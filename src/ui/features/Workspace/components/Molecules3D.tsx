@@ -14,6 +14,7 @@ import { movingFor, placesOf, valueOf } from "../utils/edit3d";
 import { kindOf, type MeasureKind } from "../utils/measure3d";
 import { movedUnderPointer, pressMovedUnder, setViewGoal } from "./viewGoal";
 import { hiddenInStacks, placeInStack, STACK_SWAP_MS } from "../utils/stacks";
+import { stepTurnsOnce, stopTurnsOnce, turningOnce } from "../utils/turnOnce";
 import { Remake3D } from "./remake3d";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
@@ -676,8 +677,31 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
     );
   }, [dom, hovered, active, sel3d, settingMoves]);
 
-  // a molecule let go while turning turns on, slowing to a stop
+  // any press - on the page, in a talk, anywhere - or Escape stops the molecules turning once, gently (utils/turnOnce)
+  useEffect(() => {
+    const stop = () => {
+      if (!turningOnce(store)) return;
+      stopTurnsOnce(store);
+      invalidate();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") stop();
+    };
+    window.addEventListener("pointerdown", stop, true);
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("pointerdown", stop, true);
+      window.removeEventListener("keydown", onKey, true);
+    };
+  }, [store, invalidate]);
+
+  // a molecule let go while turning turns on, slowing to a stop; one turning once round, round (utils/turnOnce)
   useFrame((_, dt) => {
+    if (turningOnce(store)) {
+      stepTurnsOnce(store, performance.now(), new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion));
+      movedUnderPointer(camera);
+      invalidate();
+    }
     if (!spins.current.size) return;
     for (const [id, s] of spins.current) {
       const was = store.getState().turns3d[id];

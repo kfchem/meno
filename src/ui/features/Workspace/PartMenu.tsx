@@ -103,6 +103,8 @@ export type MenuMolecule3D = {
   onSetChosen?: () => void;
   /** Turned back to face as its file has it. */
   onResetTurn: () => void;
+  /** Turned once round about the screen's up, and back as it was - with the others selected with it, each about its own centre. */
+  onTurnOnce: () => void;
   /** It alone, cut or copied. */
   onCut: () => void;
   onCopy: () => void;
@@ -423,6 +425,7 @@ export default function PartMenu({
         // (the other look, one step away: the 3D style's secondary, or back to its primary)
         { name: molecule3d.otherLook.name, keys: "", run: molecule3d.otherLook.run, icon: MENU_ICONS[molecule3d.otherLook.atoms] },
         { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn, icon: MENU_ICONS.resetTurn },
+        { name: "Turn once", keys: "", run: molecule3d.onTurnOnce, icon: MENU_ICONS.turnOnce },
       ]
     : [];
   const moleculeList: Item[] = molecule3d
