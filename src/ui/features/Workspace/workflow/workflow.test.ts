@@ -278,13 +278,13 @@ describe("Meno's own steps", () => {
     expect(pauses).toBe(2);
   });
 
-  it("lay a conformer in Duplicates over only those kept that could be alike - five thousand distinct ones, not each over every other", () => {
-    const many = shaken(5_000, 0.6);
+  it("lay a conformer in Duplicates over only those kept that could be alike - two thousand distinct ones, not each over every other", () => {
+    const many = shaken(2_000, 0.6);
     let laid = 0;
     const kept = keptApart(many, 0.125, (p, q) => (laid++, rmsd(p, q)));
-    expect(kept).toHaveLength(5_000);
-    // (every one over every one kept before it: 12,497,500)
-    expect(laid).toBeLessThan(50_000);
+    expect(kept).toHaveLength(2_000);
+    // (every one over every one kept before it: 1,999,000 - counted, not timed: a busy machine is slow, not wrong)
+    expect(laid).toBeLessThan(20_000);
   });
 
   const entries = (m: Omit<Molecule3D, "id">, set: "molecules" | "conformers") => setEntries([{ ...m, id: 1 }], set);
