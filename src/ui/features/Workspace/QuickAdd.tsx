@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
@@ -249,6 +249,29 @@ export default function QuickAdd({
     }
   };
   const [place] = useState(() => placeQuickAdd(x, y, within, sizeOf(wired ? "calculations" : "none"), QUICK_PANELS.map(sizeOf)));
+  // (as it is laid out - not as it was reckoned: a row wider than its sum, at a display scale, reaches past the canvas - it is eased back within it)
+  const [back, setBack] = useState({ dx: 0, dy: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const parent = el?.offsetParent;
+    if (!el || !parent) return;
+    const fit = () => {
+      const a = el.getBoundingClientRect();
+      const b = parent.getBoundingClientRect();
+      const dx = a.right > b.right - 4 ? Math.min(0, b.right - 4 - a.right) : 0;
+      const dy = a.bottom > b.bottom - 4 ? Math.min(0, b.bottom - 4 - a.bottom) : 0;
+      const l = a.left + dx < b.left + 4 ? b.left + 4 - (a.left + dx) : 0;
+      const t = a.top + dy < b.top + 4 ? b.top + 4 - (a.top + dy) : 0;
+      setBack((was) => {
+        const next = { dx: was.dx + dx + l, dy: was.dy + dy + t };
+        return next.dx === was.dx && next.dy === was.dy ? was : next;
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <motion.div
       ref={ref}
@@ -258,7 +281,7 @@ export default function QuickAdd({
       aria-label="Add"
       data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
-      style={{ left: place.left, top: place.top, transformOrigin: place.origin }}
+      style={{ left: place.left + back.dx, top: place.top + back.dy, transformOrigin: place.origin, transition: "left 150ms ease-out, top 150ms ease-out" }}
     >
       {!wired && (
         <div className="flex items-center gap-0.5">
