@@ -506,6 +506,11 @@ describe("saving", () => {
     expect(readWorkflow({})).toBeUndefined();
   });
 
+  it("reads back the name a set was given", () => {
+    const saved = JSON.parse(JSON.stringify({ sets: [{ id: 1, x0: 0, y0: 0, x1: 2, y1: 2, name: "Ligands" }, { id: 2, x0: 0, y0: 0, x1: 2, y1: 2, name: 7 }] }));
+    expect(readWorkflow(saved)!.sets.map((b) => b.name)).toEqual(["Ligands", undefined]);
+  });
+
   it("reads back a step's earlier runs, each with what it gave - a molecule that does not read left out", () => {
     const m = bent({ x: 9, y: 9 });
     const saved = readWorkflow({
