@@ -1,5 +1,6 @@
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
+import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
@@ -2007,6 +2008,14 @@ function WorkspaceContent({
             if (menu.kind === "atom" && menu.id != null) radicalAtom(menu.id);
           }}
           radical={!!model.atoms.find((a) => a.id === menu.id)?.radical}
+          onChain={(() => {
+            const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
+            if (!a) return undefined;
+            const sum = model.bonds.reduce((n, b) => (b.a === a.id || b.b === a.id ? n + valenceOrder(b, a.el) : n), 0);
+            return canTakeBond(a.el, sum, a.charge ?? 0, a.radical)
+              ? () => store.getState().startExtend(a.id, "chain", true)
+              : undefined;
+          })()}
           onExpand={
             menu.kind === "atom" && menu.id != null && expandable(model.atoms.find((a) => a.id === menu.id))
               ? () => store.getState().expandAbbreviation(menu.id!)

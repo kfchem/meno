@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickClock, clickEditHeldOff, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnBond, pressOnEmpty } from "./clickCount";
+import { clickClock, clickEditHeldOff, clickStillEdits, doubleClickedSince, noteClick, notePress, pressOnBond, pressNumber, pressOnEmpty } from "./clickCount";
 
 describe("clickCount", () => {
   it("tells a double-click's second click that came after a moment", () => {
@@ -72,3 +72,21 @@ describe("a press on a bond", () => {
   });
 });
 
+
+describe("pressNumber", () => {
+  it("is 1, 2, then 1 again for three quick presses on an atom: a third click starts nothing", () => {
+    let last = { id: null as number | null, t: 0, count: 0 };
+    const seen: number[] = [];
+    for (const t of [1000, 1100, 1200, 1300]) {
+      const n = pressNumber(last, 7, t, 400);
+      seen.push(n);
+      last = { id: 7, t, count: n };
+    }
+    expect(seen).toEqual([1, 2, 1, 2]);
+  });
+
+  it("is 1 for another atom, or after the double-click's time", () => {
+    expect(pressNumber({ id: 7, t: 1000, count: 1 }, 8, 1100, 400)).toBe(1);
+    expect(pressNumber({ id: 7, t: 1000, count: 1 }, 7, 1500, 400)).toBe(1);
+  });
+});

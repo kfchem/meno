@@ -350,7 +350,6 @@ export function createEditorStore(
     askUndo: null,
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
-    doubleClickBond: null,
     fitNonce: 0,
     autoFitSuspended: false,
     labelEdit: { active: false, atomId: null, value: "" },

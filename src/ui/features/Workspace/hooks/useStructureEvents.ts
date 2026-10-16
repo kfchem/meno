@@ -315,14 +315,12 @@ export function useStructureEvents(
         const near = store
           .getState()
           .findAtomNear(nx, ny, NOMINAL_BOND_LENGTH * 0.3, base.id);
-        // One gesture, one undo step: the atom and its bond together. (A
-        // third click takes it back, to draw a chain instead.)
+        // One gesture, one undo step: the atom and its bond together.
         if (near != null) {
           st.connectAtoms(base.id, near, 1);
         } else {
           st.addAtomBonded(base.id, nx, ny, "C", 1);
         }
-        st.noteDoubleClickBond(base.id);
         return;
       }
     }

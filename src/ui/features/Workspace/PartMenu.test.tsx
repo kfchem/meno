@@ -65,6 +65,12 @@ describe("a bond's menu", () => {
 });
 
 describe("the right-click menu", () => {
+  it("lists Chain from here for an atom that can take another bond - and not for a bond, or an atom that cannot", () => {
+    expect(menu(target({ kind: "atom", id: 1 }), { onChain: none }).listed).toEqual(["Chain from here", "Unpaired electron", "Select this structure"]);
+    expect(menu(target({ kind: "atom", id: 1 })).listed).not.toContain("Chain from here");
+    expect(menu(target({ kind: "bond", id: 2 }), { onChain: none }).listed).not.toContain("Chain from here");
+  });
+
   it("puts what is done most to an atom first, as icons, Delete at the end, and lists the rest", () => {
     expect(menu(target({ kind: "atom", id: 1 }))).toMatchObject({
       icons: ["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Delete atom"],

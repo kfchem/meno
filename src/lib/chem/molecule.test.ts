@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { chargeText, implicitHydrogens } from "./molecule";
+import { canTakeBond, chargeText, implicitHydrogens } from "./molecule";
 
 describe("implicitHydrogens", () => {
   it("moves the valence with the charge the way the electrons go", () => {
@@ -37,5 +37,19 @@ describe("chargeText", () => {
     expect(chargeText(2)).toBe("2+");
     expect(chargeText(-3)).toBe("3−");
     expect(chargeText(0)).toBe("");
+  });
+});
+
+describe("canTakeBond", () => {
+  it("is where the valence is not yet met, as charge and unpaired electron leave it", () => {
+    expect(canTakeBond("C", 3)).toBe(true);
+    expect(canTakeBond("C", 4)).toBe(false);
+    expect(canTakeBond("O", 2)).toBe(false);
+    expect(canTakeBond("O", 2, 1)).toBe(true);
+    expect(canTakeBond("O", 1, -1)).toBe(false);
+    expect(canTakeBond("N", 3)).toBe(false);
+    expect(canTakeBond("H", 0)).toBe(true);
+    expect(canTakeBond("H", 1)).toBe(false);
+    expect(canTakeBond("Pd", 4)).toBe(true);
   });
 });
