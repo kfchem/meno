@@ -181,10 +181,12 @@ describe("what the pointer is over on a molecule in 3D", () => {
   });
 
   it("is the ribbon's triangle three.js finds, and its residue", () => {
-    const { mesh, residues, R } = ribbon(300);
+    // (three.js's own search goes through every triangle for each ray: the ribbon and the rays
+    // are as many as it takes to meet it often - this took 2.4 s alone, over vitest's 5 s in a full run)
+    const { mesh, residues, R } = ribbon(60);
     const rnd = seeded(11);
     let met = 0;
-    for (let k = 0; k < 300; k++) {
+    for (let k = 0; k < 120; k++) {
       const to = mesh.localToWorld(new THREE.Vector3((2 * rnd() - 1) * R, (2 * rnd() - 1) * R, 0));
       const { theirs, ours } = both(mesh, (rc, h) => raycastByResidue(mesh, rc, h, residues), rayAt(to, rnd));
       expect(ours.length).toBe(theirs.length ? 1 : 0);
