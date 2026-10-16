@@ -948,6 +948,37 @@ molecules in 3D.
   start; a paste across styles; bodies in 3D kept together; page objects
   exporting at the same size.
 
+## Drawing resolution
+
+How finely the canvas is drawn: Settings, General, *Drawing resolution*
+(the maintainer, 2026-10-17, from a comparison of the choices on 100 % and
+150 % screens).
+- **2×** (the default, as before there was a choice): twice as many pixels
+  each way as the canvas's size on the page, whatever the screen. The
+  sharpest; on a screen that shows things once (100 %) the graphics card
+  draws four times the screen's pixels.
+- **Matching the screen**: as finely as the screen itself shows things -
+  once at 100 %, 1.25 at 125 %, 1.5 at 150 %, twice on a Retina screen -
+  never finer than twice. Nothing is scaled between the canvas and the
+  screen, so thin lines do not shimmer as the view moves; followed as the
+  window goes to another screen.
+- **1×**: once, whatever the screen: the lightest.
+
+The comparison (2026-10-17), drawn and then shown on a screen as a
+compositor shows it, against a drawing four times as fine: 1.25 times was
+the least faithful on either screen; on a 100 % screen, 1.5 times was no
+sharper than once and shimmered nearly twice as much as the view moved, a
+3:2 scaling; on a 150 % screen, 1.5 times - its own - was sharp and still.
+Hence the screen's own as the middle choice rather than a number.
+
+The choice applies at once. Everything on the canvas that depends on its
+pixels reads them as it is drawn: PDF pages' tiles, a text's or a
+Markdown sheet's letters, molecules in 3D (how round their balls are drawn,
+their shade and their key light). A line's least width, picking and the
+pointer's reach are in the screen's own units and do not change. Pictures
+made of the drawing - exported, copied, rendered, a talk's - are drawn at
+their own sizes, whichever is chosen.
+
 ## Styles in 3D
 
 Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D

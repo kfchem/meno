@@ -118,7 +118,7 @@ import { useChemMarks } from "./chem/useChemMarks";
 import { exportKindOf, exportKinds, holdsOfDrawn, useFileActions, type FileActions, type Holds } from "./fileActions";
 import { setSavedPathOf, setSaver } from "../../../lib/doc/savers";
 import { useReadings } from "../../../lib/calc/readings";
-import { CANVAS_DPR } from "./constants";
+import { useCanvasRatio } from "./canvasRatio";
 import { editorLayoutOptions, startingZoom } from "./layoutOptions";
 import { labelSetOf } from "../../../lib/chem/layout2d";
 import { useDrawingStyle } from "./useDrawingStyle";
@@ -307,6 +307,8 @@ function WorkspaceContent({
   // the plugins that fill the chemistry roles: their marks on the structure
   // and R/S on request; and clean-up, by Meno's own layout engine (chem/cleanUp)
   const store = useEditorStore();
+  // (how finely the canvas is drawn, as Settings has it: a change shows at once)
+  const canvasRatio = useCanvasRatio();
   // (no menu over a talk)
   const talking = useEditor((s) => s.presenting != null);
   // (a structure selected: a guide's step waiting for it goes on)
@@ -2204,7 +2206,7 @@ function WorkspaceContent({
         frameloop={active ? "demand" : "never"}
         // (following its box as the panel beside it slides)
         resize={CANVAS_RESIZE}
-        dpr={CANVAS_DPR}
+        dpr={canvasRatio}
         onDoubleClick={handleDoubleClick}
         gl={{
           antialias: true,

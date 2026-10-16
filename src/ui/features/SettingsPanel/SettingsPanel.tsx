@@ -10,6 +10,7 @@ import AbbreviationSettings from "./AbbreviationSettings";
 import ChemistrySettings from "./ChemistrySettings";
 import FileSettings from "./FileSettings";
 import PointerSettings from "./PointerSettings";
+import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
 import LogSettings from "./LogSettings";
 import LabelSettings from "./LabelSettings";
@@ -94,6 +95,7 @@ export default function SettingsPanel() {
             <h2 className="text-base font-semibold text-gh-black">General</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">How Meno works as a whole. Changes are saved as you make them.</p>
             <PointerSettings />
+            <CanvasSettings />
             <LabelSettings />
             <ColourSettings />
             <LogSettings />
