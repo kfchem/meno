@@ -10,12 +10,12 @@ combines several methods, expressed in a form the chemist can read,
 rearrange and run again, with its results beside the molecule it is about.
 
 A rebuild of its foundation is proposed in
-[WORKFLOWS-FOUNDATION.md](WORKFLOWS-FOUNDATION.md) (2026-10-16), made for the
-whole range from computational chemistry to cheminformatics: values and
-their types, entries with properties, collections at any size, reactions,
-pairs and paths, retries, where jobs run, and kinds for every step from
-conformers and transition states to generation, prediction, filtering,
-similarity, docking and models. It is for review; nothing in it is built.
+[WORKFLOWS-FOUNDATION.md](WORKFLOWS-FOUNDATION.md) (2026-10-16), for the whole
+range from computational chemistry to cheminformatics: values and their
+types, entries with properties, collections at any size, and simple nodes of
+one role each - Meno's own, an ACCeL plugin's, and the program plugins' -
+wired into anything from a conformer ensemble's NMR to a ConfoTS-like search
+for transition states. It is for review; nothing in it is built.
 
 ## Decided by the maintainer (2026-10-08)
 

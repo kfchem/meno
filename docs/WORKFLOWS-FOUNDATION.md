@@ -1,6 +1,7 @@
 # Workflows: the foundation, rebuilt (proposed, 2026-10-16)
 
-A design for the maintainer to review; nothing in it is built.
+A design for the maintainer to review; nothing in it is built. This is its
+fourth revision.
 
 **Why rebuild.** Stage 6 works, and the bug hunts of 2026-10-12 to 10-14
 fixed what they found in it. But several of those bugs came from how the
@@ -10,20 +11,17 @@ workflow is founded, not from one place in the code:
 - when a result no longer answers to its input;
 - what a run is on when its input moves.
 
-**Why wider.** The foundation is also narrower than what is coming. The
-maintainer, on the first draft of this design (2026-10-16):
+**Why wider.** The maintainer asked for more on each draft:
 
 > We anticipate workflows across the whole range from computational chemistry
 > to cheminformatics, such as structure-generation nodes like VAEs and
 > filtering by property values. Make it a shape that anticipates that far.
 
-And on the second:
-
 > The five use cases all lean towards cheminformatics. Are
 > computational-chemistry uses anticipated? It must be possible to build an
 > equivalent of ConfoTS as a workflow on Meno.
 
-ConfoTS is the maintainer's own public workflow (kfchem/ConfoTS, with
+**ConfoTS** is the maintainer's own public workflow (kfchem/ConfoTS, with
 examples in kfchem/ConfoTS-showcase). It finds transition states and
 estimates reaction barriers from many conformers:
 - a reaction read from a drawing, atom-mapped;
@@ -36,38 +34,63 @@ estimates reaction barriers from many conformers:
 
 It runs hundreds of jobs on a cluster and keeps hundreds of MB to GB of
 output per reaction. Its scripts were read for what the workflow does and
-needs; nothing is taken from their code, and ACCeL, which it is built on,
-stays a source of ideas only (decisions 4 and 14).
+needs; nothing is taken from their code.
 
-So the base proposed here is made for the whole range: from calculations on
-one drawn molecule, through ensembles of conformers and reaction paths, to
-cheminformatics on millions of entries.
+**How to build it.** The maintainer, on the third draft:
 
-**This document, in order:**
-1. the cases it is designed against;
-2. the base: values and their types, entries, collections, steps and their
-   ports; reactions, pairs and paths; retries; where jobs run; programs' own
-   input;
-3. the points of the first draft, each with what happens today, a case, and
-   the design;
-4. seven cases walked through end to end: F (ConfoTS) and G (a conformer
-   ensemble to NMR and ECD), in most detail; then A to E, mostly
-   cheminformatics (generation, similarity, docking, models, a loop), with
-   calculations in A and C;
-5. the order of work, one shippable PR at a time;
-6. what stays in core and what is the plugins';
-7. the questions for the maintainer.
+> Don't make it too abstract. For example, make a reaction node, put several
+> inputs into it, and have outputs like bond changes. Make it possible to
+> express advanced, general things by combining simple roles.
 
-**The decisions of [WORKFLOWS.md](WORKFLOWS.md) all stand** (*Decided by
-the maintainer*; "decision 5" and the like below are its numbers). Three are
-refined, not reversed, and say so where they are touched:
-- 5, what lies in a frame is what a set holds (*Sets and collections*);
-- 9, results in a set to the right of their step (*Steps, ports and exits*);
-- 3, Meno defines the kinds and plugins fill them: the kinds grow (*Kinds of
-  step*).
+> Don't make advanced nodes. Make re-submission explicit, by combining simple
+> processing nodes.
+
+> Then even a Diels-Alder won't work. Make an ACCeL plugin.
+
+That last remark was about atom mapping done by Meno's own "fewest bond
+changes".
+
+This revision is built on that. The decisions of [WORKFLOWS.md](WORKFLOWS.md)
+all stand (*Decided by the maintainer*; "decision 5" and the like below are
+its numbers). Three are refined, not reversed, and say so where they are
+touched:
+- 5, what lies in a frame is what a set holds;
+- 9, results in a set to the right of their step;
+- 3, Meno defines the kinds and plugins fill them, now with more kinds.
+
+The answers given on the third draft are recorded at the end (*Answered*).
 
 The references are to the code at v0.1.13 (`67157130`). Paths are under
 `src/ui/features/Workspace/` unless they say otherwise.
+
+## The principle: simple nodes, wired
+
+**Every node has one role.** It takes plain inputs and gives plain outputs.
+Anything advanced is drawn as nodes wired together, where the chemist can
+read it, change it, and copy it.
+
+What this rules out:
+- **Rich value types** that carry several roles inside them. A reaction is
+  not a value with sides, a map and contacts built in: it is a node with
+  reactants and products going in, and mapped products and bond changes
+  coming out.
+- **Nodes that decide by themselves.** Examples: which side of a reaction to
+  start a path from; whether a failed job is worth running again; routing a
+  lone atom to another kind of calculation.
+- **Built-in bundles**, such as a "Barriers" node that ranks, weights,
+  subtracts and draws at once. Each of those is its own node.
+- **Hidden loops.** Running a failed job again is drawn: the failed entries
+  come out of a step, through simple nodes, into the same kind of step
+  again, and are merged back.
+
+What makes this practical:
+- **Copying.** Copying and pasting a chain of steps already works as it
+  does for atoms (WORKFLOWS.md, *Step 7: procedures and copying*). A retry
+  chain drawn once is pasted again for a second attempt.
+- **Procedures.** Saved chains put down again (question C below).
+- **Lineage.** Every entry knows the entry or entries it was made from, so
+  two inputs of one node can be matched without a "pair" type (*Steps, ports
+  and exits*).
 
 ## The cases it is designed against
 
@@ -83,1206 +106,858 @@ The references are to the code at v0.1.13 (`67157130`). Paths are under
    - excited states broadened into an ECD or UV spectrum, weighted, and
      compared with a measured one.
 4. **Reactions and transition states**, as ConfoTS:
-   - a reaction with an atom map;
-   - reactant-product pairs, paths between them, transition-state
-     candidates;
-   - validation by frequencies and IRC;
+   - atom mapping and bond changes;
+   - pairs of structures and paths between them;
+   - transition-state candidates validated by frequencies and IRC;
    - barriers from ensembles, competing outcomes compared.
 5. **Failure at scale**: hundreds of jobs, some failing in ways their
-   program reports, each run again with a remedy, the rest of the work going
-   on.
+   program reports, run again where the chemist draws it, the rest of the
+   work going on.
 6. **Where jobs run**: this computer, or a cluster with a scheduler, with
    GB of output left where it was made.
 
 **Cheminformatics**
-7. **Generation.** A step with no molecule input, or with seeds or a
-   target, gives N new structures: a VAE or another generative model, an
-   enumeration of a library, a fragment grower. Its entries may have no
-   coordinates at all, only a graph (as a SMILES gives one).
-8. **Prediction and descriptors.** A step adds properties to each entry:
-   pKa, logP, ADMET end points, descriptors, fingerprints. Each property
-   carries a name, a unit, the method or model and its version, and its own
-   status for each entry.
-9. **Filtering and ranking.** Keep the entries where a condition on a
-   property holds, or several combined; sort, and take the top N. *Energy
-   window* becomes one case of a general filter.
-10. **Similarity, substructure and clustering**: from a set to a set (kept),
-    to a set with a new property (a similarity), or to groups (clusters).
-11. **Docking and scoring**: two kinds of input, ligands and a target.
-12. **Models as values**: trained on a set, given out as a model, used by
-    another step.
+7. **Generation**: a step with no molecule input, or with seeds or a
+   target, gives N new structures (a VAE or another generative model, an
+   enumeration, a fragment grower). Its entries may have no coordinates at
+   all, only a graph.
+8. **Prediction and descriptors**: pKa, logP, ADMET end points,
+   descriptors, fingerprints, each with a name, a unit, its method or model
+   and version, and a status per entry.
+9. **Filtering and ranking** by properties.
+10. **Similarity, substructure and clustering.**
+11. **Docking and scoring**: ligands and a target.
+12. **Models as values**: trained on a set, used by another step.
 
 **Both**
-13. **Scale**: sets of thousands to millions of entries, which the page
-    cannot draw one by one.
-14. **Tables, numbers, charts and spectra as values**: a step can take or
-    give any of them, not only molecules.
-15. **Loops**: generate, score, filter, generate again (active learning,
-    optimisation).
-16. **Branching, merging and joins**: predicted properties put back onto
-    the molecules they belong to; a measured spectrum set beside a computed
-    one.
+13. **Scale**: sets of thousands to millions of entries.
+14. **Tables, numbers and charts** as values, not only molecules.
+15. **Loops**: generate, score, filter, generate again.
+16. **Branching, merging and joins**: properties put back onto the
+    molecules they belong to; measured data set beside computed.
 
 ## The base
 
 ### Values and their types
 
-**What passes along a wire is a value.** Every value has a **type**, and a
-port takes or gives one type. The types are Meno's; plugins use them and add
-none (decision 3, kept).
+**What passes along a wire is a value**, and every value has a type. The
+types are Meno's; plugins use them and add none (decision 3).
 
 | Type | What it is | Example |
 |---|---|---|
-| **Molecules** | a collection of entries (below), in order | a drawn set; 600 conformers; 10,000 generated structures |
-| **Reaction** | species (molecules) on two sides, sharing one atom numbering, with what changes between them | a Diels-Alder drawn with two products side by side |
-| **Table** | rows and typed columns: numbers with units, text, true/false, vectors, and a column of entry ids where its rows are about molecules | measured NMR shifts; a table of barriers |
-| **Number** | one quantity with its unit | a count; a threshold worked out from data |
-| **Chart** | a table and how Meno draws it: an energy diagram, a spectrum, a scatter plot | the energy diagram of a reaction at the DFT level |
-| **Spectrum** | a curve or a list of peaks, its axes with units, what it is of | a computed ECD spectrum; a measured one read from a file |
-| **Model** | a trained model's files and its signature: what it takes, and the properties (names and units) it gives | a pKa model trained on a set |
-| **Pictures** | pictures, each with what it shows | a Render step's |
-| **Files** | files of any kind, each with a media type, for a step that writes something Meno does not read | a program's raw output kept for another program |
+| **Molecules** | entries (below), in order | a drawn set; 600 conformers; 10,000 generated structures |
+| **Table** | rows and typed columns: numbers with units, text, true/false, entry ids | measured NMR shifts; bond changes; restraints |
+| **Number** | one quantity with its unit | a standard-state term; a threshold |
+| **Chart** | a table and how Meno draws it | an energy diagram; computed against measured |
+| **Model** | a trained model's files and what it takes and gives | a pKa model |
+| **Pictures** | pictures | a Render step's |
+| **Files** | files Meno does not read, with their media types | a program's raw output kept for another program |
 
-**A Molecules type also says what its entries carry,** and that is part of
-the type a port takes:
-- **structure**, which every entry has: a graph of atoms and bonds, in a
-  numbering of its own (*The entry*);
-- **drawn**: 2D coordinates as drawn;
+**A Molecules port may say what its entries need**:
+- **structure**, which every entry has: a graph in a fixed numbering;
 - **3D**: one geometry each;
-- **paired**: two or more named geometries on one numbering. A reactant
-  conformer and the product geometry made from it are one entry, its
-  geometries named *start* and *end*; a transition-state guess with the two
-  sides it lies between adds *guess*;
-- **path**: an ordered series of geometries on one numbering, each with its
-  own properties and a coordinate along the path. NEB images and an IRC are
-  paths;
-- **grouped**: entries in groups by a key. Conformers grouped by compound
-  are the conformer set of today, clusters are groups by cluster, docking
-  poses are grouped by ligand, and transition states are grouped by the path
-  they lie on.
+- **frames**: a series of geometries each, such as an optimisation's path,
+  NEB images or an IRC, each frame with its own properties.
 
-**Examples:**
-- *Optimise* takes "molecules, 3D";
-- *Conformers* takes "molecules" (structure is enough);
-- *Choose one* takes "molecules, grouped";
-- a nudged elastic band takes "molecules, paired";
-- *Take from path* takes "molecules, path";
-- *Filter* takes any molecules and gives what it took.
+That is all. There is no reaction type, no "paired" entry, and no "grouped"
+type:
+- a reaction is a node;
+- two inputs are matched by lineage;
+- a group is a property, *group*, which the nodes that work "in each group"
+  read.
 
 **What converts implicitly, and what never does.** A conversion happens on
 its own only where nothing is lost or guessed:
-- **Narrower to wider: implicit.** Molecules with 3D go into a port that
-  takes molecules. A grouped set goes into one that takes molecules, as its
-  entries, with the groups kept in each entry's group key. A paired or path
-  entry goes into a port that takes 3D only through a step that says which
-  geometry (*Take from path*, *Take one geometry*): never implicitly.
-- **Molecules to a table: implicit**, as a view: one row per entry, its id,
-  its identity and each property as a column.
-- **A reaction to its species: implicit**, as a view: the species as
-  molecules, each with its role (reactant or product) and label (*a*, *b*,
-  ...), in the reaction's numbering.
-- **Numbers between units of one dimension: implicit** where Meno knows the
-  factor (Eh, kcal/mol, kJ/mol, eV, cm⁻¹ for energies; K and °C; nm and eV
-  for a spectrum's axis). The value keeps its own unit, and the conversion
-  is done where it is read.
-- **Never implicit:**
-  - wider to narrower (molecules to 3D: decision 18; a flat set to a
-    grouped one: decision 13);
-  - a table to molecules (a step says which column holds structures, or
-    joins by id);
-  - a table to a number (a step says how: *Count*, a column's least, its
-    mean);
-  - molecules to a reaction (*As a reaction* says which are reactants,
-    which products, and maps them);
-  - across dimensions;
-  - a model to anything.
+- **implicit**:
+  - molecules with 3D into a port that takes molecules;
+  - molecules into a port that takes a table, as a view: one row per entry,
+    its id, its identity and its properties as columns;
+  - numbers between units of one dimension that Meno's units table knows
+    (Eh, kcal/mol, kJ/mol, eV, cm⁻¹; K and °C; nm and eV on a spectrum's
+    axis), converted where they are read;
+- **never implicit**: molecules to 3D (decision 18); frames to one geometry
+  (*Take frames* says which); a table to molecules; a table to a number;
+  across dimensions; a model to anything.
 
-A wire refused says which of these it met, at the port it was dropped on
-(*Takes molecules with 3D: these are drawn only. Conformers makes 3D from a
-drawing*).
+A wire refused says which rule it met, at the port it was dropped on.
 
 ### The entry: one record for every molecule that flows
 
 ```
 Entry
-  id          unique within its collection; kept by every step that passes it on
-  from        the entry it was made from (its parent's id and collection), where it was
-  identity    Meno's canonical key of its structure (below)
+  id          unique within its collection
+  from        the entry or entries it was made from (lineage)
   structure   atoms (element, isotope, formal charge, radical) and bonds
-              (order, stereo), in the entry's numbering
-  given       the text it came as, where it came as text (a SMILES from a generator)
-  drawn       2D coordinates                                  optional
-  geometry    3D coordinates; or named geometries (paired);   optional
-              or a path of geometries with a coordinate each
-  group       its group's key, in a grouped set               optional
-  role        in a reaction: its species (a, b, ...) and side optional
-  species     charge and multiplicity, and where each came from:
-              the chemist, a calculation it was read from, or its atoms
-  properties  name -> Property (an open map)
-  attempts    each time a step tried it: options, how it ended, the log (Retries)
-  status      done, failed or set aside, with a reason (for the step that made it)
+              (order, stereo), in the entry's fixed numbering
+  geometry    none (a graph); 2D as drawn; one 3D geometry; or frames
+  species     charge and multiplicity, and where each came from: the
+              chemist, a calculation it was read from, or its atoms
+  properties  name -> Property, an open map
+  status      done, failed or set aside, with the reason
 ```
 
 ```
 Property
-  value       its shape: one value; one per atom (in the entry's numbering);
-              one per vibration; one per excited state; a curve (x and y);
-              a vector (a fingerprint); or a list of restraints
-  unit        for each number in it: one Meno's units table knows, or "none"
-  quantity    what it is a value of (energy, free-energy correction, shielding,
-              rotatory strength, pKa, similarity...), with its dimension
+  value       a number, a text, true/false, an entry id, a list (one value
+              per atom in the entry's numbering, or a curve's points), a
+              vector (a fingerprint), or a small table (one row per
+              vibration or per excited state)
+  unit        for each number in it, from Meno's units table, or "none"
   at          the geometry it was worked out at (its hash) and, where it
-              applies, the temperature, pressure, standard state and solvent
-  by          the step and run that gave it; the plugin and its version; the
-              program, method and basis, or the model and its version; the
-              training set's identity, for a model's
+              applies, the temperature, pressure and solvent
+  by          the step and run that gave it; the plugin and version; the
+              program, method and basis, or the model and its version
   status      computed, failed (why), or not applicable (why)
 ```
 
-**What the first draft named becomes properties.** They keep their meaning;
-they are no longer special fields:
-- **energy**: Eh, with its kind (electronic, ZPE-corrected, free energy),
-  program, method, basis and solvent;
-- **thermal corrections**: to energy, enthalpy and free energy, at a
-  temperature and pressure;
-- **share**: a fraction, with its temperature and where it came from (a
-  *Populations* step, a program's own, the chip's room temperature);
-- **degeneracy**;
-- **vibrations**: frequencies, intensities and displacements per
-  vibration, the count of imaginary ones as a property of its own, so that
-  a filter can say *exactly one imaginary vibration*.
+**Properties instead of fields.** Everything a step finds is a property:
+- an energy, with its kind (electronic, ZPE-corrected, free energy);
+- thermal corrections at a temperature and pressure;
+- vibrations (a small table), and the count of imaginary ones;
+- a share, with its temperature;
+- a degeneracy;
+- an entry's group, its given text (a SMILES from a generator), its name.
 
 **The numbering is fixed.** An entry's atoms are numbered once, when its
-structure is first made: drawn, read from a file, or given by a generator.
-No step renumbers them.
-- **A step whose program reorders atoms maps them back** before it gives its
-  entries. The conformer searches already keep the order, and #374 settles
-  equivalent atoms onto one numbering across conformers.
-- **Across a reaction**, every species takes the numbering of the reactant
-  side through the atom map (*Reactions*). From there, "atom 7" means the
-  same atom in every conformer, pair, path, transition state and IRC end
-  point of the reaction.
-- **Per-atom properties are therefore aligned by number** with no matching:
-  shieldings, charges, the displacements of a vibration.
-- **A measured table keyed by the drawing's atom numbers joins on**, because
-  a 3D molecule keeps the drawn atom it came from (`drawnFrom`).
+structure is first made (drawn, read, generated), and no step renumbers
+them.
+- **A program that reorders atoms has them mapped back** by its plugin
+  before entries are given. The conformer searches already keep the order,
+  and #374 settles equivalent atoms onto one numbering across conformers.
+- **The reaction node gives the products in the reactants' numbering.** From
+  there, "atom 7" means the same atom in every conformer, path,
+  transition state and IRC end of the reaction.
+- **Per-atom properties are aligned by number**, with no matching.
+- **A measured table keyed by the drawing's atom numbers joins on**, through
+  the drawn atom each 3D atom came from (`drawnFrom`).
 
-**Levels of theory are kept apart.** A property records the geometry it was
-worked out at:
-- a molecule optimised by GFN2-xTB and then by DFT keeps its xTB energy,
-  marked as of its earlier geometry;
-- steps that combine properties (*Free energy*, below) combine only those
-  worked out at the same geometry, unless the chemist allows otherwise, and
-  then say so.
+**Levels of theory stay apart.** A property records the geometry it was
+worked out at (question 23, answered). A node that combines properties
+(*Add*) combines only those worked out at the same geometry, unless the
+chemist allows otherwise, and then the result says so.
 
-So an xTB ranking and a DFT ranking of the same lineage can be set side by
-side, and never mixed by accident.
+**Identity** is Meno's canonical key of a structure (question 13, answered).
+It comes from the canonical numbering written for Clean-up (#319), which
+also gives each atom's symmetry class. It is order-free, and never replaces
+the numbering. It is worked out once per structure and kept with the
+collection.
 
-**Identity.** Meno works out a canonical key from an entry's structure:
-graph, stereo, charges, isotopes.
-- **What uses it**: joins by identity, duplicates by identity, and "is this
-  the same compound".
-- **What gives it**: Meno's own canonical numbering. Clean-up's (#319,
-  individualisation and refinement, written from published descriptions)
-  gives both the key and each atom's symmetry class. The classes say which
-  atoms are equivalent: the three hydrogens of a methyl, the two ortho
-  carbons of a phenyl turning freely.
-- **Meno's, never a plugin's**, so that a join does not depend on which
-  plugins are added.
-- **Worked out once** per structure, in a worker, and kept with its
-  collection.
-
-The identity never replaces the numbering. It is order-free; the numbering
-is the entry's own.
-
-**Lineage.** `from` makes a join by descent possible: properties worked out
-on a copy of a set are put back on the entries they belong to, even where
-two entries share an identity, such as two conformers.
+**Lineage.** `from` lists the entry or entries an entry was made from. An
+optimised conformer has one parent; an entry made by *Re-bond* has two: the
+one whose geometry it took and the one whose bonding it took.
 
 ### Sets and collections
 
 **Entries live in collections, not on the page.**
-- **A collection** is an ordered list of entries, kept by Meno for the
-  workspace. It is never changed once made: a step makes a new one.
+- **A collection** is an ordered list of entries. It is never changed once
+  made: a step makes a new one.
 - **Its hash** is worked out once, when it is made, from its entries' own
-  hashes: structure, geometries, species and properties.
-- **In the workspace file**, collections are kept beside the files already
-  kept by their SHA-256, as columns:
-  - structures and geometries compactly;
-  - properties as typed columns;
-  - fingerprints packed as bits.
+  hashes.
 - **A set on the page shows a collection.** A set the chemist makes holds the
-  page's own molecules and drawings. Meno makes its collection from them on
-  each edit, which is cheap at the sizes one draws.
+  page's own molecules and drawings, and Meno makes its collection from them
+  on each edit.
+
+**Keeping**, as the maintainer answered (question 12): "Basically, keep
+everything. But make it possible to choose not to keep it, too."
+- **Kept by default.** The workspace file keeps every collection and every
+  property, fingerprints included, beside the files it already keeps by
+  their SHA-256.
+- **Not kept, by choice.** A set's menu has *Don't keep in the file*. Its
+  collection is then left out when the workspace is saved, and only its hash
+  and count are kept.
+  - Opened again, the set says *Not kept · 12,480 molecules* until its step
+    runs again (*Run again*).
+  - Steps after it keep their own results, and are not *Changed*: what they
+    ran on is recorded by hash.
+  - The choice is the set's, kept with the workspace, and *Keep in the file*
+    undoes it.
+- **Programs' raw outputs** are the exception by default, because they can
+  run to GB per reaction (question 26, answered):
+  - they stay where the job ran, with a record of each file (path, size,
+    SHA-256), and are fetched when a step needs one;
+  - a step's menu has *Bring raw outputs into the workspace*, which copies
+    its jobs' files into the workspace file, compressed. A step brought in
+    keeps them as everything else is kept.
+
+  What Meno read from an output (the values, the logs) is kept as now,
+  either way.
 
 **What a set shows** depends on its size:
-- **Up to 50 entries: on the page**, as today. Each entry is a molecule or a
-  drawing in the frame, and a result's entries are laid out in rows (point
-  9).
-  - A paired entry shows its first geometry, with a chip to step through the
-    others.
-  - A path entry shows as a molecule with its frames chip, the coordinate
-    along the bottom.
-- **More: a summary in its frame**:
-  - its count, with nouns (*12,480 molecules · 3 properties*);
-  - a grid of a sample of its structures, drawn in 2D by Meno's own layout,
-    where they have no drawing;
-  - small histograms of the properties chosen for it.
+- **up to 50 entries, on the page**, as today (question 15, answered). An
+  entry with frames shows its frames chip;
+- **more, as a summary in its frame**: its count with nouns, a grid of a
+  sample of its structures (drawn in 2D by Meno's own layout where they have
+  no drawing), and histograms of the properties chosen. It also opens as a
+  table in the column, and any entries can be put on the page from there.
 
-  It also opens as **a table** in the column: rows drawn as they scroll,
-  sorted and searched, with a structure column. Any entries can be put on the
-  page from there: they become page molecules, shown in a set of their own,
-  linked to their entries.
-- **What does not change with size:** a set's type, count, members and order
-  are the same whichever way it is shown. Showing is never what decides
-  them.
-
-**Members are explicit** (refining decision 5):
-- **A set's members are a list in order**: its collection's.
-- **The frame's gesture stays as the edit.** A molecule or drawing dropped
-  into a chemist's set joins it, at its place in the order. One dragged out
-  leaves it. Each is an edit of its own, one step to undo, and the frame
-  lights as it is crossed.
-- **Moving one inside the frame keeps its place.** A turn, a nudge, a label
-  grown: none changes the order.
-- **Re-ordering is done on purpose**: *Sort by reading order* on the set's
-  menu, or a member dragged before another.
-- **A result set's order is its step's.**
-
-Today, by contrast, membership is "the middle inside the frame" and order is
-reading order with rows 0.9 units apart, both worked out on every look
-(`setMembers`, `before`, `workflow/entries.ts`). A molecule turned so its
-middle crosses a row line swaps two compounds' letters. A result molecule
-nudged past the edge silently leaves the next run's input.
+**Members are explicit** (question 2, answered; refining decision 5):
+- a set's members are a list in order: its collection's;
+- dropping a molecule into a chemist's set adds it at its place; dragging it
+  out removes it. Each is an edit of its own;
+- moving one inside the frame keeps its place;
+- re-ordering is done on purpose: *Sort by reading order*, or a member
+  dragged before another;
+- a result set's order is its step's.
 
 ### Steps, ports and exits
 
-**A step has named inputs and named exits, each typed.** Its kind declares
-them in Meno's kind table:
-- most kinds take one input and give one exit, as today;
-- *Dock* takes *ligands* (molecules) and *target* (molecules, one entry);
-- *Predict with a model* takes *molecules* and *model*;
-- *Pair* takes *from* (molecules, grouped by species) and a *reaction*;
-- *Compare* takes *computed* and *measured*;
-- *Split* gives *kept* and *rest*;
-- *Barriers* gives a *table* and a *chart*.
-
-**Every exit is a result set** (refining decision 9), made with the step,
-empty and named for what it will hold (*Optimised · not run yet*). It lies
-to the right of the card, and wires leave from it.
-- **The card's own give port goes.** Today a step gives from two ports that
-  mean the same: its own (`StepCard.tsx`, `data-give-step`) and its result
-  set's. A wire from the card crosses its own result set.
-- **A procedure** put down comes with its empty result sets, wired.
-
-**An exit that gives something other than molecules** is a frame of its own
+**A node has named inputs and named exits, each typed**, declared by its
 kind:
-- a table shows its first rows and opens whole in the column;
-- a number shows as a chip with its unit;
-- a chart is drawn by Meno, in vector, its labels editable and its export
-  the page's;
-- a spectrum is drawn as a chart;
-- a model shows its name, what it takes, what it gives, and its training
-  set;
-- a reaction shows its scheme, mapped atoms numbered on hover.
+- most take one input;
+- some take two or three: *Path search* takes *start* and *end*;
+  *Re-bond* takes *geometry* and *bonding*; *Predict with a model* takes
+  *molecules* and *model*.
 
-Nothing takes a model or a picture until a kind that takes it is added. Its
-port says *Nothing added takes models yet*.
+**Two inputs are matched by lineage** where a node works entry by entry:
+- each entry of one input is matched with the entry of the other that it
+  descends from, or that it shares its nearest ancestor with;
+- where neither descends from the other and they share no ancestor, the node
+  pairs every entry with every entry, if its kind says it does (*Re-bond*);
+- where neither applies, it refuses, saying why.
 
-### Reactions
+This is what lets the end of a NEB be the optimised partner of its start
+with no pair type in between: the end descends from the start.
 
-**A reaction is a value**, not a drawing that steps read again and again.
-*As a reaction* (Meno's) makes one from a scheme drawn on the page or an RXN
-file opened. It holds:
-- **the species**: each a molecule, labelled *a*, *b*, *c* from left to
-  right as drawn, on the reactant or the product side. Molecules drawn
-  together on one side are one species, a complex, when the chemist says
-  so (a reactant pair that meets in one transition state). Several products
-  drawn side by side are **competing outcomes** of the same reactants
-  (exo and endo, two regioisomers), each with its own paths, compared at the
-  end (*Barriers*);
-- **the atom map**: every product atom given the number of the reactant atom
-  it is. *Map atoms* (Meno's, below) makes it where the file brings none.
-  Where several maps change bonds equally few times, as symmetry allows, the
-  alternatives are kept and shown, and the first by canonical order is used
-  until the chemist picks another;
-- **what changes**: the bonds formed and broken, with their orders, and
-  the atoms they join: the reacting atoms;
-- **contacts**: bonds drawn as coordination bonds, such as between a Lewis
-  acid and the carbonyl oxygen it holds. These are not bonds that form, but
-  interactions to hold during force-field work. Each becomes a distance
-  restraint at a set fraction of the two atoms' van der Waals radii;
-- **checks**: the bonding each species must keep, and what the checks pass
-  over: atoms, elements or bonds the chemist names, with contacts always
-  passed over.
+**Every exit is a result set** (question 1, answered; refining decision 9),
+made with the step, empty until it runs, to the right of the card. The
+card's own give port goes.
 
-From the reaction come, by Meno's steps:
-- **pairs**: a reactant conformer and the product geometry made from it, or
-  the other way round (*Pair*);
-- **restraints**: distance restraints for contacts, torsion restraints for
-  the double bonds whose E or Z must not change, and fixed reacting atoms
-  for a constrained pre-optimisation;
-- **the end points' check** (*Match end points*).
+**Second exits.** A node that can fail entries, or set entries aside, has a
+second exit for them (revisiting question 19, question B below):
+- a calculation gives *done* and *failed*;
+- *Filter*, *Rank* and *Duplicates* give *kept* and *rest*;
+- *Compare bonding* gives *same* and *different*.
 
-**Atom order through a reaction** is the reactant side's, carried by the map
-(*The numbering is fixed*), and never renumbered after.
+A second exit shows as a small frame under the first, with its count
+(*Failed · 3*), and opens to a full set when something is wired from it or
+the chemist opens it. Nothing is hidden: what does not go on is in plain
+view, and can be wired on.
 
-### Retries
+**A kind may declare other exits**, each one role: the reaction node gives
+*mapped products* and *bond changes*.
 
-**A failure is a status with a class**, not just words. A program plugin's
-`collect` says, for each failed entry:
-- the **class**, declared in its manifest with the remedies it offers.
-  Examples for a DFT program: the SCF did not converge; the optimisation
-  oscillated; a memory allocation failed; the solvation model failed; the
-  run ended without saying how;
+### Failed entries, and running them again
+
+**A calculation's failed entries come out of its *failed* exit**, each with:
+- its **failure**, a property: the kind of failure, in the names the
+  plugin declares in its manifest (*SCF not converged*, *optimisation
+  oscillated*, *out of memory*, *ended without saying how*);
 - the program's **own words**;
-- whether it can be **run again from its last geometry**.
+- the **frames it reached**, where it reached any (an optimisation's path so
+  far), so that *Take frames* can take the last of them.
 
-Meno's own checks give validation failures the same way:
-- the wrong number of imaginary vibrations (none for a minimum, exactly one
-  for a transition state);
-- bonds changed, or stereo lost (R or S, E or Z);
-- an IRC whose end points are not the expected reactant and product.
+**Running them again is drawn** (question 24, answered: no advanced nodes):
+1. the failed exit is wired into simple nodes that change what is run:
+   *Take frames* (the last geometry reached), or *Displace* (along the
+   imaginary vibration);
+2. those go into another step of the same kind, whose own options hold the
+   remedy: another SCF algorithm in its template, force constants computed
+   at the start, more memory;
+3. its *done* exit and the first step's go into a *Merge*.
 
-**A step's retry policy is an option**, with defaults in Settings
-(decision 17). For each class, one of:
-- *Run again as it was*;
-- *Run again from its last geometry*;
-- *Run again with a remedy* the plugin offers (another SCF algorithm, force
-  constants computed at the start, more memory);
-- *Displace along the imaginary vibration and run again*: Meno's, for a
-  minimum that came out with one;
-- *Leave it failed*.
+**A second attempt** is the same small chain again, pasted onto the first
+chain's *failed* exit, and so on for as many attempts as are wanted. Each
+copy is on the page, with its own runs and logs. There is no counter and no
+loop, so loops stay out of the base (question 11, answered: later).
 
-Retries are bounded: at most three attempts by default, the number
-changeable.
-
-**Attempts are kept.** Each entry's attempts are listed with their options,
-how each ended and each one's log. Its status says how it ended (*done on
-its 2nd attempt · SCF settings changed*). Nothing a failed attempt wrote is
-overwritten.
-
-**A retry is not a loop.** It happens inside one step, on the entries that
-failed, and the step is *Partly done* until its attempts are spent.
-Escalating restraints work the same way, as a bounded retry with a
-validation in between: torsion restraints strengthened at each attempt
-until the E/Z check passes, at most ten times (*Minimise with restraints*).
+**Validation is drawn the same way.** A saddle point whose frequencies show
+two imaginary vibrations is not a failed job: a *Filter* on *imaginary
+vibrations = 1* sends it to *rest*, where *Displace* and another optimisation
+can take it.
 
 ### Where jobs run
 
-**A program plugin says what to run; a runner says where.**
-- **The program plugin prepares each job** as today:
-  - the program;
-  - arguments, files and standard input;
-  - the files to read back;
-  - what to do after (a checkpoint converted and compressed);
-  - and now the **resources** it needs: cores, memory, time.
+As answered (question 25):
+- **A program plugin says what to run**: the program; arguments, files and
+  standard input; the files to read back; what to do after; and the
+  resources it needs (cores, memory, time).
+- **A runner says where.** A runner is a plugin role of its own: it
+  submits, says how a job stands, fetches the files asked for, stops,
+  cleans up, and knows where programs are on its machine.
+- **This computer's runner** is the one built today (`Meno --job`,
+  `src-tauri/src/jobs.rs`), moved onto the seam with no change.
+- **Cluster runners are plugins**, for batch schedulers over SSH. Core knows
+  no scheduler.
+- **Throttling** (how many jobs a runner keeps queued) is the runner's
+  option.
+- **Each step's own option**, *Runs on*, chooses the runner, with defaults
+  in Settings.
+- **Credentials are never Meno's.** A cluster runner signs in through the
+  system's own SSH configuration and agent. Meno stores no password or key,
+  and its hosts are granted as other network access is.
+- **Raw outputs** stay where the job ran unless brought in (*Keeping*).
 
-  It does not know where the job will run.
-- **A runner** is a plugin role of its own. It submits a job, says how it
-  stands (waiting, running, done, failed, gone), fetches the files asked
-  for, stops it, and cleans up after. It also knows where each program is on
-  the machine it runs jobs on.
-- **Meno's own runner**, this computer's, is the one built today (`Meno
-  --job`, `src-tauri/src/jobs.rs`). It stays in core, and is moved onto the
-  same seam with no change in what it does.
-- **Cluster runners are plugins.** A runner for a batch scheduler (PBS,
-  Slurm, others) over SSH writes the scheduler's submission script from the
-  job's resources and submits through the scheduler. It then polls on its own
-  schedule, fetches, and gives back. Core knows no scheduler.
-- **Throttling** is the runner's: how many jobs it keeps queued at once.
-  ConfoTS's helper submits a set number at a time and never the same job
-  twice; on Meno that is the runner's *Jobs at once*.
+### Programs' own input, and options shared in kind
 
-**Which runner runs a step** is an option on the step, *Runs on* (*This
-computer*, *the lab's cluster*), its default per plugin and kind in Settings.
-A run picked up after Meno was closed asks the same runner (decision 8,
-kept).
+**Templates** are the program plugins' own options, as answered (question
+27):
+- a route line, an input template with the plugin's placeholders, or a block
+  to add;
+- set as a default in Settings or on the step;
+- shown and kept by core, never read by it.
 
-**Credentials are never Meno's.** A cluster runner signs in through the
-system's own SSH configuration and agent. Meno stores no password or key
-and asks for none. The hosts a runner reaches are declared in its manifest
-and granted as Meno's other network access is.
+**Options shared in kind.** There are no workflow-wide parameters that flow
+into steps by themselves. Each step has its own options (decision 17), and
+some kinds of option are Meno's, so that every plugin shows them the same
+way:
+- **solvent**: a name from Meno's list of solvents with their usual aliases
+  (*chloroform*, *CHCl3*, *CDCl3*), or none. Each plugin maps the name to
+  its program's model and keyword, and says when its model does not know
+  that solvent;
+- **temperature** and **pressure**, with units.
 
-**Data stays where it was made.** A reaction's DFT outputs, checkpoints
-and NEB trajectories come to hundreds of MB to GB.
-- The runner fetches **what a step reads**: the declared outputs and logs,
-  compressed in transit.
-- It **leaves the rest where the job ran**, with a record: path, size,
-  SHA-256.
-- A file left behind is **fetched only when a step asks for it**: a
-  wavefunction for an NCI step, a checkpoint for an IRC.
-- Job folders are **removed when their step is deleted**, as now, after
-  asking where they are on another machine.
-- Settings shows the disk each runner's folders take.
+Charge and multiplicity are each entry's *species*, not options. A *Species*
+node sets them where the atoms do not say it.
 
-### Programs' own input
+**Restraints are a table**, made by the *Restraints* node, wired into the
+steps whose plugins apply them. Each row is one restraint:
+- distance, angle, torsion, or fixed atom;
+- the atoms, in the entry's numbering;
+- the target, with its unit;
+- the force constant.
 
-**The program plugins own their input.** A program plugin may offer, for a
-kind, an option of the kind *text, several lines*:
-- a route line, an input template with the plugin's own placeholders, or a
-  block to add;
-- set as a default in Settings or on the step (decision 17).
+### Meno's own nodes
 
-Core shows it, keeps it, and passes it on. It never reads it. The plugin
-fills its placeholders, checks what it can, and says what it could not use.
-This is how the chemist's own route lines and templates are kept, as
-ConfoTS keeps them.
+Redone from the start as a small set of simple nodes, as the maintainer asked
+on question 16. Each has one role, and they are meant to be combined.
 
-**Some parameters are shared, in Meno's form.** These go to every plugin,
-whatever its program calls them:
-- **charge and multiplicity** (*species*, per entry);
-- **solvent**: a name from Meno's list of solvents, with their usual
-  aliases (*chloroform*, *CHCl3*, *CDCl3*), or "none". Each plugin maps the
-  name to its program's model and keyword, and says when its model does not
-  know that solvent;
-- **temperature and pressure**, for thermochemistry;
-- **restraints**, where the kind takes them: distances, angles, torsions and
-  fixed atoms, in the entry's numbering, with targets and force constants
-  in units. A plugin declares which kinds of restraint it applies.
+**Sets**
 
-A solvent's name is chemistry, not a program, so the list is core's. How a
-program writes it is the plugin's.
+| Node | Takes | Gives |
+|---|---|---|
+| **Filter** | molecules | *kept* and *rest*, by conditions on properties picked as rows (a property, a comparison, a value with its unit; all of them, or any). An entry with no value goes to *rest*, counted |
+| **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all |
+| **Group** | molecules | the same, each entry's *group* set: by compound (its identity with its species), by a property's value, or none |
+| **Merge** | molecules, two or more | one set, in the inputs' order; or one entry of each identity |
+| **Join** | molecules, and molecules or a table | the first, with the second's properties put on by lineage, by identity, or by drawn atom; what did not match is said |
+| **Duplicates** | molecules | *kept* and *rest*: one of each identity, or by RMSD in each group, as Meno does today |
 
-### Kinds of step, for the whole range
+**Numbers**
 
-**Meno defines the kinds, and plugins fill them** (decision 3). The list
-grows from today's eleven. A plugin declares in its manifest, for each kind
-it fills:
-- what it takes, where that is less than the kind takes;
-- the properties it gives: names, units, quantities;
-- the failure classes it reports, and the remedies it offers;
-- the restraints it applies;
-- its options;
-- whether a kind's entries go together into one job.
+| Node | Takes | Gives |
+|---|---|---|
+| **Number** | nothing | a number with its unit, typed by the chemist |
+| **Add** | molecules, and numbers | the same, with a new property: the sum of the properties and numbers chosen, at one geometry |
+| **Relative** | molecules, and a reference where wanted | the same, with a new property: one minus the lowest in its group, or minus the reference |
+| **Linear** | molecules | the same, with *a* × a property + *b* (for a per-atom list, *a* and *b* by element) |
+| **Populations** | molecules | the same, with shares from an energy, in each group, at a temperature, degeneracies counted |
+| **Ensemble energy** | molecules | one entry per group, with −RT ln Σ exp(−E/RT) of an energy at a temperature, degeneracies counted |
+| **Average** | molecules | one entry per group, each property chosen averaged, weighted by a property (shares) or evenly: numbers, per-atom lists and curves alike |
+| **Equivalent atoms** | molecules | the same, a per-atom property averaged over each symmetry class (from Meno's canonical numbering) |
 
-**Calculations: filled by plugins**
+*Ensemble energy* and *Average* give one entry per group. The group's entry
+of highest weight stands for it, carrying the results.
+
+**Structures**
+
+| Node | Takes | Gives |
+|---|---|---|
+| **Species** | molecules | the same, charge and multiplicity set |
+| **Combine** | molecules | one entry holding them all, numbered in order: a complex |
+| **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | for each pair (matched by lineage, or each with each): the first's geometry with the second's bonds and charges, its group *a → b* |
+| **Restraints** | molecules (the reference), and a table of atoms where wanted | a table of restraints: listed atoms or coordination bonds kept at a distance; double bonds' cis or trans kept as in the reference; listed atoms fixed |
+| **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
+| **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
+| **Displace** | molecules with vibrations | the same, the geometry moved along a vibration (the imaginary one, or a chosen one) by an amplitude |
+
+**Spectra and charts**
+
+| Node | Takes | Gives |
+|---|---|---|
+| **Broaden** | molecules with excited states | the same, with a curve: each state broadened (Gaussian or Lorentzian, its width in eV), on an axis in nm or eV |
+| **Errors** | molecules with a per-atom property, and a table or molecules to compare with | a table: the differences per atom, their mean absolute error in each group, and the same after a fitted line |
+| **Curve similarity** | molecules with a curve, and a table (a measured curve) | the same, with a similarity to it |
+| **Energy diagram** | molecules with an energy, and what each connects | a chart |
+| **Chart** | a table | a chart: one column against another |
+
+That is 26 nodes, each doing one thing.
+
+**What happens to today's five**
+- ***Energy window*** becomes *Relative* (to the lowest in its group) then
+  *Filter* (at most *x* kcal/mol).
+- ***Choose one*** becomes *Rank* by energy, the first 1 in each group.
+- ***As conformers*** becomes *Group* by compound.
+- ***Duplicates*** and ***Populations*** stay, under those names, as above.
+
+**In saved workspaces**, steps of a kind Meno no longer knows are left out
+when a workspace is read. The reader does this already
+(`workflow/saved.ts`, `readStep`), so nothing special is written:
+- the wires into and out of them go with them;
+- the sets they made stay, as plain sets;
+- *Duplicates* and *Populations* open as themselves, their options read
+  where the names still mean the same.
+
+The PR says so (decision: no shims before 1.0).
+
+### Kinds filled by plugins
+
+Each is one role. A plugin declares in its manifest the kinds it fills,
+what it takes where that is less than the kind, the properties it gives
+(names, units), the failure kinds it reports, the restraints it applies, its
+options and templates, and whether a kind's entries go into one job
+together (`together`).
+
+**Calculations**
 
 | Kind | Takes | Gives |
 |---|---|---|
-| Conformers | molecules | molecules, 3D, grouped by compound |
-| Optimise, Energy, Frequencies | molecules, 3D (restraints where the plugin applies them) | molecules, 3D, with energies, thermal corrections and vibrations |
+| Conformers | molecules | molecules, 3D, the group of each its compound |
+| Optimise, Energy, Frequencies | molecules, 3D; restraints where the plugin applies them | *done*: with energies, thermal corrections, vibrations; *failed* |
 | NCI, Render | molecules, 3D | molecules with surfaces; pictures |
-| **Minimise with restraints** | molecules, 3D or paired, with restraints | the same, the geometry minimised (a force field, a semiempirical method) |
-| **Path search** | molecules, paired | molecules, path: images with energies, the highest marked |
-| **Optimise to a saddle point** | molecules, 3D (a guess); or paired with a guess, where the plugin says it takes the two sides as well | molecules, 3D, with energy |
-| **Follow the reaction path** | molecules, 3D (saddle points) | molecules, path: both directions as one path, the saddle point at 0 |
-| **NMR shielding** | molecules, 3D | the same, with shieldings per atom (ppm) |
-| **Excited states** | molecules, 3D | the same, with energies and strengths per state |
+| **Minimise with restraints** | molecules, 3D; restraints | *done*, *failed* |
+| **Path search** | *start* and *end* (molecules, 3D, matched by lineage) | *done*: molecules with frames, an energy on each frame; *failed* |
+| **Optimise to a saddle point** | *guess*; and *reactant side* and *product side*, where the plugin takes them | *done*, *failed* |
+| **Follow the reaction path** | molecules, 3D | *done*: molecules with frames, both directions as one path; *failed* |
+| **NMR shielding** | molecules, 3D | *done*: shieldings per atom (ppm); *failed* |
+| **Excited states** | molecules, 3D | *done*: a small table of states (energies, strengths); *failed* |
 
-**Reactions, checks and derived quantities: Meno's own**
-
-| Kind | Takes | Gives |
-|---|---|---|
-| **As a reaction** | a scheme drawn, or an RXN file's | a reaction |
-| **Map atoms** | a reaction | the reaction, mapped, with what changes |
-| **Pair** | *from*: molecules grouped by species; *reaction* | molecules, paired: each conformer with its partner species' bonding, on the same geometry, to be minimised |
-| **Take from path** | molecules, path | molecules, 3D: the highest point, the end points, or a point by its coordinate; or molecules, paired: the highest point as *guess*, with the points either side of it at a set distance as its two sides |
-| **Take one geometry** | molecules, paired | molecules, 3D: the named geometry |
-| **Check bonding** | molecules, 3D; a reaction or the species to check against | those whose bonds, as Meno reads them from the geometry, and stereo (R or S, E or Z, by the shared numbering) are as expected; the rest set aside, with what differs |
-| **Match end points** | molecules, path (IRC); a reaction | the saddle points whose two ends are one reactant and one product of the reaction, each with its connection (*a → b*) |
-| **Check the vibration** | molecules, 3D, with vibrations; a reaction | those whose one imaginary vibration moves the reacting atoms most, within a tolerance |
-| **Measure** | molecules, 3D | the same, with distances, angles or dihedrals between numbered atoms (Å, °) |
-| **Free energy** | molecules with energies and thermal corrections | the same, with a free energy: an energy, plus a correction, plus the standard-state term, all at one geometry and temperature, each part named |
-| **Populations** | molecules, grouped, with energies or free energies | the same, with shares at a temperature |
-| **Boltzmann average** | molecules, grouped, with shares | one entry per group, its per-atom properties, states or spectra weighted by the shares |
-| **Average equivalent atoms** | molecules with per-atom properties | the same, each value averaged over its atom's symmetry class |
-| **Scale** | molecules with shieldings | the same, with shifts (ppm), by a line given (slope and intercept, from a table) or by a reference compound worked out alongside |
-| **Spectrum** | molecules with excited states | the same, with a curve: each state broadened (a Gaussian or Lorentzian width in eV), on an axis in nm or eV |
-| **Barriers** | the reaction, and its species and saddle points with free energies | a table (each species' free energy, lowest or Boltzmann over its conformers; each path's barrier and reaction energy; competing paths' differences and the ratio they give at a temperature), and an energy diagram |
-| **Compare** | *computed* and *measured*: molecules or spectra; a table or a spectrum | a table: errors per atom, their mean, a fitted line; or a spectrum's similarity, as itself and mirrored (its enantiomer) |
-
-**Data steps: Meno's own**
+**Cheminformatics and models**
 
 | Kind | Takes | Gives |
 |---|---|---|
-| **Filter** | molecules | molecules kept (the rest set aside) |
-| **Sort**, **Top N** | molecules | in the new order; the first N, or N in each group |
-| **Split** | molecules | *kept* and *rest*, two exits |
-| **Merge** | molecules, two or more | all, or one of each identity |
-| **Join** | molecules, and molecules or a table | the first, with the second's properties put on by lineage, by identity, or by drawn atom |
-| **Group**, **Ungroup** | molecules | grouped by a key (identity, a property's bands, compound, species), or flat again |
-| **Count**, **Summarise** | molecules or a table | a number; a table of a property's least, greatest, mean and spread |
-| **Sample** | molecules | N of them, at random with a seed shown |
-| **Duplicates** | molecules | one of each identity; for conformers, by RMSD with the atoms' symmetry, as today |
-
-**Cheminformatics and models: filled by plugins**
-
-| Kind | Takes | Gives |
-|---|---|---|
-| **Generate** | nothing, or seeds (molecules), or a target (molecules, or a table of desired properties) | molecules (structure only, or with coordinates where it gives them) |
-| **Describe** | molecules | the same molecules, with properties added |
-| **Similarity** | molecules, and a query (molecules) | the same, with a similarity |
-| **Substructure** | molecules, and a pattern (drawn, or text in a pattern language the plugin declares) | the same, with a true/false property |
-| **Cluster** | molecules | grouped by cluster |
-| **Dock** | ligands (molecules), a target (one entry), and a site where it needs one | poses, grouped by ligand, with scores |
+| **Generate** | nothing, seeds (molecules), or a target (molecules or a table) | molecules, structure only or with coordinates |
+| **Describe** | molecules | the same, with properties |
+| **Similarity** | molecules, and a query | the same, with a similarity |
+| **Substructure** | molecules, and a pattern | the same, with a true/false property |
+| **Cluster** | molecules | the same, each entry's group its cluster |
+| **Dock** | *ligands* and *target* | poses, the group of each its ligand, with scores |
 | **Train** | molecules with a property to learn | a model |
 | **Predict with a model** | molecules, and a model | the same, with the model's properties |
 
-**Today's steps of Meno's own become cases of these**, named as now in Quick
-Add, so that the plain way stays plain (decision 2):
-- *Energy window* is a *Filter*: *energy above the lowest in its group ≤ x
-  kcal/mol*;
-- *Choose one* is a *Top N* of 1 in each group, by energy or by number;
-- *As conformers* is a *Group* by compound.
+**One atom** (revisiting question 8, question D below). There is no routing
+in core. A kind's meaning is written in PLUGINS.md and held by each plugin's
+tests: *Optimise*, *Conformers* or *Frequencies* of a lone atom gives its
+energy where it is, as the plugins do today. A chemist who wants it
+otherwise draws a *Filter* on the number of atoms.
 
-**A filter's condition** is written as rows the chemist picks, not typed as
-an expression:
-- a property, a comparison, a value with its unit;
-- relative to its group where asked (*above the lowest in its group*);
-- rows combined with *all of* or *any of*.
+### The ACCeL plugin
 
-An entry with no value for a property in a condition is set aside, and the
-card counts it (*41 had no logP*), not hidden. *Exactly one imaginary
-vibration* is such a row.
+**What it is.** ACCeL is the maintainer's own library (kfchem/accel, MIT).
+The plugin is a Python-environment plugin like RDKit's: it uses ACCeL as a
+library, in its own environment, and fills the nodes below. No ACCeL code
+goes into core.
+
+**The nodes it fills.** Each is one role, backed by ACCeL's public API (named
+in brackets), and each is what ConfoTS uses ACCeL for:
+
+| Node | Takes | Gives | ACCeL |
+|---|---|---|---|
+| **Reaction** | *reactants* (one entry; a complex is made first by *Combine*) and *products* | *mapped products*: each product in the reactants' numbering (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after | the modeller's maps |
+| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference each descends from; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over | bonds from geometry; stereo |
+| **Duplicates** | molecules, 3D | *kept* and *rest*: RMSD with the molecule's symmetry (equivalent groups turned, equivalent atoms swapped), in each group | symmetry; RMSD pruning |
+| **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning | numbering alignment |
+| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance | the bonding check of a vibration |
+
+**Later, if wanted.** ACCeL also reads Gaussian's NMR shieldings, ECD,
+spin-spin couplings and IRC paths. The plugin could offer those as readers
+(FILE-IO.md, *Readers*). They are not needed for F or G.
+
+**Meno's own, though ACCeL has them too:** relative energies, energy
+windows, Boltzmann populations, the lowest of each group, sums of energy
+terms, averages, distances and mirror images. They are arithmetic on Meno's
+own data, kept in core so that they work whichever plugins are added.
+Decision 16 lets a plugin fill a kind Meno fills, so ACCeL could offer them
+later beside Meno's.
+
+**Its environment.**
+- **Packages:** `accel` 0.3.0 from PyPI, a pure-Python wheel of 71,980
+  bytes that declares only `numpy`, for Python 3.9 or later. GitHub's master
+  is at 0.3.1, which is not on PyPI.
+- **What is not needed:** acceltools 0.2.0 (MIT; it needs scipy and
+  matplotlib), since charts are Meno's.
+- **The plugin's own entry:** `uses: [{name: "ACCeL", version: "0.3.0"}]`,
+  held to its `requirements.lock` by `versions.test.ts` as every plugin's
+  is.
+
+**Consent.** The maintainer's request covers installing ACCeL and the
+dependencies it declares into this plugin's own environment, for building
+and testing it, and nothing else. The first install happens when its PR is
+built (*In order*), after the command centre has been told what it fetches.
+
+## Changed and kept under the principle
+
+Every part of the third draft, re-checked against *Don't make it too
+abstract*:
+
+| Part | Now | Why |
+|---|---|---|
+| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (ACCeL) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
+| Meno's "fewest bond changes" mapping | **Changed**: ACCeL's | the maintainer: even a Diels-Alder would fail |
+| Paired entries (*start*, *end*, *guess*) | **Changed**: plain inputs matched by lineage | no entry kind needed; the same works for every node with two inputs |
+| Grouped type | **Changed**: *group* is a property | a type that only marks a property was abstraction |
+| Spectrum type | **Changed**: a curve is a property; a measured one is a table | one less type, nothing lost |
+| *Pair*, with its side chosen by itself | **Changed**: *Re-bond* (one role); the direction is wired | choosing the side by conformer counts was a node deciding by itself |
+| *Take from path* (guess with two sides) | **Changed**: *Take frames*, one rule a node; three of them for the three structures | one role a node |
+| *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
+| *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
+| *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (ACCeL), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
+| *Boltzmann average*, *Scale*, *Spectrum*, *Compare* | **Changed**: *Average*, *Linear*, *Broaden*, *Errors*, *Curve similarity* | general names for single roles; *Linear* with *a* = −1 mirrors a curve |
+| Filter's "relative to its group" | **Changed**: *Relative* before *Filter* | one role a node |
+| Energy window, Choose one, As conformers | **Changed**: cases of *Relative* + *Filter*, *Rank*, *Group*; dropped from saved workspaces | the maintainer asked for a clean set (question 16) |
+| Retry policies, failure classes, attempts in a step | **Changed**: a *failed* exit, and retries drawn | the maintainer (question 24) |
+| Shared parameters flowing into every step | **Changed**: each step's own options, some of a kind Meno defines (solvent, temperature, pressure); restraints as a table | values that arrive by themselves are not wired |
+| Lone atoms routed by Meno (question 8) | **Changed**: no routing; the kind's meaning, held by the plugins | routing was core acting by itself |
+| Second exits only where declared (question 19) | **Changed**: a second exit wherever entries can fail or be set aside | the maintainer's retries need them |
+| Collections, members, large-set views | **Kept** | they hold and show data; they decide nothing |
+| Fingerprints, snapshots, the store's signal | **Kept** | bookkeeping, under every node alike |
+| Keeping (question 12) | **Changed**: everything kept by default; *Don't keep in the file* per set; raw outputs left where they ran unless brought in | the maintainer: keep everything, with a way not to |
+| Fixed numbering; properties with their geometry and units; identity | **Kept** | rules about data, not nodes |
+| Runners; templates | **Kept** | each chosen on the step, explicitly |
+| Implicit conversions (molecules to a table view, units) | **Kept** | views that lose nothing |
+| Kinds filled by plugins | **Kept** | each was already one role |
+| Loops later (question 11) | **Kept** | retries drawn as copies need no loop |
 
 ## The points, revised
 
-Each of the first draft's points still holds; most are now cases of the base
-above. For each: today, a case, and the design.
-
-### 1. One exit per output
-
-**Today.** Two ports give one step's results (*Steps, ports and exits*).
-
-**Design.** One result set per declared exit, made with the step. The
-card's give port goes.
-
-### 2. Typed inputs and outputs
-
-**Today.** No port says what it takes.
-- `givesOf` walks wires back through *same* (`workflow/flow.ts`).
-- A plugin's narrowing shows only as a wire refused: CREST's *Conformers*
-  takes `["molecules", "conformers"]`.
-- A step that has not run takes anything: `holds == null` passes `canWire`.
-
-**Design.** *Values and their types*, above.
-- Each exit's type is fixed when its inputs are wired, and stored, not
-  walked back on each look.
-- A port says its type on hover; a refused wire says why.
-
-### 3. Sets with explicit contents and order
-
-**Today.** Membership is geometric and order is reading order (*Sets and
-collections*).
-
-**Design.** Explicit members in order, kept in collections. The frame's
-gesture edits a chemist's set. Large sets are shown, not drawn.
-
-### 4. One data contract between steps
-
-**Today.** Steps' entries are built from loose `Molecule3D` fields
-(`setEntries`, `workflow/entries.ts`; `pluginEntry`,
-`workflow/programs.ts`):
-- `SetEntry` has no shares, so a *Populations* step's shares never reach the
-  next step;
-- *As conformers* and *Duplicates* tell species apart by the atoms alone
-  (`speciesOf`, `workflow/meno.ts`), while plugins are given a calculation's
-  charge where one was read. A cation read from an output is grouped with
-  the neutral molecule drawn beside it;
-- two Boltzmann distributions run side by side: `boltzmann` at a step's
-  temperature, and `populations` at a fixed 298.15 K for the chip, which
-  does not say which it shows;
-- there is no place for a property that is not an energy, nor for one per
-  atom, per vibration or per state;
-- nothing says which geometry an energy was worked out at.
-
-**Design.** *The entry*, above:
-- one record, with or without coordinates, with named geometries or a path;
-- an identity, a fixed numbering and a lineage;
-- an open map of typed properties, each with units, the geometry it was
-  worked out at, and provenance.
-
-`entriesOf` and `moleculesOf` are the only crossings between the page's
-molecules and entries. Species are worked out once, by one rule: the
-chemist's, else the calculation's, else the atoms'. There is one Boltzmann
-function, and every share says its temperature and source.
-
-### 5. Partial failure, and retries
-
-**Today.** A run is ok or not (`StepRan.ok`):
-- twelve conformers into *Optimise*, three of whose SCF did not converge,
-  end as *Failed · 3 of 12 failed · …*;
-- the nine that worked are brought in unnamed;
-- *Run again* runs all twelve;
-- *Run all* stops there;
-- nothing runs a failed job again with a remedy.
-
-At ConfoTS's scale (up to 64 pairs, up to 16 saddle points and 16 minima at
-the DFT level, three rounds of resubmission), that would stop every
-reaction.
-
-**Design.**
-- **Status per entry, and per property**, with its reason and its class
-  (*Retries*).
-- **Three states.** A step is *Done*, *Partly done · 61 of 64 pairs · 2
-  retried · 3 failed*, or *Failed*.
-- **The failed ones are named** on the card and in the table's status column.
-- **Retries are bounded and within the step**, by class, with every attempt
-  kept.
-- **Run again on the failed** reruns those entries alone and merges them in.
-- **Downstream runs on what was done**, saying so on its card (*on 61 of
-  64*).
-
-### 6. Invalidation when a source changes, at any size
-
-**Today.**
-- A hash over the input molecules, options, doer and kind is worked out on
-  every edit for every step (`inputKey`, `workflow/flow.ts`).
-- It missed a drawn input's chemistry until #399.
-- It still misses the charge a calculation read, and who did a run and in
-  which version.
-- At a million entries, hashing every input on every edit is not possible.
-
-**Design.**
-- **A step's fingerprint is small and cheap.** It hashes:
-  - the hashes of its inputs' collections, by port;
-  - its kind and resolved options, including a template's text and the
-    shared parameters;
-  - its doer: plugin id and version, program and version as found;
-  - the hash of a model or reaction value, where it takes one.
-- **The runner is not in it.** The same job on another machine is the same
-  calculation. Its result records where it ran.
-- **Each collection's hash is worked out once**, when it is made.
-- **A step is *Changed* when its fingerprint is**, and *Changed upstream*
-  when a step before it is. Its results stay on the page, marked as from an
-  earlier input.
-- **Not counted:** where things lie, names, the 3D look, and the order of a
-  set's members (a step whose result depends on order sorts first).
-
-### 7. A snapshot at the start; a closed store
-
-**Today.**
-- **No snapshot.** A run keeps its input's hash only, and reads its input
-  again at its end (`finishStep`, `store/slices/stepRuns.ts`). #399 keeps
-  what a run's jobs started on in memory, but a workspace reopened mid-run
-  has no such record.
-- **A closed tab tells only the Render command.** Meno's own work goes on
-  against a store whose page is gone.
-
-**Design.**
-- **The snapshot is the input collections.** Collections never change, so a
-  run's snapshot is their hashes, saved with the run. A workspace opened
-  again, days into a cluster run, finishes on exactly what it started on.
-- **A store that closes says so.** Each document's store has a signal, and
-  every run path takes it.
-  - Jobs go on, as decision 8 has it, on whichever runner runs them.
-  - Meno's own work stops, recorded as *Stopped · the workspace was closed*.
-
-### 8. Typed outputs that are not molecules
-
-**Today.** A Render step's pictures are special-cased in eight places:
-`runOne`, `finishStep`, `placePictures`, `canWire`, `inputOf`,
-`resultsNow`, `fitResultSets`, `countOf`.
-
-**Design.** Pictures, tables, numbers, charts, spectra, reactions, models
-and files are types, each with a frame that shows it.
-
-### 9. Layout derived, not stored
-
-**Today.** Result molecules are put at document positions when a run lands
-(`placeResults`, `workflow/run.ts`). A change of 3D look then needs
-`fitResultSets` to lay them out again, through `doc.amend`, over the whole
-history.
-
-**Design.** A result set's layout is worked out where it is shown: its
-members in order, in the look in force.
-- A set the chemist arranged keeps its positions.
-- Large sets are not laid out on the page at all.
-
-### 10. One atom, no electrons, not applicable
-
-**Today.** Each plugin handles a lone atom or a species with no electrons
-its own way:
-- xTB drops `--opt`;
-- CREST runs plain xtb;
-- ORCA and Gaussian swap to an energy run;
-- xTB leaves out a gap with no electrons.
-
-**Design.** The kinds say what such an entry means, and Meno sees to it:
-- **One atom**: *Optimise*, *Conformers* or *Frequencies* of it is its energy
-  where it is, by the doer's *Energy*.
-- **No electrons**: no orbital properties, each marked *not applicable*
-  with the reason.
-- **New kinds** follow the same rule. A property that does not apply to an
-  entry is *not applicable*, not failed: a pKa of a molecule with no acidic
-  site, as the model says, or a shielding of an atom whose nucleus the step
-  was not asked for.
-
-### 11. Every number says what it counts, and its unit
-
-**Today.**
-- Counts appear without nouns: *2 compounds · 12*, *10 of 12*.
-- Options appear without units: *30 · MMFF94 · 2000 · 0.5 Å · 19781*.
-- The chip gives an energy above the lowest and a share without saying the
-  reference or the temperature.
-
-**Design.**
-- **Every number names what it counts and its unit**: *12 conformers*, *2000
-  iterations*, *31 % at 298.15 K*, *ΔG‡ 18.4 kcal/mol at 298.15 K, 1 mol/L*.
-- **A test over every summary function** holds the rule.
-- **A property's unit** comes from the property itself, and its quantity from
-  Meno's units table.
-
-### 12. What a run keeps
-
-**Today.** `StepRan` keeps when it ran, its kind, options, words and its
-jobs' ids. The program and its version are only on the results'
-calculation info, and the logs only in the jobs' folders.
-
-**Design.** A run keeps:
-- its doer, with versions;
-- its runner and where the jobs ran;
-- its input collections' hashes (the snapshot);
-- each entry's attempts and status;
-- its logs, as texts in the workspace;
-- its output collections;
-- a record of each large file left where it was made.
-
-The ten runs kept stay ten.
-
-### 13. Conformers on the new base
-
-**Today.**
-- A molecule is "one compound's conformers" when `conformerSet` is set and
-  it has more than one frame.
-- Shares have no temperature.
-- The "all in one job" of decision 11 has no field in `StepDecl`: CREST
-  groups its own.
-
-**Design.**
-- **A conformer set is molecules grouped by compound.**
-  - *Populations* gives shares with their temperature.
-  - *Choose one* and *Energy window* are cases of *Top N* and *Filter* in
-    each group.
-  - *Duplicates* uses the atoms' symmetry classes.
-- **The same shape serves elsewhere**: docking poses are grouped by ligand,
-  and transition states by the path they lie on.
-- **A manifest's step may say `together: true`**, and CREST's *Optimise*
-  does.
+The thirteen points of the first draft, as they stand now.
+1. **One exit per output.** Today two ports give one step's results. Now
+   every declared exit is a result set, made with the step.
+2. **Typed inputs and outputs.** Today `givesOf` walks wires back, and a
+   step not run takes anything. Now the types above, fixed when wired, are
+   said on hover and on refusal.
+3. **What a set holds.** Today it is geometric (`setMembers`, reading order
+   0.9 units apart). Now explicit members are kept in collections.
+4. **What passes between steps.** Today it is loose `Molecule3D` fields:
+   shares are dropped, there are two ideas of charge, and two Boltzmann
+   distributions. Now there is one entry record, with properties that carry
+   their units and geometry.
+5. **Partial failure.** Today a run is ok or not. Now *done* and *failed*
+   are exits, and runs again are drawn.
+6. **Staleness.** Today it is a hash over some inputs, missing a calculation's
+   charge and the doer's version. Now a fingerprint over the inputs'
+   collection hashes, the kind, the resolved options and templates, and the
+   doer's versions.
+7. **A run's input.** Today it is read again at the end (#399 keeps it in
+   memory). Now the snapshot is the input collections' hashes, saved with the
+   run, and each store has a signal on close.
+8. **Outputs that are not molecules.** Today pictures are special-cased in
+   eight places. Now tables, numbers, charts, models, pictures and files are
+   types.
+9. **Layout.** Today result positions are stored and repaired by
+   `fitResultSets`. Now layout is worked out where it is shown, unless the
+   chemist arranged it.
+10. **One atom, no electrons.** The kind's meaning is held by the plugins; no
+    routing in core.
+11. **Numbers on the page.** Every number names what it counts and its unit,
+    by a test over every summary.
+12. **What a run keeps.** Its doer and versions, its runner, its snapshot,
+    its logs, its output collections, and records of raw outputs left where
+    they ran.
+13. **Conformers.** A conformer set is molecules whose *group* is their
+    compound. *Populations*, *Rank*, *Relative* and *Filter* work in each
+    group; a manifest may say `together`.
 
 ## Seven cases, end to end
 
-Two cases of computational chemistry are walked first and in most detail:
-F (ConfoTS) and G (a conformer ensemble to NMR and ECD). Then come A to E,
-which are mostly cheminformatics but include calculations in A and C.
+Computational chemistry first and in most detail: F (ConfoTS) and G (a
+conformer ensemble to NMR and ECD). Then A to E, mostly cheminformatics.
+Each node is named with who does it: *Meno*, *ACCeL*, or a program plugin.
+ConfoTS's folders and options are in brackets, so that the two can be read
+side by side.
 
 ### F. ConfoTS on Meno
 
-**The case** (cases 2, 4, 5, 6, 14): a Diels-Alder with one reactant, as
-in the showcase's first example. The reactant (*a*) and two products drawn
-side by side (*b*, *c*: two outcomes of the same reaction), in chloroform.
-The question: which product forms faster, and by how much?
+**The case** (cases 2, 4, 5, 6, 14): a Diels-Alder with one reactant, as in
+the showcase's first example. The reactant *a* and two products *b* and *c*
+drawn side by side, in chloroform. Which product forms faster, and by how
+much?
 
-Each ConfoTS step is named in brackets by its output folder or option, so
-the two can be read side by side.
+**On the page:** set **R** holds the reactant drawn (two reactants are made
+one complex by *Combine*); set **P** holds the products drawn.
 
-**F1. The reaction** (ConfoTS step 0)
-1. **The scheme** is drawn on the page, or an RXN file is opened. Where a
-   Lewis acid holds a carbonyl (the showcase's sixth example), the contact is
-   drawn as a coordination bond
-   (in ConfoTS, a bond of the molfile's coordination type, which becomes a
-   distance restraint). The solvent is set once, in the workflow's shared
-   parameters, as *chloroform* (in ConfoTS, a file named for the solvent,
-   matched against aliases).
-2. ***As a reaction*** (Meno's) makes the reaction value:
-   - species *a* on the reactant side; *b* and *c*, competing outcomes, on
-     the product side;
-   - molecules drawn together on one side are one complex where the chemist
-     says so (ConfoTS joins the pieces of one label);
-   - every species must hold the same atoms (ConfoTS stops on differing
-     molecular weights). Meno refuses with the atoms that differ.
-3. ***Map atoms*** (Meno's) gives *b* and *c* the numbering of *a* [003].
-   - **Alternatives.** The showcase's example has four equally good maps for
-     each product, as its symmetry allows; they are kept and shown, and the
-     first is used.
-   - **What changes:** the bonds formed, broken or changed in order, and the
-     atoms they join (ConfoTS's "reacting bonds" and "reacting atoms").
-4. **No single 3D structure is made.** ConfoTS embeds one in step 0 to seed
-   its force-field search; Meno's *Conformers* starts from the drawing
-   (decision 18).
+**F1. The reaction** (step 0)
+1. **Reaction** (ACCeL): *reactants* R, *products* P. It gives *mapped
+   products* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
+   *bond changes* BC [ConfoTS's reacting bonds and atoms].
 
 **F2. Conformers of each species** (step 1, first part)
-1. ***Conformers*** on the reaction's species: the implicit view of its
-   species as molecules. A plugin fills it [100: ConfoTS uses a force-field
-   search of 10,000 steps].
-   - **Restraints:** the reaction's contacts, as distance restraints, where
-     the plugin applies them.
-   - **What it gives:** molecules, 3D, grouped by species, each in the
-     reaction's numbering (the plugin maps its own order back).
-2. ***Filter***: within 10 kcal/mol of the lowest in its group
-   [`energy_limit_to_empopt`].
-3. **Optional:** ***Minimise with restraints***, the reacting atoms fixed,
-   as a pre-optimisation [`prep_opt`].
-4. ***Optimise*** by xTB, GFN2 [110], on the runner chosen.
-5. ***Duplicates***: RMSD below 0.1 Å, with the atoms' symmetry
-   [`rmsd_limit`, with its rotamer and number-isomer permutations].
-6. ***Check bonding*** against each species. Conformers whose bonds changed
-   in the optimisation are set aside, with the bonds gained and lost. Passed
-   over: contacts, and any atoms, elements or bonds the chemist names
-   [`ignored_atoms_in_bond_check` and the like].
-7. ***Filter*** within 5 kcal/mol, and ***Top N***, at most 64
-   [`energy_limit_to_neb`, `max_limit_to_neb`].
-
-In the showcase's example this is some 670 force-field conformers and
-several hundred xTB jobs.
+2. **Merge** (Meno): R and P′ into S (*a*, *b*, *c*).
+3. **Restraints** (Meno): from S, coordination bonds kept at 0.9 of the van
+   der Waals distance, giving T1 [`lewis_distance_scaling`].
+4. **Conformers** (a plugin) on S, with T1 where the plugin takes
+   restraints. Each conformer's group is its species [100; ConfoTS uses a
+   force-field search of 10,000 steps].
+5. **Relative** then **Filter** (Meno): within 10 kcal/mol of the lowest in
+   each group [`energy_limit_to_empopt`].
+6. **Optimise** (xTB, GFN2), *done* [110].
+7. **Duplicates** (ACCeL): RMSD 0.1 Å, with symmetry [`rmsd_limit`].
+8. **Compare bonding** (ACCeL), each against the species it descends from in
+   S, coordination bonds passed over: *same* [the bonds check].
+9. **Relative**, **Filter** and **Rank** (Meno): within 5 kcal/mol, the first
+   64 [`energy_limit_to_neb`, `max_limit_to_neb`].
+10. **Filter** (Meno): the group is *a*. *kept* gives the reactant conformers
+    RC; *rest* gives the product conformers PC.
 
 **F3. Pairs** (step 1, second part)
-1. ***Pair*** (Meno's) [120]:
-   - **Which side.** The option *From*: the side with fewer conformers, or
-     both sides where they are within a quarter of each other (ConfoTS's
-     `path_flag`, *auto*); or *both*, *reactants*, *products*.
-   - **What a pair is.** Each conformer of the chosen side, paired with each
-     species on the other: the conformer's geometry, taken with the partner's
-     bonding and charges, in the shared numbering.
-   - **What it gives:** molecules, paired. *start* is the conformer; *end* is
-     to be made.
-2. ***Minimise with restraints*** (a force-field plugin) on *end*, with the
-   contacts as distance restraints.
-   - **The check:** Meno's E/Z check against the partner species.
-   - **The retry:** where the check fails, torsion restraints on those double
-     bonds, 50 units stronger at each attempt, at most ten attempts
-     [`max_cycle_of_force_mini`; folders 120 to 120_recalc2]. This is a
-     bounded retry with a validation between (*Retries*).
-3. ***Optimise*** (xTB) on *end* [122], optionally after a pre-optimisation
-   with the reacting atoms fixed [`pair_prep_opt`].
-4. ***Check bonding*** on *end* against the partner species, R or S and E or
-   Z kept [`check_chirality`]. Pairs that fail are set aside, with what
-   differs.
+11. **Re-bond** (Meno): *geometry* RC, *bonding* P′, each with each. It gives
+    the ends E, grouped *a → b* and *a → c* [120]. Both directions take a
+    second *Re-bond* (*geometry* PC, *bonding* R) and the same chain after
+    it, merged before F4. ConfoTS chooses the direction from the conformer
+    counts [`path_flag`]; here it is wired.
+12. **Restraints** (Meno): from P′, coordination bonds and the double bonds'
+    cis or trans, giving T2.
+13. **Minimise with restraints** (a force-field plugin): E with T2.
+14. **Compare bonding** (ACCeL) against P′, E or Z only. *same* goes on.
+15. **Its *different*, again, drawn:** **Restraints** with the torsions 50
+    units stronger, **Minimise with restraints**, **Compare bonding**, and a
+    **Merge** with 14's *same*. Pasted once more for each further attempt
+    [`max_cycle_of_force_mini`; the showcase used three rounds,
+    120_recalc0-2].
+16. **Optimise** (xTB) [122].
+17. **Compare bonding** (ACCeL) against P′, with R or S and E or Z:
+    *same* [`check_chirality`].
 
 **F4. Paths and saddle points at the semiempirical level**
-1. ***Path search*** on each pair: a nudged elastic band with GFN2-xTB, 8
-   images, filled by the ORCA plugin [123]. It gives paths, each image with
-   its energy.
-2. ***Take from path*** gives molecules, paired:
-   - **guess**: the highest point, or the climbing image [`use_ci_xyz`];
-   - **reactant side** and **product side**: the images either side of it, a
-     set number of images away, for a three-structure optimisation later
-     [`image_distance`].
-3. ***Measure*** the forming bonds' lengths, in Å [`calc_length`].
-4. ***Duplicates***, by RMSD with the atoms' symmetry.
-5. ***Frequencies*** (xTB) [125], then ***Filter***: exactly one imaginary
-   vibration [`check_freq(im=1)`].
-6. ***Follow the reaction path*** (the ORCA plugin's IRC, xTB), both ways
-   [`irc_test`; 125_F, 125_B].
-7. ***Match end points***: the saddle points whose two ends are one reactant
-   and one product of the reaction, R or S and E or Z kept
-   [`check_irc_chirality`]. Each keeps its connection (*a → b*, *a → c*);
-   the rest are set aside with *IRC ends not the reaction's*. Without an IRC,
-   ***Check the vibration*** does instead: the imaginary vibration must move
-   the reacting atoms most, within a tolerance [`additional_valid_range`,
-   `acceptable_invalid_atoms`].
-8. ***Take from path*** once more: the IRC's ends become the better sides
-   for the three-structure optimisation [`use_irc_terminal_for_qst`].
+18. **Path search** (ORCA plugin: NEB with GFN2-xTB, 8 images). *start* is RC
+    and *end* is 17's *same*, matched by lineage, since each end descends from
+    its start. It gives paths [123].
+19. **Take frames** (Meno): the highest energy, giving the guesses G [124].
+20. **Measure** (Meno): the forming bonds, atoms from BC [`calc_length`].
+21. **Duplicates** (ACCeL) [`rmsd_limit`].
+22. **Frequencies** (xTB) [125].
+23. **Filter** (Meno): exactly one imaginary vibration [`check_freq`].
+24. **Follow the reaction path** (ORCA plugin, IRC with xTB) [125_F, 125_B].
+25. **Take frames** twice (Meno): the first, and the last.
+26. **Compare bonding** twice (ACCeL): each end against S, naming the
+    species it matches (*a*, *b*, *c* or none) [128].
+27. **Join** (Meno) by lineage: both names put back on the saddle points as
+    *first end* and *last end*.
+28. **Filter** (Meno): one end is *a* and the other the product the saddle
+    point was made for. This gives the validated saddle points V [126].
+    Without IRC, **Mode on atoms** (ACCeL, atoms from BC) and a **Filter**
+    do instead [`check_bonding`].
+29. **The sides for the three-structure optimisation**: 25's ends of V
+    [`use_irc_terminal_for_qst`]; or **Take frames**, two frames before and
+    after the highest, from 18's paths [`image_distance`].
 
-The result is saddle points grouped by path [126].
-
-**F5. The energy diagram at the xTB level** [130]
-1. ***Frequencies*** (xTB) on the reactant and product conformers kept
-   (within 5 kcal/mol, at most 16) [114] and on the saddle points.
-2. ***Free energy***: xTB's energy plus its own thermal correction, at
-   298.15 K and 1 atm.
-3. ***Barriers***, lowest of each species, gives a table and a chart: the
-   energy diagram before any DFT, which the user guide suggests for a quick
-   screen.
+**F5. The diagram at the xTB level** [130]
+30. **Relative**, **Filter** and **Rank** (Meno): reactant and product
+    conformers within 5 kcal/mol, at most 16. Then **Frequencies** (xTB)
+    [114].
+31. **Add** (Meno): the xTB energy plus its thermal correction to G, for
+    them and for V. This is G at the xTB level.
+32. **Rank** (Meno): the lowest of each species and each path.
+33. **Energy diagram** (Meno): a chart.
 
 **F6. DFT** (steps 2 and 3)
-1. ***Filter*** and ***Top N***:
-   - saddle points within 10 kcal/mol, at most 16;
-   - reactants and products within 5 kcal/mol, at most 16
-     [`energy_limit_to_ts_dft`, `energy_limit_to_reapro_dft`,
-     `max_limit_to_dftopt`].
-2. **The saddle points.** ***Optimise to a saddle point*** with the Gaussian
-   plugin, on the cluster runner [203]:
-   - with the three structures, where the plugin takes them [`qst_opt`];
-   - or the guess alone, force constants computed first.
-3. **The minima.** ***Optimise*** the reactants and products [201, 202].
-4. **Frequencies** at the same level.
-5. **The levels.** The chemist's route lines are the Gaussian plugin's
-   template option: ωB97X-D/6-31G(d) for geometries. Then ***Energy*** at
-   ωB97X-D/6-311+G(d,p) with SMD chloroform [`model_sp`, the Link1 job].
-   This is two steps, or one job by the plugin's template, as the chemist
-   sets it.
-6. **Retries**, at most three attempts, as step 2's three rounds of
-   resubmission. The classes are those its helper script tells apart, among
-   them an SCF that did not converge, an optimisation that oscillated, a
-   memory error, and the wrong count of imaginary vibrations. On Meno each
-   class has its remedy, the chemist's to choose:
-   - an SCF that did not converge: from the last geometry, with another SCF
-     algorithm the plugin offers;
-   - an oscillating optimisation (its forces repeating): from the last
-     geometry, force constants computed;
-   - memory: as it was;
-   - the wrong count of imaginary vibrations: displaced along it (Meno's),
-     then run again.
-7. ***Check the vibration*** on the DFT saddle points. ***Filter***: no
-   imaginary vibration for a minimum, exactly one for a saddle point.
-8. ***Free energy***: the higher level's energy, plus the lower level's
-   thermal correction at the same geometry, plus the standard-state term (1
-   atm to 1 mol/L, as the chemist sets). Each part is named on the property.
-   ConfoTS's single-point-only mode adds xTB's correction to a DFT energy at
-   the xTB geometry; that is allowed, since the geometry is the same, and
-   the property says so.
-9. ***Duplicates***, then ***Populations*** (Boltzmann over each species'
-   conformers) [`calc_distribution`].
-10. ***Barriers***, lowest of each species or Boltzmann over each, as
-    chosen [310]:
-    - a table: ΔG‡ of *a → b* and of *a → c*, their difference ΔΔG‡, and
-      the ratio of *b* to *c* it gives at 298.15 K;
-    - a chart: the energy diagram at the DFT level.
+34. **Relative**, **Filter** and **Rank** (Meno): V within 10 kcal/mol, at
+    most 16; the minima within 5 kcal/mol, at most 16 [`max_limit_to_dftopt`
+    and the two energy limits].
+35. **Optimise to a saddle point** (Gaussian plugin, on the cluster runner):
+    *guess* V, with *reactant side* and *product side*, matched by lineage.
+    The template is ωB97X-D/6-31G(d), opt=(QST3) [203, `qst_opt`].
+36. **Optimise** (Gaussian), the minima [201, 202].
+37. **Frequencies** (Gaussian), at the same level.
+38. **Runs again, drawn**, as step 2's three rounds of resubmission:
+    - *failed* → **Take frames** (the last reached) → **Optimise to a saddle
+      point**, its template holding the remedy (another SCF algorithm, or
+      force constants computed first) → **Merge** with *done*;
+    - pasted once more for a third round. The failure kinds are those
+      ConfoTS's helper script tells apart.
+39. **Filter** (Meno): exactly one imaginary vibration for a saddle point,
+    none for a minimum. Its *rest* goes to **Displace**, an optimisation
+    again, and a **Merge**.
+40. **Mode on atoms** (ACCeL), atoms from BC [step 3's `check_bonding`].
+41. **Energy** (Gaussian): ωB97X-D/6-311+G(d,p), solvent chloroform
+    [`model_sp`; the Link1 job].
+42. **Number** (Meno): 1.89 kcal/mol, the standard-state term from 1 atm to
+    1 mol/L at 298.15 K. Then **Add** (Meno): 41's energy, plus 37's thermal
+    correction to G, plus 42. Each part is worked out at the same geometry,
+    so *Add* takes them; the result is G at the DFT level.
+43. **Duplicates** (ACCeL), then **Populations** (Meno) in each group
+    [`calc_distribution`].
+44. **Rank** (Meno), the lowest in each group, or **Ensemble energy** (Meno)
+    over each.
+45. **Relative** (Meno): each saddle point against the reactant, giving ΔG‡
+    per path.
+46. **Populations** (Meno) over the saddle points of both paths, as one
+    group: the share of each path, which is the ratio of *b* to *c* at
+    298.15 K.
+47. **Energy diagram** (Meno): a chart [310].
 
 **F7. IRC at the DFT level** (steps 4 and 5)
-1. ***Top N***: 1 per path, the lowest saddle point [`irc_all` off, 401 and
-   402]; or all of them [403, 404].
-2. ***Follow the reaction path*** (Gaussian, both ways) gives paths, the
-   points in coordinate order as Meno already reads them (#356).
-3. ***Take from path***: the end points. ***Optimise*** them (Gaussian)
-   [502]. ConfoTS writes these inputs without running them.
-4. ***Match end points*** confirms each path joins the species it claims.
+48. **Rank** (Meno): the first in each path [401, 402]; or all [403, 404].
+49. **Follow the reaction path** (Gaussian) [501].
+50. **Take frames** (first, last), **Optimise** (Gaussian) [502], **Compare
+    bonding** (ACCeL, naming), **Join** and **Filter** (Meno): each path
+    joins the species it claims.
 
-**F8. Where it runs, and what it keeps**
-- **Where.** The xTB steps run on this computer or the cluster, and the DFT
-  steps on the cluster (*Runs on*). Hundreds of jobs.
-- **How much output.** The showcase's example keeps about 580 MB in the
-  parts it shows:
+**The nodes F uses:**
+- **Meno's** (15): Merge, Restraints, Relative, Filter, Rank, Re-bond, Take
+  frames, Measure, Join, Displace, Number, Add, Populations, Ensemble
+  energy, Energy diagram.
+- **ACCeL's** (4): Reaction, Duplicates, Compare bonding, Mode on atoms.
+- **Program plugins'** (8): Conformers, Optimise, Minimise with restraints,
+  Path search, Frequencies, Follow the reaction path, Optimise to a saddle
+  point, Energy.
+
+Each appears as often as F needs it: some sixty nodes on the page for the
+whole of ConfoTS, both directions and the retry copies included. Any part
+can be saved and put down again (question C).
+
+**F8. Where it runs and what it keeps**
+- **Where.** The xTB nodes run on this computer or the cluster, and the DFT
+  nodes on the cluster (*Runs on*).
+- **How much output.** The showcase's example keeps about 580 MB in the parts
+  it shows:
   - 170 MB of NEB output;
   - 180 MB of DFT optimisations;
   - 70 MB of collected DFT logs;
   - 47 MB of IRC output.
 
-  This stays on the cluster where it was made. The outputs steps read are
-  fetched, and the `.meno` holds what Meno read.
-- **The record.** Every step's runs and every attempt are kept. Every entry
-  set aside keeps its reason (*bonds changed*, *IRC ends not the
-  reaction's*), as ConfoTS's records keep theirs.
+  These stay on the cluster unless a step is told *Bring raw outputs into the
+  workspace*. Everything Meno read, and every collection, is kept in the
+  `.meno` by default.
 
-**F9. What it needed**, against the ten points asked for:
-1. **Reactions as values, the numbering kept**: *Reactions*; *The numbering
-   is fixed*.
-2. **Pairs as entries, a step that makes them**: the *paired* kind of entry;
-   *Pair*.
-3. **Paths**: the *path* kind of entry; *Path search*, *Follow the reaction
-   path*, *Take from path*.
+**F9. Against the ten points asked for, last round:**
+1. **Reactions and their numbering**: the *Reaction* node, the fixed
+   numbering.
+2. **Pairs**: *Re-bond*, with inputs matched by lineage.
+3. **Paths**: entries with frames, and *Take frames*.
 4. **Stationary points and their validation**:
-   - vibrations as properties, the imaginary count among them;
-   - *Filter*;
-   - *Check the vibration*;
-   - *Match end points*, by the shared numbering and the reaction's bonding.
-5. **Levels kept apart, free energies whole**: properties with the geometry
-   they were worked out at, and their method; *Free energy* with every part
-   named.
-6. **Barriers and diagrams**: *Barriers*, giving a table and a chart.
-7. **Failure and retries**: failure classes, retry policies, attempts kept;
-   *Partly done* through hundreds of jobs.
-8. **Where jobs run**: runners, with data left where it was made.
-9. **Program input templates**: the program plugins' template options; the
-   shared parameters.
-10. **Who does bond changes and restrained minimisation**:
-    - *Map atoms* and *Check bonding* are Meno's: graph comparisons and
-      geometry, on Meno's own data;
-    - *Minimise with restraints* is a plugin's: it needs a force field.
+   - the imaginary count as a property, and *Filter*;
+   - *Mode on atoms*;
+   - *Compare bonding* with *Join*.
+5. **Levels of theory**: properties with their geometry; *Add*.
+6. **Barriers and diagrams**: *Relative*, *Populations*, *Energy diagram*.
+7. **Failure and runs again**: the *failed* exit, drawn chains, *Merge*.
+8. **Where jobs run**: runners.
+9. **Templates**: the program plugins' options.
+10. **Bond changes and restrained minimisation**:
+    - *Reaction* and *Compare bonding* are ACCeL's;
+    - *Minimise with restraints* is a force-field plugin's;
+    - *Restraints* and *Re-bond* are Meno's.
 
 ### G. A conformer ensemble to NMR and ECD
 
 **The case** (cases 1, 2, 3, 14, 16): a natural product with two candidate
-diastereomers. The questions: which relative configuration do its ¹H and
-¹³C NMR support, and which absolute configuration does its ECD?
+diastereomers, drawn into one set. Which relative configuration do its ¹H
+and ¹³C shifts support, and which absolute configuration does its ECD?
 
-**G1. Conformers**
-1. **The candidates.** Both are drawn into one set, a compound set. Where
-   the drawing leaves a centre open, *Conformers* asks which stereoisomers to
-   make, all of them included, as the canvas does.
-2. ***Conformers*** (CREST) gives conformers grouped by compound, in each
-   drawing's numbering.
-3. ***Filter*** within 6 kcal/mol, then ***Duplicates***.
+1. **Conformers** (CREST): each conformer's group is its candidate.
+2. **Relative**, **Filter** (Meno), within 6 kcal/mol, then **Duplicates**
+   (Meno's, or ACCeL's with symmetry).
+3. **Optimise** (ORCA or Gaussian, B3LYP-D3(BJ)/def2-SVP, on the cluster).
+   Its *failed* exit is run again as in F, if wanted.
+4. **Frequencies**, then **Filter** (Meno), no imaginary vibration. *rest*
+   goes to **Displace**, **Optimise**, **Frequencies** and a **Merge**.
+5. **Energy** at a higher level, with the solvent.
+6. **Add** (Meno): the energy plus the thermal correction to G, at one
+   geometry. The CREST energies stay on the entries, marked as of an earlier
+   geometry, and *Add* does not take them.
+7. **Populations** (Meno), in each group at 298.15 K. **Filter** (Meno):
+   share at least 1 %. **Populations** again, for the shares of those kept.
+8. **NMR shielding** (a plugin, GIAO, in the solvent): shieldings per atom,
+   in each candidate's drawn numbering.
+9. **Equivalent atoms** (Meno): a methyl's three hydrogens averaged;
+   diastereotopic ones not.
+10. **Linear** (Meno): shifts from shieldings, by element, with *a* and *b*
+    for that level. Or by a reference: tetramethylsilane worked out alongside,
+    **Relative** to its shielding, then **Linear** with *a* = −1.
+11. **Average** (Meno), weighted by the shares, in each group: one entry per
+    candidate.
+12. **The measured shifts**, a table read from a CSV keyed by the drawing's
+    atom numbers (a hydrogen by the atom it is on). **Join** by drawn atom,
+    then **Errors** (Meno): a table of the mean absolute errors per
+    candidate. **Chart** (Meno): computed against measured.
+13. **Excited states** (a plugin, TD-DFT, 30 states) on 7's conformers,
+    **Broaden** (Meno: Gaussian, 0.3 eV, nm), then **Average** (Meno),
+    weighted: one curve per candidate.
+14. **The measured ECD** as a table, then **Curve similarity** (Meno). Also
+    **Linear** with *a* = −1 (the mirror image), then **Curve similarity**
+    again. The absolute configuration is the one whose curve, or its mirror,
+    matches.
 
-**G2. DFT geometries and populations**
-1. ***Optimise*** and ***Frequencies*** (ORCA or Gaussian,
-   B3LYP-D3(BJ)/def2-SVP), on the cluster runner.
-2. ***Filter***: no imaginary vibration. Retry: displaced along it, at most
-   three attempts.
-3. ***Energy*** at a higher level, with the solvent from the shared
-   parameters.
-4. ***Free energy*** at the same geometry, each part named.
-5. ***Populations*** at 298.15 K, then ***Filter***: share above 1 %, as the
-   chemist sets.
+**The nodes G uses:**
+- **Meno's** (15): Relative, Filter, Duplicates, Displace, Merge, Add,
+  Populations, Equivalent atoms, Linear, Average, Join, Errors, Chart,
+  Broaden, Curve similarity.
+- **Program plugins'** (6): Conformers, Optimise, Frequencies, Energy, NMR
+  shielding, Excited states.
 
-Every property here was worked out at the DFT geometry. The CREST energies
-stay on the entries, marked as of their earlier geometry, and are never
-mixed in.
-
-**G3. NMR**
-1. ***NMR shielding*** (GIAO, at a level chosen, in the solvent) gives
-   shieldings per atom, in each conformer's numbering. That is the drawing's
-   numbering, kept through the drawn atom each 3D atom came from.
-2. ***Average equivalent atoms*** averages by the atoms' symmetry classes:
-   the three hydrogens of a methyl are averaged; diastereotopic protons are
-   not.
-3. ***Scale*** turns shieldings into shifts:
-   - by a line for that level, from a table the chemist gives;
-   - or by a reference, tetramethylsilane, worked out alongside at the same
-     level.
-4. ***Boltzmann average*** within each candidate gives one entry per
-   candidate, with ¹H and ¹³C shifts per atom.
-
-**G4. Against the measured shifts**
-1. **The measured shifts** come as a table: read from a CSV keyed by the
-   drawing's atom numbers (a hydrogen by the atom it is on), or typed in the
-   column.
-2. ***Join*** by drawn atom, then ***Compare***. It gives:
-   - a table: per-atom errors, their mean absolute value, and the same after a
-     fitted line, for each candidate;
-   - a chart: computed against measured.
-3. **A probability between the candidates**, by a published statistical
-   method of the DP4 kind, would be a plugin's *Describe* or a later step of
-   Meno's (question 29).
-
-**G5. ECD**
-1. ***Excited states*** (TD-DFT, 30 states, in the solvent) on the
-   conformers above 1 %.
-2. ***Spectrum*** broadens each into a curve: Gaussian, 0.3 eV wide, on an
-   axis in nm.
-3. ***Boltzmann average*** gives one spectrum per candidate.
-4. ***Compare*** with the measured ECD, a spectrum read from a file. It gives
-   each candidate's similarity, as computed and mirrored. The absolute
-   configuration is the one whose spectrum, or its mirror image, matches.
-
-**G6. Scale.** Two candidates, about 20 conformers each after filtering, and
-four calculations each (geometry with frequencies, energy, NMR, excited
-states): some 150 to 250 jobs. The solvent and temperature are set once for
-the workflow, in the shared parameters.
+A probability between the candidates, of the DP4 kind, is a plugin's first,
+as answered (question 29).
 
 ### A. Generate, predict, filter, then calculate
 
 *Cases 7, 8, 9, 13.*
 
-1. **Generate.** A *Generate* step, filled by a generative-model plugin,
-   takes a target: a table of one row, logP 2 ± 1, made by the chemist on the
-   page.
-   - Its options: 10,000 structures and a seed.
-   - Its exit: *molecules, structure only*.
-   - What came back: 9,962 graphs. The other 38 failed, each with the
-     generator's reason, and the card says *Partly done · 9,962 of 10,000
-     molecules · 38 failed*.
-   - The result set shows its count and a sampled grid drawn by Meno's
-     layout.
-2. **Describe.** A *Describe* step (a property-prediction plugin) adds
-   *logP* and *pKa (most basic)*, both dimensionless, each with its model and
-   version named. 41 have no pKa: *not applicable · no basic site*.
-3. **Filter**: *logP between 1 and 3*, and *pKa above 7*.
-   - 1,204 are kept; the card says *1,204 of 9,962 kept · 41 had no pKa*.
-   - Histograms of both properties now show on the set.
-4. **Sort and take the top.** *Sort* by a third property, then *Top N* with
-   N = 40. Forty fit the page, so they are drawn, each with its 2D drawing
-   made by Meno's layout.
-5. **Calculate.** *Conformers*, then *Optimise* (xTB), on the runner chosen,
-   as today. The entries get 3D, energies come with their method, and the
-   properties ride along.
-6. **Run again.** *Generate* run with another seed makes a new collection.
-   Every step after it is *Changed upstream*, its results still shown and
-   marked, until run again.
+1. **Generate** (a plugin): a target table, 10,000 structures, a seed.
+   *done*: 9,962 graphs. *failed*: 38, each with the generator's reason.
+   The set shows a summary.
+2. **Describe** (a plugin): logP and pKa, with model and version. 41 have no
+   pKa: *not applicable · no basic site*.
+3. **Filter** (Meno): logP between 1 and 3, and pKa above 7. 1,204 kept;
+   *41 had no pKa*.
+4. **Rank** (Meno), by a third property, keeping 40. Forty fit the page.
+5. **Conformers**, then **Optimise** (xTB).
+6. **Generate** run with another seed makes a new collection. Everything
+   after it is *Changed upstream*.
+
+**The nodes:** Meno's Filter and Rank; plugins' Generate, Describe,
+Conformers, Optimise.
 
 ### B. Similarity and clustering on a library
 
 *Cases 10, 13.*
 
-1. **The library.** A 200,000-compound SD file is opened as a set. It is
-   shown as a summary and never drawn whole.
-2. **Similarity.** A drawn query molecule is wired into *Similarity*'s query
-   port.
-   - The plugin computes its fingerprints itself, kept as a packed vector
-     property.
-   - A second run with the same fingerprint options computes none again.
-   - It gives *Tanimoto similarity to the query*, dimensionless.
-3. **Filter and cluster.** *Filter* at 0.6 or more keeps 3,180. *Cluster* (a
-   plugin) gives them grouped, 212 clusters.
-4. **One per cluster.** *Top N* of 1 in each group, by similarity, gives 212
-   representatives, shown as a summary. *Sample* 30 of them puts thirty on
-   the page.
-5. **What it costs.** 200,000 fingerprints of 2,048 bits are 51 MB packed. A
-   plugin computes them at tens of thousands a second, in its own process,
-   and comparing one query against all takes a fraction of a second there.
-   Meno moves the columns; it does not compute fingerprints.
+1. A 200,000-compound SD file is opened as a set: a summary, never drawn
+   whole.
+2. **Similarity** (a plugin) to a drawn query. Its fingerprints are kept as
+   packed vectors (in the file, by default, as the maintainer asked); 51 MB
+   for 200,000 at 2,048 bits.
+3. **Filter** (Meno): 0.6 or more, 3,180 kept. **Cluster** (a plugin): each
+   entry's group is its cluster.
+4. **Rank** (Meno): the first in each group, 212 entries. Thirty are put on
+   the page from the table.
+
+**The nodes:** Meno's Filter and Rank; plugins' Similarity and Cluster.
 
 ### C. Docking, with properties joined back
 
 *Cases 11, 16.*
 
-1. **Inputs.** The forty from A go into *Dock*'s *ligands*. A protein opened
-   from a PDB file goes into *target*. The site comes from the plugin's
-   options, as a box, or from a ligand already in the structure.
-2. **Poses.** The exit is *molecules, 3D, grouped by ligand*, each pose with
-   a score in kcal/mol, named with its scoring function.
-3. **Best pose.** *Top N* of 1 in each group, by score, gives the best pose
-   of each ligand.
-4. **Rescoring, if wanted.** *Optimise* (xTB) of the complexes, with the
-   protein held, would be restraints of the *fixed atoms* kind on a cut-out
-   of the pocket. The same shape as in F applies.
-5. **Join back.** A *Join* by lineage puts the scores back onto the forty
-   from A, which still carry logP and pKa. One collection then holds every
-   property.
-6. **Export.** Its exit, taken as a table (the implicit view), goes to an
-   Export as CSV.
+1. **Dock** (a plugin): *ligands* (A's forty), *target* (a protein opened
+   from a PDB file). The poses' group is their ligand, each with a score in
+   kcal/mol.
+2. **Rank** (Meno): the first in each group, the best pose of each ligand.
+3. **Join** (Meno) by lineage: the scores back onto A's forty, with their
+   logP and pKa.
+4. The set taken as a table goes to an Export as CSV.
+
+**The nodes:** Meno's Rank and Join; a plugin's Dock.
 
 ### D. Train and predict
 
 *Cases 12, 16.*
 
-1. **The data.** A CSV of measured pKa, with SMILES, is opened as a table.
-2. **Join.** A *Join* by identity puts the pKa onto the molecules drawn in a
-   set. 37 of 40 rows match; the three that do not are listed on the card by
-   their SMILES.
-3. **Train.** *Train* (a plugin) takes the joined set, with *pKa* as what it
-   learns, and gives a model. Its frame says:
-   - what it takes: molecules, structure;
-   - what it gives: *pKa*, dimensionless;
-   - its method, and the hash of its training set.
-4. **Predict.** The model's exit is wired into *Predict with a model*,
-   beside A's 1,204 molecules. Their predicted pKa says it came from that
-   model, trained on that set.
-5. **Retrain.** Retraining on more data makes a new model value, and the
-   predictions downstream are *Changed upstream*.
+1. A CSV of measured pKa with SMILES, opened as a table.
+2. **Join** (Meno) by identity onto molecules drawn in a set. 37 of 40 rows
+   match; the three that do not are listed.
+3. **Train** (a plugin) gives a model, its frame saying what it takes and
+   gives, and its training set's hash.
+4. **Predict with a model** (a plugin) on A's 1,204.
+5. Retraining makes a new model, and the predictions are *Changed upstream*.
+
+**The nodes:** Meno's Join; plugins' Train and Predict with a model.
 
 ### E. A loop: generate, score, filter, generate again
 
-*Case 15. Later, by design.*
-
-1. **Today, it is done by hand.** The chemist joins the scored set back as
-   the *Generate* step's seeds, on a second copy of the chain put down from
-   a saved procedure.
-2. **Later, as a repeat frame:**
-   - a frame drawn round a chain of steps, with one wire allowed back from
-     its end to its start: the only cycle Meno allows;
-   - its options: how many passes at most, and a condition to stop on (a
-     property's best changing by less than a value);
-   - each pass kept as a run of the frame, with its own collections, so that
-     every pass can be looked at and its lineage traced.
-3. **Not now, because a cycle breaks three things the rest of this design
-   rests on:**
-   - a result is a function of its inputs, so fingerprints mean something;
-   - the scheduler runs each step once, in order;
-   - results lie to the right of their steps.
-
-   A frame confines the cycle to one place, where those rules are replaced by
-   passes. That is a design of its own, best made once the base exists and
-   loops are asked for in earnest. Nothing in the base shuts it out: runs
-   already keep lineage and collections.
-
-   F's retries and escalating restraints are not loops in this sense. They
-   are bounded attempts within one step, on the entries that failed.
+*Case 15. Later, by design* (question 11, answered).
+- **Today it is drawn by hand**: the scored set is joined back as the seeds
+  of a pasted copy of the chain.
+- **Later, a repeat frame**: one wire allowed back from a chain's end to its
+  start, passes kept as runs, a bound and a stop condition.
+- **The base does not need it.** F's and G's runs again are drawn as copies:
+  nothing in them loops.
 
 ## Branching and merging
 
-- **Branching** is several wires from one exit: allowed today, kept. F uses
-  it for the xTB diagram and the DFT branch, which both leave from the
-  validated saddle points.
-- **Merging** is *Merge* (all, or one of each identity) or *Join*:
-  - **by lineage**: the same entries, followed through other steps (C);
-  - **by identity**: the same compound, from elsewhere (D);
-  - **by drawn atom**: a measured per-atom table onto computed entries (G).
-- **A join says what it did not match** (*3 rows matched no molecule*) and
-  never guesses. Where two entries share an identity, a join by identity puts
-  a row's properties on both, and says so.
+- **Branching** is several wires from one exit, as F does from its validated
+  saddle points to the xTB diagram and to DFT.
+- **Merging** is **Merge** (all, or one of each identity) or **Join**: by
+  lineage (C, F), by identity (D), or by drawn atom (G).
+- **A join says what it did not match**, and never guesses.
 
 ## Found while writing the first draft
 
@@ -1298,308 +973,209 @@ changes the workspace file. The plugins for new kinds come after the kinds
 open, one plugin to a PR.
 
 1. **The entry record and units.**
-   - `Entry` and `Property`, with the property shapes (one, per atom, per
-     vibration, per state, a curve, a vector, restraints).
-   - The geometry a property was worked out at.
+   - `Entry` and `Property`, with their value shapes, the geometry each was
+     worked out at, and units.
+   - Lineage with one or more parents.
    - The fixed numbering, written down and tested on the steps there are.
    - Species by one rule; Meno's units table; one Boltzmann function.
-   - Energies, shares, degeneracies, thermal corrections and vibrations
-     become properties.
-   - The chip names its share's source.
    - PLUGINS.md documents the plugin entry, with a version number.
-2. **Identity and symmetry classes.**
-   - Meno's canonical key and each atom's class, from the canonical
-     numbering written for Clean-up (#319), once it is merged.
-   - *As conformers* and *Duplicates* use them.
-3. **Collections and members.**
-   - Collections in the workspace file; sets reference them; hashes made
-     once; members explicit and in order.
-   - The frame's gesture as the edit.
+2. **Identity and symmetry classes**, from #319's canonical numbering once it
+   is merged.
+3. **Collections, members and keeping.**
+   - Collections in the file; members explicit and in order; the frame's
+     gesture as the edit.
+   - *Don't keep in the file*; raw outputs left where they ran, *Bring raw
+     outputs into the workspace*.
    - Workspaces saved before read their members from their frames once
-     (question 7).
-4. **Fingerprints and snapshots.**
-   - Fingerprints over collection hashes and doer versions; *Changed
-     upstream*.
-   - Snapshots as collection hashes.
-   - The store's signal on close.
-5. **Status, failure classes and retries.**
-   - Status per entry and per property; *Partly done*.
-   - Failure classes; the retry policy; attempts kept.
-   - Meno's validation failures, and displacement along an imaginary
-     vibration.
-   - *Run again on the failed*.
-   - The wording rule and its test.
-6. **Ports, exits and types.**
-   - Named, typed inputs and exits per kind.
-   - The kinds of entry: paired, path, grouped.
-   - Result sets made with their steps; the card's give port gone.
-   - Types fixed when wired, said on hover and refusal; the conversion rules.
-   - Pictures as a type.
-7. **Large sets.**
-   - The summary frame (count, sampled grid, histograms), and the table in
-     the column.
-   - Putting entries on the page.
-   - Layout derived for small sets; `fitResultSets` goes.
-8. **Meno's data steps.**
-   - *Filter*, *Sort*, *Top N*, *Split*, *Merge*, *Join*, *Group* and
-     *Ungroup*, *Count*, *Summarise*, *Sample*.
-   - *Energy window*, *Choose one* and *As conformers* as their cases, kept
-     by name in Quick Add.
-9. **The plugin contract.**
-   - Entries passed by file above a size (columns, not JSON).
-   - Manifests declare the properties given, failure classes and remedies,
-     restraints applied, template options, `together`, and model formats.
-   - The shared parameters, with Meno's list of solvents.
-   - The existing plugins (xTB, CREST, ORCA, Gaussian, RDKit) moved onto
-     it.
-   - The boundary guard extended to property and model names.
-10. **Tables, numbers, charts and spectra on the page.**
-    - Their frames.
-    - A table or spectrum read from a file as a value.
-    - Charts drawn by Meno, exported as the page is.
-11. **Meno's chemistry steps.** *Measure*, *Check bonding*, *Free energy*,
-    *Boltzmann average*, *Average equivalent atoms*, *Scale*, *Spectrum*,
-    *Compare*. With 10 they make G possible to the end, once the plugins
-    fill *NMR shielding* and *Excited states* (PR 13).
-12. **Reactions.**
-    - The reaction value.
-    - *As a reaction*, from a drawn scheme or an RXN file.
-    - *Map atoms*, with what changes and its alternatives.
-    - Contacts as restraints.
-    - *Pair*, *Take from path*, *Take one geometry*, *Match end points*,
-      *Check the vibration*.
-    - *Barriers*, with its table and energy diagram.
-13. **The kinds for computational chemistry, opened.** *Minimise with
-    restraints*, *Path search*, *Optimise to a saddle point*, *Follow the
-    reaction path*, *NMR shielding*, *Excited states*. After it, one PR per
-    plugin fills what its program does:
+     (question 7, answered).
+4. **Fingerprints, snapshots and the store's signal**, with *Changed
+   upstream*.
+5. **Ports and exits.**
+   - Named, typed inputs, matched by lineage.
+   - Every exit a result set; second exits (*done* and *failed*, *kept* and
+     *rest*).
+   - The types and their conversions; pictures as a type; the card's give
+     port gone.
+6. **Large sets**: the summary frame, the table in the column, putting
+   entries on the page; layout worked out where shown.
+7. **Meno's nodes for sets and numbers**: *Filter*, *Rank*, *Group*,
+   *Merge*, *Join*, *Duplicates*, *Number*, *Add*, *Relative*, *Linear*,
+   *Populations*, *Ensemble energy*, *Average*. Today's *Energy window*,
+   *Choose one* and *As conformers* go.
+8. **The plugin contract.**
+   - Entries by file at scale; properties, failure kinds and the frames
+     reached on *failed*; restraints applied; templates; the option kinds
+     (solvent, temperature, pressure); `together`.
+   - The existing plugins (xTB, CREST, ORCA, Gaussian, RDKit) moved onto it,
+     each holding its kinds' meaning for a lone atom in its tests.
+9. **Tables, numbers and charts on the page**: tables read from files;
+   *Chart* and *Energy diagram*.
+10. **Meno's nodes for structures and spectra**: *Species*, *Combine*,
+    *Re-bond*, *Restraints*, *Measure*, *Take frames*, *Displace*,
+    *Equivalent atoms*, *Broaden*, *Errors*, *Curve similarity*.
+11. **The ACCeL plugin**: *Reaction*, *Compare bonding*, *Duplicates*,
+    *Number like*, *Mode on atoms*. ACCeL is first installed here, into the
+    plugin's own environment, for building and testing it.
+12. **The computational-chemistry kinds opened**: *Minimise with restraints*,
+    *Path search*, *Optimise to a saddle point*, *Follow the reaction path*,
+    *NMR shielding*, *Excited states*. Then one PR per plugin filling them:
     - ORCA: NEB, IRC, NMR, excited states;
     - Gaussian: saddle points with one or three structures, IRC, NMR,
       excited states;
     - xTB: restraints;
     - a force-field plugin for restrained minimisation.
-14. **Runners.**
-    - The runner role and its seam; this computer's runner moved onto it,
-      with nothing it does changed; *Runs on*; data left where it was made,
-      with its record.
-    - Then, in its own PR, a cluster runner plugin for batch schedulers
-      over SSH.
-15. **The kinds for cheminformatics, opened.** *Generate*, *Describe*,
-    *Similarity*, *Substructure*, *Cluster*, *Dock*, *Train*, *Predict with
-    a model*, and models as values. Then their plugins, one to a PR.
-16. **One atom, no electrons, not applicable** (point 10), and **what a run
-    keeps** (point 12).
-17. **Loops**: a design of their own, after the maintainer asks for them.
+13. **Runners**: the seam and this computer's runner; then, its own PR, a
+    cluster runner plugin.
+14. **The cheminformatics kinds and models**; then their plugins.
+15. **What a run keeps**: doer, runner, logs, records of raw outputs.
+16. **Loops**: a design of their own, later.
 
-F runs end to end after PR 14 (and its runner plugin, for the cluster). G
-runs after PR 13 on this computer, and on a cluster once 14 is there. A to D
-run after PR 15 and their plugins.
+**When the cases run:**
+- **G** runs on this computer after 12 and its plugins.
+- **F** runs on this computer after 12 for its xTB parts, and on a cluster
+  for DFT after 13.
+- **A to D** run after 14 and their plugins.
 
 ## What is core's and what is the plugins'
 
-**Core keeps everything that holds the workflow together, and knows no
-program, scheduler or model by name:**
-- **values**: the types and their conversions, the entry and property
-  records with their shapes, Meno's units table, the shared parameters with
-  the list of solvents, and restraints as a value;
-- **structure**: identity (Meno's canonical key and symmetry classes), the
-  fixed numbering, and the reaction value with its map;
-- **collections**: their storage and hashes; sets and their members;
-- **the workflow**: steps, ports, exits and wires, and the kinds (their
-  names, inputs, exits and meaning);
+**Core keeps what holds the workflow together, and knows no program,
+scheduler or model by name:**
+- **values**: the types and conversions, entries and properties, Meno's
+  units table, and the option kinds (the list of solvents, temperature,
+  pressure);
+- **structure**: identity and symmetry classes, the fixed numbering, lineage;
+- **collections**: their storage, hashes and keeping; sets and their
+  members;
+- **the workflow**: steps, ports, exits, wires, and the kinds (names, inputs,
+  exits, meaning);
 - **running**:
   - states and fingerprints;
   - snapshots and the store's signal;
   - the scheduler;
-  - retry policies and attempts;
   - the runner seam, and this computer's runner;
-- **on the page**: the summary frame, the table view, charts and spectra
-  drawn by Meno, and the words on the page with their rule;
-- **Meno's steps**:
-  - the data steps;
-  - *Duplicates* and *Populations*;
-  - reactions: *As a reaction*, *Map atoms*, *Pair*, *Take from path*,
-    *Take one geometry*;
-  - checks: *Check bonding*, *Match end points*, *Check the vibration*;
-  - derived quantities: *Measure*, *Free energy*, *Boltzmann average*,
-    *Average equivalent atoms*, *Scale*, *Spectrum*, *Compare*,
-    *Barriers*.
+- **on the page**: summaries, tables, charts, and the words on the page with
+  their rule;
+- **Meno's 26 nodes** (*Meno's own nodes*): arithmetic, geometry and data
+  handling on Meno's own data, each written from what it computes.
 
-  These are graph comparison, geometry and arithmetic on Meno's own data,
-  each written from what it computes, not from any program;
-- **the meaning** of one-atom, no-electron and not-applicable entries.
+**ACCeL's plugin fills** *Reaction*, *Compare bonding*, *Duplicates* (with
+symmetry), *Number like* and *Mode on atoms*, using ACCeL as a library. No
+ACCeL code is in core.
 
-**Plugins fill kinds and run things.** In their manifests they say:
-- which kinds they fill, and what they take where they take less;
-- the properties they give, with names, units and quantities;
-- their failure classes and the remedies they offer;
+**Program plugins fill** the calculation, computational-chemistry and
+cheminformatics kinds, and read their own outputs. **Runner plugins** run
+jobs elsewhere. In their manifests they declare:
+- the kinds they fill;
+- what they take, where that is less than the kind takes;
+- the properties they give, with names and units;
+- their failure kinds;
 - the restraints they apply;
-- their options, among them a program's templates and route lines;
-- their programs and versions;
-- whether entries go together into one job;
-- which model formats they read.
+- their options and templates;
+- `together`;
+- the model formats they read.
 
-**What plugins do:**
-- **Program plugins** prepare, run and collect. They compute what needs a
-  program:
-  - force fields and restrained minimisation, semiempirical and DFT methods;
-  - nudged elastic bands and IRC;
-  - shieldings and excited states;
-  - fingerprints, similarities, predictions, docking, training.
+**The guards.** The boundary guard (`src/lib/plugins/boundary.test.ts`)
+keeps program, scheduler and model names out of core. Property and failure
+names given by plugins are data, never literals in core. Core names only the
+quantities its own nodes compute or use: *energy*, *thermal correction*,
+*share*, *degeneracy*, *vibrations*, *group*, *shielding*, *excited
+states*.
 
-  They read their own outputs, and map their keywords from the shared
-  parameters.
-- **Runner plugins** submit, poll, fetch, stop and clean up on machines
-  other than this one. Each knows its scheduler, and where the programs are
-  on that machine.
+## Questions this round raises
 
-A plugin is given entries (by file, at scale) and gives entries or values
-back; it never sees the page.
+Each has a recommendation.
 
-**The guards.**
-- The boundary guard (`src/lib/plugins/boundary.test.ts`) keeps program
-  names out of core. Extended, it keeps scheduler and model names out too.
-- Property names given by plugins are data, never literals in core. Core
-  names only the quantities its own steps compute or use: *energy*, *thermal
-  correction*, *free energy*, *share*, *degeneracy*, *vibrations*,
-  *shielding*, *shift*, *excited states*, *similarity*.
+**A. Matching by lineage.** Where a node takes two inputs entry by entry
+(*Path search*, *Re-bond*, *Optimise to a saddle point* with its two sides),
+are entries matched by lineage? That is: each with the one it descends from,
+or the one it shares its nearest ancestor with; each with each where the kind
+says so; refused otherwise. And may an entry have more than one parent (a
+*Re-bond*'s geometry and bonding)? This replaces the paired entries of
+question 22.
+*Recommended: yes, both.* No pair type is needed, and the rule is the same
+for every node.
 
-## Questions for the maintainer
+**B. Second exits** (revisiting question 19). Should every node that can
+fail entries, or set them aside, have a second exit for them (*failed*,
+*rest*, *different*), drawn small under the first until it is wired or
+opened?
+*Recommended: yes.* Runs again are drawn from it, and nothing is hidden.
 
-The ten of the first draft, adjusted; nine from the wider range; and eleven
-from computational chemistry. Each has a recommendation; one round of
-answers covers them all.
+**C. Saving a chain.** Procedures are whole workflows today (decided
+2026-10-08). May a chain of wired steps also be saved as a procedure, and
+put down onto an exit? Examples: a retry chain, F's IRC check, G's NMR
+scaling.
+*Recommended: yes.* Copy and paste already repeats a chain once; a saved
+chain makes the common ones a single choice in Quick Add, and stays fully
+visible once put down.
 
-**The base**
+**D. One atom** (revisiting question 8). Instead of Meno routing a lone
+atom's *Optimise* to *Energy*, does each plugin keep doing it, as the kind's
+written meaning, held by its tests?
+*Recommended: yes.* Routing in core was a node acting by itself.
 
-1. **Exits.** Is each declared exit a result set, made with its step and
-   empty until it runs, with the card's own give port gone?
-   *Recommended: yes.* What flows is what is drawn.
-2. **What a set holds.** Explicit members in order, kept in a collection,
-   with the frame's gesture as the edit (refining decision 5)?
-   *Recommended: yes.* At scale nothing else works, and on the page a turn or
-   a nudge no longer changes a set.
-3. **After a partial failure.** Does the chain go on with what was done, or
-   wait?
-   *Recommended: go on*, said on the next card (*on 61 of 64*), with *Wait
-   for all* on a step's menu.
-4. **Failed entries.** Are they named on the card and in the table's status
-   column, but not shown in the result set?
-   *Recommended: yes.* A set holds what was made.
-5. **A *Changed* step's results.** Kept and marked, or hidden?
-   *Recommended: kept and marked.*
-6. **Closing a tab while Meno itself is working** (not a job). Stopped, or
-   carried on unseen?
-   *Recommended: stopped, and shown so.* Jobs go on, on any runner.
-7. **Workspaces saved before.** Do they read their members from their frames
-   once, or not open?
-   *Recommended: read once*, said in the PR.
-8. **One atom.** Does Meno route an *Optimise* of a lone atom to the doer's
-   *Energy*?
-   *Recommended: yes*, by the kind's meaning.
-9. **Order in the fingerprint.** Does re-ordering a set's members change
-   what is downstream?
-   *Recommended: no.* A step whose result depends on order sorts first.
-10. **Arranged result sets.** Does a result set the chemist arranged keep its
-    positions?
-    *Recommended: yes.*
+**E. Options shared in kind** (revising part of question 27). Instead of
+workflow-wide parameters, does each step keep its own options, with
+solvent, temperature and pressure as option kinds Meno defines? And are
+restraints a table, made by *Restraints*?
+*Recommended: yes.* Nothing arrives at a step unless it is wired or set on
+it.
 
-**The wider range**
+**F. Meno's 26 nodes** (*Meno's own nodes*). Is that the set to build, in
+place of today's five?
+*Recommended: yes.* Each is one role. F and G between them use 23 of the 26.
+*Group*, *Species* and *Combine* are for cases with several compounds to
+regroup, a charge the atoms do not say, or two reactants that meet.
 
-11. **Loops.** In the base now, or later as a repeat frame?
-    *Recommended: later*, by design (case E). Retries within a step cover
-    what F and G need.
-12. **Where large data lives.** Collections always inside the `.meno`, or
-    only up to a size, with the rest elsewhere?
-    *Recommended: collections always inside*, so the file stays the whole
-    record.
-    - Meno warns when a workspace passes 500 MB.
-    - Fingerprints, which can be computed again, are left out.
-    - Programs' raw outputs are a different matter (question 26).
-13. **Identity.** Is Meno's own canonical key the identity for joins and
-    duplicates, or a plugin's?
-    *Recommended: Meno's own*, from #319's canonical numbering.
-14. **Conversions.** Are the implicit conversions those listed under *What
-    converts implicitly*, and all others never?
-    *Recommended: yes.*
-15. **How many are drawn.** At most 50 entries on the page, more shown as a
-    summary and a table?
-    *Recommended: yes*, with *Put on the page* for any chosen entries, up to
-    500 at once.
-16. **Today's steps of Meno's.** Do *Energy window*, *Choose one* and *As
-    conformers* become cases of *Filter*, *Top N* and *Group*, kept by name
-    in Quick Add?
-    *Recommended: yes.*
-17. **Property names.** Open names declared by plugins with unit and
-    quantity, core naming only the quantities its own steps use?
-    *Recommended: yes.*
-18. **Steps with several inputs.** Named input ports per kind (*Dock*,
-    *Predict with a model*, *Pair*, *Compare*)?
-    *Recommended: yes.*
-19. **Steps with several exits.** Only where the kind declares them (*Split*;
-    *Barriers*' table and chart)?
-    *Recommended: yes.*
+**G. Today's three in saved workspaces.** Is it right that *Energy window*,
+*Choose one* and *As conformers* are left out when an old workspace is
+read, their result sets kept as plain sets, with no converter?
+*Recommended: yes*, said in the PR. The reader already leaves out kinds it
+does not know.
 
-**Computational chemistry**
+**H. ACCeL's plugin and version.** Do these hold?
+- It fills *Reaction*, *Compare bonding*, *Duplicates* with symmetry,
+  *Number like* and *Mode on atoms*.
+- It is built on `accel` 0.3.0 from PyPI, while GitHub's master is 0.3.1.
+- Meno keeps the arithmetic nodes ACCeL also has.
 
-20. **Reactions as values.** A reaction holds:
-    - its species with sides and labels;
-    - one atom numbering, the reactant side's, carried to every product by
-      the map;
-    - what changes;
-    - contacts.
+*Recommended:*
+- *yes*;
+- *0.3.0*, pinned as every plugin's packages are. If the plugin needs what
+  0.3.1 adds, the maintainer releases 0.3.1 to PyPI first;
+- *Meno keeps the arithmetic nodes*, so they work whichever plugins are
+  added.
 
-    Are several products drawn side by side competing outcomes, each with its
-    own paths, compared in *Barriers*?
-    *Recommended: yes, both*, as ConfoTS reads a scheme.
-21. **Mapping.** Is *Map atoms* Meno's own (fewest bond changes; equal
-    alternatives kept and shown, the first by canonical order used until
-    the chemist picks), with plugins free to fill it too?
-    *Recommended: yes.*
-22. **Pairs and paths as kinds of entry.** Named geometries on one numbering
-    (*start*, *end*, *guess*), and paths of geometries with a coordinate,
-    with steps that take one geometry or point out of them?
-    *Recommended: yes.*
-23. **Levels of theory.** Does every property keep the geometry it was worked
-    out at, and do steps that combine properties refuse different geometries
-    unless the chemist allows it, saying so on the result?
-    *Recommended: yes.*
-24. **Retries.** Automatic within the step, by failure class, at most three
-    attempts by default, every attempt kept with its log? The remedies come
-    from the plugin, and the validation failures (imaginary vibrations,
-    bonds, stereo) are Meno's.
-    *Recommended: yes.* The chemist can choose *ask first* instead.
-25. **Runners.** Is the runner a plugin role, with this computer's runner
-    built in and cluster runners as plugins? A cluster runner signs in only
-    through the system's SSH agent and configuration, Meno storing no
-    password or key, and its hosts are granted as other network access is.
-    *Recommended: yes.* Built after the base (PR 14).
-26. **Programs' raw outputs.** Left where the job ran, with a record (path,
-    size, SHA-256), fetched when a step needs them; the `.meno` keeping what
-    Meno read?
-    *Recommended: yes.* A reaction's raw output is hundreds of MB to GB.
-27. **Templates and shared parameters.** Programs' templates and route
-    lines as the program plugins' own options, which core keeps and never
-    reads? And charge, multiplicity, solvent, temperature, pressure and
-    restraints given to every plugin in Meno's form, with the list of
-    solvents in core?
-    *Recommended: yes.*
-28. **Charts.** Are energy diagrams and spectra drawn by Meno from tables,
-    in vector, labels editable, exported as the page is, rather than given
-    as pictures?
-    *Recommended: yes.* They join the graphs on the roadmap.
-29. **Per-atom properties and statistics.** Are per-atom properties aligned
-    by the numbering, with equivalent atoms averaged by Meno's symmetry
-    classes, the chemist able to turn that off? And is a probability between
-    candidates of the DP4 kind a plugin's, or a later step of Meno's from
-    the published method?
-    *Recommended:*
-    - *aligned and averaged, yes*;
-    - *the probability: a plugin's first*.
-30. **The line for computational chemistry's steps.** Are bond changes,
-    bonding and stereo checks, the vibration check, pairing, taking from
-    paths, measuring, free energies, Boltzmann averages, scaling, spectra
-    and barriers Meno's? And are restrained minimisation, path searches,
-    saddle-point optimisation, IRC, shieldings and excited states the
-    plugins'?
-    *Recommended: yes.* The first need no program; the second do.
+**I. Keeping.** Is everything kept in the `.meno` by default, with *Don't
+keep in the file* on a set? And do raw outputs stay where they ran unless a
+step is told *Bring raw outputs into the workspace*?
+*Recommended: yes.* That is the maintainer's "keep everything, with a way
+not to", with raw outputs, which can be GB, the one default the other way.
+
+**J. A failed entry's frames.** Does a *failed* exit give each entry the
+frames its program reached, so that *Take frames* (the last) restarts from
+the last geometry?
+*Recommended: yes.* Restarting from the last geometry is then a node, not a
+setting.
+
+**K. Representing a group.** Where *Ensemble energy* and *Average* give one
+entry per group, does the group's entry of highest weight stand for it,
+carrying the results?
+*Recommended: yes.* The result keeps a real structure and geometry, which a
+diagram or a table can show.
+
+## Answered (2026-10-16)
+
+- **As recommended:** 1 to 11, 13 to 15, 17 to 19, 22, 23 and 25 to 30. The
+  principle under 20 reopens three of them: 8, 19 and part of 27 (questions
+  D, B and E). It also replaces 22's paired entries (question A), and moves
+  30's mapping and checks to ACCeL.
+- **12:** keep everything, with a way not to (*Keeping*; question I).
+- **16:** Meno's own nodes redone as a small, clean set (*Meno's own nodes*;
+  questions F and G).
+- **20:** don't over-abstract: the governing principle, *The principle:
+  simple nodes, wired*.
+- **21:** an ACCeL plugin fills the mapping, and more (*The ACCeL plugin*;
+  question H).
+- **24:** no advanced nodes for retries: drawn (*Failed entries, and running
+  them again*; questions B and J).
