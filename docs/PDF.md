@@ -153,10 +153,53 @@ stops being part of the work.
 - **While a pinch or a zoom goes on**, the tiles there are scaled on the
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
+- **Drawn as it scrolls** (the maintainer, 2026-10-16: nothing was
+  drawn again until a scroll stopped). While the view moves across a page
+  at the same zoom - a scroll in the column, a pan on the canvas - the
+  tiles coming into view are asked for every eighth of a second at the
+  level the page has (in the column, a page new in view takes the quick
+  one), the way it is going first; one that has left the view a moment
+  before its turn is dropped. A zoom still waits for the view to stop,
+  the level changing. Tiles that come are shown one a frame, each put on
+  the graphics card as it is, so that none waits on several at once.
 - **Only what is in view is drawn**, nearest first, then the pages next
-  in the way the view is going. A tile no longer wanted when its turn
+  in the way the view is going: once it stops, the column asks for the
+  next screen's worth the way it last scrolled, and the canvas for half a
+  screen further the way it was last moved - after all that is seen, so
+  that what it goes on to is there (the maintainer, 2026-10-15). A tile no longer wanted when its turn
   comes is dropped, never sent to PDFium; one sent is drawn to the end.
   Pages far out of view are let go, and drawn again when they come back.
+- **Sharp again soon after a zoom stops** (2026-10-15, after a report of
+  pages staying blurred a while on a Windows tablet):
+  - Pages are drawn in two passes once the view is still: first at
+    about 1.41 times the screen's scale, sharp soon; then, once those
+    tiles have come and faded in, at twice it, faded in over them. The
+    levels lie on a grid a sixteenth of a doubling apart, so a view
+    stopped a hair from where it was keeps the tiles it has.
+  - Why twice: PDFium's small letters drawn at the screen's own scale come
+    out lighter than drawn finer and shrunk to it. At 1 to 1.41 times, a
+    paper's text was a tenth to a third lighter than 0.1.12's 1 to 2
+    times (found on Windows, 2026-10-16); at twice, it is as dark at every
+    zoom. Drawn at twice alone, a page of heavy figures on a slow machine
+    took seconds to come; the quick pass first keeps it sharp as soon as
+    before.
+  - What a zoom leaves stays: tiles of any level had, finer or coarser,
+    are drawn under the new level's own until those over the part seen
+    have come and faded in, never the page's small picture between -
+    however long the view stood still before. Parts out of view are not
+    waited for, and at most 24 tiles are kept under, those of the nearest
+    levels first, so that panning and zooming a long while keeps no more
+    than a few screens' worth.
+  - Tiles are 1024 pixels a side, four on their way at once: a quarter as
+    many requests as at 512, each carrying the page's part from PDFium
+    to the window.
+  - Parts of pages are drawn by up to three readers side by side, one
+    fewer than the machine's cores, each a process with its own PDFium:
+    PDFium draws on one thread at a time in a process, so pages are drawn
+    side by side only in processes of their own. The first reader is
+    asked everything else, and draws only where it is the only one, so
+    that a hover or a figure read never waits behind a page drawn large.
+    Each keeps the six PDFs last asked about open, closing the rest.
 
 ### Text
 

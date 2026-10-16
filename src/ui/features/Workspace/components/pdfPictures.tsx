@@ -26,21 +26,30 @@ export const GRAY = "#59636e";
 export const BASE = "#f6f8fa";
 
 /** A tile's side, in pixels. */
-export const TILE = 512;
+export const TILE = 1024;
 /** A page's first picture: this many pixels across, whatever its size. */
 export const PREVIEW_PX = 360;
 /** How long a picture takes to fade in, in ms. */
 export const FADE_MS = 160;
+/**
+ * While the view moves across a page at the same zoom, how often the tiles
+ * coming into view are asked for, in ms - and how long one asked for then
+ * waits its turn while it is no longer in view before it is dropped.
+ */
+export const MOVING_ASK_MS = 120;
+export const MOVING_KEEP_MS = 300;
 /** How long a tile no longer wanted is kept before it is let go, in ms. */
 const KEEP_MS = 4000;
+/** How many tiles of other levels a page keeps under its level's own while those come: a screen's worth, and more. */
+export const UNDER_MOST = 24;
 
 /** Marks on a page: boxes, in points from its top left, in a colour - words selected, or found. */
 export type Mark = { rects: readonly (readonly [number, number, number, number])[]; color: string; opacity: number; edge?: boolean; ring?: boolean };
 
 /** A picture of a page or a part of one, as WebGL has it, and when it came. */
 export type Pic = { tex: THREE.Texture; born: number };
-/** A tile had: its key, its picture, where it lies among the page's tiles, and the level - pixels a point - it was drawn at. */
-export type Tile = { key: string; pic: Pic; i: number; j: number; level: number };
+/** A tile had: its key, its picture, where it lies among the page's tiles, and the level - pixels a point - it was drawn at; `under`, one of another level kept under the level's own until they have come. */
+export type Tile = { key: string; pic: Pic; i: number; j: number; level: number; under?: true };
 
 function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
   const tex = new THREE.Texture(d.bitmap);
@@ -55,9 +64,31 @@ function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
   return tex;
 }
 
-/** The level a page is drawn at, `want` pixels a point wanted of a page `width` points wide: none, where its small picture is enough; else a power of two at or above it. */
-export function levelFor(want: number, width: number): number {
-  return want <= (PREVIEW_PX / width) * 1.15 ? 0 : Math.min(32, Math.pow(2, Math.ceil(Math.log2(want))));
+/** How many levels a page is drawn at to each doubling: a sixteenth of one apart. */
+export const LEVELS_PER_DOUBLING = 16;
+/**
+ * How many times the screen's pixels a side a page is drawn at: first, to
+ * be sharp soon (`QUICK`), then, once that has come, to be as dark as it
+ * should be (`OVERSAMPLE`). PDFium's small letters drawn at the screen's
+ * own scale are lighter than drawn finer and shrunk to it: at 1 to 1.41
+ * times, a paper's text was a tenth to a third lighter than 0.1.12's 1 to 2
+ * times (found on Windows, 2026-10-16, and measured here); at twice, it is
+ * as dark, at every zoom.
+ */
+export const QUICK = Math.SQRT2;
+export const OVERSAMPLE = 2;
+
+/**
+ * The level a page is drawn at, `want` pixels a point wanted of a page
+ * `width` points wide, `over` times finer: none, where its small picture is
+ * enough; else the first of the levels a sixteenth of a doubling apart at
+ * or above it - so that a view stopped a hair from where it was keeps the
+ * tiles it has.
+ */
+export function levelFor(want: number, width: number, over = OVERSAMPLE): number {
+  if (want <= (PREVIEW_PX / width) * 1.15) return 0;
+  const k = Math.ceil(LEVELS_PER_DOUBLING * Math.log2(want * over) - 1e-9);
+  return Math.min(32, Math.pow(2, k / LEVELS_PER_DOUBLING));
 }
 
 /** What is asked of a page's tiles: the PDF, the page and its size in points, the level, and the part wanted, in points from its top left. */
@@ -71,6 +102,8 @@ export type TileAsk = {
   nearness: (i: number, j: number) => number;
   /** Since when what asks has been still: a tile not wanted since is dropped before its turn. */
   stillSince: () => number;
+  /** Asked ahead - where the view is going, past what is seen - rather than for what is seen. */
+  ahead?: true;
 };
 
 /** The pictures of the PDFs' pages: previews by page, tiles by level and place; those it is told have come are said to whoever listens. */
@@ -81,6 +114,14 @@ export class Pictures {
   wanted = new Map<string, number>();
   /** The tiles the column draws now: kept, however long since they were asked for (the column asks only as it moves). */
   held = new Set<string>();
+  /**
+   * Tiles come and not yet shown: shown a few a frame (`reveal`), so that
+   * putting them on the graphics card is spread over frames, not all in one
+   * as the view moves.
+   */
+  private arriving: { key: string; d: DrawnPart }[] = [];
+  /** The part of each page last asked for as seen, by PDF and page: its level, and its pixels at it. */
+  seen = new Map<string, { level: number; x0: number; y0: number; x1: number; y1: number }>();
   private listeners = new Set<() => void>();
 
   listen(f: () => void): () => void {
@@ -119,6 +160,7 @@ export class Pictures {
     const right = Math.min(w * level, part.x1 * level);
     const top = Math.max(0, part.y0 * level);
     const bottom = Math.min(h * level, part.y1 * level);
+    if (!a.ahead) this.seen.set(`${a.sha256}:${a.page}`, { level, x0: left, y0: top, x1: right, y1: bottom });
     let asked = false;
     for (let j = Math.floor(top / TILE); j * TILE < bottom; j++)
       for (let i = Math.floor(left / TILE); i * TILE < right; i++) {
@@ -139,32 +181,119 @@ export class Pictures {
               this.came();
               return;
             }
-            this.tiles.set(key, { tex: textureOf(d, false), born: performance.now() });
+            this.arriving.push({ key, d });
             this.came();
           })
           .catch(() => this.tiles.delete(key));
       }
+    // (those of other levels kept under what is seen, as wanted now: kept, even
+    // where the view stood still a long while before - long since wanted -
+    // and has just been zoomed, until the level's own have come)
+    if (!a.ahead) this.tilesOf(a.sha256, a.page, level, now);
     return asked;
   }
 
-  /** A page's tiles to draw at a level: those at it, over those at the one before it where that is all there is yet. */
-  tilesOf(sha256: string, page: number, level: number): Tile[] {
+  /**
+   * A page's tiles to draw at a level: those at it, and under them those
+   * had at any other - finer or coarser, from before a zoom - where the
+   * level's own over the part seen have not all come and faded in over
+   * them: what a zoom leaves stays until what replaces it is there, never
+   * the page's small picture between (each kept so, as wanted, while it is
+   * drawn). The part seen is the one last asked for at that level; what
+   * lies outside it is not waited for. At most `UNDER_MOST` are kept under,
+   * those of the levels nearest first.
+   */
+  tilesOf(sha256: string, page: number, level: number, now = performance.now()): Tile[] {
     const out: Tile[] = [];
     if (!level) return out;
     const prefix = `${sha256}:${page}:`;
+    const others: Tile[] = [];
     for (const [key, t] of this.tiles) {
       if (t === "asked" || !key.startsWith(prefix)) continue;
       const [l, i, j] = key.slice(prefix.length).split(":").map(Number);
-      if (l === level || l === level / 2) out.push({ key, pic: t, i, j, level: l });
+      (l === level ? out : others).push({ key, pic: t, i, j, level: l });
     }
-    return out.sort((x, y) => x.level - y.level);
+    // (the level's own tile over a part come and faded in - or a part not seen, which is not waited for)
+    const seen = this.seen.get(`${sha256}:${page}`);
+    const look = seen && seen.level === level ? seen : null;
+    const done = (i: number, j: number) => {
+      if (look && ((i + 1) * TILE <= look.x0 || i * TILE >= look.x1 || (j + 1) * TILE <= look.y0 || j * TILE >= look.y1)) return true;
+      const t = this.tiles.get(`${prefix}${level}:${i}:${j}`);
+      return !!t && t !== "asked" && now - t.born >= FADE_MS;
+    };
+    const under = others.filter((o) => {
+      const img = o.pic.tex.image as { width: number; height: number };
+      // (the part it covers, at the level's pixels)
+      const x0 = ((o.i * TILE) / o.level) * level;
+      const y0 = ((o.j * TILE) / o.level) * level;
+      const x1 = x0 + (img.width / o.level) * level;
+      const y1 = y0 + (img.height / o.level) * level;
+      for (let j = Math.floor(y0 / TILE); j * TILE < y1 - 0.5; j++) for (let i = Math.floor(x0 / TILE); i * TILE < x1 - 0.5; i++) if (!done(i, j)) return true;
+      return false;
+    });
+    // (the nearest levels' first, as many as are kept)
+    under.sort((x, y) => Math.abs(Math.log2(x.level / level)) - Math.abs(Math.log2(y.level / level)));
+    under.length = Math.min(under.length, UNDER_MOST);
+    for (const o of under) this.wanted.set(o.key, now);
+    // (drawn coarsest first, the level's own over all: Page sets them so)
+    return [...under.sort((x, y) => x.level - y.level).map((o) => ({ ...o, under: true as const })), ...out];
   }
 
-  /** Whether any picture is still fading in. */
+  /**
+   * Up to `most` of the tiles come shown - each then fading in - and whether
+   * any was. Called each frame by what draws them, with its renderer, which
+   * puts each on the graphics card then (`upload`), before the frame is drawn.
+   */
+  reveal(most = 1, upload?: (tex: THREE.Texture) => void): boolean {
+    let shown = 0;
+    while (shown < most && this.arriving.length) {
+      const { key, d } = this.arriving.shift()!;
+      // (asked for still: one dropped meanwhile is not shown)
+      if (this.tiles.get(key) !== "asked") continue;
+      const tex = textureOf(d, false);
+      upload?.(tex);
+      this.tiles.set(key, { tex, born: performance.now() });
+      shown++;
+    }
+    if (shown) this.came();
+    return shown > 0;
+  }
+
+  /** Whether any picture is still fading in, or waits to be shown. */
   fading(now: number): boolean {
+    if (this.arriving.length) return true;
     for (const t of this.tiles.values()) if (t !== "asked" && now - t.born < FADE_MS + 80) return true;
     for (const t of this.previews.values()) if (t !== "asked" && now - t.born < FADE_MS + 80) return true;
     return false;
+  }
+
+  /** Whether a page's tiles at a level over a part (in points from its top left) have all come and faded in. */
+  allCome(sha256: string, page: number, size: readonly [number, number], level: number, part: TileAsk["part"], now: number): boolean {
+    const [w, h] = size;
+    const left = Math.max(0, part.x0 * level);
+    const right = Math.min(w * level, part.x1 * level);
+    const top = Math.max(0, part.y0 * level);
+    const bottom = Math.min(h * level, part.y1 * level);
+    for (let j = Math.floor(top / TILE); j * TILE < bottom; j++)
+      for (let i = Math.floor(left / TILE); i * TILE < right; i++) {
+        const t = this.tiles.get(`${sha256}:${page}:${level}:${i}:${j}`);
+        if (!t || t === "asked" || now - t.born < FADE_MS) return false;
+      }
+    return true;
+  }
+
+  /**
+   * The level a page's part seen is drawn at now, `want` pixels a point
+   * wanted: first the quick one (`QUICK`), sharp soon; once that has come
+   * and faded in, the fine one (`OVERSAMPLE`), drawn behind it and faded in
+   * over it - the page then as dark as it should be. None, where its small
+   * picture is enough.
+   */
+  levelNow(sha256: string, page: number, size: readonly [number, number], part: TileAsk["part"], want: number, now: number): number {
+    const quick = levelFor(want, size[0], QUICK);
+    const fine = levelFor(want, size[0], OVERSAMPLE);
+    if (!quick || quick === fine) return fine;
+    return this.allCome(sha256, page, size, fine, part, now) || this.allCome(sha256, page, size, quick, part, now) ? fine : quick;
   }
 
   /** Tiles not wanted for a while let go. */
@@ -257,7 +386,8 @@ export function Page(props: {
         const x = left + ((t.i * TILE) / t.level) * unit + tw / 2;
         const y = topY - ((t.j * TILE) / t.level) * unit - th / 2;
         return (
-          <mesh key={t.key} position={[x, y, 0.002 + 0.0001 * Math.log2(t.level)]} scale={[tw, th, 1]}>
+          // (those kept under, finer over coarser, all under the level's own: below the ink, 0.00245)
+          <mesh key={t.key} position={[x, y, t.under ? 0.002 + 0.00004 * Math.min(4, Math.max(0, Math.log2(t.level) + 1)) : 0.0023]} scale={[tw, th, 1]}>
             <planeGeometry args={[1, 1]} />
             <meshBasicMaterial map={t.pic.tex} transparent opacity={fade(t.pic.born)} toneMapped={false} />
           </mesh>
