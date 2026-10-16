@@ -318,6 +318,8 @@ export default function PartMenu({
       standing: "none" | "changed" | "incomplete" | "ready";
       shown: boolean;
       maps: number;
+      /** Which of them is in use, from 0: the best first. */
+      chosen: number;
       onMake: () => void;
       onShow: (shown: boolean) => void;
       onOther: () => void;
@@ -534,7 +536,8 @@ export default function PartMenu({
             ? arrow.atomMap.standing === "ready"
               ? [
                   { name: arrow.atomMap.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => arrow.atomMap!.onShow(!arrow.atomMap!.shown), divider: true },
-                  ...(arrow.atomMap.maps > 1 ? [{ name: "Other map", keys: "", run: arrow.atomMap.onOther }] : []),
+                  // (which of how many is in use: most differ only in where the hydrogens go, which the drawing does not show)
+                  ...(arrow.atomMap.maps > 1 ? [{ name: "Other map", keys: `${arrow.atomMap.chosen + 1} of ${arrow.atomMap.maps}`, run: arrow.atomMap.onOther, keep: true }] : []),
                   { name: "Export reaction in 3D…", keys: "", run: arrow.atomMap.onExport },
                 ]
               : [

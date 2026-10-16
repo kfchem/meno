@@ -2164,6 +2164,7 @@ function WorkspaceContent({
                     standing: mapStanding(a, st.model),
                     shown: !!a.atomMap?.shown,
                     maps: a.atomMap?.maps.length ?? 0,
+                    chosen: a.atomMap?.chosen ?? 0,
                     onMake: () => void atomMaps.makeAtomMap(a.id),
                     onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
                     onOther: () => store.getState().otherAtomMap(a.id),

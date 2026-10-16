@@ -244,7 +244,9 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
 - **Show / Hide atom map** puts the numbers and centres on the drawing or
   takes them off; the map is kept either way.
 - **Other map** takes the next of the complete maps, round again after the
-  last; the best stays first.
+  last; the best stays first. The menu stays open on it and says which of
+  how many is in use ("2 of 32"): most maps differ only in where the
+  hydrogens go, which the drawing does not show.
 - **Export reaction in 3D...** writes an SD file of two records: the
   reactants in 3D, and the products with every atom - hydrogens too - in the
   reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
