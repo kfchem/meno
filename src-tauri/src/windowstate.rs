@@ -163,7 +163,7 @@ pub fn restored(saved: &State, screens: &[Screen], off: (i32, i32)) -> Option<[i
 mod native {
     use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowPlacement, SetWindowPlacement, SystemParametersInfoW, SPI_GETWORKAREA, SW_SHOWMAXIMIZED, SW_SHOWNORMAL, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOWPLACEMENT,
+        GetWindowPlacement, SetWindowPlacement, SystemParametersInfoW, SPI_GETWORKAREA, SW_HIDE, SW_SHOWMAXIMIZED, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOWPLACEMENT,
     };
 
     /// The origin of the work area, which placements' coordinates are from (the desktop's, less the taskbar where it is at the top or left).
@@ -186,10 +186,10 @@ mod native {
         Some(([r.left, r.top, r.right, r.bottom], wp.showCmd == SW_SHOWMAXIMIZED.0 as u32))
     }
 
-    /// The window put at a normal frame and shown - maximized or not - at once.
-    pub fn set(h: Handle, raw: [i32; 4], maximized: bool) -> bool {
+    /// The normal frame the window goes back to set, the window left hidden (`SW_HIDE`): it is shown, by Tauri, once its frame is its own.
+    pub fn set(h: Handle, raw: [i32; 4]) -> bool {
         let mut wp = WINDOWPLACEMENT { length: std::mem::size_of::<WINDOWPLACEMENT>() as u32, ..Default::default() };
-        wp.showCmd = if maximized { SW_SHOWMAXIMIZED.0 as u32 } else { SW_SHOWNORMAL.0 as u32 };
+        wp.showCmd = SW_HIDE.0 as u32;
         wp.rcNormalPosition = RECT { left: raw[0], top: raw[1], right: raw[2], bottom: raw[3] };
         // SAFETY: as `get`.
         unsafe { SetWindowPlacement(HWND(h), &wp).is_ok() }
@@ -249,15 +249,24 @@ pub fn restore(w: &WebviewWindow, data: Option<&Path>) {
     let saved = data.and_then(load);
     match saved.as_ref().map(|s| (place(s, &screens(w)), s)) {
         Some((Placement::At(r), s)) => {
-            // (on Windows, its own placement: the normal frame it goes back to is kept exactly, and
-            // the window is shown, maximized or not, by it - the size is not left to be read back)
+            // (on Windows, its own placement: the normal frame it goes back to is kept exactly and set
+            // with the window still hidden - not shown by it, which would let the system's own caption
+            // be seen before Tauri's frame is the window's - then maximized hidden, as the state says,
+            // the frame set again, and shown below, as elsewhere)
             #[cfg(windows)]
             if let Some(raw) = restored(s, &screens(w), native::origin()) {
-                if w.hwnd().is_ok_and(|h| native::set(h.0, raw, s.maximized)) {
-                    if s.fullscreen {
-                        let _ = w.set_fullscreen(true);
+                if let Ok(h) = w.hwnd() {
+                    if native::set(h.0, raw) {
+                        if s.maximized {
+                            let _ = w.maximize();
+                            let _ = native::set(h.0, raw);
+                        }
+                        if s.fullscreen {
+                            let _ = w.set_fullscreen(true);
+                        }
+                        let _ = w.show();
+                        return;
                     }
-                    return;
                 }
             }
             // (its inner size as `inner_size` reads it, whatever offset the platform has between
