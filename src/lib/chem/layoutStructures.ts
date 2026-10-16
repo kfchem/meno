@@ -104,6 +104,8 @@ export function magnifiedOptions(opts: LayoutOptions, k: number): LayoutOptions 
   if (!byK) MAGNIFIED_OPTIONS.set(opts, (byK = new Map()));
   const kept = byK.get(k);
   if (kept) return kept;
+  // (a change of magnification goes over in steps of a hundredth: kept to a few of them)
+  if (byK.size > 64) byK.clear();
   const out: Record<string, unknown> = { ...opts };
   for (const [key, v] of Object.entries(opts)) if (key.endsWith("Px") && key !== "minLinePx" && typeof v === "number") out[key] = v * k;
   byK.set(k, out as LayoutOptions);
