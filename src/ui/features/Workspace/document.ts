@@ -12,6 +12,7 @@ import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
+import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
@@ -74,6 +75,13 @@ export type WorkspaceDocument = {
   pageId?: number;
   style: StyleChoice;
   /**
+   * Its styles in 3D, as its drawing style: its primary and its secondary,
+   * each whole, and its light - fixed as it is made, Settings' then, and
+   * changed from its canvas (lib/chem/workspaceStyle3d; docs/WORKSPACE.md,
+   * *Styles in 3D*).
+   */
+  style3d: Workspace3D;
+  /**
    * The atoms *Expand abbreviation* drew out last, which the Clean-up
    * straight after it leaves drawn out (chem/cleanUp). Not saved.
    */
@@ -126,9 +134,10 @@ let pages = 0;
 /** A page's id, new (`pageId`). */
 export const newPageId = (): number => ++pages;
 
-export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE): WorkspaceDocument {
+export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE, style3d: Workspace3D = DEFAULT_WORKSPACE_3D): WorkspaceDocument {
   return {
     style,
+    style3d,
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -143,13 +152,13 @@ export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE
 }
 
 /**
- * Builds a document for a workspace tab, in `style` - Settings' as it is
- * made, given by whoever makes it (views/registry): this module reads no
- * settings. The tab's data may carry a file to import (`payload`), which
+ * Builds a document for a workspace tab, in `style` and `style3d` -
+ * Settings' as it is made, given by whoever makes it (views/registry):
+ * this module reads no settings. The tab's data may carry a file to import (`payload`), which
  * the view parses and applies, so the document starts empty here - or
  * files opened as text (`texts`), which it starts holding.
  */
-export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE): DocumentStore<WorkspaceDocument> {
+export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE, style3d: Workspace3D = DEFAULT_WORKSPACE_3D): DocumentStore<WorkspaceDocument> {
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
@@ -158,7 +167,7 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   );
   // (PDFs opened on a canvas of their own: in a row from the middle of the page - and pictures likewise)
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
-  let doc = addTexts(emptyWorkspaceDocument(style), texts).doc;
+  let doc = addTexts(emptyWorkspaceDocument(style, style3d), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
@@ -2309,6 +2318,11 @@ export function setAromaticEnabled(
  */
 export function setDocumentStyle(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
   return doc.style === style ? doc : { ...doc, style };
+}
+
+/** The workspace in styles in 3D `style3d`, set as they are: its molecules drawn in them. */
+export function setDocumentStyle3d(doc: WorkspaceDocument, style3d: Workspace3D): WorkspaceDocument {
+  return doc.style3d === style3d ? doc : { ...doc, style3d };
 }
 
 export function setRingEnabled(

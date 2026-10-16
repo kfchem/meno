@@ -9,6 +9,7 @@ import {
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
+import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
 import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
@@ -64,6 +65,8 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     steps: doc.steps ?? NO_STEPS,
     wires: doc.wires ?? NO_WIRES,
     docStyle: doc.style,
+    // (a document made before workspaces carried them: Meno's own)
+    docStyle3d: doc.style3d ?? DEFAULT_WORKSPACE_3D,
     pageId: doc.pageId,
     texts: doc.texts ?? NO_TEXTS,
     pdfs: doc.pdfs ?? NO_PDFS,
@@ -447,7 +450,7 @@ export function EditorProvider({
   children: ReactNode;
 }) {
   const doc = useMemo(
-    () => document ?? createWorkspaceDocument(undefined, useAppSettings.getState().drawingStyle),
+    () => document ?? createWorkspaceDocument(undefined, useAppSettings.getState().drawingStyle, workspace3dOf(useAppSettings.getState().style3d)),
     // A different tab identity means a different canvas, so a canvas without a
     // document of its own gets a fresh one rather than keeping the old tab's.
     // eslint-disable-next-line react-hooks/exhaustive-deps

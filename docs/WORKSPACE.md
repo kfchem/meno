@@ -821,7 +821,8 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   user's own of that id as it is now - changed or renamed since - it is a
   card of its own too, the one chosen, and picking or renaming the user's
   acts on theirs alone. Style files opened together are asked about in
-  turn.
+  turn. Styles in 3D follow the same rules (*Styles in 3D*, *A workspace's
+  styles in 3D*).
 
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
 pull request (`agent/style-one-per-workspace`): L8 the change of style and
@@ -1069,6 +1070,35 @@ space-filling side by side is better science than either alone.
   primary, Use as secondary, Duplicate, Export style… - and, for the user's
   own, Rename and Delete. A built-in style's changes are kept apart,
   marked, and taken back by Reset; the user's own is set as a whole.
+- **A workspace's styles in 3D** (the maintainer, 2026-10-16: as a
+  workspace carries its drawing style). A workspace is drawn in its own
+  primary and secondary, fixed as it is made - Settings' then, each whole:
+  a built-in style with what was changed of it, or one of the user's own -
+  and from then on changed only from it: Settings' are for new workspaces
+  (lib/chem/workspaceStyle3d). Its file carries them whole (FILE-IO.md,
+  *The workspace file*), so it opens the same on any computer. A
+  right-click on empty space, *Styles…*, opens the workspace's styles: its
+  drawing style, and under *Molecules in 3D* the same slots and cards as
+  Settings' page - its two in the slots, Settings' styles below, and one
+  it carries that this computer's Settings has none like (made on another
+  computer, or changed in Settings since) on a card of its own, *In this
+  workspace*. A style dragged onto a slot, or given a role from its menu,
+  becomes the workspace's as it is now, whole - one step to undo, a result
+  set its molecules no longer fit laid out again in the same step - and
+  the molecules go over to it: each number and colour of the looks eased
+  from what it was (ball size, bond thickness, lines, atoms' colours), the
+  rest at once, as a change of drawing style eases its bond (at once past
+  20 000 atoms). Duplicate copies a style - a carried one too - into the
+  user's own; Rename acts on the user's style alone; nothing is deleted
+  from here. **What travels with it** (the lane's call, 2026-10-16): what
+  changes the picture - the light from all round and from above right,
+  the shadows, an orbital's colours and how ribbons are coloured, set
+  under the cards, one step each; how a drag turns a molecule and how it
+  coasts, and how a very large drawing is drawn lighter, are the
+  viewer's, and stay in Settings. Talks, pictures and files exported, and
+  a render asked for *as the canvas draws it* follow the workspace's
+  styles. A workspace saved before they were carried opens in Settings'
+  as they are then, and keeps them.
 - **Two roles.** One style is the primary - every molecule's look to
   begin with - and one the secondary. Each style's card in Settings says
   which it is; giving a style the other's role swaps the two, so the

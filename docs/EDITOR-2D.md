@@ -543,7 +543,7 @@ Both go together, because both touch every layer.
 - **Scope.** An application default; a document's own style over it; and
   per-bond and per-atom overrides over that (a coloured atom, a bold bond).
 - **Where it is set.** Settings holds the application's style, and
-  *Drawing style…* (a right-click on empty space) gives a
+  *Styles…* (a right-click on empty space) gives a
   document one of its own. Either is
   a preset - ACS 1996, RSC, Wiley or Nature - and what was changed from it;
   every setting has its name, description, unit and range in

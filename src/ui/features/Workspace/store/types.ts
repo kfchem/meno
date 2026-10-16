@@ -10,6 +10,7 @@ import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
+import type { Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
 import type { Role3D } from "../../../../lib/chem/style3d";
 import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
@@ -1315,6 +1316,8 @@ export type EditorState = {
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
   docStyle: StyleChoice;
+  /** The workspace's styles in 3D (document.ts `style3d`): what its molecules are drawn in. */
+  docStyle3d: Workspace3D;
   /** Which page the document is (document.ts `pageId`): unset until one is opened from a file. */
   pageId?: number;
   labelEdit: {
@@ -1621,6 +1624,8 @@ export type EditorState = {
   setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => void;
   /** A preset chosen in the Drawing style card: the style taken, its bond eased in from the old one, one step (../styleEase). */
   easeDocumentStyle: (style: StyleChoice) => void;
+  /** The workspace's styles in 3D set: one step to undo - a run of a slider's in one `coalesceKey`. Its molecules go over to them, eased. */
+  setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

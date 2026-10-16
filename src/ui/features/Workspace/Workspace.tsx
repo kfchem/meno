@@ -76,7 +76,8 @@ import SizeCard from "./SizeCard";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
-import { currentStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
+import { style3dOf, useEasedStyle3D, useStyle3D, useStyleNames3D } from "./style3d";
+import { LARGE_ATOMS } from "./utils/largeDrawing";
 import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
 import { movingAtoms, movingFor } from "./utils/edit3d";
@@ -457,7 +458,7 @@ function WorkspaceContent({
         const made: Parameters<ReturnType<typeof store.getState>["riseMolecules3d"]>[0] = [];
         let allInView = true;
         // (what they keep clear of: the molecules in 3D there already, as they are seen now - and each row made)
-        const look3d = currentStyle3D();
+        const look3d = style3dOf(store.getState());
         const st = store.getState();
         const solids = st.molecules3d.map((m) => {
           const b = seenBounds(poseOf(m, solidOf(m, look3d), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]));
@@ -554,7 +555,7 @@ function WorkspaceContent({
         // (laid out in the drawing's style, as Clean-up lays it out)
         const style = styleOf(st.docStyle);
         const { model: formula, link, ordersUnknown } = await formulaOf(await chemWorker("drawing"), mol, st.frames3d[id] ?? 0, style);
-        const placed = centredAt(formula, formulaPlace(mol, formula, currentStyle3D()));
+        const placed = centredAt(formula, formulaPlace(mol, formula, style3dOf(store.getState())));
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
         if (ordersUnknown) setChemError("Bond orders unknown: the formula is drawn with every bond single.");
@@ -575,7 +576,7 @@ function WorkspaceContent({
       const st = store.getState();
       const mol = st.molecules3d.find((x) => x.id === id);
       if (!mol?.drawnFrom) return;
-      const solid = solidOf(mol, currentStyle3D());
+      const solid = solidOf(mol, style3dOf(store.getState()));
       const places = solid.frames[frameOf(solid, st.frames3d[id])];
       const byId = new Map(st.model.atoms.map((a) => [a.id, a]));
       const from: number[] = [];
@@ -948,7 +949,10 @@ function WorkspaceContent({
   // a molecule in 3D right-clicked: what its menu does to it
   const molecules3d = useEditor((s) => s.molecules3d);
   const chosen3d = useEditor((s) => s.chosen3d);
-  const style3d = useStyle3D();
+  // (its molecules going over to a change of the workspace's styles in 3D, not jumping - at once in a very large drawing)
+  const target3d = useStyle3D();
+  const atoms3d = useEditor((s) => s.molecules3d.reduce((n, m) => n + m.atoms.length, 0));
+  const style3d = useEasedStyle3D(target3d, atoms3d > LARGE_ATOMS);
   const styleNames3d = useStyleNames3D();
   const menuMolecule = menu?.kind === "molecule3d" ? molecules3d.find((m) => m.id === menu.id) : undefined;
   // a molecule's output shown in the column of texts, held in the
@@ -1077,7 +1081,7 @@ function WorkspaceContent({
   // the selection as a box would take it, where it holds whole structures or molecules in 3D
   const selectionAsSet = () => {
     const st = store.getState();
-    return selectionFrame(st.model, st.sel.atoms, st.molecules3d, st.sel3d, currentStyle3D(), st.turns3d, st.frames3d);
+    return selectionFrame(st.model, st.sel.atoms, st.molecules3d, st.sel3d, style3dOf(store.getState()), st.turns3d, st.frames3d);
   };
   // a box's tab or a step's card right-clicked (Workflow2D): its menu, there
   const workflowMenu = useEditor((s) => s.workflowMenu);
@@ -1453,7 +1457,7 @@ function WorkspaceContent({
         ]
       : []),
     ...(pdfsHeld ? [{ name: "Find in PDF…", keys: shortcutLabel("F"), run: openFind }] : []),
-    { name: "Drawing style…", keys: "", run: () => !styleOpen && toggleStyle(), divider: true },
+    { name: "Styles…", keys: "", run: () => !styleOpen && toggleStyle(), divider: true },
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
@@ -1606,7 +1610,7 @@ function WorkspaceContent({
             known={(ids) => {
               const state = store.getState();
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
-              return chosen.length ? knownOfMolecules(chosen) : {};
+              return chosen.length ? knownOfMolecules(chosen, style3dOf(store.getState())) : {};
             }}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {

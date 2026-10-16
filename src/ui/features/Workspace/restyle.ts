@@ -16,6 +16,8 @@ import type { WorkspaceDocument } from "./document";
 import type { Model, PictureItem, WorkflowSet } from "./store/types";
 import { restyled3d } from "./utils/restyle3d";
 import { setMembers, type Frame } from "./workflow/entries";
+import type { Style3D } from "../../../lib/chem/style3d";
+import { style3dOf } from "./style3d";
 
 type Pt = { x: number; y: number };
 const ORIGIN: Pt = { x: 0, y: 0 };
@@ -42,13 +44,13 @@ export function pointOfStyle(style: StyleChoice | undefined): number {
  * units; everything else on the page scaled by k; a workflow's sets fitted
  * round what they hold. Where k is 1, `parts` itself.
  */
-export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = ORIGIN): T {
+export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = ORIGIN, style3d?: Style3D): T {
   if (k === 1 || !(k > 0) || !Number.isFinite(k)) return parts;
   const x = (v: number) => about.x + (v - about.x) * k;
   const y = (v: number) => about.y + (v - about.y) * k;
   const out: Restylable = { ...parts };
   if (parts.model) out.model = structuresMoved(parts.model, k, about);
-  if (parts.molecules3d) out.molecules3d = restyled3d(parts.molecules3d, k, about);
+  if (parts.molecules3d) out.molecules3d = restyled3d(parts.molecules3d, k, about, style3d);
   if (parts.arrows)
     out.arrows = parts.arrows.map((a) => ({
       ...a,
@@ -103,7 +105,8 @@ export function restyledDocument(doc: WorkspaceDocument, style: StyleChoice): Wo
   // (the style it has: no change, and no step to undo)
   if (doc.style && (doc.style === style || JSON.stringify(doc.style) === JSON.stringify(style))) return doc;
   const k = doc.style ? bondPtOf(doc.style) / bondPtOf(style) : 1;
-  const out = restyled({ ...doc, style }, k);
+  // (its molecules in 3D in its own styles in 3D: how far each reaches)
+  const out = restyled({ ...doc, style }, k, ORIGIN, style3dOf({ docStyle3d: doc.style3d }));
   if (!doc.style || !out.captions?.length) return out;
   const captions = wordsKept(out.captions, labelPtOf(doc.style), labelPtOf(style));
   return captions === out.captions ? out : { ...out, captions };

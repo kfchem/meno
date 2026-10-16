@@ -231,7 +231,7 @@ function AtomColours({ look, preset, onSet }: { look: MoleculeLook; preset: Mole
   );
 }
 
-function Row({
+export function Row({
   field,
   value,
   changed,
