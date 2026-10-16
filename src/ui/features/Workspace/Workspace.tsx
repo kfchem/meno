@@ -185,6 +185,8 @@ import { putDownSmiles } from "./utils/quickAddSmiles";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
+import { mapStanding, reactionOf } from "./chem/atomMap";
+import { useAtomMaps } from "./chem/useAtomMaps";
 import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
@@ -410,6 +412,9 @@ function WorkspaceContent({
   }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
+  // A drawn reaction's atom map, made off the drawing's thread - said
+  // meanwhile, and stoppable - and kept on its arrow (chem/useAtomMaps)
+  const atomMaps = useAtomMaps(store, setChemError);
   // a molecule's bond orders sought from its shape as it comes in, where they
   // are unknown; and those given from a SMILES, asked for on its ligand
   useBondOrders();
@@ -1528,6 +1533,30 @@ function WorkspaceContent({
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence>
+        {active && atomMaps.mapping && (
+          <motion.div
+            key="mapping"
+            {...RISE}
+            layout
+            role="status"
+            className="absolute right-3 bottom-12 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm pl-3 pr-1.5 py-1 text-xs text-gh-gray"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span key={atomMaps.mapping.phase} {...FADE} className="block">
+                {atomMaps.mapping.phase === "3d" ? "Making the reaction's 3D structures…" : "Mapping the reaction's atoms…"}
+              </motion.span>
+            </AnimatePresence>
+            <Elapsed since={atomMaps.mapping.since} />
+            <button
+              onClick={atomMaps.stopMapping}
+              className="rounded-full px-2 py-0.5 text-gh-black transition-colors duration-150 ease-meno hover:bg-gh-base"
+            >
+              Stop
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
@@ -2126,6 +2155,22 @@ function WorkspaceContent({
               weight: a.weight ?? "regular",
               setWeight: (weight: ArrowWeight | "regular") => set({ weight }),
               ...(a.corners?.length ? { onStraighten: () => set({ corners: null }) } : {}),
+              // (an arrow with a reaction drawn on either side: its atom map)
+              ...((() => {
+                const sides = reactionOf(st.model, a, st.pluses);
+                if (!sides.reactants.length || !sides.products.length) return {};
+                return {
+                  atomMap: {
+                    standing: mapStanding(a, st.model),
+                    shown: !!a.atomMap?.shown,
+                    maps: a.atomMap?.maps.length ?? 0,
+                    onMake: () => void atomMaps.makeAtomMap(a.id),
+                    onShow: (shown: boolean) => store.getState().showAtomMap(a.id, shown),
+                    onOther: () => store.getState().otherAtomMap(a.id),
+                    onExport: () => void files.exportReaction3d(a.id),
+                  },
+                };
+              })()),
             };
           })()}
           push={(() => {
@@ -2566,6 +2611,25 @@ export default function Workspace({
  * each with Add - asking for the network as adding always does - and the
  * file read again once one is added.
  */
+/** How long something has been going, in whole seconds, once it has gone two: said beside what it is. */
+function Elapsed({ since }: { since: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+  const s = Math.floor((now - since) / 1000);
+  return (
+    <AnimatePresence initial={false}>
+      {s >= 2 && (
+        <motion.span key="elapsed" {...FADE} className="tabular-nums">
+          {s} s
+        </motion.span>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function AddToRead({ suggest, again }: { suggest: readonly string[]; again: () => void }) {
   const states = useReaders((s) => s.state);
   return (
