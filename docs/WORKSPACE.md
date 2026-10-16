@@ -474,6 +474,16 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, lowest
   first. Of two enantiomers, one is made as the other's mirror image, so
   the two have the same conformers and shares.
+- **A metal's bonds hold** (2026-10-17). A bond drawn to a d- or f-block
+  metal is embedded at its covalent length (Pyykkö's radii, as Meno's own)
+  with the metal's ligands kept apart, and the metal is given UFF's own
+  geometry for it: square planar for Ni, Pd, Pt and Au (their angles held
+  at 90 and 180 degrees), tetrahedral or octahedral for the rest. Where UFF
+  has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
+  metal of its group stands in for its shape while its bonds are held at
+  their own lengths, and no energies are given: the chip says so, and the
+  conformers are not ranked or weighted. Before, UFF without terms for a
+  metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A haptic bond binds its ring whole** (2026-10-13): where an atom of
   the ring it binds is deleted or merged onto another, or it is pasted or
   taken as part of a structure without its ring, it binds none - a plain
