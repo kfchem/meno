@@ -435,6 +435,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // counting then as much as a label on a label)
     const score = kept(scorer(mol, piece, depth, measured, 0, false));
     const scoreH = kept(scorer(mol, piece, depth, measured, 1));
+    const scoreFan = kept(scorer(mol, piece, depth, measured, 1, undefined, true));
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
@@ -456,19 +457,26 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       .sort(bestFirst(mol, piece));
     // and the best few set right within their small sides - every one, for
     // a small piece
-    for (const cand of improved.slice(0, piece.length <= 40 ? improved.length : 3)) {
-      const deeper = {
-        ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere),
-        mirrored: cand.mirrored,
-      };
-      if (deeper.score < best.score - 1e-9) best = deeper;
-    }
-    best = { ...rejoin(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
-    best = { ...untangle(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
+    const deeper = improved.slice(0, piece.length <= 40 ? improved.length : 3).map((cand) => ({
+      ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere),
+      mirrored: cand.mirrored,
+    }));
+    // and the best few of those - with the best drawing grown - each
+    // rejoined and untangled, and the one that reads best then kept: a
+    // drawing a little worse before its parts are set can read better
+    // after (Wilkinson's catalyst), and drawings as good may be set right
+    // to drawings that are not
+    const pool = deeper.some((d) => d.score <= best.score + 1e-9) ? deeper : [best, ...deeper];
+    const finalists = pool.sort(bestFirst(mol, piece)).slice(0, FINALISTS);
+    best = finalists
+      .map((cand) => {
+        const joined = rejoin(mol, piece, cand.pos, cand.score, score, fixed);
+        return { ...untangle(mol, piece, joined.pos, joined.score, score, fixed), mirrored: cand.mirrored };
+      })
+      .sort(bestFirst(mol, piece))[0];
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
     best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
     // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
-    const scoreFan = kept(scorer(mol, piece, depth, measured, 1, undefined, true));
     const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
     best = { pos: settled, score: scoreH(settled), mirrored: best.mirrored };
     // a cage in a mirrored frame is the one seen from its other side
@@ -1507,50 +1515,72 @@ function propellers(
       return { x, rings };
     })
     .filter((h) => h.rings.length >= 2 && !faceOn.has(h.x));
-  for (const { x, rings } of hubs) {
-    const sides = rings.map((c) => sideAtoms(mol, x, c));
-    if (!sides.some((side) => side.some((v) => crowded.has(v)))) continue;
-    const at = pos.get(x)!;
-    const was = new Map(sides.flat().map((v) => [v, pos.get(v)!]));
-    const turnTo = (phi: number) => {
-      const trial = new Map(pos);
-      const lift = new Map<number, number>();
-      sides.forEach((side, k) => {
-        const u = sub(pos.get(rings[k])!, at);
-        const len = Math.hypot(u.x, u.y) || 1;
-        const ux = u.x / len;
-        const uy = u.y / len;
-        for (const v of side) {
-          const p = sub(was.get(v)!, at);
-          const along = p.x * ux + p.y * uy;
-          const across = -p.x * uy + p.y * ux;
-          trial.set(v, { x: at.x + along * ux - across * Math.cos(phi) * uy, y: at.y + along * uy + across * Math.cos(phi) * ux });
-          lift.set(v, across * Math.sin(phi));
+  // (every crowded hub tried at every angle from the drawing as it stands,
+  // and the best taken, a round at a time (`bestMove`) - not the first that
+  // helps, which would go by the order the atoms come in)
+  const seen = [...depth];
+  const persp = [...solid];
+  let current = scorer(mol, piece, seen, persp)(pos);
+  const order = byMove(mol);
+  const left = new Set(hubs.map((_, k) => k));
+  while (left.size) {
+    const best = bestMove(order);
+    const lifts = new Map<Grown, Map<number, number>>();
+    const hubOf = new Map<Grown, number>();
+    for (const k of left) {
+      const { x, rings } = hubs[k];
+      const sides = rings.map((c) => sideAtoms(mol, x, c));
+      if (!sides.some((side) => side.some((v) => crowded.has(v)))) continue;
+      const at = pos.get(x)!;
+      PROPELLER.forEach((phi, step) => {
+        const trial = new Map(pos);
+        const lift = new Map<number, number>();
+        sides.forEach((side, j) => {
+          const u = sub(pos.get(rings[j])!, at);
+          const len = Math.hypot(u.x, u.y) || 1;
+          const ux = u.x / len;
+          const uy = u.y / len;
+          for (const v of side) {
+            const p = sub(pos.get(v)!, at);
+            const along = p.x * ux + p.y * uy;
+            const across = -p.x * uy + p.y * ux;
+            trial.set(v, { x: at.x + along * ux - across * Math.cos(phi) * uy, y: at.y + along * uy + across * Math.cos(phi) * ux });
+            lift.set(v, across * Math.sin(phi));
+          }
+        });
+        const d = [...seen];
+        const q = [...persp];
+        for (const [v, l] of lift) {
+          d[v] = l;
+          q[v] = true;
+        }
+        const score = scorer(mol, piece, d, q)(trial);
+        if (score < current - 1e-6) {
+          lifts.set(trial, lift);
+          hubOf.set(trial, k);
+          best.offer(trial, score, { kind: 0, atoms: [x], step });
         }
       });
-      return { trial, lift };
-    };
-    const before = scorer(mol, piece, depth, solid)(pos);
-    let best: { score: number; trial: Grown; lift: Map<number, number> } | null = null;
-    for (const phi of PROPELLER) {
-      const { trial, lift } = turnTo(phi);
-      const seen = [...depth];
-      const persp = [...solid];
-      for (const [v, l] of lift) {
-        seen[v] = l;
-        persp[v] = true;
-      }
-      const score = scorer(mol, piece, seen, persp)(trial);
-      if (!best || score < best.score) best = { score, trial, lift };
     }
-    if (!best || best.score >= before - 1e-6) continue;
-    for (const [v, p] of best.trial) pos.set(v, p);
-    for (const [v, l] of best.lift) depth[v] = l;
-    turned.push(...sides);
+    const found = best.found();
+    if (!found) return;
+    const k = hubOf.get(found.pos)!;
+    for (const [v, p] of found.pos) pos.set(v, p);
+    for (const [v, l] of lifts.get(found.pos)!) {
+      depth[v] = l;
+      seen[v] = l;
+      persp[v] = true;
+    }
+    current = found.score;
+    turned.push(...hubs[k].rings.map((c) => sideAtoms(mol, hubs[k].x, c)));
+    left.delete(k);
     crowded = clashing(mol, piece, pos);
     if (!crowded.size) return;
   }
 }
+
+/** How many of a piece's best drawings are each rejoined and untangled, the best of them kept. */
+const FINALISTS = 3;
 
 /** How far a point is from the segment p-q. */
 function toSegment(h: Point, p: Point, q: Point): number {
