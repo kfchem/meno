@@ -9,7 +9,7 @@ import {
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -23,6 +23,7 @@ import { createPicturesSlice } from "./slices/picturesSlice";
 import { createWorkflowSlice } from "./slices/workflowSlice";
 import { createSlidesSlice } from "./slices/slidesSlice";
 import { createShapesSlice } from "./slices/shapesSlice";
+import { createCyclesSlice } from "./slices/cyclesSlice";
 import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
@@ -70,6 +71,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     slides: doc.slides ?? NO_SLIDES,
     shapes: doc.shapes ?? NO_SHAPES,
     inks: doc.inks ?? NO_INKS,
+    cycles: doc.cycles ?? NO_CYCLES,
   };
 }
 
@@ -107,6 +109,7 @@ const NO_PICTURES: PictureItem[] = [];
 const NO_SLIDES: Slide[] = [];
 const NO_SHAPES: Shape[] = [];
 const NO_INKS: Ink[] = [];
+const NO_CYCLES: Cycle[] = [];
 
 /** The pictures selected, kept to those the document still has. */
 function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Set<number> {
@@ -225,6 +228,8 @@ export function connectStoreToDocument(
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
         selSlides: picturesHeld(prev.selSlides, mirrored.slides),
         selShapes: picturesHeld(prev.selShapes, mirrored.shapes),
+        selCycles: picturesHeld(prev.selCycles, mirrored.cycles),
+        hoveredCycle: prev.hoveredCycle != null && !mirrored.cycles.some((c) => c.id === prev.hoveredCycle) ? null : prev.hoveredCycle,
         selArrows: picturesHeld(prev.selArrows, mirrored.arrows),
         selPluses: picturesHeld(prev.selPluses, mirrored.pluses ?? []),
         selInks: picturesHeld(prev.selInks, mirrored.inks),
@@ -321,6 +326,8 @@ export function createEditorStore(
     selSlides: new Set<number>(),
     hoveredSlide: null,
     selShapes: new Set<number>(),
+    selCycles: new Set<number>(),
+    hoveredCycle: null,
     selArrows: new Set<number>(),
     selPluses: new Set<number>(),
     hoveredShape: null,
@@ -380,6 +387,7 @@ export function createEditorStore(
     ...createWorkflowSlice(doc, set, get),
     ...createSlidesSlice(doc, set, get),
     ...createShapesSlice(doc, set),
+    ...createCyclesSlice(doc, set),
     ...createInksSlice(doc, set),
     ...createRecordsSlice(doc, set, get),
   }));

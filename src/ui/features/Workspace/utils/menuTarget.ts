@@ -6,7 +6,7 @@ import { ringThere } from "./rings";
 /** What a right-click menu's part is looked for in. */
 type Parts = Pick<
   EditorState,
-  "model" | "captions" | "pdfs" | "pictures" | "texts" | "arrows" | "pluses" | "pushes" | "slides" | "shapes" | "inks" | "molecules3d" | "sets" | "steps" | "wires"
+  "model" | "captions" | "pdfs" | "pictures" | "texts" | "arrows" | "pluses" | "pushes" | "slides" | "shapes" | "inks" | "cycles" | "molecules3d" | "sets" | "steps" | "wires"
 >;
 
 const has = (items: readonly { id: number }[], id: number | null) => id != null && items.some((x) => x.id === id);
@@ -58,6 +58,8 @@ export function menuTargetGone(target: MenuTarget, s: Parts): boolean {
       return !has(s.shapes, id);
     case "ink":
       return !has(s.inks, id);
+    case "cycle":
+      return !has(s.cycles, id);
     case "molecule3d":
       return !has(s.molecules3d, id);
     case "measure3d": {

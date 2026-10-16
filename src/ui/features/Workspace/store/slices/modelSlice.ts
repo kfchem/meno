@@ -13,6 +13,7 @@ import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
 import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
+import { endsRenamed } from "../../utils/cycles";
 import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
@@ -175,8 +176,8 @@ export const createModelSlice = (
   },
 
   deleteSelection: () => {
-    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, selShapes, selArrows, selPluses, selInks, steps } = get();
-    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size && !selShapes.size && !selArrows.size && !selPluses.size && !selInks.size) return;
+    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, selShapes, selArrows, selPluses, selInks, selCycles, steps } = get();
+    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size && !selShapes.size && !selArrows.size && !selPluses.size && !selInks.size && !selCycles.size) return;
     // the arrows and pluses among it go with it, as with a cut, and those
     // selected for themselves; the molecules in 3D selected, and a
     // workflow's sets and steps, in the same step - but not a step running,
@@ -187,6 +188,7 @@ export const createModelSlice = (
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>
       removeParts(
+        ops.removeCycles(
         ops.removeInks(
         ops.removeShapes(
         ops.removeSlides(
@@ -202,6 +204,8 @@ export const createModelSlice = (
         selShapes,
         ),
         selInks,
+        ),
+        selCycles,
         ),
         selFlow.sets,
         idle,
@@ -479,7 +483,10 @@ export const createModelSlice = (
     // (arrows and "+" signs: a reaction's, or alone - one pointing at something)
     const arrows = next.arrows ?? [];
     const pluses = next.pluses ?? [];
-    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length && !shapes.length && !inks.length && !arrows.length && !pluses.length) return;
+    // (catalytic cycles, with what lies on them pasted with them)
+    const cycles = next.cycles ?? [];
+    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length && !shapes.length && !inks.length && !arrows.length && !pluses.length && !cycles.length) return;
+    const startCycle = doc.getState().nextCycleId ?? 1;
     const startArrow = doc.getState().nextArrowId;
     const startPlus = doc.getState().nextPlusId ?? 1;
     const startSlide = doc.getState().nextSlideId ?? 1;
@@ -495,10 +502,16 @@ export const createModelSlice = (
     // 3D pasted with its drawing is tied to the pasted drawing - and a
     // workflow's parts numbered on from its counter, wired as they were)
     const idOf = new Map(next.atoms.map((a, k) => [a.id, start + k]));
-    const tied = { ...next, molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))) };
+    // (and a cycle's gaps set by hand kept for what they were of, numbered anew)
+    const wordsOf = new Map(words.map((w, k) => [w.id, startCaption + k]));
+    const tied = {
+      ...next,
+      molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))),
+      ...(cycles.length ? { cycles: cycles.map((c) => endsRenamed(c, (id) => idOf.get(id), (id) => wordsOf.get(id))) } : {}),
+    };
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
     const pasted = doc.edit("paste", (d) => {
-      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
+      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length || cycles.length ? ops.withImportedScheme(d, ops.schemeOf(tied)) : d;
       const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
       const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);
       const withSlides = inks.reduce((doc2, { id: _, ...k }) => ops.addInk(doc2, k), slides.reduce((doc2, { id: _, ...s }) => ops.addSlide(doc2, s), withPdfs));
@@ -533,6 +546,7 @@ export const createModelSlice = (
       selSlides: new Set(slides.map((_, i) => startSlide + i)),
       selShapes: new Set(shapes.map((_, i) => startShape + i)),
       selInks: new Set(inks.map((_, i) => startInk + i)),
+      selCycles: new Set(cycles.map((_, i) => startCycle + i)),
       // (the arrows and "+" signs pasted selected for themselves too: those among the atoms are carried with them, once)
       selArrows: new Set(arrows.map((_, i) => startArrow + i)),
       selPluses: new Set(pluses.map((_, i) => startPlus + i)),

@@ -232,6 +232,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
 | An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; arrow style |
+| A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise, how far its arrows stop short of what is on it (close, a little apart, apart, well apart; the one it is ticked), reset this arrow's gap (on one set by hand), reset all arrow gaps (where any is) |
 | A measurement | Delete | set its distance, angle or torsion angle |
 | A set, a "+", a wire | Delete | save as procedure (a set) |
 
@@ -978,6 +979,64 @@ All hover-based, as above.
     an arrow alone shows no reaction. Pictures - SVG, EMF, those copied -
     fill each line or dash, head and cross as a shape of its own, in the
     arrow's colour.
+- **Catalytic cycles** (the maintainer, 2026-10-15): a circle on the
+  page, and what is placed on it, round which a cycle's reaction arrows
+  run (`lib/chem/cycle`, `Cycles2D`, `utils/cycles`).
+  - **Put down from Quick Add**, its *Catalytic cycle*, where Quick Add
+    was opened: four and a half bonds from its middle to its line.
+  - **On it** is a structure or words whose middle - of the box round
+    what is drawn, its labels' letters included, the H of HO and all -
+    lies within six tenths of a bond of its line. One
+    let go within a bond of the line, dragged or put down from Quick Add's
+    SMILES, is put on it, moved straight out from the middle or in. What
+    is on a cycle is not kept with it: it is what lies on its line, so
+    that it is moved along the circle, or off it, as anything is moved.
+  - **Its arrows**: the circle breaks round each thing on it, each side on
+    its own where it first comes within half a bond of what is
+    drawn - a bond as wide as it is drawn, a label's letters, words - or,
+    where it comes no nearer, where it comes nearest; so each stretch
+    ends just short of what it points at, however much of the box round
+    a structure is empty where the circle passes. Each stretch between two
+    neighbours is a curved reaction arrow, clockwise unless turned from
+    its menu. With nothing on it, it is a whole circle with no head. The
+    stretches follow as a thing is dragged along the line; the circle
+    opens round what comes on to it and closes after what goes off it,
+    eased. The arrows take the drawing style's reaction arrows' look, and
+    the cycle's colour, from its menu.
+  - **Arrows coming in and going out**, from the menu a right-click on
+    its line opens, where it was right-clicked: one coming in curves in
+    from outside and joins the circle along the way it goes; one going out
+    leaves it so and curves out, its head at its far end. Each is given
+    words at its far end, typed at once, which go with the cycle; *Remove
+    this arrow* takes the one there away. One put there grows - in from
+    its far end, or out from the circle - and one taken away goes the
+    same way back.
+  - **Turned round** from its menu, each stretch's head travels along it
+    to its other end, smallest half way, where it turns; the arrows coming
+    in and going out swing across to the other side of where they join,
+    their words carried with them - one step.
+  - **Selected** by a click on its line, or taken hold of by holding
+    still on it a moment; selected, a drag moves it with what is on it and
+    the words at its arrows' ends, and its handle at the lower right sizes
+    it, what is on it moved out or in with the line - each one undo step.
+  - **How far its arrows stop short** (the maintainer, 2026-10-16): half
+    a bond, or what its menu sets for the cycle - a quarter, half, three
+    quarters or a whole bond. Selected, each end of its arrows shows a
+    handle: dragged back, that end stops further short; forward, nearer -
+    kept for that end of that structure or those words however they are
+    moved, and with them when copied. Its menu gives ends back the
+    cycle's own: *Reset this arrow's gap*, right-clicked on an arrow (or
+    on the break by an end) set by hand, and *Reset all arrow gaps* - a
+    double-click on a handle does nothing of the kind, so that a careful
+    setting is not lost by chance (the maintainer, 2026-10-16). Each change
+    is one step, eased.
+    It is selected with all, copied or cut alone or with the rest, and
+    carried round or turned over with what is selected: turned over, it
+    goes the other way and its arrows in and out join it mirrored.
+  - **Saved** in the .meno and in Meno's own copies, pasted and restyled
+    as the rest of the drawing; in pictures - SVG, EMF, those copied - its
+    arrows are reaction arrows, the curves as corners close along them.
+    Nothing arranges what is on it: where it goes is where it is put.
 - **Text** (the maintainer, 2026-10-08: reagents' labels): words on the
   page - a reaction's reagents and conditions, or anything else
   (`lib/chem/captions`, `Captions2D`, `CaptionTyping2D`).

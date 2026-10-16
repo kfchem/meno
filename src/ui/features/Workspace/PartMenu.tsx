@@ -18,7 +18,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -75,6 +75,14 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
+/** The gaps a cycle's arrows can keep from what is on it, in bonds, as its menu offers them. */
+const CYCLE_GAPS: readonly (readonly [number, string])[] = [
+  [0.25, "Arrows close"],
+  [0.5, "Arrows a little apart"],
+  [0.75, "Arrows apart"],
+  [1, "Arrows well apart"],
+];
+
 type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
@@ -172,6 +180,7 @@ export default function PartMenu({
   slide,
   onSlideAround,
   shape,
+  cycle,
   onBoxAround,
   canvas = [],
   clipboard,
@@ -326,6 +335,8 @@ export default function PartMenu({
     onFront: () => void;
     onBack: () => void;
   };
+  /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
+  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void; onResetEnd?: () => void; onResetAll?: () => void };
   /** A rounded rectangle made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
@@ -612,6 +623,20 @@ export default function PartMenu({
         ]
       : target.kind === "ink"
       ? [...colour, del("Delete writing")]
+      : target.kind === "cycle" && cycle
+      ? [
+          ...colour,
+          { name: "Arrow coming in", keys: "", run: cycle.onIn },
+          { name: "Arrow going out", keys: "", run: cycle.onOut },
+          ...(cycle.onRemoveArrow ? [{ name: "Remove this arrow", keys: "", run: cycle.onRemoveArrow }] : []),
+          { name: cycle.ccw ? "Turn clockwise" : "Turn anticlockwise", keys: "", run: cycle.onTurn, divider: true },
+          // (how far its arrows stop short of what is on it, ticked as it is)
+          ...CYCLE_GAPS.map(([gap, name], i) => ({ name, keys: "", run: () => cycle.setGap(gap), checked: Math.abs(cycle.gap - gap) < 1e-6, ...(i === 0 ? { divider: true } : {}) })),
+          // (ends set by hand given back the cycle's gap: the arrow's right-clicked, or all)
+          ...(cycle.onResetEnd ? [{ name: "Reset this arrow's gap", keys: "", run: cycle.onResetEnd, divider: true }] : []),
+          ...(cycle.onResetAll ? [{ name: "Reset all arrow gaps", keys: "", run: cycle.onResetAll, ...(cycle.onResetEnd ? {} : { divider: true }) }] : []),
+          del("Delete cycle"),
+        ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -774,6 +799,8 @@ export default function PartMenu({
                       ? "Shape"
                     : target.kind === "ink"
                       ? "Writing"
+                    : target.kind === "cycle"
+                      ? "Catalytic cycle"
                       : "Canvas"
       }
       tabIndex={-1}

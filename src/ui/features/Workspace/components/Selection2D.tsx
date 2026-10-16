@@ -14,6 +14,7 @@ import { arrowsIn, cornersOf, inBox, inLasso, marksAtOf, middleOf, molecules3dIn
 import { flowIn } from "../workflow/parts";
 import { middleOf as shapeMiddle, turned as turnedShape } from "../../../../lib/chem/shapes";
 import { shapePlace } from "../document";
+import { cycleTurned } from "../../../../lib/chem/cycle";
 import { strokesBounds, strokeTurned } from "../../../../lib/chem/ink";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { currentStyle3D, useStyle3D } from "../style3d";
@@ -359,6 +360,9 @@ export default function Selection2D() {
     const shapesAt = (angle: number) => shapes.map((s) => shapePlace(turnedShape(s, about, angle), { x: 0, y: 0 }));
     const inks = st.inks.filter((k) => st.selInks.has(k.id));
     const inksAt = (angle: number) => inks.map((k) => ({ id: k.id, strokes: k.strokes.map((s) => strokeTurned(s, about, angle)) }));
+    // (catalytic cycles carried round by their middles, their arrows in and out joining them as far round)
+    const cycles = st.cycles.filter((c) => st.selCycles.has(c.id));
+    const cyclesAt = (angle: number) => cycles.map((c) => ({ id: c.id, ccw: c.ccw, ...cycleTurned(c, about, angle) }));
     // (the arrows, "+" signs and words among it, and those selected for themselves, carried round too - the words' places, their letters upright - as a drag takes them)
     const among = selectionScheme(st);
     const words = among.captions;
@@ -382,7 +386,7 @@ export default function Selection2D() {
       // (molecules with the drawing: carried round in its plane, and turned with it)
       const markAts = marksAt(angle);
       const marks =
-        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || inks.length || scheme
+        pics.length || markAts || sheets.length || pdfs.length || slides.length || shapes.length || inks.length || cycles.length || scheme
           ? {
               ...(scheme ? { arrows: turnedArrows(among.arrows, about, angle), pluses: turned(among.pluses, about, angle), captions: turned(words, about, angle) } : {}),
               ...(pics.length ? { pictures: picturesAt(angle) } : {}),
@@ -392,6 +396,7 @@ export default function Selection2D() {
               ...(slides.length ? { slides: turned(slides, about, angle) } : {}),
               ...(shapes.length ? { shapes: shapesAt(angle) } : {}),
               ...(inks.length ? { inks: inksAt(angle) } : {}),
+              ...(cycles.length ? { cycles: cyclesAt(angle) } : {}),
             }
           : undefined;
       if (carried.length) store.getState().turnMolecules3d(turnedInPlane(carried, about, angle), gesture, turned(from, about, angle), marks);

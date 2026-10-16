@@ -16,7 +16,8 @@ import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
  * cross as its form makes them (lib/chem/reactionArrow `arrowPieces`) - its
  * kind, heads, dashes, weight and corners - measured as the drawing style
  * has them, over which `look` sets what this arrow sets for itself; in the
- * bonds' colour unless told otherwise.
+ * bonds' colour unless told otherwise. Its head may be drawn smaller, while
+ * it comes or goes (`headScale`, a share of its size).
  */
 export default function ReactionArrow2D({
   x1,
@@ -26,6 +27,7 @@ export default function ReactionArrow2D({
   look,
   form,
   color,
+  headScale = 1,
   z = 0,
 }: {
   x1: number;
@@ -35,6 +37,7 @@ export default function ReactionArrow2D({
   look?: ArrowLook;
   form?: ArrowForm;
   color?: string;
+  headScale?: number;
   z?: number;
 }) {
   const style = useDrawingStyle();
@@ -52,12 +55,12 @@ export default function ReactionArrow2D({
       { x: x1, y: y1 },
       { x: x2, y: y2 },
       JSON.parse(formKey) as ArrowForm,
-      { ...measures, thickness },
+      { ...measures, thickness, headLength: measures.headLength * headScale, headWidth: measures.headWidth * headScale },
     );
     return new THREE.ShapeGeometry(
       pieces.map((o) => new THREE.Shape(o.map((p) => new THREE.Vector2(p.x, p.y)))),
     );
-  }, [measures, formKey, thickness, x1, y1, x2, y2]);
+  }, [measures, formKey, thickness, headScale, x1, y1, x2, y2]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
   return (
