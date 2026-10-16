@@ -962,6 +962,11 @@ pub fn run() {
             // a workspace file Windows started Meno to open (opened.rs)
             #[cfg(windows)]
             opened::open(app.handle(), opened::workspaces_in(std::env::args()));
+            // (the single-instance plugin's window, made visible by it, hidden: opened.rs)
+            #[cfg(windows)]
+            if !ole::started_for_office() {
+                opened::hide_instance_window(&app.config().identifier);
+            }
             // drags from other programs the webview cannot read (Windows)
             #[cfg(windows)]
             drop::start(app.handle());
