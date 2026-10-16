@@ -596,6 +596,21 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const lower = y[p] < y[q] ? p : q;
     for (const b of [p, q]) depth[b] = b === lower ? PAIR_DEPTH : -PAIR_DEPTH;
   }
+  // a group off a solid, its first atom at the depth of the solid's atom it
+  // leaves: where its bond crosses one of the solid's further back, that one
+  // is drawn broken, as in front of it (aconitine's N-ethyl), and a centre
+  // of the solid with a group on it reads by where that group is. An atom
+  // that leaves more than one such atom - of a ring fused flat onto the
+  // solid too, at its depth there - is at the mean of theirs, whichever
+  // comes first.
+  const withSolid = new Set(mol.systemOf.filter((sys, a) => sys >= 0 && solid[a]));
+  const groupDepth = new Map<number, number>();
+  for (let d = 0; d < mol.n; d++) {
+    if (depth[d] != null) continue;
+    const from = mol.neighbours[d].filter((c) => withSolid.has(mol.systemOf[c]) && depth[c] != null && mol.systemOf[d] !== mol.systemOf[c]);
+    if (from.length) groupDepth.set(d, from.reduce((sum, c) => sum + depth[c]!, 0) / from.length);
+  }
+  groupDepth.forEach((z, d) => (depth[d] = z));
   // a ring in perspective - bound face-on, or turned on its bond - drawn as
   // Haworth drew rings: a bond with both its atoms near, bold; one running
   // from the far half to the near one, a wedge toward the viewer, narrow at

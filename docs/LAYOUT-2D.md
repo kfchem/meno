@@ -265,7 +265,11 @@ they hang from.
   ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
-  is drawn broken there. Bonds out of the ring follow it - an equatorial
+  is drawn broken there - a group's bond too: the first atom of a group off
+  the solid is as near as the atom of the solid it leaves (the mean of
+  theirs, where it leaves more than one), so a bond out of the front of
+  the cage that crosses one at its back is drawn whole, the one behind
+  broken (aconitine's N-ethyl). Bonds out of the ring follow it - an equatorial
   bond parallel to the ring bonds but one, an axial one upright - and what
   hangs from the cage hangs from its front where it can. A
   bicyclo[3.3.1] cage - two six-membered rings sharing three atoms, 9-BBN,

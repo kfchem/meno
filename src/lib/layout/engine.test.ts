@@ -241,10 +241,18 @@ describe("layout2D", () => {
     const smiles = "C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O";
     const given = input(smiles);
     const ttx = layout2D(given);
-    const centres = given.atoms.flatMap((a, i) => (a.tetra && ttx.depth[i] != null ? [i] : []));
-    expect(given.atoms.filter((_, i) => ttx.depth[i] != null)).toHaveLength(14);
     const mol = perceive(given);
     const sys = mol.systems.find((x) => x.atoms.length === 14)!;
+    // (the whole cage in depth; beyond it only the first atoms of the groups
+    // off it, each at the depth of the cage's atom it leaves)
+    expect(sys.atoms.every((a) => ttx.depth[a] != null)).toBe(true);
+    for (const [i] of given.atoms.entries()) {
+      if (ttx.depth[i] == null || sys.atoms.includes(i)) continue;
+      const from = mol.neighbours[i].filter((c) => sys.atoms.includes(c));
+      expect(from.length, `atom ${i} off the cage`).toBeGreaterThan(0);
+      expect(ttx.depth[i]).toBeCloseTo(from.reduce((t, c) => t + ttx.depth[c]!, 0) / from.length, 9);
+    }
+    const centres = sys.atoms.filter((a) => given.atoms[a].tetra);
     const shown = shownBySolid(mol, sys, centres.concat(given.atoms.flatMap((_, i) => (ttx.solid[i] ? [i] : []))), (a) => ({ x: ttx.x[a], y: ttx.y[a] }));
     for (const c of centres) {
       if (ttx.solid[c]) expect(shown.has(c), `C${c} shown by the solid's shape`).toBe(true);
