@@ -12,6 +12,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join, relative } from "node:path";
 
 const ROOT = join(__dirname, "../../..");
@@ -150,8 +151,35 @@ export function literalsOf(text: string, lang: "ts" | "rs"): string[] {
   return out;
 }
 
+/** The files git tracks under `dirs`: what is core's source - a scratch file under src/ that git ignores is not. null where git cannot say (a source tree without its repository). */
+function tracked(dirs: string[]): string[] | null {
+  try {
+    const out = execFileSync("git", ["ls-files", "-z", "--", ...dirs], { cwd: ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] });
+    const files = out.split("\0").filter(Boolean);
+    return files.length ? files.map((f) => join(ROOT, f)) : null;
+  } catch {
+    return null;
+  }
+}
+
 function sources(): { file: string; lang: "ts" | "rs" }[] {
   const out: { file: string; lang: "ts" | "rs" }[] = [];
+  const kept = (name: string, lang: "ts" | "rs") => {
+    if (lang === "ts") {
+      if (!/\.(ts|tsx)$/.test(name) || /\.(test|spec)\.(ts|tsx)$/.test(name) || /\.d\.ts$/.test(name)) return false;
+      // (test support: fixtures and scratch files beside the tests)
+      return !/\.scratch\./.test(name);
+    }
+    return name.endsWith(".rs");
+  };
+  const git = tracked(["src", "src-tauri/src"]);
+  if (git) {
+    for (const file of git) {
+      const lang = file.endsWith(".rs") ? "rs" : "ts";
+      if (kept(file.split("/").pop() ?? file, lang)) out.push({ file, lang });
+    }
+    return out;
+  }
   const walk = (dir: string, lang: "ts" | "rs") => {
     for (const name of readdirSync(dir)) {
       if (name === "node_modules" || name === "target") continue;
@@ -160,12 +188,7 @@ function sources(): { file: string; lang: "ts" | "rs" }[] {
         walk(p, lang);
         continue;
       }
-      if (lang === "ts") {
-        if (!/\.(ts|tsx)$/.test(name) || /\.(test|spec)\.(ts|tsx)$/.test(name) || /\.d\.ts$/.test(name)) continue;
-        // (test support: fixtures and scratch files beside the tests)
-        if (/\.scratch\./.test(name)) continue;
-      } else if (!name.endsWith(".rs")) continue;
-      out.push({ file: p, lang });
+      if (kept(name, lang)) out.push({ file: p, lang });
     }
   };
   walk(join(ROOT, "src"), "ts");
