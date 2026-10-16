@@ -165,7 +165,8 @@ describe("the dictionary's pictures", () => {
         .atoms.map((a) => a.el)
         .filter((el) => el === "Ph" || el === "PPh2"),
     ).toEqual([]);
-  });
+    // (BINAP's picture is laid out here, 0.7 to 1.8 s alone: a busy machine passes the default 5 s)
+  }, 30_000);
 
   it("write a counter-anion's CF3 by formula, as everywhere", () => {
     const placed = picturedStructure(counterIonStructure("BArF")!, 1);

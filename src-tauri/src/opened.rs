@@ -18,6 +18,30 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
+/// The window the single-instance plugin makes to receive a second Meno's arguments, hidden.
+/// The plugin makes it a top-level window of no size, layered and kept off the taskbar, and
+/// sets it visible (its own note: so that it takes the messages sent to it). Being visible,
+/// it is among the process's visible windows, where a program asking for the process's main
+/// window may be given it for Meno's; hidden, it is not, and still receives them (a hidden
+/// window is found by name, and takes `WM_COPYDATA`). Not made message-only: such a window is
+/// not found by name, which is how a second Meno finds the first. Said once, and nothing
+/// more, where it is not found (another plugin version may name it otherwise).
+#[cfg(windows)]
+pub fn hide_instance_window(identifier: &str) {
+    use windows::core::PCWSTR;
+    use windows::Win32::UI::WindowsAndMessaging::{FindWindowW, ShowWindow, SW_HIDE};
+    let wide = |s: String| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let (class, title) = (wide(format!("{identifier}-sic")), wide(format!("{identifier}-siw")));
+    // SAFETY: both names are NUL-ended and outlive the call; the window is this process's own.
+    match unsafe { FindWindowW(PCWSTR(class.as_ptr()), PCWSTR(title.as_ptr())) } {
+        Ok(hwnd) => {
+            // SAFETY: as above.
+            let _ = unsafe { ShowWindow(hwnd, SW_HIDE) };
+        }
+        Err(e) => eprintln!("the single-instance window was not found, and is left as it is: {e}"),
+    }
+}
+
 /// The workspace files opened from outside and not yet taken by the page.
 #[derive(Default)]
 pub struct Opened(Mutex<Vec<String>>);

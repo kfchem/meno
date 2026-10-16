@@ -149,7 +149,10 @@ stops being part of the work.
 
 - **A page shows at once**, from a small picture of it, and the parts in
   view are then drawn at the screen's resolution, in tiles that fade in
-  over it.
+  over it. The small picture alone is kept only where the page is shown at
+  half its pixels or fewer: shown larger, its letters were all but white
+  (a page put on the canvas small, found on Windows, 2026-10-16), and the
+  page is drawn in tiles, as at any size.
 - **While a pinch or a zoom goes on**, the tiles there are scaled on the
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
@@ -162,6 +165,17 @@ stops being part of the work.
   before its turn is dropped. A zoom still waits for the view to stop,
   the level changing. Tiles that come are shown one a frame, each put on
   the graphics card as it is, so that none waits on several at once.
+- **Light on the graphics card** (found on Windows, 2026-10-16: a PDF
+  scrolled in the column kept the graphics card full).
+  - A picture of a page come and faded in is drawn opaque, and its tiles
+    before anything else, so that the graphics card leaves out, pixel by
+    pixel, all of the page behind them - its small picture, tiles of
+    another level kept under - instead of drawing each and blending the
+    next over it. A page's white sheet is not drawn under its small
+    picture once that is whole.
+  - With the column open the full height of the window, the page is drawn
+    only beside it: under it, the column's own background covers all of it.
+  - Nothing is drawn again while nothing moves or changes.
 - **Only what is in view is drawn**, nearest first, then the pages next
   in the way the view is going: once it stops, the column asks for the
   next screen's worth the way it last scrolled, and the canvas for half a

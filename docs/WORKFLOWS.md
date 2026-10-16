@@ -546,6 +546,14 @@ states an undo goes back to as well.
   done; cancelled, the history stays where it was. An undo that takes
   away only the wire into a running step is done at once: the step runs
   on, on what came in.
+- **A step ends on what came in when it started** (2026-10-16): an undo, a
+  molecule moved out of its set, its input set deleted - its results are
+  of what it started on, put in all the same, and its card then says
+  *Changed · run again*. Meno's own *Duplicates*, worked in turns, does the
+  same. A workspace closed while a step's jobs run, and opened again, has
+  no record of what they started on: the step ends on what comes in then
+  where that is still the same, and its entries fail, saying so, where it
+  is not.
 
 ## Saving and sharing
 

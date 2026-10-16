@@ -1782,7 +1782,7 @@ fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
-fn job_id_ok(id: &str) -> bool {
+pub fn job_id_ok(id: &str) -> bool {
     uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
 }
 

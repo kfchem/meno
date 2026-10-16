@@ -65,6 +65,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   const waiters = new Map<number, (() => void)[]>();
   /** Steps whose results are being read back. */
   const finishing = new Set<number>();
+  /**
+   * What came into each step's run as it started, by step, for the run that
+   * started then: what its jobs are on, and what it ends on - whatever comes
+   * in since (an undo of its wire, a molecule moved out of its set), as
+   * WORKFLOWS.md, *Undo*, has it. A workspace opened again has none: its run
+   * ends on what comes in then, where that is still what came in.
+   */
+  const taken = new Map<number, { at: number; entries: SetEntry[]; holds: SetKind }>();
   /** What has been read of each job's log: how far, and its last line. */
   const logs = new Map<string, { from: number; line: string; tail?: string; progress?: { done: number; total: number } }>();
   // (the jobs whose folders were taken away with their step, deleted: no log or files of theirs to show, should it come back)
@@ -176,8 +184,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const took = Date.now() - at;
     const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
     if (!outcome) return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
-    // (what came in changed meanwhile - an edit, an undo, its set deleted: results of what came in before are none of its own - it says so, and runs again when asked)
-    if (inputKey(now, still, "meno") !== key) return void fail(id, "What came into it changed while it ran", at, key);
+    // (what came in changed meanwhile - an edit, an undo, its set deleted: its results are of what came in when it started, put in all the same, and the step says it has changed)
     // (how long it took said first, as a program's step says it: it may take seconds)
     const said = outcome.ok ? { ...outcome, said: `${clock(took)} \u00b7 ${outcome.said}` } : outcome;
     doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
@@ -419,6 +426,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = jobEntries(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { slots, cores } = runningOf(useAppSettings.getState().calculations);
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
@@ -706,10 +714,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         await finishRender(id, run, records, plugin, { at: run.at, input: run.input, took, jobs: ids, ...as });
         return close();
       }
-      // (what comes in now, where it is what came in when it started - its options aside, which may change as it runs)
-      const input = inputOf(d, id);
-      const same = inputKey(d, { ...step, kind, options: run.options }, by) === run.input;
-      const entries: SetEntry[] = same && input && input.holds !== "structures" ? jobEntries(kind, setEntries(input.molecules, input.holds), input.holds) : [];
+      // (what came in when it started, as it was taken then; opened again, what comes in now, where it is still what came in - its options aside, which may change as it runs)
+      const snap = taken.get(id)?.at === run.at ? taken.get(id) : undefined;
+      taken.delete(id);
+      const input = snap ? null : inputOf(d, id);
+      const same = !snap && inputKey(d, { ...step, kind, options: run.options }, by) === run.input;
+      const entries: SetEntry[] = snap ? snap.entries : same && input && input.holds !== "structures" ? jobEntries(kind, setEntries(input.molecules, input.holds), input.holds) : [];
+      const holds = snap?.holds ?? input?.holds;
       const total = run.jobs.reduce((n, j) => n + j.entries.length, 0);
       const worked: Worked[] = [];
       const whys: string[] = [];
@@ -826,7 +837,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
       const said = ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`;
-      bringIn(id, worked, givesFor(kind, input?.holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
+      bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
       close();
     } catch (e) {
       // (whatever went wrong bringing its results in: said as how it ended, and its run closed - its jobs looked at no more, those waiting for it let go)
