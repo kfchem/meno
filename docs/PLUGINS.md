@@ -157,7 +157,8 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | Field | Form | What it says, and how it is checked |
 | --- | --- | --- |
 | `id` | text | Its id: a lower-case letter or digit, then up to 39 more or hyphens; its folder's name. The same rule in the backend. |
-| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the version of what it brings (the version its lock pins, or its own); one line on what it is; the licence of what it brings, as its version is that one's - the program's or package's, or its own code's (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
+| `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the plugin's own version (*Versions*, below); one line on what it is; the licence of what it brings, as its version is that one's - the program's or package's, or its own code's (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
+| `uses` | list of `{name, version}` | The programs and libraries it wraps, each with the version its lock or pin fixes (*Versions*): said beside its own version in Settings › Plugins. |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
 | `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
@@ -422,6 +423,14 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   answers. Only conformers RDKit made are touched: not a calculation's,
   not another program's, not a single structure; no heavy atom moves but
   as a whole equivalent branch; and no whole-molecule symmetry is searched.
+
+## Versions
+
+(The maintainer, 2026-10-16.) A manifest's `version` is **always the plugin's own**, semver (`major.minor.patch`), bumped whenever the plugin's files change. What the plugin wraps - a program or a library - is `uses`, `[{name, version}]`, each the version its lock or pin fixes: a pip lock's `name==version`, a pixi lock's package, the commit a git pin names, or a download's own file name. `src/lib/plugins/versions.test.ts` holds each to its lock or pin, so the two cannot drift; a plugin that wraps a program the chemist installs (ORCA, Gaussian) declares none, and Settings shows the version of the program found.
+
+Settings › Plugins shows the plugin's version, and below it *Uses cclib 1.9rc1* where it declares what it uses. A worker's `ready` event keeps saying the version of what it ran (xtb's, cclib's), which results record as where they came from ("xtb 6.7.1") - that is provenance, and not the manifest's `version`.
+
+On update: nothing keys on `version`. An environment is set up again only by its lock's hash, its Python and its files (`stamps`, `lib/pyEnv`), a fetched program by its pinned file and SHA-256, and what is learned of a computer (the render's device timing) by the devices' names and the program's version - so a plugin's version changing, as these did once, re-fetches and wipes nothing.
 
 ## Looks
 

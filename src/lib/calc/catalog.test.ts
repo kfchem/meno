@@ -127,6 +127,7 @@ describe("the readers Meno knows of", () => {
       id: "nbo",
       name: "NBO",
       version: "7",
+      uses: [],
       description: "",
       licence: "",
       homepage: "",

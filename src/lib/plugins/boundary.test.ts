@@ -59,6 +59,7 @@ function declared(): Map<string, string[]> {
       for (const p of str(x.program)) add(p.split("/").pop() ?? p, `${who}: program`);
     }
     for (const i of list(m.installed)) for (const n of str((i as Json).name)) add(n, `${who}: installed program`);
+    for (const u of list(m.uses)) for (const n of str((u as Json).name)) add(n, `${who}: uses`);
     for (const k of list(m.kinds)) for (const n of str((k as Json).id)) add(n, `${who}: kind of file`);
     for (const r of list(m.reads)) for (const n of str(r)) add(n, `${who}: reads`);
     for (const w of list(m.writes)) for (const n of str((w as Json).kind ?? (w as Json).id)) add(n, `${who}: writes`);

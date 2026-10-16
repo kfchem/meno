@@ -1,7 +1,8 @@
 {
   "id": "molscribe",
   "name": "MolScribe",
-  "version": "1.1.1+7296a30",
+  "version": "0.1.0",
+  "uses": [{"name": "MolScribe", "version": "1.1.1+7296a30"}],
   "description": "Reads structures from pictures - a figure a PDF holds as a picture, a screenshot - with MolScribe, a model trained on drawings of molecules.",
   "licence": "MIT",
   "homepage": "https://github.com/thomas0809/MolScribe",

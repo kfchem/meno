@@ -11,7 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type StepDecl, type System, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type StepDecl, type System, type UsesDecl, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
@@ -22,8 +22,10 @@ import { cataloguedKinds, kindById, MENO_KINDS, registered, type Kind } from "..
 type Described = {
   id: string;
   name: string;
-  /** The version of what it brings; Meno's own, none. */
+  /** Its own version (docs/PLUGINS.md, *Versions*); Meno's own, none. */
   version: string;
+  /** The programs and libraries it wraps, each with the version its lock or pin fixes. */
+  uses: readonly UsesDecl[];
   /** One line on what it is. */
   description: string;
   licence: string;
@@ -85,7 +87,7 @@ const brings = (m: Manifest): Brings => ({ systems: m.systems, guide: m.guide, s
 
 /** A plugin, from its manifest. */
 export const pluginOf = (m: Manifest): Plugin => {
-  const described = { id: m.id, name: m.name, version: m.version, description: m.description, licence: m.licence, homepage: m.homepage };
+  const described = { id: m.id, name: m.name, version: m.version, uses: m.uses, description: m.description, licence: m.licence, homepage: m.homepage };
   if (!m.environment) return { ...described, ...brings(m), data: true };
   return {
     ...described,
@@ -150,6 +152,7 @@ export const MENO: MenoReader = {
   id: "meno",
   name: "Meno",
   version: "",
+  uses: [],
   description: "",
   licence: "",
   homepage: "",
