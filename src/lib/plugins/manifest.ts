@@ -234,12 +234,17 @@ export const lockOf = (maker: Maker) => (maker === "pixi" ? "pixi.lock" : "requi
 /** A plugin's worker, in its folder. */
 export const WORKER = "worker.py";
 
+/** A program or library a plugin wraps, and the version its lock or pin fixes (a test checks it against them). */
+export type UsesDecl = { name: string; version: string };
+
 /** A plugin's manifest, as Meno reads it. */
 export type Manifest = {
   id: string;
   name: string;
-  /** Its version: that of what it brings - the version its environment's lock pins, or its own. */
+  /** Its own version, semver, bumped whenever its files change (docs/PLUGINS.md, *Versions*). What it uses is `uses`, never this. */
   version: string;
+  /** The programs and libraries it wraps, each with the version its lock or pin fixes: said beside its own version. */
+  uses: UsesDecl[];
   /** One line on what it is. */
   description: string;
   licence: string;
@@ -396,6 +401,19 @@ function acceptLooks(v: unknown): LookDecl[] {
       ...(r.seeThrough === true ? { seeThrough: true as const } : {}),
     });
     if (out.length >= 60) break;
+  }
+  return out;
+}
+
+/** What a plugin says it uses: each a name and the version its lock fixes; what is not that is left out. */
+function acceptUses(v: unknown): UsesDecl[] {
+  const out: UsesDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    const name = typeof r?.name === "string" ? r.name.trim().slice(0, 40) : "";
+    const version = typeof r?.version === "string" ? r.version.trim().slice(0, 40) : "";
+    if (name && version && !out.some((u) => u.name === name)) out.push({ name, version });
+    if (out.length >= 6) break;
   }
   return out;
 }
@@ -689,6 +707,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     id,
     name,
     version,
+    uses: acceptUses(m.uses),
     description: text(m.description, 300) ?? "",
     licence: text(m.licence, 60) ?? "",
     homepage: text(m.homepage, 200) ?? "",
