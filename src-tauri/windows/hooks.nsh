@@ -4,6 +4,12 @@
 ; Meno writes and removes the keys itself, so the list of them is kept in
 ; one place.
 
+; The installer's window shows the wordmark from these bitmaps (installer.nsi,
+; MenoInstFilesShow; scripts/icons/installer-logo.ps1 draws them). Defined
+; here, outside the macros: inside one, ${__FILEDIR__} is the generated
+; script's folder, not this one's.
+!define MENO_INSTALLER_IMAGES "${__FILEDIR__}\installer"
+
 !macro NSIS_HOOK_POSTINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --register-ole'
   ; A workspace file's own icon (icons\document, docs/FILE-IO.md): the
