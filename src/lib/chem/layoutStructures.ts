@@ -266,6 +266,8 @@ export function clustersOf(atoms: readonly Atom[], bonds: readonly Bond[]): Part
     const left = x0[r] - reach[r];
     open = open.filter((o) => x1[o] + reach[o] >= left);
     for (const o of open) {
+      // (structures shown at different magnifications are laid out apart, whatever they near: byMagnification)
+      if ((atoms[o].magnified ?? 1) !== (atoms[r].magnified ?? 1)) continue;
       if (y0[o] - reach[o] <= y1[r] + reach[r] && y0[r] - reach[r] <= y1[o] + reach[o]) {
         const a = groupTop(o);
         const b = groupTop(r);
