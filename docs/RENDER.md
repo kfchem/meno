@@ -33,8 +33,13 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
     or square;
   - the **look**: one choice, a bundle of what the molecules are made of,
     what the surfaces are made of, how it is shaded and how it is
-    outlined - as the canvas draws them, glossy, matte, clay, glass,
-    metal, cartoon, line art (2026-10-15). Folded under it, *Adjust this
+    outlined. **The looks are the renderer's**: the card offers the
+    canvas's own look, *as the canvas draws them*, which every renderer is
+    asked to make, and then those the renderer's manifest declares (a
+    label, a description, and its parts or that it makes it with materials
+    and light of its own - docs/PLUGINS.md, *Looks*), in its order;
+    Meno keeps no list of them, and a look is added by the plugin alone
+    (2026-10-15). Folded under it, *Adjust this
     look* shows its parts, filled in from it, each the chemist's to change
     for this render alone: the molecules' material (as the 3D style draws
     them, glossy, metal, glass, matte, clay, white); where a surface is

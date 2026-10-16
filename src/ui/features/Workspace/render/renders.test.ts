@@ -65,7 +65,7 @@ import { addMolecule3d, createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, madeStoreOf, storeOf } from "../store";
 
 /** The look as the canvas draws it: lit, and not outlined. */
-const LIT = { look: "meno", shading: "lit", outlines: "none", outline: 3, outlineColour: "black", band: 0.5 };
+const LIT = { look: "meno", sticks: "shown", shading: "lit", outlines: "none", outline: 3, outlineColour: "black", band: 0.5 };
 
 describe("a render", () => {
   it("is as far as its job last said, in lines of its log", () => {

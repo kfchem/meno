@@ -1,4 +1,5 @@
-import type { Molecule3D } from "../Workspace/store/types";
+import * as THREE from "three";
+import type { Molecule3D, Turn3D } from "../Workspace/store/types";
 
 /**
  * Paracetamol in 3D, its atoms placed by a force field: the molecule the 3D
@@ -39,3 +40,9 @@ export const SAMPLE_3D: Molecule3D = {
   bonds: BONDS.map(([a1, a2, order]) => ({ a1, a2, order })),
   at: { x: 0, y: 0 },
 };
+
+/** How the sample is first seen: tipped back a little and turned, so its ring is not seen edge on. */
+export const SAMPLE_TURN: Turn3D = (() => {
+  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0.35, 0.1));
+  return [q.x, q.y, q.z, q.w] as Turn3D;
+})();

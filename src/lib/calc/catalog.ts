@@ -11,7 +11,7 @@
  * molecule was read by - keeps the id; its name is looked up only to show
  * it.
  */
-import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type Manifest, type StepDecl, type System, type WriteDecl } from "../plugins/manifest";
+import { lockOf, WORKER, type CatalogueFile, type DownloadDecl, type InstalledDecl, type LookDecl, type Manifest, type StepDecl, type System, type WriteDecl } from "../plugins/manifest";
 import type { GuideStep, Suggestion } from "../plugins/guide";
 import type { Option } from "../options";
 import { MANIFESTS, PLUGINS_ROOT } from "../plugins/known";
@@ -52,7 +52,7 @@ export type PythonPlugin = ReaderBase &
     /** The options it takes for the roles it fills, by role (Settings, where each role is chosen). */
     roleOptions: Partial<Record<RoleId, readonly Option[]>>;
     /** The looks it can make for a role, by role, where it declares any (Render: docs/RENDER.md). */
-    roleLooks: Partial<Record<RoleId, readonly string[]>>;
+    roleLooks: Partial<Record<RoleId, readonly LookDecl[]>>;
     /** The programs it runs for a role, by role, where it runs one as a job (Render). */
     rolePrograms: Partial<Record<RoleId, readonly string[]>>;
     /** The kinds of a workflow's step it fills (docs/WORKFLOWS.md). */

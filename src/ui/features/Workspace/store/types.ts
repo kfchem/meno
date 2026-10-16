@@ -1470,6 +1470,15 @@ export type EditorState = {
   noteDoubleClickBond: (atomId: number) => void;
   /** The double-click's bond on `atomId` taken back, if it is the last edit and has only just been made. */
   takeBackDoubleClickBond: (atomId: number) => void;
+  /** A press come down on the page, noted: the document and the selection as they were, for `takeBackPress`. */
+  notePress: () => void;
+  /**
+   * The press noted last taken back as if it had never been - a finger that
+   * turned out to be a pinch's first: what it did to the document gone,
+   * leaving nothing to redo, the selection as it was, and its gesture let
+   * go. False where the document could not be put back (an undo since).
+   */
+  takeBackPress: () => boolean;
   /**
    * R and S, E and Z shown - or hidden - on the drawing's atoms and bonds
    * given, by id, and the molecules in 3D's, by index (all of a molecule's,

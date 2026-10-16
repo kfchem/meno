@@ -84,6 +84,14 @@ export interface DocumentStore<T> {
    * where the step on top is not that gesture's - it made none.
    */
   drop(coalesceKey: string): boolean;
+  /**
+   * Takes back every step since the history was `depth` deep and held
+   * `state`, as if none had been - a press let go of when it turned out to
+   * be the start of a pinch. Nothing is left to redo of them. False where
+   * the history is shallower than it was then (an undo since), and nothing
+   * is taken back.
+   */
+  takeBackTo(depth: number, state: T): boolean;
   /** The state an undo (or a redo) would come to, without coming to it: none where there is nothing to undo (to redo). */
   peek(direction: "undo" | "redo"): T | undefined;
   /** Replaces the content and forgets the history, e.g. after opening a file. */
@@ -249,6 +257,17 @@ export function createDocument<T>(
       if (present.coalesceKey !== coalesceKey || !past.length) return false;
       present = past.pop()!;
       travelled = true;
+      notify();
+      return true;
+    },
+
+    takeBackTo(depth, state) {
+      if (past.length < depth) return false;
+      // (the step that was on top then: still on top - an edit since coalesced into it - or now under what came after)
+      const at = past.length === depth ? present : past[depth];
+      if (past.length === depth && Object.is(at.state, state)) return true;
+      past = past.slice(0, depth);
+      present = { ...at, state };
       notify();
       return true;
     },
