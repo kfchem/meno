@@ -9,6 +9,19 @@ import {
 import { BALL_AND_STICK } from "../chem/style3d";
 import { STYLE_PRESETS } from "../chem/style";
 
+describe("how finely the canvas is drawn, as the settings file holds it", () => {
+  it("is twice, from a file from before there was a choice, or one that does not read", () => {
+    expect(acceptAppSettings({}).canvas).toEqual({ resolution: 2 });
+    expect(acceptAppSettings({ canvas: { resolution: 3 } }).canvas).toEqual({ resolution: 2 });
+    expect(acceptAppSettings({ canvas: "fine" }).canvas).toEqual({ resolution: 2 });
+  });
+
+  it("is as the screen shows things, or once, where it says so", () => {
+    expect(acceptAppSettings({ canvas: { resolution: "display" } }).canvas).toEqual({ resolution: "display" });
+    expect(acceptAppSettings({ canvas: { resolution: 1 } }).canvas).toEqual({ resolution: 1 });
+  });
+});
+
 describe("the settings file", () => {
   it("reads back what it wrote", () => {
     const settings = {
@@ -24,6 +37,7 @@ describe("the settings file", () => {
       plugins: { removed: ["rdkit"], roles: { smiles: "rdkit" }, programs: { "orca:orca": "/Applications/orca_6_1_0/orca" }, guided: ["getting-started"] },
       pictures: { dpi: 1200 as const },
       pointer: { wheelUp: "out" as const },
+      canvas: { resolution: "display" as const },
       labels: { smart: false },
       words: { smart: false },
       calculations: { atOnce: 2, cores: 4 },

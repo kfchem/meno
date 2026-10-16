@@ -43,6 +43,8 @@ export type AppSettings = {
   pictures: PictureSettings;
   /** How the mouse and the trackpad work the canvas. */
   pointer: PointerSettings;
+  /** How finely the canvas is drawn. */
+  canvas: CanvasSettings;
   /** How an atom's label is read as it is typed. */
   labels: LabelSettings;
   /** How words on the page are written as they are typed. */
@@ -75,6 +77,14 @@ export type CalculationSettings = {
 /** The most jobs at once, and cores for each, Settings takes. */
 export const JOBS_AT_ONCE_MOST = 64;
 export const CORES_MOST = 1024;
+
+/**
+ * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
+ * twice as finely as its size on the screen - the sharpest, and as before -
+ * as finely as the screen itself shows things, or once. Pictures made of it
+ * are drawn at their own sizes, whichever is chosen.
+ */
+export type CanvasSettings = { resolution: 2 | "display" | 1 };
 
 /** How the mouse and the trackpad work the canvas: which way a turn of the wheel zooms. */
 export type PointerSettings = {
@@ -161,6 +171,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   plugins: { removed: [], roles: {}, programs: {}, guided: [] },
   pictures: { dpi: 600 },
   pointer: { wheelUp: "in" },
+  canvas: { resolution: 2 },
   labels: { smart: true },
   words: { smart: true },
   calculations: {},
@@ -188,6 +199,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
     plugins: acceptPlugins(r.plugins),
     pictures: acceptPictures(r.pictures),
     pointer: acceptPointer(r.pointer),
+    canvas: acceptCanvas(r.canvas),
     labels: { smart: (r.labels as { smart?: unknown } | undefined)?.smart !== false },
     words: { smart: (r.words as { smart?: unknown } | undefined)?.smart !== false },
     calculations: acceptCalculations(r.calculations),
@@ -219,6 +231,12 @@ function acceptProcedures(raw: unknown): SavedProcedure[] {
     const list = (x: unknown) => (Array.isArray(x) ? x : []);
     return [{ id, name, saved: typeof r.saved === "number" && Number.isFinite(r.saved) ? r.saved : 0, flow: { sets: list(f.sets), steps: f.steps, wires: list(f.wires) } }];
   });
+}
+
+/** How finely the canvas is drawn, as the file holds it; what does not read - a file from before there was a choice - twice. */
+function acceptCanvas(raw: unknown): CanvasSettings {
+  const r = (raw as { resolution?: unknown } | null)?.resolution;
+  return { resolution: r === 1 || r === "display" ? r : 2 };
 }
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */
@@ -391,6 +409,7 @@ type SettingsState = AppSettings & {
   setPlugins: (plugins: PluginSettings) => void;
   setPictures: (pictures: PictureSettings) => void;
   setPointer: (pointer: PointerSettings) => void;
+  setCanvas: (canvas: CanvasSettings) => void;
   setLabels: (labels: LabelSettings) => void;
   setWords: (words: WordSettings) => void;
   setCalculations: (calculations: CalculationSettings) => void;
@@ -406,9 +425,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours } = get();
+      const { drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, canvas, labels, words, calculations, procedures, colours } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours }),
+        settingsFileText({ drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, canvas, labels, words, calculations, procedures, colours }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -453,6 +472,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     },
     setPointer: (pointer) => {
       set({ pointer });
+      scheduleSave();
+    },
+    setCanvas: (canvas) => {
+      set({ canvas });
       scheduleSave();
     },
     setLabels: (labels) => {
