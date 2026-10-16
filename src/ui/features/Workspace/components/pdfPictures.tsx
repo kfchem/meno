@@ -83,12 +83,14 @@ export const OVERSAMPLE = 2;
 /**
  * The level a page is drawn at, `want` pixels a point wanted of a page
  * `width` points wide, `over` times finer: none, where its small picture is
- * enough; else the first of the levels a sixteenth of a doubling apart at
- * or above it - so that a view stopped a hair from where it was keeps the
- * tiles it has.
+ * enough - drawn as finely as `over` asks, at least, so that its letters
+ * are as dark as tiles' would be (a page put on the canvas small showed its
+ * small picture all but white, found on Windows, 2026-10-16); else the first
+ * of the levels a sixteenth of a doubling apart at or above it - so that a
+ * view stopped a hair from where it was keeps the tiles it has.
  */
 export function levelFor(want: number, width: number, over = OVERSAMPLE): number {
-  if (want <= (PREVIEW_PX / width) * 1.15) return 0;
+  if (want * over <= (PREVIEW_PX / width) * 1.15) return 0;
   const k = Math.ceil(LEVELS_PER_DOUBLING * Math.log2(want * over) - 1e-9);
   return Math.min(32, Math.pow(2, k / LEVELS_PER_DOUBLING));
 }

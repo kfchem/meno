@@ -149,7 +149,10 @@ stops being part of the work.
 
 - **A page shows at once**, from a small picture of it, and the parts in
   view are then drawn at the screen's resolution, in tiles that fade in
-  over it.
+  over it. The small picture alone is kept only where the page is shown at
+  half its pixels or fewer: shown larger, its letters were all but white
+  (a page put on the canvas small, found on Windows, 2026-10-16), and the
+  page is drawn in tiles, as at any size.
 - **While a pinch or a zoom goes on**, the tiles there are scaled on the
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
