@@ -13,7 +13,11 @@ import {
 } from "./lib/core";
 import { Deck, viewRegistry, type ViewEntry } from "./ui/views";
 import DocumentBridge from "./ui/views/DocumentBridge";
-import { openable, openedAs, openedTexts, textsOf, workspaceOfFile, type Opened } from "./ui/views/openFile";
+import { openable, openedAs, openedTexts, stylesOfFile, textsOf, workspaceOfFile, type Opened, type OpenedStyles } from "./ui/views/openFile";
+import StyleFileAsk from "./ui/features/StyleEditor/StyleFileAsk";
+import { afterAnswer, withAsked } from "./ui/features/StyleEditor/styleAsks";
+import { ownChoice, withOwnStyle2d } from "./lib/chem/styleFields";
+import { withOwn3d, withRole } from "./lib/chem/style3d";
 import { forgetFiles, giveFiles, type OpenedFile } from "./ui/views/files";
 import { pdfTakerOf, type OpenedPdf } from "./ui/views/pdfs";
 import { pictureTakerOf } from "./ui/views/pictures";
@@ -86,6 +90,10 @@ export default function App() {
   const [pendingClose, setPendingClose] = useState<
     { kind: "tab"; id: string } | { kind: "window" } | null
   >(null);
+  // The style files opened, each asking in turn whether its styles are to be added (docs/FILE-IO.md, *What a .meno holds*).
+  const [stylesAsked, setStylesAsked] = useState<OpenedStyles[]>([]);
+  const askStyles = (styles: OpenedStyles) => setStylesAsked((was) => withAsked(was, styles));
+  const nextStyles = () => setStylesAsked(afterAnswer);
 
   // One document per tab, for the view kinds that declare `createDocument`.
   // Documents live outside React state: each is its own store and notifies
@@ -195,6 +203,32 @@ export default function App() {
     forgetFiles(id);
     const store = held?.kind === "workspace" ? madeStoreOf(held.doc as DocumentStore<WorkspaceDocument>) : undefined;
     return store ? stopRenders(store) : Promise.resolve();
+  };
+
+  // A style file's styles added to the user's own - and, asked, used: the
+  // drawing style in the workspace in front, eased in as an edit it can
+  // undo; the 3D one as the primary.
+  const addStyles = ({ styles }: OpenedStyles, use: boolean) => {
+    const s = useAppSettings.getState();
+    let own = s.ownDrawingStyles;
+    const drawn: string[] = [];
+    for (const d of styles.drawing) {
+      const made = withOwnStyle2d(own, d.name, d.style);
+      own = made.own;
+      drawn.push(made.id);
+    }
+    if (drawn.length) s.setOwnDrawingStyles(own);
+    let style3d = s.style3d;
+    const looks: string[] = [];
+    for (const d of styles.molecules3d) {
+      const made = withOwn3d(style3d, d.name, d.look);
+      style3d = made.choice;
+      looks.push(made.id);
+    }
+    if (use && looks.length) style3d = withRole(style3d, "primary", looks[0]);
+    if (looks.length) s.setStyle3d(style3d);
+    const held = use && drawn.length && frontWorkspace ? documentsRef.current.get(frontWorkspace) : undefined;
+    if (held?.kind === "workspace") madeStoreOf(held.doc as DocumentStore<WorkspaceDocument>)?.getState().easeDocumentStyle(ownChoice(own.find((o) => o.id === drawn[0])!));
   };
 
   // The last tab closed, Meno goes with it - once its renders are asked to
@@ -354,6 +388,12 @@ export default function App() {
       }
       try {
         const bytes = await readFile(path);
+        // (a file of styles: asked whether to add them - never opened as a workspace)
+        const styles = stylesOfFile(bytes);
+        if (styles) {
+          askStyles(styles);
+          continue;
+        }
         // (a workspace file: its workspace, and the outputs it keeps held)
         const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
@@ -423,6 +463,11 @@ export default function App() {
     for (const f of files) {
       try {
         const bytes = new Uint8Array(await f.arrayBuffer());
+        const styles = stylesOfFile(bytes);
+        if (styles) {
+          askStyles(styles);
+          continue;
+        }
         const workspace = workspaceOfFile(bytes);
         if (workspace != null) {
           openWorkspaceTab(f.name, workspace);
@@ -756,6 +801,19 @@ export default function App() {
       {/* (beside it, not in it: closing is asked about, and the tabs kept in
           step with their documents, whatever has failed) */}
       <AnimatePresence>
+      {stylesAsked.length > 0 && (
+        <StyleFileAsk
+          key={`style-file-${stylesAsked.length}`}
+          file={stylesAsked[0].styles}
+          picture={stylesAsked[0].picture}
+          canUse={frontWorkspace != null}
+          onCancel={nextStyles}
+          onAdd={(use) => {
+            addStyles(stylesAsked[0], use);
+            nextStyles();
+          }}
+        />
+      )}
       {pendingClose && (
         <ConfirmDiscard
           key="confirm-discard"

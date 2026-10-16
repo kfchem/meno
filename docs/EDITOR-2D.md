@@ -143,6 +143,34 @@ moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
 wheel with Ctrl, has no end of its own: it ends once no step has come for
 80 ms.
+
+**Touch and pinch.** On a touch screen one finger does what the left
+button does: from empty space it moves the view. A second finger makes a
+pinch of it where it comes down within 200 ms of the first, or before the
+first has gone a bond's length on the screen, or while the first moves the
+view - whatever the first came down on: what the first began is taken
+back as if it had never been, no bond, no move, no selection, nothing to
+redo (`notePress`, `takeBackPress`). The view then zooms as far as the two
+spread or close, about the point between them, and moves as that point
+moves, so what is under the fingers stays under them (`lib/input/pinch.ts`);
+let go while still zooming, it glides as a trackpad's pinch does. A second
+finger later than that, the first drawing or moving, is no press at all. A
+pen writes as before.
+
+On Windows a pinch - two fingers on a precision touchpad, as on a
+Surface's, or on its touch screen - is the user's only where WebView2's
+`IsPinchZoomEnabled` lets it be, and Meno's webview is made with it off
+together with its zoom by Ctrl and the wheel or the keys (Tauri's
+`zoomHotkeysEnabled`). A setting takes effect from the next navigation, so
+on Windows Meno makes its main window itself (`"create": false` in
+tauri.conf.json) at about:blank, hidden, turns the pinch on, and only then
+loads the page - once (`src-tauri/src/pinch.rs`). Ctrl with the wheel or
+the keys still zooms nothing of the WebView's own. The page takes every pinch for itself: a
+touchpad's comes as the wheel with Ctrl held, which the canvas follows as
+on a Mac and whose default the page prevents everywhere (`main.tsx`), so
+that it zooms the page nowhere; a touch screen's finds no pinch allowed
+but the canvas's (`touch-action: none` on the canvas, `pan-x pan-y` on the
+page, `App.css`), and a list still scrolls under a finger.
 A drawing is laid out again as the view zooms only once the zoom has
 moved a hundredth from the one it was laid out at: the last of a wheel's
 zoom, in steps too small to see for most of a second, lays nothing out

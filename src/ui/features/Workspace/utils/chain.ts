@@ -42,6 +42,18 @@ const LOOP_ROUND = 0.45;
 /** How far apart a loop's points are taken, as a part of a bond: any closer, and the hand's tremble lengthens it. */
 const LOOP_STEP = 0.25;
 
+/**
+ * The trail the pointer leaves, as it is drawn: from where the pointer was
+ * first seen, not from the chain's start. A chain begun from Quick Add's icon
+ * starts where the double-click was and its trail's first point is where the
+ * pointer then is - the icon, up and to the right of it, with a move there
+ * before or after the press - and a line joining them, drawn, was no path
+ * the pointer took. None until there are two of the pointer's own points.
+ */
+export function trailShown(trail: readonly Pt[]): readonly Pt[] {
+  return trail.length > 2 ? trail.slice(1) : [];
+}
+
 /** A chain from `start`, its honeycomb turned so that a bond it already has (`bondedTo`) is one of its own. */
 export function startChain(start: Pt, bondedTo: Pt[], length: number): Chain {
   const honeycomb = honeycombFrom(start, bondedTo, length);

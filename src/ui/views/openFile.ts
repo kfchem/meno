@@ -4,7 +4,8 @@ import { opensAsText } from "../features/Workspace/utils/io";
 import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
-import { isMenoFile, readMenoFile } from "../../lib/doc/menoFile";
+import { isMenoFile, menoKindOf, NotMenoFile, readMenoFile, readStyleFile } from "../../lib/doc/menoFile";
+import { readStyleFileText, type StyleFile } from "../../lib/chem/styleFile";
 import { useNotices } from "../notices";
 import type { OpenedText } from "./texts";
 
@@ -40,6 +41,22 @@ export function openable(): string[] {
   ];
 }
 
+/** A Meno file of styles, as it opens: what it holds, and its picture. */
+export type OpenedStyles = { styles: StyleFile; picture: Uint8Array | null };
+
+/**
+ * A Meno file's styles, where `bytes` are a Meno file of kind "style"; none
+ * for any other. Throws, saying why, where they are one that does not read
+ * - or a Meno file of a kind made by a newer Meno.
+ */
+export function stylesOfFile(bytes: Uint8Array): OpenedStyles | null {
+  if (!isMenoFile(bytes) || menoKindOf(bytes) !== "style") return null;
+  const file = readStyleFile(bytes);
+  const styles = readStyleFileText(file.styles);
+  if (!styles) throw new NotMenoFile("It is a style file whose styles do not read.");
+  return { styles, picture: file.picture };
+}
+
 /**
  * A workspace file's workspace, its JSON - where `bytes` are one - with the
  * outputs it keeps held for the session, each read from it when wanted
@@ -48,6 +65,8 @@ export function openable(): string[] {
  */
 export function workspaceOfFile(bytes: Uint8Array): string | null {
   if (!isMenoFile(bytes)) return null;
+  // (a Meno file says what it holds: a workspace where it does not - a kind this Meno does not know, said so)
+  if (menoKindOf(bytes) !== "workspace") return null;
   const file = readMenoFile(bytes);
   holdOutputsOf(file);
   // (a PDF it keeps that cannot be held would be blank: said, by its name)

@@ -1,12 +1,16 @@
 @import "tailwindcss";
 
 /* The page itself never scrolls - not by the wheel, nor by an element
-   scrolled into view - and does not bounce: only what is inside it does. */
+   scrolled into view - and does not bounce: only what is inside it does.
+   Nor is it zoomed by two fingers on a touch screen: what is inside it may
+   be moved by a finger, but no pinch is the page's (the canvas takes its
+   own, components/PanZoom2D). */
 html,
 body {
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+  touch-action: pan-x pan-y;
 }
 
 /*

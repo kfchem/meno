@@ -67,6 +67,12 @@ function added(start: number, model: Model): EditorState["sel"] {
  * Each action is one undo step, except where a gesture produces several edits
  * in a row - those share a coalesce key so a drag stays one step.
  */
+/** What a press may change that a pinch begun with it takes back (`notePress`, `takeBackPress`): the selection, besides the document. */
+const SELECTION_KEYS = ["sel", "selAnchor", "sel3d", "chosen3d", "selFlow", "pdfSel", "pdfBox", "selPictures", "selTexts", "selCaptions", "selPdfs", "selSlides", "selShapes", "selArrows", "selPluses", "selInks"] as const;
+type PressNote = { depth: number; state: WorkspaceDocument; selection: Pick<EditorState, (typeof SELECTION_KEYS)[number]> };
+/** The press noted last, by its document: none once taken back. */
+const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
+
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
   set: SetState,
@@ -233,6 +239,22 @@ export const createModelSlice = (
     if (!d || d.atomId !== atomId || performance.now() - d.at > 2 * DOUBLE_CLICK_MS) return;
     // (the bond's own step, nothing since: the document still as the bond left it)
     if (doc.getState() === d.state) doc.undo();
+  },
+
+  notePress: () => {
+    const st = get();
+    const selection = Object.fromEntries(SELECTION_KEYS.map((k) => [k, st[k]])) as PressNote["selection"];
+    pressNotes.set(doc, { depth: doc.history().undoDepth, state: doc.getState(), selection });
+  },
+
+  takeBackPress: () => {
+    const note = pressNotes.get(doc);
+    pressNotes.delete(doc);
+    get().endGestures();
+    if (!note) return false;
+    const back = doc.takeBackTo(note.depth, note.state);
+    set((prev: EditorState) => ({ ...prev, ...note.selection }));
+    return back;
   },
 
   drawStrokeAt: (start: { x: number; y: number }, nodes: Parameters<typeof ops.addStroke>[2]) => {
