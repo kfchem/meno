@@ -9,6 +9,10 @@ below). Judge it against [PURPOSE.md](PURPOSE.md): a procedure that
 combines several methods, expressed in a form the chemist can read,
 rearrange and run again, with its results beside the molecule it is about.
 
+A rebuild of its foundation is proposed at the end (*The foundation,
+rebuilt*, 2026-10-16): what a set holds, what passes between steps, partial
+failure, staleness and snapshots. It is for review; nothing in it is built.
+
 ## Decided by the maintainer (2026-10-08)
 
 1. **The workspace is the node editor.** There is no editor of its own: a
@@ -1267,7 +1271,456 @@ Then, of the leftovers the maintainer chose:
 Not backward compatible: a workspace or procedure saved with a *3D
 structure* step opens without that step (no shim before 1.0).
 
+## The foundation, rebuilt (proposed, 2026-10-16)
+
+A design for the maintainer to review; nothing in it is built. Stage 6 works,
+and the bug hunts of 2026-10-12 to 10-14 fixed what they found in it, but
+several of those bugs came from how the workflow is founded, not from one
+place in the code: what a set holds, what passes from step to step, when a
+result no longer answers to its input, and what a run is on when its input
+moves. This section takes those points one at a time. For each it gives what
+happens today, a case that shows it, and the design. It ends with the order
+of work, one shippable PR at a time, what stays in core and what is the
+plugins', and the questions left for the maintainer.
+
+The decisions above all stand (*Decided by the maintainer*). Two are
+refined, not reversed, and say so where they are touched: 5 (what lies in a
+frame is what a set holds) in point 3, and 9 (results in a set to the right
+of their step) in point 1.
+
+The references are to the code at v0.1.13 (`67157130`). Paths are under
+`src/ui/features/Workspace/` unless they say otherwise.
+
+### In short
+
+| | Today | Rebuilt |
+|---|---|---|
+| 1. A step's exit | two ports give the same data: the step's own and its result set's | one exit: the step's result set, there from the moment the step is made |
+| 2. Types | worked out by walking wires back (`givesOf`); a mismatch shows only as a refused wire | each port has a type, fixed when it is wired, said on hover and on refusal |
+| 3. What a set holds | whatever's middle is inside the frame, in reading order (rows 0.9 apart) | a list of members, in order; dropping in and dragging out are the edits that change it |
+| 4. What passes between steps | `SetEntry`, built from loose `Molecule3D` fields; populations dropped, two ideas of charge | one entry record, the same for every step and plugin |
+| 5. A run that partly fails | *Failed · 3 of 12 failed · …*, the nine that worked brought in unnamed | *Partly done*, each entry's own status and reason; *Run again on the failed* |
+| 6. When a result is stale | a hash over some inputs; a drawn input's elements and the read charge left out | a fingerprint of exactly what the doer is given, its version included |
+| 7. A run's input | read again at its end; undoing its wire fails it; a closed tab is not told | a snapshot taken at its start; closing a tab stops what runs in Meno |
+| 8. Outputs that are not molecules | pictures special-cased in eight places | a typed output like any other; *Nothing takes this yet* where nothing does |
+| 9. Where results lie | stored positions, repaired when the 3D look changes (`fitResultSets`) | laid out as they are shown, unless the chemist arranged them |
+| 10. One atom, no electrons | each plugin handles it its own way | the kind says what such an entry means; Meno sees to it |
+| 11. Numbers on the page | some without a noun or a unit (*10 of 12*, *30 · MMFF94 · 2000 · 0.5 Å*) | every number says what it counts and in what |
+| 12. What a run keeps | when, kind, options, words, jobs by id | also who did it: plugin, program, both versions, and its logs |
+| 13. Conformers | populations at a fixed 298.15 K beside a step's own; As conformers groups by the atoms alone | one set of rules for conformers on the new base |
+
+### 1. One exit per step
+
+**Today.** A step gives from two ports: its own on the card's right edge
+(`StepCard.tsx`, `data-give-step`) and its result set's (`SetFrame.tsx`,
+`data-give-set`). Both mean the same molecules: `inputOf` turns a wire from
+the step into its result set (`flow.ts`, `inputOf`). A chain can start from
+either, so a wire from the card crosses its own result set to reach the next
+step. And before the first run there is only the card's port, so a procedure
+put down is wired card to card while a run's results later sit beside it,
+unwired.
+
+**Design.** A step has one exit: its result set. The set is made with the
+step, empty and named for what it will hold (*Optimised · not run yet*). It
+sits to the right of the card, where results go today (decision 9). A wire
+into the next step leaves from it, so what flows is what is drawn. The card
+keeps its take port and loses its give port. A procedure put down comes with
+its empty result sets, wired. Deleting a step leaves its result set as a
+plain set, as today, holding what it held.
+
+### 2. Typed inputs and outputs
+
+**Today.** Nothing on a port says what it takes or gives. `givesOf` walks
+wires back through *same* until it finds a set, and `canWire` refuses a wire
+whose ends do not agree (`flow.ts`). A plugin may narrow what its kind takes
+(CREST's *Conformers* declares `takes: ["molecules", "conformers"]`), but
+the chemist learns it only when a wire from a drawing will not join. A wire
+from a step that has not run takes anything (`holds == null` passes).
+
+**Design.**
+- **Types are named.** The set kinds stay Meno's: *drawings*, *molecules in
+  3D*, *conformer sets*, *pictures*, and later others (point 8). A kind of
+  step says what it takes and gives in Meno's kind table, as now. A plugin
+  may only narrow what it takes, as now.
+- **Fixed when wired.** A result set's type is set when its step's input is
+  wired (a *same* kind takes its input's type) and changes only when that
+  wire changes. It is stored, not walked back on each look.
+- **Said where it matters.** A port says its type on hover (*Takes molecules
+  in 3D or conformer sets*). A set's top line says it beside the count
+  (*Conformer set · 3 compounds · 27*). A wire refused says why at the drop,
+  in the words of the port it was dropped on.
+- **Unknown is not a type.** A wire into a step whose input is not wired
+  yet has the type its exit will have; there is no "anything" left.
+
+### 3. Sets with explicit contents and order
+
+**Today.** A set holds what lies inside its frame: a drawn structure by the
+middle of its atoms, a 3D molecule by where it is put, a picture by its
+corner (`entries.ts`, `setMembers`). The order is reading order, rows told
+apart at 0.9 world units (`before`). Both are worked out again on every
+look, so edits that do not mean to change the set do change it:
+- a molecule turned in 3D, or a label grown, moves its middle across a row
+  line, and two compounds swap their letters. The steps downstream are then
+  *Changed*, their entries in another order;
+- a result molecule nudged past the frame's edge leaves the set, and the
+  next run quietly has one entry fewer.
+
+**Design.** A set keeps its members as a list of ids, in order. Decision 5
+stays as the gesture that edits the list: a structure dropped into a frame
+joins it, at the place in the order where it was dropped; one dragged out of
+the frame leaves it. Each is an edit of its own, undone in one step, and the
+frame shows it as it happens (it lights as the structure crosses its edge).
+A structure moved inside the frame keeps its place in the order. A set
+re-orders on purpose: *Sort by reading order* on its menu, or dragging one
+member before another. A result set's order is its run's. The count, the
+compound letters and every step's entries follow the list.
+
+### 4. One data contract between steps
+
+**Today.** A step's entries are built from `Molecule3D` fields
+(`setEntries`, `entries.ts`), and a plugin's from those again
+(`pluginEntry`, `programs.ts`). Some of what a molecule knows does not pass:
+- **populations are lost.** `SetEntry` has no `shares`, so a *Populations*
+  step's shares never reach the next step. A plugin that could use them is
+  never given them;
+- **two ideas of charge.** `pluginEntry` takes the calculation's charge and
+  multiplicity where one was read (`calc.charge`), and else works them out
+  from the atoms. *As conformers* and *Duplicates* tell species apart by the
+  atoms alone (`speciesOf`, `meno.ts`). A cation read from an output (its
+  atoms carry no formal charge) is grouped as a conformer of the neutral
+  molecule drawn beside it, though xTB is then told one is a cation;
+- **two Boltzmann distributions.** `boltzmann` (`meno.ts`) at the step's
+  temperature, and `populations` (`utils/molecule3d.ts`) at a fixed
+  298.15 K for the chip where no step gave shares. The chip does not say
+  which it shows.
+
+**Design.** One entry record, the same for every step, Meno's or a plugin's,
+and the only thing that passes between them:
+
+```
+Entry
+  id            stable across runs of the same input (molecule id, frame)
+  compound      which compound it is, in its set (a, b, ...)
+  number        its conformer number, in a conformer set
+  geometry      atoms (element, isotope, formal charge, radical), bonds, xyz
+  species       charge, multiplicity, and where each came from:
+                the calculation it was read from, the atoms, or the chemist
+  energy        value in Eh, with its kind (electronic, free energy...),
+                program, method and basis
+  share         value, the temperature, and where it came from
+                (a Populations step, a program's own, the chip's room temperature)
+  degeneracy    as a program found it
+  status        done, failed, stopped or set aside, with a reason (point 5)
+  from          the step and run that made it, the file and job it was read from
+```
+
+- `entriesOf(set)` and `moleculesOf(entries)` are the only two crossings
+  between the page's molecules and entries. The plugin request's entry is
+  the record as written in PLUGINS.md, with a version number of its own.
+- Species are worked out once, in `entriesOf`, by one rule: the chemist's,
+  else the calculation's, else the atoms'. *As conformers*, *Duplicates*
+  and the plugins all read `species`.
+- One Boltzmann function, with degeneracies. A share always carries its
+  temperature and source, and the chip names them (*31 % · 298.15 K* or
+  *31 % · CREST*).
+
+### 5. Partial failure as a state
+
+**Today.** A run is ok or not (`StepRan.ok`). Twelve conformers sent to
+*Optimise*, three of whose SCF did not converge, end as *Failed · 3 of 12
+failed · SCF not converged*. The nine that worked are brought in, but the
+card says *Failed*, and nothing says which three failed. *Run again* runs
+all twelve. Downstream, *Run all* stops at the failed step, though nine
+results are there.
+
+**Design.**
+- **Each entry has a status**: done, failed with a reason, stopped, or set
+  aside by the step on purpose (Duplicates, Energy window), with its own
+  reason.
+- **A step can be partly done.** A step whose entries all worked is *Done*.
+  If some worked and some did not, it is *Partly done · 9 of 12 conformers ·
+  3 failed*. If none worked, it is *Failed*.
+- **The failed ones are named** on the card's open part (*b #4 · SCF not
+  converged*) and in the log, with the reason in the program's own words
+  where it gave them.
+- **Run again on the failed** reruns those entries alone and merges them in,
+  in the run's order.
+- **Downstream runs on what was done**, and its card says so (*on 9 of
+  12*); a step can be told to wait for all instead (question 3).
+- **The result set holds the molecules made.** Failed entries are not
+  ghosts in it; they are listed on the card.
+
+### 6. Invalidation when a source changes
+
+**Today.** A step is *Changed · run again* when a hash of its input and
+options differs from its run's (`inputKey`, `flow.ts`). The hash covers a
+3D molecule's atoms, bonds, frames, energies, numbers, shares and
+degeneracies, the kind, the doer and the options as resolved. It misses:
+- **a drawn input's chemistry.** Drawn structures enter the hash by their
+  atoms' ids alone. A carbon redrawn as a nitrogen in a drawing that
+  *Conformers* has run on leaves the step *Done*;
+- **the charge and multiplicity a calculation read.** They choose what the
+  plugin is told, but are not hashed;
+- **who did it, and in which version.** A plugin updated (xtb 6.7.1 to a
+  later build) leaves every step it ran *Done*.
+
+**Design.** A step's fingerprint is a hash of exactly what its doer is given
+(the entries in the contract of point 4, in order), its kind and resolved
+options, and its doer: the plugin's id and version, and its program's name
+and version as found. Change any and the step is *Changed*. Nothing else
+counts: not where things lie, not names, not the 3D look. A step whose input
+comes from a step now *Changed* shows *Changed upstream*. Its results stay
+shown, marked as from an earlier input, until it runs again.
+
+### 7. A snapshot at the start; a closed store
+
+**Today.** A run keeps only its input's hash (`running.input`). At its end
+(`finishStep`, `store/slices/stepRuns.ts`) it reads its input again from the
+live page, and if the hash differs every entry fails: *What came into it
+changed while it ran*. So undoing the wire into a running step fails the run.
+That contradicts *Undo* above, which says the step "runs on, on what came
+in". And when a tab closes, only the Render command is told
+(`letGoOf`, `App.tsx`, `stopRenders`). Steps that run in Meno itself are not
+told: a conformer search from a drawing in the RDKit worker, Duplicates in
+turns, Meno's own steps. Nor are steps between their start and their first
+job. Each goes on and finishes against a store whose page is gone.
+
+**Design.**
+- **A snapshot at the start.** A run takes its input entries (the contract
+  of point 4) when it starts, saved with it, so a workspace opened again
+  finishes its runs without the page as it was. The run ends on its
+  snapshot: an undo, a move or a redraw while it runs never fails it. If the
+  input changed meanwhile, the step lands its results and then shows
+  *Changed* (point 6), as *Undo* already says.
+- **A store that closes says so.** Each document's store has a signal that
+  fires when its tab closes. Every run path takes it. Jobs (separate
+  processes) go on, as decision 8 has it, and are picked up when the
+  workspace is opened again. Work in Meno's own process (a worker's search,
+  Duplicates in turns, a step not yet at its first job) stops and is
+  recorded as *Stopped · the workspace was closed*. Nothing is written into
+  a store after its signal.
+
+### 8. Typed outputs that are not molecules
+
+**Today.** A Render step's pictures are a set kind no step takes, and are
+special-cased in at least eight places: `runOne`, `finishStep`,
+`placePictures` (its own copy of the row layout), `canWire`, `inputOf`,
+`resultsNow`, `fitResultSets` and `countOf`.
+
+**Design.** *Pictures* is a type like the others (point 2). Its set is laid
+out by the same function as molecules, and its port says *Nothing takes
+pictures yet*. Later outputs (a table of energies, files, spectra; see the
+2026-10-13 roadmap) come the same way: a type, a way to show it, and the
+kinds that take it.
+
+### 9. Layout derived, not stored
+
+**Today.** A result set's molecules are put at document positions when the
+run lands (`placeResults`, `workflow/run.ts`). A change of 3D look (a
+space-filling style, a double-click to the secondary look) leaves them
+overlapping, so `fitResultSets` lays them out again through `doc.amend`
+over the whole history (#284).
+
+**Design.** A result set's layout is worked out where it is shown: its
+members in order, in the look in force, in rows as now. What is stored is
+the chemist's own arranging. Once they move a member by hand, that set
+keeps its positions and grows to fit, as a set they made does.
+`fitResultSets` and its amend go.
+
+### 10. One atom, no electrons
+
+**Today.** A counter-ion alone (Na⁺) or a lone atom reached each plugin as a
+case of its own, and each was fixed apart (#284):
+- xTB drops `--opt` and marks the result optimised;
+- CREST runs plain xtb for its energy;
+- ORCA and Gaussian swap the optimisation for an energy run;
+- xTB leaves out a HOMO-LUMO gap with no electrons;
+- Gaussian refuses fewer than none.
+
+**Design.** The kinds say what such an entry means, and Meno sees to it
+before a plugin is asked:
+- *Optimise*, *Conformers* or *Frequencies* of one atom is its energy where
+  it is, done by the doer's *Energy* with the same options. It is marked
+  optimised, has one conformer with a share of 1, or has no vibrations.
+- An entry with no electrons has no orbital results.
+
+Plugins keep only what their program itself needs.
+
+### 11. Every number says what it counts
+
+**Today.** Several numbers on cards and chips carry neither a noun nor a
+unit:
+- *2 compounds · 12* (twelve what?);
+- *10 of 12*;
+- an option row of *30 · MMFF94 · 2000 · 0.5 Å · 19781*;
+- a chip's energy above the lowest, and its population, with neither the
+  reference nor the temperature.
+
+**Design.** A rule, checked by a test over every summary function: each
+number names what it counts and its unit.
+- *2 compounds · 12 conformers*;
+- *9 of 12 conformers kept*;
+- *30 conformers · MMFF94 · 2000 iterations · RMSD 0.5 Å · seed 19781*;
+- *+0.42 kcal/mol above the lowest · 31 % at 298.15 K*.
+
+### 12. What a run keeps
+
+**Today.** A run keeps when it ran, its kind and options, what it said, how
+long it took and its jobs' ids (`StepRan`). The program and its version are
+found only on the results' calculation info, and the logs only in the jobs'
+folders, which are not in the workspace file.
+
+**Design.** A run keeps:
+- its doer: plugin id and version, program and version;
+- its snapshot (point 7);
+- each entry's status (point 5);
+- its jobs' logs, as texts in the workspace, each under its entry's name.
+
+The ten runs kept stay ten.
+
+### 13. Conformers on the new base
+
+**Today.** Conformer handling works, but on the loose fields of point 4:
+- a molecule is "one compound's conformers" when `conformerSet` is set and
+  it has more than one frame (`conformersOfOne`);
+- shares sit on the molecule without their temperature;
+- *As conformers* groups by atoms and bonds, not by species as read;
+- WORKFLOWS.md describes a plugin saying it takes all entries in one job
+  (decision 11), but `StepDecl` has no such field: CREST's *Optimise* groups
+  them in its own `prepare`.
+
+**Design.**
+- A conformer set is a type (point 2). Its entries carry `compound` and
+  `number`, and the set's members are its compounds in order (point 3).
+- Shares carry their temperature and source (point 4). *Energy window*,
+  *Duplicates* and *Choose one* work within each compound, by the contract.
+- *As conformers* groups by constitution and `species`.
+- A manifest's step may say `together: true`, so that its entries of one
+  compound go into one job. CREST's *Optimise* says so, and its own
+  grouping goes.
+
+### Found while writing this
+
+These are bugs today. Each could be fixed on its own now, before the rebuild,
+as a small PR:
+- **A set's name is not read back.** Saving writes it, but `readSet`
+  (`workflow/saved.ts`) leaves it out, so a renamed set opens with its
+  default name.
+- **A drawn input's chemistry is not in the step's key** (point 6). An
+  element changed in a drawing leaves *Conformers* on it *Done*.
+- **Undo during a run fails the run** (point 7), against what *Undo* says.
+
+### In order: the PRs
+
+Each is shippable on its own, leaves the app working, and changes the
+workspace file only where it says so.
+
+1. **The entry record** (point 4).
+   - `Entry`, `entriesOf` and `moleculesOf`; species by one rule; one
+     Boltzmann function; shares with temperature and source.
+   - No change on the page, except the chip naming its share's source.
+   - PLUGINS.md documents the plugin entry, with a version number.
+2. **The fingerprint** (point 6).
+   - It is computed over the entries; doer versions are added; the step
+     shows *Changed upstream*.
+   - Fixes the drawn-input gap.
+3. **Snapshots and closing** (point 7).
+   - Runs end on their snapshot; each store has a signal; Meno's own work
+     stops on close.
+   - The file keeps the snapshot with `running`.
+4. **Entry status and *Partly done*** (points 5 and 11).
+   - Per-entry status; the new state; *Run again on the failed*.
+   - The summary wording rule and its test.
+5. **Explicit members** (point 3).
+   - Member lists in order; drop-in and drag-out as edits; *Sort by reading
+     order*.
+   - The file stores members. Workspaces saved before read their members
+     from their frames once, as they are opened (question 7).
+6. **One exit and typed ports** (points 1, 2 and 8).
+   - The result set is made with its step; the step's give port goes; types
+     are fixed when wired and said on hover; pictures are a type.
+   - Procedures are saved with their empty result sets.
+7. **Layout derived** (point 9). `fitResultSets` goes.
+8. **One atom, no electrons** (point 10). The kinds' meaning is written in
+   PLUGINS.md; the plugins' special cases go, each plugin's tests kept
+   passing.
+9. **What a run keeps** (point 12), and the manifest's `together` (point 13).
+10. **Conformers on the new base** (point 13): the rest of point 13, and
+    WORKFLOWS.md brought up to date throughout.
+
+### What is core's and what is the plugins'
+
+**Core keeps everything that holds the workflow together, and knows no
+program:**
+- sets, steps, wires;
+- the types and kinds of step;
+- the entry record;
+- members and their order;
+- states and fingerprints;
+- snapshots and the store's signal;
+- the scheduler;
+- layout and the words on the page;
+- the meaning of one-atom and no-electron entries;
+- Meno's own steps: *Energy window*, *Duplicates*, *Populations*, *As
+  conformers*, *Choose one*, and Boltzmann's distribution with them.
+
+**Plugins fill kinds** and say in their manifests:
+- which kinds they fill;
+- what they take where they take less than the kind;
+- their options;
+- their programs and versions;
+- whether a kind's entries go together (`together`).
+
+They prepare, run and collect, and read their outputs. A plugin is given
+entries and gives entries back; it never sees the page. The boundary guard
+(`src/lib/plugins/boundary.test.ts`) keeps program names out of core
+throughout.
+
+### Questions for the maintainer
+
+1. **A step's exit.** Is its result set, made with the step and empty until
+   it runs, the step's only exit? Or does the card keep its own give port and
+   the result set have none?
+   *Recommended: the result set.* What flows is then what is drawn, and a
+   procedure comes with the places its results will go.
+2. **What a set holds.** Should a set keep an explicit list of members in
+   order, with dropping in and dragging out as the edits (a refinement of
+   decision 5)? Or should membership stay geometric, with only the order made
+   explicit?
+   *Recommended: the list.* A turn or a nudge then never changes a set.
+3. **After a partial failure.** Does the chain go on with the entries that
+   worked, or wait?
+   *Recommended: go on*, saying so on the next card (*on 9 of 12*). A
+   *Wait for all* option sits on the step's menu.
+4. **Failed entries.** Are they listed on the card only, or also shown faded
+   in the result set?
+   *Recommended: on the card only.* A set holds molecules that exist.
+5. **A *Changed* step's results.** Are they kept on the page, marked as from
+   an earlier input, or hidden until it runs again?
+   *Recommended: kept and marked.* Nothing the chemist ran disappears without
+   being asked.
+6. **Closing a tab while Meno itself is working** (not a job). Is that work
+   stopped, and shown as stopped to run again, or carried on unseen?
+   *Recommended: stopped.* Only jobs, which are separate processes, go on
+   (decision 8).
+7. **Workspaces saved before the change.** Do they read their members from
+   their frames once when opened, or not open?
+   *Recommended: read once.* It is how they were made, done once, not a
+   standing shim. The PR says so.
+8. **One atom.** Does Meno turn an *Optimise* of a lone atom into the doer's
+   *Energy*, or does each plugin keep deciding?
+   *Recommended: Meno*, by the kind's meaning (point 10).
+9. **Order in the fingerprint.** Is a set re-ordered *Changed*, or only one
+   whose members changed?
+   *Recommended: members only.* Order changes letters and numbering, not
+   results.
+10. **Arranged result sets.** Does a result set the chemist has moved members
+    in keep its own positions from then on?
+    *Recommended: yes*, as a set they made does (point 9).
+
 ## Questions
 
-None left open (2026-10-08). All seven steps are built (*As built*);
-what the maintainer changes is folded in here first.
+None left open in what is built (2026-10-08): the seven steps are built
+(*As built*), and what the maintainer changes is folded in here first. The
+proposed rebuild has its own questions (*The foundation, rebuilt*,
+*Questions for the maintainer*).
