@@ -1,3 +1,5 @@
+import { boltzmann } from "../../../../lib/boltzmann";
+import { ROOM_TEMPERATURE } from "../../../../lib/units";
 import * as THREE from "three";
 import { bentPieces } from "./stickBend";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -18,8 +20,6 @@ export const RIBBON_REACH = 1.3;
 /** World units to the ångström: a bond of 1.5 Å as long as a drawn bond. */
 export const WORLD_PER_ANGSTROM = NOMINAL_BOND_LENGTH / 1.5;
 
-/** RT at 298.15 K, in hartrees: the energy a conformer's population falls by e for. */
-const RT_HARTREE = (8.314462618 * 298.15) / 2625499.6;
 
 /**
  * The widest way out from a point between the ways to its neighbours, given
@@ -218,11 +218,7 @@ export function labelSpot(
  * one.
  */
 export function populations(energies: readonly number[], degeneracies?: readonly number[]): number[] {
-  if (!energies.length) return [];
-  const lowest = least(energies);
-  const w = energies.map((e, i) => (degeneracies?.length === energies.length ? degeneracies[i] : 1) * Math.exp(-(e - lowest) / RT_HARTREE));
-  const sum = w.reduce((a, b) => a + b, 0);
-  return w.map((x) => x / sum);
+  return boltzmann(energies, ROOM_TEMPERATURE, degeneracies);
 }
 
 /** How a molecule in 3D is drawn: in the 3D style's primary look, or its secondary. */
