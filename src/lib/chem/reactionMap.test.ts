@@ -92,9 +92,20 @@ describe("mapReaction", () => {
     expect(numbered.products[0].atoms.every((a) => a.map === undefined)).toBe(true);
   });
 
-  it("will not map flat drawings", () => {
+  it("will not map flat drawings, their hydrogens implicit", () => {
     const flat = (m: Molecule): Molecule => ({ ...m, atoms: m.atoms.map((a) => ({ ...a, z: 0 })) });
-    const r = mapReaction({ reactants: [flat(da.reactants[0])], products: [flat(da.product)] });
+    const heavy = (m: Molecule): Molecule => {
+      const keep = m.atoms.map((a, i) => (a.el === "H" ? -1 : i)).filter((i) => i >= 0);
+      return { atoms: keep.map((i) => m.atoms[i]), bonds: m.bonds.filter((b) => keep.includes(b.a1) && keep.includes(b.a2)).map((b) => ({ ...b, a1: keep.indexOf(b.a1), a2: keep.indexOf(b.a2) })) };
+    };
+    const r = mapReaction({ reactants: [flat(heavy(da.reactants[0]))], products: [flat(heavy(da.product))] });
     expect("error" in r && r.error).toBe("2d");
+  });
+
+  it("maps small molecules that lie flat at z = 0 with all their atoms", () => {
+    const water = (x: number) => molecule({ O: ["O", [x, 0, 0]], Ha: ["H", [x + 0.96, 0, 0]], Hb: ["H", [x - 0.24, 0.93, 0]] }, [["O", "Ha", 1], ["O", "Hb", 1]], undefined, { jitter: false });
+    const r = mapReaction({ reactants: [water(0), water(3)], products: [water(3), water(0)] });
+    expect("error" in r).toBe(false);
+    if (!("error" in r)) expect(r.complete.every(Boolean)).toBe(true);
   });
 });

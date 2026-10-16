@@ -32,7 +32,7 @@ import {
   orderedMaps,
   type MapperTrace,
 } from "./accelMapper";
-import type { Molecule, ParsedAtom, ParsedBond } from "./molecule";
+import { implicitHydrogens, type Molecule, type ParsedAtom, type ParsedBond } from "./molecule";
 
 export type ReactionMapInput = {
   reactants: readonly Molecule[];
@@ -96,8 +96,33 @@ function combine(ms: readonly Molecule[]): { atoms: Atoms; molecule: Molecule } 
   return { atoms, molecule: { atoms: molAtoms, bonds } };
 }
 
-/** Whether a side is a flat drawing: every atom at z = 0. */
+/** Whether every atom of the structures lies at z = 0. */
 const flat = (ms: readonly Molecule[]) => ms.every((m) => m.atoms.every((a) => a.z === 0));
+
+/**
+ * Whether some atom of the structures is short of the hydrogens its valence
+ * asks, as a drawn atom whose hydrogens are implicit is (an aromatic bond
+ * counting one and a half).
+ */
+function shortOfHydrogens(ms: readonly Molecule[]): boolean {
+  return ms.some((m) => {
+    const sums = new Array(m.atoms.length).fill(0);
+    for (const b of m.bonds) {
+      const o = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
+      sums[b.a1] += o;
+      sums[b.a2] += o;
+    }
+    return m.atoms.some((a, i) => implicitHydrogens(a.el, Math.round(sums[i]), a.charge ?? 0, a.radical) > 0);
+  });
+}
+
+/**
+ * A 2D drawing, not structures in 3D: every atom flat at z = 0 and some atom
+ * short of hydrogens. Small molecules lying in a plane (water, a lone ion)
+ * with all their atoms are not taken for one.
+ */
+const drawing = (rs: readonly Molecule[], ps: readonly Molecule[]) =>
+  flat(rs) && flat(ps) && (shortOfHydrogens(rs) || shortOfHydrogens(ps));
 
 /** The bonds of a structure by atom pair (smaller index first), with their CTfile types. */
 function bondTypes(m: Molecule, renumber: (i: number) => number = (i) => i): Map<string, { a1: number; a2: number; type: number }> {
@@ -134,7 +159,7 @@ export function mapReaction(input: ReactionMapInput): ReactionMap | ReactionMapR
   const { reactants, products } = input;
   if (!reactants.length || !products.length || reactants.some((m) => !m.atoms.length) || products.some((m) => !m.atoms.length))
     return { error: "no-atoms", message: "Each side needs a structure with atoms." };
-  if (flat(reactants) && flat(products))
+  if (drawing(reactants, products))
     return { error: "2d", message: "The structures are flat drawings; map their 3D structures, with their hydrogens." };
   const r = combine(reactants);
   const p = combine(products);

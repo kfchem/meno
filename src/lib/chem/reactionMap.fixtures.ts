@@ -48,12 +48,17 @@ function jitter(name: string): V {
   return out as V;
 }
 
-/** A molecule from named atoms and bonds between their names, its atoms in the order `order` gives (all of them). */
-export function molecule(atoms: Record<string, [string, V]>, bonds: [string, string, number][], order: string[] = Object.keys(atoms)): Molecule {
+/** A molecule from named atoms and bonds between their names, its atoms in the order `order` gives (all of them); each a little off (`jitter`) unless asked not to be. */
+export function molecule(
+  atoms: Record<string, [string, V]>,
+  bonds: [string, string, number][],
+  order: string[] = Object.keys(atoms),
+  options: { jitter?: boolean } = {},
+): Molecule {
   const index = new Map(order.map((k, i) => [k, i]));
   const parsed: ParsedAtom[] = order.map((k) => {
     const [el, p] = atoms[k];
-    const j = jitter(k);
+    const j: V = options.jitter === false ? [0, 0, 0] : jitter(k);
     return { el, x: round4(p[0] + j[0]), y: round4(p[1] + j[1]), z: round4(p[2] + j[2]) };
   });
   const parsedBonds: ParsedBond[] = bonds.map(([p, q, o]) => ({ a1: index.get(p)!, a2: index.get(q)!, order: o }));

@@ -54,8 +54,11 @@ a full map, for a drawing.
 
 What it will not do:
 
-- **Map a flat drawing.** If every atom of both sides lies at z = 0 the
-  structures are a 2D drawing, and `mapReaction` refuses them. A drawn
+- **Map a flat drawing.** If every atom of both sides lies at z = 0 and
+  some atom is short of the hydrogens its valence asks, the structures are
+  a 2D drawing with its hydrogens implicit, and `mapReaction` refuses them.
+  (Small molecules that happen to lie in the plane with all their atoms -
+  water, a lone ion - are mapped.) A drawn
   scheme is mapped through its 3D structures - Meno's own 3D generation -
   never as drawn, with its hydrogens implicit.
 - **Guess bonds.** The bonds come with the structures. ACCeL reads a
