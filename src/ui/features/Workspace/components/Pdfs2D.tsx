@@ -53,7 +53,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
 import { COLORS } from "../../../theme/colors";
-import { BASE, FADE_MS, GRAY, levelFor, LINE, Page, TILE, usePictures, type Mark, type Pic, type Tile } from "./pdfPictures";
+import { BASE, FADE_MS, GRAY, levelFor, LINE, Page, QUICK, TILE, usePictures, type Mark, type Pic, type Tile } from "./pdfPictures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
 import { followLink, readerOf } from "./pdfColumnReader";
 import { linkAt, linksOf, type PdfLink } from "../../../../lib/pdf/reader";
@@ -307,12 +307,14 @@ export default function Pdfs2D() {
           textHad(p.sha256, page);
           figuresHad(p.sha256, page);
         }
-        // (the level: pixels a point, a power of two above what the screen wants; none, where the preview is enough)
-        const level = levelFor(want * (unit / POINT), p.pages[page][0]);
-        if (inView) v.level.set(p.id * 100000 + page, level);
-        if (!level) continue;
         const left = s.x - s.w / 2;
         const top = s.y + s.h / 2;
+        const partOf = (r: typeof seen) => ({ x0: (r.x0 - left) / unit, x1: (r.x1 - left) / unit, y0: (top - r.y1) / unit, y1: (top - r.y0) / unit });
+        // (the level, pixels a point: quick first, then fine once that has come, for what is seen - quick, ahead; none, where the preview is enough)
+        const pagePx = want * (unit / POINT);
+        const level = inView ? pics.levelNow(p.sha256, page, p.pages[page], partOf(seen), pagePx, now) : levelFor(pagePx, p.pages[page][0], QUICK);
+        if (inView) v.level.set(p.id * 100000 + page, level);
+        if (!level) continue;
         const ask = (r: typeof seen, later: boolean) =>
           pics.ask(
             {
@@ -320,7 +322,7 @@ export default function Pdfs2D() {
               page,
               size: p.pages[page],
               level,
-              part: { x0: (r.x0 - left) / unit, x1: (r.x1 - left) / unit, y0: (top - r.y1) / unit, y1: (top - r.y0) / unit },
+              part: partOf(r),
               nearness: (i, j) => (later ? 1e9 : 0) + Math.hypot(left + ((i + 0.5) * TILE * unit) / level - mid.x, top - ((j + 0.5) * TILE * unit) / level - mid.y),
               stillSince: () => view.current.still,
               ...(later ? { ahead: true as const } : {}),

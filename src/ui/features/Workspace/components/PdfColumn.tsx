@@ -30,7 +30,7 @@ import { setViewGoal, viewGoalOf } from "./viewGoal";
 import { pagesInView } from "../../../../lib/pdf/column";
 import { textHad } from "../../../../lib/pdf/text";
 import { figuresHad } from "../../../../lib/pdf/figures";
-import { BASE, levelFor, Page, TILE, usePictures } from "./pdfPictures";
+import { BASE, levelFor, Page, QUICK, TILE, usePictures } from "./pdfPictures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
 import { HEADER_PX, readerOf } from "./pdfColumnReader";
 import { ease, SETTLE_MS } from "./Pdfs2D";
@@ -357,7 +357,9 @@ function ColumnPass({
     if (!pdf) return;
     const { l, top, left } = reader.seen();
     const dpr = gl.getPixelRatio();
-    const level = levelFor(l.scale * dpr, Math.max(...pdf.pages.map(([w]) => w)));
+    const want = l.scale * dpr;
+    // (ahead, the quick level: there soon, when the column goes on)
+    const quick = levelFor(want, Math.max(...pdf.pages.map(([w]) => w)), QUICK);
     const held = new Set<string>();
     let asked = false;
     for (const i of pagesInView(l, top, tall)) {
@@ -365,14 +367,16 @@ function ColumnPass({
       // (its letters, and its figures, ready for a press on them)
       textHad(pdf.sha256, i);
       figuresHad(pdf.sha256, i);
-      clock.current.levels.set(i, level);
-      if (!level) continue;
       const part = {
         x0: (left - p.x) / l.scale,
         x1: (left + reader.width - p.x) / l.scale,
         y0: (top - p.y) / l.scale,
         y1: (top + tall - p.y) / l.scale,
       };
+      // (quick first, then fine once that has come)
+      const level = pics.levelNow(pdf.sha256, i, pdf.pages[i], part, want, now);
+      clock.current.levels.set(i, level);
+      if (!level) continue;
       // (the column's own come first, nearest its middle)
       const mid = { x: left + reader.width / 2, y: top + tall / 2 };
       asked =
@@ -392,6 +396,7 @@ function ColumnPass({
     }
     // the next screen's worth the way it went, after all in view: there when it goes on
     const way = clock.current.way;
+    const level = quick;
     if (level && way) {
       const from = way > 0 ? top + tall : top - tall;
       const mid = { x: left + reader.width / 2, y: top + tall / 2 };

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
-import { FADE_MS, levelFor, OVERSAMPLE, Pictures, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
+import { FADE_MS, levelFor, OVERSAMPLE, Pictures, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
 
 // (the reader: a tile drawn at once - or, while `hold` is set, never)
 const reader = vi.hoisted(() => ({ hold: false }));
@@ -111,5 +111,40 @@ describe("a page's tiles kept", () => {
     }
     // (the tiles of a screen at each of the levels seen in the last few seconds, and those kept under: tens, not hundreds)
     expect(most).toBeLessThan(10 * 12 + UNDER_MOST);
+  });
+});
+
+describe("the level a page's part seen is drawn at now", () => {
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const part = { x0: 0, y0: 0, x1: 300, y1: 200 };
+  const ask = (level: number): TileAsk => ({ sha256: "q", page: 0, size: [612, 792], level, part, nearness: () => 0, stillSince: () => 0 });
+
+  it("is the quick one first, then the fine one once the quick one's tiles have come, kept after they are let go", async () => {
+    reader.hold = false;
+    const pics = new Pictures();
+    const want = 2.2;
+    const quick = levelFor(want, 612, QUICK);
+    const fine = levelFor(want, 612, OVERSAMPLE);
+    expect(quick).toBeLessThan(fine);
+    let now = performance.now() + 1000;
+    expect(pics.levelNow("q", 0, [612, 792], part, want, now)).toBe(quick);
+    pics.ask(ask(quick), now);
+    await settle();
+    // (come, but not yet faded in: still the quick one)
+    expect(pics.levelNow("q", 0, [612, 792], part, want, performance.now())).toBe(quick);
+    now = performance.now() + FADE_MS;
+    expect(pics.levelNow("q", 0, [612, 792], part, want, now)).toBe(fine);
+    pics.ask(ask(fine), now);
+    await settle();
+    // (the fine one come, the quick one's let go: the fine one still)
+    // (asked for again each frame the view is still, as the canvas does)
+    now = performance.now() + FADE_MS + 10_000;
+    pics.ask(ask(fine), now);
+    pics.tilesOf("q", 0, fine, now);
+    pics.letGo(now);
+    const kept = [...pics.tiles.keys()];
+    expect(kept.length).toBeGreaterThan(0);
+    expect(kept.every((k) => k.startsWith(`q:0:${fine}:`))).toBe(true);
+    expect(pics.levelNow("q", 0, [612, 792], part, want, now)).toBe(fine);
   });
 });

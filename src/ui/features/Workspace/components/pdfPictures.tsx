@@ -60,24 +60,27 @@ function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
 /** How many levels a page is drawn at to each doubling: a sixteenth of one apart. */
 export const LEVELS_PER_DOUBLING = 16;
 /**
- * How many times the screen's pixels a side a page is drawn at. PDFium's
- * small letters drawn at the screen's own scale are lighter than drawn
- * finer and shrunk to it: at 1 to 1.41 times, a paper's text was a tenth to
- * a third lighter than 0.1.12's 1 to 2 times (found on Windows,
- * 2026-10-16, and measured here); at twice, it is as dark, at every zoom.
+ * How many times the screen's pixels a side a page is drawn at: first, to
+ * be sharp soon (`QUICK`), then, once that has come, to be as dark as it
+ * should be (`OVERSAMPLE`). PDFium's small letters drawn at the screen's
+ * own scale are lighter than drawn finer and shrunk to it: at 1 to 1.41
+ * times, a paper's text was a tenth to a third lighter than 0.1.12's 1 to 2
+ * times (found on Windows, 2026-10-16, and measured here); at twice, it is
+ * as dark, at every zoom.
  */
+export const QUICK = Math.SQRT2;
 export const OVERSAMPLE = 2;
 
 /**
  * The level a page is drawn at, `want` pixels a point wanted of a page
- * `width` points wide: none, where its small picture is enough; else the
- * first of the levels a sixteenth of a doubling apart at or above twice it
- * (`OVERSAMPLE`) - so that a page's text is as dark at every zoom, and a
- * view stopped a hair from where it was keeps the tiles it has.
+ * `width` points wide, `over` times finer: none, where its small picture is
+ * enough; else the first of the levels a sixteenth of a doubling apart at
+ * or above it - so that a view stopped a hair from where it was keeps the
+ * tiles it has.
  */
-export function levelFor(want: number, width: number): number {
+export function levelFor(want: number, width: number, over = OVERSAMPLE): number {
   if (want <= (PREVIEW_PX / width) * 1.15) return 0;
-  const k = Math.ceil(LEVELS_PER_DOUBLING * Math.log2(want * OVERSAMPLE) - 1e-9);
+  const k = Math.ceil(LEVELS_PER_DOUBLING * Math.log2(want * over) - 1e-9);
   return Math.min(32, Math.pow(2, k / LEVELS_PER_DOUBLING));
 }
 
@@ -228,6 +231,35 @@ export class Pictures {
     for (const t of this.tiles.values()) if (t !== "asked" && now - t.born < FADE_MS + 80) return true;
     for (const t of this.previews.values()) if (t !== "asked" && now - t.born < FADE_MS + 80) return true;
     return false;
+  }
+
+  /** Whether a page's tiles at a level over a part (in points from its top left) have all come and faded in. */
+  allCome(sha256: string, page: number, size: readonly [number, number], level: number, part: TileAsk["part"], now: number): boolean {
+    const [w, h] = size;
+    const left = Math.max(0, part.x0 * level);
+    const right = Math.min(w * level, part.x1 * level);
+    const top = Math.max(0, part.y0 * level);
+    const bottom = Math.min(h * level, part.y1 * level);
+    for (let j = Math.floor(top / TILE); j * TILE < bottom; j++)
+      for (let i = Math.floor(left / TILE); i * TILE < right; i++) {
+        const t = this.tiles.get(`${sha256}:${page}:${level}:${i}:${j}`);
+        if (!t || t === "asked" || now - t.born < FADE_MS) return false;
+      }
+    return true;
+  }
+
+  /**
+   * The level a page's part seen is drawn at now, `want` pixels a point
+   * wanted: first the quick one (`QUICK`), sharp soon; once that has come
+   * and faded in, the fine one (`OVERSAMPLE`), drawn behind it and faded in
+   * over it - the page then as dark as it should be. None, where its small
+   * picture is enough.
+   */
+  levelNow(sha256: string, page: number, size: readonly [number, number], part: TileAsk["part"], want: number, now: number): number {
+    const quick = levelFor(want, size[0], QUICK);
+    const fine = levelFor(want, size[0], OVERSAMPLE);
+    if (!quick || quick === fine) return fine;
+    return this.allCome(sha256, page, size, fine, part, now) || this.allCome(sha256, page, size, quick, part, now) ? fine : quick;
   }
 
   /** Tiles not wanted for a while let go. */
