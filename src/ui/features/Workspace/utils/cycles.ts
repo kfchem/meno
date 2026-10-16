@@ -7,7 +7,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { wordsSet } from "../../../../lib/chem/captions";
-import { branchPath, cycleArrows, cycleMembers, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
+import { branchPath, cycleArrows, cycleMembers, endKey, ontoCycle, type Cycle, type CycleArrow, type CycleBox, type CycleBranch, type CycleInk, type CycleMember, type CycleMotion } from "../../../../lib/chem/cycle";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { styleOf } from "../../../../lib/chem/style";
 import { DURATION, follow, TAU } from "../../../theme/motion";
@@ -94,9 +94,28 @@ export function cycleThings(model: Pick<Model, "atoms" | "bonds">, captions: rea
   return out;
 }
 
-/** What is on a cycle, of `things`: each by its box's middle, the circle cut short of its ink. */
+/** A cycle's gaps set by hand, kept for what they were of where that is numbered anew - pasted: `atom` and `words` say each one's new number. */
+export function endsRenamed<C extends Pick<Cycle, "ends">>(c: C, atom: (id: number) => number | undefined, words: (id: number) => number | undefined): C {
+  if (!c.ends) return c;
+  const ends = Object.entries(c.ends).flatMap(([k, v]) => {
+    const m = /^([ac])(\d+):(lo|hi)$/.exec(k);
+    const id = m ? (m[1] === "a" ? atom : words)(Number(m[2])) : undefined;
+    return id == null ? [] : [[`${m![1]}${id}:${m![3]}`, v] as const];
+  });
+  const { ends: _, ...rest } = c;
+  return (ends.length ? { ...rest, ends: Object.fromEntries(ends) } : rest) as C;
+}
+
+/** What is on a cycle, of `things`: each by its box's middle, the circle cut short of its ink - by the cycle's gap, or an end's set by hand. */
 export function membersOn(c: Cycle, things: readonly CycleThing[]): CycleMember[] {
-  return cycleMembers(c, things.map((t) => t.box), NOMINAL_BOND_LENGTH, things.map((t) => t.ink));
+  const ends = c.ends ?? {};
+  const gaps = things.map((t) => {
+    const k = thingKey(t);
+    const lo = ends[endKey(k, "lo")];
+    const hi = ends[endKey(k, "hi")];
+    return lo == null && hi == null ? undefined : { ...(lo != null ? { lo } : {}), ...(hi != null ? { hi } : {}) };
+  });
+  return cycleMembers(c, things.map((t) => t.box), NOMINAL_BOND_LENGTH, things.map((t) => t.ink), gaps);
 }
 
 /** The arrows the cycles are drawn with, what is on each measured from `things`. */

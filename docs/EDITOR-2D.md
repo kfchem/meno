@@ -228,7 +228,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
 | An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; arrow style |
-| A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise |
+| A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise, how far its arrows stop short of what is on it (close, a little apart, apart, well apart; the one it is ticked) |
 | A measurement | Delete | set its distance, angle or torsion angle |
 | A set, a "+", a wire | Delete | save as procedure (a set) |
 
@@ -988,7 +988,7 @@ All hover-based, as above.
     is on a cycle is not kept with it: it is what lies on its line, so
     that it is moved along the circle, or off it, as anything is moved.
   - **Its arrows**: the circle breaks round each thing on it, each side on
-    its own where it first comes within a quarter of a bond of what is
+    its own where it first comes within half a bond of what is
     drawn - a bond as wide as it is drawn, a label's letters, words - or,
     where it comes no nearer, where it comes nearest; so each stretch
     ends just short of what it points at, however much of the box round
@@ -1015,6 +1015,13 @@ All hover-based, as above.
     still on it a moment; selected, a drag moves it with what is on it and
     the words at its arrows' ends, and its handle at the lower right sizes
     it, what is on it moved out or in with the line - each one undo step.
+  - **How far its arrows stop short** (the maintainer, 2026-10-16): half
+    a bond, or what its menu sets for the cycle - a quarter, half, three
+    quarters or a whole bond. Selected, each end of its arrows shows a
+    handle: dragged back, that end stops further short; forward, nearer -
+    kept for that end of that structure or those words however they are
+    moved, and with them when copied. A double-click on the handle gives it
+    back the cycle's own. Each change is one step, eased.
     It is selected with all, copied or cut alone or with the rest, and
     carried round or turned over with what is selected: turned over, it
     goes the other way and its arrows in and out join it mirrored.

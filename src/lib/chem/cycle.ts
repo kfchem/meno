@@ -21,8 +21,17 @@ export type CycleBox = { x0: number; y0: number; x1: number; y1: number };
 /** An arrow coming in to the cycle, or going out of it, where it joins the circle: an angle, in radians, anticlockwise from the circle's right (y up). */
 export type CycleBranch = { at: number; way: "in" | "out" };
 
-/** A cycle: its middle and radius, in the drawing's units; the way it goes (clockwise, unless `ccw`); the arrows coming in and going out; its colour (#rrggbb; none, the bonds' ink). */
-export type Cycle = { id: number; x: number; y: number; r: number; ccw?: true; branches?: CycleBranch[]; color?: string };
+/**
+ * A cycle: its middle and radius, in the drawing's units; the way it goes
+ * (clockwise, unless `ccw`); the arrows coming in and going out; its colour
+ * (#rrggbb; none, the bonds' ink); how far its arrows stop short of what is
+ * on it, in bonds (`gap`; none, `MARGIN`), and, set by hand, how far each
+ * end does (`ends`, by what it is of and which side: `endKey`).
+ */
+export type Cycle = { id: number; x: number; y: number; r: number; ccw?: true; branches?: CycleBranch[]; color?: string; gap?: number; ends?: Record<string, number> };
+
+/** Which end of an arrow a gap set by hand is kept for: what is on the cycle (a name of its own, kept as it is moved) and the side of it - clockwise (`lo`) or anticlockwise (`hi`). */
+export const endKey = (thing: string, side: "lo" | "hi") => `${thing}:${side}`;
 
 /**
  * An arrow as a cycle draws it: where its middle is, which way it points and
@@ -53,8 +62,10 @@ export type CycleInk = { lines: readonly { a: P; b: P; half: number }[]; boxes: 
 
 /** How near the line a thing's middle lies to be on it, in bonds. */
 export const ON_LINE = 0.6;
-/** How far the circle stays clear of what is on it - of its ink, where that is known; of its box, else - in bonds. */
-export const MARGIN = 0.25;
+/** How far the circle stays clear of what is on it - of its ink, where that is known; of its box, else - in bonds, unless the cycle says otherwise. */
+export const MARGIN = 0.5;
+/** The most an arrow's end may be kept from what it points at, in bonds. */
+export const GAP_MOST = 3;
 /** How far an arrow coming in or going out runs along the circle, and out from it, in bonds. */
 export const BRANCH_ALONG = 1.6;
 export const BRANCH_OUT = 1.1;
@@ -102,11 +113,12 @@ export function inkDistance(p: P, ink: CycleInk): number {
  * circle first comes within `MARGIN` bonds of what is drawn - a line, a
  * letter - so that each stretch ends just short of what it points at; where
  * the circle comes no nearer than that, where it comes nearest. With none, the
- * circle is cut where it leaves the box, `MARGIN` bonds out.
+ * circle is cut where it leaves the box, `MARGIN` bonds out. The margin is
+ * the cycle's `gap`, or, for an end set by hand, that end's (`gaps`, by the
+ * same index, in bonds).
  */
-export function cycleMembers(c: Pick<Cycle, "x" | "y" | "r">, boxes: readonly CycleBox[], bond: number, inks?: readonly (CycleInk | undefined)[]): CycleMember[] {
+export function cycleMembers(c: Pick<Cycle, "x" | "y" | "r" | "gap">, boxes: readonly CycleBox[], bond: number, inks?: readonly (CycleInk | undefined)[], gaps?: readonly ({ lo?: number; hi?: number } | undefined)[]): CycleMember[] {
   const out: CycleMember[] = [];
-  const g = MARGIN * bond;
   // (round from its middle a little at a time)
   const fine = Math.min(STEP / 4, 0.25 / Math.max(c.r / bond, 1));
   boxes.forEach((b, index) => {
@@ -114,11 +126,12 @@ export function cycleMembers(c: Pick<Cycle, "x" | "y" | "r">, boxes: readonly Cy
     const m = middle(b);
     const angle = Math.atan2(m.y - c.y, m.x - c.x);
     const ink = inks?.[index];
-    const inside = (a: number) => {
-      const p = pointOn(c, c.r, a);
-      return p.x >= b.x0 - g && p.x <= b.x1 + g && p.y >= b.y0 - g && p.y <= b.y1 + g;
-    };
     const side = (s: 1 | -1) => {
+      const g = (gaps?.[index]?.[s > 0 ? "hi" : "lo"] ?? c.gap ?? MARGIN) * bond;
+      const inside = (a: number) => {
+        const p = pointOn(c, c.r, a);
+        return p.x >= b.x0 - g && p.x <= b.x1 + g && p.y >= b.y0 - g && p.y <= b.y1 + g;
+      };
       // (as far as the circle runs in its box, the margin round it)
       let reach = 0;
       while (reach < Math.PI && inside(angle + s * reach)) reach += fine;
@@ -297,12 +310,14 @@ export function cycleTurned(c: Cycle, about: P, angle: number): Pick<Cycle, "x" 
  * upright) or top for bottom - as a mirror shows it: its middle mirrored,
  * the way it goes the other, and where its arrows join it mirrored.
  */
-export function cycleMirrored(c: Cycle, about: P, axis: "vertical" | "horizontal"): Pick<Cycle, "x" | "y" | "ccw" | "branches"> {
+export function cycleMirrored(c: Cycle, about: P, axis: "vertical" | "horizontal"): Pick<Cycle, "x" | "y" | "ccw" | "branches" | "ends"> {
   const across = axis === "vertical";
   return {
     x: across ? 2 * about.x - c.x : c.x,
     y: across ? c.y : 2 * about.y - c.y,
     ...(c.ccw ? {} : { ccw: true as const }),
     branches: c.branches?.map((b) => ({ ...b, at: round(across ? Math.PI - b.at : -b.at) })),
+    // (an end set by hand on a thing's clockwise side is, mirrored, on its anticlockwise side)
+    ends: c.ends && Object.fromEntries(Object.entries(c.ends).map(([k, v]) => [k.replace(/:(lo|hi)$/, (_, s: string) => (s === "lo" ? ":hi" : ":lo")), v])),
   };
 }

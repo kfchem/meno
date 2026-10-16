@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { angleOn, branchPath, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, MARGIN, ontoCycle, type Cycle, type CycleBox, type CycleInk } from "./cycle";
+import { angleOn, branchPath, cycleArrows, cycleMembers, cycleMirrored, cycleTurned, inkDistance, MARGIN, ontoCycle, type Cycle, type CycleBox, type CycleInk } from "./cycle";
 import { arrowPath, arrowPieces, type ArrowMeasures } from "./reactionArrow";
 
 const BOND = 1;
@@ -20,10 +20,10 @@ describe("what is on a cycle", () => {
     const m = cycleMembers(c, boxes, BOND);
     expect(m.map((x) => x.index)).toEqual([0, 1]);
     expect((m[0].angle * 180) / Math.PI).toBeCloseTo(90);
-    // (a box 1.2 wide across the top, no ink known: clear of it and of the margin, about 0.85 either side of its middle)
+    // (a box 1.2 wide across the top, no ink known: clear of it and of the margin, about 1.1 either side of its middle)
     for (const side of [m[0].lo, m[0].hi]) {
-      expect(side * c.r).toBeGreaterThan(0.8);
-      expect(side * c.r).toBeLessThan(1.0);
+      expect(side * c.r).toBeGreaterThan(1.0);
+      expect(side * c.r).toBeLessThan(1.25);
     }
   });
 
@@ -139,6 +139,26 @@ describe("where the circle breaks for what is on it", () => {
     const b = box(0, 4, 2, 0.5);
     const [m] = cycleMembers(c, [b], BOND, [{ lines: [], boxes: [b] }]);
     for (const d of endsFrom([m], { lines: [], boxes: [b] })) expect(Math.abs(d - MARGIN)).toBeLessThan(0.12);
+  });
+});
+
+describe("how far a cycle's arrows stop short", () => {
+  const b = box(0, 4, 2, 0.5);
+  const words = [{ lines: [], boxes: [b] }];
+  const from = (m: ReturnType<typeof cycleMembers>[number]) =>
+    [m.angle - m.lo, m.angle + m.hi].map((a) => inkDistance({ x: 4 * Math.cos(a), y: 4 * Math.sin(a) }, words[0]));
+
+  it("is half a bond, unless the cycle says otherwise", () => {
+    expect(MARGIN).toBe(0.5);
+    for (const d of from(cycleMembers(c, [b], BOND, words)[0])) expect(Math.abs(d - 0.5)).toBeLessThan(0.12);
+    for (const d of from(cycleMembers({ ...c, gap: 1 }, [b], BOND, words)[0])) expect(Math.abs(d - 1)).toBeLessThan(0.12);
+  });
+
+  it("is an end's own where it is set by hand, the other end the cycle's", () => {
+    const [m] = cycleMembers(c, [b], BOND, words, [{ lo: 1.5 }]);
+    const [lo, hi] = from(m);
+    expect(Math.abs(lo - 1.5)).toBeLessThan(0.12);
+    expect(Math.abs(hi - 0.5)).toBeLessThan(0.12);
   });
 });
 

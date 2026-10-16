@@ -3,7 +3,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { styleOf } from "../../../../lib/chem/style";
-import { cycleArrows, type Cycle } from "../../../../lib/chem/cycle";
+import { cycleArrows, endKey, GAP_MOST, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
 import { dragSelection } from "../utils/dragSelection";
@@ -31,7 +31,9 @@ const HANDLE_AT = -Math.PI / 4;
  * lies on it, and its arrows coming in and going out - in the drawing
  * style's reaction arrows' look. A click on its line selects it; held still
  * a moment there, it is taken hold of; selected, a drag moves it with all
- * that lies on it, and its handle sizes it, what lies on it kept on its line.
+ * that lies on it, and its handle sizes it, what lies on it kept on its line;
+ * a handle at each end of its arrows sets how far that end stops short of
+ * what it points at - a double-click gives it back the cycle's own.
  */
 export default function Cycles2D() {
   const cycles = useEditor((s) => s.cycles);
@@ -193,6 +195,53 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
     window.addEventListener("pointermove", onMoveDrag);
     window.addEventListener("pointerup", onUp, true);
   };
+  // (each end of its arrows, while it is selected: where it is, and what it stops short of)
+  const ends = selected
+    ? ease.current.members().flatMap((m) => {
+        const t = things[m.index];
+        if (m.passing || !t?.ink) return [];
+        return (["lo", "hi"] as const).map((side) => ({ key: endKey(thingKey(t), side), side, angle: m.angle, ink: t.ink!, at: m.angle + (side === "hi" ? m.hi : -m.lo) }));
+      })
+    : [];
+  const clicked = useRef<{ key: string; t: number } | null>(null);
+  /** An end's handle pressed: dragged, that end's gap where the pointer has taken it - back from what it points at, or nearer - as one step; pressed twice, the cycle's own gap again. */
+  const onEnd = (e: { nativeEvent: PointerEvent; stopPropagation: () => void }, end: (typeof ends)[number]) => {
+    const ev = e.nativeEvent;
+    if (ev.button !== 0) return;
+    e.stopPropagation();
+    const st = store.getState();
+    const at = performance.now();
+    if (clicked.current && clicked.current.key === end.key && at - clicked.current.t < DOUBLE_CLICK_MS) {
+      clicked.current = null;
+      st.updateCycle(c.id, { ends: { [end.key]: null } });
+      st.suppressDoubleClick(DOUBLE_CLICK_MS);
+      return;
+    }
+    clicked.current = { key: end.key, t: at };
+    st.beginPanHold(ev.pointerId);
+    const from = { x: ev.clientX, y: ev.clientY };
+    const gesture = `cycle-end-${at}`;
+    const s = end.side === "hi" ? 1 : -1;
+    const onMoveDrag = (mv: PointerEvent) => {
+      if (Math.hypot(mv.clientX - from.x, mv.clientY - from.y) < CLICK_PX) return;
+      const p = toWorld(mv.clientX, mv.clientY);
+      const a = Math.atan2(p.y - c.y, p.x - c.x);
+      // (how far round from the middle of what it stops short of, on its own side: none, past the middle)
+      const off = Math.atan2(Math.sin(a - end.angle), Math.cos(a - end.angle)) * s;
+      const q = { x: c.x + c.r * Math.cos(a), y: c.y + c.r * Math.sin(a) };
+      const gap = off <= 0 ? 0 : Math.min(GAP_MOST, inkDistance(q, end.ink) / NOMINAL_BOND_LENGTH);
+      store.getState().updateCycle(c.id, { ends: { [end.key]: gap } }, gesture);
+    };
+    const onUp = (u: PointerEvent) => {
+      window.removeEventListener("pointermove", onMoveDrag);
+      window.removeEventListener("pointerup", onUp, true);
+      const s2 = store.getState();
+      s2.endPanHold(u.pointerId);
+      s2.suppressDoubleClick(DOUBLE_CLICK_MS);
+    };
+    window.addEventListener("pointermove", onMoveDrag);
+    window.addEventListener("pointerup", onUp, true);
+  };
   const lit = selected ? 0.35 : hovered ? 0.18 : 0;
   return (
     <group position={[0, 0, Z]}>
@@ -213,6 +262,12 @@ function CycleItem({ c, things, selected, hovered, zoom, toWorld }: { c: Cycle; 
         <ringGeometry args={[Math.max(0, c.r - slack), c.r + slack, 128]} />
         <meshBasicMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
       </mesh>
+      {ends.map((end) => (
+        <mesh key={end.key} position={[c.x + c.r * Math.cos(end.at), c.y + c.r * Math.sin(end.at), 0.002]} onPointerDown={(e) => onEnd(e, end)}>
+          <circleGeometry args={[handle * 0.8, 20]} />
+          <meshBasicMaterial color={COLORS.highlight} depthTest={false} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ))}
       {selected && (
         <mesh position={[hp.x, hp.y, 0.002]} onPointerDown={onHandle}>
           <circleGeometry args={[handle, 24]} />

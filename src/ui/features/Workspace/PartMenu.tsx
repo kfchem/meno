@@ -75,6 +75,14 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
+/** The gaps a cycle's arrows can keep from what is on it, in bonds, as its menu offers them. */
+const CYCLE_GAPS: readonly (readonly [number, string])[] = [
+  [0.25, "Arrows close"],
+  [0.5, "Arrows a little apart"],
+  [0.75, "Arrows apart"],
+  [1, "Arrows well apart"],
+];
+
 type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
@@ -325,7 +333,7 @@ export default function PartMenu({
     onBack: () => void;
   };
   /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
-  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void };
+  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void };
   /** A rounded rectangle made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
@@ -619,6 +627,8 @@ export default function PartMenu({
           { name: "Arrow going out", keys: "", run: cycle.onOut },
           ...(cycle.onRemoveArrow ? [{ name: "Remove this arrow", keys: "", run: cycle.onRemoveArrow }] : []),
           { name: cycle.ccw ? "Turn clockwise" : "Turn anticlockwise", keys: "", run: cycle.onTurn, divider: true },
+          // (how far its arrows stop short of what is on it, ticked as it is)
+          ...CYCLE_GAPS.map(([gap, name], i) => ({ name, keys: "", run: () => cycle.setGap(gap), checked: Math.abs(cycle.gap - gap) < 1e-6, ...(i === 0 ? { divider: true } : {}) })),
           del("Delete cycle"),
         ]
       : target.kind === "set"

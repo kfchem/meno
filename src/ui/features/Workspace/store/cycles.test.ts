@@ -16,6 +16,32 @@ function editor() {
   return { doc, state: () => store.getState() };
 }
 
+describe("a catalytic cycle's gaps", () => {
+  it("are set for the cycle and for an end, one step each, and undone", () => {
+    const { doc, state } = editor();
+    const id = state().addCycle({ x: 0, y: 0, r: 4 * B })!;
+    state().updateCycle(id, { gap: 1 });
+    state().updateCycle(id, { ends: { "a1:lo": 1.5 } });
+    expect(state().cycles[0]).toMatchObject({ gap: 1, ends: { "a1:lo": 1.5 } });
+    // (an end given back the cycle's own)
+    state().updateCycle(id, { ends: { "a1:lo": null } });
+    expect(state().cycles[0].ends).toBeUndefined();
+    doc.undo();
+    expect(state().cycles[0].ends).toEqual({ "a1:lo": 1.5 });
+    doc.undo();
+    doc.undo();
+    expect(state().cycles[0].gap).toBeUndefined();
+  });
+
+  it("are kept when copied and pasted", () => {
+    const { state } = editor();
+    state().addCycle({ x: 0, y: 0, r: 4 * B, gap: 0.75 });
+    const items = clipItems({ atoms: [], bonds: [], cycles: state().cycles } as never);
+    const back = readDrawn(JSON.parse(items[0].text ?? "null"));
+    expect(back?.cycles?.[0].gap).toBe(0.75);
+  });
+});
+
 describe("a catalytic cycle among the rest of the page", () => {
   it("is selected with all of it", () => {
     const { state } = editor();

@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { branchPath, cycleMembers, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
+import { branchPath, cycleMembers, endKey, inkDistance, type Cycle } from "../../../../lib/chem/cycle";
 import type { Model } from "../store/types";
-import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, membersOn } from "./cycles";
+import { arrowsOfCycles, branchWords, carriedByCycle, CycleChange, CycleEase, cycleThings, endsRenamed, membersOn, thingKey } from "./cycles";
 
 const on = (key: string, angle: number, half = 0.3) => ({ key, index: 0, angle, lo: half, hi: half });
 const settle = (e: CycleEase) => {
@@ -172,6 +172,30 @@ describe("the circle round a structure on it", () => {
     expect(arrows).toHaveLength(1);
     const a = arrows[0];
     const ends = [-1, 1].map((k) => ({ x: a.x + (k * Math.cos(a.angle) * a.length) / 2, y: a.y + (k * Math.sin(a.angle) * a.length) / 2 }));
-    for (const e of ends) expect(inkDistance(e, t.ink!)).toBeLessThan(0.45 * B);
+    for (const e of ends) expect(inkDistance(e, t.ink!)).toBeLessThan(0.7 * B);
+  });
+
+  it("keeps an end's gap set by hand as the structure is moved along the circle", () => {
+    const [t] = cycleThings(model, [], style);
+    const m = { x: (t.box.x0 + t.box.x1) / 2, y: (t.box.y0 + t.box.y1) / 2 };
+    const c: Cycle = { id: 1, x: m.x + 4.5 * B, y: m.y, r: 4.5 * B, ends: { [endKey(thingKey(t), "hi")]: 1.5 } };
+    const end = (things: ReturnType<typeof cycleThings>) => {
+      const [x] = membersOn(c, things);
+      const a = x.angle + x.hi;
+      return inkDistance({ x: c.x + c.r * Math.cos(a), y: c.y + c.r * Math.sin(a) }, things[0].ink!) / B;
+    };
+    expect(end([t])).toBeGreaterThan(1.3);
+    // (carried 40 degrees round the circle, as a drag along it carries it)
+    const turn = (40 * Math.PI) / 180;
+    const moved = { ...model, atoms: model.atoms.map((a) => ({ ...a, x: c.x + (a.x - c.x) * Math.cos(turn) - (a.y - c.y) * Math.sin(turn), y: c.y + (a.x - c.x) * Math.sin(turn) + (a.y - c.y) * Math.cos(turn) })) } as Model;
+    const after = cycleThings(moved, [], style);
+    expect(thingKey(after[0])).toBe(thingKey(t));
+    expect(end(after)).toBeGreaterThan(1.3);
+  });
+
+  it("keeps an end's gap for what it was of when pasted, numbered anew", () => {
+    const c: Cycle = { id: 1, x: 0, y: 0, r: 4, ends: { "a7:lo": 1, "c3:hi": 0.25, "a99:hi": 2 } };
+    const renamed = endsRenamed(c, (id) => (id === 7 ? 107 : undefined), (id) => (id === 3 ? 13 : undefined));
+    expect(renamed.ends).toEqual({ "a107:lo": 1, "c13:hi": 0.25 });
   });
 });

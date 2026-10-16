@@ -19,7 +19,7 @@ import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
-import type { Cycle, CycleBranch } from "../../../lib/chem/cycle";
+import { GAP_MOST, type Cycle, type CycleBranch } from "../../../lib/chem/cycle";
 import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
@@ -1561,7 +1561,7 @@ export type MarkPlaces = {
   /** Writing by hand moved or carried round with the rest: each piece's strokes where they now are. */
   inks?: { id: number; strokes: InkStroke[] }[];
   /** Catalytic cycles moved, sized, carried round or turned over with the rest: where each one's middle now is, and its radius, the way it goes and its arrows in and out. */
-  cycles?: { id: number; x: number; y: number; r?: number; ccw?: true; branches?: CycleBranch[] }[];
+  cycles?: { id: number; x: number; y: number; r?: number; ccw?: true; branches?: CycleBranch[]; ends?: Record<string, number> }[];
   /** Shapes moved or carried round with the rest: where each now lies, and its tail; their words go with them. */
   shapes?: { id: number; x0: number; y0: number; x1: number; y1: number; tail?: { x: number; y: number } }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
@@ -1590,9 +1590,10 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
     const put = (c: Cycle): Cycle => {
       const p = at.get(c.id)!;
       // (the way it goes and its arrows, where they are said: a turn-over turns them)
-      const { ccw: _w, ...rest } = c;
+      const { ccw: _w, ends: _e, ...rest } = c;
       const ccw = "branches" in p || "ccw" in p ? p.ccw : c.ccw;
-      return { ...rest, x: p.x, y: p.y, r: p.r ?? c.r, ...(ccw ? { ccw } : {}), ...("branches" in p ? { branches: p.branches } : {}) };
+      const ends = "ends" in p ? p.ends : c.ends;
+      return { ...rest, x: p.x, y: p.y, r: p.r ?? c.r, ...(ccw ? { ccw } : {}), ...("branches" in p ? { branches: p.branches } : {}), ...(ends ? { ends } : {}) };
     };
     const placed = { ...doc, cycles: (doc.cycles ?? []).map((c) => (at.has(c.id) ? put(c) : c)) };
     return placeMarks(placed, { ...places, cycles: [] });
@@ -2144,19 +2145,32 @@ export function addCycle(doc: WorkspaceDocument, cycle: Omit<Cycle, "id">): Work
   return { ...doc, cycles: [...(doc.cycles ?? []), { ...cycle, id }], nextCycleId: id + 1 };
 }
 
-/** A change to a cycle: which way it goes, its arrows coming in and going out, its colour (null: none of its own). */
-export type CyclePatch = { ccw?: boolean; branches?: CycleBranch[]; color?: string | null };
+/** A change to a cycle: which way it goes, its arrows coming in and going out, its colour (null: none of its own), its arrows' gap (null: Meno's) and the gaps set by hand at their ends (`endKey`; a null, that end's taken away). */
+export type CyclePatch = { ccw?: boolean; branches?: CycleBranch[]; color?: string | null; gap?: number | null; ends?: Record<string, number | null> };
 
 /** `doc` with the cycle `id` changed as `patch` says. */
 export function updateCycle(doc: WorkspaceDocument, id: number, patch: CyclePatch): WorkspaceDocument {
   const at = (doc.cycles ?? []).findIndex((c) => c.id === id);
   if (at < 0) return doc;
-  const { ccw: _w, branches: _b, color: _c, ...rest } = doc.cycles![at];
+  const { ccw: _w, branches: _b, color: _c, gap: _g, ends: _e, ...rest } = doc.cycles![at];
   const was = doc.cycles![at];
+  const gap = patch.gap === undefined ? was.gap : patch.gap ?? undefined;
+  const ends = { ...(was.ends ?? {}) };
+  for (const [k, v] of Object.entries(patch.ends ?? {})) {
+    if (v == null || !Number.isFinite(v)) delete ends[k];
+    else ends[k] = Math.min(GAP_MOST, Math.max(0, v));
+  }
   const ccw = patch.ccw === undefined ? was.ccw : patch.ccw || undefined;
   const branches = patch.branches === undefined ? was.branches : patch.branches.length ? patch.branches : undefined;
   const color = patch.color === undefined ? was.color : patch.color ?? undefined;
-  const next: Cycle = { ...rest, ...(ccw ? { ccw: true as const } : {}), ...(branches ? { branches } : {}), ...(color ? { color } : {}) };
+  const next: Cycle = {
+    ...rest,
+    ...(ccw ? { ccw: true as const } : {}),
+    ...(branches ? { branches } : {}),
+    ...(color ? { color } : {}),
+    ...(gap != null && Number.isFinite(gap) ? { gap: Math.min(GAP_MOST, Math.max(0, gap)) } : {}),
+    ...(Object.keys(ends).length ? { ends } : {}),
+  };
   return { ...doc, cycles: doc.cycles!.map((c, i) => (i === at ? next : c)) };
 }
 

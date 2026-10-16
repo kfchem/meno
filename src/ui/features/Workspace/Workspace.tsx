@@ -168,7 +168,7 @@ import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
 import { cyclePointed, turnCycle } from "./utils/cycles";
-import { branchPath, CYCLE_RADIUS } from "../../../lib/chem/cycle";
+import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
 import { useTextMenu } from "../TextEditor/textMenu";
@@ -1934,6 +1934,8 @@ function WorkspaceContent({
               ...(near >= 0 ? { onRemoveArrow: () => st.updateCycle(cy.id, { branches: branches.filter((_, i) => i !== near) }) } : {}),
               ccw: !!cy.ccw,
               onTurn: () => turnCycle(store, cy.id),
+              gap: cy.gap ?? CYCLE_MARGIN,
+              setGap: (gap: number) => st.updateCycle(cy.id, { gap }),
             };
           })()}
           shape={(() => {

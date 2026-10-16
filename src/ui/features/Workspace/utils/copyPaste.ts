@@ -476,6 +476,8 @@ function readCycle(raw: unknown): Cycle | null {
     ...(c.ccw === true ? { ccw: true as const } : {}),
     ...(branches.length ? { branches: branches.map((b) => ({ at: b.at, way: b.way })) } : {}),
     ...(typeof c.color === "string" && /^#[0-9a-f]{6}$/i.test(c.color) ? { color: c.color } : {}),
+    ...(isNum(c.gap) && c.gap >= 0 ? { gap: c.gap } : {}),
+    ...(isEntry(c.ends) && Object.values(c.ends as object).every(isNum) ? { ends: { ...(c.ends as Record<string, number>) } } : {}),
   };
 }
 

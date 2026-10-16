@@ -13,6 +13,7 @@ import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
 import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
+import { endsRenamed } from "../../utils/cycles";
 import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
@@ -516,10 +517,16 @@ export const createModelSlice = (
     // 3D pasted with its drawing is tied to the pasted drawing - and a
     // workflow's parts numbered on from its counter, wired as they were)
     const idOf = new Map(next.atoms.map((a, k) => [a.id, start + k]));
-    const tied = { ...next, molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))) };
+    // (and a cycle's gaps set by hand kept for what they were of, numbered anew)
+    const wordsOf = new Map(words.map((w, k) => [w.id, startCaption + k]));
+    const tied = {
+      ...next,
+      molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))),
+      ...(cycles.length ? { cycles: cycles.map((c) => endsRenamed(c, (id) => idOf.get(id), (id) => wordsOf.get(id))) } : {}),
+    };
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
     const pasted = doc.edit("paste", (d) => {
-      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length || cycles.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
+      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length || cycles.length ? ops.withImportedScheme(d, ops.schemeOf(tied)) : d;
       const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
       const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);
       const withSlides = inks.reduce((doc2, { id: _, ...k }) => ops.addInk(doc2, k), slides.reduce((doc2, { id: _, ...s }) => ops.addSlide(doc2, s), withPdfs));
