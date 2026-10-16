@@ -157,12 +157,29 @@ fn screens(w: &WebviewWindow) -> Vec<Screen> {
     out
 }
 
+/// One side asked for as `want`, got as `got`: asked again as far from `want` the other way, so that it comes to `want`.
+fn corrected(want: u32, got: u32) -> u32 {
+    (2 * i64::from(want) - i64::from(got)).clamp(1, i64::from(u32::MAX)) as u32
+}
+
+/// An inner size set as `want`, read back, and set again corrected - once - where it came to another.
+fn sized(want: (u32, u32), mut set: impl FnMut((u32, u32)), get: impl Fn() -> Option<(u32, u32)>) {
+    set(want);
+    if let Some(got) = get() {
+        if got != want {
+            set((corrected(want.0, got.0), corrected(want.1, got.1)));
+        }
+    }
+}
+
 /// The window put where it was left, then shown: before it is first seen, so that it does not appear and move.
 pub fn restore(w: &WebviewWindow, data: Option<&Path>) {
     let saved = data.and_then(load);
     match saved.as_ref().map(|s| (place(s, &screens(w)), s)) {
         Some((Placement::At(r), s)) => {
-            let _ = w.set_size(tauri::PhysicalSize::new(r.w as u32, r.h as u32));
+            // (its inner size as `inner_size` reads it, whatever offset the platform has between
+            // what `set_size` is given and what it makes: read back, and corrected once)
+            sized((r.w as u32, r.h as u32), |(x, y)| { let _ = w.set_size(tauri::PhysicalSize::new(x, y)); }, || w.inner_size().ok().map(|s| (s.width, s.height)));
             let _ = w.set_position(tauri::PhysicalPosition::new(r.x, r.y));
             // (on Windows a window maximized while hidden loses the frame it goes back to,
             // and unmaximized lands at the system's own place: it is shown at its frame first,
@@ -266,6 +283,22 @@ mod tests {
     impl Fake {
         fn outer(&self) -> (u32, u32) {
             (self.inner.0 + self.frame.0, self.inner.1 + self.frame.1)
+        }
+    }
+
+    #[test]
+    fn a_size_set_comes_to_what_was_kept_whatever_offset_the_platform_has() {
+        use std::cell::Cell;
+        for offset in [(0u32, 0u32), (0, 30), (16, 39), (24, 64)] {
+            let inner = Cell::new((1u32, 1u32));
+            // (a window whose `set_size` makes an inner size larger by a fixed offset)
+            let set = |s: (u32, u32)| inner.set((s.0 + offset.0, s.1 + offset.1));
+            let mut kept = (1700u32, 1150u32);
+            for _ in 0..3 {
+                sized(kept, &set, || Some(inner.get()));
+                assert_eq!(inner.get(), kept, "{offset:?}");
+                kept = inner.get();
+            }
         }
     }
 
