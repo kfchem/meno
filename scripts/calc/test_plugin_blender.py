@@ -69,9 +69,15 @@ class Prepare(unittest.TestCase):
 
     def test_declares_the_looks_it_makes(self):
         m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
-        looks = m["roles"][0]["looks"]
+        decls = m["roles"][0]["looks"]
+        looks = [l["id"] for l in decls]
+        # (each declared in full: a label, a description, and parts or "own"; the canvas's look is Meno's, not declared)
+        self.assertNotIn("meno", looks)
+        self.assertEqual(len(set(looks)), len(looks))
+        for l in decls:
+            self.assertTrue(l["label"] and l["description"], l["id"])
+            self.assertTrue(l.get("own") or l.get("parts"), l["id"])
         self.assertIn("cartoon", looks)
-        self.assertIn("meno", looks)
         for own in ("gold", "silver", "copper", "bubble", "wood", "marble", "clay", "porcelain", "slime", "ice", "neon", "xray", "fur"):
             self.assertIn(own, looks)
             self.assertIn(own, worker.LOOKS)

@@ -424,7 +424,35 @@ export function presetById(id: string | undefined): StylePreset {
 export type StyleChoice = {
   preset: string;
   changes: Partial<DrawingStyle>;
+  /**
+   * The user's own style it is made from, where it is one (`OwnStyle2D`,
+   * from their styles in Settings): its name and the whole of it, carried,
+   * so that a workspace drawn in it opens the same where that style is not.
+   */
+  own?: { name: string; style: DrawingStyle };
 };
+
+/** A style of the user's own: saved from a workspace's, or duplicated from another, and named - kept in the app's settings. */
+export type OwnStyle2D = { id: string; name: string; style: DrawingStyle };
+
+/** What a choice is made from: the user's own style it carries, or a built-in preset. */
+export function baseOf(choice: StyleChoice): { name: string; style: DrawingStyle } {
+  return choice.own ?? presetById(choice.preset);
+}
+
+/** Whether a preset's id is one of the user's own styles'. */
+export function isOwnStyleId(id: string): boolean {
+  return /^own-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id);
+}
+
+/**
+ * An id for a style of the user's own: "own-" and a random UUID, so that
+ * one made on another computer - carried by a workspace from there - is
+ * never taken for one made here.
+ */
+export function newOwnStyleId(): string {
+  return `own-${globalThis.crypto.randomUUID()}`;
+}
 
 export const DEFAULT_STYLE_CHOICE: StyleChoice = {
   preset: STYLE_PRESETS[0].id,
@@ -433,7 +461,7 @@ export const DEFAULT_STYLE_CHOICE: StyleChoice = {
 
 /** The style a choice comes to. */
 export function styleOf(choice: StyleChoice): DrawingStyle {
-  return resolveStyle(presetById(choice.preset).style, choice.changes);
+  return resolveStyle(baseOf(choice).style, choice.changes);
 }
 
 /** A wedge's broad end: as set, or one and a half bold thicknesses. */

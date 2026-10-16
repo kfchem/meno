@@ -9,7 +9,8 @@
  * under it and are the chemist's to change for the one render.
  */
 import type { Option, OptionValues } from "../../../../lib/options";
-import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, SurfaceMaterial } from "./renderScene";
+import type { LookDecl } from "../../../../lib/plugins/manifest";
+import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, Sticks, SurfaceMaterial } from "./renderScene";
 
 /** What a render is: a picture, or a film. */
 export type Kind = RenderAsk["kind"];
@@ -43,6 +44,10 @@ const SHADINGS: { value: Shading; label: string }[] = [
   { value: "lit", label: "Lit: light and shadow as a renderer finds them" },
   { value: "toon", label: "Toon: one lit band and one in shade" },
 ];
+const STICKS: { value: Sticks; label: string }[] = [
+  { value: "shown", label: "Shown, running on" },
+  { value: "stopped", label: "Stopped at the surface" },
+];
 const OUTLINES: { value: Outlines; label: string }[] = [
   { value: "none", label: "None" },
   { value: "thin", label: "Thin, on every line" },
@@ -56,59 +61,54 @@ const OUTLINE_COLOURS = [
 ];
 
 /** What a look is made of: each of its parts. */
-export type LookParts = { molecules: MoleculeMaterial; surfaces: SurfaceMaterial; shading: Shading; outlines: Outlines; outline: number; outline_colour: "black" | "white" | "grey"; band: number };
+export type LookParts = { molecules: MoleculeMaterial; surfaces: SurfaceMaterial; shading: Shading; outlines: Outlines; outline: number; outline_colour: "black" | "white" | "grey"; band: number; sticks: Sticks };
 
-const PLAIN = { shading: "lit" as const, outlines: "none" as const, outline: 3, outline_colour: "black" as const, band: 0.5 };
+const PLAIN: LookParts = { molecules: "meno", surfaces: "meno", shading: "lit", outlines: "none", outline: 3, outline_colour: "black", band: 0.5, sticks: "shown" };
 
 /**
- * The looks Meno knows, in the order they are offered: each a bundle of
- * what the molecules and the surfaces are made of, how it is shaded and how
- * outlined. A renderer's plugin says which of them it can make
- * (`looks` in its manifest, docs/PLUGINS.md); one none can is not offered.
+ * The one look Meno has of its own: the scene as the canvas draws it, which every renderer is asked to make. Every other look is
+ * declared by the plugin that makes it (`looks` of its role in its manifest, docs/PLUGINS.md): Meno keeps no list of them.
  */
-export const LOOKS: readonly { id: string; label: string; parts: LookParts }[] = [
-  { id: "meno", label: "As the canvas draws them", parts: { ...PLAIN, molecules: "meno", surfaces: "meno" } },
-  { id: "glossy", label: "Glossy", parts: { ...PLAIN, molecules: "glossy", surfaces: "glossy" } },
-  { id: "matte", label: "Matte", parts: { ...PLAIN, molecules: "matte", surfaces: "matte" } },
-  { id: "clay", label: "Clay", parts: { ...PLAIN, molecules: "clay", surfaces: "matte" } },
-  { id: "glass", label: "Glass", parts: { ...PLAIN, molecules: "glass", surfaces: "glass" } },
-  { id: "metal", label: "Metal", parts: { ...PLAIN, molecules: "metal", surfaces: "glossy" } },
-  { id: "cartoon", label: "Cartoon: one lit band, outlined", parts: { ...PLAIN, molecules: "meno", surfaces: "meno", shading: "toon", outlines: "mixed" } },
-  { id: "lineart", label: "Line art: white fill, outlined", parts: { ...PLAIN, molecules: "white", surfaces: "matte", shading: "toon", outlines: "mixed", band: 1 } },
-  // (looks a renderer makes with materials of its own, in light of its own: the molecules keep the element colours the renderer reads)
-  ...(
-    [
-      ["gold", "Gold: polished metal"],
-      ["silver", "Silver: mirror or satin"],
-      ["copper", "Copper: brushed or tarnished"],
-      ["bubble", "Soap bubble: clear, with thin-film colour"],
-      ["wood", "Wood: varnished, in a species"],
-      ["marble", "Marble: polished white stone, veined"],
-      ["porcelain", "Porcelain: glazed blue-white"],
-      ["slime", "Slime: see-through jelly"],
-      ["ice", "Ice: cold, clear glass"],
-      ["neon", "Neon: lit tubes"],
-      ["xray", "X-ray: layers that add up"],
-      ["fur", "Fur: long, or short and dense as velvet"],
-    ] as const
-  ).map(([id, label]) => ({ id, label, parts: { ...PLAIN, molecules: "meno" as const, surfaces: "meno" as const } })),
-];
+export const CANVAS_LOOK: LookDecl = { id: "meno", label: "As the canvas draws them" };
 
-/** The ids of the looks Meno knows. */
-export const LOOK_IDS: readonly string[] = LOOKS.map((l) => l.id);
+/** What a declared look fills in: its parts over the plain ones. */
+export function partsOf(look: LookDecl): LookParts {
+  return { ...PLAIN, ...(look.parts as Partial<LookParts> | undefined) };
+}
 
-/** The choices of a look: each fills in its parts. `only`: the looks a renderer can make; all, where it is none. */
-function lookChoices(only?: readonly string[]) {
-  return LOOKS.filter((l) => !only || only.includes(l.id)).map((l) => ({ value: l.id, label: l.label, sets: { ...l.parts } as Record<string, string | number | boolean> }));
+/**
+ * The looks the card offers: the canvas's, then those the renderer declares, in the order it declares them - a look declared
+ * twice once. `declared`: the render plugins' looks; none, only the canvas's.
+ */
+export function looksOffered(declared?: readonly LookDecl[]): readonly LookDecl[] {
+  const seen = new Set([CANVAS_LOOK.id]);
+  const out: LookDecl[] = [CANVAS_LOOK];
+  for (const l of declared ?? []) {
+    if (seen.has(l.id)) continue;
+    seen.add(l.id);
+    out.push(l);
+  }
+  return out;
+}
+
+/** The choices of a look: each fills in its parts. */
+function lookChoices(looks: readonly LookDecl[]) {
+  return looks.map((l) => ({
+    value: l.id,
+    label: l.label,
+    sets: { ...partsOf(l) } as Record<string, string | number | boolean>,
+  }));
 }
 
 /**
  * Render's own choices, Meno's whoever renders: a picture's or a film's size and shape, a film's motion, length and rate, its look
  * - and, folded under it, the parts the look is made of. `looks`: those the renderer can make; none given, all.
  */
-export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: boolean, looks?: readonly string[]): Option[] {
+export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: boolean, declared?: readonly LookDecl[]): Option[] {
   const film = kind === "film";
-  const choices = lookChoices(looks);
+  const offered = looksOffered(declared);
+  const choices = lookChoices(offered);
+  const seeThrough = offered.filter((l) => l.seeThrough).map((l) => l.id);
   const adjust = "Adjust this look";
   return [
     ...(film && motions.length
@@ -125,6 +125,7 @@ export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: 
     { id: "look", label: "Look", type: "choice", choices, default: choices[0]?.value ?? "meno" },
     { id: "molecules", label: "Molecules made of", type: "choice", choices: MOLECULES, default: "meno", group: adjust },
     ...(surfaces ? [{ id: "surfaces", label: "Surfaces made of", type: "choice" as const, choices: SURFACES, default: "meno", group: adjust }] : []),
+    ...(seeThrough.length ? [{ id: "sticks", label: "Sticks inside the balls", type: "choice" as const, choices: STICKS, default: "shown", group: adjust, when: { id: "look", in: seeThrough } }] : []),
     { id: "shading", label: "Shading", type: "choice", choices: SHADINGS, default: "lit", group: adjust },
     { id: "band", label: "Size of the lit band", type: "number", default: 0.5, min: 0.05, max: 1, step: 0.05, group: adjust, when: { id: "shading", in: ["toon"] } },
     { id: "outlines", label: "Outlines", type: "choice", choices: OUTLINES, default: "none", group: adjust },
@@ -142,6 +143,7 @@ export function finishOf(v: OptionValues): Finish {
     outline: Number(v.outline ?? 3),
     outlineColour: (v.outline_colour as Finish["outlineColour"]) ?? "black",
     band: Number(v.band ?? 0.5),
+    sticks: v.sticks === "stopped" ? "stopped" : "shown",
   };
 }
 

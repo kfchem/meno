@@ -5,9 +5,9 @@ import {
 import clsx from "clsx";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
+  baseOf,
   inPoints,
   presetById,
-  STYLE_PRESETS,
   styleOf,
   type DrawingStyle,
   type Length,
@@ -15,12 +15,19 @@ import {
 } from "../../../lib/chem/style";
 import {
   automaticValue,
+  drawingStyleNameTaken,
+  freshDrawingStyleName,
+  OWN_NAME_MOST,
+  ownChoice,
   STYLE_FIELDS,
   STYLE_GROUPS,
+  withOwnRenamed2d,
+  withOwnStyle2d,
   withSetting,
   type ShareOf,
   type StyleField,
 } from "../../../lib/chem/styleFields";
+import { useAppSettings } from "../../../lib/settings/appSettings";
 import {
   arrowSampleSvg,
   SAMPLE_BONDS,
@@ -29,6 +36,9 @@ import {
 } from "../../../lib/chem/styleSamples";
 import { useTypefaces } from "../../fonts/typefaces";
 import { useAtLeastWide } from "./sideBySide";
+import CardMenu from "./CardMenu";
+import { exportStyles } from "./exportStyle";
+import { chosenCard, presetCards } from "./styleMenus";
 import TypefacePicker from "./TypefacePicker";
 
 /**
@@ -83,9 +93,9 @@ export default function StyleEditor({
         </label>
         {changedCount > 0 && (
           <button
-            onClick={() => onChange({ preset: choice.preset, changes: {} })}
+            onClick={() => onChange({ ...choice, changes: {} })}
             className="h-8 px-3 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base whitespace-nowrap"
-            title={`Take all ${changedCount} changes back to ${presetById(choice.preset).name}`}
+            title={`Take all ${changedCount} changes back to ${baseOf(choice).name}`}
           >
             Reset all ({changedCount})
           </button>
@@ -180,6 +190,15 @@ const groupId = (g: string) =>
 
 // --- Presets -------------------------------------------------------------------
 
+
+/**
+ * The styles to pick from: the built-in presets, the user's own (their
+ * styles in Settings, in every workspace) and - where the workspace is drawn
+ * in an own style this computer does not have - that one, as the workspace
+ * carries it. A right-click on one duplicates it into the user's own, and
+ * renames or deletes one of theirs; Save as style keeps the style as it is
+ * set as one of theirs.
+ */
 function PresetPicker({
   choice,
   onChange,
@@ -187,43 +206,151 @@ function PresetPicker({
   choice: StyleChoice;
   onChange: StyleEditorProps["onChange"];
 }) {
+  const own = useAppSettings((s) => s.ownDrawingStyles);
+  const setOwn = useAppSettings((s) => s.setOwnDrawingStyles);
+  const cards = presetCards(own, choice);
+  const chosen = chosenCard(own, choice);
+  const card = (key: string) => cards.find((c) => c.key === key);
+  // (a card's choice: a built-in preset's by its id; an own style's carrying it whole)
+  const choiceOf = (key: string): StyleChoice => {
+    const c = card(key);
+    return !c || c.whose === "built" ? { preset: key, changes: {} } : { preset: c.id, changes: {}, own: { name: c.name, style: c.style } };
+  };
   // Picking another preset with changes made asks what to do with them.
   const [asking, setAsking] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number; byKey: boolean } | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
   const changes = Object.keys(choice.changes).length;
-  const pick = (id: string) => {
-    if (id === choice.preset) return;
-    if (changes > 0) setAsking(id);
-    else onChange({ preset: id, changes: {} });
+  const pick = (key: string) => {
+    if (key === chosen) return;
+    if (changes > 0) setAsking(key);
+    else onChange(choiceOf(key));
+  };
+  const nameOf = (key: string) => card(key)?.name ?? presetById(key).name;
+  const save = (name: string) => {
+    const made = withOwnStyle2d(own, name, styleOf(choice));
+    setOwn(made.own);
+    onChange(ownChoice(made.own.find((o) => o.id === made.id)!));
   };
   return (
     <div>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2">
-        {STYLE_PRESETS.map((p) => {
-          const on = p.id === choice.preset;
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(9.5rem,1fr))] gap-2" role="radiogroup" aria-label="Styles">
+        {cards.map((p) => {
+          const on = p.key === chosen;
           return (
-            <button
-              key={p.id}
-              onClick={() => pick(p.id)}
-              aria-pressed={on}
-              title={p.description}
+            <div
+              key={p.key}
+              role="radio"
+              aria-checked={on}
+              tabIndex={0}
+              onClick={() => pick(p.key)}
+              onKeyDown={(e) => {
+                if (renaming === p.key) return;
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  pick(p.key);
+                } else if (e.key === "ContextMenu" || (e.key === "F10" && e.shiftKey)) {
+                  e.preventDefault();
+                  const b = e.currentTarget.getBoundingClientRect();
+                  setMenu({ id: p.key, x: b.left + 12, y: b.bottom - 8, byKey: true });
+                }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setMenu({ id: p.key, x: e.clientX, y: e.clientY, byKey: false });
+              }}
+              title={p.description || undefined}
               className={clsx(
-                "text-left rounded-lg border px-3 py-2 transition-colors",
+                "text-left rounded-lg border px-3 py-2 transition-colors cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-accel-base",
                 on
                   ? "border-accel-base bg-accel-lightbase/40 ring-1 ring-accel-base"
                   : "border-gh-line bg-white hover:bg-gh-base",
               )}
             >
-              <div className="text-sm font-medium text-gh-black">{p.name}</div>
+              {renaming === p.key ? (
+                <NameField
+                  name={p.name}
+                  taken={(n) => drawingStyleNameTaken(own, n, p.id)}
+                  onDone={(n) => {
+                    setRenaming(null);
+                    if (n != null) {
+                      const next = withOwnRenamed2d(own, p.id, n);
+                      setOwn(next);
+                      // (the workspace's carried copy takes the name too - where it is this card's, as it is)
+                      if (chosen === p.key && choice.own) onChange({ ...choice, own: { name: next.find((o) => o.id === p.id)!.name, style: choice.own.style } });
+                    }
+                  }}
+                />
+              ) : (
+                <div className="text-sm font-medium text-gh-black truncate">{p.name}</div>
+              )}
               <div className="text-[11px] leading-snug text-gh-gray line-clamp-2">
-                {p.description}
+                {p.whose === "built" ? p.description : p.whose === "own" ? "Your own" : "In this workspace"}
               </div>
               <div className="mt-1 text-[11px] text-gh-black/70 tabular-nums">
                 {summary(p.style)}
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
+      <div className="mt-2 flex items-center gap-2">
+        {saving ? (
+          <div className="flex items-center gap-2 text-xs text-gh-gray">
+            Save as
+            <NameField
+              name={freshDrawingStyleName(own, `${nameOf(chosen)} copy`)}
+              taken={(n) => drawingStyleNameTaken(own, n)}
+              onDone={(n) => {
+                setSaving(false);
+                if (n != null) save(n);
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            onClick={() => setSaving(true)}
+            className="h-7 px-2.5 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base"
+            title="Keep this style, as it is set, as one of your own, offered in every workspace"
+          >
+            Save as style…
+          </button>
+        )}
+      </div>
+      {problem && <p className="mt-2 text-xs text-red-700">{problem}</p>}
+      {menu && (
+        <CardMenu
+          at={menu}
+          label="Style"
+          onClose={() => setMenu(null)}
+          items={[
+            {
+              name: "Duplicate",
+              run: () => {
+                const c = card(menu.id)!;
+                setOwn(withOwnStyle2d(own, `${c.name} copy`, c.style).own);
+              },
+            },
+            {
+              name: "Export style…",
+              run: () => {
+                const c = card(menu.id)!;
+                exportStyles({ drawing: [{ name: c.name, style: c.style }], molecules3d: [] }).catch((e) =>
+                  setProblem(`The style could not be exported: ${e instanceof Error ? e.message : String(e)}`),
+                );
+              },
+            },
+            ...(card(menu.id)?.whose === "own"
+              ? [
+                  { name: "Rename", run: () => setRenaming(menu.id) },
+                  { name: "Delete", run: () => setOwn(own.filter((o) => o.id !== menu.id)) },
+                ]
+              : []),
+          ]}
+        />
+      )}
       {asking && (
         <div
           role="alertdialog"
@@ -231,12 +358,12 @@ function PresetPicker({
         >
           <span className="flex-1 min-w-[12rem] text-gh-black">
             {changes === 1 ? "One setting is" : `${changes} settings are`}{" "}
-            changed from {presetById(choice.preset).name}. Keep{" "}
-            {changes === 1 ? "it" : "them"} on {presetById(asking).name}?
+            changed from {nameOf(chosen)}. Keep{" "}
+            {changes === 1 ? "it" : "them"} on {nameOf(asking)}?
           </span>
           <button
             onClick={() => {
-              onChange({ preset: asking, changes: choice.changes });
+              onChange({ ...choiceOf(asking), changes: choice.changes });
               setAsking(null);
             }}
             className="h-7 px-2.5 rounded-md border border-gh-line bg-white text-xs hover:bg-gray-100"
@@ -245,12 +372,12 @@ function PresetPicker({
           </button>
           <button
             onClick={() => {
-              onChange({ preset: asking, changes: {} });
+              onChange(choiceOf(asking));
               setAsking(null);
             }}
             className="h-7 px-2.5 rounded-md bg-accel-base text-white text-xs hover:opacity-90"
           >
-            Use {presetById(asking).name} as it is
+            Use {nameOf(asking)} as it is
           </button>
           <button
             onClick={() => setAsking(null)}
@@ -261,6 +388,33 @@ function PresetPicker({
         </div>
       )}
     </div>
+  );
+}
+
+/** A style's name, being typed: Enter keeps it, Escape the old one; an empty name, or another style's, is said and not kept. */
+function NameField({ name, taken, onDone }: { name: string; taken: (name: string) => boolean; onDone: (name: string | null) => void }) {
+  const [text, setText] = useState(name);
+  const n = text.trim();
+  const wrong = !n ? "A style needs a name." : taken(n) ? "Another style has this name." : null;
+  return (
+    <input
+      autoFocus
+      value={text}
+      maxLength={OWN_NAME_MOST}
+      aria-label="Style name"
+      aria-invalid={!!wrong}
+      title={wrong ?? undefined}
+      onFocus={(e) => e.currentTarget.select()}
+      onClick={(e) => e.stopPropagation()}
+      onChange={(e) => setText(e.target.value)}
+      onKeyDown={(e) => {
+        e.stopPropagation();
+        if (e.key === "Enter" && !wrong) onDone(n);
+        else if (e.key === "Escape") onDone(null);
+      }}
+      onBlur={() => onDone(wrong ? null : n)}
+      className={clsx("h-7 rounded-md border bg-white px-2 text-sm font-medium text-gh-black outline-none", wrong ? "border-red-500" : "border-accel-base")}
+    />
   );
 }
 
@@ -400,7 +554,7 @@ function FieldRow({
   stacked: boolean;
 }) {
   const key = field.key;
-  const preset = presetById(choice.preset);
+  const preset = baseOf(choice);
   return (
     <SettingRow
       field={field}

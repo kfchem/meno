@@ -88,6 +88,13 @@ export function tilesOf(w: number, h: number, most: number): { x: number; y: num
  * 300 dpi, 300 / 96); what lies further
  * back fades toward white, the page's colour, as on the canvas.
  */
+/** A renderer as a picture is drawn with: its own context, its drawing kept to be read. */
+export function pictureRenderer(): THREE.WebGLRenderer {
+  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
+  watchShaderErrors(renderer);
+  return renderer;
+}
+
 export function rendered3d(
   ms: readonly Carried3D[],
   style: Style3D,
@@ -95,6 +102,9 @@ export function rendered3d(
   eyeHeight?: number,
   tile = TILE,
   cssPx = 1,
+  // (a renderer to draw with, kept by whoever gives it - many small pictures one after another, say: each a context of
+  // its own, the browser takes the oldest live ones away; else one made for this picture and let go after it)
+  using?: THREE.WebGLRenderer,
 ): { canvas: HTMLCanvasElement; bounds: Bounds } | null {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
@@ -118,8 +128,7 @@ export function rendered3d(
 
   let renderer: THREE.WebGLRenderer;
   try {
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
-    watchShaderErrors(renderer);
+    renderer = using ?? pictureRenderer();
   } catch {
     return null;
   }
@@ -185,7 +194,7 @@ export function rendered3d(
       // its bonds - those the frame shown has, where they go frame by frame -
       // their hollows shaded as the canvas shades them
       const bonds = drawn.atoms !== "space" ? bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]) : [];
-      const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look]);
+      const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one");
       const occlusion = drawn.occlusion > 0 ? occlusionNow(places, radii, packLines(lines)) : null;
       const finish = { roughness: drawn.roughness, metalness: drawn.metalness };
       const ball = new THREE.SphereGeometry(1, segments, segments / 2);
@@ -413,8 +422,10 @@ export function rendered3d(
     surfaceMat.dispose();
     colouredMat.dispose();
     for (const mat of ribbonMats) mat.dispose();
-    renderer.dispose();
-    renderer.forceContextLoss();
+    if (!using) {
+      renderer.dispose();
+      renderer.forceContextLoss();
+    }
   }
   return { canvas: out, bounds };
 }
