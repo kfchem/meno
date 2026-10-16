@@ -938,6 +938,71 @@ molecules in 3D.
   start; a paste across styles; bodies in 3D kept together; page objects
   exporting at the same size.
 
+## Magnified display
+
+Planned on 2026-10-16 (agreed by the maintainer on 2026-10-14 as a special
+state, for 2D and 3D alike; the command centre's defaults). Not built yet:
+this section is the plan, to be checked with the maintainer first.
+
+**What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
+or smaller than it is - 100 % being its true size - without changing the
+workspace's one style underneath. It brings back a bigger and a smaller
+structure on one slide without mixing styles: the workspace's style still
+says how long a bond is; the magnification says only how large this one
+object is shown.
+
+- **A display transform, per object.** It is held on the object, never in
+  the style and never in k (the style change's factor, *Drawing style*):
+  - a structure in 2D - every atom of it - carries `shown: { k, about }`,
+    the factor and the point on the page it is shown about; what is drawn
+    is `about + (p - about) * k` for every point p of it, as laid out in
+    the workspace's style. Lines, labels, wedges, marks and the gaps
+    between them all scale together, as a zoomed copy of it would;
+  - a molecule in 3D carries `shown: k`, applied after `solidOf`, about the
+    molecule's own place: it is shown k times as large and stands k times
+    as high. Its ångströms stay true - measurements, writers, the rise and
+    Fit's units are untouched.
+  Each kept with the object, in the workspace's file and in a copy.
+- **Edited through the transform.** A press on a magnified structure is
+  taken back through its transform to where it is in the drawing, and what
+  is drawn there - an atom, a bond, a chain - is drawn at the workspace's
+  bond length, so shown k times as long, as the rest of it. A drag moves it
+  and its `about` together, so it moves under the pointer. A new atom
+  drawn from it takes its magnification. Joined to another structure,
+  the one drawn from keeps its magnification, and the other takes it (its
+  change eased). Split, each part keeps it. A stack's records share it.
+- **What the page knows of it is what is shown**: hover, the selection's
+  frame and handle, Fit, free places for what is opened or pasted, guides
+  and snapping, a set round it, a slide over it - each from its shown box.
+- **Exports follow what is shown**: pictures (PNG, SVG, the Office picture
+  and its EMF), copies as pictures, a talk, a render *as the canvas draws
+  it*. A structure file (MOL, SD, RXN, PDB, a plugin's writer) holds the
+  structure as it is, at true size: magnification is not chemistry.
+- **A style change keeps each object's magnification**: it is converted as
+  the page is, its `about` moving with its structure, its k as it was.
+- **Rising into 3D**, a magnified drawing's structure is made at its
+  magnification, so it rises at the size it is shown.
+- **No jumps** (*No abrupt changes*): a change of magnification is one step
+  to undo, and what is shown goes over to it eased, about `about`.
+
+**How it is set (proposed).**
+- In the right-click menu of a structure, a molecule in 3D, or a selection
+  holding some: *Magnification*, offering 50 %, 75 %, 125 %, 150 %, 200 %
+  and 300 %, and *Back to 100 %* where it is not at 100 %. A selection's
+  objects each take it, about their own centres.
+- While one is not at 100 %, a small mark beside it - *150 %* - shows on
+  hover and while it is selected; a press on it opens the same choices,
+  and a drag along it sets the magnification freely, 25 % to 400 %, eased
+  as it goes, one step to undo when let go.
+
+**Built in one pull request, in two stages**: first molecules in 3D (the
+transform after `solidOf`, the page's boxes, the menu and the mark, export),
+then structures in 2D (a magnified structure drawn by the same layers in a
+group scaled about its `about`, presses taken back through it, the page's
+boxes, export). Tests at each: the transform and its inverse, editing
+through it at the workspace's bond length, a style change keeping k, true
+size in structure files, the shown size in pictures, undo.
+
 ## Styles in 3D
 
 Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
