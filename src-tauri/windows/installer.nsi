@@ -16,8 +16,9 @@
 ; - Meno running is asked about before the window shows (MenoInstFilesPre),
 ;   and installing stopped part way is said and the installer quits
 ;   (MenoInstFilesLeave), as the window has no button to close it;
-; - the installing page is restyled (MenoGuiInit, MenoInstFilesShow), and
-;   Meno is started at the end (.onInstSuccess).
+; - the installing page is restyled (MenoGuiInit, MenoInstFilesShow) and
+;   shown only once it is drawn (MenoReveal), and Meno is started at the end
+;   (.onInstSuccess).
 ; Quiet installs (/S, as an update runs it: /S /UPDATE, with /R and /ARGS to
 ; start Meno again) show nothing and do what they did. The uninstaller is
 ; Tauri's, unchanged: its confirmation page asks whether to delete Meno's
@@ -340,6 +341,9 @@ FunctionEnd
 
 
 Section EarlyChecks
+  ; Meno: the window shown, now that it is drawn
+  Call MenoReveal
+
   ; Abort silent installer if downgrades is disabled
   !if "${ALLOWDOWNGRADES}" == "false"
   ${If} ${Silent}
@@ -796,6 +800,9 @@ Function MenoGuiInit
   ; DWMWA_WINDOW_CORNER_PREFERENCE 33 = DWMWCP_ROUND 2). Earlier Windows
   ; ignore it, and the window is square.
   System::Call "dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 33, *i 2, i 4)"
+  ; And kept off the screen (cloaked: DWMWA_CLOAK 13) until it is drawn
+  ; whole, wordmark and all, so its first frame there is whole (MenoReveal).
+  System::Call "dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 13, *i 1, i 4)"
 
   ; Every control of the outer window hidden (buttons, header, branding,
   ; lines), the page's place (1018) made the whole window, and white.
@@ -926,6 +933,33 @@ Function MenoInstFilesShow
   SetCtlColors $2 "" FFFFFF
   !insertmacro MenoPlace $2 0 40 440 38
   LoadAndSetImage /STRINGID $2 0 0x10 "$PLUGINSDIR\meno-logo.bmp"
+FunctionEnd
+
+Function MenoReveal
+  ; The window, cloaked since MenoGuiInit, shown once it is drawn. Called
+  ; first in the first section, which runs in a thread of its own once the
+  ; page is made: the window is waited for to be shown (up to a second), its
+  ; drawing done now (RedrawWindow: RDW_INVALIDATE 0x1 | RDW_ERASE 0x4 |
+  ; RDW_ALLCHILDREN 0x80 | RDW_UPDATENOW 0x100) and composed (DwmFlush), and
+  ; only then is it uncloaked. Quiet installs have no window.
+  ${If} ${Silent}
+    Return
+  ${EndIf}
+  Push $0
+  Push $1
+  StrCpy $1 0
+  ${Do}
+    System::Call "user32::IsWindowVisible(p $HWNDPARENT) i .r0"
+    ${IfThen} $0 <> 0 ${|} ${ExitDo} ${|}
+    ${IfThen} $1 >= 100 ${|} ${ExitDo} ${|}
+    Sleep 10
+    IntOp $1 $1 + 1
+  ${Loop}
+  System::Call "user32::RedrawWindow(p $HWNDPARENT, p 0, p 0, i 0x185)"
+  System::Call "dwmapi::DwmFlush()"
+  System::Call "dwmapi::DwmSetWindowAttribute(p $HWNDPARENT, i 13, *i 0, i 4)"
+  Pop $1
+  Pop $0
 FunctionEnd
 
 Function un.SkipIfPassive
