@@ -453,8 +453,15 @@ again. No Meno process waits on a cluster.
 - it is where a program physically runs. For this computer it is set in
   Meno's Settings, Meno's own folder by default; a cluster runner has its
   own setting for its machine;
-- its folders have readable names (workspace, step, entry), not bare IDs,
-  and *Open the folder* is on a step's and an entry's menu;
+- its folders' names are path-safe: ASCII letters, digits and hyphens
+  only, from the workspace's, step's and entry's names with a short id
+  (`binol-opt-3f9a`). A workspace or step named with spaces or Japanese
+  is a known risk in a path: the Mac was checked safe on 2026-10-14 only
+  with job folders named by ASCII ids, and Windows never was. The
+  readable names are for display only: in the folder list, and on *Open
+  the folder*, which is on a step's and an entry's menu;
+- a program still runs with its job folder as its working directory and
+  is given its files by bare name, as today;
 - once a job has ended and its files are saved in the `.meno`, its scratch
   is cleaned on its own, unless *Keep job folders* is chosen in Settings;
   nothing depends on it afterwards;
@@ -1128,7 +1135,7 @@ open, one plugin to a PR.
 14. **Runners.**
     - The seam, and this computer's runner on it: knowing its cores and
       memory, keeping the order jobs were asked for; the working folder in
-      Settings, with readable names, *Open the folder*, and cleaned on its
+      Settings, with path-safe names (readable ones shown), *Open the folder*, and cleaned on its
       own unless *Keep job folders* is chosen.
     - Then, its own PR, a cluster runner plugin: submit and return, taken up
       again from the job's record.
