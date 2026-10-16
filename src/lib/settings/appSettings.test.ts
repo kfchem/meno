@@ -6,12 +6,15 @@ import {
   settingsFileText,
   useAppSettings,
 } from "./appSettings";
+import { BALL_AND_STICK } from "../chem/style3d";
+import { STYLE_PRESETS } from "../chem/style";
 
 describe("the settings file", () => {
   it("reads back what it wrote", () => {
     const settings = {
-      drawingStyle: { preset: "rsc", changes: { ends: "round" as const } },
-      style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 } },
+      drawingStyle: { preset: "own-00000000-0000-4000-8000-000000000001", changes: { ends: "round" as const }, own: { name: "Group style", style: { ...STYLE_PRESETS[2].style, bondLengthPt: 12 } } },
+      ownDrawingStyles: [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Group style", style: { ...STYLE_PRESETS[2].style, bondLengthPt: 12 } }],
+      style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 }, own: [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Lab figures", look: { ...BALL_AND_STICK, ballScale: 0.16, colours: { O: "#ff2020" } } }] },
       network: { offline: true, granted: ["python-env:console"] },
       chemistry: { valenceWarnings: false },
       updates: { asked: true },

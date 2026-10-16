@@ -273,7 +273,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       // at the surface of the ball it leaves - the lone atom's end, with no ball of its own to speak of, runs to it)
       const linesIn = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
-        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look]).map((l, li) => {
+        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look], drawn.multipleBonds === "one").map((l, li) => {
           const pieces = bentPieces(l);
           if (seeThrough) {
             const b = bonds[lineOf[li]];
@@ -321,6 +321,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         });
       }
       for (let l = 0; l < each[0].length; l++) {
+        // (a line of no thickness - a multiple bond drawn as one stick - is given as nothing; one that bends is its tube, above)
+        if (each.every((x) => x[l].r === 0)) continue;
         if (pieceOfBent[l]) continue;
         const at = (s: number) => {
           const x = each[s][l];
