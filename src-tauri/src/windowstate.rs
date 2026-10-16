@@ -163,7 +163,7 @@ pub fn restored(saved: &State, screens: &[Screen], off: (i32, i32)) -> Option<[i
 mod native {
     use windows::Win32::Foundation::{HWND, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{
-        GetWindowPlacement, SetWindowPlacement, SystemParametersInfoW, SPI_GETWORKAREA, SW_HIDE, SW_SHOWMAXIMIZED, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOWPLACEMENT,
+        GetWindowPlacement, SetWindowPlacement, SetWindowPos, SystemParametersInfoW, SPI_GETWORKAREA, SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_SHOWMAXIMIZED, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOWPLACEMENT,
     };
 
     /// The origin of the work area, which placements' coordinates are from (the desktop's, less the taskbar where it is at the top or left).
@@ -192,7 +192,17 @@ mod native {
         wp.showCmd = SW_HIDE.0 as u32;
         wp.rcNormalPosition = RECT { left: raw[0], top: raw[1], right: raw[2], bottom: raw[3] };
         // SAFETY: as `get`.
-        unsafe { SetWindowPlacement(HWND(h), &wp).is_ok() }
+        let ok = unsafe { SetWindowPlacement(HWND(h), &wp).is_ok() };
+        if ok {
+            refresh(h);
+        }
+        ok
+    }
+
+    /// The frame worked out again, which is where Tao takes the system's caption off an undecorated window (its `WM_NCCALCSIZE`): a placement put on a window not yet shown has left it showing the caption, with the page 31 px below.
+    fn refresh(h: Handle) {
+        // SAFETY: the window is this process's own; no size, place or order is asked, only the frame.
+        let _ = unsafe { SetWindowPos(HWND(h), None, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE) };
     }
 }
 
