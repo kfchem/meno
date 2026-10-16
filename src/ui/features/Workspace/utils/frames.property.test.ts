@@ -19,7 +19,9 @@
  *     as the molecule holds them, as an SD file of every frame writes them
  *     and as a workflow's set takes them (setEntries).
  */
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { registerKinds } from "../../../../lib/io/kinds";
+import { MANIFESTS } from "../../../../lib/plugins/known";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { readPdb } from "../../../../lib/chem/pdb";
 import { checkedStructures, readStructures, type StructureRead } from "../../../../lib/io/structures";
@@ -369,6 +371,10 @@ function pdbText(made: Made): string {
   out.push("END");
   return out.join("\n") + "\n";
 }
+
+// (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+afterAll(() => registerKinds([]));
 
 describe("a molecule's frames and what belongs to each stay together, whatever reads it", () => {
   it("an XYZ file, as the page takes it (readStructures, then checkedStructures)", () => {

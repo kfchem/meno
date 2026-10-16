@@ -209,3 +209,14 @@ describe("a change of drawing style", () => {
     expect(now.pluses![0]).toMatchObject({ x: 120, y: 50 });
   });
 });
+
+describe("a style chosen that the workspace has", () => {
+  it("is no change: the document as it was, and no step to undo", () => {
+    const doc = { ...page(), style: { preset: "rsc", changes: {} } } as WorkspaceDocument;
+    expect(restyledDocument(doc, { preset: "rsc", changes: {} })).toBe(doc);
+    expect(restyledDocument(doc, doc.style)).toBe(doc);
+    // (another, or the same preset changed: a change)
+    expect(restyledDocument(doc, { preset: "acs1996", changes: {} })).not.toBe(doc);
+    expect(restyledDocument(doc, { preset: "rsc", changes: { bondLengthPt: 20 } })).not.toBe(doc);
+  });
+});

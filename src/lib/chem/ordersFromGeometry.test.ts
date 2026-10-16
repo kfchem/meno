@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { orderFromLength, ordersFromGeometry, type GeoAtom } from "./ordersFromGeometry";
+import { orderFromLength, ordersFromGeometry, work, type GeoAtom } from "./ordersFromGeometry";
 
 // Molecules as RDKit's ETKDG and MMFF lay them out in 3D, hydrogens taken
 // away but where said; each bond with the order its SMILES gives.
@@ -99,18 +99,16 @@ describe("bond orders estimated from where atoms stand", () => {
       expect(r.charges.filter((c) => c === 1).length).toBe(m.nitro);
       expect(r.charges.filter((c) => c === -1).length).toBe(m.nitro);
     };
-    const cpu = (m: ReturnType<typeof many>) => {
-      const c = process.cpuUsage();
+    // (steps counted, not time: a ratio of seconds is missed on a busy machine)
+    const steps = (m: ReturnType<typeof many>) => {
+      work.steps = 0;
       run(m);
-      const d = process.cpuUsage(c);
-      return d.user + d.system;
+      return work.steps;
     };
-    const small = many(240);
-    const large = many(1920);
-    run(small);
-    run(large);
-    let least = [Infinity, Infinity];
-    for (let k = 0; k < 3; k++) least = [Math.min(least[0], cpu(small)), Math.min(least[1], cpu(large))];
-    expect(least[1] / least[0]).toBeLessThan(24);
-  }, 60_000);
+    const small = steps(many(240));
+    const large = steps(many(1920));
+    expect(small).toBeGreaterThan(0);
+    // (eight times the copies: about eight times the steps, not sixty-four)
+    expect(large / small).toBeLessThan(10);
+  });
 });

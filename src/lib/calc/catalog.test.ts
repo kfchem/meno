@@ -140,6 +140,7 @@ describe("the readers Meno knows of", () => {
       installed: [],
       downloads: [],
       writes: [],
+      xyzEnergies: [],
       guide: [],
       suggests: [],
       files: [],

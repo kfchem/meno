@@ -15,6 +15,7 @@ const good = {
   reads: ["gaussian", "nbo-47"],
   writes: [],
   roles: [],
+  xyzEnergies: [],
   steps: [],
   systems: [],
   installed: [],
@@ -28,8 +29,24 @@ describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { uses: _uses, writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { uses: _uses, writes: _w, xyzEnergies: _x, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
+    // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
+    const declared = acceptManifest({
+      ...good,
+      xyzEnergies: [
+        { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
+        { id: "two", pattern: "no group here", unit: "hartree" },
+        { id: "three", pattern: "(a)(b)" },
+        { id: "Bad Id", pattern: "(\\d+)" },
+        { id: "four", pattern: "([unclosed" },
+        { id: "five", pattern: "^(\\d+)", unit: "furlongs" },
+      ],
+    })?.xyzEnergies;
+    expect(declared).toEqual([
+      { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
+      { id: "five", pattern: "^(\\d+)", unit: "hartree" },
+    ]);
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
