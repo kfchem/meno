@@ -108,7 +108,8 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** "progress 12/240": how far a job is, as its log says it last. */
 export function progressOf(text: string): { done: number; total: number } | null {
   let found: { done: number; total: number } | null = null;
-  for (const m of text.matchAll(/^progress (\d+)\/(\d+)\s*$/gm)) {
+  // (a line ends with \n, \r\n or a lone \r - as some systems' pipes and a program's own redraws leave it)
+  for (const m of text.matchAll(/(?:^|[\r\n])progress (\d+)\/(\d+)[ \t]*(?=[\r\n]|$)/g)) {
     const done = Number(m[1]);
     const total = Number(m[2]);
     if (total > 0 && done <= total) found = { done, total };

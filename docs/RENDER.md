@@ -223,8 +223,9 @@ uv, no package), and the script Blender runs, `render.py`.
   white is white - writing a PNG, or an MP4 (H.264) through Blender's own
   video writer.
 - **Its options**: the renderer (Cycles, light traced, or EEVEE, fast),
-  samples for each pixel, noise removal, the graphics processor where
-  Blender can use one (Metal, OptiX, CUDA, HIP or oneAPI), the background
+  samples for each pixel, noise removal, where it renders (the faster of
+  the graphics processor - Metal, OptiX, CUDA, HIP or oneAPI, where Blender
+  can use one - and the processor, or either), the background
   (transparent - a film's then white - white, black or grey), the colours
   (true to the style, by Khronos PBR Neutral; film-like, AgX; or
   standard), the key light and the light all round against the canvas's,
@@ -274,6 +275,29 @@ uv, no package), and the script Blender runs, `render.py`.
   copper is deepened by the scene - panels of a warm tone, fewer of them
   - not by its F0. A surface drawn from an orbital keeps the colours Meno
   gave it.
+- **Where it renders** (2026-10-16, the maintainer): a three-way choice,
+  *Render on*: **Automatic (the faster one)**, the default; **Graphics
+  processor**; **Processor**. Automatic times the two once on this
+  computer - 16 samples at an eighth of the picture's width and height,
+  the graphics processor warmed up first so that what is timed is not its
+  kernels' preparing - and keeps the faster, by the processors' names and
+  Blender's version, in `device-probe.json` in the plugin's data folder - which
+  its worker knows, as the folder holding its environment, and passes to the
+  job, whatever Blender's own path looks like; a later render takes what
+  is kept. The step's line says *Checking which is
+  faster...* while it times, and, after, **Rendered on the processor**,
+  in small words, where the render was on the processor - by the choice,
+  by the timing, or because Blender has no graphics processor it can use
+  (nothing is shown where it rendered on the graphics processor). The
+  job's log (*Show log* on the step's menu) says which in each case, and
+  the two times - it is not in `meno.log`. The old on/off switch's
+  remembered value is not read (pre-alpha: no shim). A render's progress
+  comes from Blender's own render statistics (samples; a film's frames),
+  as hundredths, and never goes back; between the statistics a graphics
+  processor reports, seconds apart, the bar goes on by the clock along
+  Blender's own estimate of the time remaining (never to the end before
+  the render says it). A film's line says it in hundredths of its length,
+  *Rendering 37%...*.
 - The first render on a computer can take a few minutes while Blender
   prepares its renderer for the graphics processor; after that, seconds.
 - **What the canvas alone draws** is left out of the scene, as a renderer

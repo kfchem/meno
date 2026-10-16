@@ -52,7 +52,7 @@
         {"id": "engine", "when": {"id": "shading", "in": ["lit"]}, "label": "Renderer", "type": "choice", "choices": [{"value": "cycles", "label": "Cycles: light traced, true shadows"}, {"value": "eevee", "label": "EEVEE: fast"}], "default": "cycles"},
         {"id": "samples", "label": "Samples for each pixel", "type": "number", "default": 128, "min": 1, "max": 4096, "step": 1},
         {"id": "denoise", "when": {"id": "shading", "in": ["lit"]}, "label": "Remove noise", "type": "switch", "default": true},
-        {"id": "gpu", "label": "Use the graphics processor where Blender can", "type": "switch", "default": true},
+        {"id": "device", "label": "Render on", "type": "choice", "choices": [{"value": "auto", "label": "Automatic (the faster one)"}, {"value": "gpu", "label": "Graphics processor"}, {"value": "cpu", "label": "Processor"}], "default": "auto"},
         {"id": "background", "label": "Background", "type": "choice", "choices": [{"value": "transparent", "label": "Transparent (a film's is white)"}, {"value": "white", "label": "White"}, {"value": "black", "label": "Black"}, {"value": "grey", "label": "Grey"}], "default": "transparent"},
         {"id": "colours", "label": "Colours", "type": "choice", "choices": [{"value": "neutral", "label": "True to the style (Khronos PBR Neutral)"}, {"value": "agx", "label": "Film-like (AgX)"}, {"value": "standard", "label": "Standard"}], "default": "neutral"},
         {"id": "key", "label": "Key light, against the canvas's", "type": "number", "default": 1, "min": 0, "max": 10, "step": 0.1, "unit": "×"},

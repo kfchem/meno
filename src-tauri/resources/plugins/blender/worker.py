@@ -46,9 +46,13 @@ SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
 SETTINGS = "render.json"
 PICTURE = "picture.png"
+# the line render.py logs where the graphics processor was asked for and none was found
+FELL_BACK = "Rendering on the processor (no graphics processor Blender can use)"
+FASTER = "Rendering on the processor (the faster one here)"
 FILM = "film.mp4"
 
 ENGINES = {"cycles", "eevee"}
+DEVICES = {"auto", "gpu", "cpu"}
 BACKGROUNDS = {"transparent", "white", "black", "grey"}
 COLOURS = {"neutral", "agx", "standard"}
 QUALITIES = {"high", "medium", "lossless"}
@@ -100,6 +104,14 @@ def switch(v, what):
     return v
 
 
+def plugin_home():
+    """The plugin's data folder, where its environment (`venv`) and its files (`files`, Blender's own) are: the folder holding the environment this worker runs in. None where it is run some other way (a test)."""
+    prefix = os.path.abspath(sys.prefix)
+    if os.path.basename(prefix) == "venv" and os.path.isdir(os.path.dirname(prefix)):
+        return os.path.dirname(prefix)
+    return None
+
+
 def settings_of(entry, options):
     """A render's settings, as render.py reads them: what Meno asked for, and the options chosen, each checked."""
     if not isinstance(entry, dict):
@@ -119,7 +131,9 @@ def settings_of(entry, options):
         "engine": one_of(options.get("engine", "cycles"), "engine", ENGINES),
         "samples": whole(options.get("samples", 128), "The samples", 1, 4096),
         "denoise": switch(options.get("denoise", True), "Noise removal"),
-        "gpu": switch(options.get("gpu", True), "The graphics processor"),
+        "device": one_of(options.get("device", "auto"), "device", DEVICES),
+        # (where what is learned of this computer is kept: the plugin's data folder, which this worker knows)
+        **({"probe_dir": plugin_home()} if plugin_home() else {}),
         "background": one_of(options.get("background", "transparent"), "background", BACKGROUNDS),
         "colours": one_of(options.get("colours", "neutral"), "colour transform", COLOURS),
         "key": number(options.get("key", 1), "The key light", 0, 10),
@@ -197,7 +211,11 @@ def op_collect(m):
     for i, entry in enumerate(m.get("entries") or []):
         film = isinstance(entry, dict) and entry.get("film") is True
         made.append({"entry": i, "file": FILM if film else PICTURE, "media": "video/mp4" if film else "image/png"})
-    return {"made": made}
+    result = {"made": made}
+    # (the graphics processor asked for, and Blender fell back to the processor: said once, which the card may show - nothing where it rendered on the graphics processor or was not asked to)
+    if FELL_BACK in (m.get("log") or "") or FASTER in (m.get("log") or ""):
+        result["note"] = "Rendered on the processor"
+    return result
 
 
 OPS = {"prepare": op_prepare, "collect": op_collect}
