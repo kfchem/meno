@@ -8,7 +8,7 @@ import { TAU, follow } from "../../../theme/motion";
 import { DOUBLE_CLICK_MS } from "../constants";
 import { useEditor, useEditorStore } from "../store";
 import { pageAt } from "../utils/page";
-import { pushShapes, pushTargetAt } from "../utils/pushes";
+import { laidKey, pushShapes, pushTargetAt } from "../utils/pushes";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { polyTriangles } from "./polyTriangles";
@@ -46,6 +46,13 @@ function shapesGeometry(polys: readonly P[][], dots: readonly { c: P; r: number 
  * a bond or the gap between two atoms takes it there; each one step. Two
  * clicks on it bend it as Meno does again.
  */
+/** `value` as it was when `key` was last other than it is: the same object while what it is said to be stays the same. */
+function useKept<T>(value: T, key: string): T {
+  const kept = useRef({ key, value });
+  if (kept.current.key !== key) kept.current = { key, value };
+  return kept.current.value;
+}
+
 export default function PushArrows2D() {
   const pushes = useEditor((s) => s.pushes);
   const hoveredPush = useEditor((s) => s.hoveredPush);
@@ -57,9 +64,11 @@ export default function PushArrows2D() {
   const m = useMemo(() => pushMeasures(style, NOMINAL_BOND_LENGTH), [style]);
   // an end being drawn out: where the pointer is
   const [moving, setMoving] = useState<{ of: number; end: "from" | "to"; at: P } | null>(null);
+  // (laid out again only as what they are laid by changes - not as the drawing is laid out again the same, at each frame of a zoom)
+  const laidOn = useKept(layout, pushes.length ? laidKey(layout) : "");
   const shapes = useMemo(
-    () => pushShapes(pushes, atoms, bonds, layout, opts, opts.fontPx, m, moving ?? undefined),
-    [pushes, atoms, bonds, layout, opts, m, moving],
+    () => pushShapes(pushes, atoms, bonds, laidOn, opts, opts.fontPx, m, moving ?? undefined),
+    [pushes, atoms, bonds, laidOn, opts, m, moving],
   );
   // (one mesh for each colour they are drawn in: the bonds' ink, unless an arrow is given its own)
   const ink = opts.bondColor ?? "black";
@@ -167,8 +176,11 @@ export default function PushArrows2D() {
   });
   useEffect(() => invalidate(), [hoveredPush, invalidate]);
 
-  // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`, while there are arrows)
-  const k = HANDLE_PX / Math.max(useDrawnZoom((z) => (drawn.length ? z : 1)), 1e-6);
+  // (the view's zoom as the drawing takes it up, for the handles' size on the screen: drawn again as it changes -
+  // drawnLayoutContext `useDrawnZoom` - only while an arrow shows its handles; with none lit, a zoom draws nothing
+  // here again: every frame of a zoom, all of it was drawn again for handles not shown, found on Windows, 2026-10-16)
+  const lit = hoveredPush != null || moving != null || [...level.current.values()].some((v) => v > 0);
+  const k = HANDLE_PX / Math.max(useDrawnZoom((z) => (lit ? z : 1)), 1e-6);
   return (
     <group>
       {drawn.map(({ color, geometry }) => (
@@ -229,8 +241,9 @@ function PushHold({
   ];
   return (
     <group name={`push-${id}`} onPointerOver={onEnter} onPointerOut={onLeave}>
+      {/* (taking the pointer always, drawn only while lit: unlit, it is nothing to see, and drawing it cost every frame) */}
       <mesh geometry={band} position={[0, 0, -0.01]} renderOrder={-1} frustumCulled={false} onPointerDown={onBend}>
-        <meshBasicMaterial color={COLORS.highlight} transparent opacity={LIT * level} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={COLORS.highlight} transparent opacity={LIT * level} visible={level > 0} depthWrite={false} toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
       {level > 0 &&
         handles.map(([key, at, press]) => (
