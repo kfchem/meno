@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { registerKinds } from "../../lib/io/kinds";
+import { MANIFESTS } from "../../lib/plugins/known";
 import { checkedStructures, readStructures } from "./structures";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../samples/esterification.rxn?raw";
 import samplePdb from "../../samples/cholesterol.pdb?raw";
 
 const WATER = "3\nwater\nO 0 0 0\nH 0.76 0.59 0\nH -0.76 0.59 0\n";
+
+// (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
+beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
+afterAll(() => registerKinds([]));
 
 describe("a structure's file, as Meno's own reader gives it", () => {
   it("is what the file holds: a drawing, a reaction's arrow, or molecules in 3D", () => {

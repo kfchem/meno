@@ -95,6 +95,14 @@ export type WriteDecl = {
 };
 
 /**
+ * How a program writes a frame's energy on an XYZ file's comment line: `pattern`, a regular expression with one capture group
+ * holding the number (matched without regard to case); `unit` the number's, converted to hartrees. A frame's energy is read
+ * only by the patterns of the plugins added: Meno knows no program's way of writing it.
+ */
+export const ENERGY_UNITS = ["hartree", "eV", "kcal/mol", "kJ/mol"] as const;
+export type XyzEnergyDecl = { id: string; pattern: string; unit: (typeof ENERGY_UNITS)[number] };
+
+/**
  * A look a render plugin declares (docs/RENDER.md, docs/PLUGINS.md): its id, what the card calls it, a short description,
  * and what it is made of - a bundle of Meno's own parts (`parts`: what the molecules and the surfaces are made of, how it is
  * shaded and outlined; any left out are the plain ones), or `own`: made with materials and light of the plugin's own, the
@@ -244,6 +252,8 @@ export type Manifest = {
   reads: string[];
   /** The kinds it writes, of its own. */
   writes: WriteDecl[];
+  /** How the XYZ files its program writes carry a frame's energy on a comment line, from that program's documentation (docs/FILE-IO.md). */
+  xyzEnergies: XyzEnergyDecl[];
   /** The roles it fills besides reading and writing files. */
   roles: RoleDecl[];
   /** The kinds of step it fills, each once. */
@@ -324,6 +334,25 @@ function kindOf(v: unknown): KindDecl | null {
 }
 
 /** A program's name, as a job is given it: a name, not a path. */
+/** The ways a plugin says its program writes an XYZ frame's energy: an id, and a pattern that compiles and has one capture group - what is not that is left out. */
+function acceptXyzEnergies(v: unknown): XyzEnergyDecl[] {
+  const out: XyzEnergyDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || typeof r.pattern !== "string" || r.pattern.length > 200) continue;
+    const unit = (ENERGY_UNITS as readonly string[]).includes(r.unit as string) ? (r.unit as XyzEnergyDecl["unit"]) : "hartree";
+    try {
+      // (one capture group: its alternative with the empty string gives the match and one group)
+      if (new RegExp(`${r.pattern}|`, "i").exec("")!.length !== 2) continue;
+    } catch {
+      continue;
+    }
+    out.push({ id: r.id, pattern: r.pattern, unit });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
 const LOOK_ID = /^[a-z][a-z0-9-]{0,39}$/;
 const LOOK_MOLECULES = ["meno", "glossy", "metal", "glass", "matte", "clay", "white"];
 const LOOK_SURFACES = ["meno", "glass", "glossy", "matte"];
@@ -667,6 +696,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     kinds,
     reads: readable,
     writes,
+    xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
     roles,
     steps,
     systems,

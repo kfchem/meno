@@ -6,7 +6,8 @@
  * reader's answer.
  */
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
-import { energiesOf } from "../../utils/xyzEnergies";
+import { energiesOf, waysOf } from "../../utils/xyzEnergies";
+import { xyzEnergies } from "./kinds";
 import { atomsTogether, bondsByDistance, wholeXyzFrames } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry, type PdbModel, type PdbUnreadableAtom } from "../chem/pdb";
@@ -209,7 +210,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     if (!kept.size) throw noMolecules(name);
     const [first, ...rest] = whole.frames;
     // (and each frame's energy, as programs write it on the comment lines)
-    const energies = whole.total > 1 ? energiesOf(xyzComments(content))?.filter((_, i) => kept.has(i)) : undefined;
+    const energies = whole.total > 1 ? energiesOf(xyzComments(content), waysOf(xyzEnergies()))?.filter((_, i) => kept.has(i)) : undefined;
     return {
       model: { atoms: [], bonds: [] },
       centroid: { x: 0, y: 0 },

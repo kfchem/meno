@@ -14,6 +14,7 @@ const good = {
   reads: ["gaussian", "nbo-47"],
   writes: [],
   roles: [],
+  xyzEnergies: [],
   steps: [],
   systems: [],
   installed: [],
@@ -27,8 +28,24 @@ describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { writes: _w, xyzEnergies: _x, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
+    // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
+    const declared = acceptManifest({
+      ...good,
+      xyzEnergies: [
+        { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
+        { id: "two", pattern: "no group here", unit: "hartree" },
+        { id: "three", pattern: "(a)(b)" },
+        { id: "Bad Id", pattern: "(\\d+)" },
+        { id: "four", pattern: "([unclosed" },
+        { id: "five", pattern: "^(\\d+)", unit: "furlongs" },
+      ],
+    })?.xyzEnergies;
+    expect(declared).toEqual([
+      { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
+      { id: "five", pattern: "^(\\d+)", unit: "hartree" },
+    ]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
     expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
