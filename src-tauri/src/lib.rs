@@ -21,6 +21,7 @@ mod logfile;
 mod pdf;
 mod net;
 mod opened;
+mod pinch;
 mod pixienv;
 mod plugfiles;
 mod present;
@@ -935,10 +936,20 @@ pub fn run() {
         // (the main window's size and place kept as it moves, resizes and closes: windowstate.rs)
         .on_window_event(windowstate::on_event)
         .setup(|app| {
-            // the window put where it was left, then shown - first, so that it is never seen elsewhere
-            if let Some(w) = app.get_webview_window(windowstate::LABEL) {
-                windowstate::restore(&w, app.path().app_data_dir().ok().as_deref());
-            }
+            // the main window, made here rather than from tauri.conf.json (its "create" is
+            // false): on Windows its pinch is let through before its page first loads (pinch.rs) -
+            // made hidden, then put where it was left and shown (windowstate.rs), so that it is never
+            // seen elsewhere first
+            let main = app.config().app.windows.iter().find(|w| w.label == "main").cloned().ok_or("no main window in tauri.conf.json")?;
+            #[cfg(windows)]
+            let window = pinch::open_main(app.handle(), &main)?;
+            #[cfg(not(windows))]
+            let window = {
+                let mut hidden = main.clone();
+                hidden.visible = false;
+                tauri::WebviewWindowBuilder::from_config(app.handle(), &hidden)?.build()?
+            };
+            windowstate::restore(&window, app.path().app_data_dir().ok().as_deref());
             // (and where Tauri has the data folder, should that be elsewhere)
             if let Ok(data) = app.path().app_data_dir() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());

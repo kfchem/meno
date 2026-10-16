@@ -106,6 +106,16 @@ describe("a plugin's manifest", () => {
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
+    // (looks, each declared in full: an id, a label, parts from Meno's vocabulary or own; the canvas's look is Meno's and not declarable; what is not understood left out)
+    const looks = [
+      { id: "jelly", label: "Jelly", description: "See-through.", own: true, seeThrough: true, parts: { sticks: "stopped", molecules: "not-a-material", band: 5, shading: "toon" } },
+      { id: "meno", label: "Not allowed" },
+      { id: "No Id", label: "Bad id" },
+      { id: "plain" },
+      { id: "jelly", label: "Twice" },
+    ];
+    const declared = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], looks }] })?.roles[0].looks;
+    expect(declared).toEqual([{ id: "jelly", label: "Jelly", description: "See-through.", parts: { shading: "toon", sticks: "stopped" }, own: true, seeThrough: true }]);
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);

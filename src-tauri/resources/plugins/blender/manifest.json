@@ -19,7 +19,27 @@
     {
       "role": "render",
       "programs": ["blender"],
-      "looks": ["meno", "glossy", "matte", "clay", "glass", "metal", "cartoon", "lineart", "gold", "silver", "copper", "bubble", "wood", "marble", "porcelain", "slime", "ice", "neon", "xray", "fur"],
+      "looks": [
+        {"id": "glossy", "label": "Glossy", "description": "A clear coat over the element colours.", "parts": {"molecules": "glossy", "surfaces": "glossy"}},
+        {"id": "matte", "label": "Matte", "description": "Dull, in the element colours.", "parts": {"molecules": "matte", "surfaces": "matte"}},
+        {"id": "clay", "label": "Clay: one colour or the elements'", "description": "Unglazed clay, terracotta or in the element colours.", "own": true, "parts": {"molecules": "clay", "surfaces": "matte"}},
+        {"id": "glass", "label": "Glass", "description": "Clear glass, tinted by the element colours.", "parts": {"molecules": "glass", "surfaces": "glass", "sticks": "shown"}, "seeThrough": true},
+        {"id": "metal", "label": "Metal", "description": "Metal in the element colours.", "parts": {"molecules": "metal", "surfaces": "glossy"}},
+        {"id": "cartoon", "label": "Cartoon: one lit band, outlined", "description": "One lit band and one in shade, outlined.", "parts": {"shading": "toon", "outlines": "mixed"}},
+        {"id": "lineart", "label": "Line art: white fill, outlined", "description": "White, outlined.", "parts": {"molecules": "white", "surfaces": "matte", "shading": "toon", "outlines": "mixed", "band": 1}},
+        {"id": "gold", "label": "Gold: polished metal", "description": "Polished gold in a studio's light.", "own": true},
+        {"id": "silver", "label": "Silver: mirror or satin", "description": "Silver, mirror or satin.", "own": true},
+        {"id": "copper", "label": "Copper: brushed or tarnished", "description": "Copper, brushed or tarnished.", "own": true},
+        {"id": "bubble", "label": "Soap bubble: clear, with thin-film colour", "description": "Clear, with a thin film's colours at the rim.", "parts": {"sticks": "stopped"}, "own": true, "seeThrough": true},
+        {"id": "wood", "label": "Wood: varnished, in a species", "description": "Varnished wood: oak, walnut, cherry, maple, ebony, or by element.", "own": true},
+        {"id": "marble", "label": "Marble: polished white stone, veined", "description": "Polished white stone with veins.", "own": true},
+        {"id": "porcelain", "label": "Porcelain: glazed blue-white", "description": "Glazed porcelain, or a pearl's cream white.", "own": true},
+        {"id": "slime", "label": "Slime: see-through jelly", "description": "A see-through jelly in the element colours.", "parts": {"sticks": "stopped"}, "own": true, "seeThrough": true},
+        {"id": "ice", "label": "Ice: melting, clear", "description": "Melting ice: lumps, wet highlights, a faint cyan.", "parts": {"sticks": "stopped"}, "own": true, "seeThrough": true},
+        {"id": "neon", "label": "Neon: lit tubes", "description": "Lit tubes that glow at their edges.", "own": true},
+        {"id": "xray", "label": "X-ray: layers that add up", "description": "See-through layers that add up.", "parts": {"sticks": "shown"}, "own": true, "seeThrough": true},
+        {"id": "fur", "label": "Fur: long, or short and dense as velvet", "description": "Hair on every ball and stick.", "own": true}
+      ],
       "options": [
         {"id": "pile", "when": {"id": "look", "in": ["fur"]}, "label": "Pile", "type": "choice", "choices": [{"value": "long", "label": "Long: fur"}, {"value": "short", "label": "Short and dense: velvet"}], "default": "long"},
         {"id": "clay-colour", "when": {"id": "look", "in": ["clay"]}, "label": "Clay's colour", "type": "choice", "choices": [{"value": "terracotta", "label": "One colour (terracotta)"}, {"value": "elements", "label": "Element colours"}], "default": "terracotta"},
