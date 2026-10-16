@@ -23,7 +23,8 @@ Meno says it is incomplete and writes nothing from it.
 ## How it is done
 
 `src/lib/chem/reactionMap.ts` is Meno's side; `src/lib/chem/accelMapper.ts`
-is ACCeL's mapper, ported. Both are pure (no DOM, Tauri or network).
+is ACCeL's mapper, ported, with three departures of Meno's own (*Where
+Meno departs from ACCeL*). Both are pure (no DOM, Tauri or network).
 
 `mapReaction({ reactants, products })` takes each side as one or more
 structures (`Molecule`: atoms with 3D coordinates, hydrogens as atoms,
@@ -147,25 +148,43 @@ differ by less than that - hydrogens of a methyl, or a symmetric molecule's
 equivalent atoms - may come in the other order. The rounded scores
 (`bonding_local_rmsd`, `local_rmsd`) and every other score agree exactly.
 
-### What the original does, kept as it is
+### Where Meno departs from ACCeL
 
-Found while checking the port; left exactly as ACCeL has them, for its
-author to judge:
+Three things the original does were found while checking the port. The
+port keeps them as ACCeL has them (`ACCEL_EXACT`, which the checks below
+run); Meno maps with three departures instead (`MENO_DEPARTURES`), each
+marked `[Meno departure: ...]` where it is in `accelMapper.ts`, and each
+tested beside what ACCeL does with the same input
+(`accelMapper.departures.test.ts`). `mapReaction({ ..., accelExact: true })`
+maps as ACCeL does.
 
-- **A torsion of exactly 180°.** `_get_most_dihedral` takes `arccos` of a
-  cosine that rounding can push past -1; it is then not a number, and the
-  atom that is exactly anti loses to a gauche one. Real structures are not
-  exactly anti; hand-built ones can be.
-- **The first hydrogen of a group, with nothing to measure it from.** When
-  three or more like atoms hang on an atom whose one paired neighbour has no
-  other paired neighbour yet (a methyl whose carbon's other bonds all change,
-  as in an SN2 at a methyl), the first by atom order is paired with the
-  first, and the rest follow by chirality. Which way round a methyl maps
-  then depends on the atoms' order in the files.
-- **A Python error.** A pair of faces that read the same forwards and
-  backwards with no face flag (`None`) makes `_order_maps` compute
-  `bool ^ None`, which Python refuses; the port raises there too, and
-  `mapReaction` reports it.
+- **The first of a group, with nothing to measure it from**
+  (`firstOfGroupByGeometry`). When three or more like atoms hang on an atom
+  with no torsion to place the first of them by - no paired neighbour, or
+  none with a paired neighbour of its own, as for the methyl of an SN2 at a
+  methyl - ACCeL pairs the first by atom order with the first, the rest
+  following by chirality; which way round the methyl maps then depends on
+  the atoms' order in the files, and an SN2 does not come out as the Walden
+  map. Meno pairs the first with the one nearest it once the two
+  structures are laid over one another: by the best rotation over the pairs
+  so far where at least three of them span a plane, else by setting the
+  two central atoms on one another. Where there is a torsion to go by,
+  nothing changes.
+- **A torsion of exactly 180°** (`clampTorsionCosine`). `_get_most_dihedral`
+  takes `arccos` of a cosine that rounding can push past -1; it is then not
+  a number, and the atom exactly anti loses to a gauche one (an exactly
+  staggered ethane, rigidly moved, then comes out with one methyl turned
+  against the other). Meno keeps the cosine within [-1, 1]. Real structures
+  are seldom exactly anti; hand-built and symmetrised ones are.
+- **A pair of faces with no face flag** (`skipUnflaggedFacePair`). Where two
+  faces read the same forwards and backwards and their flag is `None`,
+  `_order_maps` computes `bool ^ None`, which Python refuses: ACCeL fails
+  on an oxa-6π electrocyclisation (a dienal closing to a 2H-pyran), for
+  one. Meno leaves that pair out of the pericyclic score.
+
+Elsewhere the same `arccos` rounding is kept as ACCeL has it: `_det_ez`
+reads an exactly-anti torsion as not E, and `_order_maps`' face tests
+read a not-a-number angle as under 90°.
 
 ## How the port was checked
 

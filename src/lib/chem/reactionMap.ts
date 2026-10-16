@@ -5,8 +5,10 @@
  * the products can be written in the reactants' atom numbering, as NEB,
  * QST3 and matching an IRC's ends need (docs/ATOM-MAPPING.md).
  *
- * The maps are worked out by ./accelMapper, ACCeL's mapper ported as it is.
- * This is how Meno hands it its structures and reads its answer:
+ * The maps are worked out by ./accelMapper, ACCeL's mapper ported as it is,
+ * with three departures of Meno's own, each named there (`Departures`;
+ * `accelExact` turns them off). This is how Meno hands it its structures and
+ * reads its answer:
  *
  * - The structures go in in 3D with every atom, hydrogens included: a 2D
  *   drawing is first given its 3D structure (Meno's own 3D generation),
@@ -24,8 +26,10 @@
  * (`heavyAtomPairs`); it never stands in for one.
  */
 import {
+  ACCEL_EXACT,
   Atoms,
   BondType,
+  MENO_DEPARTURES,
   atomsMapNumbers,
   atomsMapped,
   incorporate,
@@ -44,6 +48,8 @@ export type ReactionMapInput = {
   /** ACCeL's ordering options: a factor on each score, by its name (EVALUATION_KEYS). */
   options?: Partial<Record<string, number>>;
   trace?: MapperTrace;
+  /** Map exactly as ACCeL does, without Meno's departures from it (accelMapper's `Departures`). */
+  accelExact?: boolean;
 };
 
 /** A bond the reaction changes, in the reactants' numbering: its CTfile type before and after, 0 where there is none. */
@@ -170,6 +176,7 @@ export function mapReaction(input: ReactionMapInput): ReactionMap | ReactionMapR
       terminalFirst: input.terminalFirst ?? null,
       options: input.options,
       trace: input.trace,
+      departures: input.accelExact ? ACCEL_EXACT : MENO_DEPARTURES,
     });
   } catch (e) {
     return { error: "python-error", message: String(e) };
