@@ -45,6 +45,8 @@ export type Atom = AtomChem & {
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is: drawn in it exactly. */
   highlight?: string;
+  /** How large its structure is shown: laid out in the style so many times over (layoutStructures `magnifiedOptions`). Unset, 1. */
+  magnified?: number;
 };
 export type Bond = BondChem & {
   a1: number;

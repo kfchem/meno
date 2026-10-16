@@ -945,7 +945,7 @@ state, for 2D and 3D alike; the command centre's defaults), and approved
 with its three choices as proposed on 2026-10-16: the magnifications
 below, a 3D molecule made from a magnified drawing taking its
 magnification, and a selection's objects each about its own centre.
-Molecules in 3D built first (`utils/magnified`); structures in 2D next.
+Molecules in 3D built first (`utils/magnified`), then structures in 2D.
 
 **What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
 or smaller than it is - 100 % being its true size - without changing the
@@ -956,11 +956,23 @@ object is shown.
 
 - **A display transform, per object.** It is held on the object, never in
   the style and never in k (the style change's factor, *Drawing style*):
-  - a structure in 2D - every atom of it - carries `magnified: { k, about }`,
-    the factor and the point on the page it is shown about; what is drawn
-    is `about + (p - about) * k` for every point p of it, as laid out in
-    the workspace's style. Lines, labels, wedges, marks and the gaps
-    between them all scale together, as a zoomed copy of it would;
+  - a structure in 2D is held where it is shown - its atoms k times as far
+    apart, about the middle of its box - and every atom of it says
+    `magnified: k`, in the workspace's file too; it is laid out in the
+    workspace's style with every length k times over (layoutStructures
+    `magnifiedOptions`): lines, labels, wedges, marks and the gaps between
+    them all scale together, as a zoomed copy of it would. (Planned at
+    first as true places drawn through a transform; held as shown instead,
+    with the command centre's agreement on 2026-10-16, so that the pointer,
+    the selection, snapping and the page's boxes, which read where atoms
+    are, need nothing new.) **All chemistry reads it at its true size**
+    (lib/chem/magnified2d `atTrueSize`, in `writeMolfile`): MOL, SD and
+    RXN files, a copy for another program, what a plugin or a job is
+    given and so a workflow's inputs, the drawing a 3D structure rises
+    from - a magnified drawing writes the very same MOL file as it does at
+    100 %. Every structure says one magnification: an edit that leaves a
+    structure saying several - two joined - gives it the one most of its
+    atoms say;
   - a molecule in 3D carries `magnified: k`, applied after `solidOf`, about
     the molecule's own place: it is shown k times as large and stands k
     times as high (`poseOf`'s `scale`, `heightOf`, `reachOf`; on the canvas
@@ -968,14 +980,16 @@ object is shown.
     widths in pixels of its highlights as they are). Its ångströms stay
     true - measurements, writers and Fit's units are untouched.
   Each kept with the object, in the workspace's file and in a copy.
-- **Edited through the transform.** A press on a magnified structure is
-  taken back through its transform to where it is in the drawing, and what
-  is drawn there - an atom, a bond, a chain - is drawn at the workspace's
-  bond length, so shown k times as long, as the rest of it. A drag moves it
-  and its `about` together, so it moves under the pointer. A new atom
-  drawn from it takes its magnification. Joined to another structure,
-  the one drawn from keeps its magnification, and the other takes it (its
-  change eased). Split, each part keeps it. A stack's records share it.
+- **Edited as at its true size.** What is drawn on a structure shown
+  magnified - a bond, a chain, a ring - is drawn k times the style's bond
+  long, as the rest of it (`bondLengthFrom`); what lays out by itself - a
+  label drawn out, Clean-up, a group shown as a label - is done on the
+  structure at its true size and shown as large again about the same
+  middle (utils/trueSize `editAtTrueSize`): an edit at k is the same edit
+  at 100 %, k times as large (tested, edit by edit). A drag moves it as it
+  is shown. Joined to another structure, the one drawn from keeps its
+  magnification and the other takes it; split, each part keeps it; pasted,
+  it comes as large as it was copied. A stack's records share it.
 - **What the page knows of it is what is shown**: hover, the selection's
   frame and handle, Fit, free places for what is opened or pasted, guides
   and snapping, a set round it, a slide over it - each from its shown box.

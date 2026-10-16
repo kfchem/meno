@@ -3,7 +3,6 @@ import { Suspense, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import type { Model, RecordSwap } from "../store/types";
-import { layoutMolecule } from "../../../../lib/chem/layout2d";
 import { layoutAtomOf, layoutBonds } from "../layoutOptions";
 import { DrawnLayoutContext, useDrawnLayout } from "./drawnLayoutContext";
 import { Bonds2D } from "./Bonds2D";
@@ -12,6 +11,7 @@ import Wedges2D from "./Wedges2D";
 import Fills2D from "./Fills2D";
 import { Texts2D } from "./Labels2D";
 import { recordsOf, shownRecord, STACK_SWAP_MS } from "../utils/stacks";
+import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 
 /**
  * A stack going over from one record to the next (as long as
@@ -123,7 +123,7 @@ function RecordGoing({ going, model }: { going: Going; model: Model }) {
     const index = new Map(drawn.map((a, i) => [a.id, i]));
     const laid = layoutBonds(part.bonds, index);
     // (at the zoom the drawing is laid out at, as it is)
-    return { atoms: drawn, bonds: laid, opts, layout: layoutMolecule(drawn, laid, opts, laidAt), laidAt };
+    return { atoms: drawn, bonds: laid, opts, layout: layoutByStructure(drawn, laid, opts, laidAt, structureLayouts()), laidAt };
   }, [part, opts, laidAt]);
   const middle = useMemo(() => {
     const xs = value.atoms.map((a) => a.x);

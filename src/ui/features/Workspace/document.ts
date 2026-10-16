@@ -13,6 +13,7 @@ import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
 import { magnificationWithin } from "./utils/magnified";
+import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
@@ -168,13 +169,38 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(next, before), before), cost: stepCost });
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(withOneMagnification(next, before), before), before), cost: stepCost });
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
 export function stepCost(state: WorkspaceDocument, before: WorkspaceDocument | undefined): number {
   const { atoms, bonds } = state.model;
   return (atoms !== before?.model.atoms ? atoms.length : 0) + (bonds !== before?.model.bonds ? bonds.length : 0);
+}
+
+/**
+ * `doc` with each structure of its drawing shown at one magnification, as
+ * an edit leaves it (lib/chem/magnified2d `oneMagnificationEach`): two
+ * structures joined, atoms added to one, take the one most of its atoms
+ * say. As it was where its drawing did not change.
+ */
+export function withOneMagnification(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
+  if (before && doc.model === before.model) return doc;
+  if (!doc.model.atoms.some((a) => a.magnified != null)) return doc;
+  const atoms = oneMagnificationEach(doc.model.atoms, doc.model.bonds);
+  return atoms === doc.model.atoms ? doc : { ...doc, model: { ...doc.model, atoms: atoms as Atom[] } };
+}
+
+/**
+ * Structures in 2D shown `k` times as large as they are (docs/WORKSPACE.md,
+ * *Magnified display*): each structure holding one of the atoms `ids`,
+ * about its own centre - held where it is shown, its atoms so many times as
+ * far apart, each saying so. At 1, at their true size again.
+ */
+export function setMagnified2d(doc: WorkspaceDocument, ids: readonly number[], k: number): WorkspaceDocument {
+  const to = magnificationWithin(k);
+  const atoms = magnifiedTo(doc.model.atoms, doc.model.bonds, new Set(ids), to);
+  return atoms.every((a, i) => a === doc.model.atoms[i]) ? doc : { ...doc, model: { ...doc.model, atoms } };
 }
 
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */

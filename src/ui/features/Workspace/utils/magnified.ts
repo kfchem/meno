@@ -1,3 +1,5 @@
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { magnifiedOfAtom } from "../../../../lib/chem/magnified2d";
 /**
  * The magnified display (docs/WORKSPACE.md, *Magnified display*): a
  * structure in 2D or a molecule in 3D shown larger or smaller than it is,
@@ -28,4 +30,17 @@ export const DOUBLING_PX = 120;
 /** The magnification a drag of `dx` pixels along its mark makes of `from`, kept within its bounds and to whole percents. */
 export function draggedMagnification(from: number, dx: number): number {
   return magnificationWithin(Math.round(from * 2 ** (dx / DOUBLING_PX) * 100) / 100);
+}
+
+/**
+ * How long a bond drawn from an atom is drawn, where it is shown: the
+ * style's, times as large as the atom's structure is shown - so that what
+ * is drawn on a structure shown magnified is drawn as large as the rest of
+ * it (lib/chem/magnified2d). The style's from no atom (`id` null, or one
+ * not there): a structure begun on empty space is at its true size.
+ */
+export function bondLengthFrom(atoms: readonly { id: number; magnified?: number }[], id: number | null | undefined): number {
+  if (id == null) return NOMINAL_BOND_LENGTH;
+  const a = atoms.find((x) => x.id === id);
+  return NOMINAL_BOND_LENGTH * (a ? magnifiedOfAtom(a) : 1);
 }

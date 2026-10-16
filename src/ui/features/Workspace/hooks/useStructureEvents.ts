@@ -36,6 +36,7 @@ import { placeOpened } from "../utils/freePlace";
 import { styleOf } from "../../../../lib/chem/style";
 import { heldEach } from "../utils/heldEach";
 import { greatest } from "../../../../lib/chem/lists";
+import { bondLengthFrom } from "../utils/magnified";
 
 
 /** What failed to come in, as the canvas says it: and, where no plugin added reads it, the plugins a catalogue suggests, and how to read it again once one is added. */
@@ -273,7 +274,8 @@ export function useStructureEvents(
 
     const id2 = new Map<number, { x: number; y: number }>();
     for (const a of atoms) id2.set(a.id, { x: a.x, y: a.y });
-    const L = NOMINAL_BOND_LENGTH;
+    // (as long as the bonds of the structure drawn on are shown)
+    const L = bondLengthFrom(atoms, st.hovered.atomId);
 
     const hoveredAtomId = st.hovered.atomId;
     if (hoveredAtomId != null) {

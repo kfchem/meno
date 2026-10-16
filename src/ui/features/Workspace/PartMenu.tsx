@@ -803,6 +803,7 @@ export default function PartMenu({
           ...stereoItem,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...stackItem,
+          ...magnifyItems,
         ];
   const row = items.filter((i) => i.icon && !i.compact);
   const compact = items.filter((i) => i.icon && i.compact);

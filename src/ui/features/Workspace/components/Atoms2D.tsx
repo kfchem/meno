@@ -16,6 +16,7 @@ import { commitInstanceMatrices } from "./instances";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { labelReach } from "../workflow/selectionSet";
 import { setLabelReach } from "../utils/labelHits";
+import { bondLengthFrom } from "../utils/magnified";
 
 /** A click edits a label this long after it, unless a second click follows. */
 const EDIT_DELAY_MS = DOUBLE_CLICK_MS;
@@ -254,7 +255,8 @@ export function Atoms2D() {
             if (b.a === thisAtom.id) nbrs.push(b.b);
             else if (b.b === thisAtom.id) nbrs.push(b.a);
           }
-          const L = NOMINAL_BOND_LENGTH;
+          // (as long as the bonds of its structure are shown)
+          const L = bondLengthFrom(model.atoms, thisAtom.id);
           const step = Math.PI / 6;
           const only =
             nbrs.length === 1

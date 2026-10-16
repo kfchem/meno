@@ -44,19 +44,22 @@ export function layoutByStructure(
   const circles: Layout["circles"] = [];
   const fills: Layout["fills"] = [];
   const under: NonNullable<Layout["under"]> = [];
+  const crowded: NonNullable<Layout["crowded"]> = [];
   const reach: Layout["reach"] = new Array(bonds.length);
   const bounds = { min: { x: Infinity, y: Infinity }, max: { x: -Infinity, y: -Infinity } };
   // (each atom's place in the structure being laid out)
   const local = new Int32Array(atoms.length);
-  for (const part of clustersOf(atoms, bonds)) {
+  for (const part of clustersOf(atoms, bonds).flatMap((whole) => byMagnification(whole, atoms, bonds))) {
     const key = atoms[part.atoms[0]].id;
+    // (shown magnified: laid out in the style so many times over - a zoomed copy of it)
+    const k = atoms[part.atoms[0]].magnified ?? 1;
     let it = was.get(key);
     if (!it || !sameAs(it, part, atoms, bonds)) {
       part.atoms.forEach((i, k) => (local[i] = k));
       const layout = layoutMolecule(
         part.atoms.map((i) => atoms[i]),
         part.bonds.map((k) => ({ ...bonds[k], a1: local[bonds[k].a1], a2: local[bonds[k].a2] })),
-        opts,
+        magnifiedOptions(opts, k),
         zoom,
       );
       it = { atoms: part.atoms.map((i) => atoms[i]), bonds: part.bonds.map((k) => bonds[k]), at: part.atoms, layout, texts: placed(layout.texts, part.atoms) };
@@ -72,6 +75,7 @@ export function layoutByStructure(
     for (const x of l.circles) circles.push(x);
     for (const x of l.fills) fills.push(x);
     for (const x of l.under ?? []) under.push(x);
+    for (const x of l.crowded ?? []) crowded.push(x);
     part.bonds.forEach((k, j) => (reach[k] = l.reach[j]));
     bounds.min.x = Math.min(bounds.min.x, l.bounds.min.x);
     bounds.min.y = Math.min(bounds.min.y, l.bounds.min.y);
@@ -81,7 +85,46 @@ export function layoutByStructure(
   kept.laid = laid;
   // (nothing drawn: the bounds of nothing, as layoutMolecule gives them)
   if (!atoms.length) return layoutMolecule(atoms, bonds, opts, zoom);
-  return { ...(under.length ? { under } : {}), lines, polys, texts, circles, fills, bounds, zoom, reach };
+  return { ...(under.length ? { under } : {}), lines, polys, texts, circles, fills, bounds, zoom, reach, ...(crowded.length ? { crowded } : {}) };
+}
+
+/** The layout options kept for each magnification, so that each is the same object each time. */
+const MAGNIFIED_OPTIONS = new WeakMap<LayoutOptions, Map<number, LayoutOptions>>();
+
+/**
+ * Layout options for a structure shown `k` times as large as it is
+ * (docs/WORKSPACE.md, *Magnified display*): every length so many times as
+ * long - its lines, their gaps, its letters, the room round them - as a
+ * zoomed copy of it is drawn; the least width a line is drawn at on the
+ * screen as it is. The same options at 1.
+ */
+export function magnifiedOptions(opts: LayoutOptions, k: number): LayoutOptions {
+  if (k === 1) return opts;
+  let byK = MAGNIFIED_OPTIONS.get(opts);
+  if (!byK) MAGNIFIED_OPTIONS.set(opts, (byK = new Map()));
+  const kept = byK.get(k);
+  if (kept) return kept;
+  const out: Record<string, unknown> = { ...opts };
+  for (const [key, v] of Object.entries(opts)) if (key.endsWith("Px") && key !== "minLinePx" && typeof v === "number") out[key] = v * k;
+  byK.set(k, out as LayoutOptions);
+  return out as LayoutOptions;
+}
+
+/** A part to be laid out, split where its structures are shown at different magnifications: each laid out at its own. */
+function byMagnification(part: Part, atoms: readonly Atom[], bonds: readonly Bond[]): Part[] {
+  const k0 = atoms[part.atoms[0]].magnified ?? 1;
+  if (part.atoms.every((i) => (atoms[i].magnified ?? 1) === k0)) return [part];
+  const groups = new Map<number, number[]>();
+  for (const i of part.atoms) {
+    const k = atoms[i].magnified ?? 1;
+    const g = groups.get(k);
+    if (g) g.push(i);
+    else groups.set(k, [i]);
+  }
+  return [...groups.values()].map((g) => {
+    const in_ = new Set(g);
+    return { atoms: g, bonds: part.bonds.filter((b) => in_.has(bonds[b].a1) && in_.has(bonds[b].a2)) };
+  });
 }
 
 /** Structures laid out before, for `layoutByStructure` to take again; see `structureLayouts`. */

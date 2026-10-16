@@ -4,7 +4,6 @@ import { useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import {
   labelSetOf,
-  layoutMolecule,
   type Atom as LAtom,
   type Bond as LBond,
 } from "../../../../lib/chem/layout2d";
@@ -25,6 +24,7 @@ import { shapeBounds } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { schemeExtent } from "../utils/schemeExtent";
 import { partsBounds } from "../workflow/parts";
+import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 
 export default function FitToContent2D({
   paddingPx = 48,
@@ -95,7 +95,7 @@ export default function FitToContent2D({
     // bounds to untangle.
     const opts = editorLayoutOptions(style);
     const bounds = atoms.length
-      ? layoutMolecule(la, lb, opts, cam.zoom || 1).bounds
+      ? layoutByStructure(la, lb, opts, cam.zoom || 1, structureLayouts()).bounds
       : { min: { x: Infinity, y: Infinity }, max: { x: -Infinity, y: -Infinity } };
     // and the arrows and "+" signs - those standing alone too, a reaction's being among its atoms
     const scheme = schemeExtent(arrows, pluses, opts.fontPx);

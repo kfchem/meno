@@ -247,6 +247,18 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         fitResultSets(ops.setLook3d(d, ids, look), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(ids)),
       );
     },
+    setMagnified: (atoms: number[], molecules: number[], k: number, gesture?: string) => {
+      const style = currentStyle3D();
+      const { turns3d } = get();
+      doc.edit(
+        "magnification",
+        (d) => {
+          const both = ops.setMagnified3d(ops.setMagnified2d(d, atoms, k), molecules, k);
+          return molecules.length ? fitResultSets(both, (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(molecules)) : both;
+        },
+        gesture ? { coalesceKey: `magnify:${gesture}` } : undefined,
+      );
+    },
     setMagnified3d: (ids: number[], k: number, gesture?: string) => {
       // (a result set they no longer fit as large laid out again, its frame widened: the same step to undo)
       const style = currentStyle3D();

@@ -4,10 +4,11 @@ import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import type { AbbreviationStructure, AtomChem, BondChem, Radical, SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
+import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
-export type WriterAtom = AtomChem & { id: number; x: number; y: number };
+export type WriterAtom = AtomChem & { id: number; x: number; y: number; magnified?: number };
 /** A bond to write, between two atoms by id, as the editor holds it. */
 export type WriterBond = BondChem & {
   a: number;
@@ -587,6 +588,8 @@ export function writeMolfile(
   model: WriterModel,
   options: { title?: string; version?: "V2000" | "V3000" | "auto" } = {},
 ): string {
+  // (a structure shown magnified, at its true size: lib/chem/magnified2d)
+  model = atTrueSize(model);
   const title = titleLine(options.title);
   const version = options.version ?? "auto";
   return version === "V3000" || (version === "auto" && needsV3000(model))

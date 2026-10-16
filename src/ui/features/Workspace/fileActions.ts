@@ -8,7 +8,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
-import { createSVG, labelBox, labelSetOf, layoutMolecule, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
+import { createSVG, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
 import { arrowsWithWords, wordsSet } from "../../../lib/chem/captions";
 import { arrowsOfCycles, cycleThings } from "./utils/cycles";
 import { writeMolfile, writeMolfile3d, writeSdf, type Atom3D } from "../../../lib/chem/molWriter";
@@ -36,6 +36,7 @@ import { writtenAtoms, writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
 import { greatest, least } from "../../../lib/chem/lists";
+import { layoutByStructure, structureLayouts } from "../../../lib/chem/layoutStructures";
 
 /** A file's name without its folder. */
 export function fileNameOf(path: string): string {
@@ -259,7 +260,7 @@ export function drawingLayout(
     minLinePx: 0,
     paddingPx: 4,
   });
-  const layout = layoutMolecule(atoms, bonds, opts, exportPxPerWorld(style));
+  const layout = layoutByStructure(atoms, bonds, opts, exportPxPerWorld(style), structureLayouts());
   // (what the drawing reaches so far: nothing, with no atoms)
   let drawn = model.atoms.length > 0;
   const take = (xs: number[], ys: number[]) => {
