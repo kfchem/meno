@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { followChain, startChain, type Chain } from "./chain";
+import { followChain, startChain, trailShown, type Chain } from "./chain";
 import { cellOf } from "./honeycomb";
 import type { Pt } from "./honeycomb";
 
@@ -147,5 +147,30 @@ describe("a chain traced on its honeycomb", () => {
     expect(closedRing(c)).toBe(6);
     const back = lead(c, [{ x: 0, y: 0 }]);
     expect(closedRing(back)).toBeNull();
+  });
+});
+
+describe("the trail a chain leaves, as it is drawn", () => {
+  const L = 1.8;
+  const start = { x: 0, y: 0 };
+  // (Quick Add's Chain icon, up and to the right of where the double-click was)
+  const icon = { x: 1.4, y: 1.1 };
+  const path = [{ x: 2.2, y: 1.0 }, { x: 3.0, y: 0.8 }, { x: 3.8, y: 0.9 }];
+
+  it("does not join the chain's start to the icon the press was on, whether the pointer is heard there before the press or after", () => {
+    // (the icon's point first - a move there - or none: the first point is then the first move on)
+    for (const heard of [[icon, ...path], [...path]]) {
+      let c = startChain(start, [], L);
+      for (const p of heard) c = followChain(c, p);
+      const shown = trailShown(c.trail);
+      expect(shown.some((p) => p.x === start.x && p.y === start.y)).toBe(false);
+      expect(shown[0]).toEqual(heard[0]);
+    }
+  });
+
+  it("is none until the pointer has two points of its own", () => {
+    const c = startChain(start, [], L);
+    expect(trailShown(c.trail)).toEqual([]);
+    expect(trailShown(followChain(c, icon).trail)).toEqual([]);
   });
 });

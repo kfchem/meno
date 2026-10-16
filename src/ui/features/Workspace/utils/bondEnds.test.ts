@@ -44,7 +44,7 @@ const r = 0.16 * WORLD_PER_ANGSTROM;
 const linesIn = (m: Molecule3D, look: MoleculeLook) => {
   const solid = solidOf(m, styleOf(look));
   const p = solid.frames[0];
-  return { solid, lines: bondLines(m, p, r, solid.ends.primary), at: (i: number) => new THREE.Vector3(p[3 * i], p[3 * i + 1], p[3 * i + 2]) };
+  return { solid, lines: bondLines(m, p, r, solid.ends.primary, look.multipleBonds === "one"), at: (i: number) => new THREE.Vector3(p[3 * i], p[3 * i + 1], p[3 * i + 2]) };
 };
 
 describe("how a double or triple bond's lines end at a lone atom", () => {
@@ -164,5 +164,25 @@ describe("how a double or triple bond's lines end at a lone atom", () => {
         expect([key, lookOfStyle(read, "balls")[key]]).toEqual([key, ends]);
       }
     }
+  });
+
+  it("as one stick: one stick a bond, as thick as a single bond's, on its axis - and no ends worked out", () => {
+    const one = { ...sticks, multipleBonds: "one" as const };
+    for (const m of [formaldehyde(), cyanide()]) {
+      const { lines } = linesIn(m, one);
+      const drawn = lines.filter((l) => l.r > 0);
+      expect(drawn).toHaveLength(m.bonds.length);
+      expect(drawn.every((l) => Math.abs(l.r - r) < 1e-12)).toBe(true);
+      expect(endsAt(m, one)).toBeNull();
+    }
+    expect(endsShow(one, 2)).toBe(false);
+    // (as many lines a bond as ever - the others of no thickness - so that going over from lines is line by line: the side ones into the middle one)
+    const lines = linesIn(formaldehyde(), withEnds(sticks, "plain")).lines;
+    const half = linesBetween(lines, linesIn(formaldehyde(), one).lines, 0.5);
+    expect(half[1].r).toBeCloseTo(lines[1].r / 2, 9);
+    expect(look3dPreset("outlined").look.multipleBonds).toBe("one");
+    expect(look3dPreset("balls").look.multipleBonds).toBe("lines");
+    const read = acceptStyle3dChoice(JSON.parse(JSON.stringify(withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "multipleBonds", "one"))));
+    expect(lookOfStyle(read, "balls").multipleBonds).toBe("one");
   });
 });

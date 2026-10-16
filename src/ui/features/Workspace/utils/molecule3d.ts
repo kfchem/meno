@@ -536,7 +536,7 @@ export function atomAt(pose: Pose, eye: Eye | undefined, x: number, y: number): 
  * not show them costs nothing for them.
  */
 export function endsAt(m: Pick<Molecule3D, "atoms" | "bonds">, look: MoleculeLook): (BondEnds | null)[] | null {
-  if (look.atoms === "space" || (look.doubleEnds === "plain" && look.tripleEnds === "plain")) return null;
+  if (look.atoms === "space" || look.multipleBonds === "one" || (look.doubleEnds === "plain" && look.tripleEnds === "plain")) return null;
   const lone = multipleEnds(m);
   const bondR = bondRadiusOf(look);
   let any = false;
@@ -553,7 +553,7 @@ export function endsAt(m: Pick<Molecule3D, "atoms" | "bonds">, look: MoleculeLoo
 
 /** Whether a look's double (2) or triple (3) bond ends can show at all: its sticks alone, or balls of the atoms such bonds end at thinner than its lines reach. */
 export function endsShow(look: MoleculeLook, order: 2 | 3): boolean {
-  if (look.atoms === "space") return false;
+  if (look.atoms === "space" || look.multipleBonds === "one") return false;
   const reach = bondReach(order, bondRadiusOf(look));
   return ["C", "N", "O", "S"].some((el) => atomRadius(el, look) < reach);
 }
@@ -591,7 +591,7 @@ export type BondLine = {
  * side by side - in the plane of a neighbouring atom, so that a double bond
  * lies in the plane its atoms make.
  */
-export function bondLines(m: Molecule3D, places: Float32Array, r: number, ends?: readonly (BondEnds | null)[] | null): BondLine[] {
+export function bondLines(m: Molecule3D, places: Float32Array, r: number, ends?: readonly (BondEnds | null)[] | null, one = false): BondLine[] {
   const near: number[][] = m.atoms.map(() => []);
   for (const b of m.bonds) {
     near[b.a1].push(b.a2);
@@ -605,6 +605,11 @@ export function bondLines(m: Molecule3D, places: Float32Array, r: number, ends?:
     const n = linesOf(bond.order);
     if (n === 1) {
       lines.push({ a, b, r });
+      continue;
+    }
+    // (as one stick: the middle line - the first, of a double bond - as thick as a single bond, on the axis; the others there too, of no thickness)
+    if (one) {
+      for (let k = 0; k < n; k++) lines.push({ a: a.clone(), b: b.clone(), r: k === (n === 3 ? 1 : 0) ? r : 0 });
       continue;
     }
     const along = b.clone().sub(a).normalize();
@@ -1004,7 +1009,7 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
     const turned = new Float32Array(places.length);
     for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
     const bonds = bondsAt(m, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]);
-    for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look]).flatMap((l) => bentPieces(l))) {
+    for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one").flatMap((l) => (l.r > 0 ? bentPieces(l) : []))) {
       const a = seen(line.a);
       const b = seen(line.b);
       // (which atoms the line runs between: the nearest at each end)

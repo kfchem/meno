@@ -13,7 +13,7 @@
 import * as THREE from "three";
 import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type MoleculeLook, type Style3D } from "../../../../lib/chem/style3d";
 import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, type GltfMesh, type GltfNode, type GltfScene, type Quat, type Vec3 } from "../../../../lib/scene/gltf";
-import { unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
+import { tubeAlong, unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
 import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
@@ -48,7 +48,17 @@ export type RenderAsk = {
 /** How a picture is shaded - lit as the renderer lights it, or in one band of toon shading - and its outlines. */
 export type Shading = "lit" | "toon";
 export type Outlines = "none" | "thin" | "outer" | "mixed";
-export type Finish = { look: string; shading: Shading; outlines: Outlines; outline: number; outlineColour: "black" | "white" | "grey"; band: number };
+export type Finish = {
+  look: string;
+  shading: Shading;
+  outlines: Outlines;
+  outline: number;
+  outlineColour: "black" | "white" | "grey";
+  band: number;
+  /** In a look that is seen through: its sticks as they are, running on inside the balls, or stopped at the balls' surfaces. */
+  sticks?: Sticks;
+};
+export type Sticks = "shown" | "stopped";
 
 /** A molecule in 3D as it is shown: carried as a copy carries it, the surface it shows - placed about its shown frame's centre, in ångströms - and the vibration it shows, each atom's displacement. */
 export type Shown3D = { m: Carried3D; surfaces?: { plus: Mesh; minus: Mesh | null }; move?: readonly number[] };
@@ -92,6 +102,31 @@ const RATIOS: Record<Exclude<Shape, "fit">, number> = { "16:9": 16 / 9, "4:3": 4
  * swinging in its vibration - and its turn.
  */
 type Sample = { places: Float32Array; turn: THREE.Quaternion; presence: Float32Array | null };
+
+/** Whether a see-through look's sticks stop at the balls' surfaces: where the look - or the choice - says so. */
+export function sticksStopped(ask: Pick<RenderAsk, "finish">): boolean {
+  return ask.finish?.sticks === "stopped";
+}
+
+/**
+ * Where a stick's end stops: the move of `end`, along the line towards `other`, to the surface of the ball about
+ * `centre` of radius `radius` - the stick's own radius allowed for, so that the flat end's rim, not its middle,
+ * meets the surface. A line that does not meet the ball, or whose end is outside it, is not moved.
+ */
+export function stoppedAt(end: THREE.Vector3, centre: THREE.Vector3, radius: number, stick: number, other: THREE.Vector3): THREE.Vector3 {
+  const along = other.clone().sub(end);
+  const len = along.length();
+  if (len < 1e-9) return new THREE.Vector3();
+  along.divideScalar(len);
+  const rel = end.clone().sub(centre);
+  const reach = Math.sqrt(Math.max(radius * radius - stick * stick, 0));
+  const d = rel.dot(along);
+  const across2 = rel.lengthSq() - d * d;
+  if (reach * reach <= across2) return new THREE.Vector3();
+  const exit = -d + Math.sqrt(reach * reach - across2);
+  if (exit <= 0) return new THREE.Vector3();
+  return along.multiplyScalar(Math.min(exit, len));
+}
 
 export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: RenderAsk): Rendered {
   const film = ask.kind === "film";
@@ -231,10 +266,31 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     // each bond's lines (a double bond two, a triple three), as sticks from atom to atom
     if (bondR > 0 && bonds.length) {
       const stick = shapeIn("stick", material(drawn.bondColor, drawn));
-      // (a line curving in to a lone atom, as straight pieces along its curve: a plugin's sticks are straight)
+      // (which bond each line is of, a bond's lines side by side)
+      const lineOf = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
+      const seeThrough = sticksStopped(ask);
+      // (a line curving in to a lone atom, as straight pieces along its curve: a plugin's sticks are straight; seen through, a line stops
+      // at the surface of the ball it leaves - the lone atom's end, with no ball of its own to speak of, runs to it)
       const linesIn = (x: Sample) =>
         // (bondLines works in whatever units it is given: here ångströms)
-        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look]).map((l) => bentPieces(l));
+        bondLines({ ...molecule, bonds }, x.places, bondR, solid.ends[look], drawn.multipleBonds === "one").map((l, li) => {
+          const pieces = bentPieces(l);
+          if (seeThrough) {
+            const b = bonds[lineOf[li]];
+            const ball = (atom: number) => (left[atom] || radii[atom] <= 0 ? 0 : radii[atom] / k);
+            const centre = (atom: number) => new THREE.Vector3(x.places[3 * atom], x.places[3 * atom + 1], x.places[3 * atom + 2]);
+            const first = pieces[0];
+            if (pieces.length === 1) {
+              if (ball(b.a1) > 0) first.a.add(stoppedAt(first.a, centre(b.a1), ball(b.a1), first.r, first.b));
+              if (ball(b.a2) > 0) first.b.add(stoppedAt(first.b, centre(b.a2), ball(b.a2), first.r, first.a));
+            } else {
+              // (the straight end is the atom's: a bend's `atB` says which)
+              const atom = l.bend?.atB ? b.a1 : b.a2;
+              if (ball(atom) > 0) first.a.add(stoppedAt(first.a, centre(atom), ball(atom), first.r, first.b));
+            }
+          }
+          return pieces;
+        });
       const linesAt = (x: Sample) =>
         linesIn(x).flat().map((l) => {
           const along = l.b.clone().sub(l.a);
@@ -242,10 +298,32 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
           return { mid: l.a.clone().add(l.b).multiplyScalar(0.5), turn: len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion(), len, r: l.r };
         });
       // (which bond each line - each piece of a curving one - is of, a bond's lines side by side)
-      const pieces = linesIn(samples[0]).map((p) => p.length);
-      const lineBond = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i)).flatMap((b, l) => Array<number>(pieces[l]).fill(b));
+      const piecesOf = linesIn(samples[0]).map((p) => p.length);
+      const lineBond = lineOf.flatMap((b, l) => Array<number>(piecesOf[l]).fill(b));
       const each = samples.map(linesAt);
+      // (a line that bends, in a render that does not move: one smooth tube along its curve, not straight pieces end to end)
+      const perLine = linesIn(samples[0]);
+      const pieceOfBent = !animated ? perLine.flatMap((p) => Array<boolean>(p.length).fill(p.length > 1)) : [];
+      if (!animated) {
+        const mat = meshes[stick].material;
+        perLine.forEach((pcs, li) => {
+          if (pcs.length < 2) return;
+          const there = samples[0].presence ? samples[0].presence![lineOf[li]] : 1;
+          const r = pcs[0].r * there;
+          if (r <= 0) return;
+          const tube = tubeAlong([pcs[0].a, ...pcs.map((q) => q.b)], r, 24);
+          if (!tube.indices.length) return;
+          const mesh = meshes.length;
+          meshes.push({ name: `stick ${materials[mat].name}`, positions: tube.positions, normals: tube.normals, indices: tube.indices, material: mat });
+          const node = nodes.length;
+          nodes.push({ mesh });
+          children.push(node);
+        });
+      }
       for (let l = 0; l < each[0].length; l++) {
+        // (a line of no thickness - a multiple bond drawn as one stick - is given as nothing; one that bends is its tube, above)
+        if (each.every((x) => x[l].r === 0)) continue;
+        if (pieceOfBent[l]) continue;
         const at = (s: number) => {
           const x = each[s][l];
           const there = samples[s].presence ? samples[s].presence![lineBond[l]] : 1;

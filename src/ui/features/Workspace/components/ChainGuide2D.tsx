@@ -5,15 +5,19 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor, useEditorStore } from "../store";
 import { COLORS } from "../../../theme/colors";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { DOUBLE_CLICK_MS, MOV_PX } from "../constants";
+import { CHAIN_EASE, DOUBLE_CLICK_MS, MOV_PX } from "../constants";
 import { traceEndedBy } from "../utils/press";
-import { setLinePoints } from "../utils/linePoints";
 import { cellOf, cellsWithin, type Honeycomb } from "../utils/honeycomb";
+import { setLinePoints } from "../utils/linePoints";
+import { trailShown } from "../utils/chain";
+import { follow } from "../../../theme/motion";
 
 /** How far about the chain's end the honeycomb is shown, in bonds, and how long it takes to open out and to fold away, in seconds. */
 const REACH = 3.4;
-const OPEN_S = 0.32;
-const FOLD_S = 0.2;
+const OPEN_S = 0.32 * CHAIN_EASE;
+const FOLD_S = 0.2 * CHAIN_EASE;
+/** The time constant, in seconds, with which the honeycomb's middle goes to the chain's end each time it steps on: a step is not a jump of it. */
+const HEAD_TAU = 0.05 * CHAIN_EASE;
 /** How strongly it is shown at its middle: the highlight, this much of it. */
 const STRENGTH = 0.32;
 /** A guide's width, in pixels on the screen. */
@@ -133,18 +137,23 @@ export default function ChainGuide2D() {
 
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
+    const L0 = NOMINAL_BOND_LENGTH;
+    let movingHead = false;
     let s = shown.current;
     if (chain) {
       const head = cellOf(chain.honeycomb, chain.walk[chain.walk.length - 1]);
       if (!s || s.honeycomb !== chain.honeycomb) s = { honeycomb: chain.honeycomb, head, open: s?.honeycomb === chain.honeycomb ? s.open : 0 };
-      s.head = { x: head.x, y: head.y };
+      // (each step of the chain moves the light's middle on - going to it, not jumping)
+      s.head = { x: follow(s.head.x, head.x, step, HEAD_TAU), y: follow(s.head.y, head.y, step, HEAD_TAU) };
+      if (Math.hypot(s.head.x - head.x, s.head.y - head.y) < 1e-3 * L0) s.head = { x: head.x, y: head.y };
+      else movingHead = true;
       s.open = Math.min(1, s.open + step / OPEN_S);
     } else if (s) {
       s.open = Math.max(0, s.open - step / FOLD_S);
     }
     shown.current = s && s.open > 0 ? s : null;
     // the trail: where the pointer has been
-    const trail = chain ? chain.trail : [];
+    const trail = chain ? trailShown(chain.trail) : [];
     if (trail.length > 1) {
       setLinePoints(trailLine.geometry, trail, -0.03);
       trailLine.visible = true;
@@ -193,7 +202,7 @@ export default function ChainGuide2D() {
     geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 4));
     geometry.computeBoundingSphere();
     mesh.current.visible = positions.length > 0;
-    if (open < 1 || !chain) invalidate();
+    if (open < 1 || !chain || movingHead) invalidate();
   });
 
   return (
