@@ -1280,4 +1280,4 @@ structure* step opens without that step (no shim before 1.0).
 None left open in what is built (2026-10-08): the seven steps are built
 (*As built*), and what the maintainer changes is folded in here first. The
 proposed rebuild has its own questions (WORKFLOWS-FOUNDATION.md, *Questions
-for the maintainer*).
+this round raises*).

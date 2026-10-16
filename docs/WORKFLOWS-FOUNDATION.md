@@ -1,7 +1,7 @@
 # Workflows: the foundation, rebuilt (proposed, 2026-10-16)
 
 A design for the maintainer to review; nothing in it is built. This is its
-fourth revision.
+fifth revision.
 
 **Why rebuild.** Stage 6 works, and the bug hunts of 2026-10-12 to 10-14
 fixed what they found in it. But several of those bugs came from how the
@@ -58,7 +58,29 @@ touched:
 - 9, results in a set to the right of their step;
 - 3, Meno defines the kinds and plugins fill them, now with more kinds.
 
-The answers given on the third draft are recorded at the end (*Answered*).
+The answers given on the third and fourth drafts are recorded at the end
+(*Answered*).
+
+**The fifth revision** follows the maintainer's decisions of 2026-10-16,
+made after this design was compared with the second version of ACCeL, the
+maintainer's own library:
+
+> Meno is the base. Meno owns the store (.meno), the graph, provenance, the
+> 'has this been done' judgement, and where jobs run.
+
+- **ACCeL is used only where it is genuinely needed.** Its plugin is built
+  on ACCeL 1 (`accel` 0.3.0), through its public API. Each node it might
+  have filled is decided one by one (*The ACCeL plugin, and what Meno does
+  itself*): the atom map is ACCeL's, and the rest is Meno's.
+- **Five mechanisms of ACCeL's second version are adopted, as Meno's own**:
+  a job key from the input files and versions; never overwriting; stopping
+  on outputs Meno cannot account for; a local runner that knows its
+  resources; cluster jobs that are submitted and taken up again (*Where jobs
+  run, and when a job is the same job*). There is one source of truth.
+- **Inputs are matched on IDs a node wrote**, never by an implicit rule
+  (question A).
+- **The `.meno` holds everything**, raw outputs included, and the working
+  directory is scratch (question I).
 
 The references are to the code at v0.1.13 (`67157130`). Paths are under
 `src/ui/features/Workspace/` unless they say otherwise.
@@ -88,8 +110,9 @@ What makes this practical:
   does for atoms (WORKFLOWS.md, *Step 7: procedures and copying*). A retry
   chain drawn once is pasted again for a second attempt.
 - **Procedures.** Saved chains put down again (question C below).
-- **Lineage.** Every entry knows the entry or entries it was made from, so
-  two inputs of one node can be matched without a "pair" type (*Steps, ports
+- **IDs.** *Tag* writes an ID on each entry, it rides along through later
+  steps, and a node with two inputs matches them on it. No "pair" type is
+  needed, and no rule guesses which entries belong together (*Steps, ports
   and exits*).
 
 ## The cases it is designed against
@@ -114,7 +137,8 @@ What makes this practical:
    program reports, run again where the chemist draws it, the rest of the
    work going on.
 6. **Where jobs run**: this computer, or a cluster with a scheduler, with
-   GB of output left where it was made.
+   GB of output, all of it kept in the workspace unless the chemist chooses
+   otherwise.
 
 **Cheminformatics**
 7. **Generation**: a step with no molecule input, or with seeds or a
@@ -162,7 +186,7 @@ types are Meno's; plugins use them and add none (decision 3).
 That is all. There is no reaction type, no "paired" entry, and no "grouped"
 type:
 - a reaction is a node;
-- two inputs are matched by lineage;
+- two inputs are matched on an ID they carry;
 - a group is a property, *group*, which the nodes that work "in each group"
   read.
 
@@ -244,7 +268,12 @@ collection.
 
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
-one whose geometry it took and the one whose bonding it took.
+one whose geometry it took and the one whose bonding it took. Lineage is a
+record, for provenance. No node matches entries by it.
+
+**Properties ride along.** An entry made from another keeps its properties,
+each still saying the geometry it was worked out at. That is how an ID
+written by *Tag*, a name or a group reaches the steps after.
 
 ### Sets and collections
 
@@ -257,30 +286,25 @@ one whose geometry it took and the one whose bonding it took.
   page's own molecules and drawings, and Meno makes its collection from them
   on each edit.
 
-**Keeping**, as the maintainer answered (question 12): "Basically, keep
-everything. But make it possible to choose not to keep it, too."
-- **Kept by default.** The workspace file keeps every collection and every
-  property, fingerprints included, beside the files it already keeps by
-  their SHA-256.
-- **Not kept, by choice.** A set's menu has *Don't keep in the file*. Its
-  collection is then left out when the workspace is saved, and only its hash
-  and count are kept.
-  - Opened again, the set says *Not kept · 12,480 molecules* until its step
-    runs again (*Run again*).
-  - Steps after it keep their own results, and are not *Changed*: what they
-    ran on is recorded by hash.
-  - The choice is the set's, kept with the workspace, and *Keep in the file*
-    undoes it.
-- **Programs' raw outputs** are the exception by default, because they can
-  run to GB per reaction (question 26, answered):
-  - they stay where the job ran, with a record of each file (path, size,
-    SHA-256), and are fetched when a step needs one;
-  - a step's menu has *Bring raw outputs into the workspace*, which copies
-    its jobs' files into the workspace file, compressed. A step brought in
-    keeps them as everything else is kept.
-
-  What Meno read from an output (the values, the logs) is kept as now,
-  either way.
+**Keeping: the `.meno` is the whole record.** The maintainer, refining
+question I: "If possible, I'd like it to be complete inside the .meno file
+alone. The ideal is that taking the .meno out takes everything out."
+- **Kept by default, all of it:** every collection and property,
+  fingerprints included, and every job's input files, output files and raw
+  files, for local and cluster runs alike. They are kept beside the files the
+  workspace already keeps by their SHA-256 (`files/<sha256>`), compressed.
+  Opening a `.meno` on another computer shows everything, raw outputs
+  included.
+- **Not kept, by choice** (question 12, "a way not to keep it"):
+  - a set's menu has *Don't keep in the file*: its collection is left out,
+    and only its hash and count are kept. Opened again, it says *Not kept ·
+    12,480 molecules* until its step runs again, and the steps after it stay
+    valid, since what they ran on is recorded by hash;
+  - a step's menu has *Don't keep raw outputs*: the values and logs Meno read
+    stay, and the raw files go.
+- **A size warning.** When a save would take the workspace past 500 MB, Meno
+  says so, names the largest steps, and offers *Don't keep raw outputs* on
+  them. It never drops anything by itself.
 
 **What a set shows** depends on its size:
 - **up to 50 entries, on the page**, as today (question 15, answered). An
@@ -308,15 +332,22 @@ kind:
   *Re-bond* takes *geometry* and *bonding*; *Predict with a model* takes
   *molecules* and *model*.
 
-**Two inputs are matched by lineage** where a node works entry by entry:
-- each entry of one input is matched with the entry of the other that it
-  descends from, or that it shares its nearest ancestor with;
-- where neither descends from the other and they share no ancestor, the node
-  pairs every entry with every entry, if its kind says it does (*Re-bond*);
-- where neither applies, it refuses, saying why.
-
-This is what lets the end of a NEB be the optimised partner of its start
-with no pair type in between: the end descends from the start.
+**Two inputs are matched on an ID, never by an implicit rule** (question A,
+answered: "Don't make implicit and specific indicators... embedding IDs and
+pairing based on those IDs"):
+- **IDs are written by a node.** *Tag* gives each entry a property holding
+  an ID of its own, under a name the chemist gives (*start*, *product*,
+  *path*). It rides along, so an optimised end still carries the *start* its
+  geometry came from.
+- **A node that takes two or three inputs entry by entry matches them on a
+  property the chemist chooses on it**: each entry of one input with the
+  entry of the other that has the same value. *Path search* matches *start*
+  and *end*; *Optimise to a saddle point* matches *guess* and its two sides.
+  An entry without a match goes to the *rest* exit, counted, and so does one
+  with more than one.
+- **Where one input goes with every entry of the other**, the node says so
+  plainly (*Re-bond*: each with each).
+- **Lineage stays a record.** No matching depends on it.
 
 **Every exit is a result set** (question 1, answered; refining decision 9),
 made with the step, empty until it runs, to the right of the card. The
@@ -365,9 +396,13 @@ two imaginary vibrations is not a failed job: a *Filter* on *imaginary
 vibrations = 1* sends it to *rest*, where *Displace* and another optimisation
 can take it.
 
-### Where jobs run
+### Where jobs run, and when a job is the same job
 
-As answered (question 25):
+As answered (question 25), and with the mechanisms ACCeL's second version
+was designed with, adopted here (2026-10-16). Meno owns them all: there is
+one source of truth.
+
+**What runs where:**
 - **A program plugin says what to run**: the program; arguments, files and
   standard input; the files to read back; what to do after; and the
   resources it needs (cores, memory, time).
@@ -375,17 +410,55 @@ As answered (question 25):
   submits, says how a job stands, fetches the files asked for, stops,
   cleans up, and knows where programs are on its machine.
 - **This computer's runner** is the one built today (`Meno --job`,
-  `src-tauri/src/jobs.rs`), moved onto the seam with no change.
+  `src-tauri/src/jobs.rs`), moved onto the seam.
 - **Cluster runners are plugins**, for batch schedulers over SSH. Core knows
   no scheduler.
-- **Throttling** (how many jobs a runner keeps queued) is the runner's
-  option.
 - **Each step's own option**, *Runs on*, chooses the runner, with defaults
   in Settings.
 - **Credentials are never Meno's.** A cluster runner signs in through the
   system's own SSH configuration and agent. Meno stores no password or key,
   and its hosts are granted as other network access is.
-- **Raw outputs** stay where the job ran unless brought in (*Keeping*).
+
+**A job's key.** A calculation's job key is the hash of the input files it
+writes, plus the program's version and the plugin's.
+- **Same key, same result.** A job whose key the workspace has already run
+  to the end is not run again: its kept result is used, and the card says
+  *Reused*. This holds across steps and across runs.
+- **The step's fingerprint** (point 6) stays the step's. The job key is per
+  job, and is what decides "has this been done".
+
+**Never overwrite.** A run, an attempt, a job's files: nothing is written
+over. A new run adds; the earlier stays, as the runs kept today.
+
+**An output Meno cannot account for stops the step.** On taking up a job
+(after Meno was closed, or from a cluster), Meno checks what it finds:
+- a job folder without its record;
+- files whose key is not the job's;
+- outputs from a run Meno did not start.
+
+Any of these stops the step with *Output Meno cannot account for*, naming
+the files. An explicit *Adopt* lets the chemist take it as the step's
+result, recorded as adopted, with when.
+
+**This computer's runner knows its resources.** It runs jobs while their
+cores and memory fit what is free, and keeps the order they were asked
+for: a job never jumps ahead of an earlier one.
+
+**Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
+(scheduler, its job id, the key), and returns. It takes the job up again
+from that record whenever the workspace is open, or when it is opened
+again. No Meno process waits on a cluster.
+
+**The working directory is scratch** (question I, refined):
+- it is where a program physically runs: Meno's jobs folder by default, or
+  a folder the chemist chooses, per runner;
+- its folders have readable names (workspace, step, entry), not bare IDs,
+  and *Open the folder* is on a step's and an entry's menu;
+- once a job has ended and its files are in the `.meno`, its scratch may be
+  cleaned; nothing depends on it afterwards;
+- running again, or continuing, from a `.meno` elsewhere writes the inputs
+  back out of the `.meno` into a new scratch;
+- a runner still takes only job specifications Meno wrote.
 
 ### Programs' own input, and options shared in kind
 
@@ -429,8 +502,9 @@ on question 16. Each has one role, and they are meant to be combined.
 | **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all |
 | **Group** | molecules | the same, each entry's *group* set: by compound (its identity with its species), by a property's value, or none |
 | **Merge** | molecules, two or more | one set, in the inputs' order; or one entry of each identity |
-| **Join** | molecules, and molecules or a table | the first, with the second's properties put on by lineage, by identity, or by drawn atom; what did not match is said |
-| **Duplicates** | molecules | *kept* and *rest*: one of each identity, or by RMSD in each group, as Meno does today |
+| **Tag** | molecules | the same, with a new property: an ID for each entry, under the name given |
+| **Join** | molecules, and molecules or a table | the first, with the second's properties put on by a property both carry (an ID from *Tag*), by identity, or by drawn atom; what did not match is said |
+| **Duplicates** | molecules | *kept* and *rest*: one of each identity, or by RMSD in each group, as Meno does today; with the molecule's symmetry where chosen (equivalent groups turned, equivalent atoms swapped) |
 
 **Numbers**
 
@@ -454,7 +528,10 @@ of highest weight stands for it, carrying the results.
 |---|---|---|
 | **Species** | molecules | the same, charge and multiplicity set |
 | **Combine** | molecules | one entry holding them all, numbered in order: a complex |
-| **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | for each pair (matched by lineage, or each with each): the first's geometry with the second's bonds and charges, its group *a → b* |
+| **Re-bond** | *geometry* (molecules, 3D) and *bonding* (molecules, same atoms) | each with each, or matched on a property: the first's geometry with the second's bonds and charges, its group *a → b*, with both entries' properties (the geometry's where both have one) |
+| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
+| **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
+| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
 | **Restraints** | molecules (the reference), and a table of atoms where wanted | a table of restraints: listed atoms or coordination bonds kept at a distance; double bonds' cis or trans kept as in the reference; listed atoms fixed |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
@@ -470,7 +547,7 @@ of highest weight stands for it, carrying the results.
 | **Energy diagram** | molecules with an energy, and what each connects | a chart |
 | **Chart** | a table | a chart: one column against another |
 
-That is 26 nodes, each doing one thing.
+That is 30 nodes, each doing one thing.
 
 **What happens to today's five**
 - ***Energy window*** becomes *Relative* (to the lowest in its group) then
@@ -497,6 +574,12 @@ what it takes where that is less than the kind, the properties it gives
 options and templates, and whether a kind's entries go into one job
 together (`together`).
 
+**Reactions**
+
+| Kind | Takes | Gives |
+|---|---|---|
+| **Reaction** | *reactants* (one entry; a complex is made first by *Combine*) and *products* | *mapped products*: each product in the reactants' numbering (the first map, or every map), from the plugin; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after, worked out by Meno from the map |
+
 **Calculations**
 
 | Kind | Takes | Gives |
@@ -505,8 +588,8 @@ together (`together`).
 | Optimise, Energy, Frequencies | molecules, 3D; restraints where the plugin applies them | *done*: with energies, thermal corrections, vibrations; *failed* |
 | NCI, Render | molecules, 3D | molecules with surfaces; pictures |
 | **Minimise with restraints** | molecules, 3D; restraints | *done*, *failed* |
-| **Path search** | *start* and *end* (molecules, 3D, matched by lineage) | *done*: molecules with frames, an energy on each frame; *failed* |
-| **Optimise to a saddle point** | *guess*; and *reactant side* and *product side*, where the plugin takes them | *done*, *failed* |
+| **Path search** | *start* and *end* (molecules, 3D, matched on a property) | *done*: molecules with frames, an energy on each frame; *failed* |
+| **Optimise to a saddle point** | *guess*; and *reactant side* and *product side*, where the plugin takes them, matched on a property | *done*, *failed* |
 | **Follow the reaction path** | molecules, 3D | *done*: molecules with frames, both directions as one path; *failed* |
 | **NMR shielding** | molecules, 3D | *done*: shieldings per atom (ppm); *failed* |
 | **Excited states** | molecules, 3D | *done*: a small table of states (energies, strengths); *failed* |
@@ -530,23 +613,36 @@ tests: *Optimise*, *Conformers* or *Frequencies* of a lone atom gives its
 energy where it is, as the plugins do today. A chemist who wants it
 otherwise draws a *Filter* on the number of atoms.
 
-### The ACCeL plugin
+### The ACCeL plugin, and what Meno does itself
 
-**What it is.** ACCeL is the maintainer's own library (kfchem/accel, MIT).
-The plugin is a Python-environment plugin like RDKit's: it uses ACCeL as a
-library, in its own environment, and fills the nodes below. No ACCeL code
-goes into core.
+**Meno is the base** (the maintainer, 2026-10-16). Meno owns the store (the
+`.meno`), the graph, provenance, the judgement of whether a job has been
+done, and where jobs run. ACCeL is used only where it is genuinely needed.
 
-**The nodes it fills.** Each is one role, backed by ACCeL's public API (named
-in brackets), and each is what ConfoTS uses ACCeL for:
+**What the plugin is.** ACCeL is the maintainer's own library (kfchem/accel,
+MIT). The plugin is a Python-environment plugin like RDKit's: it uses ACCeL
+as a library, in its own environment.
+- **It is built on ACCeL 1**, `accel` 0.3.0 from PyPI, through its public
+  API only: `Box` and its public calls, never its internals. A later ACCeL
+  that keeps those calls keeps the plugin working.
+- **No ACCeL code goes into core.** For core, ACCeL is a source of ideas
+  only.
 
-| Node | Takes | Gives | ACCeL |
-|---|---|---|---|
-| **Reaction** | *reactants* (one entry; a complex is made first by *Combine*) and *products* | *mapped products*: each product in the reactants' numbering (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after | the modeller's maps |
-| **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference each descends from; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over | bonds from geometry; stereo |
-| **Duplicates** | molecules, 3D | *kept* and *rest*: RMSD with the molecule's symmetry (equivalent groups turned, equivalent atoms swapped), in each group | symmetry; RMSD pruning |
-| **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning | numbering alignment |
-| **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance | the bonding check of a vibration |
+**The five nodes ACCeL could have filled, decided one by one.** What is easy
+is written in Meno, from a published algorithm or Meno's own rule, named in
+the code and tested on its own cases.
+
+| Node | Who | Why |
+|---|---|---|
+| **Reaction**: the atom map | **ACCeL** | Mapping reactants onto products is the hard part: a Diels-Alder already defeats the fewest bond changes. ACCeL's mapping is what ConfoTS relies on |
+| **Reaction**: the bond changes | **Meno** | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering. Worked out by core from the map, they come out the same whichever plugin maps |
+| **Compare bonding** | **Meno** | Meno already reads bonds and their orders from distances (#230, from Pyykkö's covalent radii) and perceives R or S and E or Z. With the numbering fixed, comparing with a reference is comparing two lists of bonds, and of stereo labels, atom by atom |
+| **Duplicates** with symmetry | **Meno** | Meno's canonical numbering (#319, #350) gives each atom's symmetry class. The RMSD with symmetry is the lowest RMSD over the graph's automorphisms, each laid over by the quaternion fit Meno's *Duplicates* uses today (Horn 1987; Coutsias, Seok and Dill 2004), as described by Meli and Biggin (J. Cheminform. 12, 49 (2020)). A cap on the automorphisms tried (tert-butyl groups multiply them) is said when it is met |
+| **Number like** | **Meno** | The same automorphisms: the one with the lowest RMSD to the reference is applied as the new numbering, so only equivalent atoms swap |
+| **Mode on atoms** | **Meno** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
+
+So the plugin fills one kind, *Reaction*, and gives its map. The other four
+are among Meno's own nodes.
 
 **Later, if wanted.** ACCeL also reads Gaussian's NMR shieldings, ECD,
 spin-spin couplings and IRC paths. The plugin could offer those as readers
@@ -581,16 +677,17 @@ abstract*:
 
 | Part | Now | Why |
 |---|---|---|
-| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (ACCeL) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
+| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (ACCeL's map, Meno's bond changes) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
 | Meno's "fewest bond changes" mapping | **Changed**: ACCeL's | the maintainer: even a Diels-Alder would fail |
-| Paired entries (*start*, *end*, *guess*) | **Changed**: plain inputs matched by lineage | no entry kind needed; the same works for every node with two inputs |
+| Paired entries (*start*, *end*, *guess*) | **Changed**: plain inputs matched on an ID that *Tag* wrote | the maintainer (question A): IDs embedded and matched, no implicit rules; the same works for every node with two inputs |
 | Grouped type | **Changed**: *group* is a property | a type that only marks a property was abstraction |
 | Spectrum type | **Changed**: a curve is a property; a measured one is a table | one less type, nothing lost |
 | *Pair*, with its side chosen by itself | **Changed**: *Re-bond* (one role); the direction is wired | choosing the side by conformer counts was a node deciding by itself |
 | *Take from path* (guess with two sides) | **Changed**: *Take frames*, one rule a node; three of them for the three structures | one role a node |
 | *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
 | *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
-| *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (ACCeL), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
+| *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (Meno), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
+| What ACCeL fills | **Changed**: *Reaction*'s map only; *Compare bonding*, *Duplicates* with symmetry, *Number like* and *Mode on atoms* are Meno's | the maintainer: ACCeL only where it is genuinely needed, the easy parts in-house |
 | *Boltzmann average*, *Scale*, *Spectrum*, *Compare* | **Changed**: *Average*, *Linear*, *Broaden*, *Errors*, *Curve similarity* | general names for single roles; *Linear* with *a* = −1 mirrors a curve |
 | Filter's "relative to its group" | **Changed**: *Relative* before *Filter* | one role a node |
 | Energy window, Choose one, As conformers | **Changed**: cases of *Relative* + *Filter*, *Rank*, *Group*; dropped from saved workspaces | the maintainer asked for a clean set (question 16) |
@@ -600,9 +697,10 @@ abstract*:
 | Second exits only where declared (question 19) | **Changed**: a second exit wherever entries can fail or be set aside | the maintainer's retries need them |
 | Collections, members, large-set views | **Kept** | they hold and show data; they decide nothing |
 | Fingerprints, snapshots, the store's signal | **Kept** | bookkeeping, under every node alike |
-| Keeping (question 12) | **Changed**: everything kept by default; *Don't keep in the file* per set; raw outputs left where they ran unless brought in | the maintainer: keep everything, with a way not to |
+| Keeping (question 12) | **Changed**: everything kept in the `.meno` by default, every job's raw files included; *Don't keep in the file* per set, *Don't keep raw outputs* per step | the maintainer: keep everything, with a way not to, and the `.meno` the whole record |
+| Whether a job has been done | **Changed**: a job key per job (its input files, the program's and the plugin's versions), reused when the same; nothing overwritten; outputs Meno cannot account for stop the step | the mechanisms of ACCeL's second version, adopted as Meno's own |
 | Fixed numbering; properties with their geometry and units; identity | **Kept** | rules about data, not nodes |
-| Runners; templates | **Kept** | each chosen on the step, explicitly |
+| Runners; templates | **Kept**; this computer's runner knows its cores and memory, cluster jobs are submitted and taken up again, and the working directory is scratch | each chosen on the step, explicitly |
 | Implicit conversions (molecules to a table view, units) | **Kept** | views that lose nothing |
 | Kinds filled by plugins | **Kept** | each was already one role |
 | Loops later (question 11) | **Kept** | retries drawn as copies need no loop |
@@ -626,7 +724,8 @@ The thirteen points of the first draft, as they stand now.
 6. **Staleness.** Today it is a hash over some inputs, missing a calculation's
    charge and the doer's version. Now a fingerprint over the inputs'
    collection hashes, the kind, the resolved options and templates, and the
-   doer's versions.
+   doer's versions. Under it, each job's key decides whether that job has
+   been done.
 7. **A run's input.** Today it is read again at the end (#399 keeps it in
    memory). Now the snapshot is the input collections' hashes, saved with the
    run, and each store has a signal on close.
@@ -641,8 +740,8 @@ The thirteen points of the first draft, as they stand now.
 11. **Numbers on the page.** Every number names what it counts and its unit,
     by a test over every summary.
 12. **What a run keeps.** Its doer and versions, its runner, its snapshot,
-    its logs, its output collections, and records of raw outputs left where
-    they ran.
+    its logs, its output collections, and every job's key and files, in the
+    `.meno` unless the chemist chose not to keep them.
 13. **Conformers.** A conformer set is molecules whose *group* is their
     compound. *Populations*, *Rank*, *Relative* and *Filter* work in each
     group; a manifest may say `together`.
@@ -666,12 +765,14 @@ much?
 one complex by *Combine*); set **P** holds the products drawn.
 
 **F1. The reaction** (step 0)
-1. **Reaction** (ACCeL): *reactants* R, *products* P. It gives *mapped
+1. **Reaction** (ACCeL's map): *reactants* R, *products* P. It gives *mapped
    products* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
-   *bond changes* BC [ConfoTS's reacting bonds and atoms].
+   *bond changes* BC, worked out by Meno from the map [ConfoTS's reacting
+   bonds and atoms].
 
 **F2. Conformers of each species** (step 1, first part)
-2. **Merge** (Meno): R and P′ into S (*a*, *b*, *c*).
+2. **Merge** (Meno): R and P′ into S (*a*, *b*, *c*). **Tag** (Meno): S's
+   entries with *species*, which their conformers carry from here.
 3. **Restraints** (Meno): from S, coordination bonds kept at 0.9 of the van
    der Waals distance, giving T1 [`lewis_distance_scaling`].
 4. **Conformers** (a plugin) on S, with T1 where the plugin takes
@@ -680,51 +781,54 @@ one complex by *Combine*); set **P** holds the products drawn.
 5. **Relative** then **Filter** (Meno): within 10 kcal/mol of the lowest in
    each group [`energy_limit_to_empopt`].
 6. **Optimise** (xTB, GFN2), *done* [110].
-7. **Duplicates** (ACCeL): RMSD 0.1 Å, with symmetry [`rmsd_limit`].
-8. **Compare bonding** (ACCeL), each against the species it descends from in
-   S, coordination bonds passed over: *same* [the bonds check].
+7. **Duplicates** (Meno): RMSD 0.1 Å, with symmetry [`rmsd_limit`].
+8. **Compare bonding** (Meno), each against its species in S, matched on
+   *species*, coordination bonds passed over: *same* [the bonds check].
 9. **Relative**, **Filter** and **Rank** (Meno): within 5 kcal/mol, the first
    64 [`energy_limit_to_neb`, `max_limit_to_neb`].
 10. **Filter** (Meno): the group is *a*. *kept* gives the reactant conformers
     RC; *rest* gives the product conformers PC.
 
 **F3. Pairs** (step 1, second part)
-11. **Re-bond** (Meno): *geometry* RC, *bonding* P′, each with each. It gives
-    the ends E, grouped *a → b* and *a → c* [120]. Both directions take a
+11. **Tag** (Meno): RC with *start*, and P′ with *product*. **Re-bond**
+    (Meno): *geometry* RC, *bonding* P′, each with each. It gives the ends E,
+    each carrying both IDs, grouped *a → b* and *a → c* [120]. Both directions take a
     second *Re-bond* (*geometry* PC, *bonding* R) and the same chain after
     it, merged before F4. ConfoTS chooses the direction from the conformer
     counts [`path_flag`]; here it is wired.
 12. **Restraints** (Meno): from P′, coordination bonds and the double bonds'
     cis or trans, giving T2.
 13. **Minimise with restraints** (a force-field plugin): E with T2.
-14. **Compare bonding** (ACCeL) against P′, E or Z only. *same* goes on.
+14. **Compare bonding** (Meno) against P′, matched on *product*, E or Z only.
+    *same* goes on.
 15. **Its *different*, again, drawn:** **Restraints** with the torsions 50
     units stronger, **Minimise with restraints**, **Compare bonding**, and a
     **Merge** with 14's *same*. Pasted once more for each further attempt
     [`max_cycle_of_force_mini`; the showcase used three rounds,
     120_recalc0-2].
 16. **Optimise** (xTB) [122].
-17. **Compare bonding** (ACCeL) against P′, with R or S and E or Z:
+17. **Compare bonding** (Meno) against P′, on *product*, with R or S and E or Z:
     *same* [`check_chirality`].
 
 **F4. Paths and saddle points at the semiempirical level**
 18. **Path search** (ORCA plugin: NEB with GFN2-xTB, 8 images). *start* is RC
-    and *end* is 17's *same*, matched by lineage, since each end descends from
-    its start. It gives paths [123].
+    and *end* is 17's *same*, matched on *start*, which each end carries from
+    the conformer its geometry came from. It gives paths [123], and **Tag**
+    (Meno) writes *path* on each.
 19. **Take frames** (Meno): the highest energy, giving the guesses G [124].
 20. **Measure** (Meno): the forming bonds, atoms from BC [`calc_length`].
-21. **Duplicates** (ACCeL) [`rmsd_limit`].
+21. **Duplicates** (Meno), with symmetry [`rmsd_limit`].
 22. **Frequencies** (xTB) [125].
 23. **Filter** (Meno): exactly one imaginary vibration [`check_freq`].
 24. **Follow the reaction path** (ORCA plugin, IRC with xTB) [125_F, 125_B].
 25. **Take frames** twice (Meno): the first, and the last.
-26. **Compare bonding** twice (ACCeL): each end against S, naming the
+26. **Compare bonding** twice (Meno): each end against S, naming the
     species it matches (*a*, *b*, *c* or none) [128].
-27. **Join** (Meno) by lineage: both names put back on the saddle points as
+27. **Join** (Meno) on *path*: both names put back on the saddle points as
     *first end* and *last end*.
 28. **Filter** (Meno): one end is *a* and the other the product the saddle
     point was made for. This gives the validated saddle points V [126].
-    Without IRC, **Mode on atoms** (ACCeL, atoms from BC) and a **Filter**
+    Without IRC, **Mode on atoms** (Meno, atoms from BC) and a **Filter**
     do instead [`check_bonding`].
 29. **The sides for the three-structure optimisation**: 25's ends of V
     [`use_irc_terminal_for_qst`]; or **Take frames**, two frames before and
@@ -744,7 +848,7 @@ one complex by *Combine*); set **P** holds the products drawn.
     most 16; the minima within 5 kcal/mol, at most 16 [`max_limit_to_dftopt`
     and the two energy limits].
 35. **Optimise to a saddle point** (Gaussian plugin, on the cluster runner):
-    *guess* V, with *reactant side* and *product side*, matched by lineage.
+    *guess* V, with *reactant side* and *product side*, matched on *path*.
     The template is ωB97X-D/6-31G(d), opt=(QST3) [203, `qst_opt`].
 36. **Optimise** (Gaussian), the minima [201, 202].
 37. **Frequencies** (Gaussian), at the same level.
@@ -757,14 +861,14 @@ one complex by *Combine*); set **P** holds the products drawn.
 39. **Filter** (Meno): exactly one imaginary vibration for a saddle point,
     none for a minimum. Its *rest* goes to **Displace**, an optimisation
     again, and a **Merge**.
-40. **Mode on atoms** (ACCeL), atoms from BC [step 3's `check_bonding`].
+40. **Mode on atoms** (Meno), atoms from BC [step 3's `check_bonding`].
 41. **Energy** (Gaussian): ωB97X-D/6-311+G(d,p), solvent chloroform
     [`model_sp`; the Link1 job].
 42. **Number** (Meno): 1.89 kcal/mol, the standard-state term from 1 atm to
     1 mol/L at 298.15 K. Then **Add** (Meno): 41's energy, plus 37's thermal
     correction to G, plus 42. Each part is worked out at the same geometry,
     so *Add* takes them; the result is G at the DFT level.
-43. **Duplicates** (ACCeL), then **Populations** (Meno) in each group
+43. **Duplicates** (Meno, with symmetry), then **Populations** (Meno) in each group
     [`calc_distribution`].
 44. **Rank** (Meno), the lowest in each group, or **Ensemble energy** (Meno)
     over each.
@@ -779,14 +883,15 @@ one complex by *Combine*); set **P** holds the products drawn.
 48. **Rank** (Meno): the first in each path [401, 402]; or all [403, 404].
 49. **Follow the reaction path** (Gaussian) [501].
 50. **Take frames** (first, last), **Optimise** (Gaussian) [502], **Compare
-    bonding** (ACCeL, naming), **Join** and **Filter** (Meno): each path
+    bonding** (Meno, naming), **Join** on *path* and **Filter** (Meno): each path
     joins the species it claims.
 
 **The nodes F uses:**
-- **Meno's** (15): Merge, Restraints, Relative, Filter, Rank, Re-bond, Take
-  frames, Measure, Join, Displace, Number, Add, Populations, Ensemble
-  energy, Energy diagram.
-- **ACCeL's** (4): Reaction, Duplicates, Compare bonding, Mode on atoms.
+- **Meno's** (19): Merge, Tag, Restraints, Relative, Filter, Rank, Re-bond,
+  Take frames, Measure, Join, Displace, Number, Add, Populations, Ensemble
+  energy, Energy diagram, Duplicates, Compare bonding, Mode on atoms; and
+  *Reaction*'s bond changes.
+- **ACCeL's** (1): *Reaction*'s map.
 - **Program plugins'** (8): Conformers, Optimise, Minimise with restraints,
   Path search, Frequencies, Follow the reaction path, Optimise to a saddle
   point, Energy.
@@ -805,14 +910,19 @@ can be saved and put down again (question C).
   - 70 MB of collected DFT logs;
   - 47 MB of IRC output.
 
-  These stay on the cluster unless a step is told *Bring raw outputs into the
-  workspace*. Everything Meno read, and every collection, is kept in the
-  `.meno` by default.
+  All of it comes into the `.meno` by default, compressed, so that the
+  workspace holds the whole study. Past 500 MB Meno says so, and offers
+  *Don't keep raw outputs* on the largest steps (the NEB's, say). The
+  cluster's working directories are scratch, cleanable once their files are
+  in.
+- **Reused, not run again.** A pasted retry chain, or the chain run again
+  after a later step was changed, runs no job whose key the workspace has
+  already run to the end.
 
 **F9. Against the ten points asked for, last round:**
 1. **Reactions and their numbering**: the *Reaction* node, the fixed
    numbering.
-2. **Pairs**: *Re-bond*, with inputs matched by lineage.
+2. **Pairs**: *Tag* and *Re-bond*, inputs matched on the IDs *Tag* wrote.
 3. **Paths**: entries with frames, and *Take frames*.
 4. **Stationary points and their validation**:
    - the imaginary count as a property, and *Filter*;
@@ -821,10 +931,12 @@ can be saved and put down again (question C).
 5. **Levels of theory**: properties with their geometry; *Add*.
 6. **Barriers and diagrams**: *Relative*, *Populations*, *Energy diagram*.
 7. **Failure and runs again**: the *failed* exit, drawn chains, *Merge*.
-8. **Where jobs run**: runners.
+8. **Where jobs run**: runners; job keys; cluster jobs submitted and taken
+   up again.
 9. **Templates**: the program plugins' options.
 10. **Bond changes and restrained minimisation**:
-    - *Reaction* and *Compare bonding* are ACCeL's;
+    - *Reaction*'s map is ACCeL's; its bond changes and *Compare bonding*
+      are Meno's;
     - *Minimise with restraints* is a force-field plugin's;
     - *Restraints* and *Re-bond* are Meno's.
 
@@ -836,7 +948,7 @@ and ¹³C shifts support, and which absolute configuration does its ECD?
 
 1. **Conformers** (CREST): each conformer's group is its candidate.
 2. **Relative**, **Filter** (Meno), within 6 kcal/mol, then **Duplicates**
-   (Meno's, or ACCeL's with symmetry).
+   (Meno), with symmetry.
 3. **Optimise** (ORCA or Gaussian, B3LYP-D3(BJ)/def2-SVP, on the cluster).
    Its *failed* exit is run again as in F, if wanted.
 4. **Frequencies**, then **Filter** (Meno), no imaginary vibration. *rest*
@@ -917,15 +1029,16 @@ Conformers, Optimise.
 
 *Cases 11, 16.*
 
-1. **Dock** (a plugin): *ligands* (A's forty), *target* (a protein opened
+1. **Tag** (Meno): A's forty with *ligand*. **Dock** (a plugin): *ligands*
+   (the forty), *target* (a protein opened
    from a PDB file). The poses' group is their ligand, each with a score in
    kcal/mol.
 2. **Rank** (Meno): the first in each group, the best pose of each ligand.
-3. **Join** (Meno) by lineage: the scores back onto A's forty, with their
+3. **Join** (Meno) on *ligand*: the scores back onto A's forty, with their
    logP and pKa.
 4. The set taken as a table goes to an Export as CSV.
 
-**The nodes:** Meno's Rank and Join; a plugin's Dock.
+**The nodes:** Meno's Tag, Rank and Join; a plugin's Dock.
 
 ### D. Train and predict
 
@@ -955,8 +1068,8 @@ Conformers, Optimise.
 
 - **Branching** is several wires from one exit, as F does from its validated
   saddle points to the xTB diagram and to DFT.
-- **Merging** is **Merge** (all, or one of each identity) or **Join**: by
-  lineage (C, F), by identity (D), or by drawn atom (G).
+- **Merging** is **Merge** (all, or one of each identity) or **Join**: on an
+  ID *Tag* wrote (C, F), by identity (D), or by drawn atom (G).
 - **A join says what it did not match**, and never guesses.
 
 ## Found while writing the first draft
@@ -975,23 +1088,23 @@ open, one plugin to a PR.
 1. **The entry record and units.**
    - `Entry` and `Property`, with their value shapes, the geometry each was
      worked out at, and units.
-   - Lineage with one or more parents.
+   - Lineage with one or more parents, as a record; properties riding along.
    - The fixed numbering, written down and tested on the steps there are.
    - Species by one rule; Meno's units table; one Boltzmann function.
    - PLUGINS.md documents the plugin entry, with a version number.
-2. **Identity and symmetry classes**, from #319's canonical numbering once it
-   is merged.
+2. **Identity and symmetry classes**, from the canonical numbering of #319
+   and #350 once they are merged; the graph's automorphisms within those
+   classes, capped.
 3. **Collections, members and keeping.**
    - Collections in the file; members explicit and in order; the frame's
      gesture as the edit.
-   - *Don't keep in the file*; raw outputs left where they ran, *Bring raw
-     outputs into the workspace*.
+   - *Don't keep in the file* on a set.
    - Workspaces saved before read their members from their frames once
      (question 7, answered).
 4. **Fingerprints, snapshots and the store's signal**, with *Changed
    upstream*.
 5. **Ports and exits.**
-   - Named, typed inputs, matched by lineage.
+   - Named, typed inputs, matched on a property chosen on the node; *Tag*.
    - Every exit a result set; second exits (*done* and *failed*, *kept* and
      *rest*).
    - The types and their conversions; pictures as a type; the card's give
@@ -999,24 +1112,33 @@ open, one plugin to a PR.
 6. **Large sets**: the summary frame, the table in the column, putting
    entries on the page; layout worked out where shown.
 7. **Meno's nodes for sets and numbers**: *Filter*, *Rank*, *Group*,
-   *Merge*, *Join*, *Duplicates*, *Number*, *Add*, *Relative*, *Linear*,
-   *Populations*, *Ensemble energy*, *Average*. Today's *Energy window*,
-   *Choose one* and *As conformers* go.
+   *Merge*, *Join*, *Duplicates* (with symmetry, from 2), *Number*, *Add*,
+   *Relative*, *Linear*, *Populations*, *Ensemble energy*, *Average*.
+   Today's *Energy window*, *Choose one* and *As conformers* go.
 8. **The plugin contract.**
    - Entries by file at scale; properties, failure kinds and the frames
      reached on *failed*; restraints applied; templates; the option kinds
-     (solvent, temperature, pressure); `together`.
+     (solvent, temperature, pressure); `together`; the resources a job needs.
    - The existing plugins (xTB, CREST, ORCA, Gaussian, RDKit) moved onto it,
      each holding its kinds' meaning for a lone atom in its tests.
-9. **Tables, numbers and charts on the page**: tables read from files;
-   *Chart* and *Energy diagram*.
-10. **Meno's nodes for structures and spectra**: *Species*, *Combine*,
+9. **What a job keeps, and whether it has been done.**
+   - Every job's input, output and raw files in the `.meno`, compressed;
+     *Don't keep raw outputs* on a step; the size warning.
+   - Job keys, and a job reused when its key has run to the end; nothing
+     overwritten.
+   - Outputs Meno cannot account for stop the step; *Adopt*, recorded.
+   - Running again from a `.meno` elsewhere writes the inputs back out.
+10. **Tables, numbers and charts on the page**: tables read from files;
+    *Chart* and *Energy diagram*.
+11. **Meno's nodes for structures and spectra**: *Species*, *Combine*,
     *Re-bond*, *Restraints*, *Measure*, *Take frames*, *Displace*,
-    *Equivalent atoms*, *Broaden*, *Errors*, *Curve similarity*.
-11. **The ACCeL plugin**: *Reaction*, *Compare bonding*, *Duplicates*,
-    *Number like*, *Mode on atoms*. ACCeL is first installed here, into the
-    plugin's own environment, for building and testing it.
-12. **The computational-chemistry kinds opened**: *Minimise with restraints*,
+    *Compare bonding*, *Number like*, *Mode on atoms*, *Equivalent atoms*,
+    *Broaden*, *Errors*, *Curve similarity*.
+12. **Reactions**: the *Reaction* kind, with Meno's bond changes from a
+    map; then, its own PR, **the ACCeL plugin** filling the map. ACCeL is
+    first installed there, into the plugin's own environment, for building
+    and testing it.
+13. **The computational-chemistry kinds opened**: *Minimise with restraints*,
     *Path search*, *Optimise to a saddle point*, *Follow the reaction path*,
     *NMR shielding*, *Excited states*. Then one PR per plugin filling them:
     - ORCA: NEB, IRC, NMR, excited states;
@@ -1024,17 +1146,20 @@ open, one plugin to a PR.
       excited states;
     - xTB: restraints;
     - a force-field plugin for restrained minimisation.
-13. **Runners**: the seam and this computer's runner; then, its own PR, a
-    cluster runner plugin.
-14. **The cheminformatics kinds and models**; then their plugins.
-15. **What a run keeps**: doer, runner, logs, records of raw outputs.
+14. **Runners.**
+    - The seam, and this computer's runner on it: knowing its cores and
+      memory, keeping the order jobs were asked for; the scratch working
+      directory, with readable names, *Open the folder* and cleaning.
+    - Then, its own PR, a cluster runner plugin: submit and return, taken up
+      again from the job's record.
+15. **The cheminformatics kinds and models**; then their plugins.
 16. **Loops**: a design of their own, later.
 
 **When the cases run:**
-- **G** runs on this computer after 12 and its plugins.
-- **F** runs on this computer after 12 for its xTB parts, and on a cluster
-  for DFT after 13.
-- **A to D** run after 14 and their plugins.
+- **G** runs on this computer after 13 and its plugins.
+- **F** runs on this computer after 13 for its xTB parts, and on a cluster
+  for DFT after 14.
+- **A to D** run after 15 and their plugins.
 
 ## What is core's and what is the plugins'
 
@@ -1043,7 +1168,8 @@ scheduler or model by name:**
 - **values**: the types and conversions, entries and properties, Meno's
   units table, and the option kinds (the list of solvents, temperature,
   pressure);
-- **structure**: identity and symmetry classes, the fixed numbering, lineage;
+- **structure**: identity, symmetry classes and automorphisms, the fixed
+  numbering, lineage as a record, and a reaction's bond changes from its map;
 - **collections**: their storage, hashes and keeping; sets and their
   members;
 - **the workflow**: steps, ports, exits, wires, and the kinds (names, inputs,
@@ -1052,15 +1178,16 @@ scheduler or model by name:**
   - states and fingerprints;
   - snapshots and the store's signal;
   - the scheduler;
-  - the runner seam, and this computer's runner;
+  - job keys, reuse, never overwriting, and accounting for outputs;
+  - the runner seam, and this computer's runner, knowing its resources;
 - **on the page**: summaries, tables, charts, and the words on the page with
   their rule;
-- **Meno's 26 nodes** (*Meno's own nodes*): arithmetic, geometry and data
-  handling on Meno's own data, each written from what it computes.
+- **Meno's 30 nodes** (*Meno's own nodes*): arithmetic, geometry and data
+  handling on Meno's own data, each written from a published algorithm or
+  Meno's own rule.
 
-**ACCeL's plugin fills** *Reaction*, *Compare bonding*, *Duplicates* (with
-symmetry), *Number like* and *Mode on atoms*, using ACCeL as a library. No
-ACCeL code is in core.
+**ACCeL's plugin fills** *Reaction*'s map, using ACCeL 1 as a library
+through its public API. No ACCeL code is in core.
 
 **Program plugins fill** the calculation, computational-chemistry and
 cheminformatics kinds, and read their own outputs. **Runner plugins** run
@@ -1085,84 +1212,50 @@ states*.
 
 Each has a recommendation.
 
-**A. Matching by lineage.** Where a node takes two inputs entry by entry
-(*Path search*, *Re-bond*, *Optimise to a saddle point* with its two sides),
-are entries matched by lineage? That is: each with the one it descends from,
-or the one it shares its nearest ancestor with; each with each where the kind
-says so; refused otherwise. And may an entry have more than one parent (a
-*Re-bond*'s geometry and bonding)? This replaces the paired entries of
-question 22.
-*Recommended: yes, both.* No pair type is needed, and the rule is the same
-for every node.
+**L. A reaction's bond changes.** Does Meno work out *bond changes* from
+the map a plugin gives, rather than each mapping plugin giving its own?
+*Recommended: yes.* Under one numbering they are a comparison of bonds, the
+same whichever plugin maps, and tested once in core.
 
-**B. Second exits** (revisiting question 19). Should every node that can
-fail entries, or set them aside, have a second exit for them (*failed*,
-*rest*, *different*), drawn small under the first until it is wired or
-opened?
-*Recommended: yes.* Runs again are drawn from it, and nothing is hidden.
+**M. *Tag*, and matching on a chosen property.** Is *Tag* the one node that
+writes IDs, with every node that takes two inputs entry by entry matching on
+a property chosen on it, and an entry with no match, or more than one, sent
+to *rest*?
+*Recommended: yes.* It is the explicit ID the maintainer asked for (question
+A), written where the chemist can see it, and the same for every node.
 
-**C. Saving a chain.** Procedures are whole workflows today (decided
-2026-10-08). May a chain of wired steps also be saved as a procedure, and
-put down onto an exit? Examples: a retry chain, F's IRC check, G's NMR
-scaling.
-*Recommended: yes.* Copy and paste already repeats a chain once; a saved
-chain makes the common ones a single choice in Quick Add, and stays fully
-visible once put down.
+**N. Where a job key is reused.** Is a job reused only within the same
+workspace, not across workspaces or from a cache on the computer?
+*Recommended: within the workspace.* Its files are kept there, so a `.meno`
+taken elsewhere reuses exactly what it holds, and nothing outside it decides
+what runs.
 
-**D. One atom** (revisiting question 8). Instead of Meno routing a lone
-atom's *Optimise* to *Energy*, does each plugin keep doing it, as the kind's
-written meaning, held by its tests?
-*Recommended: yes.* Routing in core was a node acting by itself.
+**O. Outputs Meno cannot account for.** Are these the three: a job folder
+without its record; files whose key is not the job's; outputs of a run Meno
+did not start? And is *Adopt* per job, recorded with when, the
+adopted result marked as such wherever it is shown?
+*Recommended: yes.* Each is a case where Meno would otherwise have to guess.
 
-**E. Options shared in kind** (revising part of question 27). Instead of
-workflow-wide parameters, does each step keep its own options, with
-solvent, temperature and pressure as option kinds Meno defines? And are
-restraints a table, made by *Restraints*?
-*Recommended: yes.* Nothing arrives at a step unless it is wired or set on
-it.
+**P. Duplicates with symmetry before #319 and #350.** Until both are
+merged, does *Duplicates* compare atoms in their own order, as today, with
+symmetry, *Number like* and the automorphisms coming in PR 2?
+*Recommended: yes.* Nothing waits on them but those three.
 
-**F. Meno's 26 nodes** (*Meno's own nodes*). Is that the set to build, in
-place of today's five?
-*Recommended: yes.* Each is one role. F and G between them use 23 of the 26.
-*Group*, *Species* and *Combine* are for cases with several compounds to
-regroup, a charge the atoms do not say, or two reactants that meet.
+**Q. The size warning.** Is 500 MB the point at which a save says the
+workspace is large, as a setting?
+*Recommended: yes*, in Settings, General.
 
-**G. Today's three in saved workspaces.** Is it right that *Energy window*,
-*Choose one* and *As conformers* are left out when an old workspace is
-read, their result sets kept as plain sets, with no converter?
-*Recommended: yes*, said in the PR. The reader already leaves out kinds it
-does not know.
+**R. Cleaning the scratch.** Is a job's scratch folder cleaned on its own
+once its files are saved in the `.meno`, with *Keep job folders* in
+Settings for those who want to look in them?
+*Recommended: yes.* The `.meno` holds everything, so scratch left behind is
+only disk used.
 
-**H. ACCeL's plugin and version.** Do these hold?
-- It fills *Reaction*, *Compare bonding*, *Duplicates* with symmetry,
-  *Number like* and *Mode on atoms*.
-- It is built on `accel` 0.3.0 from PyPI, while GitHub's master is 0.3.1.
-- Meno keeps the arithmetic nodes ACCeL also has.
-
-*Recommended:*
-- *yes*;
-- *0.3.0*, pinned as every plugin's packages are. If the plugin needs what
-  0.3.1 adds, the maintainer releases 0.3.1 to PyPI first;
-- *Meno keeps the arithmetic nodes*, so they work whichever plugins are
-  added.
-
-**I. Keeping.** Is everything kept in the `.meno` by default, with *Don't
-keep in the file* on a set? And do raw outputs stay where they ran unless a
-step is told *Bring raw outputs into the workspace*?
-*Recommended: yes.* That is the maintainer's "keep everything, with a way
-not to", with raw outputs, which can be GB, the one default the other way.
-
-**J. A failed entry's frames.** Does a *failed* exit give each entry the
-frames its program reached, so that *Take frames* (the last) restarts from
-the last geometry?
-*Recommended: yes.* Restarting from the last geometry is then a node, not a
-setting.
-
-**K. Representing a group.** Where *Ensemble energy* and *Average* give one
-entry per group, does the group's entry of highest weight stand for it,
-carrying the results?
-*Recommended: yes.* The result keeps a real structure and geometry, which a
-diagram or a table can show.
+**S. This computer's resources.** Does this computer's runner take a job's
+cores and memory from what its plugin declares, against the machine's
+totals, capped in Settings (all cores and three quarters of the memory by
+default)?
+*Recommended: yes.*
 
 ## Answered (2026-10-16)
 
@@ -1179,3 +1272,24 @@ diagram or a table can show.
   question H).
 - **24:** no advanced nodes for retries: drawn (*Failed entries, and running
   them again*; questions B and J).
+
+**Questions A to K, on the fourth draft:**
+- **As recommended:** B to H, J and K.
+- **A:** explicit IDs, embedded by a node, and pairing by those IDs. No
+  implicit rules (*Steps, ports and exits*; *Tag*).
+- **I:** everything self-contained in the `.meno`: every job's inputs,
+  outputs and raw files brought in by default, with a way not to and a size
+  warning. The working directory is only a scratch place, cleanable, and
+  running again elsewhere writes the inputs back out of the `.meno`
+  (*Keeping*; *Where jobs run*).
+
+**After comparing with ACCeL's second version:**
+- Meno is the base, and owns the store, the graph, provenance, whether a job
+  has been done, and where jobs run.
+- ACCeL's plugin is built on ACCeL 1 (`accel` 0.3.0 from PyPI), through its
+  public API. It fills only what genuinely needs ACCeL: *Reaction*'s map
+  (*The ACCeL plugin, and what Meno does itself*). This narrows H.
+- The second version's mechanisms are adopted as Meno's own: job keys,
+  never overwriting, stopping on outputs Meno cannot account for, a local
+  runner that knows its resources, cluster jobs submitted and taken up
+  again.
