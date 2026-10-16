@@ -31,6 +31,13 @@ export const TILE = 1024;
 export const PREVIEW_PX = 360;
 /** How long a picture takes to fade in, in ms. */
 export const FADE_MS = 160;
+/**
+ * While the view moves across a page at the same zoom, how often the tiles
+ * coming into view are asked for, in ms - and how long one asked for then
+ * waits its turn while it is no longer in view before it is dropped.
+ */
+export const MOVING_ASK_MS = 120;
+export const MOVING_KEEP_MS = 300;
 /** How long a tile no longer wanted is kept before it is let go, in ms. */
 const KEEP_MS = 4000;
 /** How many tiles of other levels a page keeps under its level's own while those come: a screen's worth, and more. */
@@ -107,6 +114,12 @@ export class Pictures {
   wanted = new Map<string, number>();
   /** The tiles the column draws now: kept, however long since they were asked for (the column asks only as it moves). */
   held = new Set<string>();
+  /**
+   * Tiles come and not yet shown: shown a few a frame (`reveal`), so that
+   * putting them on the graphics card is spread over frames, not all in one
+   * as the view moves.
+   */
+  private arriving: { key: string; d: DrawnPart }[] = [];
   /** The part of each page last asked for as seen, by PDF and page: its level, and its pixels at it. */
   seen = new Map<string, { level: number; x0: number; y0: number; x1: number; y1: number }>();
   private listeners = new Set<() => void>();
@@ -168,7 +181,7 @@ export class Pictures {
               this.came();
               return;
             }
-            this.tiles.set(key, { tex: textureOf(d, false), born: performance.now() });
+            this.arriving.push({ key, d });
             this.came();
           })
           .catch(() => this.tiles.delete(key));
@@ -226,8 +239,29 @@ export class Pictures {
     return [...under.sort((x, y) => x.level - y.level).map((o) => ({ ...o, under: true as const })), ...out];
   }
 
-  /** Whether any picture is still fading in. */
+  /**
+   * Up to `most` of the tiles come shown - each then fading in - and whether
+   * any was. Called each frame by what draws them, with its renderer, which
+   * puts each on the graphics card then (`upload`), before the frame is drawn.
+   */
+  reveal(most = 1, upload?: (tex: THREE.Texture) => void): boolean {
+    let shown = 0;
+    while (shown < most && this.arriving.length) {
+      const { key, d } = this.arriving.shift()!;
+      // (asked for still: one dropped meanwhile is not shown)
+      if (this.tiles.get(key) !== "asked") continue;
+      const tex = textureOf(d, false);
+      upload?.(tex);
+      this.tiles.set(key, { tex, born: performance.now() });
+      shown++;
+    }
+    if (shown) this.came();
+    return shown > 0;
+  }
+
+  /** Whether any picture is still fading in, or waits to be shown. */
   fading(now: number): boolean {
+    if (this.arriving.length) return true;
     for (const t of this.tiles.values()) if (t !== "asked" && now - t.born < FADE_MS + 80) return true;
     for (const t of this.previews.values()) if (t !== "asked" && now - t.born < FADE_MS + 80) return true;
     return false;

@@ -53,7 +53,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { needsFallback, useLabelFontUrl } from "../../../fonts/typefaces";
 import { labelFont } from "../../../../lib/chem/labelFonts";
 import { COLORS } from "../../../theme/colors";
-import { BASE, FADE_MS, GRAY, levelFor, LINE, Page, QUICK, TILE, usePictures, type Mark, type Pic, type Tile } from "./pdfPictures";
+import { BASE, FADE_MS, GRAY, levelFor, LINE, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures, type Mark, type Pic, type Tile } from "./pdfPictures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
 import { followLink, readerOf } from "./pdfColumnReader";
 import { linkAt, linksOf, type PdfLink } from "../../../../lib/pdf/reader";
@@ -143,7 +143,8 @@ export default function Pdfs2D() {
 
   // the view: where it is, how near, and since when it has been still
   // (and which way it was last moved across the page, a unit step: where tiles are asked for ahead)
-  const view = useRef({ zoom: 0, x: 0, y: 0, still: 0, level: new Map<number, number>(), way: { x: 0, y: 0 } });
+  // (and when it was last zoomed, and last asked for tiles while moving across)
+  const view = useRef({ zoom: 0, x: 0, y: 0, still: 0, level: new Map<number, number>(), way: { x: 0, y: 0 }, zoomedAt: 0, movingAsked: 0 });
   const settleTimer = useRef<number | null>(null);
   useEffect(() => () => void (settleTimer.current != null && window.clearTimeout(settleTimer.current)), []);
   // each PDF's motion: a page turned (the one that went), its pages spread or gathered, and its light
@@ -244,7 +245,10 @@ export default function Pdfs2D() {
       if (!zoomed && d * cam.zoom > STILL_PX) v.way = { x: dx / d, y: dy / d };
       else if (zoomed) v.way = { x: 0, y: 0 };
       // (zoomed: what is drawn the same size on the screen is drawn again at it)
-      if (zoomed) setTick((t) => t + 1);
+      if (zoomed) {
+        setTick((t) => t + 1);
+        v.zoomedAt = now;
+      }
       v.zoom = cam.zoom;
       v.x = cam.position.x;
       v.y = cam.position.y;
@@ -272,11 +276,16 @@ export default function Pdfs2D() {
       if (m.icon && now - m.icon.start < ICON_MS + 80) animating = true;
       if (m.held && heldShows(m.held, now)) animating = true;
     }
+    // (a tile come shown this frame - one a frame, so that none waits on many put on the graphics card at once)
+    pics.reveal(1, (tex) => gl.initTexture(tex));
     // (the tiles' fading in, and the motions, ask for frames while they last)
     const fading = pics.fading(now);
     // (what moves is worked out as it is drawn: drawn again each frame while it moves)
     if (animating || fading) redraw();
-    if (!settled) return;
+    // (moved across at the same zoom: the tiles coming into view asked for as they come, every so often, at the level each page has - not waiting for it to stop; a zoom waits, the level changing)
+    const across = !settled && now - v.zoomedAt > SETTLE_MS && now - v.movingAsked >= MOVING_ASK_MS;
+    if (!settled && !across) return;
+    if (across) v.movingAsked = now;
     const a = pageAt(-1, -1, cam);
     const b = pageAt(1, 1, cam);
     const seen = { x0: Math.min(a.x, b.x), x1: Math.max(a.x, b.x), y0: Math.min(a.y, b.y), y1: Math.max(a.y, b.y) };
@@ -312,7 +321,8 @@ export default function Pdfs2D() {
         const partOf = (r: typeof seen) => ({ x0: (r.x0 - left) / unit, x1: (r.x1 - left) / unit, y0: (top - r.y1) / unit, y1: (top - r.y0) / unit });
         // (the level, pixels a point: quick first, then fine once that has come, for what is seen - quick, ahead; none, where the preview is enough)
         const pagePx = want * (unit / POINT);
-        const level = inView ? pics.levelNow(p.sha256, page, p.pages[page], partOf(seen), pagePx, now) : levelFor(pagePx, p.pages[page][0], QUICK);
+        const had = v.level.get(p.id * 100000 + page);
+        const level = across && had ? had : inView ? pics.levelNow(p.sha256, page, p.pages[page], partOf(seen), pagePx, now) : levelFor(pagePx, p.pages[page][0], QUICK);
         if (inView) v.level.set(p.id * 100000 + page, level);
         if (!level) continue;
         const ask = (r: typeof seen, later: boolean) =>
@@ -324,7 +334,8 @@ export default function Pdfs2D() {
               level,
               part: partOf(r),
               nearness: (i, j) => (later ? 1e9 : 0) + Math.hypot(left + ((i + 0.5) * TILE * unit) / level - mid.x, top - ((j + 0.5) * TILE * unit) / level - mid.y),
-              stillSince: () => view.current.still,
+              // (asked for while it moves: dropped before its turn once it has been out of view a moment)
+              stillSince: across ? () => performance.now() - MOVING_KEEP_MS : () => view.current.still,
               ...(later ? { ahead: true as const } : {}),
             },
             now,

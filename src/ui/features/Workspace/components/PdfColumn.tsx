@@ -30,7 +30,7 @@ import { setViewGoal, viewGoalOf } from "./viewGoal";
 import { pagesInView } from "../../../../lib/pdf/column";
 import { textHad } from "../../../../lib/pdf/text";
 import { figuresHad } from "../../../../lib/pdf/figures";
-import { BASE, levelFor, Page, QUICK, TILE, usePictures } from "./pdfPictures";
+import { BASE, levelFor, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures } from "./pdfPictures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
 import { HEADER_PX, readerOf } from "./pdfColumnReader";
 import { ease, SETTLE_MS } from "./Pdfs2D";
@@ -273,7 +273,8 @@ function ColumnPass({
   }, [cam, flightCam]);
 
   // (and which way the column last went: up, -1, or down, 1 - where its tiles are asked for ahead)
-  const clock = useRef({ last: performance.now(), still: 0, levels: new Map<number, number>(), top: 0, way: 0 });
+  // (and its scale, when that last changed, and when tiles were last asked for as it went)
+  const clock = useRef({ last: performance.now(), still: 0, levels: new Map<number, number>(), top: 0, way: 0, scale: 0, scaledAt: 0, movingAsked: 0 });
   useFrame(({ gl: r, scene: page, camera }) => {
     const now = performance.now();
     const c = clock.current;
@@ -286,12 +287,21 @@ function ColumnPass({
     if (pdf && reader.id === pdf.id) {
       const going = reader.step(dt);
       if (reader.pageNow().changed) reader.tell("page");
-      const { top: at } = reader.seen();
+      const { top: at, l: shown } = reader.seen();
       if (going && at !== c.top) c.way = Math.sign(at - c.top);
       c.top = at;
+      if (shown.scale !== c.scale) {
+        c.scale = shown.scale;
+        c.scaledAt = now;
+      }
       if (going) {
         c.still = now;
         redraw();
+        // (scrolled at the same scale: the tiles coming into view asked for as they come, every so often; a zoom waits)
+        if (now - c.scaledAt > SETTLE_MS && now - c.movingAsked >= MOVING_ASK_MS) {
+          c.movingAsked = now;
+          askTiles(now, true);
+        }
       } else {
         const onTop = st.pdfs.find((p) => p.id === pdf.id)?.page;
         if (onTop != null && onTop !== reader.page) st.readToPage(pdf.id, onTop, reader.page);
@@ -299,6 +309,8 @@ function ColumnPass({
         if (now - c.still > SETTLE_MS) askTiles(now);
         else window.setTimeout(() => invalidate(), SETTLE_MS + 20);
       }
+      // (a tile come shown this frame, one a frame)
+      pics.reveal(1, (tex) => r.initTexture(tex));
       if (pics.fading(now)) redraw();
       // (a place shown marked, fading)
       if (st.pdfFlash && now - st.pdfFlash.start < FLASH_MS + 80) redraw();
@@ -353,7 +365,7 @@ function ColumnPass({
   }, 1);
 
   /** The tiles of the column's pages in view asked for at the level the screen wants. */
-  const askTiles = (now: number) => {
+  const askTiles = (now: number, moving = false) => {
     if (!pdf) return;
     const { l, top, left } = reader.seen();
     const dpr = gl.getPixelRatio();
@@ -374,7 +386,8 @@ function ColumnPass({
         y1: (top + tall - p.y) / l.scale,
       };
       // (quick first, then fine once that has come)
-      const level = pics.levelNow(pdf.sha256, i, pdf.pages[i], part, want, now);
+      // (while it scrolls, the level each page has - or, new in view, the quick one - not drawn finer till it stops)
+      const level = moving ? (clock.current.levels.get(i) ?? quick) : pics.levelNow(pdf.sha256, i, pdf.pages[i], part, want, now);
       clock.current.levels.set(i, level);
       if (!level) continue;
       // (the column's own come first, nearest its middle)
@@ -388,7 +401,7 @@ function ColumnPass({
             level,
             part,
             nearness: (ti, tj) => -0.5 + Math.hypot(p.x + ((ti + 0.5) * TILE * l.scale) / level - mid.x, p.y + ((tj + 0.5) * TILE * l.scale) / level - mid.y) * 1e-6,
-            stillSince: () => clock.current.still,
+            stillSince: moving ? () => performance.now() - MOVING_KEEP_MS : () => clock.current.still,
           },
           now,
         ) || asked;
@@ -411,7 +424,7 @@ function ColumnPass({
               level,
               part: { x0: (left - p.x) / l.scale, x1: (left + reader.width - p.x) / l.scale, y0: (from - p.y) / l.scale, y1: (from + tall - p.y) / l.scale },
               nearness: (ti, tj) => 0.5 + Math.hypot(p.x + ((ti + 0.5) * TILE * l.scale) / level - mid.x, p.y + ((tj + 0.5) * TILE * l.scale) / level - mid.y) * 1e-6,
-              stillSince: () => clock.current.still,
+              stillSince: moving ? () => performance.now() - MOVING_KEEP_MS : () => clock.current.still,
               ahead: true,
             },
             now,

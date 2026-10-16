@@ -153,6 +153,15 @@ stops being part of the work.
 - **While a pinch or a zoom goes on**, the tiles there are scaled on the
   graphics card, and drawn again sharper once it stops. Nothing waits
   for PDFium.
+- **Drawn as it scrolls** (the maintainer, 2026-10-16: nothing was
+  drawn again until a scroll stopped). While the view moves across a page
+  at the same zoom - a scroll in the column, a pan on the canvas - the
+  tiles coming into view are asked for every eighth of a second at the
+  level the page has (in the column, a page new in view takes the quick
+  one), the way it is going first; one that has left the view a moment
+  before its turn is dropped. A zoom still waits for the view to stop,
+  the level changing. Tiles that come are shown one a frame, each put on
+  the graphics card as it is, so that none waits on several at once.
 - **Only what is in view is drawn**, nearest first, then the pages next
   in the way the view is going: once it stops, the column asks for the
   next screen's worth the way it last scrolled, and the canvas for half a

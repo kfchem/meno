@@ -61,7 +61,7 @@ describe("a page's tiles drawn", () => {
 });
 
 describe("a page's tiles kept", () => {
-  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const settle = (pics: Pictures) => new Promise((r) => setTimeout(r, 0)).then(() => pics.reveal(Infinity));
   /** What the canvas asks of a page 3000 points square: the part seen, a screen of 2560 by 1600 pixels, its top left at (x, y) points. */
   const asked = (level: number, x: number, y: number): TileAsk => ({
     sha256: "p",
@@ -78,7 +78,7 @@ describe("a page's tiles kept", () => {
     const pics = new Pictures();
     const t0 = performance.now();
     pics.ask(asked(2, 0, 0), t0);
-    await settle();
+    await settle(pics);
     const had = [...pics.tiles.keys()];
     expect(had.length).toBeGreaterThan(0);
     // (still for ten seconds, then zoomed in: the new level's tiles on their way)
@@ -103,7 +103,7 @@ describe("a page's tiles kept", () => {
       const x = (step * 137) % 2400;
       const y = (step * 89) % 2600;
       pics.ask(asked(level, x, y), now);
-      await settle();
+      await settle(pics);
       pics.tilesOf("p", 0, level, now);
       pics.letGo(now);
       most = Math.max(most, pics.tiles.size);
@@ -115,7 +115,7 @@ describe("a page's tiles kept", () => {
 });
 
 describe("the level a page's part seen is drawn at now", () => {
-  const settle = () => new Promise((r) => setTimeout(r, 0));
+  const settle = (pics: Pictures) => new Promise((r) => setTimeout(r, 0)).then(() => pics.reveal(Infinity));
   const part = { x0: 0, y0: 0, x1: 300, y1: 200 };
   const ask = (level: number): TileAsk => ({ sha256: "q", page: 0, size: [612, 792], level, part, nearness: () => 0, stillSince: () => 0 });
 
@@ -129,13 +129,13 @@ describe("the level a page's part seen is drawn at now", () => {
     let now = performance.now() + 1000;
     expect(pics.levelNow("q", 0, [612, 792], part, want, now)).toBe(quick);
     pics.ask(ask(quick), now);
-    await settle();
+    await settle(pics);
     // (come, but not yet faded in: still the quick one)
     expect(pics.levelNow("q", 0, [612, 792], part, want, performance.now())).toBe(quick);
     now = performance.now() + FADE_MS;
     expect(pics.levelNow("q", 0, [612, 792], part, want, now)).toBe(fine);
     pics.ask(ask(fine), now);
-    await settle();
+    await settle(pics);
     // (the fine one come, the quick one's let go: the fine one still)
     // (asked for again each frame the view is still, as the canvas does)
     now = performance.now() + FADE_MS + 10_000;
@@ -146,5 +146,25 @@ describe("the level a page's part seen is drawn at now", () => {
     expect(kept.length).toBeGreaterThan(0);
     expect(kept.every((k) => k.startsWith(`q:0:${fine}:`))).toBe(true);
     expect(pics.levelNow("q", 0, [612, 792], part, want, now)).toBe(fine);
+  });
+});
+
+describe("tiles come while the view moves", () => {
+  it("are shown one a frame, so that they are put on the graphics card a frame apart", async () => {
+    reader.hold = false;
+    const pics = new Pictures();
+    // (a part of four tiles asked for at once)
+    pics.ask({ sha256: "r", page: 0, size: [3000, 3000], level: 2, part: { x0: 0, y0: 0, x1: 1000, y1: 1000 }, nearness: () => 0, stillSince: () => 0 }, performance.now());
+    await new Promise((r) => setTimeout(r, 0));
+    const shown = () => [...pics.tiles.values()].filter((t) => t !== "asked").length;
+    expect(shown()).toBe(0);
+    expect(pics.fading(performance.now())).toBe(true);
+    expect(pics.reveal(1)).toBe(true);
+    expect(shown()).toBe(1);
+    pics.reveal(1);
+    expect(shown()).toBe(2);
+    pics.reveal(Infinity);
+    expect(shown()).toBe(4);
+    expect(pics.reveal(1)).toBe(false);
   });
 });
