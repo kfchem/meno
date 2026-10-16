@@ -94,9 +94,9 @@ const MAGNIFIED_OPTIONS = new WeakMap<LayoutOptions, Map<number, LayoutOptions>>
 /**
  * Layout options for a structure shown `k` times as large as it is
  * (docs/WORKSPACE.md, *Magnified display*): every length so many times as
- * long - its lines, their gaps, its letters, the room round them - as a
- * zoomed copy of it is drawn; the least width a line is drawn at on the
- * screen as it is. The same options at 1.
+ * long - its lines, their gaps, its letters, the room round them, and
+ * the least width a line is drawn at on the screen - as a zoomed copy of it
+ * is drawn. The same options at 1.
  */
 export function magnifiedOptions(opts: LayoutOptions, k: number): LayoutOptions {
   if (k === 1) return opts;
@@ -107,7 +107,9 @@ export function magnifiedOptions(opts: LayoutOptions, k: number): LayoutOptions 
   // (a change of magnification goes over in steps of a hundredth: kept to a few of them)
   if (byK.size > 64) byK.clear();
   const out: Record<string, unknown> = { ...opts };
-  for (const [key, v] of Object.entries(opts)) if (key.endsWith("Px") && key !== "minLinePx" && typeof v === "number") out[key] = v * k;
+  for (const [key, v] of Object.entries(opts)) if (key.endsWith("Px") && typeof v === "number") out[key] = v * k;
+  // (the least a line is drawn at on the screen too: zoomed out, it is as much thicker as the rest of it)
+  out.minLinePx = (opts.minLinePx ?? 1) * k;
   byK.set(k, out as LayoutOptions);
   return out as LayoutOptions;
 }

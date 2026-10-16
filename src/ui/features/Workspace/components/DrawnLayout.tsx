@@ -284,8 +284,10 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
     const on = g ? glideAt(g.plan, g.from, e) : null;
     const out = on
       ? atoms.map((a) => {
-          const p = on.get(a.id);
           const k0 = g?.sizes?.get(a.id);
+          // (one going over to another magnification: straight there, each atom from where it was - a growing is no turn)
+          const f = k0 != null ? g?.from.get(a.id) : undefined;
+          const p = f ? { x: f.x + (a.x - f.x) * Math.min(1, e), y: f.y + (a.y - f.y) * Math.min(1, e) } : on.get(a.id);
           // (as large as it is shown on its way: k going over with its places)
           const k = k0 == null ? null : Math.round((k0 + ((a.magnified ?? 1) - k0) * Math.min(1, e)) * 100) / 100;
           return p ? { ...a, x: p.x, y: p.y, ...(a.z != null && p.z != null ? { z: p.z } : {}), ...(k != null ? { magnified: k } : {}) } : a;
