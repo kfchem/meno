@@ -51,9 +51,10 @@ and in particular:
   - A bond led within reach of an atom closes onto it, and so does one led
     onto an atom however far away - a long bond closes a ring too; the
     preview shows it closed before the button comes up.
-  - **Chains** (agreed 2026-10-03): three clicks on an atom draw a chain,
-    and so does Quick Add's *Chain* from empty space - led by a drag, or,
-    the last click (or the press on the icon) let go where it was, traced
+  - **Chains** (agreed 2026-10-03): Quick Add's *Chain* from empty space
+    draws a chain, and so does *Chain from here* on an atom's right-click
+    menu (shown where the atom can take another bond) - led by a drag, or,
+    the press on the icon let go where it was (the menu's: at once), traced
     with the button up until a click ends it; Escape lets it go, and so
     does undo (Cmd/Ctrl+Z) while any gesture is under way - a chain, a
     shape, an arrow, a stroke of ink, a drag, a box, a handle's resize, a
@@ -63,12 +64,15 @@ and in particular:
     the words' own, as in a text field, and never the document's under
     them (`wordsUnderWay`). A gesture lost - the window left, the pointer
     taken from it - is let go the same way, and its flags with it, so that
-    no undo after it is taken for it (`letLostGesturesGo`). The third
-    click takes back the bond the double-click drew. (Two clicks on empty
-    space drew one until 2026-10-08, when the maintainer gave the
-    double-click there to *Quick Add*, below; three did until 2026-10-10,
-    when the maintainer moved the chain from empty space into Quick Add, so
-    that Quick Add need not wait to see whether a third click comes.)
+    no undo after it is taken for it (`letLostGesturesGo`). Three
+    clicks on an atom are not a chain gesture, nor are they anywhere: a
+    third click is a click like the first (the maintainer, 2026-10-16: it
+    misfired - double-clicking OH again and again, or a click then a
+    double-click, kept starting one). (Two clicks on empty space drew one
+    until 2026-10-08, when the maintainer gave the double-click there to
+    *Quick Add*, below; three did until 2026-10-10, when the maintainer
+    moved the chain from empty space into Quick Add; three on an atom drew
+    one until 2026-10-16.)
     - It runs on a honeycomb of the drawing's own lengths and angles laid
       out from its start (`utils/honeycomb`), turned so that a bond the
       atom already has is one of its own; across at 30 degrees from empty

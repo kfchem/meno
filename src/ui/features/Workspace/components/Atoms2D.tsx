@@ -10,7 +10,7 @@ import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
-import { clickClock, clickEditHeldOff, clickStillEdits } from "../utils/clickCount";
+import { clickClock, clickEditHeldOff, clickStillEdits, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { commitInstanceMatrices } from "./instances";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -390,8 +390,8 @@ export function Atoms2D() {
         return;
       }
       const DBL_MS = DOUBLE_CLICK_MS;
-      const again = lastDown.current.id === a.id && now - lastDown.current.t <= DBL_MS;
-      const count = again ? lastDown.current.count + 1 : 1;
+      // (a third click is a click like the first: a double-click is two, and a press after it starts again)
+      const count = pressNumber(lastDown.current, a.id, now, DBL_MS);
       const second = count === 2;
       cand.current = {
         active: true,
@@ -405,20 +405,6 @@ export function Atoms2D() {
       endedByInteractive.current = false;
       // the drag is the atom's, not the view's
       beginPanHold(pid);
-      if (count >= 3) {
-        // Three clicks draw a chain out of the atom, on its honeycomb
-        // (utils/chain): led by a drag, or - the third click let go where
-        // it was - traced with the button up, until a click ends it. The
-        // bond the double-click drew is taken back for it.
-        cancelPendingEdit();
-        forgetPresses();
-        store.getState().takeBackDoubleClickBond(a.id);
-        strokeGesture(a.id, "chain", pid, () => {
-          startExtend(a.id, "chain", true);
-          endedByInteractive.current = true;
-        });
-        return;
-      }
       if (second) {
         // A double-click that drags draws a bond out of the atom, where it
         // is led; a pause lets it go where the pointer is. One that does

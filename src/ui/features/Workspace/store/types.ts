@@ -1464,12 +1464,6 @@ export type EditorState = {
    */
   pressHold: { atomId?: number; at?: { x: number; y: number }; start: number } | null;
   setPressHold: (h: EditorState["pressHold"]) => void;
-  /** The bond a double-click on an atom drew, which a third click takes back to draw a chain instead. */
-  /** (`state`: the document as the bond left it - its depth in the history stays the same once the history is full, so it is told by this) */
-  doubleClickBond: { atomId: number; state: object; at: number } | null;
-  noteDoubleClickBond: (atomId: number) => void;
-  /** The double-click's bond on `atomId` taken back, if it is the last edit and has only just been made. */
-  takeBackDoubleClickBond: (atomId: number) => void;
   /** A press come down on the page, noted: the document and the selection as they were, for `takeBackPress`. */
   notePress: () => void;
   /**

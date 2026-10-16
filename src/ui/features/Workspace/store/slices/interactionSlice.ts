@@ -274,7 +274,6 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         // no gesture under way
         boxSelect: { active: false, kind: "box", points: [] },
         pressHold: null,
-        doubleClickBond: null,
         extend: ended,
         moveDrag: { active: false, atomId: null, pointer: null, mode: "snap", preview: null },
         panHold: { active: false, pointerId: null },

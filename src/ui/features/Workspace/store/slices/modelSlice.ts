@@ -19,7 +19,6 @@ import { pictureBytes } from "../../../../../lib/picture/held";
 import { resultKey } from "../../../../../lib/calc/results";
 import type { Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
-import { DOUBLE_CLICK_MS } from "../../constants";
 import { nextIdAfter } from "../../workflow/saved";
 import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
@@ -220,22 +219,8 @@ export const createModelSlice = (
     });
   },
 
-  noteDoubleClickBond: (atomId: number) =>
-    set((prev: EditorState) => ({
-      ...prev,
-      doubleClickBond: { atomId, state: doc.getState(), at: performance.now() },
-    })),
-
   setStereoShown: (of: Parameters<typeof ops.setStereoShown>[1], show: boolean) => {
     doc.edit(show ? "show R/S" : "hide R/S", (d) => ops.setStereoShown(d, of, show));
-  },
-
-  takeBackDoubleClickBond: (atomId: number) => {
-    const d = get().doubleClickBond;
-    set((prev: EditorState) => ({ ...prev, doubleClickBond: null }));
-    if (!d || d.atomId !== atomId || performance.now() - d.at > 2 * DOUBLE_CLICK_MS) return;
-    // (the bond's own step, nothing since: the document still as the bond left it)
-    if (doc.getState() === d.state) doc.undo();
   },
 
   notePress: () => {

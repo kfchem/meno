@@ -261,6 +261,17 @@ export function implicitHydrogens(
   return Math.max(0, valence - bondOrderSum);
 }
 
+/**
+ * Whether an atom can take another bond: its element's valence, as its
+ * charge and unpaired electron leave it, is not yet met by bonds whose
+ * orders sum to `bondOrderSum`. An element with no valence here - a metal -
+ * always can; hydrogen takes one.
+ */
+export function canTakeBond(el: string, bondOrderSum: number, charge = 0, radical?: Radical): boolean {
+  if (el === "H") return bondOrderSum < 1;
+  return VALENCE[el] ? implicitHydrogens(el, bondOrderSum, charge, radical) > 0 : true;
+}
+
 /** A charge as a formula writes it: +, 2+, − (a minus sign, not a hyphen), 3−. */
 export function chargeText(charge: number): string {
   if (!charge) return "";

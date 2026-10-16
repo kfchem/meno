@@ -144,6 +144,7 @@ export default function PartMenu({
   onRadical,
   radical,
   onExpand,
+  onChain,
   asTyped,
   onArrowStyle,
   onEditText,
@@ -197,6 +198,8 @@ export default function PartMenu({
   radical: boolean;
   /** An abbreviation's atoms drawn out; unset, where the atom is none. */
   onExpand?: () => void;
+  /** Where the atom can take another bond: a chain begun from it, traced with the button up. */
+  onChain?: () => void;
   /** Its label as it was typed (obz, read as OBz), and the label made that again; unset, where it was read as typed. */
   asTyped?: { typed: string; run: () => void };
   /** A reaction arrow's own line and head, in a panel beside the canvas. */
@@ -706,6 +709,7 @@ export default function PartMenu({
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
+                ...(onChain ? [{ name: "Chain from here", keys: "", run: onChain }] : []),
                 { name: radical ? "No unpaired electron" : "Unpaired electron", keys: "", run: onRadical },
                 ...(onExpand ? [{ name: "Expand abbreviation", keys: "", run: onExpand }] : []),
                 ...(asTyped ? [{ name: `As typed: ${asTyped.typed}`, keys: "", run: asTyped.run }] : []),
