@@ -20,7 +20,9 @@ export function shuffled(g: LayoutInput, seed: number): LayoutInput {
   // (and each centre's neighbours in another order, its volume turned with
   // each swap: the same configuration, written as another file writes it)
   const atoms = from.map((o) => {
-    const a = g.atoms[o];
+    const a0 = g.atoms[o];
+    // (a star's pi system by its atoms' new places)
+    const a = a0.pi ? { ...a0, pi: a0.pi.map((m) => to[m]) } : a0;
     if (!a.tetra) return a;
     const ns = a.tetra.neighbours.map((n) => (n < 0 ? n : to[n]));
     let volume = a.tetra.volume;
@@ -43,7 +45,9 @@ export function shuffled(g: LayoutInput, seed: number): LayoutInput {
     const j = Math.floor(next() * (i + 1));
     [bonds[i], bonds[j]] = [bonds[j], bonds[i]];
   }
-  return { atoms, bonds };
+  // (and each axis of chirality, its atoms and references where they now are)
+  const axes = g.axes?.map((x) => ({ ...x, atoms: [to[x.atoms[0]], to[x.atoms[1]]] as const, refs: [to[x.refs[0]], to[x.refs[1]]] as const }));
+  return { atoms, bonds, ...(axes ? { axes } : {}) };
 }
 
 /**
@@ -65,7 +69,7 @@ export function asSeen(g: LayoutInput, out: Layout2D): string {
 }
 
 /** The shuffled orders a molecule is drawn in beside its SMILES's own (the seeds of `shuffled`). */
-export const SHUFFLE_SEEDS = [1, 2, 3, 4].map((k) => k * 7919);
+export const SHUFFLE_SEEDS = [1, 2, 3, 4, 5, 6, 7, 8].map((k) => k * 7919);
 
 /**
  * Cages of three-bonded CH whose atoms ranks refined by their neighbours
@@ -75,4 +79,6 @@ export const SHUFFLE_SEEDS = [1, 2, 3, 4].map((k) => k * 7919);
 export const tiedCages = [
   { name: "cuneane", smiles: "C12C3C4C3C2C5C4C51" },
   { name: "basketane", smiles: "C12C3C4C5C3C2C5C4CC1" },
+  // (pentacyclo[4.4.0.0(2,4).0(3,8).0(5,7)]dec-9-ene)
+  { name: "snoutene", smiles: "C12C3C4C3C5C2C5C4C=C1" },
 ] as const;

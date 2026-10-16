@@ -26,7 +26,8 @@ describe("a reagent's label written out on the canvas", () => {
         expect(sameConfiguration(read!, t), `${label}: atom ${i}`).toBe(true);
       }
     }
-  });
+    // (six reagents laid out, Jacobsen's catalyst among them: a few seconds on a busy machine)
+  }, 30_000);
 
   it("binds a ligand's neutral donor by a coordination bond, which takes no H from a carbene's carbon", () => {
     const model: Model = {

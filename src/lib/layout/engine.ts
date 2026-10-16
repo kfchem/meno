@@ -35,6 +35,7 @@ import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo"
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
 import { atomClasses, byStructure, canonicalRanks } from "./ranks";
+import { canonicalRanks as canonicalOrderRanks, reordered, restored, walkOrder } from "./canonical";
 import { greatest, least } from "../chem/lists";
 
 export type { LayoutInput } from "./perceive";
@@ -68,6 +69,71 @@ export type Layout2D = {
 } & Stereo;
 
 export function layout2D(input: LayoutInput): Layout2D {
+  // (laid out with its atoms in the molecule's own order, worked out from
+  // its structure alone - every tie, every sum taken in that order - and
+  // handed back in the order given: the same molecule drawn with its atoms
+  // in any order comes out the same. Atoms the order leaves alike are
+  // alike in everything the layout reads, so the drawing either way is the
+  // same, by symmetry)
+  // (and kept: the same input again, a label's group drawn out at each
+  // relayout, a drawing read back - however its atoms come - laid out once)
+  const given = JSON.stringify(input);
+  const asGiven = laidOutAsGiven.get(given);
+  if (asGiven) {
+    laidOutAsGiven.delete(given);
+    laidOutAsGiven.set(given, asGiven);
+    return structuredClone(asGiven);
+  }
+  const to = walkOrder(input, canonicalOrderRanks(input));
+  const own = reordered(input, to);
+  const key = JSON.stringify(own);
+  let laid = laidOutBefore.get(key);
+  if (laid) {
+    laidOutBefore.delete(key);
+    laidOutBefore.set(key, laid);
+  } else {
+    laid = layoutInOrder(own);
+    laidOutBefore.set(key, laid);
+    if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
+  }
+  const out = restored(structuredClone(laid), to);
+  laidOutAsGiven.set(given, structuredClone(out));
+  if (laidOutAsGiven.size > LAID_OUT_KEPT) laidOutAsGiven.delete(laidOutAsGiven.keys().next().value!);
+  return out;
+}
+
+/** The molecules laid out last, by the input as given: each drawing, handed out as a copy. */
+const laidOutAsGiven = new Map<string, Layout2D>();
+
+/** The molecules laid out last, by the molecule written in its own order: the drawing in that order. */
+const laidOutBefore = new Map<string, Layout2D>();
+
+/** How many molecules `layout2D` keeps laid out, the least recently asked for going first. */
+const LAID_OUT_KEPT = 64;
+
+/** Forget the molecules `layout2D` keeps laid out (for tests that lay the same molecule out in several orders). */
+export function forgetLaidOut(): void {
+  laidOutAsGiven.clear();
+  laidOutBefore.clear();
+}
+
+/**
+ * Drawings of a piece best first by `score` - and of two that score the
+ * same, the one that reads left to right as a formula is written: what is
+ * not carbon (a label, an acid's O, a metal's halide) further right. Frames
+ * the measure cannot part, a chain drawn one way round or the other, went by
+ * the order the atoms came in.
+ */
+function bestFirst(mol: Molecule, piece: readonly number[]): (p: { pos: Grown; score: number }, q: { pos: Grown; score: number }) => number {
+  const labels = piece.filter((a) => mol.el[a] !== "C" && mol.el[a] !== "H");
+  const rightward = (pos: Grown) => {
+    const mean = piece.reduce((s, a) => s + pos.get(a)!.x, 0) / piece.length;
+    return labels.reduce((s, a) => s + pos.get(a)!.x - mean, 0);
+  };
+  return (p, q) => (Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : rightward(q.pos) - rightward(p.pos));
+}
+
+function layoutInOrder(input: LayoutInput): Layout2D {
   // Drawn, then read back as Meno reads a drawing (drawn.ts): a ring system
   // drawn as a solid whose stereocentres do not read as given - a bond out
   // of it drawn nearer the other of the two ways the solid leaves free than
@@ -329,7 +395,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
           const pos = grow(mol, piece, L, frame, sides, H, upright);
           return { pos, score: score(pos) };
         })
-        .sort((p, q) => p.score - q.score);
+        .sort(bestFirst(mol, piece));
       for (const top of grown.slice(0, piece.length <= 60 ? 3 : 1)) {
         const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
         // (a cage's textbook view kept unless another reads clearly better:
@@ -376,7 +442,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const { L, H } = setUp(frame);
       const pos = grow(mol, piece, L, frame, sides, H, upright);
       return { pos, score: score(pos), mirrored: frame.mirrored };
-    }).sort((p, q) => p.score - q.score);
+    }).sort(bestFirst(mol, piece));
     let best = tried[0];
     // every frame tried the other way where it helps, for a small piece;
     // the most promising few for a large one
@@ -387,7 +453,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, false, swapsHere),
         mirrored: cand.mirrored,
       }))
-      .sort((p, q) => p.score - q.score);
+      .sort(bestFirst(mol, piece));
     // and the best few set right within their small sides - every one, for
     // a small piece
     for (const cand of improved.slice(0, piece.length <= 40 ? improved.length : 3)) {
