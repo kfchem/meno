@@ -239,10 +239,12 @@ brought onto the nearest, its title bar within reach, or centred at the default
 size where there is none (`place`, with its tests). The size kept is the
 inner one - what `set_size` takes - and the place the outer one, so that a
 frameless window's larger outer frame on Windows does not grow it at every
-start, and the size set is read back and set again corrected, once, so that
-what the platform makes of `set_size` - on Windows a caption's height more
-than was asked - does not grow it; a maximized window is shown at its frame before it is maximized on
-Windows, so that it goes back to it. The talk's window and any
+start. On Windows the window's own placement is kept as it is
+(`GetWindowPlacement`: the normal frame, maximized or not) and given back
+before the window is shown (`SetWindowPlacement`, `SW_SHOWMAXIMIZED` or
+`SW_SHOWNORMAL`), so that the frame it goes back to as it is unmaximized
+round-trips exactly - the size set and read back is not the same measure
+there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
 other are not kept. Tauri's window API only; no crate of its own.
 
 ## Meno's log

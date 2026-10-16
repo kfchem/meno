@@ -53,6 +53,10 @@ pub struct State {
     pub scale: f64,
     pub maximized: bool,
     pub fullscreen: bool,
+    /// On Windows, the platform's own placement of the window as it is not maximized (`WINDOWPLACEMENT`'s
+    /// `rcNormalPosition`: left, top, right, bottom, in its workspace coordinates), given back as it was kept.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub placement: Option<[i32; 4]>,
 }
 
 /// Where the window goes.
@@ -124,6 +128,74 @@ pub fn place(saved: &State, screens: &[Screen]) -> Placement {
     Placement::At(Rect { x, y, w, h })
 }
 
+/// A normal frame as the platform's placement gives it - the desktop's, less the work area's origin `off` - as a frame of the desktop.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn desktop_of(raw: [i32; 4], off: (i32, i32)) -> Rect {
+    Rect { x: raw[0] + off.0, y: raw[1] + off.1, w: raw[2] - raw[0], h: raw[3] - raw[1] }
+}
+
+/// A frame of the desktop as the platform's placement has it.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn raw_of(r: &Rect, off: (i32, i32)) -> [i32; 4] {
+    [r.x - off.0, r.y - off.1, r.x - off.0 + r.w, r.y - off.1 + r.h]
+}
+
+/// What is kept of a placement: its frame as the state has it - the place in the desktop's pixels, the size in logical ones at `scale` - and the placement itself.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn state_of(raw: [i32; 4], off: (i32, i32), scale: f64, maximized: bool, fullscreen: bool) -> State {
+    let r = desktop_of(raw, off);
+    State { x: r.x, y: r.y, width: r.w as f64 / scale, height: r.h as f64 / scale, scale, maximized, fullscreen, placement: Some(raw) }
+}
+
+/// The placement a kept state is put back as: the one kept, as it is where it needs no change, or brought within a monitor as `place` has it; none where it is centred or has none kept.
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn restored(saved: &State, screens: &[Screen], off: (i32, i32)) -> Option<[i32; 4]> {
+    let raw = saved.placement?;
+    match place(saved, screens) {
+        Placement::At(r) if r == desktop_of(raw, off) => Some(raw),
+        Placement::At(r) => Some(raw_of(&r, off)),
+        Placement::Centred { .. } => None,
+    }
+}
+
+/// Windows' own placement, which keeps the frame a window goes back to as it is unmaximized, whatever the inner and outer sizes are made of.
+#[cfg(windows)]
+mod native {
+    use windows::Win32::Foundation::{HWND, RECT};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetWindowPlacement, SetWindowPlacement, SystemParametersInfoW, SPI_GETWORKAREA, SW_SHOWMAXIMIZED, SW_SHOWNORMAL, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOWPLACEMENT,
+    };
+
+    /// The origin of the work area, which placements' coordinates are from (the desktop's, less the taskbar where it is at the top or left).
+    pub fn origin() -> (i32, i32) {
+        let mut rc = RECT::default();
+        // SAFETY: SPI_GETWORKAREA writes a RECT through the pointer given.
+        let ok = unsafe { SystemParametersInfoW(SPI_GETWORKAREA, 0, Some(&mut rc as *mut RECT as *mut _), SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0)) };
+        if ok.is_ok() { (rc.left, rc.top) } else { (0, 0) }
+    }
+
+    /// The window's handle, as a pointer: Tauri's is of the windows crate Tauri is built on, which need not be this one's.
+    pub type Handle = *mut core::ffi::c_void;
+
+    /// The normal frame the window goes back to (left, top, right, bottom), and whether it is maximized.
+    pub fn get(h: Handle) -> Option<([i32; 4], bool)> {
+        let mut wp = WINDOWPLACEMENT { length: std::mem::size_of::<WINDOWPLACEMENT>() as u32, ..Default::default() };
+        // SAFETY: `wp` is as large as its `length` says, and the window is this process's own.
+        unsafe { GetWindowPlacement(HWND(h), &mut wp).ok()? };
+        let r = wp.rcNormalPosition;
+        Some(([r.left, r.top, r.right, r.bottom], wp.showCmd == SW_SHOWMAXIMIZED.0 as u32))
+    }
+
+    /// The window put at a normal frame and shown - maximized or not - at once.
+    pub fn set(h: Handle, raw: [i32; 4], maximized: bool) -> bool {
+        let mut wp = WINDOWPLACEMENT { length: std::mem::size_of::<WINDOWPLACEMENT>() as u32, ..Default::default() };
+        wp.showCmd = if maximized { SW_SHOWMAXIMIZED.0 as u32 } else { SW_SHOWNORMAL.0 as u32 };
+        wp.rcNormalPosition = RECT { left: raw[0], top: raw[1], right: raw[2], bottom: raw[3] };
+        // SAFETY: as `get`.
+        unsafe { SetWindowPlacement(HWND(h), &wp).is_ok() }
+    }
+}
+
 /// The file the state is kept in.
 fn file(data: &Path) -> PathBuf {
     data.join("window-state.json")
@@ -177,6 +249,17 @@ pub fn restore(w: &WebviewWindow, data: Option<&Path>) {
     let saved = data.and_then(load);
     match saved.as_ref().map(|s| (place(s, &screens(w)), s)) {
         Some((Placement::At(r), s)) => {
+            // (on Windows, its own placement: the normal frame it goes back to is kept exactly, and
+            // the window is shown, maximized or not, by it - the size is not left to be read back)
+            #[cfg(windows)]
+            if let Some(raw) = restored(s, &screens(w), native::origin()) {
+                if w.hwnd().is_ok_and(|h| native::set(h.0, raw, s.maximized)) {
+                    if s.fullscreen {
+                        let _ = w.set_fullscreen(true);
+                    }
+                    return;
+                }
+            }
             // (its inner size as `inner_size` reads it, whatever offset the platform has between
             // what `set_size` is given and what it makes: read back, and corrected once)
             sized((r.w as u32, r.h as u32), |(x, y)| { let _ = w.set_size(tauri::PhysicalSize::new(x, y)); }, || w.inner_size().ok().map(|s| (s.width, s.height)));
@@ -219,6 +302,13 @@ fn snapshot(w: &Window, before: Option<State>) -> Option<State> {
     }
     s.maximized = w.is_maximized().unwrap_or(false);
     s.fullscreen = w.is_fullscreen().unwrap_or(false);
+    // (on Windows, the placement it keeps for the frame it goes back to - maximized or not)
+    #[cfg(windows)]
+    if let (Some((raw, _)), Ok(scale)) = (w.hwnd().ok().and_then(|h| native::get(h.0)), w.scale_factor()) {
+        if scale > 0.0 {
+            return Some(state_of(raw, native::origin(), scale, s.maximized, s.fullscreen));
+        }
+    }
     if !s.maximized && !s.fullscreen {
         // (its size as `set_size` takes it - the inner one: a frameless window's outer
         // frame is larger on Windows, and kept so it grew at every start - and its
@@ -287,6 +377,30 @@ mod tests {
     }
 
     #[test]
+    fn a_placement_kept_comes_back_unchanged_at_any_scale_and_work_area() {
+        let screens = |scale: f64| [Screen { frame: Rect { x: 0, y: 0, w: (3440.0 * scale / 1.0) as i32, h: (1440.0 * scale) as i32 }, scale }];
+        for (scale, off) in [(1.0, (0, 0)), (1.75, (0, 0)), (1.25, (0, 40)), (1.0, (60, 0))] {
+            let raw = [400 - off.0, 250 - off.1, 400 - off.0 + 1700, 250 - off.1 + 1150];
+            let state = state_of(raw, off, scale, true, false);
+            // (through a file and back)
+            let state: State = serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+            assert_eq!(restored(&state, &screens(scale), off), Some(raw), "{scale} {off:?}");
+            // (and kept again from what was put back)
+            let again = state_of(restored(&state, &screens(scale), off).unwrap(), off, scale, true, false);
+            assert_eq!(again, state);
+        }
+    }
+
+    #[test]
+    fn a_placement_off_every_monitor_is_brought_on_one() {
+        let screens = [Screen { frame: Rect { x: 0, y: 0, w: 1920, h: 1080 }, scale: 1.0 }];
+        let state = state_of([5000, 300, 5800, 900], (0, 0), 1.0, false, false);
+        let raw = restored(&state, &screens, (0, 0)).unwrap();
+        assert!(raw[0] >= 0 && raw[2] <= 1920);
+        assert_eq!((raw[2] - raw[0], raw[3] - raw[1]), (800, 600));
+    }
+
+    #[test]
     fn a_size_set_comes_to_what_was_kept_whatever_offset_the_platform_has() {
         use std::cell::Cell;
         for offset in [(0u32, 0u32), (0, 30), (16, 39), (24, 64)] {
@@ -308,7 +422,7 @@ mod tests {
         let scale = 1.75;
         for _ in 0..3 {
             // (kept: the inner size, in logical pixels; set again: at the scale it is on)
-            let kept = State { x: 0, y: 0, width: w.inner.0 as f64 / scale, height: w.inner.1 as f64 / scale, scale, maximized: false, fullscreen: false };
+            let kept = State { x: 0, y: 0, width: w.inner.0 as f64 / scale, height: w.inner.1 as f64 / scale, scale, maximized: false, fullscreen: false, placement: None };
             let screens = [Screen { frame: Rect { x: 0, y: 0, w: 3840, h: 2160 }, scale }];
             let Placement::At(r) = place(&kept, &screens) else { panic!("placed") };
             w.inner = (r.w as u32, r.h as u32);
@@ -322,7 +436,7 @@ mod tests {
     const RETINA: Screen = Screen { frame: Rect { x: 0, y: 0, w: 2880, h: 1800 }, scale: 2.0 };
 
     fn saved(x: i32, y: i32, w: f64, h: f64, scale: f64) -> State {
-        State { x, y, width: w, height: h, scale, maximized: false, fullscreen: false }
+        State { x, y, width: w, height: h, scale, maximized: false, fullscreen: false, placement: None }
     }
 
     #[test]
@@ -397,7 +511,7 @@ mod tests {
     fn the_state_is_written_whole_and_read_back_and_a_bad_file_is_none() {
         let dir = std::env::temp_dir().join(format!("meno-window-{}", uuid::Uuid::new_v4()));
         assert!(load(&dir).is_none());
-        let s = State { x: -20, y: 30, width: 1111.5, height: 777.0, scale: 1.25, maximized: true, fullscreen: false };
+        let s = State { x: -20, y: 30, width: 1111.5, height: 777.0, scale: 1.25, maximized: true, fullscreen: false, placement: None };
         save(&dir, &s).unwrap();
         assert_eq!(load(&dir), Some(s));
         std::fs::write(dir.join("window-state.json"), "{ not json").unwrap();
