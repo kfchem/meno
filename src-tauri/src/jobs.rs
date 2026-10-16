@@ -1713,46 +1713,12 @@ fn plain(path: PathBuf) -> PathBuf {
     path
 }
 
-/// Meno's identifier (tauri.conf.json), which names its data folder.
-const IDENTIFIER: &str = "com.kfchem.meno";
-
-/// Meno's local data folder as Tauri finds it (`app_local_data_dir`: the
-/// system's folder for applications' local data, then Meno's identifier),
-/// where Meno makes jobs (lib.rs `local_data_dir`) - for a job's runner,
-/// which has no window to ask. On a Mac and on Linux it is the data folder
-/// itself; on Windows the local one, not the roaming one.
+/// Meno's local data folder as Tauri finds it (`app_local_data_dir`, as
+/// folders.rs has it), where Meno makes jobs (lib.rs `local_data_dir`) - for
+/// a job's runner, which has no window to ask. On a Mac and on Linux it is
+/// the data folder itself; on Windows the local one, not the roaming one.
 fn data_dir_here() -> Option<PathBuf> {
-    #[cfg(windows)]
-    let base = local_app_data();
-    #[cfg(unix)]
-    let base = {
-        let home = std::env::var_os("HOME").map(PathBuf::from).filter(|p| p.is_absolute());
-        if cfg!(target_os = "macos") {
-            home.map(|h| h.join("Library").join("Application Support"))
-        } else {
-            let xdg = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from).filter(|p| p.is_absolute());
-            xdg.or_else(|| home.map(|h| h.join(".local").join("share")))
-        }
-    };
-    base.map(|b| b.join(IDENTIFIER))
-}
-
-/// The user's local application data folder (Windows' known folder, as Tauri reads it).
-#[cfg(windows)]
-fn local_app_data() -> Option<PathBuf> {
-    use std::os::windows::ffi::OsStringExt;
-    use windows_sys::Win32::UI::Shell::{FOLDERID_LocalAppData, SHGetKnownFolderPath};
-    unsafe {
-        let mut path: windows_sys::core::PWSTR = std::ptr::null_mut();
-        let ok = SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, std::ptr::null_mut(), &mut path) == 0;
-        let found = (ok && !path.is_null()).then(|| {
-            let len = (0..).take_while(|&i| *path.add(i) != 0).count();
-            PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(path, len)))
-        });
-        // (given back however it went)
-        windows::Win32::System::Com::CoTaskMemFree(Some(path as *const core::ffi::c_void));
-        found
-    }
+    crate::folders::local_data_dir()
 }
 
 /// The plugins Meno carries, where Tauri finds its resources - for a job's runner, as for its data folder.
@@ -2927,12 +2893,12 @@ mod tests {
         let here = data_dir_here().unwrap();
         #[cfg(windows)]
         {
-            let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap()).join(IDENTIFIER);
+            let local = PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap()).join("Meno").join("data");
             assert_eq!(here, local);
             assert!(!here.starts_with(std::env::var_os("APPDATA").unwrap()));
         }
         #[cfg(target_os = "macos")]
-        assert_eq!(here, PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library").join("Application Support").join(IDENTIFIER));
+        assert_eq!(here, PathBuf::from(std::env::var_os("HOME").unwrap()).join("Library").join("Application Support").join("Meno"));
         // (a job made as job_start makes it, in a local data folder: taken by its runner)
         let base = temp();
         let data = base.join("local");
@@ -2943,11 +2909,11 @@ mod tests {
     }
 
     #[test]
-    fn a_runner_finds_meno_s_data_folder_by_meno_s_identifier() {
+    fn a_runner_finds_meno_s_local_data_folder_as_tauri_has_it() {
         let conf: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json")).unwrap()).unwrap();
-        assert_eq!(conf["identifier"], IDENTIFIER);
+        assert_eq!(conf["app"]["appDirectoriesOverride"]["localData"], "$LOCALDATA/Meno");
         assert_eq!(conf["productName"], "Meno");
-        assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with(IDENTIFIER)));
+        assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with("Meno")));
         assert!(plugins_here().is_some_and(|p| p.ends_with(Path::new("resources").join("plugins"))));
     }
 

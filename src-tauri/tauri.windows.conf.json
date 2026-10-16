@@ -1,5 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "appDirectoriesOverride": {
+      "localData": "$LOCALDATA/Meno/data",
+      "cache": "$LOCALDATA/Meno/data"
+    }
+  },
   "bundle": {
     "resources": [
       "resources/plugins/*/manifest.json",

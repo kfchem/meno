@@ -293,7 +293,7 @@ molecular quadrupole (traceless):
 
     def test_a_dump_whose_command_line_holds_a_windows_path_unescaped(self):
         # (xtb on Windows records its command line with the program's path as it is: backslashes JSON does not take)
-        dump = '{\n   "program call": "C:\\Users\\me\\AppData\\Roaming\\com.kfchem.meno\\pixi\\Library/bin\\xtb.exe input.xyz --gfn 2",\n   "total energy": -8.2255,\n   "note": "a \\"quoted\\" word"\n}'
+        dump = '{\n   "program call": "C:\\Users\\me\\AppData\\Local\\Meno\\data\\pixi\\Library/bin\\xtb.exe input.xyz --gfn 2",\n   "total energy": -8.2255,\n   "note": "a \\"quoted\\" word"\n}'
         with self.assertRaises(ValueError):
             json.loads(dump)
         out = ask("collect", step="energy", entries=[ETHYNE], options={}, files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]

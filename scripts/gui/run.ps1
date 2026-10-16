@@ -96,10 +96,10 @@ function Get-MenoSettingsPath {
     <#
       .SYNOPSIS
       Where the app keeps its settings: settings.json in its data folder,
-      named for its identifier (src-tauri/tauri.conf.json).
+      named Meno (src-tauri/src/folders.rs).
     #>
-    if ($IsWindows) { return Join-Path $env:APPDATA "com.kfchem.meno/settings.json" }
-    return Join-Path $HOME "Library/Application Support/com.kfchem.meno/settings.json"
+    if ($IsWindows) { return Join-Path $env:APPDATA "Meno/settings.json" }
+    return Join-Path $HOME "Library/Application Support/Meno/settings.json"
 }
 
 function Set-GuidesShown {
