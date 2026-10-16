@@ -68,10 +68,10 @@ maintainer's own library:
 > Meno is the base. Meno owns the store (.meno), the graph, provenance, the
 > 'has this been done' judgement, and where jobs run.
 
-- **ACCeL is used only where it is genuinely needed.** Its plugin is built
-  on ACCeL 1 (`accel` 0.3.0), through its public API. Each node it might
-  have filled is decided one by one (*The ACCeL plugin, and what Meno does
-  itself*): the atom map is ACCeL's, and the rest is Meno's.
+- **Atom mapping is Meno's own**, a basic feature of drawing reaction
+  schemes, used by the *Reaction* node as by the 2D canvas. The nodes ACCeL
+  might have filled are each decided (*Atom mapping, and what Meno does
+  itself*): all are Meno's, and no ACCeL plugin is part of this plan.
 - **Five mechanisms of ACCeL's second version are adopted, as Meno's own**:
   a job key from the input files and versions; never overwriting; stopping
   on outputs Meno cannot account for; a local runner that knows its
@@ -450,12 +450,14 @@ from that record whenever the workspace is open, or when it is opened
 again. No Meno process waits on a cluster.
 
 **The working directory is scratch** (question I, refined):
-- it is where a program physically runs: Meno's jobs folder by default, or
-  a folder the chemist chooses, per runner;
+- it is where a program physically runs. For this computer it is set in
+  Meno's Settings, Meno's own folder by default; a cluster runner has its
+  own setting for its machine;
 - its folders have readable names (workspace, step, entry), not bare IDs,
   and *Open the folder* is on a step's and an entry's menu;
-- once a job has ended and its files are in the `.meno`, its scratch may be
-  cleaned; nothing depends on it afterwards;
+- once a job has ended and its files are saved in the `.meno`, its scratch
+  is cleaned on its own, unless *Keep job folders* is chosen in Settings;
+  nothing depends on it afterwards;
 - running again, or continuing, from a `.meno` elsewhere writes the inputs
   back out of the `.meno` into a new scratch;
 - a runner still takes only job specifications Meno wrote.
@@ -532,6 +534,7 @@ of highest weight stands for it, carrying the results.
 | **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
+| **Reaction** | *reactants* (one entry; a complex is made first by *Combine*) and *products* | *mapped products*: each product in the reactants' numbering, by Meno's atom mapping (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
 | **Restraints** | molecules (the reference), and a table of atoms where wanted | a table of restraints: listed atoms or coordination bonds kept at a distance; double bonds' cis or trans kept as in the reference; listed atoms fixed |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
@@ -547,7 +550,7 @@ of highest weight stands for it, carrying the results.
 | **Energy diagram** | molecules with an energy, and what each connects | a chart |
 | **Chart** | a table | a chart: one column against another |
 
-That is 30 nodes, each doing one thing.
+That is 31 nodes, each doing one thing.
 
 **What happens to today's five**
 - ***Energy window*** becomes *Relative* (to the lowest in its group) then
@@ -573,12 +576,6 @@ what it takes where that is less than the kind, the properties it gives
 (names, units), the failure kinds it reports, the restraints it applies, its
 options and templates, and whether a kind's entries go into one job
 together (`together`).
-
-**Reactions**
-
-| Kind | Takes | Gives |
-|---|---|---|
-| **Reaction** | *reactants* (one entry; a complex is made first by *Combine*) and *products* | *mapped products*: each product in the reactants' numbering (the first map, or every map), from the plugin; *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after, worked out by Meno from the map |
 
 **Calculations**
 
@@ -613,62 +610,36 @@ tests: *Optimise*, *Conformers* or *Frequencies* of a lone atom gives its
 energy where it is, as the plugins do today. A chemist who wants it
 otherwise draws a *Filter* on the number of atoms.
 
-### The ACCeL plugin, and what Meno does itself
+### Atom mapping, and what Meno does itself
 
 **Meno is the base** (the maintainer, 2026-10-16). Meno owns the store (the
 `.meno`), the graph, provenance, the judgement of whether a job has been
-done, and where jobs run. ACCeL is used only where it is genuinely needed.
+done, and where jobs run.
 
-**What the plugin is.** ACCeL is the maintainer's own library (kfchem/accel,
-MIT). The plugin is a Python-environment plugin like RDKit's: it uses ACCeL
-as a library, in its own environment.
-- **It is built on ACCeL 1**, `accel` 0.3.0 from PyPI, through its public
-  API only: `Box` and its public calls, never its internals. A later ACCeL
-  that keeps those calls keeps the plugin working.
-- **No ACCeL code goes into core.** For core, ACCeL is a source of ideas
-  only.
+**Atom mapping is a basic Meno feature.** Drawing a reaction scheme calls
+for an atom map, so mapping lives in core (`src/lib/chem`), for the 2D
+canvas and for the *Reaction* node alike. Its first version ports the mapper
+of ACCeL, the maintainer's own library (kfchem/accel, MIT), with the
+maintainer's explicit permission and its notice kept. It is built in its own
+PR, by another lane; this plan only uses it as a core API.
 
-**The five nodes ACCeL could have filled, decided one by one.** What is easy
-is written in Meno, from a published algorithm or Meno's own rule, named in
-the code and tested on its own cases.
+**The nodes ACCeL could have filled, decided one by one.** Apart from the
+mapper, what Meno does is written from a published algorithm or Meno's own
+rule, named in the code and tested on its own cases. No other ACCeL code is
+read for it.
 
-| Node | Who | Why |
-|---|---|---|
-| **Reaction**: the atom map | **ACCeL** | Mapping reactants onto products is the hard part: a Diels-Alder already defeats the fewest bond changes. ACCeL's mapping is what ConfoTS relies on |
-| **Reaction**: the bond changes | **Meno** | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering. Worked out by core from the map, they come out the same whichever plugin maps |
-| **Compare bonding** | **Meno** | Meno already reads bonds and their orders from distances (#230, from Pyykkö's covalent radii) and perceives R or S and E or Z. With the numbering fixed, comparing with a reference is comparing two lists of bonds, and of stereo labels, atom by atom |
-| **Duplicates** with symmetry | **Meno** | Meno's canonical numbering (#319, #350) gives each atom's symmetry class. The RMSD with symmetry is the lowest RMSD over the graph's automorphisms, each laid over by the quaternion fit Meno's *Duplicates* uses today (Horn 1987; Coutsias, Seok and Dill 2004), as described by Meli and Biggin (J. Cheminform. 12, 49 (2020)). A cap on the automorphisms tried (tert-butyl groups multiply them) is said when it is met |
-| **Number like** | **Meno** | The same automorphisms: the one with the lowest RMSD to the reference is applied as the new numbering, so only equivalent atoms swap |
-| **Mode on atoms** | **Meno** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
+| Node | Why Meno's own |
+|---|---|
+| **Reaction**: the atom map | Mapping is part of drawing reactions, so it belongs in core. A Diels-Alder already defeats the fewest bond changes, so the port of a working mapper is the starting point |
+| **Reaction**: the bond changes | Once the products are in the reactants' numbering, the bond changes are the bonds whose order differs between the two: a comparison under one numbering |
+| **Compare bonding** | Meno already reads bonds and their orders from distances (#230, from Pyykkö's covalent radii) and perceives R or S and E or Z. With the numbering fixed, comparing with a reference is comparing two lists of bonds, and of stereo labels, atom by atom |
+| **Duplicates** with symmetry | Meno's canonical numbering (#319, #350) gives each atom's symmetry class. The RMSD with symmetry is the lowest RMSD over the graph's automorphisms, each laid over by the quaternion fit Meno's *Duplicates* uses today (Horn 1987; Coutsias, Seok and Dill 2004), as described by Meli and Biggin (J. Cheminform. 12, 49 (2020)). A cap on the automorphisms tried (tert-butyl groups multiply them) is said when it is met |
+| **Number like** | The same automorphisms: the one with the lowest RMSD to the reference is applied as the new numbering, so only equivalent atoms swap |
+| **Mode on atoms** | A vibration is a displacement per atom, which the program plugins already read. Whether the listed atoms move most is their share of the displacement against the rest: arithmetic on Meno's own data |
 
-So the plugin fills one kind, *Reaction*, and gives its map. The other four
-are among Meno's own nodes.
-
-**Later, if wanted.** ACCeL also reads Gaussian's NMR shieldings, ECD,
-spin-spin couplings and IRC paths. The plugin could offer those as readers
-(FILE-IO.md, *Readers*). They are not needed for F or G.
-
-**Meno's own, though ACCeL has them too:** relative energies, energy
-windows, Boltzmann populations, the lowest of each group, sums of energy
-terms, averages, distances and mirror images. They are arithmetic on Meno's
-own data, kept in core so that they work whichever plugins are added.
-Decision 16 lets a plugin fill a kind Meno fills, so ACCeL could offer them
-later beside Meno's.
-
-**Its environment.**
-- **Packages:** `accel` 0.3.0 from PyPI, a pure-Python wheel of 71,980
-  bytes that declares only `numpy`, for Python 3.9 or later. GitHub's master
-  is at 0.3.1, which is not on PyPI.
-- **What is not needed:** acceltools 0.2.0 (MIT; it needs scipy and
-  matplotlib), since charts are Meno's.
-- **The plugin's own entry:** `uses: [{name: "ACCeL", version: "0.3.0"}]`,
-  held to its `requirements.lock` by `versions.test.ts` as every plugin's
-  is.
-
-**Consent.** The maintainer's request covers installing ACCeL and the
-dependencies it declares into this plugin's own environment, for building
-and testing it, and nothing else. The first install happens when its PR is
-built (*In order*), after the command centre has been told what it fetches.
+**Plugins may still fill these.** Decision 16 lets a plugin fill a kind
+Meno fills, so a plugin, ACCeL's among them, may later offer its own
+*Reaction* or its readers beside Meno's. None is needed for F or G.
 
 ## Changed and kept under the principle
 
@@ -677,8 +648,8 @@ abstract*:
 
 | Part | Now | Why |
 |---|---|---|
-| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (ACCeL's map, Meno's bond changes) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
-| Meno's "fewest bond changes" mapping | **Changed**: ACCeL's | the maintainer: even a Diels-Alder would fail |
+| Reaction as a value (sides, map, contacts) | **Changed**: a *Reaction* node (Meno's) with *mapped products* and *bond changes* out; *Combine* for a complex; *Restraints* for contacts | a node with plain inputs and outputs, as the maintainer described |
+| Meno's "fewest bond changes" mapping | **Changed**: Meno's own atom mapping in core, first ported from ACCeL's mapper with the maintainer's permission, used in 2D too | the maintainer: even a Diels-Alder would fail; a reaction scheme calls for a map |
 | Paired entries (*start*, *end*, *guess*) | **Changed**: plain inputs matched on an ID that *Tag* wrote | the maintainer (question A): IDs embedded and matched, no implicit rules; the same works for every node with two inputs |
 | Grouped type | **Changed**: *group* is a property | a type that only marks a property was abstraction |
 | Spectrum type | **Changed**: a curve is a property; a measured one is a table | one less type, nothing lost |
@@ -687,7 +658,7 @@ abstract*:
 | *Barriers* (lowest or ensemble, differences, ratio, diagram) | **Changed**: *Rank* or *Ensemble energy*, *Relative*, *Populations* (the ratio between competing paths), *Energy diagram* | four roles were bundled |
 | *Free energy* | **Changed**: *Add*, with a *Number* for the standard-state term | a sum is a sum |
 | *Check bonding*, *Match end points*, *Check the vibration* | **Changed**: *Compare bonding* and *Mode on atoms* (Meno), with *Take frames*, *Join* and *Filter* | the match was four roles in one |
-| What ACCeL fills | **Changed**: *Reaction*'s map only; *Compare bonding*, *Duplicates* with symmetry, *Number like* and *Mode on atoms* are Meno's | the maintainer: ACCeL only where it is genuinely needed, the easy parts in-house |
+| An ACCeL plugin | **Changed**: none in this plan; *Reaction*, *Compare bonding*, *Duplicates* with symmetry, *Number like* and *Mode on atoms* are Meno's | the maintainer: mapping is basic to Meno, and the rest is easy in-house |
 | *Boltzmann average*, *Scale*, *Spectrum*, *Compare* | **Changed**: *Average*, *Linear*, *Broaden*, *Errors*, *Curve similarity* | general names for single roles; *Linear* with *a* = −1 mirrors a curve |
 | Filter's "relative to its group" | **Changed**: *Relative* before *Filter* | one role a node |
 | Energy window, Choose one, As conformers | **Changed**: cases of *Relative* + *Filter*, *Rank*, *Group*; dropped from saved workspaces | the maintainer asked for a clean set (question 16) |
@@ -750,7 +721,7 @@ The thirteen points of the first draft, as they stand now.
 
 Computational chemistry first and in most detail: F (ConfoTS) and G (a
 conformer ensemble to NMR and ECD). Then A to E, mostly cheminformatics.
-Each node is named with who does it: *Meno*, *ACCeL*, or a program plugin.
+Each node is named with who does it: *Meno*, or a program plugin.
 ConfoTS's folders and options are in brackets, so that the two can be read
 side by side.
 
@@ -765,10 +736,9 @@ much?
 one complex by *Combine*); set **P** holds the products drawn.
 
 **F1. The reaction** (step 0)
-1. **Reaction** (ACCeL's map): *reactants* R, *products* P. It gives *mapped
+1. **Reaction** (Meno): *reactants* R, *products* P. It gives *mapped
    products* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
-   *bond changes* BC, worked out by Meno from the map [ConfoTS's reacting
-   bonds and atoms].
+   *bond changes* BC [ConfoTS's reacting bonds and atoms].
 
 **F2. Conformers of each species** (step 1, first part)
 2. **Merge** (Meno): R and P′ into S (*a*, *b*, *c*). **Tag** (Meno): S's
@@ -887,11 +857,9 @@ one complex by *Combine*); set **P** holds the products drawn.
     joins the species it claims.
 
 **The nodes F uses:**
-- **Meno's** (19): Merge, Tag, Restraints, Relative, Filter, Rank, Re-bond,
-  Take frames, Measure, Join, Displace, Number, Add, Populations, Ensemble
-  energy, Energy diagram, Duplicates, Compare bonding, Mode on atoms; and
-  *Reaction*'s bond changes.
-- **ACCeL's** (1): *Reaction*'s map.
+- **Meno's** (20): Reaction, Merge, Tag, Restraints, Relative, Filter, Rank,
+  Re-bond, Take frames, Measure, Join, Displace, Number, Add, Populations,
+  Ensemble energy, Energy diagram, Duplicates, Compare bonding, Mode on atoms.
 - **Program plugins'** (8): Conformers, Optimise, Minimise with restraints,
   Path search, Frequencies, Follow the reaction path, Optimise to a saddle
   point, Energy.
@@ -913,7 +881,7 @@ can be saved and put down again (question C).
   All of it comes into the `.meno` by default, compressed, so that the
   workspace holds the whole study. Past 500 MB Meno says so, and offers
   *Don't keep raw outputs* on the largest steps (the NEB's, say). The
-  cluster's working directories are scratch, cleanable once their files are
+  cluster's working directories are scratch, cleaned once their files are
   in.
 - **Reused, not run again.** A pasted retry chain, or the chain run again
   after a later step was changed, runs no job whose key the workspace has
@@ -935,8 +903,8 @@ can be saved and put down again (question C).
    up again.
 9. **Templates**: the program plugins' options.
 10. **Bond changes and restrained minimisation**:
-    - *Reaction*'s map is ACCeL's; its bond changes and *Compare bonding*
-      are Meno's;
+    - *Reaction*, with Meno's atom mapping, and *Compare bonding* are
+      Meno's;
     - *Minimise with restraints* is a force-field plugin's;
     - *Restraints* and *Re-bond* are Meno's.
 
@@ -1134,10 +1102,8 @@ open, one plugin to a PR.
     *Re-bond*, *Restraints*, *Measure*, *Take frames*, *Displace*,
     *Compare bonding*, *Number like*, *Mode on atoms*, *Equivalent atoms*,
     *Broaden*, *Errors*, *Curve similarity*.
-12. **Reactions**: the *Reaction* kind, with Meno's bond changes from a
-    map; then, its own PR, **the ACCeL plugin** filling the map. ACCeL is
-    first installed there, into the plugin's own environment, for building
-    and testing it.
+12. **The *Reaction* node**, on Meno's atom mapping (a core API, built
+    first in its own PR by another lane) and Meno's bond changes.
 13. **The computational-chemistry kinds opened**: *Minimise with restraints*,
     *Path search*, *Optimise to a saddle point*, *Follow the reaction path*,
     *NMR shielding*, *Excited states*. Then one PR per plugin filling them:
@@ -1148,8 +1114,9 @@ open, one plugin to a PR.
     - a force-field plugin for restrained minimisation.
 14. **Runners.**
     - The seam, and this computer's runner on it: knowing its cores and
-      memory, keeping the order jobs were asked for; the scratch working
-      directory, with readable names, *Open the folder* and cleaning.
+      memory, keeping the order jobs were asked for; the working folder in
+      Settings, with readable names, *Open the folder*, and cleaned on its
+      own unless *Keep job folders* is chosen.
     - Then, its own PR, a cluster runner plugin: submit and return, taken up
       again from the job's record.
 15. **The cheminformatics kinds and models**; then their plugins.
@@ -1169,7 +1136,8 @@ scheduler or model by name:**
   units table, and the option kinds (the list of solvents, temperature,
   pressure);
 - **structure**: identity, symmetry classes and automorphisms, the fixed
-  numbering, lineage as a record, and a reaction's bond changes from its map;
+  numbering, lineage as a record, atom mapping, and a reaction's bond
+  changes from its map;
 - **collections**: their storage, hashes and keeping; sets and their
   members;
 - **the workflow**: steps, ports, exits, wires, and the kinds (names, inputs,
@@ -1182,12 +1150,14 @@ scheduler or model by name:**
   - the runner seam, and this computer's runner, knowing its resources;
 - **on the page**: summaries, tables, charts, and the words on the page with
   their rule;
-- **Meno's 30 nodes** (*Meno's own nodes*): arithmetic, geometry and data
+- **Meno's 31 nodes** (*Meno's own nodes*): arithmetic, geometry and data
   handling on Meno's own data, each written from a published algorithm or
   Meno's own rule.
 
-**ACCeL's plugin fills** *Reaction*'s map, using ACCeL 1 as a library
-through its public API. No ACCeL code is in core.
+**Atom mapping is core's**, in `src/lib/chem`, for the canvas and the
+*Reaction* node. Its first version is a port of ACCeL's mapper, with the
+maintainer's permission and its MIT notice kept; no other ACCeL code is in
+core.
 
 **Program plugins fill** the calculation, computational-chemistry and
 cheminformatics kinds, and read their own outputs. **Runner plugins** run
@@ -1211,11 +1181,6 @@ states*.
 ## Questions this round raises
 
 Each has a recommendation.
-
-**L. A reaction's bond changes.** Does Meno work out *bond changes* from
-the map a plugin gives, rather than each mapping plugin giving its own?
-*Recommended: yes.* Under one numbering they are a comparison of bonds, the
-same whichever plugin maps, and tested once in core.
 
 **M. *Tag*, and matching on a chosen property.** Is *Tag* the one node that
 writes IDs, with every node that takes two inputs entry by entry matching on
@@ -1245,12 +1210,6 @@ symmetry, *Number like* and the automorphisms coming in PR 2?
 workspace is large, as a setting?
 *Recommended: yes*, in Settings, General.
 
-**R. Cleaning the scratch.** Is a job's scratch folder cleaned on its own
-once its files are saved in the `.meno`, with *Keep job folders* in
-Settings for those who want to look in them?
-*Recommended: yes.* The `.meno` holds everything, so scratch left behind is
-only disk used.
-
 **S. This computer's resources.** Does this computer's runner take a job's
 cores and memory from what its plugin declares, against the machine's
 totals, capped in Settings (all cores and three quarters of the memory by
@@ -1261,15 +1220,17 @@ default)?
 
 - **As recommended:** 1 to 11, 13 to 15, 17 to 19, 22, 23 and 25 to 30. The
   principle under 20 reopens three of them: 8, 19 and part of 27 (questions
-  D, B and E). It also replaces 22's paired entries (question A), and moves
-  30's mapping and checks to ACCeL.
+  D, B and E). It also replaces 22's paired entries (question A), and moved
+  30's mapping and checks to ACCeL; they are now Meno's (*On the fifth
+  draft*).
 - **12:** keep everything, with a way not to (*Keeping*; question I).
 - **16:** Meno's own nodes redone as a small, clean set (*Meno's own nodes*;
   questions F and G).
 - **20:** don't over-abstract: the governing principle, *The principle:
   simple nodes, wired*.
-- **21:** an ACCeL plugin fills the mapping, and more (*The ACCeL plugin*;
-  question H).
+- **21:** an ACCeL plugin was to fill the mapping, and more (question H);
+  since then, mapping is Meno's own (*Atom mapping, and what Meno does
+  itself*).
 - **24:** no advanced nodes for retries: drawn (*Failed entries, and running
   them again*; questions B and J).
 
@@ -1286,10 +1247,18 @@ default)?
 **After comparing with ACCeL's second version:**
 - Meno is the base, and owns the store, the graph, provenance, whether a job
   has been done, and where jobs run.
-- ACCeL's plugin is built on ACCeL 1 (`accel` 0.3.0 from PyPI), through its
-  public API. It fills only what genuinely needs ACCeL: *Reaction*'s map
-  (*The ACCeL plugin, and what Meno does itself*). This narrows H.
+- The nodes ACCeL might have filled are each decided, and all are Meno's
+  (*Atom mapping, and what Meno does itself*). This replaces H.
 - The second version's mechanisms are adopted as Meno's own: job keys,
   never overwriting, stopping on outputs Meno cannot account for, a local
   runner that knows its resources, cluster jobs submitted and taken up
   again.
+
+**On the fifth draft:**
+- **Atom mapping is a basic Meno feature**, in core, since drawing a
+  reaction scheme calls for a map. ACCeL's mapper, the maintainer's own MIT
+  code, may be ported; another lane builds it. The *Reaction* node is
+  Meno's, and the ACCeL plugin leaves this plan.
+- **R:** the working folder is set in Meno's Settings, Meno's own folder by
+  default, and cleaned on its own once the files are in the `.meno`, with a
+  choice to keep job folders.

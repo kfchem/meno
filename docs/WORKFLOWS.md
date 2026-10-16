@@ -13,7 +13,7 @@ A rebuild of its foundation is proposed in
 [WORKFLOWS-FOUNDATION.md](WORKFLOWS-FOUNDATION.md) (2026-10-16), for the whole
 range from computational chemistry to cheminformatics: values and their
 types, entries with properties, collections at any size, and simple nodes of
-one role each - Meno's own, an ACCeL plugin's, and the program plugins' -
+one role each - Meno's own and the program plugins' -
 wired into anything from a conformer ensemble's NMR to a ConfoTS-like search
 for transition states. It is for review; nothing in it is built.
 
