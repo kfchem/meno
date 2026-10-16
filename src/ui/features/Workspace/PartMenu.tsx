@@ -2,12 +2,13 @@ import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
 import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
+import { MAGNIFICATIONS, magnificationText } from "./utils/magnified";
 
 /**
  * What was right-clicked, where in the canvas the menu opens, and how big
@@ -83,7 +84,7 @@ const CYCLE_GAPS: readonly (readonly [number, string])[] = [
   [1, "Arrows well apart"],
 ];
 
-type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean };
+type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean; after?: ReactNode };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
 export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean };
@@ -188,6 +189,7 @@ export default function PartMenu({
   clipboard,
   molecule3d,
   measure3d,
+  magnify,
   onClose,
 }: {
   target: MenuTarget;
@@ -352,11 +354,20 @@ export default function PartMenu({
   stereo?: { name: string; run: () => void };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
+  /**
+   * How large what was right-clicked is shown (docs/WORKSPACE.md,
+   * *Magnified display*) - a selection's, the first of it - and its
+   * magnification set, each object about its own centre; unset, where it
+   * can be shown no other way.
+   */
+  magnify?: { now: number; set: (k: number) => void };
   onClose: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   // a bond's second row of kinds: shown at once where the bond is one of them, else as "more" is pressed
   const [more, setMore] = useState(() => !!bondKind?.current && OTHER_BOND_KINDS.includes(bondKind.current));
+  // the magnifications offered, as "Magnification" is pressed
+  const [magnifying, setMagnifying] = useState(false);
   // the width it came out at, so that the whole of it stays in the canvas
   const [width, setWidth] = useState(WIDTH);
   useLayoutEffect(() => {
@@ -462,6 +473,50 @@ export default function PartMenu({
     : [];
   // What each target's menu has: the frequent, as icons along its top -
   // Delete at its right end, always - and the rest listed under them.
+  // (shown larger or smaller: the magnifications, in a row under "Magnification" as it is pressed, and back to its true size)
+  const magnifyItems: Item[] = magnify
+    ? [
+        {
+          name: "Magnification",
+          keys: magnificationText(magnify.now),
+          run: () => setMagnifying((m) => !m),
+          keep: true,
+          divider: true,
+          after: (
+            <AnimatePresence initial={false}>
+              {magnifying && (
+                <motion.div
+                  key="magnifications"
+                  role="group"
+                  aria-label="Magnifications"
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: ROW2 + 4, opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+                  className="flex items-center gap-0.5 px-2 overflow-hidden"
+                >
+                  {MAGNIFICATIONS.map((k) => (
+                    <button
+                      key={k}
+                      role="menuitem"
+                      aria-pressed={Math.abs(magnify.now - k) < 1e-6}
+                      onClick={() => {
+                        onClose();
+                        magnify.set(k);
+                      }}
+                      className={`shrink-0 h-7 px-1.5 rounded-md text-xs tabular-nums outline-none transition-colors duration-150 ease-meno ${Math.abs(magnify.now - k) < 1e-6 ? "bg-gh-base text-gh-black" : "text-gh-black hover:bg-gh-base focus:bg-gh-base"}`}
+                    >
+                      {magnificationText(k)}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          ),
+        },
+        ...(magnify.now !== 1 ? [{ name: "Back to 100 %", keys: "", run: () => magnify.set(1) }] : []),
+      ]
+    : [];
   const items: Item[] =
     target.kind === "measure3d"
       ? [del("Delete measurement"), ...(measure3d ? [{ name: SET_NAME[measure3d.atoms], keys: "", run: measure3d.onSet }] : [])]
@@ -475,6 +530,7 @@ export default function PartMenu({
           ...moleculeList,
           // (rendered, by a plugin added that renders)
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
+          ...magnifyItems,
         ]
       : target.kind === "arrow"
       ? [
@@ -676,6 +732,7 @@ export default function PartMenu({
           ...(onExport ? [{ name: "Export…", keys: "", run: onExport, divider: !drawing && moleculeList.length > 0 }] : []),
           // (its molecules in 3D rendered, by a plugin added that renders)
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender }] : []),
+          ...magnifyItems,
           ...stereoItem,
           ...(drawing
             ? [
@@ -751,7 +808,7 @@ export default function PartMenu({
   const compact = items.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
   const list = items.filter((i) => !i.icon);
-  const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
+  const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -905,6 +962,7 @@ export default function PartMenu({
           <span>{item.name}</span>
           {item.checked ? <CheckIcon aria-label="Chosen" className="h-4 w-4 text-gh-gray" /> : <kbd className="font-sans text-xs text-gh-gray">{item.keys}</kbd>}
         </button>,
+        item.after && <Fragment key={`${item.name}-after`}>{item.after}</Fragment>,
       ])}
     </motion.div>
   );

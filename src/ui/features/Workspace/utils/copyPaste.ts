@@ -31,6 +31,7 @@ import { readPdfs } from "./pdfItems";
 import { pdfBounds } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
+import { magnificationWithin } from "./magnified";
 
 type Pt = { x: number; y: number };
 
@@ -615,6 +616,8 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(frames.length ? { frames } : {}),
     ...(energies ? { energies } : {}),
     ...(m.look === "secondary" ? { look: m.look } : {}),
+    // (shown larger or smaller than it is: docs/WORKSPACE.md, *Magnified display*)
+    ...(isNum(m.magnified) && magnificationWithin(m.magnified) !== 1 ? { magnified: magnificationWithin(m.magnified) } : {}),
     ...(measures.length ? { measures } : {}),
     ...(typeof m.name === "string" ? { name: m.name } : {}),
     ...(typeof m.title === "string" && m.title ? { title: m.title } : {}),

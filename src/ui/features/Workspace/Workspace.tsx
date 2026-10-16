@@ -994,6 +994,11 @@ function WorkspaceContent({
     measureMolecule && menuMeasure && movingFor(measureMolecule, menuMeasure.id, frameShown(measureMolecule.id))
       ? { atoms: menuMeasure.atoms.length, onSet: () => store.getState().editMeasure3d({ id: measureMolecule.id, measure: menuMeasure.id }) }
       : undefined;
+  // (how large the molecules right-clicked are shown - a selection's, those in it; the first's said: docs/WORKSPACE.md, *Magnified display*)
+  const menuSel3d = store.getState().sel3d;
+  const magnifyIds = menu?.kind === "molecule3d" && menuMolecule ? (menuSel3d.has(menuMolecule.id) ? [...menuSel3d] : [menuMolecule.id]) : menu?.selection === "here" ? [...menuSel3d] : [];
+  const magnifyFirst = molecules3d.find((m) => m.id === magnifyIds[0]);
+  const menuMagnify = magnifyFirst ? { now: magnifyFirst.magnified ?? 1, set: (k: number) => store.getState().setMagnified3d(magnifyIds, k) } : undefined;
   const menu3d: MenuMolecule3D | undefined = menuMolecule
     ? {
         otherLook: (() => {
@@ -1786,6 +1791,7 @@ function WorkspaceContent({
           molecule3d={menu3d}
           records={menuRecords}
           measure3d={measure3dMenu}
+          magnify={menuMagnify}
           onArrowStyle={() => {
             if (menu.kind === "arrow" && menu.id != null) openArrowStyle(menu.id);
           }}

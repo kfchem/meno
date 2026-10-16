@@ -184,6 +184,13 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
     expect(html).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
     expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Add hydrogens"]);
   });
+  it("offers its magnification, and back to its true size where it is not at it", () => {
+    const t = target({ kind: "molecule3d", id: 1 });
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0 }), magnify: { now: 1, set: none } }).listed).toContain("Magnification");
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0 }), magnify: { now: 1, set: none } }).listed).not.toContain("Back to 100 %");
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0 }), magnify: { now: 1.5, set: none } }).listed).toContain("Back to 100 %");
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0 }) }).listed).not.toContain("Magnification");
+  });
   it("offers to set a measurement right-clicked, where it can be set", () => {
     const t = target({ kind: "measure3d", id: 1, measure: 1 });
     expect(menu(t, { measure3d: { atoms: 2, onSet: none } })).toMatchObject({ icons: ["Delete measurement"], listed: ["Set distance…"] });

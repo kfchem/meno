@@ -12,6 +12,7 @@ import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
+import { magnificationWithin } from "./utils/magnified";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
@@ -1172,6 +1173,25 @@ function withMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule
 /** A molecule in 3D as `change` makes it: what is found or given of it (its bond orders, its hydrogens: utils/completeness). */
 export function changeMolecule3d(doc: WorkspaceDocument, id: number, change: (m: Molecule3D) => Molecule3D): WorkspaceDocument {
   return withMolecule3d(doc, id, change);
+}
+
+/**
+ * Molecules in 3D shown `k` times as large as they are (docs/WORKSPACE.md,
+ * *Magnified display*), each about its own place - at 1, at their true size
+ * again. Kept within its bounds (utils/magnified).
+ */
+export function setMagnified3d(doc: WorkspaceDocument, ids: readonly number[], k: number): WorkspaceDocument {
+  const to = magnificationWithin(k);
+  const one = to === 1;
+  return ids.reduce(
+    (d, id) =>
+      withMolecule3d(d, id, (m) => {
+        if ((m.magnified ?? 1) === (one ? 1 : to)) return m;
+        const { magnified: _was, ...rest } = m;
+        return one ? rest : { ...rest, magnified: to };
+      }),
+    doc,
+  );
 }
 
 /** Molecules in 3D drawn in the 3D style's primary look, or its secondary. */

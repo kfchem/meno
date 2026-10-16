@@ -941,8 +941,11 @@ molecules in 3D.
 ## Magnified display
 
 Planned on 2026-10-16 (agreed by the maintainer on 2026-10-14 as a special
-state, for 2D and 3D alike; the command centre's defaults). Not built yet:
-this section is the plan, to be checked with the maintainer first.
+state, for 2D and 3D alike; the command centre's defaults), and approved
+with its three choices as proposed on 2026-10-16: the magnifications
+below, a 3D molecule made from a magnified drawing taking its
+magnification, and a selection's objects each about its own centre.
+Molecules in 3D built first (`utils/magnified`); structures in 2D next.
 
 **What it is.** A structure in 2D, or a molecule in 3D, may be *shown* larger
 or smaller than it is - 100 % being its true size - without changing the
@@ -953,15 +956,17 @@ object is shown.
 
 - **A display transform, per object.** It is held on the object, never in
   the style and never in k (the style change's factor, *Drawing style*):
-  - a structure in 2D - every atom of it - carries `shown: { k, about }`,
+  - a structure in 2D - every atom of it - carries `magnified: { k, about }`,
     the factor and the point on the page it is shown about; what is drawn
     is `about + (p - about) * k` for every point p of it, as laid out in
     the workspace's style. Lines, labels, wedges, marks and the gaps
     between them all scale together, as a zoomed copy of it would;
-  - a molecule in 3D carries `shown: k`, applied after `solidOf`, about the
-    molecule's own place: it is shown k times as large and stands k times
-    as high. Its ångströms stay true - measurements, writers, the rise and
-    Fit's units are untouched.
+  - a molecule in 3D carries `magnified: k`, applied after `solidOf`, about
+    the molecule's own place: it is shown k times as large and stands k
+    times as high (`poseOf`'s `scale`, `heightOf`, `reachOf`; on the canvas
+    its turned group scaled, the lines round it as wide as it is shown, the
+    widths in pixels of its highlights as they are). Its ångströms stay
+    true - measurements, writers and Fit's units are untouched.
   Each kept with the object, in the workspace's file and in a copy.
 - **Edited through the transform.** A press on a magnified structure is
   taken back through its transform to where it is in the drawing, and what
@@ -983,17 +988,23 @@ object is shown.
 - **Rising into 3D**, a magnified drawing's structure is made at its
   magnification, so it rises at the size it is shown.
 - **No jumps** (*No abrupt changes*): a change of magnification is one step
-  to undo, and what is shown goes over to it eased, about `about`.
+  to undo - a drag along the mark's run of them one - and what is shown
+  goes over to it eased, about `about` (a molecule's on a log scale, as the
+  look's change is timed). A result set a molecule no longer fits as large
+  is laid out again in the same step.
 
 **How it is set (proposed).**
 - In the right-click menu of a structure, a molecule in 3D, or a selection
-  holding some: *Magnification*, offering 50 %, 75 %, 125 %, 150 %, 200 %
-  and 300 %, and *Back to 100 %* where it is not at 100 %. A selection's
-  objects each take it, about their own centres.
-- While one is not at 100 %, a small mark beside it - *150 %* - shows on
-  hover and while it is selected; a press on it opens the same choices,
-  and a drag along it sets the magnification freely, 25 % to 400 %, eased
-  as it goes, one step to undo when let go.
+  holding some: *Magnification* (saying how large it is shown now), which
+  opens a row of 50 %, 75 %, 125 %, 150 %, 200 % and 300 %; and *Back to
+  100 %* where it is not at 100 %. A selection's objects each take it,
+  about their own centres.
+- While one is not at 100 %, a small mark at its top right - *150 %* -
+  shows on hover, while it is selected and while the mark is in use; a
+  press on it opens the same choices and *Back to 100 %*, and a drag along
+  it sets the magnification freely, 25 % to 400 % - doubling every 120
+  pixels to the right, halving to the left, in whole percents - eased as
+  it goes, one step to undo when let go.
 
 **Built in one pull request, in two stages**: first molecules in 3D (the
 transform after `solidOf`, the page's boxes, the menu and the mark, export),
