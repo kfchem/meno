@@ -1033,9 +1033,15 @@ environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
 download. On Windows that is `%LOCALAPPDATA%\com.kfchem.meno`, not the roaming
 `%APPDATA%` one, which a domain may copy to a server and back at each sign-in
 and keep within a quota; the settings and the network log stay in the roaming
-one. On a Mac and on Linux the two are one folder. A Meno before this kept all
-of it in the roaming folder on Windows; nothing is moved - plugins are set up
-again as they are next used, and the old folders can be deleted.
+one. On a Mac and on Linux the two are one folder. A Meno before 0.1.13 kept
+all of it in the roaming folder on Windows; nothing is moved - plugins are set
+up again as they are next used - and what was left there is taken away
+(`roaming.rs`), by name only: `uv`, `pixi` and `tools` at each start while
+they are there, and a plugin's environment there as the plugin is removed;
+`jobs` only where it holds no job. While a job there still waits or runs,
+everything there is left, as its program may be using its environment; jobs
+kept there are left with their files. What is left, and why, goes in Meno's
+log.
 
 ### PDFs
 

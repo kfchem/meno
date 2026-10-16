@@ -25,6 +25,7 @@ mod pinch;
 mod pixienv;
 mod plugfiles;
 mod present;
+mod roaming;
 mod tools;
 mod update;
 mod windowstate;
@@ -337,8 +338,9 @@ fn plugin_stamp(dir: &Path) -> Result<PathBuf, String> {
 
 /// Takes a plugin's environment away, and its record of being set
 /// up, when it is removed in Settings, Plugins - and, with the
-/// last of pixi's, what pixi keeps for them. Its worker is stopped first,
-/// by the app.
+/// last of pixi's, what pixi keeps for them; and the same where a Meno
+/// before 0.1.13 made them, on Windows (roaming.rs). Its worker is stopped
+/// first, by the app.
 #[tauri::command]
 async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String> {
     let env = validate_env_info(&payload)?;
@@ -352,6 +354,8 @@ async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String>
     if stamp.exists() {
         std::fs::remove_file(&stamp).map_err(|e| format!("removing {}: {e}", stamp.display()))?;
     }
+    // (and where it was made before 0.1.13, in the roaming folder, on Windows: roaming.rs)
+    roaming::remove_plugin_env(&app, &rel, &plugin_stamp(&rel)?);
     if env.pixi {
         // (the environment is gone either way: a cache not taken away is
         // only room not given back, and pixi finds it again if needed)
@@ -967,6 +971,8 @@ pub fn run() {
             // the installers updates left in the temporary folder (Windows)
             #[cfg(windows)]
             update::tidy_after_updates(app.handle());
+            // what Meno made in the roaming folder before 0.1.13 and no longer uses (Windows: roaming.rs)
+            roaming::tidy(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
