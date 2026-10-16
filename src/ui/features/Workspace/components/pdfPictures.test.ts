@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
-import { FADE_MS, levelFor, Pictures, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
+import { FADE_MS, levelFor, OVERSAMPLE, Pictures, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
 
 // (the reader: a tile drawn at once - or, while `hold` is set, never)
 const reader = vi.hoisted(() => ({ hold: false }));
@@ -14,16 +14,16 @@ describe("the level a page is drawn at", () => {
     expect(levelFor((PREVIEW_PX / 612) * 0.9, 612)).toBe(0);
   });
 
-  it("is the first of the levels a half power of two apart at or above what is wanted: never more than 1.41 times it a side", () => {
-    expect(levelFor(1, 612)).toBe(1);
-    expect(levelFor(1.2, 612)).toBeCloseTo(Math.SQRT2);
-    expect(levelFor(2, 612)).toBe(2);
-    expect(levelFor(4.7, 612)).toBeCloseTo(4 * Math.SQRT2);
+  it("is twice the screen's scale, within a sixteenth of a doubling: as dark at every zoom", () => {
+    expect(levelFor(1, 612)).toBe(2);
+    expect(levelFor(2, 612)).toBe(4);
     for (const want of [0.9, 1.3, 2.2, 3.1, 4.7, 6.5, 9.9]) {
-      const l = levelFor(want, 612);
+      const l = levelFor(want, 612) / OVERSAMPLE;
       expect(l).toBeGreaterThanOrEqual(want);
-      expect(l / want).toBeLessThanOrEqual(Math.SQRT2 + 1e-9);
+      expect(l / want).toBeLessThanOrEqual(Math.pow(2, 1 / 16) + 1e-9);
     }
+    // (a view stopped a hair from where it was: the same level, the tiles it has)
+    expect(levelFor(2.2, 612)).toBe(levelFor(2.21, 612));
     expect(levelFor(100, 612)).toBe(32);
   });
 });

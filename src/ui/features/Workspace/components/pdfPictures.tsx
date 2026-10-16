@@ -57,18 +57,28 @@ function textureOf(d: DrawnPart, mip: boolean): THREE.Texture {
   return tex;
 }
 
+/** How many levels a page is drawn at to each doubling: a sixteenth of one apart. */
+export const LEVELS_PER_DOUBLING = 16;
+/**
+ * How many times the screen's pixels a side a page is drawn at. PDFium's
+ * small letters drawn at the screen's own scale are lighter than drawn
+ * finer and shrunk to it: at 1 to 1.41 times, a paper's text was a tenth to
+ * a third lighter than 0.1.12's 1 to 2 times (found on Windows,
+ * 2026-10-16, and measured here); at twice, it is as dark, at every zoom.
+ */
+export const OVERSAMPLE = 2;
+
 /**
  * The level a page is drawn at, `want` pixels a point wanted of a page
  * `width` points wide: none, where its small picture is enough; else the
- * first of the levels a half power of two apart (1, 1.41, 2, 2.83, 4...)
- * at or above it - never more than 1.41 times the pixels a side wanted, so
- * that a zoom stopped at asks for no more tiles than it must, and a zoom in
- * a little way stays sharp with the tiles it has.
+ * first of the levels a sixteenth of a doubling apart at or above twice it
+ * (`OVERSAMPLE`) - so that a page's text is as dark at every zoom, and a
+ * view stopped a hair from where it was keeps the tiles it has.
  */
 export function levelFor(want: number, width: number): number {
   if (want <= (PREVIEW_PX / width) * 1.15) return 0;
-  const k = Math.ceil(2 * Math.log2(want) - 1e-9);
-  return Math.min(32, Math.pow(2, k / 2));
+  const k = Math.ceil(LEVELS_PER_DOUBLING * Math.log2(want * OVERSAMPLE) - 1e-9);
+  return Math.min(32, Math.pow(2, k / LEVELS_PER_DOUBLING));
 }
 
 /** What is asked of a page's tiles: the PDF, the page and its size in points, the level, and the part wanted, in points from its top left. */

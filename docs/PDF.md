@@ -162,11 +162,13 @@ stops being part of the work.
   Pages far out of view are let go, and drawn again when they come back.
 - **Sharp again soon after a zoom stops** (2026-10-15, after a report of
   pages staying blurred a while on a Windows tablet):
-  - Pages are drawn at levels a half power of two apart (1, 1.41, 2,
-    2.83, 4... pixels a point), the first at or above what the screen
-    wants - never more than 1.41 times its pixels a side, where a power of
-    two drew up to twice them, four times the tiles - so a zoom in a
-    little way stays sharp with the tiles it has.
+  - Pages are drawn at twice the screen's scale once the view is
+    still, on a grid of levels a sixteenth of a doubling apart. PDFium's
+    small letters drawn at the screen's own scale come out lighter than
+    drawn finer and shrunk to it: at 1 to 1.41 times, a paper's text was
+    a tenth to a third lighter than 0.1.12's 1 to 2 times (found on
+    Windows, 2026-10-16); at twice, it is as dark at every zoom. A view
+    stopped a hair from where it was keeps the tiles it has.
   - What a zoom leaves stays: tiles of any level had, finer or coarser,
     are drawn under the new level's own until those over the part seen
     have come and faded in, never the page's small picture between -
