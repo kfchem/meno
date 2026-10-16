@@ -534,7 +534,7 @@ of highest weight stands for it, carrying the results.
 | **Compare bonding** | molecules, 3D, and *reference* (molecules) | *same* and *different*: bonds read from the geometry, and R or S and E or Z where asked, compared with the reference matched on a property; or with each reference, naming the one it matches. Coordination bonds, and atoms, elements or bonds the chemist lists, are passed over |
 | **Number like** | molecules, and *reference* | the same, equivalent atoms (a methylene's hydrogens) renumbered to match the reference matched on a property, or one reference for all. Only atoms of one symmetry class are swapped, so the numbering keeps its meaning |
 | **Mode on atoms** | molecules with vibrations, and a table of atoms (from *bond changes*) | *kept* and *rest*: whether the imaginary vibration moves those atoms most, within a tolerance |
-| **Reaction** | *reactants* (one entry; a complex is made first by *Combine*) and *products* | *mapped products*: each product in the reactants' numbering, by Meno's atom mapping (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
+| **Reaction** | *reactants* (one entry, 3D, every hydrogen present; a complex is made first by *Combine*) and *products* (3D, every hydrogen present) | *mapped products*: each product a complete 3D structure in the reactants' numbering, every atom mapped one to one, hydrogens included (the first map, or every map); *bond changes*: a table of each bond formed, broken or changed in order, with its atoms and orders before and after |
 | **Restraints** | molecules (the reference), and a table of atoms where wanted | a table of restraints: listed atoms or coordination bonds kept at a distance; double bonds' cis or trans kept as in the reference; listed atoms fixed |
 | **Measure** | molecules | the same, with distances, angles or dihedrals between numbered atoms, listed or from a table |
 | **Take frames** | molecules with frames | molecules, 3D, one frame each: the highest or lowest by a property, the first, the last, by number, or *k* frames before or after the highest |
@@ -622,6 +622,18 @@ canvas and for the *Reaction* node alike. Its first version ports the mapper
 of ACCeL, the maintainer's own library (kfchem/accel, MIT), with the
 maintainer's explicit permission and its notice kept. It is built in its own
 PR, by another lane; this plan only uses it as a core API.
+
+**The *Reaction* node's contract.** A map is only usable for quantum
+chemistry if it covers every atom in 3D, one to one, so that a product's
+geometry comes out in the reactants' numbering for a path search, a
+three-structure saddle-point search and matching IRC ends. So:
+- its *mapped products* are complete 3D structures in the reactants'
+  numbering, with every atom mapped, hydrogens included;
+- hydrogens are assigned by geometry, consistent with the stereo of the
+  atoms they are on (which of a methylene's two hydrogens is which follows
+  from where they are);
+- a heavy-atom-only map, such as the 2D canvas may show, is a lesser case,
+  and never what flows into a calculation.
 
 **The nodes ACCeL could have filled, decided one by one.** Apart from the
 mapper, what Meno does is written from a published algorithm or Meno's own
@@ -736,7 +748,8 @@ much?
 one complex by *Combine*); set **P** holds the products drawn.
 
 **F1. The reaction** (step 0)
-1. **Reaction** (Meno): *reactants* R, *products* P. It gives *mapped
+1. **Reaction** (Meno): *reactants* R, *products* P, each given its 3D
+   structure first (decision 18), every hydrogen present. It gives *mapped
    products* P′, which are *b* and *c* in *a*'s numbering [003, 004], and
    *bond changes* BC [ConfoTS's reacting bonds and atoms].
 
@@ -1157,7 +1170,8 @@ scheduler or model by name:**
 **Atom mapping is core's**, in `src/lib/chem`, for the canvas and the
 *Reaction* node. Its first version is a port of ACCeL's mapper, with the
 maintainer's permission and its MIT notice kept; no other ACCeL code is in
-core.
+core. What it gives a calculation is a complete map in 3D, every atom one to
+one, hydrogens by geometry; a heavy-atom-only map is for display only.
 
 **Program plugins fill** the calculation, computational-chemistry and
 cheminformatics kinds, and read their own outputs. **Runner plugins** run
