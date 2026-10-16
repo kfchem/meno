@@ -10,8 +10,11 @@ vi.mock("../../../../lib/pdf/reader", () => ({
 }));
 
 describe("the level a page is drawn at", () => {
-  it("is none where the page's small picture is enough", () => {
-    expect(levelFor((PREVIEW_PX / 612) * 0.9, 612)).toBe(0);
+  it("is none where the page's small picture is enough: drawn at least twice as finely as the screen shows it", () => {
+    expect(levelFor((PREVIEW_PX / 612) * 0.45, 612)).toBe(0);
+    // (shown at more than half its pixels, it is too light: tiles, twice as fine)
+    expect(levelFor((PREVIEW_PX / 612) * 0.6, 612)).toBeGreaterThan(0);
+    expect(levelFor((PREVIEW_PX / 612) * 0.6, 612)).toBeGreaterThanOrEqual((PREVIEW_PX / 612) * 0.6 * OVERSAMPLE);
   });
 
   it("is twice the screen's scale, within a sixteenth of a doubling: as dark at every zoom", () => {

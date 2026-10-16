@@ -1049,10 +1049,25 @@ space-filling side by side is better science than either alone.
   and *Greys*, each element a grey as light as its Jmol colour (its
   relative luminance), for figures printed in black and white - and
   *Pastel*, each element's Jmol colour taken two fifths of the way to
-  white. Over the
-  set, any element can be given a colour of its own, marked, and set back
-  to the set's one at a time. A style's sticks coloured by their atoms
-  take each half's colour from its atom.
+  white. Every set gives each of the 118 elements a colour; darmstadtium
+  to oganesson (110 to 118) are a light grey (#cccccc, Pastel's paler) in
+  every set. A style's sticks coloured by their atoms take each half's
+  colour from its atom.
+- **Atom colours** (the maintainer, 2026-10-16: every element, not a fixed
+  few). Over its colour set, a style can give any element a colour of its
+  own, under *Atom colours* in Settings: the periodic table of all 118, as
+  the IUPAC's table lays it out (18 groups; group 3 of periods 6 and 7
+  holding the lanthanoids' and the actinoids' places, the two series in
+  rows of 15 below), each cell filled with the element's colour as the
+  style draws it, its symbol in black or white, whichever reads more
+  (lib/chem/periodicTable, `inkOn`); and the elements most drawn - H, C,
+  N, O, F, P, S, Cl, Br, I, B, Si - in a row above it. A click on a cell
+  opens the colour picker. A changed cell is ringed in the accent; it is
+  set back to the colour set's from its right-click menu, or from the line
+  under the table, which names the element last chosen (*Ruthenium (Ru,
+  44)*, its colour) - and all at once from *Back to Jmol's colours (n)*
+  beside the heading. Where the column is narrow, the table scrolls inside
+  its own box; the page does not.
 - **Multiple bonds** (the maintainer, 2026-10-15). A style draws a double
   or triple bond as two or three thinner lines side by side, or as one
   stick, as thick as a single bond - Outlined's, as its reference draws

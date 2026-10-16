@@ -332,11 +332,21 @@ function ColumnPass({
     // drawn: the page; the column's part, cut off where it is; the page on its way
     const W = size.width;
     const H = size.height;
+    const covered = st.cover;
+    // (the page drawn only beside the column, where the column runs the whole height: under it, the column's own
+    // background covers all of it - drawing it there, every frame of a scroll, kept the graphics card full)
+    const beside = (pdf || text) && covered > 0.5 && tall >= H - 0.5;
     r.autoClear = true;
     r.setScissorTest(false);
     r.setViewport(0, 0, W, H);
+    if (beside) {
+      r.clear();
+      r.autoClear = false;
+      r.setScissorTest(true);
+      r.setScissor(0, 0, Math.max(0, W - covered), H);
+    }
     r.render(page, camera);
-    const covered = st.cover;
+    r.setScissorTest(false);
     if ((pdf || text) && covered > 0.5) {
       cam.left = 0;
       cam.right = reader.width;

@@ -425,6 +425,22 @@ export function greyOf(hex: string): string {
 }
 
 /**
+ * The ink that reads on a colour `hex` (#rrggbb): black or white, whichever
+ * stands out from it more (WCAG 2's contrast ratio, from its relative
+ * luminance).
+ */
+export function inkOn(hex: string): "#000000" | "#ffffff" {
+  const v = parseInt(hex.slice(1), 16);
+  const lin = (c: number) => {
+    const x = c / 255;
+    return x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4;
+  };
+  const y = 0.2126 * lin((v >> 16) & 255) + 0.7152 * lin((v >> 8) & 255) + 0.0722 * lin(v & 255);
+  // (against black (y + 0.05) / 0.05, against white 1.05 / (y + 0.05))
+  return (y + 0.05) / 0.05 >= 1.05 / (y + 0.05) ? "#000000" : "#ffffff";
+}
+
+/**
  * The sets of element colours a style chooses from: Jmol's, Meno's from
  * its first release; Bright, brighter and plainer; and Greys, each element
  * as light as its Jmol colour, for figures printed in black and white.
