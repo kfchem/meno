@@ -860,14 +860,19 @@ export function _isproper_bonding(atom_a: Atom, atom_b: Atom, side_pairs: readon
 
 /**
  * [Meno departure: firstOfGroupByGeometry] Of `bs`, the one nearest `a` once
- * b's structure is laid over a's: by the pairs so far where at least three of
- * them span a plane (the best rotation, as _kabsch finds it), else by the
- * root pair's atoms set on one another. The first of equals.
+ * b's structure is laid over a's: by the pairs so far within the two root
+ * atoms' own molecules, where at least three of them span a plane (the best
+ * rotation, as _kabsch finds it), else by the root pair's atoms set on one
+ * another. The first of equals.
  */
 export function nearestOver(a: Atom, bs: readonly Atom[], assigned_as: readonly Atom[], assigned_bs: readonly Atom[], root_pair: Pair): Atom {
+  // (only pairs in the root's own molecule on each side: molecules apart stand where they were set, not where they react)
+  const inA = moleculeOf(root_pair[0]);
+  const inB = moleculeOf(root_pair[1]);
+  const kept = assigned_as.map((_, i) => i).filter((i) => inA.has(assigned_as[i]) && inB.has(assigned_bs[i]));
   const fit = kabschFit(
-    assigned_as.map((x) => x.xyz),
-    assigned_bs.map((x) => x.xyz),
+    kept.map((i) => assigned_as[i].xyz),
+    kept.map((i) => assigned_bs[i].xyz),
   );
   const place = (p: readonly number[]): V3 => {
     if (fit) {
@@ -887,6 +892,20 @@ export function nearestOver(a: Atom, bs: readonly Atom[], assigned_as: readonly 
     }
   }
   return best;
+}
+
+/** The atoms bonded, directly or not, to `atom`, itself among them. */
+function moleculeOf(atom: Atom): Set<Atom> {
+  const seen = new Set<Atom>([atom]);
+  const todo = [atom];
+  while (todo.length) {
+    for (const n of todo.pop()!.bonds) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      todo.push(n);
+    }
+  }
+  return seen;
 }
 
 /** The rotation _kabsch finds, with the two centroids - none where the points do not span a plane. */

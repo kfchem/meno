@@ -167,9 +167,13 @@ maps as ACCeL does.
   the atoms' order in the files, and an SN2 does not come out as the Walden
   map. Meno pairs the first with the one nearest it once the two
   structures are laid over one another: by the best rotation over the pairs
-  so far where at least three of them span a plane, else by setting the
-  two central atoms on one another. Where there is a torsion to go by,
-  nothing changes.
+  so far within the central atoms' own molecules, where at least three of
+  them span a plane, else by setting the two central atoms on one another.
+  Where there is a torsion to go by, nothing changes. With nothing but the
+  central atoms to go by, "nearest" means something only where both sides
+  stand in one frame (an IRC's two ends, structures laid over one another);
+  structures made apart give it nothing to go by, and then it is no worse
+  and no better than atom order.
 - **A torsion of exactly 180°** (`clampTorsionCosine`). `_get_most_dihedral`
   takes `arccos` of a cosine that rounding can push past -1; it is then not
   a number, and the atom exactly anti loses to a gauche one (an exactly
