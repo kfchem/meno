@@ -736,7 +736,6 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   const pair = (p: number, q: number) => (p < q ? p * n + q : q * n + p);
   const persp = g.perspective;
   const solid = (...atoms: number[]) => !!persp && atoms.every((a) => persp[a]);
-  const solid2 = (a: number, b: number) => !!persp && !!persp[a] && !!persp[b];
   // one bond in front of the other, where the drawing gives depth
   const z = g.depth;
   const passes = (a: number, b: number, c: number, d: number) => {
@@ -1795,6 +1794,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if ((side(onA) === side(onB)) !== cis) wrongDoubles++;
   }
 
+  // (atoms of one solid drawn in perspective - a cage, a ring turned on
+  // its bond - may lie over each other's ink as the solid is seen; atoms
+  // of two such, two phenyls of PPh3 turned as a propeller's blades, are
+  // two things drawn one on the other, as anywhere else)
+  const oneSolid = (...atoms: number[]) => solid(...atoms) && atoms.every((a) => systemOf.get(a) === systemOf.get(atoms[0]));
   // (the atoms from left to right, to pass over pairs far apart across -
   // every pair, where a place is not a number)
   const sweep = L > 0 && x.every(Number.isFinite) && y.every(Number.isFinite);
@@ -1807,7 +1811,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const dx = x[a] - x[b];
       const dy = y[a] - y[b];
       if (dx * dx + dy * dy >= 0.25 * L * L) continue;
-      if (bonded.has(pair(a, b)) || solid2(a, b)) continue;
+      if (bonded.has(pair(a, b)) || oneSolid(a, b)) continue;
       overlaps++;
     }
   }
@@ -1873,7 +1877,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const [c, d] = edges[j];
       if (a === c || a === d || b === c || b === d) continue;
       if (!segmentsCross(x[a], y[a], x[b], y[b], x[c], y[c], x[d], y[d])) continue;
-      if (solid(a, b, c, d) || passes(a, b, c, d)) continue;
+      if (oneSolid(a, b, c, d) || passes(a, b, c, d)) continue;
       crossings++;
     }
   }
@@ -1897,7 +1901,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const [a, b] = edges[e];
       if (p === a || p === b) continue;
       if (pointToSegment(px, py, x[a], y[a], x[b], y[b]) >= near) continue;
-      if (solid(p, a, b)) continue;
+      if (oneSolid(p, a, b)) continue;
       clashes++;
     }
   }

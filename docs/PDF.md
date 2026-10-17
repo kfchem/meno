@@ -1052,6 +1052,21 @@ workspace holds.
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
   its corners to another is no bond.
+- **Traces, and too much drawn**: a chart's or a spectrum's trace is no
+  structure's and is left out before anything is read - an open line of
+  more than a hundred corners; a path of more than 150 lines, most of them
+  under 0.6 points long or four in five of them running one way (a
+  spectrum's sticks up from its baseline), or of more than a thousand under
+  1.5 points; however the path is split into parts. A ring's circle drawn
+  as many short lines is closed and kept, and hashes drawn in one path are
+  too few. A structure drawn in a spectrum's corner is read as ever. A
+  figure still of more than 5,000 lines - a chart or a spectrum drawn a
+  dot or a stick at a time, each a path of its own - is read as nothing:
+  "This looks like a chart or a spectrum", at once, rather than holding
+  Meno up for minutes (no structure has so many; a scheme page of many
+  has a thousand or so). The passes that look at every line against the
+  others look only at those near it, on a grid, so that a figure of many
+  thousands of lines is read in time.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall,
@@ -1062,7 +1077,14 @@ workspace holds.
   where any do: where every line meets the others square - a frame, a
   graph's axes - and no wedge is drawn, no structure is drawn, and none
   is read. A cyclobutane drawn alone, a square, and a schematic box (rings
-  drawn edge-on as rectangles) are read as no structure so too.
+  drawn edge-on as rectangles) are read as no structure so too. A table's
+  lines are no bonds, wherever in the figure it stands: level and upright
+  lines bounding cells - two level lines over each other's stretch, two
+  upright between them from one to the other - where two cells or more
+  share a side, as a table's rows and columns do, and short level or
+  upright lines set within those cells, its dashes; a structure beside it
+  is read as ever. A ring is never drawn so; a Fischer projection's
+  crossing lines make no cells.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.
@@ -1142,7 +1164,12 @@ workspace holds.
   its letters one path (Boc, MeO), is read letter by letter, each sized on
   its own. A letter whose small form is its capital made smaller (c C,
   o O, s S, v V, w W, x X, z Z) is told by the capitals beside it on its
-  line: as tall as they, a capital; well under, small. A letter that could
+  line: as tall as they, a capital; well under, small - and one set alone,
+  no letter beside it (an O at a bond's end), by the height most of the
+  figure's other capitals share. A round dot, solid - one outline, as wide
+  as it is tall, filling its box as a disc does, nothing drawn within it -
+  is no letter: a mark a scheme sets at a bond's end (an o and an e have
+  their holes). A letter that could
   be another (l or I, O or 0) is read as the one that makes its label
   read; one that matched weakly is marked ("Its letters are drawn as
   shapes: read as "Cl"."). A stem with a dot just over it, however thin

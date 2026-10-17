@@ -533,6 +533,70 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
   );
 }
 
+/**
+ * A table's lines (`readFigure`): level and upright lines bounding cells -
+ * two level lines, each over the other's stretch, and two upright between
+ * them reaching from one to the other - where two cells or more share a
+ * side, as a table's rows and columns do; and short level or upright
+ * lines set within such a cell, its dashes. Cells are looked for between a
+ * level line and the next below it, so that a table of many rows is read
+ * in time.
+ */
+function tableLines(strokes: readonly Stroke[], bond: number): Set<Stroke> {
+  const out = new Set<Stroke>();
+  const tol = 0.12 * bond;
+  const level = (s: Stroke) => len(s) > 0.3 * bond && Math.abs(s.a.y - s.b.y) <= 0.03 * len(s);
+  const upright = (s: Stroke) => len(s) > 0.3 * bond && Math.abs(s.a.x - s.b.x) <= 0.03 * len(s);
+  const hs = strokes.filter(level).map((s) => ({ s, y: (s.a.y + s.b.y) / 2, x0: Math.min(s.a.x, s.b.x), x1: Math.max(s.a.x, s.b.x) }));
+  const vs = strokes.filter(upright).map((s) => ({ s, x: (s.a.x + s.b.x) / 2, y0: Math.min(s.a.y, s.b.y), y1: Math.max(s.a.y, s.b.y) }));
+  if (hs.length < 2 || vs.length < 3) return out;
+  hs.sort((p, q) => p.y - q.y);
+  vs.sort((p, q) => p.x - q.x);
+  type Cell = { box: [number, number, number, number]; sides: Stroke[] };
+  const cells: Cell[] = [];
+  for (let i = 0; i < hs.length; i++) {
+    const top = hs[i];
+    // (the next level lines below it over the same stretch, depth by depth - a dash in a cell is passed over, its row's line below
+    // making the cell - until a cell is made, or four bonds down)
+    let made = false;
+    for (let j = i + 1; j < hs.length && !made; ) {
+      if (hs[j].y - top.y <= tol) {
+        j++;
+        continue;
+      }
+      if (hs[j].y - top.y > 4 * bond) break;
+      const depth = hs[j].y;
+      const below: typeof hs = [];
+      for (; j < hs.length && hs[j].y - depth <= tol; j++) if (Math.min(top.x1, hs[j].x1) - Math.max(top.x0, hs[j].x0) > tol) below.push(hs[j]);
+      for (const bot of below) {
+        const [x0, x1] = [Math.max(top.x0, bot.x0) - tol, Math.min(top.x1, bot.x1) + tol];
+        const sides = vs.filter((v) => v.x >= x0 && v.x <= x1 && v.y0 <= top.y + tol && v.y1 >= bot.y - tol);
+        for (let k = 0; k + 1 < sides.length; k++) {
+          if (sides[k + 1].x - sides[k].x <= tol) continue;
+          cells.push({ box: [sides[k].x, top.y, sides[k + 1].x, bot.y], sides: [top.s, bot.s, sides[k].s, sides[k + 1].s] });
+          made = true;
+        }
+      }
+    }
+  }
+  // (cells sharing a side: a table's)
+  const count = new Map<Stroke, number>();
+  for (const c of cells) for (const s of c.sides) count.set(s, (count.get(s) ?? 0) + 1);
+  const ofTable = cells.filter((c) => c.sides.some((s) => (count.get(s) ?? 0) > 1));
+  if (ofTable.length < 2) return out;
+  for (const c of ofTable) for (const s of c.sides) out.add(s);
+  // (and a short line, level or upright, within one of its cells, alone - no other line ending at either of its ends, as a bond's
+  // do: a dash in it)
+  const ends = strokes.flatMap((t) => [t.a, t.b].map((p) => ({ p, t })));
+  const alone = (s: Stroke) => [s.a, s.b].every((p) => !ends.some((e) => e.t !== s && dist(e.p, p) < tol));
+  for (const s of strokes) {
+    if (out.has(s) || len(s) > 0.8 * bond || !(Math.abs(s.a.y - s.b.y) <= 0.03 * len(s) || Math.abs(s.a.x - s.b.x) <= 0.03 * len(s)) || !alone(s)) continue;
+    const m = mid(s.a, s.b);
+    if (ofTable.some((c) => m.x > c.box[0] && m.x < c.box[2] && m.y > c.box[1] && m.y < c.box[3])) out.add(s);
+  }
+  return out;
+}
+
 /** Whether two lines meet square at their ends `p` (of `s`) and `q` (of `t`): between 75 and 105 degrees, as a frame's sides and a graph's axes do. */
 function square(s: Stroke, p: Point, t: Stroke, q: Point): boolean {
   const u = unit(p, dist(s.a, p) < dist(s.b, p) ? s.b : s.a);
@@ -672,6 +736,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const meetings: { t: Stroke | null; q: Point }[] = [...shapes.strokes.flatMap((t) => [t.a, t.b].map((q) => ({ t, q }))), ...shapes.wedges.flatMap((w) => [w.tip, w.base].map((q) => ({ t: null, q })))];
   const framing = (s: Stroke) =>
     len(s) > 2.5 * bond && [s.a, s.b].every((p) => meetings.every(({ t, q }) => t === s || dist(p, q) >= 0.12 * bond || (t !== null && square(s, p, t, q))));
+  // (and a table's lines - two cells or more side by side, their sides level and upright, and dashes set within them - are none: a
+  // ring is never drawn so; a cyclobutane alone, one square, is no table)
+  const table = tableLines(shapes.strokes, bond);
   // (and a short line alongside a longer, within its stretch - a double bond's second line, the bond drawn short)
   const inner = (s: Stroke) =>
     len(s) > 0.15 * bond &&
@@ -688,9 +755,9 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
   const endAt = (s: Stroke, p: Point) => tipsOf.some((t) => t.of !== s && dist(t.p, p) < 0.1 * bond) || others.some((q) => dist(q, p) < 0.1 * bond);
   const toLabel = (s: Stroke) =>
     len(s) > 0.15 * bond && ((endAt(s, s.a) && labelled(s.b, unit(s.a, s.b))) || (endAt(s, s.b) && labelled(s.a, unit(s.b, s.a))));
-  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
+  const lines = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !textSign(s) && !ruled(s) && !framing(s) && !table.has(s) && (len(s) >= 0.3 * bond || (len(s) > 0.04 * bond && dash(s)) || stub(s) || toLabel(s) || inner(s)));
   // (a line broken where another passes in front, one piece short - a cage's back edge - joined again too; a short piece joined to nothing stays out)
-  const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && len(s) > 0.04 * bond);
+  const loose = shapes.strokes.filter((s) => !inHashes.has(s) && !inLetters.has(s) && !lines.includes(s) && !ruled(s) && !table.has(s) && len(s) > 0.04 * bond);
   const joined = joinedAcross([...lines, ...loose], bond);
   const whole = joined.filter((s) => !loose.includes(s));
   const used = loose.filter((s) => !joined.includes(s));

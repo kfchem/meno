@@ -44,12 +44,12 @@ const piLinks = (input: LayoutInput) => {
 };
 
 /**
- * Each atom's rank in the molecule, every atom alone (see `canonicalOrder`):
- * the same for the same molecule whatever order its atoms came in, and for
- * every one of its own orders (`walkOrder`), so worked out once for all.
+ * Each atom's rank by what it is and what it is bonded to, refined by its
+ * neighbours' and by how each stereocentre and double bond is set, until
+ * they part no further - atoms alike left alike - with what each atom is
+ * (`first`) and the refinement, for `canonicalRanks` to part them on.
  */
-export function canonicalRanks(input: LayoutInput): number[] {
-  const n = input.atoms.length;
+function classed(input: LayoutInput): { rank: number[]; first: string[]; withStereo: (r: number[]) => number[] } {
   const adj = adjacency(input);
   const pis = piLinks(input);
   // (which atoms are an axis of chirality's, and which its references)
@@ -64,7 +64,7 @@ export function canonicalRanks(input: LayoutInput): number[] {
   const first = input.atoms.map((a, i) =>
     [a.el, a.charge ?? 0, a.hs ?? -1, adj[i].length, adj[i].map((e) => e.order).sort((p, q) => p - q).join("."), a.pi?.length ?? 0, pis[i].length, onAxis[i]].join("|"),
   );
-  let rank = ranksOf(first);
+  const rank = ranksOf(first);
   const refine = (r: number[]): number[] => {
     for (;;) {
       const keys = r.map((v, i) =>
@@ -115,7 +115,56 @@ export function canonicalRanks(input: LayoutInput): number[] {
       r = next;
     }
   };
-  rank = withStereo(refine(rank));
+  return { rank: withStereo(refine(rank)), first, withStereo };
+}
+
+/**
+ * Each atom's symmetry class: atoms alike in every way the ranks can tell -
+ * element, charge, H count, bonds, and how a stereocentre or double bond is
+ * set against them - share a class; the classes ranked as `canonicalRanks`
+ * ranks atoms, the same for the same molecule whatever order its atoms came
+ * in. Ranks alone can leave atoms alike that are not (cuneane's, basketane's),
+ * so a class says which atoms may be equivalent, and an automorphism must
+ * still keep every bond.
+ */
+export function symmetryClasses(input: LayoutInput): number[] {
+  return classed(input).rank;
+}
+
+/**
+ * The molecule's symmetry as `canonicalRanks`' search finds it: its
+ * automorphisms met (each a permutation of the atoms, atom to atom, that
+ * takes every atom onto one alike and every bond onto a bond), and each
+ * atom's orbit under them - the atoms those take it onto, numbered by the
+ * least canonical rank among them, so the same whatever order the atoms
+ * came in. Orbits are never coarser than the molecule's true ones: two
+ * atoms share one only where an automorphism found takes one onto the
+ * other. Where the search ran out of steps (`complete` false: very large and
+ * very symmetric molecules), some automorphisms may be missing and some
+ * orbits split - finer, never wrongly joined.
+ */
+export function symmetryOrbits(input: LayoutInput): { orbit: number[]; automorphisms: number[][]; complete: boolean } {
+  const { rank, first, withStereo } = classed(input);
+  const n = input.atoms.length;
+  const found = search(rank, n, withStereo, (r) => written(input, first, r));
+  const root = Array.from({ length: n }, (_, i) => i);
+  const find = (a: number): number => (root[a] === a ? a : (root[a] = find(root[a])));
+  for (const g of found.symmetries) g.forEach((b, a) => (root[find(a)] = find(b)));
+  const least = new Map<number, number>();
+  for (let a = 0; a < n; a++) {
+    const k = find(a);
+    least.set(k, Math.min(least.get(k) ?? Infinity, found.r[a]));
+  }
+  return { orbit: Array.from({ length: n }, (_, a) => least.get(find(a))!), automorphisms: found.symmetries, complete: !found.cut };
+}
+
+/**
+ * Each atom's rank in the molecule, every atom alone (see `canonicalOrder`):
+ * the same for the same molecule whatever order its atoms came in, and for
+ * every one of its own orders (`walkOrder`), so worked out once for all.
+ */
+export function canonicalRanks(input: LayoutInput): number[] {
+  const { rank, first, withStereo } = classed(input);
   // Atoms still alike: each of the lowest such class taken first in turn,
   // the ranks refined again, and so on until every atom stands alone; of
   // the orders that gives, the one that writes the molecule first (its
@@ -125,7 +174,18 @@ export function canonicalRanks(input: LayoutInput): number[] {
   // same show a symmetry of it, and the atoms it takes onto each other are
   // not tried again: a tert-butyl's three methyls, alike in every way, are
   // tried once.
-  return settled(rank, n, withStereo, (r) => written(input, first, r));
+  return settled(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
+}
+
+/**
+ * The molecule written in its own order (`canonicalRanks`): each place's
+ * atom and how a stereocentre there is set, and the bonds between places -
+ * the same text for the same molecule however its atoms are numbered, and
+ * another for any other, its mirror image included where it is chiral.
+ */
+export function canonicalText(input: LayoutInput): string {
+  const { rank, first, withStereo } = classed(input);
+  return written(input, first, settled(rank, input.atoms.length, withStereo, (r) => written(input, first, r)));
 }
 
 /** The molecule's own order `way` (old index to new) from its ranks (`canonicalRanks`). */
@@ -181,7 +241,18 @@ const settleBudget = (n: number) => 200 + 20 * n;
  * `canonicalOrder`): the order that writes the molecule least.
  */
 function settled(start: number[], n: number, refined: (r: number[]) => number[], writes: (r: number[]) => string): number[] {
+  return search(start, n, refined, writes).r;
+}
+
+/**
+ * `settled`'s search: the order that writes the molecule least, the
+ * symmetries it met on the way - each a permutation of the atoms (atom to
+ * atom) taking the molecule onto itself, found as two orders that write it
+ * the same - and whether it ran out of steps before it had tried every way.
+ */
+function search(start: number[], n: number, refined: (r: number[]) => number[], writes: (r: number[]) => string): { r: number[]; symmetries: number[][]; cut: boolean } {
   let budget = settleBudget(n);
+  let cut = false;
   type Leaf = { text: string; r: number[]; symmetries: number[][] };
   const search = (r: number[]): Leaf => {
     if (classes(r) === n) return { text: writes(r), r, symmetries: [] };
@@ -197,7 +268,10 @@ function settled(start: number[], n: number, refined: (r: number[]) => number[],
     const symmetries: number[][] = [];
     for (let m = 0; m < n; m++) {
       if (r[m] !== cell || tried.some((t) => find(t) === find(m))) continue;
-      if (best && budget <= 0) break;
+      if (best && budget <= 0) {
+        cut = true;
+        break;
+      }
       budget--;
       const leaf = search(refined(ranksOf(r.map((v, i) => `${String(v).padStart(6, "0")}/${i === m ? 0 : 1}`))));
       tried.push(m);
@@ -217,7 +291,8 @@ function settled(start: number[], n: number, refined: (r: number[]) => number[],
     }
     return { text: best!.text, r: best!.r, symmetries };
   };
-  return search(start).r;
+  const found = search(start);
+  return { r: found.r, symmetries: found.symmetries, cut };
 }
 
 /**

@@ -2436,9 +2436,11 @@ export function buildTextLabels(
     }
     // A label that is not an element: an Rgroup, an atom list, an
     // abbreviation or any text, written as such, with no hydrogens of its own
+    // (read outward from its bonds where they come in from the right, all of them together and none leaving to the left - a
+    // ring's atom on its left side, an NFmoc at a ring's lower left reading FmocN, as one bond so does)
     const towardAll = away.get(i) ?? { x: 0, y: 0 };
     const fromRight =
-      names.get(i)?.left ?? ((ways.get(i)?.length ?? 0) === 1 && towardAll.x > Math.hypot(towardAll.x, towardAll.y) * band);
+      names.get(i)?.left ?? ((ways.get(i)?.length ?? 0) >= 1 && !leftward.has(i) && towardAll.x > Math.hypot(towardAll.x, towardAll.y) * band);
     const special = specialLabel(a, fromRight);
     if (special) {
       const runs = [...head, ...special.runs, ...tail];

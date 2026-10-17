@@ -594,7 +594,10 @@ A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take
 (`src/lib/layout/names.ts`). Its first unit sits on its atom and the rest
 follows, read outward from its bond: leftward from a bond coming in from
-the right (TBSO, IUPAC GR-2.3), rightward otherwise; a name of one unit
+the right (TBSO, IUPAC GR-2.3), rightward otherwise - and from its bonds
+where it has several, as a ring's atom has: leftward where they come in
+from the right all together, none leaving to the left (an NFmoc at a
+ring's lower left reads FmocN, away from the ring); a name of one unit
 (TMS, Ph) so is set before such a bond, its last letter on the atom. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
@@ -769,7 +772,13 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule).
+  P, is the rest of the molecule). The structure is grown with its blades
+  so turned from the start, at each angle, as well as flat, and every
+  start is set right and measured alike: grown flat, four PPh₃ round a
+  metal lie phenyl on phenyl in pairs, every frame the same drawing
+  turned, and setting that right went by hairs. Blades of two hubs are
+  two things: one drawn on the other is a fault, as anywhere else - only
+  the atoms of one solid may lie over each other's ink.
 - **Clean-up draws a complex as writing out its label does**: the same
   engine, given the same structure - a haptic bond's star with its pi
   system - and each star put afterwards at the centre of its system's
@@ -792,7 +801,12 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn
-   aryl rings crowded round an atom as a propeller (section 7).
+   aryl rings crowded round an atom as a propeller (section 7), where
+   they were not grown so. Drawings that read as well as each other
+   until then - phorbol's skeleton turned end for end - are each set
+   right to the end and measured with their stereochemistry drawn as it
+   will be (section 6): an H drawn on a centre may find a clear place in
+   one and none in the other, its wedge going onto a ring bond instead.
 6. Set the pieces of a salt or a mixture side by side, the largest first,
    with a bond and a half of paper between one's ink and the next's: a
    label's symbol, its H beside it and its charge count as ink (an OH

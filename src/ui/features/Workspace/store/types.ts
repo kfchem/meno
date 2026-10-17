@@ -714,6 +714,14 @@ export type EditorState = {
   /** How wide the column is when it is open, in CSS pixels, as its edge was dragged: what it shows is laid out at that width as it slides. */
   columnWidth: number;
   setColumnWidth: (px: number) => void;
+  /**
+   * Whether the PDF or text in the column fills the workspace - the canvas
+   * covered, the tabs and the column's header kept (docs/WORKSPACE.md,
+   * *Texts*): the tab's own while it is open, never saved. Hiding the
+   * column takes it back beside the canvas.
+   */
+  columnFilled: boolean;
+  setColumnFilled: (on: boolean) => void;
   /** How wide the column was dragged showing a PDF, in CSS pixels; none, three quarters of the canvas (utils/texts `columnWidthFor`). */
   pdfColumnWidth: number | null;
   setPdfColumnWidth: (px: number) => void;
