@@ -310,6 +310,24 @@ export default function PartMenu({
     weight: ArrowWeight | "regular";
     setWeight: (weight: ArrowWeight | "regular") => void;
     onStraighten?: () => void;
+    /**
+     * Its reaction's atom map (docs/ATOM-MAPPING.md, *On a drawn scheme*):
+     * how it stands - none made, made of a drawing changed since, made with
+     * atoms that do not all map, or ready - whether it is shown, how many
+     * maps there are to step through, and what can be done: made (again),
+     * shown or hidden, the next map taken, the reaction written in 3D.
+     */
+    atomMap?: {
+      standing: "none" | "changed" | "incomplete" | "ready";
+      shown: boolean;
+      maps: number;
+      /** Which of them is in use, from 0: the best first. */
+      chosen: number;
+      onMake: () => void;
+      onShow: (shown: boolean) => void;
+      onOther: () => void;
+      onExport: () => void;
+    };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
@@ -515,6 +533,22 @@ export default function PartMenu({
                   ] as const
                 ).map(([w, name], i) => ({ name, keys: "", run: () => arrow.setWeight(w), checked: arrow.weight === w, divider: i === 0 })),
               ]
+            : []),
+          // (its reaction's atom map: made; shown or hidden, another taken, written in 3D - or said to be incomplete)
+          ...(arrow?.atomMap
+            ? arrow.atomMap.standing === "ready"
+              ? [
+                  { name: arrow.atomMap.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => arrow.atomMap!.onShow(!arrow.atomMap!.shown), divider: true },
+                  // (which of how many is in use: most differ only in where the hydrogens go, which the drawing does not show)
+                  ...(arrow.atomMap.maps > 1 ? [{ name: "Other map", keys: `${arrow.atomMap.chosen + 1} of ${arrow.atomMap.maps}`, run: arrow.atomMap.onOther, keep: true }] : []),
+                  { name: "Export reaction in 3D…", keys: "", run: arrow.atomMap.onExport },
+                ]
+              : [
+                  { name: "Atom map", keys: "", run: arrow.atomMap.onMake, divider: true },
+                  ...(arrow.atomMap.standing === "incomplete" ? [{ name: "Atom map incomplete", keys: "", run: () => {}, disabled: true }] : []),
+                  // (one of a drawing changed since, still shown: taken off it)
+                  ...(arrow.atomMap.standing === "changed" && arrow.atomMap.shown ? [{ name: "Hide atom map", keys: "", run: () => arrow.atomMap!.onShow(false) }] : []),
+                ]
             : []),
           { name: "Arrow style…", keys: "", run: onArrowStyle, divider: true },
         ]
@@ -907,7 +941,9 @@ export default function PartMenu({
                 }
               : undefined
           }
-          className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none"
+          // (one that says how something stands, not done: shown, not taken)
+          disabled={item.disabled}
+          className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none disabled:text-gh-gray disabled:hover:bg-transparent"
         >
           <span>{item.name}</span>
           {item.checked ? <CheckIcon aria-label="Chosen" className="h-4 w-4 text-gh-gray" /> : <kbd className="font-sans text-xs text-gh-gray">{item.keys}</kbd>}

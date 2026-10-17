@@ -115,25 +115,46 @@ export function readStereo(
     return w && w.narrow === c ? (w.stereo === "up" ? 1 : -1) : 0;
   };
 
-  const fits = cageFits(atoms, bonds);
-  const tetra = new Map<number, Tetrahedral>();
-  atoms.forEach((atom, c) => {
-    const around = neighbours[c];
-    if (atom.hs > 1 || around.length + atom.hs !== 4) return;
-    if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
-    const wedged = around.some((n) => lift(c, n) !== 0);
-    if (!wedged && !atom.centre) return;
-    const order = atom.hs ? [...around, -1] : around;
-    const volume = atom.centre && atom.z != null ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
-    const v =
-      volume ||
-      drawnVolume(
-        atom,
-        order.map((n) => (n === -1 ? null : atoms[n])),
-        order.map((n) => (n === -1 ? 0 : lift(c, n))),
-      );
-    if (v) tetra.set(c, { neighbours: order, volume: v > 0 ? 1 : -1 });
-  });
+  const centres = (fits: Map<number, CageFit>) => {
+    const found = new Map<number, Tetrahedral>();
+    atoms.forEach((atom, c) => {
+      const around = neighbours[c];
+      if (atom.hs > 1 || around.length + atom.hs !== 4) return;
+      if (around.some((n) => bondOf.get(key(c, n))!.either)) return;
+      const wedged = around.some((n) => lift(c, n) !== 0);
+      if (!wedged && !atom.centre) return;
+      const order = atom.hs ? [...around, -1] : around;
+      const volume = atom.centre && atom.z != null ? volumeInSpace(atoms, c, around, lift, fits.get(c)) : 0;
+      const v =
+        volume ||
+        drawnVolume(
+          atom,
+          order.map((n) => (n === -1 ? null : atoms[n])),
+          order.map((n) => (n === -1 ? 0 : lift(c, n))),
+        );
+      if (v) found.set(c, { neighbours: order, volume: v > 0 ? 1 : -1 });
+    });
+    return found;
+  };
+  // (and a cage's solid shaped as the centres it fixes itself have it -
+  // each with three bonds into the cage, read from those bonds as drawn -
+  // where the drawing is the nearer picture of that one, and the centres
+  // read again from it: a solid with no configuration at all can be
+  // another isomer's, its free corners elsewhere - tetrodotoxin's C4, its
+  // two corners drawn on one side, read by a hair)
+  const first = cageFits(atoms, bonds);
+  let tetra = centres(first);
+  const fixed = new Map(
+    [...tetra].filter(([c]) => {
+      const fit = first.get(c);
+      return !!fit && atoms[c].centre && atoms[c].z != null && neighbours[c].filter((n) => fit.solid.has(n) && !lift(c, n)).length >= 3;
+    }),
+  );
+  if (fixed.size) {
+    const second = cageFits(atoms, bonds, fixed);
+    const nearer = new Map([...first].map(([a, f]) => [a, (second.get(a)?.miss ?? Infinity) < f.miss ? second.get(a)! : f]));
+    if ([...nearer].some(([a, f]) => f !== first.get(a))) tetra = centres(nearer);
+  }
 
   const cisTrans = new Map<number, CisTrans>();
   const cumulated = (end: number, other: number) => neighbours[end].some((n) => n !== other && bondOf.get(key(end, n))!.order >= 2);
@@ -268,24 +289,42 @@ export function unsureStereo(atoms: readonly DrawnAtom[], bonds: readonly DrawnB
  * as the engine may draw a cage the way textbooks do rather than exactly
  * as it is seen.
  */
-type CageFit = { solid: Map<number, V3>; map: (v: V3) => V3 };
+type CageFit = {
+  solid: Map<number, V3>;
+  map: (v: V3) => V3;
+  /** How far the drawing is from the solid so mapped: the mean square of its atoms' misses, depth among them. */
+  miss: number;
+};
 
-function cageFits(atoms: readonly DrawnAtom[], bonds: readonly DrawnBond[]): Map<number, CageFit> {
+function cageFits(
+  atoms: readonly DrawnAtom[],
+  bonds: readonly DrawnBond[],
+  /** Centres the solid holds as they are read (`readStereo`). */
+  held: ReadonlyMap<number, Tetrahedral> = new Map(),
+): Map<number, CageFit> {
   const out = new Map<number, CageFit>();
   if (!atoms.some((a) => a.z != null)) return out;
   const mol = perceive({
-    atoms: atoms.map((a) => ({ el: "C", hs: a.hs })),
+    atoms: atoms.map((a, i) => ({ el: "C", hs: a.hs, ...(held.has(i) ? { tetra: held.get(i)! } : {}) })),
     bonds: bonds.map(({ a, b, order }) => ({ a, b, order })),
   });
   for (const sys of mol.systems) {
     if (sys.atoms.length < 4 || sys.atoms.some((a) => atoms[a].z == null)) continue;
     const solid = solidOf(mol, sys);
-    const map = fitLinear(
-      sys.atoms.map((a) => solid.get(a)!),
-      sys.atoms.map((a): V3 => [atoms[a].x, atoms[a].y, atoms[a].z!]),
-    );
+    const from = sys.atoms.map((a) => solid.get(a)!);
+    const to = sys.atoms.map((a): V3 => [atoms[a].x, atoms[a].y, atoms[a].z!]);
+    const map = fitLinear(from, to);
     if (!map) continue;
-    const fit = { solid, map };
+    // (the map is linear, the drawing's middle the solid's)
+    const n = from.length;
+    const mid = (ps: readonly V3[]): V3 => [0, 1, 2].map((k) => ps.reduce((s, p) => s + p[k], 0) / n) as V3;
+    const [pf, pt] = [mid(from), mid(to)];
+    const miss = from.reduce((s, p, i) => {
+      const q = sub3(to[i], pt);
+      const m = map(sub3(p, pf));
+      return s + dot3(sub3(q, m), sub3(q, m));
+    }, 0) / n;
+    const fit = { solid, map, miss };
     for (const a of sys.atoms) out.set(a, fit);
   }
   return out;

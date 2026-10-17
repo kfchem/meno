@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 mod ccd;
 mod clipboard;
+mod folders;
 mod fonts;
 #[cfg(windows)]
 mod drop;
@@ -355,7 +356,7 @@ async fn py_env_remove(app: AppHandle, payload: PyEnvInfo) -> Result<(), String>
         std::fs::remove_file(&stamp).map_err(|e| format!("removing {}: {e}", stamp.display()))?;
     }
     // (and where it was made before 0.1.13, in the roaming folder, on Windows: roaming.rs)
-    roaming::remove_plugin_env(&app, &rel, &plugin_stamp(&rel)?);
+    roaming::remove_plugin_env(&rel, &plugin_stamp(&rel)?);
     if env.pixi {
         // (the environment is gone either way: a cache not taken away is
         // only room not given back, and pixi finds it again if needed)
@@ -908,9 +909,15 @@ pub fn run() {
         }
     }
     let version = context.package_info().version.to_string();
+    // what a Meno before 0.1.14 kept, moved into Meno's folders before anything uses them (folders.rs) -
+    // said in the log once it is begun
+    let moved = folders::move_old(&folders::moves());
     // Meno's log, in its data folder, begun before anything else is (logfile.rs)
-    if let Some(data) = logfile::data_dir_before(&context.config().identifier) {
+    if let Some(data) = folders::data_dir() {
         logfile::start(&data.join("logs"), &version);
+    }
+    for said in moved {
+        logfile::logged!("{said}");
     }
     #[allow(unused_mut)]
     let mut builder = tauri::Builder::default();
@@ -977,7 +984,7 @@ pub fn run() {
             #[cfg(windows)]
             update::tidy_after_updates(app.handle());
             // what Meno made in the roaming folder before 0.1.13 and no longer uses (Windows: roaming.rs)
-            roaming::tidy(app.handle());
+            roaming::tidy();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

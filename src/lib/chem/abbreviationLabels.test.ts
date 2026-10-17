@@ -79,6 +79,34 @@ describe("an abbreviation from a file", () => {
     const model = read(molfile([[0, 0, "C"], [1.3, 0, "C"]], [[1, 2, 1]], ["A    2", "OTBS"]));
     expect(model.atoms[1].el).toBe("OTBS");
   });
+
+  it("reads an alias with its letters' case as written: CO is carbon monoxide, Co cobalt - on a metal and off one", () => {
+    // (the alias on a star atom, as Meno writes one, or on a carbon)
+    for (const [metal, symbol] of [["Fe", "*"], ["Cr", "C"], ["C", "*"]] as const) {
+      const as = (alias: string) => read(molfile([[0, 0, metal], [1.8, 0, symbol]], [[1, 2, 1]], ["A    2", alias])).atoms[1].el;
+      expect(as("CO"), metal).toBe("CO");
+      expect(as("Co"), metal).toBe("Co");
+      // (in small letters only: an element's symbol, as a label typed so is read)
+      expect(as("co"), metal).toBe("Co");
+    }
+    // (nor any other label that is an element's symbol in another case: HO is no holmium, NO no nobelium)
+    const as = (alias: string) => read(molfile([[0, 0, "C"], [1.3, 0, "*"]], [[1, 2, 1]], ["A    2", alias])).atoms[1].el;
+    expect(["HO", "NO", "CS", "SC"].map(as)).toEqual(["HO", "NO", "CS", "SC"]);
+    // (an atom's own symbol, in whatever case a file writes it, is still the element's)
+    expect(read(molfile([[0, 0, "C"], [1.3, 0, "CL"]], [[1, 2, 1]])).atoms[1].el).toBe("Cl");
+  });
+
+  it("writes CO on a metal and reads it back as CO, not cobalt", () => {
+    const text = writeMolfile({
+      atoms: [
+        { id: 1, x: 0, y: 0, el: "Fe" },
+        { id: 2, x: L, y: 0, el: "CO" },
+      ],
+      bonds: [{ a: 1, b: 2, order: 1 }],
+    });
+    expect(text).toContain("A    2\nCO\n");
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["Fe", "CO"]);
+  });
 });
 
 describe("a label written", () => {

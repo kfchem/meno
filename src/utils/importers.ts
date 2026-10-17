@@ -55,9 +55,9 @@ export type EditorBond = BondChem & {
 };
 export type EditorModel = { atoms: EditorAtom[]; bonds: EditorBond[] };
 
-/** A parsed atom's chemistry, as the editor holds it: its symbol normalised, and a charge, radical or isotope only where it has one. */
+/** A parsed atom's chemistry, as the editor holds it: its symbol normalised (an alias read as written), and a charge, radical or isotope only where it has one. */
 function chemistryOf(a: ParsedAtom): AtomChem {
-  return { el: normalizeEl(a.el), ...chemistry(a) };
+  return { el: a.alias ? aliasLabel(a.el) : normalizeEl(a.el), ...chemistry(a) };
 }
 
 /** MOL's bond type for a coordination (dative) bond. */
@@ -653,6 +653,19 @@ function normalizeEl(el: string): string {
 }
 
 const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
+
+/**
+ * An alias as the atom's label: the text the file shows, its letters' case
+ * as written - a label's case says what it is (CO is carbon monoxide, Co
+ * cobalt; HO a hydroxy, Ho holmium). Written in small letters only, it is
+ * read as an element's symbol where it is one, as a label typed so is (co
+ * is Co: lib/chem/smartLabel, rule 1).
+ */
+function aliasLabel(alias: string): string {
+  const s = alias.trim();
+  if (!s) return "C";
+  return s === s.toLowerCase() ? normalizeEl(s) : s;
+}
 
 /**
  * Which wedges a file draws with their narrow end on the atom with fewer

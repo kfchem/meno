@@ -10,12 +10,21 @@ npm run layout-labels                                  # a label's H running int
 npm run layout-compare -- before.json                  # Meno's scores against an earlier .layout/scores.json
 npm run layout-stereo                                  # each drawing as a MOL file -> .layout/stereo.json
 <chem python> scripts/layout/stereo.py                 # RDKit reads each back: the stereochemistry as given?
+npm run layout-order                                   # each molecule in four other atom orders: drawn the same?
 <chem python> scripts/layout/diastereomers.py          # the bridged molecules' one-centre diastereomers that can exist -> src/lib/layout/testdata
 
 npm run layout-fetch -- --list=heldout                 # the held-out natural products (heldout.json), likewise
 <chem python> scripts/layout/baselines.py --list=heldout
 npm run layout-bench -- --list=heldout                 # writes .layout/heldout/index.html
 ```
+
+`layout-order` lays each molecule out in its SMILES's order and in four
+shuffled ones - the atoms, each bond's ends, each centre's neighbours - and
+lists those that come out as another drawing: Clean-up gives one drawing,
+whatever order the atoms come in, so a choice on the way that follows the
+order is a fault (the maintainer, 2026-10-14). The any-order tests
+(`src/lib/layout/inAnyOrder.*.test.ts`) check the same, and name the
+molecules still drawn differently.
 
 `heldout.json` lists natural products kept out of the benchmark: nothing
 is tuned for them, so they show how the engine does on a structure nobody
@@ -89,7 +98,7 @@ before, not a record of how particular molecules are drawn.
 | angles | how far angles at chain atoms are from ideal: 120°, or 180° across a triple bond, between two double bonds or between two phosphate crosses; a bond joining a cross to a zigzag may give way to 150° |
 | rings | how far rings of up to eight are from regular polygons |
 | macrocycle angles | how far the angles round a ring of nine or more are from a zigzag's 120° - a macrocycle drawn as a round polygon is far off; a ring that runs through other rings (a porphyrin's) is a ring of rings, and not counted |
-| substituents | how far a ring atom's other bonds are from splitting the room outside the ring evenly: an H at a ring fusion drawn straight out, not aslant |
+| substituents | how far a ring atom's other bonds are from splitting the room outside the ring evenly: an H at a ring fusion drawn straight out, not aslant. In a bridged system the room outside is read against every ring as small as one of its smallest set - all three of quinuclidine's six-membered cycles, of which the set holds two by the order of the atoms |
 | wedges on rings | wedges and hashes on ring bonds, where they read badly |
 
 **Orientation** - the drawing square to the page, and read left to right:

@@ -12,7 +12,7 @@ import { atomDepth, boxesDepth, hydrogenSpot, isName, namesLaid, segmentMeetsBox
 // (where a label's H goes is the names' business too: there for all that ask here)
 export { hydrogenSpot } from "./names";
 import { isMetal, METAL_BOND } from "./perceive";
-import { smallestRings, type Edge } from "./rings";
+import { ringsAlike, smallestRings, type Edge } from "./rings";
 
 export type Geometry = {
   x: readonly number[];
@@ -234,7 +234,8 @@ const deg = (r: number) => (r * 180) / Math.PI;
 
 function median(v: number[]): number {
   if (!v.length) return 1;
-  const s = [...v].sort((a, b) => a - b);
+  // (numbers sorted as numbers: the same order, without a call for each comparison)
+  const s = v.every(Number.isFinite) ? Float64Array.from(v).sort() : [...v].sort((a, b) => a - b);
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
@@ -357,6 +358,329 @@ function pointToSegment(
   return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
 }
 
+/**
+ * The rings alike in size to a bridged system's smallest set (`ringsAlike`),
+ * by the bonds they were found among: the same molecule is measured over
+ * and over while it is laid out.
+ */
+const alikeRings = new WeakMap<readonly Edge[], number[][]>();
+
+/** What a measure reads of a drawing's structure alone, whatever its atoms' places (`structureOf`). */
+type Structure = {
+  rings: number[][];
+  /** The bonds whose lengths are measured: their ends, and what the length is taken over (a metal's bond is drawn long). */
+  measured: [number, number, number][];
+  inRing: Set<number>;
+  /** Each ring atom's ring system, by its place in `systems` as they were merged. */
+  systemOf: Map<number, number>;
+  /** The ring systems. */
+  live: Set<number>[];
+  bonded: Set<number>;
+  neighbours: number[][];
+  orderOf: Map<number, number>;
+  /** The rings of eight or fewer drawn flat. */
+  small: number[][];
+  inSmall: Set<number>;
+  /** The rings of nine or more not run mostly through other rings. */
+  macrocycles: number[][];
+  ringBonds: Set<number>;
+  /** The bonds that can lie on the lattice, each in the frame or not, and the step of its lattice. */
+  latticeBonds: { a: number; b: number; frame: boolean; step: number }[];
+  frames: Set<number>[];
+  inFrame: number[];
+  ringNeighbours: number[][];
+  /** Each atom's neighbours in none of its rings. */
+  outsideOf: number[][];
+  /** The rings through each atom. */
+  ringsAt: number[][][];
+  /** The rings through each atom whose middle a bond out of it is kept from. */
+  centresAt: number[][][];
+  /** Each stereocentre at a fusion of rings with its H not drawn yet. */
+  hiddenAt: boolean[];
+  /** In a complex, the rings of six or fewer drawn flat that an atom of something else may be hidden inside, each with its system. */
+  insideRings: { ring: number[]; system: number | undefined }[];
+  /** The atoms passed over there: an H, or one in perspective or bonded to one. */
+  passedInside: boolean[];
+  /** The largest system's rings of up to eight, fused and not bridged; none without a ring. */
+  fusedMain: number[][];
+  /** Each system's rings of up to eight, where it has two or more and no larger ring; else null. */
+  ownOf: (number[][] | null)[];
+  /**
+   * The atoms from left to right and the bonds by their boxes' left sides,
+   * as the last measure of the same structure had them: a layout measures
+   * one piece placed a little otherwise each time, nearly in order already.
+   */
+  sorted: { atoms: Int32Array | null; bonds: Int32Array | null };
+};
+
+/**
+ * Each drawing's structure, by its bonds, with the arrays it was read
+ * from: a layout measures one piece over and over, placed otherwise each
+ * time, with the same arrays (`scorer`).
+ */
+const structures = new WeakMap<readonly Edge[], { from: readonly unknown[]; structure: Structure }>();
+
+/** What a measure reads of a drawing's structure alone, worked out once for the same arrays. */
+function structureOf(g: Geometry): Structure {
+  const from = [g.x.length, g.orders, g.wedged, g.labelled, g.elements, g.hydrogens, g.rings, g.cisTrans, g.perspective, g.depth, g.tetra];
+  const known = structures.get(g.edges);
+  if (known && known.from.every((v, i) => v === from[i])) return known.structure;
+  const structure = readStructure(g);
+  structures.set(g.edges, { from, structure });
+  return structure;
+}
+
+function readStructure(g: Geometry): Structure {
+  const { edges } = g;
+  const n = g.x.length;
+  const pair = (p: number, q: number) => (p < q ? p * n + q : q * n + p);
+  const persp = g.perspective;
+  const solid = (...atoms: number[]) => !!persp && atoms.every((a) => persp[a]);
+  // (a bond to a drawn H is drawn short, by choice: it is left out; a
+  // metal's to a ligand is drawn long, and measured against that - but in a
+  // chelate's ring, which is drawn regular; not in a ring through two
+  // metals, their bridges', drawn with a metal's bonds - section 7)
+  const isH = (a: number) => g.elements?.[a] === "H";
+  const rings = (g.rings as number[][] | undefined) ?? smallestRings(n, edges);
+  const metalsIn = (r: readonly number[]) => r.filter((a) => isMetal(g.elements?.[a] ?? "")).length;
+  const ringBond = new Set(rings.filter((r) => metalsIn(r) < 2).flatMap((r) => r.map((a, i) => pair(a, r[(i + 1) % r.length]))));
+  // (nor a metal's bond to a pi system's star, which is the ring's own distance)
+  const toMetal = (a: number, b: number) =>
+    isMetal(g.elements?.[a] ?? "") !== isMetal(g.elements?.[b] ?? "") &&
+    g.elements?.[a] !== "*" &&
+    g.elements?.[b] !== "*" &&
+    !ringBond.has(pair(a, b));
+  const measured = edges
+    .filter(([a, b]) => !isH(a) && !isH(b) && !solid(a, b))
+    .map(([a, b]): [number, number, number] => [a, b, toMetal(a, b) ? METAL_BOND : 1]);
+
+  const inRing = new Set(rings.flat());
+  // ring systems: rings sharing atoms
+  const systemOf = new Map<number, number>();
+  const systems: Set<number>[] = [];
+  for (const r of rings) {
+    const touching = [...new Set(r.map((a) => systemOf.get(a)).filter((s): s is number => s != null))];
+    const merged = new Set<number>(r);
+    for (const t of touching) for (const a of systems[t]) merged.add(a);
+    const id = systems.length;
+    systems.push(merged);
+    for (const a of merged) systemOf.set(a, id);
+    for (const t of touching) systems[t] = new Set();
+  }
+  const live = systems.filter((s) => s.size > 0);
+  const bonded = new Set(edges.map(([a, b]) => pair(a, b)));
+  const neighbours: number[][] = Array.from({ length: n }, () => []);
+  const orderOf = new Map<number, number>();
+  edges.forEach(([a, b], e) => {
+    neighbours[a].push(b);
+    neighbours[b].push(a);
+    orderOf.set(pair(a, b), g.orders?.[e] ?? 1);
+  });
+  const cross = (a: number) =>
+    (g.elements?.[a] === "P" || g.elements?.[a] === "S") && neighbours[a].length === 4 && !inRing.has(a);
+
+  // (a ring drawn in depth - a cage's, or one a bridge makes across a ring
+  // - is seen in perspective, not as a polygon)
+  const inDepth = (r: readonly number[]) => solid(...r) || r.some((a) => (g.depth?.[a] ?? 0) !== 0);
+  const small = rings.filter((r) => r.length <= 8 && !inDepth(r));
+  const inSmall = new Set(rings.filter((r) => r.length <= 8).flat());
+  // (not one that runs through other rings - a porphyrin's, a
+  // cyclodextrin's: that is a ring of rings, set round a circle)
+  const threaded = (r: number[]) =>
+    new Set(
+      rings
+        .filter((q) => q.length < r.length && q.filter((a) => r.includes(a)).length >= 3)
+        .flatMap((q) => q.filter((a) => r.includes(a))),
+    ).size >=
+    0.4 * r.length;
+  const macrocycles = rings.filter((r) => r.length >= 9 && !threaded(r));
+
+  const ringBonds = new Set<number>();
+  for (const r of rings) {
+    r.forEach((a, i) => {
+      const b = r[(i + 1) % r.length];
+      ringBonds.add(pair(a, b));
+    });
+  }
+
+  // the 30-degree lattice (layoutMetrics' tilt): the bonds that can lie on it
+  const fitsLattice = new Set<number>();
+  const offLattice = new Set<number>();
+  // (each ring's once: a ring of rings has many)
+  const squareRing = new Map(
+    rings.map((r) => [r, (r.length === 4 || r.length === 6) && rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2)]),
+  );
+  const square = (r: readonly number[]) => squareRing.get(r as number[])!;
+  for (const r of rings) {
+    const fits = square(r);
+    r.forEach((a, i) => {
+      const b = r[(i + 1) % r.length];
+      (fits ? fitsLattice : offLattice).add(pair(a, b));
+    });
+  }
+  // The eye takes the largest ring system as the frame the drawing is
+  // square to - of those with rings that can lie on the lattice, and all of
+  // the largest where several are as large. A ring hung off it askew is then
+  // askew, rather than the frame tilted. Without a ring, every bond counts.
+  const latticeBonds: { a: number; b: number; frame: boolean; step: number }[] = [];
+  // (a four-membered ring is a square with its sides level and upright - a
+  // beta-lactam's, an oxetane's - not merely on the lattice)
+  // (and so is a cross)
+  const squareBonds = new Set(
+    [
+      ...rings
+        .filter((r) => r.length === 4)
+        .flatMap((r) => edges.filter(([a, b]) => r.includes(a) && r.includes(b))),
+      ...edges.filter(([a, b]) => cross(a) || cross(b)),
+    ].map(([a, b]) => pair(a, b)),
+  );
+  const fitting = live.filter((sys) => rings.some((r) => square(r) && r.every((a) => sys.has(a))));
+  const frameSize = Math.max(0, ...fitting.map((sys) => sys.size));
+  const frames = fitting.filter((sys) => sys.size === frameSize);
+  for (const [a, b] of edges) {
+    const k = pair(a, b);
+    if (offLattice.has(k) && !fitsLattice.has(k)) continue;
+    // a solid's bonds, and those out of it, lie as it is seen
+    if (g.perspective?.[a] || g.perspective?.[b]) continue;
+    const frame = frames.length
+      ? fitsLattice.has(k) && frames.some((sys) => sys.has(a) && sys.has(b))
+      : true;
+    latticeBonds.push({ a, b, frame, step: squareBonds.has(k) ? 90 : 30 });
+  }
+  const inFrame = [...new Set(frames.flatMap((sys) => [...sys]))];
+
+  // a ring atom's other bonds, against splitting the widest room between
+  // its ring bonds evenly
+  const ringNeighbours: number[][] = Array.from({ length: n }, () => []);
+  for (const r of rings) {
+    r.forEach((a, i) => {
+      for (const b of [r[(i + 1) % r.length], r[(i + r.length - 1) % r.length]]) {
+        if (!ringNeighbours[a].includes(b)) ringNeighbours[a].push(b);
+      }
+    });
+  }
+  // (the ring systems with a bridge in them: two rings sharing three atoms
+  // or more anywhere among rings fused to each other)
+  const bridgedAt = new Set<number>();
+  let alike: number[][] = [];
+  {
+    const system = rings.map((_, i) => i);
+    const root = (i: number): number => (system[i] === i ? i : (system[i] = root(system[i])));
+    const bridged = new Set<number>();
+    rings.forEach((r, i) =>
+      rings.forEach((q, j) => {
+        if (j <= i) return;
+        const shared = q.filter((v) => r.includes(v)).length;
+        if (shared >= 2) system[root(j)] = root(i);
+        if (shared >= 3) bridged.add(i);
+      }),
+    );
+    const bridgedSystems = new Set([...bridged].map(root));
+    rings.forEach((r, i) => {
+      if (bridgedSystems.has(root(i))) r.forEach((v) => bridgedAt.add(v));
+    });
+    // (and in such a system every ring as small as one of its smallest set,
+    // where the room left for a bond out is read: which of quinuclidine's
+    // three six-membered cycles the smallest set holds goes by the order its
+    // atoms come in, and quinine's vinyl, read against the one ring through
+    // its atom, counted 225 degrees off one way and 88 the other)
+    if (bridgedSystems.size) {
+      const known = alikeRings.get(edges);
+      alike = known ?? [...bridgedSystems].flatMap((s) => ringsAlike(rings.filter((r, i) => root(i) === s && r.length < 9), neighbours));
+      if (!known) alikeRings.set(edges, alike);
+    }
+  }
+  const outsideOf = ringNeighbours.map((inside, a) => neighbours[a].filter((b) => !inside.includes(b)));
+  const ringsAt = Array.from({ length: n }, (_, a) => rings.filter((r) => r.includes(a)));
+  const centresAt = Array.from({ length: n }, (_, a) => (bridgedAt.has(a) ? alike : rings).filter((r) => r.includes(a) && r.length < 9));
+  // (a stereocentre at a fusion of rings, its H not drawn yet - while the
+  // engine sets the parts - is measured by where placeStereo will put
+  // that H: a frame that leaves it no room upright is the worse for it,
+  // lovastatin's turned with its rings aslant. Only where rings of five
+  // to eight are fused, as a steroid's are - not bridged, not on a
+  // macrocycle, an epoxide or a beta-lactam - and not in a solid, whose
+  // drawing shows its configuration without one)
+  const hiddenAt = Array.from(
+    { length: n },
+    (_, a) =>
+      outsideOf[a].length === 0 &&
+      ringNeighbours[a].length >= 3 &&
+      !persp?.[a] &&
+      !!g.tetra?.[a]?.neighbours.includes(-1) &&
+      !bridgedAt.has(a) &&
+      ringsAt[a].every((r) => r.length >= 5 && r.length <= 8),
+  );
+  const complex = (g.elements ?? []).some((e) => isMetal(e));
+  const insideRings = complex ? small.filter((q) => q.length <= 6).map((ring) => ({ ring, system: systemOf.get(ring[0]) })) : [];
+  const passedInside = Array.from({ length: n }, (_, p) => isH(p) || (!!persp && (!!persp[p] || neighbours[p].some((q) => persp[q]))));
+  const main = live.length ? live.reduce((b, s) => (s.size > b.size ? s : b)) : null;
+  const fusedMain = main
+    ? rings.filter(
+        (r) =>
+          r.length <= 8 &&
+          r.every((a) => main.has(a)) &&
+          rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2),
+      )
+    : [];
+  const ownOf = live.map((sys) => {
+    const own = rings.filter((r) => r.length <= 8 && r.every((a) => sys.has(a)));
+    return own.length < 2 || rings.some((r) => r.length > 8 && r.every((a) => sys.has(a))) ? null : own;
+  });
+  return {
+    rings,
+    measured,
+    inRing,
+    systemOf,
+    live,
+    bonded,
+    neighbours,
+    orderOf,
+    small,
+    inSmall,
+    macrocycles,
+    ringBonds,
+    latticeBonds,
+    frames,
+    inFrame,
+    ringNeighbours,
+    outsideOf,
+    ringsAt,
+    centresAt,
+    hiddenAt,
+    insideRings,
+    passedInside,
+    fusedMain,
+    ownOf,
+    sorted: { atoms: null, bonds: null },
+  };
+}
+
+/**
+ * The indices 0 to count - 1 by `key`, least first: sorted again from
+ * `from`, the order the last measure left them in - a drawing placed a
+ * little otherwise is nearly in order already - or, where that is far from
+ * the order now, afresh. (Between keys alike the order may differ from a
+ * sort afresh: the sweeps that use it take every pair within reach either
+ * way.)
+ */
+function sortedBy(from: Int32Array | null, count: number, key: ArrayLike<number>): Int32Array {
+  const out = from && from.length === count ? from : Int32Array.from({ length: count }, (_, i) => i);
+  let shifts = 0;
+  for (let i = 1; i < count; i++) {
+    const v = out[i];
+    const kv = key[v];
+    let j = i - 1;
+    while (j >= 0 && key[out[j]] > kv) {
+      out[j + 1] = out[j];
+      j--;
+      shifts++;
+    }
+    out[j + 1] = v;
+    if (shifts > 8 * count) return out.sort((p, q) => key[p] - key[q]);
+  }
+  return out;
+}
+
 export function layoutMetrics(g: Geometry): LayoutMetrics {
   const { x, y, edges } = g;
   const n = x.length;
@@ -382,46 +706,40 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // chelate's ring, which is drawn regular; not in a ring through two
   // metals, their bridges', drawn with a metal's bonds - section 7)
   const isH = (a: number) => g.elements?.[a] === "H";
-  const rings = (g.rings as number[][] | undefined) ?? smallestRings(n, edges);
-  const metalsIn = (r: readonly number[]) => r.filter((a) => isMetal(g.elements?.[a] ?? "")).length;
-  const ringBond = new Set(rings.filter((r) => metalsIn(r) < 2).flatMap((r) => r.map((a, i) => pair(a, r[(i + 1) % r.length]))));
-  // (nor a metal's bond to a pi system's star, which is the ring's own distance)
-  const toMetal = (a: number, b: number) =>
-    isMetal(g.elements?.[a] ?? "") !== isMetal(g.elements?.[b] ?? "") &&
-    g.elements?.[a] !== "*" &&
-    g.elements?.[b] !== "*" &&
-    !ringBond.has(pair(a, b));
-  const lengths = edges
-    .filter(([a, b]) => !isH(a) && !isH(b) && !solid(a, b))
-    .map(([a, b]) => Math.hypot(x[a] - x[b], y[a] - y[b]) / (toMetal(a, b) ? METAL_BOND : 1));
+  const {
+    rings,
+    measured,
+    inRing,
+    systemOf,
+    live,
+    bonded,
+    neighbours,
+    orderOf,
+    small,
+    inSmall,
+    macrocycles,
+    ringBonds,
+    latticeBonds,
+    frames,
+    inFrame,
+    ringNeighbours,
+    outsideOf,
+    ringsAt,
+    centresAt,
+    hiddenAt,
+    insideRings,
+    passedInside,
+    fusedMain,
+    ownOf,
+    sorted,
+  } = structureOf(g);
+  const lengths = measured.map(([a, b, per]) => Math.hypot(x[a] - x[b], y[a] - y[b]) / per);
   const L = median(lengths);
   const mean = lengths.reduce((s, v) => s + v, 0) / Math.max(lengths.length, 1);
   const bondSpread = lengths.length
     ? Math.sqrt(lengths.reduce((s, v) => s + (v - mean) ** 2, 0) / lengths.length) / mean
     : 0;
 
-  const inRing = new Set(rings.flat());
-  // ring systems: rings sharing atoms
-  const systemOf = new Map<number, number>();
-  const systems: Set<number>[] = [];
-  for (const r of rings) {
-    const touching = [...new Set(r.map((a) => systemOf.get(a)).filter((s): s is number => s != null))];
-    const merged = new Set<number>(r);
-    for (const t of touching) for (const a of systems[t]) merged.add(a);
-    const id = systems.length;
-    systems.push(merged);
-    for (const a of merged) systemOf.set(a, id);
-    for (const t of touching) systems[t] = new Set();
-  }
-  const live = systems.filter((s) => s.size > 0);
-  const bonded = new Set(edges.map(([a, b]) => pair(a, b)));
-  const neighbours: number[][] = Array.from({ length: n }, () => []);
-  const orderOf = new Map<number, number>();
-  edges.forEach(([a, b], e) => {
-    neighbours[a].push(b);
-    neighbours[b].push(a);
-    orderOf.set(pair(a, b), g.orders?.[e] ?? 1);
-  });
 
   // A phosphorus or sulfur with four bonds - a phosphate, a sulfonyl - is
   // drawn as a cross, square to the page, the chain straight through it
@@ -484,29 +802,15 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   }
   const angleError = angleCount ? angleSum / angleCount : 0;
 
-  // (a ring drawn in depth - a cage's, or one a bridge makes across a ring
-  // - is seen in perspective, not as a polygon)
-  const inDepth = (r: readonly number[]) => solid(...r) || r.some((a) => (g.depth?.[a] ?? 0) !== 0);
-  const small = rings.filter((r) => r.length <= 8 && !inDepth(r));
   const ringError = small.length
     ? small.reduce((s, r) => s + ringIrregularity(x, y, r, L), 0) / small.length
     : 0;
 
   // round a macrocycle: each atom that is in no smaller ring, its angle
   // inside the ring against 120° or 240°, whichever is nearer
-  const inSmall = new Set(rings.filter((r) => r.length <= 8).flat());
   let macroSum = 0;
   let macroCount = 0;
-  // (not one that runs through other rings - a porphyrin's, a
-  // cyclodextrin's: that is a ring of rings, set round a circle)
-  const threaded = (r: number[]) =>
-    new Set(
-      rings
-        .filter((q) => q.length < r.length && q.filter((a) => r.includes(a)).length >= 3)
-        .flatMap((q) => q.filter((a) => r.includes(a))),
-    ).size >=
-    0.4 * r.length;
-  for (const r of rings.filter((r) => r.length >= 9 && !threaded(r))) {
+  for (const r of macrocycles) {
     r.forEach((a, i) => {
       if (inSmall.has(a)) return;
       const p = r[(i + r.length - 1) % r.length];
@@ -520,13 +824,6 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   }
   const macroAngleError = macroCount ? macroSum / macroCount : 0;
 
-  const ringBonds = new Set<number>();
-  for (const r of rings) {
-    r.forEach((a, i) => {
-      const b = r[(i + 1) % r.length];
-      ringBonds.add(pair(a, b));
-    });
-  }
   // (a centre's wedge: an axis of chirality's - BINAP's, on a ring bond as
   // it must be, neither end with four groups - is not counted)
   const groupsAt = (a: number) => neighbours[a].length + (g.hydrogens?.[a] ?? 0);
@@ -652,66 +949,31 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // it), which is drawn in perspective. The turn that brings those bonds
   // nearest to it is how far the drawing is tilted, and what is left after
   // that turn how far its parts are askew.
-  const fitsLattice = new Set<number>();
-  const offLattice = new Set<number>();
-  const square = (r: readonly number[]) =>
-    (r.length === 4 || r.length === 6) &&
-    rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2);
-  for (const r of rings) {
-    const fits = square(r);
-    r.forEach((a, i) => {
-      const b = r[(i + 1) % r.length];
-      (fits ? fitsLattice : offLattice).add(pair(a, b));
-    });
-  }
-  // The eye takes the largest ring system as the frame the drawing is
-  // square to - of those with rings that can lie on the lattice, and all of
-  // the largest where several are as large. A ring hung off it askew is then
-  // askew, rather than the frame tilted. Without a ring, every bond counts.
-  const latticeDirs: { t: number; frame: boolean; step: number }[] = [];
-  // (a four-membered ring is a square with its sides level and upright - a
-  // beta-lactam's, an oxetane's - not merely on the lattice)
-  // (and so is a cross)
-  const squareBonds = new Set(
-    [
-      ...rings
-        .filter((r) => r.length === 4)
-        .flatMap((r) => edges.filter(([a, b]) => r.includes(a) && r.includes(b))),
-      ...edges.filter(([a, b]) => cross(a) || cross(b)),
-    ].map(([a, b]) => pair(a, b)),
-  );
-  const fitting = live.filter((sys) => rings.some((r) => square(r) && r.every((a) => sys.has(a))));
-  const frameSize = Math.max(0, ...fitting.map((sys) => sys.size));
-  const frames = fitting.filter((sys) => sys.size === frameSize);
-  for (const [a, b] of edges) {
-    const k = pair(a, b);
-    if (offLattice.has(k) && !fitsLattice.has(k)) continue;
-    // a solid's bonds, and those out of it, lie as it is seen
-    if (g.perspective?.[a] || g.perspective?.[b]) continue;
-    const frame = frames.length
-      ? fitsLattice.has(k) && frames.some((sys) => sys.has(a) && sys.has(b))
-      : true;
-    latticeDirs.push({ t: deg(Math.atan2(y[b] - y[a], x[b] - x[a])), frame, step: squareBonds.has(k) ? 90 : 30 });
-  }
+  const latticeDirs = latticeBonds.map(({ a, b, frame, step }) => ({ t: deg(Math.atan2(y[b] - y[a], x[b] - x[a])), frame, step }));
+  // (the frame's own bonds picked out once: the tilt is sought among 300 turns)
+  const frameDirs = latticeDirs.filter((d) => d.frame);
   const offBy = (turn: number, frameOnly: boolean) => {
+    const dirs = frameOnly ? frameDirs : latticeDirs;
     let sum = 0;
-    let count = 0;
-    for (const { t, frame, step } of latticeDirs) {
-      if (frameOnly && !frame) continue;
+    for (const { t, step } of dirs) {
       const u = t - turn;
       sum += Math.abs(u - step * Math.round(u / step));
-      count++;
     }
-    return count ? sum / count : 0;
+    return dirs.length ? sum / dirs.length : 0;
   };
   let turn = 0;
   let best = offBy(0, true);
-  for (let i = -150; i < 150; i++) {
+  // (a bond is off the lattice by at most a degree more for a degree's
+  // turn, and so is the mean: the turns within what one is off by of the
+  // best so far, past it, are no better, and are passed over)
+  for (let i = -150, next = -150; i < 150; i++) {
+    if (i < next) continue;
     const e = offBy(i / 10, true);
     if (e < best - 1e-9) {
       best = e;
       turn = i / 10;
     }
+    next = i + 1 + Math.max(0, Math.floor((e - best) * 10 - 1e-6));
   }
   let tilt = Math.abs(turn);
   // A frame whose rings cannot all lie on the lattice together - two
@@ -719,7 +981,6 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // square when it is set straight by its own shape: its long axis level
   // or upright.
   if (frames.length && best > 2) {
-    const inFrame = [...new Set(frames.flatMap((sys) => [...sys]))];
     const fx = inFrame.reduce((sum, a) => sum + x[a], 0) / inFrame.length;
     const fy = inFrame.reduce((sum, a) => sum + y[a], 0) / inFrame.length;
     let fxx = 0;
@@ -735,68 +996,23 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   }
   const gridError = offBy(turn, false);
 
-  // a ring atom's other bonds, against splitting the widest room between
-  // its ring bonds evenly
-  const ringNeighbours: number[][] = Array.from({ length: n }, () => []);
-  for (const r of rings) {
-    r.forEach((a, i) => {
-      for (const b of [r[(i + 1) % r.length], r[(i + r.length - 1) % r.length]]) {
-        if (!ringNeighbours[a].includes(b)) ringNeighbours[a].push(b);
-      }
-    });
-  }
-  // (the ring systems with a bridge in them: two rings sharing three atoms
-  // or more anywhere among rings fused to each other)
-  const bridgedAt = new Set<number>();
-  {
-    const system = rings.map((_, i) => i);
-    const root = (i: number): number => (system[i] === i ? i : (system[i] = root(system[i])));
-    const bridged = new Set<number>();
-    rings.forEach((r, i) =>
-      rings.forEach((q, j) => {
-        if (j <= i) return;
-        const shared = q.filter((v) => r.includes(v)).length;
-        if (shared >= 2) system[root(j)] = root(i);
-        if (shared >= 3) bridged.add(i);
-      }),
-    );
-    const bridgedSystems = new Set([...bridged].map(root));
-    rings.forEach((r, i) => {
-      if (bridgedSystems.has(root(i))) r.forEach((v) => bridgedAt.add(v));
-    });
-  }
   let subSum = 0;
   let subCount = 0;
   for (let a = 0; a < n; a++) {
     const inside = ringNeighbours[a];
-    const outside = neighbours[a].filter((b) => !inside.includes(b));
-    // (a stereocentre at a fusion of rings, its H not drawn yet - while the
-    // engine sets the parts - is measured by where placeStereo will put
-    // that H: a frame that leaves it no room upright is the worse for it,
-    // lovastatin's turned with its rings aslant. Only where rings of five
-    // to eight are fused, as a steroid's are - not bridged, not on a
-    // macrocycle, an epoxide or a beta-lactam - and not in a solid, whose
-    // drawing shows its configuration without one)
-    const atRings = rings.filter((r) => r.includes(a));
-    const hidden =
-      outside.length === 0 &&
-      inside.length >= 3 &&
-      !persp?.[a] &&
-      !!g.tetra?.[a]?.neighbours.includes(-1) &&
-      !bridgedAt.has(a) &&
-      atRings.every((r) => r.length >= 5 && r.length <= 8);
+    const outside = outsideOf[a];
+    const atRings = ringsAt[a];
+    const hidden = hiddenAt[a];
     if (inside.length < 2 || (outside.length === 0 && !hidden)) continue;
     const dir = (b: number) => Math.atan2(y[b] - y[a], x[b] - x[a]);
     const ringDirs = inside.map(dir).sort((p, q) => p - q);
     // the widest gap no ring lies in: at a fusion of three rings every gap
     // is 120 degrees, and only one is outside
-    const centres = rings
-      .filter((r) => r.includes(a) && r.length < 9)
-      .map((r) => {
-        const rx = r.reduce((sum, v) => sum + x[v], 0) / r.length;
-        const ry = r.reduce((sum, v) => sum + y[v], 0) / r.length;
-        return Math.atan2(ry - y[a], rx - x[a]);
-      });
+    const centres = centresAt[a].map((r) => {
+      const rx = r.reduce((sum, v) => sum + x[v], 0) / r.length;
+      const ry = r.reduce((sum, v) => sum + y[v], 0) / r.length;
+      return Math.atan2(ry - y[a], rx - x[a]);
+    });
     let start = 0;
     let gap = -1;
     ringDirs.forEach((d, i) => {
@@ -1379,13 +1595,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // eight, fused and not bridged, by their centres
   let ringOrder = 0;
   if (live.length) {
-    const main = live.reduce((b, s) => (s.size > b.size ? s : b));
-    const fused = rings.filter(
-      (r) =>
-        r.length <= 8 &&
-        r.every((a) => main.has(a)) &&
-        rings.every((q) => q === r || q.filter((a) => r.includes(a)).length <= 2),
-    );
+    const fused = fusedMain;
     if (fused.length >= 2) {
       const centres = fused.map((r) => ({
         x: r.reduce((sum, a) => sum + x[a], 0) / r.length,
@@ -1399,7 +1609,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         const rows: number[][] = [];
         ys.forEach((y0) => {
           const row = ys.map((v, i) => (Math.abs(v - y0) < 0.15 * L ? i : -1)).filter((i) => i >= 0);
-          if (!rows.some((r) => r.join() === row.join())) rows.push(row);
+          if (!rows.some((r) => r.length === row.length && r.every((v, k) => v === row[k]))) rows.push(row);
         });
         const longest = Math.max(...rows.map((r) => r.length));
         return rows.filter((r) => r.length === longest);
@@ -1439,9 +1649,8 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // and within a ring system, a benzene ring at the left, where reading
   // begins: indole's, quinoline's and coumarin's benzene rings, estradiol's
   // aromatic A ring, griseofulvin's and reserpine's
-  for (const sys of live) {
-    const own = rings.filter((r) => r.length <= 8 && r.every((a) => sys.has(a)));
-    if (own.length < 2 || rings.some((r) => r.length > 8 && r.every((a) => sys.has(a)))) continue;
+  for (const own of ownOf) {
+    if (!own) continue;
     // (six carbons each with a double bond in the rings - to its own ring
     // or a fused one, whichever way the Kekule structure was written:
     // berberine's A ring as PubChem writes it has two of its own)
@@ -1531,9 +1740,15 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if ((side(onA) === side(onB)) !== cis) wrongDoubles++;
   }
 
+  // (the atoms from left to right, to pass over pairs far apart across -
+  // every pair, where a place is not a number)
+  const sweep = L > 0 && x.every(Number.isFinite) && y.every(Number.isFinite);
+  const byX = (sorted.atoms = sortedBy(sorted.atoms, n, x));
   let overlaps = 0;
-  for (let a = 0; a < n; a++) {
-    for (let b = a + 1; b < n; b++) {
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n && !(sweep && x[byX[j]] - x[byX[i]] >= L); j++) {
+      const a = Math.min(byX[i], byX[j]);
+      const b = Math.max(byX[i], byX[j]);
       const dx = x[a] - x[b];
       const dy = y[a] - y[b];
       if (dx * dx + dy * dy >= 0.25 * L * L) continue;
@@ -1549,18 +1764,24 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   // run across it - artemisinin's; nor what hangs from a ring in
   // perspective, set by it - Cp*'s methyls; nor a stereocentre's drawn H,
   // set by its own rule.)
-  const complex = (g.elements ?? []).some((e) => isMetal(e));
-  for (const r of complex ? small.filter((q) => q.length <= 6) : []) {
+  for (const { ring: r, system: own } of insideRings) {
     const xs = r.map((a) => x[a]);
     const ys = r.map((a) => y[a]);
     const minX = Math.min(...xs);
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    const own = systemOf.get(r[0]);
-    for (let p = 0; p < n; p++) {
-      if (systemOf.get(p) === own || isH(p) || x[p] <= minX || x[p] >= maxX || y[p] <= minY || y[p] >= maxY) continue;
-      if (persp && (persp[p] || neighbours[p].some((q) => persp[q]))) continue;
+    // (only the atoms between the ring's left and right, from left to right, where every place is a number)
+    let first = 0;
+    for (let hi = sweep ? n : 0; first < hi; ) {
+      const mid = (first + hi) >> 1;
+      if (x[byX[mid]] <= minX) first = mid + 1;
+      else hi = mid;
+    }
+    for (let k = first; k < n; k++) {
+      const p = sweep ? byX[k] : k;
+      if (sweep && x[p] >= maxX) break;
+      if (x[p] <= minX || x[p] >= maxX || y[p] <= minY || y[p] >= maxY || passedInside[p] || systemOf.get(p) === own) continue;
       let inside = false;
       for (let i = 0, j = r.length - 1; i < r.length; j = i++) {
         const [xi, yi, xj, yj] = [x[r[i]], y[r[i]], x[r[j]], y[r[j]]];
@@ -1582,10 +1803,17 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     loy[e] = Math.min(y[a], y[b]);
     hiy[e] = Math.max(y[a], y[b]);
   });
+  // (and the bonds by their boxes' left sides: a bond's box reaches no
+  // further right than the widest box from its left side)
+  const bondsByX = (sorted.bonds = sortedBy(sorted.bonds, E, lox));
+  let widest = 0;
+  for (let e = 0; e < E; e++) widest = Math.max(widest, hix[e] - lox[e]);
   let crossings = 0;
-  for (let i = 0; i < E; i++) {
-    const [a, b] = edges[i];
-    for (let j = i + 1; j < E; j++) {
+  for (let s = 0; s < E; s++) {
+    for (let t = s + 1; t < E && !(sweep && lox[bondsByX[t]] > hix[bondsByX[s]]); t++) {
+      const i = Math.min(bondsByX[s], bondsByX[t]);
+      const j = Math.max(bondsByX[s], bondsByX[t]);
+      const [a, b] = edges[i];
       if (lox[j] > hix[i] || hix[j] < lox[i] || loy[j] > hiy[i] || hiy[j] < loy[i]) continue;
       const [c, d] = edges[j];
       if (a === c || a === d || b === c || b === d) continue;
@@ -1600,8 +1828,17 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   for (let p = 0; p < n; p++) {
     const px = x[p];
     const py = y[p];
-    for (let e = 0; e < E; e++) {
-      if (px < lox[e] - near || px > hix[e] + near || py < loy[e] - near || py > hiy[e] + near) continue;
+    // (the first bond whose box can reach the atom, with a bond's length to spare)
+    let lo = 0;
+    for (let hi = sweep ? E : 0; lo < hi; ) {
+      const mid = (lo + hi) >> 1;
+      if (lox[bondsByX[mid]] < px - near - widest - L) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let s = lo; s < E; s++) {
+      const e = bondsByX[s];
+      if (sweep && px < lox[e] - near) break;
+      if (px > hix[e] + near || py < loy[e] - near || py > hiy[e] + near) continue;
       const [a, b] = edges[e];
       if (p === a || p === b) continue;
       if (pointToSegment(px, py, x[a], y[a], x[b], y[b]) >= near) continue;

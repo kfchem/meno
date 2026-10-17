@@ -40,7 +40,7 @@ fn names(flavor: &str) -> &'static [&'static str] {
     #[cfg(target_os = "macos")]
     {
         match flavor {
-            "meno" => &["com.kfchem.meno.structure"],
+            "meno" => &["dev.kfchem.meno.structure"],
             "mol" => &["chemical/x-mdl-molfile"],
             // a reaction, as an RXN file
             "rxn" => &["chemical/x-mdl-rxnfile"],

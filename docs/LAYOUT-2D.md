@@ -11,6 +11,65 @@ The benchmark in `scripts/layout` measures the engine against these rules
 (`src/lib/layout/metrics.ts`) and shows every drawing beside the structure
 its Wikipedia article uses.
 
+Clean-up gives one drawing, the best it finds, and the same drawing
+whatever order the atoms come in (the maintainer, 2026-10-14). Every
+choice on the way is made by the structure, or by trying each way at that
+point and keeping the best; which atom, bond or ring happens to be listed
+first never decides it. Laying a molecule out in several orders and
+keeping the best is no answer: the result still depends on the orders
+tried. `npm run layout-order` lists the molecules still drawn otherwise in
+another order. Where the rules below leave a tie, it is settled so:
+
+- **By structure.** Each atom is classed by what it is and what it is
+  bonded to, refined through its neighbours, each stereocentre and each
+  double bond (`ranks.ts`): atoms of one class are alike in everything
+  the layout looks at. A branch's slots go by the weight of what hangs,
+  then a single bond before a double one, then by class; the ring a
+  system is started from, and each ring after it, by the rings' ranks,
+  then the one with the most bonds out of the system, then by its atoms'
+  classes; the block a macrocycle starts from by the atoms it shares with
+  the macrocycle, then how fused it is; a chain's longest path from a
+  carbon end; a ring system hung from a bond with its first ring
+  neighbour by class on the left of the bond; a macrocycle's chain run
+  from the end with more bonds of its own still to place; a cage's solid,
+  found from how far apart its bonds put its atoms, and the views of it,
+  each worked out atom by atom and bond by bond in the order the
+  structure gives - its scatter starts and easing (a view's easing
+  pulls every bond at once), a stereocentre's three
+  neighbours it is held by, which of two bonds out of an atom takes which
+  corner of the tetrahedron.
+- **By trying each.** Rings tied in rank are each placed first, or next,
+  and the system that reads best flat is kept (up to eight layouts a
+  system); ring systems as near the middle of the molecule and as large -
+  lactose's two rings, NAD+'s two riboses - are each grown from, every
+  frame of each tried; a frame that lies on the lattice no way round
+  (fives and sevens) is set with each of its atoms that has bonds out in
+  turn straight up, since the bonds out of one atom alone can lie on the
+  lattice; a macrocycle's chain run with ends alike in that is looked
+  for from both; each round of the steps that set a drawing right -
+  turning bonds the other way round (`improve`), turning a part about
+  its join (`rejoin`), turning or stretching a branch out of the way
+  (`untangle`), turning a sugar to its face, making room for an H,
+  settling a fan of methyls - tries every move from the drawing as it
+  stands and takes the best, moves as good by their kind, their atoms'
+  classes, then the canonical rank.
+- **By the canonical rank, last.** Only between atoms or rings the
+  structure leaves alike - the drawings either way the same, or mirror
+  images.
+
+The benchmark's measure reads a drawing the same way
+however its atoms are listed: in a bridged system it reads every ring as
+small as one of its smallest set, not the set alone - quinuclidine has
+three six-membered cycles, and which two make the set goes by the order
+of the atoms. So too does Clean-up read whether a ring system is a cage,
+and which part of it is its cage: from every smallest set of its rings,
+not the one it was given. It is a cage only where each set reads it as
+one (paeoniflorin's six-membered ring is one of three, and in one set
+all its rings are bridged, in the others not), and its cage is the atoms
+every set has in it (ibogaine's isoquinuclidine: its seven-membered ring
+shares three atoms with one of the cage's three six-membered cycles, and
+is fused on a side of the other two).
+
 ## What a good drawing is
 
 A structure drawing is read, not looked at. A chemist should take in its
@@ -111,12 +170,25 @@ they hang from.
 - **Rings of rings**: a macrocycle that is rings strung together and
   nothing else - a porphyrin's pyrroles, a cyclodextrin's glucoses, each
   linked to the next by an atom or two - is set round a circle, each ring
-  it runs through regular and outside it. One with chains between its
+  it runs through regular and outside it, the macrocycle running along the
+  side of each that carries fewer groups where two are as long (the
+  groups on that side face into the circle: a cyclodextrin's CH2OHs
+  inside, its secondary OHs out). One with chains between its
   rings (vancomycin's peptide) is a chain like any other macrocycle:
   where several run through the same ring, that ring is drawn first and
   each macrocycle is a zigzag from ring to ring, turning as a hexagon
   does where it runs through one, so that the ring comes out regular,
-  and kept clear of where the rest of that ring will fall.
+  and kept clear of where the rest of that ring will fall, and of the
+  two atoms it runs between. The search sets a run's first bond where it
+  likes and closes onto its far end where it must, the angles giving
+  there; so it starts from the end whose atom has more bonds of its own
+  still to place, which need the room the closing would take
+  (rifampicin's ansa chain from its ketal carbon, which carries a methyl,
+  closing onto the naphthalene carbon of its amide). Ends alike in that
+  are each searched from, the better kept. Any macrocycle passing a ring by two ways round as long runs
+  along the outer side, whose atoms are in fewer of the system's other
+  rings: rifampicin's ansa chain along its naphthalene's free edge, not
+  across the junction into the next ring.
 - **Bridged systems**: where a ring is fused on a side as well - morphine,
   artemisinin, taxol - the system is drawn flat: the smaller ring of a
   bridged pair regular, the larger arcing round it with the bridge inside
@@ -125,7 +197,10 @@ they hang from.
   and regular as though the bridge were not there, and the bridge is a
   path of bonds across the face of a ring, in front of it or behind it as
   the molecule has it, the bond behind broken where they cross -
-  artemisinin's peroxide inside its seven-membered ring. Which side is the
+  artemisinin's peroxide inside its seven-membered ring. The rings drawn
+  flat are looked for among every simple cycle of the system as long as
+  its longest ring, not the smallest set's alone, which holds one of
+  rings as long by the order of the atoms. Which side is the
   one that shows its stereocentres as given, where the bridge's bonds into
   the flat rings show them: a solid found from how far apart the bonds put
   the atoms can have a ring fusion the wrong way, and morphine's 5-epimer
@@ -167,7 +242,12 @@ they hang from.
   an atom bridging two of its atoms (norbornane's C7) stands straight
   above the front one, a bond's length from the back one; the rest is
   eased into place - its bonds toward one length, each atom held near
-  where the solid seen from that side puts it - and eased again with
+  where the solid seen from that side puts it, every bond pulled at once
+  and each atom moved by the mean of its pulls, so that no bond is eased
+  before another (bond by bond, the order decided the drawing:
+  paeoniflorin's boat came out costing 7.68 in one order and 8.04 in
+  another, over the 8 a textbook view may cost, and was then drawn from
+  below by projection) - and eased again with
   atoms not bonded to each other kept 0.7 of a bond apart. That is taken
   only where it leaves fewer pairs of atoms nearer than 0.6 of a bond and
   reads better by the measure a flat drawing and a solid are weighed by
@@ -179,10 +259,17 @@ they hang from.
   stereocentre the easing turns - a bridgehead whose three bonds lie
   nearly in the page can tip through - goes back where it was put (one
   stood upright on the ring, upright still), and the others are looked at
-  again. Adamantane is then a chair with its three axial bonds
+  again. A view that eases a double bond in a ring of seven
+  atoms or fewer trans, its neighbours round the ring either side of it,
+  counts that as heavily as a bridge drawn so: tetrodotoxin's guanidine
+  ring, seen nearly edge on, came out with its C=N a zigzag. Adamantane is then a chair with its three axial bonds
   rising to the fourth bridgehead; bicyclo[2.2.2]octane a boat with its
   third bridge rising from both bridgeheads. A bond passing behind another
-  is drawn broken there. Bonds out of the ring follow it - an equatorial
+  is drawn broken there - a group's bond too: the first atom of a group off
+  the solid is as near as the atom of the solid it leaves (the mean of
+  theirs, where it leaves more than one), so a bond out of the front of
+  the cage that crosses one at its back is drawn whole, the one behind
+  broken (aconitine's N-ethyl). Bonds out of the ring follow it - an equatorial
   bond parallel to the ring bonds but one, an axial one upright - and what
   hangs from the cage hangs from its front where it can. A
   bicyclo[3.3.1] cage - two six-membered rings sharing three atoms, 9-BBN,
@@ -229,7 +316,12 @@ they hang from.
   its guanidine ring fused to it - the cage is drawn so and the rings
   fused to it flat onto it, the cage's atoms bonded to them showing their
   configuration by a wedge; the cage seen from each of its best few sides,
-  the one that leaves the rest room taken (ibogaine). Of these and the flat
+  the one that leaves the rest room taken (ibogaine). Where several of its
+  sides are as good by the system alone - adamantane is alike from all of
+  them, seen from either hand - each of those is tried with what hangs from
+  it too, none favoured: which came first went by the order of the atoms,
+  and a gem-dimethyl on a ring fused to adamantane had room from some of
+  them only. Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
   better. Then the whole drawing decides, measured as it will be drawn -
@@ -239,7 +331,19 @@ they hang from.
   flat drawing with a fault a reader cannot miss - an atom on another,
   bonds crossing - is drawn as the solid too, and that kept where it reads
   better (aconitine). A clean flat drawing is not given up for a solid the
-  measure merely prefers (scopolamine). A ring with a double bond in it
+  measure merely prefers. Where the cage alone was drawn in perspective
+  with the rest flat onto it, or the system flat, the whole drawn as one
+  solid is tried too, and kept where the whole drawing reads better - not
+  where a ring fused onto the cage is drawn as the chair the solid has it
+  as: scopolamine's epoxide flat onto its tropane crowded the ester hung
+  from it, its whole solid did not. So too where the system was drawn
+  flat because its cage in perspective, the rest flat onto it, did not
+  read as given: the whole solid is another drawing, read back on its own
+  (aconitine's second cage laid flat onto its first turned a junction;
+  its whole solid did not). The rings laid flat onto a
+  cage take their depth from the cage's atoms they are fused to, each
+  round of atoms one bond further out from the round before, so that the
+  order of the atoms never decides it. A ring with a double bond in it
   is drawn flat: where the cage alone can be drawn in perspective with
   such rings flat onto it, the whole is not drawn as a solid (gelsemine's
   oxindole, its benzene ring otherwise foreshortened). A solid is taken
@@ -257,21 +361,27 @@ they hang from.
   wedges right for a reader that reads them flat, the perspective showing
   the epoxide on the other face. The cage seen from its other side, for a
   mirrored frame, is kept only so too.
-- **What a solid shows by its shape.** A stereocentre in a six-membered
-  ring drawn as a chair or a boat (the template, any way round) shows its
-  configuration by the drawing: each bond out of it upright or along a
-  ring bond, up or down for a reader to see. So does one in a ring bridged
-  across another, which the cage drawn in perspective fixes: ibogaine's
-  isoquinuclidine, gelsemine's cage. Either only where it reads so for
-  sure - each of its bonds out of the solid turned 15 degrees either way,
-  it still reads as given; one drawn between the two corners the solid
-  leaves free says nothing. Any other centre of a solid - in a ring fused
-  round a middle and neither chair nor boat, tetrodotoxin's in its
-  guanidine ring - shows it only by a depth the page does not show, and
+- **What a solid shows by its shape.** A stereocentre of a solid drawn in
+  perspective shows its configuration by the drawing, and carries no
+  wedge, wherever the drawing read with its depth, as Meno reads one
+  (`drawn.ts`), says it as given: each bond out of it going the way it
+  goes, up or down for a reader to see - in a six-membered ring drawn as a
+  chair or a boat, in a ring bridged across another (ibogaine's
+  isoquinuclidine, gelsemine's cage), or anywhere else the solid's depth
+  says it. Only where it reads so for sure - each of its bonds out of the
+  solid turned 15 degrees either way, it still reads as given; one drawn
+  between the two corners the solid leaves free says nothing. A wedge at
+  such a centre, read flat, can say otherwise than the drawing:
+  tetrodotoxin's C4, in the ring with the C=N, is the drawing's nearest
+  atom, its OH and its H both toward the viewer, and a wedge on the OH
+  said the H went back (the maintainer, 2026-10-17, as R/S is read from
+  the perspective; before, from 2026-10-12, every centre neither in a
+  chair or boat nor bridged carried a wedge). Any other centre of a solid
   carries a wedge or hashes on a bond out of it, or an H drawn upright, as
-  a flat ring's centre does (the maintainer, 2026-10-12, of two ways
-  offered). Meno reads a drawing so too (`drawn.ts`): depth at a centre
-  the solid shows, wedges at the rest.
+  a flat ring's centre does. A file holds no depth: a MOL or SD file, or
+  anything else that reads only wedges, is given a wedge for each centre
+  the drawing shows by its depth, the drawing left as it is
+  (`wedgesForFlat`; tetrodotoxin's C4 written with a wedge on its OH).
 - **When a flat drawing gives way.** A flat drawing whose only faults are
   bonds a little uneven and a bond or two passing behind another where a
   bridge crosses a ring is no drawing with a fault: morphine and
@@ -317,7 +427,10 @@ they hang from.
   single bond - a sugar on its glycosidic oxygen, taxol's side chain on
   its ester - each is drawn well on its own and then joined, the angle at
   the join giving way to them. So too a long chain hung from a branch (a
-  lipid's acyl chains on its glycerol): drawn straight, then joined.
+  lipid's acyl chains on its glycerol): drawn straight, then joined. A
+  sugar's ring may also be turned right round on its own atom at the join,
+  or seen from its other face, to face the way a sugar is drawn; any other
+  ring keeps its bond in along its own line but for that give.
 
 ## 3. Square to the page
 
@@ -330,8 +443,10 @@ a five-membered one) is set with its long axis level.
 
 Among the ways of setting the frame square - six turns, and their mirror
 images; twelve for a frame of squares and no hexagons, whose sides can
-lie level either way round - the drawing takes the one that reads best
-(section 4).
+lie level either way round, and for a frame of five- and seven-membered
+rings, which lies on the lattice no way round and is set on it only by
+its bonds out (proline's carboxyl level, its ring symmetric about it) -
+the drawing takes the one that reads best (section 4).
 
 ## 4. Reading order
 
@@ -353,7 +468,9 @@ lie level either way round - the drawing takes the one that reads best
   bond, where both have something beside the bond, is hung the way round
   that puts the heavier of each on opposite sides - BINOL's two OH, BINAP's
   two PPh2: grown the other way, BINAP's phenyls fell on its other
-  naphthalene.
+  naphthalene. No step that sets the drawing right afterwards turns them
+  syn. Where two things beside the bond on one ring are as heavy, neither
+  side is the heavier, and the rule does not apply.
 - **A benzene ring at the left of its ring system**, where reading
   begins: indole, quinoline and coumarin with their benzene rings on the
   left, estradiol's aromatic A ring, griseofulvin's, reserpine's indole at
@@ -435,7 +552,8 @@ When parts clash, in this order:
    is tried with what hangs on it turned back as well: tryptophan's side
    chain turned down, its NH2 below, its carboxyl's C=O still up.
 2. **Turn** a substituent off its ideal angle, as little as will do.
-3. **Stretch** a bond, only if the clash is still there.
+3. **Stretch** a bond, only if the clash is still there, and by at most
+   0.6 of a bond in all.
 
 None of these ends with bonds crossing that did not cross before, however
 much else a crossing would clear.
@@ -557,7 +675,8 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   metal is, and with no metal at all (a ligand's picture) - each atom as
   near as it is across the ring's axis. What hangs from it lies in its
   plane, pointing out from its centre and foreshortened as the ring is
-  (Cp*'s methyls). The ring may be spun about its axis: where its first
+  (Cp*'s methyls); to clear a clash it is moved out along its bond, never
+  turned off that line. The ring may be spun about its axis: where its first
   substituent points - to either side, or away from the metal - is tried
   each way, and the one that reads best kept; a ring with nothing hanging
   from it, seen with a corner nearest, is spun half a step to have an edge

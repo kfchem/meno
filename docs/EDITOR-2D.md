@@ -231,7 +231,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
-| An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; arrow style |
+| An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; atom map (a reaction drawn on either side of it: made; then show or hide it, other map, export reaction in 3D - or said incomplete); arrow style |
 | A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise, how far its arrows stop short of what is on it (close, a little apart, apart, well apart; the one it is ticked), reset this arrow's gap (on one set by hand), reset all arrow gaps (where any is) |
 | A measurement | Delete | set its distance, angle or torsion angle |
 | A set, a "+", a wire | Delete | save as procedure (a set) |

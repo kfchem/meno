@@ -10,7 +10,7 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
 import { endsRenamed } from "../../utils/cycles";
@@ -224,6 +224,20 @@ export const createModelSlice = (
     doc.edit("move atom", (d) => ops.moveAtom(d, id, x, y), {
       coalesceKey: `move-atom:${id}`,
     });
+  },
+
+  setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => {
+    doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
+  },
+
+  showAtomMap: (arrowId: number, shown: boolean) => {
+    const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
+    if (map) doc.edit(shown ? "show atom map" : "hide atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, shown }));
+  },
+
+  otherAtomMap: (arrowId: number) => {
+    const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
+    if (map && map.maps.length > 1) doc.edit("other atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, chosen: (map.chosen + 1) % map.maps.length, shown: true }));
   },
 
   setStereoShown: (of: Parameters<typeof ops.setStereoShown>[1], show: boolean) => {

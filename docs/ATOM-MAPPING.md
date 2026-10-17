@@ -23,7 +23,8 @@ Meno says it is incomplete and writes nothing from it.
 ## How it is done
 
 `src/lib/chem/reactionMap.ts` is Meno's side; `src/lib/chem/accelMapper.ts`
-is ACCeL's mapper, ported. Both are pure (no DOM, Tauri or network).
+is ACCeL's mapper, ported, with departures of Meno's own (*Where
+Meno departs from ACCeL*). Both are pure (no DOM, Tauri or network).
 
 `mapReaction({ reactants, products })` takes each side as one or more
 structures (`Molecule`: atoms with 3D coordinates, hydrogens as atoms,
@@ -147,25 +148,49 @@ differ by less than that - hydrogens of a methyl, or a symmetric molecule's
 equivalent atoms - may come in the other order. The rounded scores
 (`bonding_local_rmsd`, `local_rmsd`) and every other score agree exactly.
 
-### What the original does, kept as it is
+### Where Meno departs from ACCeL
 
-Found while checking the port; left exactly as ACCeL has them, for its
-author to judge:
+Five things the original does were found while checking the port. The
+port keeps them as ACCeL has them (`ACCEL_EXACT`, which the checks below
+run); Meno maps with departures instead (`MENO_DEPARTURES`), each
+marked `[Meno departure: ...]` where it is in `accelMapper.ts`, and each
+tested beside what ACCeL does with the same input
+(`accelMapper.departures.test.ts`). `mapReaction({ ..., accelExact: true })`
+maps as ACCeL does.
 
-- **A torsion of exactly 180°.** `_get_most_dihedral` takes `arccos` of a
-  cosine that rounding can push past -1; it is then not a number, and the
-  atom that is exactly anti loses to a gauche one. Real structures are not
-  exactly anti; hand-built ones can be.
-- **The first hydrogen of a group, with nothing to measure it from.** When
-  three or more like atoms hang on an atom whose one paired neighbour has no
-  other paired neighbour yet (a methyl whose carbon's other bonds all change,
-  as in an SN2 at a methyl), the first by atom order is paired with the
-  first, and the rest follow by chirality. Which way round a methyl maps
-  then depends on the atoms' order in the files.
-- **A Python error.** A pair of faces that read the same forwards and
-  backwards with no face flag (`None`) makes `_order_maps` compute
-  `bool ^ None`, which Python refuses; the port raises there too, and
-  `mapReaction` reports it.
+- **The first of a group, with nothing to measure it from**
+  (`firstOfGroupByGeometry`). When three or more like atoms hang on an atom
+  with no torsion to place the first of them by - no paired neighbour, or
+  none with a paired neighbour of its own, as for the methyl of an SN2 at a
+  methyl - ACCeL pairs the first by atom order with the first, the rest
+  following by chirality; which way round the methyl maps then depends on
+  the atoms' order in the files, and an SN2 does not come out as the Walden
+  map. Meno pairs the first with the one nearest it once the two
+  structures are laid over one another: by the best rotation over the pairs
+  so far within the central atoms' own molecules, where at least three of
+  them span a plane, else by setting the two central atoms on one another.
+  Where there is a torsion to go by, nothing changes. With nothing but the
+  central atoms to go by, "nearest" means something only where both sides
+  stand in one frame (an IRC's two ends, structures laid over one another);
+  structures made apart give it nothing to go by, and then it is no worse
+  and no better than atom order.
+- **A torsion of exactly 180°** (`clampTorsionCosine`). `_get_most_dihedral`
+  takes `arccos` of a cosine that rounding can push past -1; it is then not
+  a number, and the atom exactly anti loses to a gauche one (an exactly
+  staggered ethane, rigidly moved, then comes out with one methyl turned
+  against the other). Meno keeps the cosine within [-1, 1]. Real structures
+  are seldom exactly anti; hand-built and symmetrised ones are.
+- **A pair of faces with no face flag** (`skipUnflaggedFacePair`). Where two
+  faces read the same forwards and backwards and their flag is `None`,
+  `_order_maps` computes `bool ^ None`, which Python refuses: ACCeL fails
+  on an oxa-6π electrocyclisation (a dienal closing to a 2H-pyran), for
+  one. Meno leaves that pair out of the pericyclic score.
+
+- **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
+  `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
+  number; `_order_maps`' face tests read such an angle as under 90°. Meno
+  keeps those cosines within [-1, 1] too. A cosine that is not a number to
+  begin with (a zero vector's) stays one, in both.
 
 ## How the port was checked
 
@@ -214,8 +239,50 @@ hand-made reactions (`reactionMap.fixtures.ts`: ethane moved rigidly, an
 SN2 at a methyl, an enolisation, a Diels-Alder reaction) with the maps
 ACCeL gives for them, and the Python behaviours above.
 
-## Still to come
+## On a drawn scheme
 
-A drawn reaction scheme using the map - a command on the reaction, map
-numbers shown or hidden, RXN files written with them - is proposed
-separately and waits for the maintainer.
+A reaction drawn on the page is mapped from its arrow's right-click menu,
+*Atom map* (`ui/features/Workspace/chem/atomMap.ts`, `useAtomMaps.ts`):
+
+- **Which structures.** The reactants are the structure nearest the arrow's
+  tail and those standing on from it, each within four bonds of the last
+  (room for a "+"); the products, likewise from its point. Reagents written
+  over or under the arrow are not of the reaction. The menu offers the map
+  only where something stands on either side.
+- **In 3D, every hydrogen an atom.** Each structure is taken as a molecule
+  in 3D made from it, where one is still its drawing's (the conformer
+  shown); else one conformer is made, as *3D structure* makes it. A lone
+  ion is an atom alone. The drawn structures are never mapped as drawn.
+- **Off the drawing's thread.** The mapping runs in a worker of its own; a
+  status at the canvas's foot says what is being done and for how long, and
+  *Stop* ends it. ACCeL's search is used as it is, solvent and all - no
+  pieces are picked out by hand, and nothing is set to make it faster.
+- **Kept on the arrow** (`ArrowAtomMap`): both sides in 3D as mapped, which
+  drawn atom each 3D atom is, every complete map best first (up to 100),
+  the one in use - the best, unless *Other map* stepped on - and whether it
+  is shown. What it shows is put on the drawing in the same undo step:
+  - each heavy atom's map number, the reactants' numbered one after
+    another, a product atom given its reactant atom's;
+  - each bond the map makes or breaks marked as a reacting centre (CTfile
+    code 4), and each whose order it changes (8).
+  Hydrogens are in the map, not numbered on the drawing.
+- **Show / Hide atom map** puts the numbers and centres on the drawing or
+  takes them off; the map is kept either way.
+- **Other map** takes the next of the complete maps, round again after the
+  last; the best stays first. The menu stays open on it and says which of
+  how many is in use ("2 of 32"): most maps differ only in where the
+  hydrogens go, which the drawing does not show.
+- **Export reaction in 3D...** writes an SD file of two records: the
+  reactants in 3D, and the products with every atom - hydrogens too - in the
+  reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
+  need. (Two XYZ files may follow, written by a plugin, as Meno writes no
+  XYZ of its own.)
+- **An RXN file** (Export, copy) carries the map's numbers and centres
+  whether or not they are shown.
+- **Incomplete.** Where not every atom finds its counterpart, the arrow
+  keeps the reaction as incomplete, with no map: the menu says *Atom map
+  incomplete* (and offers *Atom map* again), nothing is numbered, and
+  nothing is written.
+- **Changed since.** A map of a drawing changed since (an atom, a bond, a
+  charge) shows nothing new: the menu offers *Atom map* again, and *Hide
+  atom map* where its numbers are still on the drawing.

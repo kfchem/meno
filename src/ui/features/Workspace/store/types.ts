@@ -138,6 +138,27 @@ export type Arrow = ArrowForm & {
   /** What it sets for itself over the drawing style: its line and its head. */
   look?: ArrowLook;
   color?: string;
+  /** Its reaction's atom map, where one was made (chem/atomMap). */
+  atomMap?: ArrowAtomMap;
+};
+/**
+ * A drawn reaction's atom map, kept on its arrow (docs/ATOM-MAPPING.md, *On
+ * a drawn scheme*): each side in 3D as one structure, as it was mapped, and
+ * the drawn atom each of its atoms is (none for a hydrogen made for it);
+ * every complete map, best first - for each product atom, its reactant
+ * atom - none where the atoms do not all map; the one shown and used; and
+ * whether its numbers and reacting centres are shown on the drawing. What
+ * the drawing was when it was made (chem/make3d `signatureOf`) tells a map
+ * of a drawing changed since.
+ */
+export type ArrowAtomMap = {
+  drawnAs: string;
+  reactant: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  product: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  maps: number[][];
+  complete: boolean;
+  chosen: number;
+  shown: boolean;
 };
 /** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
 export type ArrowFormPatch = {
@@ -1597,6 +1618,12 @@ export type EditorState = {
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => void;
   /** Arrows given a kind, heads, dashes, a weight, corners or a colour - or theirs taken away - as one step. */
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
+  /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */
+  setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
+  /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
+  showAtomMap: (arrowId: number, shown: boolean) => void;
+  /** An arrow's next map, of those its reaction has, shown and used instead: one step. */
+  otherAtomMap: (arrowId: number) => void;
   /** A "+" added, as one step; its id. */
   addPlus: (x: number, y: number) => number;
   removeArrow: (id: number) => void;

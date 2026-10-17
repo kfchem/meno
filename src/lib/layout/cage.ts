@@ -22,6 +22,8 @@
 import { centroid, segmentsCross, splitOutside, type Point } from "./geometry";
 import { ringShape } from "./conformation";
 import { isMetal, orderOf, type Molecule, type RingSystem } from "./perceive";
+import { byStructure } from "./ranks";
+import { ringsAlike } from "./rings";
 
 export type Vec3 = [number, number, number];
 
@@ -183,6 +185,25 @@ function leastAxis(us: readonly Vec3[]): Vec3 {
   return v;
 }
 
+/**
+ * A stereocentre's configuration with its neighbours in the order the
+ * structure gives (`byStructure`), an H last, and its volume turned with
+ * them: which three of them a solid is checked and held by is then the
+ * same in any order of the atoms.
+ */
+function orderedCentre(mol: Molecule, c: number): { neighbours: number[]; volume: number } | undefined {
+  const t = mol.tetra.get(c);
+  if (!t) return undefined;
+  const same = byStructure(mol);
+  const at = t.neighbours.map((_, k) => k).sort((p, q) => {
+    const [a, b] = [t.neighbours[p], t.neighbours[q]];
+    return a < 0 || b < 0 ? (a < 0 ? 1 : 0) - (b < 0 ? 1 : 0) : same(a, b);
+  });
+  let sign = 1;
+  for (let i = 0; i < at.length; i++) for (let j = i + 1; j < at.length; j++) if (at[i] > at[j]) sign = -sign;
+  return { neighbours: at.map((k) => t.neighbours[k]), volume: t.volume * sign };
+}
+
 /** A stereocentre held the way round it is given while a solid is eased: its index, three neighbours' and the sign of the volume they span from it. */
 type Held = { c: number; three: [number, number, number]; sign: number };
 
@@ -261,6 +282,8 @@ export type CageView = {
    * turned round with its depth, which would show it from below.
    */
   other?: Omit<CageView, "other">;
+  /** As good as the best view by the system's own measure: chosen among with no margin, by what hangs from it. */
+  tied?: true;
 };
 
 /**
@@ -274,13 +297,16 @@ function bicycleAxes(mol: Molecule, sys: RingSystem, X: Vec3[], index: Map<numbe
   const [r1, r2] = sys.rings.map((i) => mol.rings[i]);
   const shared = r1.filter((a) => r2.includes(a));
   if (shared.length < 3) return null;
-  const ends = shared.filter((a) => mol.neighbours[a].filter((b) => shared.includes(b)).length === 1);
+  // (its ends, and bridges as long, in the order the structure gives)
+  const same = byStructure(mol);
+  const ends = shared.filter((a) => mol.neighbours[a].filter((b) => shared.includes(b)).length === 1).sort(same);
   if (ends.length !== 2) return null;
+  const first = (b: number[]) => [...b].sort(same)[0];
   const bridges = [
     shared.filter((a) => !ends.includes(a)),
     r1.filter((a) => !shared.includes(a)),
     r2.filter((a) => !shared.includes(a)),
-  ].sort((p, q) => p.length - q.length);
+  ].sort((p, q) => p.length - q.length || same(first(p), first(q)));
   const at = (a: number) => X[index.get(a)!];
   const b1 = at(ends[0]);
   const b2 = at(ends[1]);
@@ -403,7 +429,10 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
   for (const bond of mol.bonds) {
     if (bond.order !== 2 || !inside(bond.a) || !inside(bond.b)) continue;
     const [a, b] = [bond.a, bond.b];
-    const group = [...new Set([a, b, ...mol.neighbours[a], ...mol.neighbours[b]])].filter(inside).map((v) => index.get(v)!);
+    const group = [...new Set([a, b, ...mol.neighbours[a], ...mol.neighbours[b]])]
+      .filter(inside)
+      .map((v) => index.get(v)!)
+      .sort((p, q) => p - q);
     if (group.length >= 4) planes.push(group);
     for (const x of mol.neighbours[a]) {
       if (x === b || !inside(x)) continue;
@@ -425,6 +454,12 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
       }
     }
   }
+  // (drawn into their planes one after another in the order of their
+  // atoms, not of the bonds)
+  planes.sort((p, q) => {
+    for (let k = 0; k < Math.min(p.length, q.length); k++) if (p[k] !== q[k]) return p[k] - q[k];
+    return p.length - q.length;
+  });
   return { d, w, least, planes };
 }
 
@@ -432,24 +467,32 @@ function targetsOf(mol: Molecule, atoms: readonly number[], index: Map<number, n
  * A ring system's solid: placed roughly by its distances (classical
  * scaling, stress majorisation), taken the way round its stereocentres
  * say rather than as its mirror image, each centre the wrong way put
- * through the plane of its three neighbours (`rightCentres`), and eased.
+ * through the plane of its three neighbours (`rightCentres`), and eased -
+ * all with its atoms in the order the structure gives, so the same solid
+ * comes out in any order of the atoms.
  */
-function embed(mol: Molecule, atoms: number[], index: Map<number, number>): Vec3[] {
+function embed(mol: Molecule, atoms: number[]): Vec3[] {
   // (found once for a ring system: it is asked for again and again - and
   // by what it is found from, not by the molecule object, since a drawing
   // read back is perceived anew, its cage the same: tetrodotoxin's solid
   // found anew for each of its read-backs was half its Clean-up)
-  const key = `${contentOf(mol)}|${atoms.join(",")}`;
-  const cached = solids.get(key);
-  if (cached) return cached;
-  const found = embedAnew(mol, atoms, index);
-  solids.set(key, found);
-  if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
-  return found;
+  const key = `${contentOf(mol)}|${[...atoms].sort((p, q) => p - q).join(",")}`;
+  let solid = solids.get(key);
+  if (!solid) {
+    // (found with the atoms in the order the structure gives - its scatter
+    // starts and its easing go atom by atom - and handed back in the
+    // caller's: the same solid whatever order the atoms come in)
+    const canon = [...atoms].sort(byStructure(mol));
+    const found = embedAnew(mol, canon, new Map(canon.map((a, i) => [a, i])));
+    solid = new Map(canon.map((a, i) => [a, found[i]]));
+    solids.set(key, solid);
+    if (solids.size > KEPT_SOLIDS) solids.delete(solids.keys().next().value!);
+  }
+  return atoms.map((a) => solid.get(a)!);
 }
 
 /** The solids found so far, by what each is found from (`contentOf`) and its system's atoms; the oldest let go first. */
-const solids = new Map<string, Vec3[]>();
+const solids = new Map<string, Map<number, Vec3>>();
 
 /** How many solids are kept (`solids`). */
 const KEPT_SOLIDS = 64;
@@ -514,9 +557,30 @@ function miss(X: Vec3[], T: Targets): number {
 
 /** The solid a cage system is taken to be: its atoms' places in three dimensions. */
 export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
-  const index = new Map(sys.atoms.map((a, i) => [a, i]));
-  const X = embed(mol, sys.atoms, index);
+  const X = embed(mol, sys.atoms);
   return new Map(sys.atoms.map((a, i) => [a, X[i]]));
+}
+
+/**
+ * A ring system with its atoms in the order the structure gives
+ * (`byStructure`): a cage's views are worked out atom by atom and bond by
+ * bond, and eased in that order, so the views come out the same whatever
+ * order the atoms are listed in.
+ */
+function inStructureOrder(mol: Molecule, sys: RingSystem): RingSystem {
+  return { ...sys, atoms: [...sys.atoms].sort(byStructure(mol)) };
+}
+
+/** The bonds between atoms of `index`, by their places in it, in the order of those places. */
+function bondsWithin(mol: Molecule, index: Map<number, number>): [number, number][] {
+  const bonds: [number, number][] = [];
+  for (const [k] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (!index.has(a) || !index.has(b)) continue;
+    const [i, j] = [index.get(a)!, index.get(b)!];
+    bonds.push(i < j ? [i, j] : [j, i]);
+  }
+  return bonds.sort((p, q) => p[0] - q[0] || p[1] - q[1]);
 }
 
 /**
@@ -525,17 +589,32 @@ export function solidOf(mol: Molecule, sys: RingSystem): Map<number, Vec3> {
  * cage: a cage the same from several sides reads best from the one that
  * leaves room for the rest. Null where there is no such view.
  */
-export function projectCage(mol: Molecule, sys: RingSystem): CageView;
-export function projectCage(mol: Molecule, sys: RingSystem, rank: number): CageView | null;
-export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView | null {
+/**
+ * Every textbook view of a cage as good as its best, from either side
+ * (`projectCage`'s ranks are one hand's): a cage alike from several sides
+ * offers them all, to choose among by what is fused to it and hangs from
+ * it. Empty where the cage is not drawn by the template.
+ */
+export function tiedViews(mol: Molecule, given: RingSystem): CageView[] {
+  const sys = inStructureOrder(mol, given);
   const atoms = sys.atoms;
   const index = new Map(atoms.map((a, i) => [a, i]));
-  const bonds: [number, number][] = [];
-  for (const [k] of mol.bondIndex) {
-    const [a, b] = k.split(",").map(Number);
-    if (index.has(a) && index.has(b)) bonds.push([index.get(a)!, index.get(b)!]);
-  }
-  const X = embed(mol, atoms, index);
+  const bonds = bondsWithin(mol, index);
+  const X = embed(mol, atoms);
+  if (twinChairs(mol, sys, X, index, bonds)) return [];
+  const tied: CageView[] = [];
+  const best = textbook(mol, sys, X, index, bonds, 0, tied);
+  return best && best.cost < 8 ? tied : [];
+}
+
+export function projectCage(mol: Molecule, sys: RingSystem): CageView;
+export function projectCage(mol: Molecule, sys: RingSystem, rank: number): CageView | null;
+export function projectCage(mol: Molecule, given: RingSystem, rank = 0): CageView | null {
+  const sys = inStructureOrder(mol, given);
+  const atoms = sys.atoms;
+  const index = new Map(atoms.map((a, i) => [a, i]));
+  const bonds = bondsWithin(mol, index);
+  const X = embed(mol, atoms);
 
   // a bicyclo[3.3.1] cage as 9-BBN is drawn: its two chairs stood on end
   const twin = twinChairs(mol, sys, X, index, bonds);
@@ -626,15 +705,18 @@ export function projectCage(mol: Molecule, sys: RingSystem, rank = 0): CageView 
     // (kept)
   } else if (axes) {
     const { e1, e2, e3 } = axes;
-    for (const elev of [15, 20, 25, 30, 40]) {
-      for (const az of [0, 10, -10, 20, -20, 30, -30]) {
-        const ce = Math.cos((elev * Math.PI) / 180);
-        const se = Math.sin((elev * Math.PI) / 180);
-        const ca = Math.cos((az * Math.PI) / 180);
-        const sa = Math.sin((az * Math.PI) / 180);
-        const toViewer = normalise([0, 1, 2].map((i) => ce * (ca * e2[i] + sa * e1[i]) + se * e3[i]) as Vec3);
-        // a little above and to the side reads best; straight on hides the back
-        consider(look(X, toViewer, e3), 0.02 * Math.abs(elev - 25) + 0.01 * Math.abs(Math.abs(az) - 15));
+    // (with either of its other two bridges in front)
+    for (const front of [1, -1]) {
+      for (const elev of [15, 20, 25, 30, 40]) {
+        for (const az of [0, 10, -10, 20, -20, 30, -30]) {
+          const ce = Math.cos((elev * Math.PI) / 180);
+          const se = Math.sin((elev * Math.PI) / 180);
+          const ca = Math.cos((az * Math.PI) / 180);
+          const sa = Math.sin((az * Math.PI) / 180);
+          const toViewer = normalise([0, 1, 2].map((i) => ce * (ca * front * e2[i] + sa * e1[i]) + se * e3[i]) as Vec3);
+          // a little above and to the side reads best; straight on hides the back
+          consider(look(X, toViewer, e3), 0.02 * Math.abs(elev - 25) + 0.01 * Math.abs(Math.abs(az) - 15));
+        }
       }
     }
   } else {
@@ -764,37 +846,6 @@ export function drawnAsChairOrBoat(pts: readonly Point[]): boolean {
   return false;
 }
 
-/**
- * The stereocentres among `atoms`, drawn as a solid at `pos`, that the
- * drawing shows by its shape: each in a six-membered ring of them drawn as
- * a chair or a boat (`drawnAsChairOrBoat`).
- */
-export function shownByShape(mol: Molecule, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
-  const out = new Set<number>();
-  for (const cycle of sixCycles(mol, atoms)) {
-    if (!cycle.some((a) => mol.tetra.has(a))) continue;
-    if (!drawnAsChairOrBoat(cycle.map(pos))) continue;
-    for (const a of cycle) if (mol.tetra.has(a)) out.add(a);
-  }
-  return out;
-}
-
-/**
- * The stereocentres among `atoms` - those of `sys` drawn as a solid, at
- * `pos` - that the drawing shows by its shape: each in a six-membered ring
- * drawn as a chair or a boat (`shownByShape`), or in a ring of the system
- * bridged across another (sharing three atoms or more with it), whose
- * atoms the cage drawn in perspective fixes - the way each bond goes from
- * them says which way round they are.
- */
-export function shownBySolid(mol: Molecule, sys: RingSystem, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
-  const out = shownByShape(mol, atoms, pos);
-  const rings = sys.rings.map((r) => mol.rings[r]);
-  const bridged = rings.filter((r) => rings.some((q) => q !== r && q.filter((a) => r.includes(a)).length >= 3));
-  for (const a of atoms) if (mol.tetra.has(a) && bridged.some((r) => r.includes(a))) out.add(a);
-  return out;
-}
-
 /** Every six-membered cycle through the given atoms, each in order round it. */
 function sixCycles(mol: Molecule, atoms: readonly number[]): number[][] {
   const inside = new Set(atoms);
@@ -845,6 +896,54 @@ export function affineFit(from: Vec3[], to: Point[]): { x: number[]; y: number[]
 }
 
 /**
+ * Each double bond of the system in a ring of seven atoms or fewer, with
+ * a neighbour of each end round such a ring: [its two ends, those two
+ * neighbours], by their places among the system's atoms (`index`). Such a
+ * ring has the bond cis. Found by the fewest bonds from the one neighbour
+ * round to the other, not through the bond itself - not by the rings the
+ * smallest set holds, which a cage alike in several rings leaves to the
+ * order of its atoms.
+ */
+function ringDoubleBonds(mol: Molecule, index: Map<number, number>): [number, number, number, number][] {
+  const found: [number, number, number, number][] = [];
+  for (const { a, b, order } of mol.bonds) {
+    if (order !== 2 || !index.has(a) || !index.has(b)) continue;
+    for (const p of mol.neighbours[a])
+      for (const q of mol.neighbours[b]) {
+        if (p === b || q === a || p === q || !index.has(p) || !index.has(q)) continue;
+        // (four bonds at most from p to q: the ring seven atoms at most)
+        const hop = new Map([[p, 0]]);
+        const queue = [p];
+        for (let h = 0; h < queue.length && !hop.has(q); h++) {
+          const u = queue[h];
+          if (hop.get(u)! >= 4) break;
+          for (const v of mol.neighbours[u]) {
+            if (v === a || v === b || !index.has(v) || hop.has(v)) continue;
+            hop.set(v, hop.get(u)! + 1);
+            queue.push(v);
+          }
+        }
+        if (hop.has(q)) found.push([index.get(a)!, index.get(b)!, index.get(p)!, index.get(q)!]);
+      }
+  }
+  return found;
+}
+
+/**
+ * How many of those double bonds (`ringDoubleBonds`) a drawing shows
+ * trans: the two neighbours on opposite sides of the bond. The solid has
+ * each flat and cis, and seen from any side it stays so; easing the rest
+ * of the cage to bonds of one length can turn one (tetrodotoxin's
+ * guanidine ring, seen nearly edge on, its C=N a zigzag).
+ */
+function turnedInRings(pts: readonly Point[], found: readonly [number, number, number, number][]): number {
+  return found.filter(([a, b, p, q]) => {
+    const side = (v: number) => Math.sign((pts[b].x - pts[a].x) * (pts[v].y - pts[a].y) - (pts[b].y - pts[a].y) * (pts[v].x - pts[a].x));
+    return side(p) * side(q) < 0;
+  }).length;
+}
+
+/**
  * The cage as a chemist draws it: one of its six-membered rings as the
  * chair or boat it is, by the template above, and the rest of the cage
  * built up from it - a bond axial to that ring upright, an atom bridging
@@ -853,7 +952,8 @@ export function affineFit(from: Vec3[], to: Point[]): { x: number[]; y: number[]
  * same way, puts it, eased to bonds of one length. Null for a cage with
  * no six-membered ring. Adamantane comes out as four chairs, the one at
  * the bottom with its three axial bonds rising to the fourth bridgehead;
- * norbornane and camphor as a boat with their bridge above.
+ * norbornane and camphor as a boat with their bridge above. A double bond
+ * in a ring of seven atoms or fewer is drawn cis, as the ring has it.
  */
 function textbook(
   mol: Molecule,
@@ -862,6 +962,7 @@ function textbook(
   index: Map<number, number>,
   bonds: [number, number][],
   rank = 0,
+  tied?: CageView[],
 ): CageView | null {
   const atoms = sys.atoms;
   const cycles = sixCycles(mol, atoms);
@@ -873,6 +974,7 @@ function textbook(
     [1, 1],
   ];
   const at = (a: number) => X[index.get(a)!];
+  const inSmallRings = ringDoubleBonds(mol, index);
   type Found = { pts: Point[]; depth: number[]; hints: Map<number, Map<number, Point>>; cost: number };
   // (the atoms of every six-membered ring the solid has as a chair or a
   // boat: a bond axial to one is drawn upright, the ring drawn by the
@@ -946,13 +1048,19 @@ function textbook(
                 (sum, a) => sum + mol.neighbours[a].filter((b) => !index.has(b)).length,
                 0,
               );
+              // (and a double bond in a small ring drawn trans counted as a
+              // bridge's is (bridge.ts): it reads as another molecule -
+              // tetrodotoxin's guanidine C=N, which won or lost by how near
+              // an OH's label came to the ring's N, a hair either side of a
+              // label's breadth as the atoms came)
               const cost =
                 viewCost(pts, bonds, 0.45, 0.2) +
                 cost0 +
                 (restUp ? 0 : 0.5) +
                 exitCost(pts, bonds, index, hints, (a) => mol.el[a] !== "C") +
                 0.25 * behind +
-                LEVEL_AXIS * axisTiltOf(pts);
+                LEVEL_AXIS * axisTiltOf(pts) +
+                20 * turnedInRings(pts, inSmallRings);
               best.set(hand, [...(best.get(hand) ?? []), { pts, depth, hints, cost }]);
             }
           }
@@ -981,6 +1089,14 @@ function textbook(
     });
     return { pos, depth, hints: f.hints, cost: f.cost };
   };
+  // (and every view of either hand as good as the best, each with the
+  // other hand's best for its other side: two hands alike - an achiral
+  // cage, adamantane - and which came first went by the order of the atoms)
+  if (tied)
+    hands.forEach((fs, h) => {
+      const back = hands[1 - h]?.[0];
+      for (const f of fs) if (f.cost < hands[0][0].cost + 1e-6) tied.push({ ...view(f), other: back ? view(back) : undefined });
+    });
   return { ...view(found[0]), other: found[1] ? view(found[1]) : undefined };
 }
 
@@ -1405,6 +1521,15 @@ function drawOn(
   const ease = (apart: readonly [number, number][] = []): Point[] => {
     const q = anchor.map((p) => ({ ...p }));
     for (let it = 0; it < 400; it++) {
+      // (every bond pulled at once, from where the atoms are: no bond eased
+      // before another, so that the order they are listed in decides nothing;
+      // each atom moved by the mean of its pulls, which cannot overshoot)
+      const move = q.map(() => ({ x: 0, y: 0, n: 0 }));
+      const pull = (i: number, x: number, y: number) => {
+        move[i].x += x;
+        move[i].y += y;
+        move[i].n++;
+      };
       for (const [a, b] of bonds) {
         const fa = fixed.has(a);
         const fb = fixed.has(b);
@@ -1414,14 +1539,8 @@ function drawOn(
         const l = Math.hypot(dx, dy) || 1e-9;
         const f = (l - 1) / l;
         const share = fa || fb ? 0.5 : 0.25;
-        if (!fa) {
-          q[a].x += dx * f * share;
-          q[a].y += dy * f * share;
-        }
-        if (!fb) {
-          q[b].x -= dx * f * share;
-          q[b].y -= dy * f * share;
-        }
+        if (!fa) pull(a, dx * f * share, dy * f * share);
+        if (!fb) pull(b, -dx * f * share, -dy * f * share);
       }
       for (const [i, j] of apart) {
         const dx = q[j].x - q[i].x;
@@ -1430,11 +1549,14 @@ function drawOn(
         if (l >= APART) continue;
         const f = ((APART - l) / l) * 0.5;
         const [si, sj] = fixed.has(i) ? [0, 1] : fixed.has(j) ? [1, 0] : [0.5, 0.5];
-        q[i].x -= dx * f * si;
-        q[i].y -= dy * f * si;
-        q[j].x += dx * f * sj;
-        q[j].y += dy * f * sj;
+        if (si) pull(i, -dx * f * si, -dy * f * si);
+        if (sj) pull(j, dx * f * sj, dy * f * sj);
       }
+      q.forEach((p, i) => {
+        if (!move[i].n) return;
+        p.x += move[i].x / move[i].n;
+        p.y += move[i].y / move[i].n;
+      });
       // (an upright bond kept upright - its far atom moved only up or down;
       // the rest held less and less, so that bonds that can all be one
       // length are)
@@ -1552,7 +1674,7 @@ const APART = 0.7;
  */
 function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number, number>, X: Vec3[], T: Targets): Vec3[] {
   const fixed = (c: number) => {
-    const t = mol.tetra.get(c);
+    const t = orderedCentre(mol, c);
     if (!t) return null;
     const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && index.has(n));
     return known.length >= 3 ? { t, known } : null;
@@ -1584,7 +1706,7 @@ function rightCentres(mol: Molecule, atoms: readonly number[], index: Map<number
 /** Every stereocentre with three bonds or more in the system, to be held the way round it is given while the solid eases. */
 function holds(mol: Molecule, atoms: readonly number[], index: Map<number, number>): Held[] {
   return atoms.flatMap((c) => {
-    const t = mol.tetra.get(c);
+    const t = orderedCentre(mol, c);
     if (!t) return [];
     const known = t.neighbours.map((n, k) => [n, k] as const).filter(([n]) => n >= 0 && index.has(n));
     if (known.length < 3) return [];
@@ -1602,7 +1724,7 @@ function holds(mol: Molecule, atoms: readonly number[], index: Map<number, numbe
 function handedness(mol: Molecule, atoms: number[], index: Map<number, number>, X: Vec3[]): number {
   let vote = 0;
   atoms.forEach((a, i) => {
-    const t = mol.tetra.get(a);
+    const t = orderedCentre(mol, a);
     if (!t) return;
     const inside = mol.neighbours[a].filter((b) => index.has(b));
     if (inside.length < 3) return;
@@ -1703,7 +1825,29 @@ function outward(
     return bi != null && mol.bonds[bi].order === 2;
   });
   if (double) return out.map(() => away);
-  if (out.length >= 2) return out.map((_, k2) => corners[k2 % 2]);
+  if (out.length >= 2) {
+    // (which goes to which corner by the structure - the corners told apart
+    // by which side of the plane of its first two neighbours inside they
+    // lie - and, at a stereocentre, as its configuration asks)
+    const same = byStructure(mol);
+    const [p, q] = [...inside].sort(same).map(unit);
+    const [c1, c2] = [...corners].sort((u, v) => Math.sign(dotV(crossV(p, q), v)) - Math.sign(dotV(crossV(p, q), u)));
+    const [o1, o2] = [...out].sort(same);
+    let pick = new Map([
+      [o1, c1],
+      [o2, c2],
+    ]);
+    const t = orderedCentre(mol, a);
+    if (t && out.length === 2) {
+      const dirOf = (n: number): Vec3 => (pick.has(n) ? pick.get(n)! : unit(n));
+      const v = t.neighbours.slice(0, 3).map(dirOf);
+      if (Math.sign(dotV(v[0], crossV(v[1], v[2]))) !== t.volume) pick = new Map([
+        [o1, c2],
+        [o2, c1],
+      ]);
+    }
+    return out.map((b) => pick.get(b) ?? away);
+  }
   // one bond out and an H: the corner the configuration asks for
   const t = mol.tetra.get(a);
   if (!t) return [away];
@@ -1726,17 +1870,101 @@ function outward(
  * atom in two rings or more (cubane). A system with a ring fused on a side
  * as well (morphine's benzene ring, artemisinin's cyclohexane) is drawn
  * flat, its bridge across it.
+ *
+ * Read from every smallest set of its rings (`smallestSets`), not only the
+ * one the system was given, which of several as small going by the order
+ * of the atoms: a cage only where each of them reads as one - a set that
+ * has a ring fused on a side shows the system is not all bridged.
  */
 export function isCage(mol: Molecule, sys: RingSystem): boolean {
   if (sys.rings.length < 2 || sys.atoms.length > 16) return false;
   // (rings through a metal - a chelate, a diene bound to it - or round a
   // star are no cage: they are drawn flat, or face-on to their metal)
   if (sys.atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]))) return false;
-  const rings = sys.rings.map((i) => mol.rings[i]);
-  if (rings.some((r) => r.length > 8)) return false;
+  if (sys.rings.some((r) => mol.rings[r].length > 8)) return false;
+  return smallestSets(mol, sys).every((rings) => allBridged(sys.atoms, rings));
+}
+
+/** Rings all bridged, each sharing three atoms or more with another, or a polyhedron, every atom in two rings or more. */
+function allBridged(atoms: readonly number[], rings: readonly (readonly number[])[]): boolean {
   const bridged = rings.every((r) => rings.some((q) => q !== r && q.filter((a) => r.includes(a)).length >= 3));
-  const polyhedron = sys.atoms.every((a) => rings.filter((r) => r.includes(a)).length >= 2);
-  return bridged || polyhedron;
+  return bridged || atoms.every((a) => rings.filter((r) => r.includes(a)).length >= 2);
+}
+
+/** At most this many smallest sets read for one system: one with more is read by its own set. */
+const MOST_SETS = 64;
+const setsOf = new WeakMap<RingSystem, number[][][]>();
+
+/**
+ * Every smallest set of a ring system's rings, each as its rings' atoms:
+ * the system's own (`Molecule.rings`) and each other as small - where
+ * several sets are as small, which one the system was given goes by the
+ * order of its atoms: quinuclidine has three six-membered cycles and any
+ * two are a smallest set; paeoniflorin's six-membered ring is one of three.
+ * Each other set takes, length by length, as many of the cycles that size
+ * no sum of shorter rings gives (`ringsAlike`) as the system's own set has,
+ * where they are independent of the shorter rings and of one another. A
+ * ring of nine atoms or more is kept as the system has it: no cage has one.
+ */
+function smallestSets(mol: Molecule, sys: RingSystem): number[][][] {
+  const known = setsOf.get(sys);
+  if (known) return known;
+  const own = sys.rings.map((i) => mol.rings[i]);
+  const small = own.filter((r) => r.length <= 8);
+  const alike = small.length ? ringsAlike(small, mol.neighbours) : [];
+  let sets: number[][][] = [own];
+  if (alike.length > small.length) {
+    // (each cycle as the set of its bonds, over GF(2))
+    const bondOf = new Map<string, number>();
+    const vectorOf = (r: readonly number[]) => {
+      let v = 0n;
+      r.forEach((a, k) => {
+        const b = r[(k + 1) % r.length];
+        const key = a < b ? `${a},${b}` : `${b},${a}`;
+        if (!bondOf.has(key)) bondOf.set(key, bondOf.size);
+        v ^= 1n << BigInt(bondOf.get(key)!);
+      });
+      return v;
+    };
+    const rank = (vs: readonly bigint[]) => {
+      const basis: bigint[] = [];
+      for (let v of vs) {
+        for (const b of basis) if ((v ^ b) < v) v ^= b;
+        if (!v) continue;
+        basis.push(v);
+        basis.sort((p, q) => (p > q ? -1 : p < q ? 1 : 0));
+      }
+      return basis.length;
+    };
+    const choose = <T,>(items: readonly T[], m: number): T[][] =>
+      m === 0 ? [[]] : items.flatMap((x, k) => choose(items.slice(k + 1), m - 1).map((rest) => [x, ...rest]));
+    const binomial = (k: number, m: number) => {
+      let c = 1;
+      for (let j = 0; j < m; j++) c = (c * (k - j)) / (j + 1);
+      return c;
+    };
+    const lengths = [...new Set(small.map((r) => r.length))].sort((p, q) => p - q);
+    const options: number[][][][] = [];
+    let count = 1;
+    for (const length of lengths) {
+      const shorter = small.filter((r) => r.length < length).map(vectorOf);
+      const wanted = small.filter((r) => r.length === length).length;
+      const cycles = alike.filter((r) => r.length === length);
+      if (binomial(cycles.length, wanted) > 4 * MOST_SETS) {
+        count = Infinity;
+        break;
+      }
+      const ways = choose(cycles, wanted).filter((pick) => rank([...shorter, ...pick.map(vectorOf)]) === shorter.length + wanted);
+      options.push(ways);
+      count *= ways.length;
+    }
+    if (count > 1 && count <= MOST_SETS) {
+      const large = own.filter((r) => r.length > 8);
+      sets = options.reduce<number[][][]>((acc, ways) => acc.flatMap((set) => ways.map((pick) => [...set, ...pick])), [[]]).map((set) => [...set, ...large]);
+    }
+  }
+  setsOf.set(sys, sets);
+  return sets;
 }
 
 const dotV = (a: Vec3, b: Vec3) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -1758,27 +1986,58 @@ const normalise = (a: Vec3): Vec3 => {
  * isoquinuclidine, fused to its indole by a seven-membered ring;
  * tetrodotoxin's cage, its guanidine ring fused to it). The largest such
  * set of rings, where it is a cage on its own; else none.
+ *
+ * Where the system has more than one smallest set of rings (`smallestSets`),
+ * its cage is the atoms every set has in its cage - all the system's, in a
+ * set that reads the whole as one - and the system's own rings within
+ * them: ibogaine's seven-membered ring shares three atoms with one of the
+ * isoquinuclidine's three six-membered cycles and is fused on a side of
+ * the other two, so it is no part of the cage whichever two the system
+ * was given.
  */
 export function cageCore(mol: Molecule, sys: RingSystem): RingSystem | null {
-  const rings = sys.rings;
-  const shares3 = (i: number, j: number) => mol.rings[i].filter((a) => mol.rings[j].includes(a)).length >= 3;
-  const seen = new Set<number>();
-  let best: number[] = [];
+  const sets = smallestSets(mol, sys);
+  if (sets.length === 1) {
+    const best = largestGroup(sys.rings, (i, j) => shares3(mol.rings[i], mol.rings[j]));
+    if (best.length < 2 || best.length === sys.rings.length) return null;
+    const core: RingSystem = { rings: best, atoms: [...new Set(best.flatMap((i) => mol.rings[i]))] };
+    return isCage(mol, core) ? core : null;
+  }
+  const cages: number[][] = [];
+  for (const rings of sets) {
+    const best = largestGroup(rings, shares3);
+    if (best.length < 2) return null;
+    const atoms = [...new Set(best.flat())];
+    const metal = atoms.some((a) => mol.el[a] === "*" || isMetal(mol.el[a]));
+    if (metal || atoms.length > 16 || best.some((r) => r.length > 8) || !allBridged(atoms, best)) return null;
+    cages.push(atoms);
+  }
+  const inside = new Set(cages[0].filter((a) => cages.every((c) => c.includes(a))));
+  const rings = sys.rings.filter((i) => mol.rings[i].every((a) => inside.has(a)));
+  if (rings.length < 2 || rings.length === sys.rings.length) return null;
+  const core: RingSystem = { rings, atoms: [...new Set(rings.flatMap((i) => mol.rings[i]))] };
+  return isCage(mol, core) ? core : null;
+}
+
+const shares3 = (p: readonly number[], q: readonly number[]) => p.filter((a) => q.includes(a)).length >= 3;
+
+/** The largest group of rings joined each to another by `joined`, the first of the largest in the order given. */
+function largestGroup<T>(rings: readonly T[], joined: (p: T, q: T) => boolean): T[] {
+  const seen = new Set<T>();
+  let best: T[] = [];
   for (const start of rings) {
     if (seen.has(start)) continue;
     const group = [start];
     seen.add(start);
     for (let k = 0; k < group.length; k++)
       for (const j of rings) {
-        if (seen.has(j) || !shares3(group[k], j)) continue;
+        if (seen.has(j) || !joined(group[k], j)) continue;
         seen.add(j);
         group.push(j);
       }
     if (group.length > best.length) best = group;
   }
-  if (best.length < 2 || best.length === rings.length) return null;
-  const core: RingSystem = { rings: best, atoms: [...new Set(best.flatMap((i) => mol.rings[i]))] };
-  return isCage(mol, core) ? core : null;
+  return best;
 }
 
 /**

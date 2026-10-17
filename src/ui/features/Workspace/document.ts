@@ -15,7 +15,8 @@ import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style"
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
-import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
+import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
@@ -1257,6 +1258,42 @@ export function setStereoShown(
     });
   }
   return out;
+}
+
+/**
+ * An arrow given its reaction's atom map (chem/atomMap) - or, null, its map
+ * taken away - with what the map shows on the drawing put there or taken
+ * off: each heavy atom's map number, and the reacting centres of the bonds
+ * it makes, breaks or changes in order - where the map is shown, complete,
+ * and of the drawing as it is. The atoms of the map before and of the new
+ * one lose the numbers and centres they had; one step.
+ */
+export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAtomMap | null): WorkspaceDocument {
+  const arrow = doc.arrows.find((a) => a.id === arrowId);
+  if (!arrow) return doc;
+  const before = arrow.atomMap;
+  const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
+  const marks = map && map.shown && mapStanding({ atomMap: map }, doc.model) === "ready" ? mapMarks(map, doc.model) : null;
+  const atoms = doc.model.atoms.map((a) => {
+    if (!inside.has(a.id)) return a;
+    const n = marks?.numbers.get(a.id);
+    if (n === a.map) return a;
+    const { map: _m, ...rest } = a;
+    return n ? { ...rest, map: n } : rest;
+  });
+  const bonds = doc.model.bonds.map((b) => {
+    if (!inside.has(b.a) || !inside.has(b.b)) return b;
+    const c = marks?.centres.get(b.id);
+    if (c === b.reactingCentre) return b;
+    const { reactingCentre: _c, ...rest } = b;
+    return c ? { ...rest, reactingCentre: c } : rest;
+  });
+  const arrows = doc.arrows.map((a) => {
+    if (a.id !== arrowId) return a;
+    const { atomMap: _a, ...rest } = a;
+    return map ? { ...rest, atomMap: map } : rest;
+  });
+  return { ...doc, arrows, model: { ...doc.model, atoms, bonds } };
 }
 
 /** A measurement's atoms put in another order - the same measurement, the same value: which side setting it moves. */
