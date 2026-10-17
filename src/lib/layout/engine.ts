@@ -502,7 +502,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const d = seen.map((z, a) => z ?? groups.get(a) ?? null);
       // (read as the drawing is read at the end: with every centre of the solid)
       const own = mol.systems[mol.systemOf[c]].atoms.filter((a) => solid[a] && input.atoms[a].tetra);
-      return !byAHair(input, mol, x, y, d, own, groups).has(c);
+      return !byAHair(input, mol, x, y, d, own, groups, [c]).has(c);
     };
     const roomy = roomForHydrogens(mol, piece, best.pos, scoreRoom(best.pos), scoreRoom, fixed, (c) => solid[c] && mol.tetra.has(c), shows).pos;
     best = { pos: roomy, score: scoreH(roomy), mirrored: best.mirrored };
@@ -724,6 +724,8 @@ function byAHair(
   centres: readonly number[],
   /** Groups' first atoms, as near as the solid's atoms they leave: still bonds out of the solid, turned as the rest. */
   groups: ReadonlyMap<number, number> = new Map(),
+  /** Which of the centres to test: all, unless given (the rest are read as centres still). */
+  test: readonly number[] = centres,
 ): Set<number> {
   const out = new Set<number>();
   if (!centres.length) return out;
@@ -736,7 +738,7 @@ function byAHair(
     ...(a.tetra && centres.includes(i) ? { centre: true } : {}),
   }));
   const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
-  for (const c of centres) {
+  for (const c of test) {
     const t = input.atoms[c].tetra!;
     const reads = (as: DrawnAtom[]) => {
       const u = readStereo(as, bonds).tetra.get(c);
