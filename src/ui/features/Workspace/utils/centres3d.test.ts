@@ -7,6 +7,7 @@ import { blocksOf, moleculeOf } from "../chem/make3d";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { shadedLines } from "../components/shading3d";
+import { keptOf, resultsOf } from "../workflow/run";
 
 /** (eta5-Cp)Fe-Cl in 3D, seen from the side: Fe 0, Cl 1 above it, a pentagon 2-6 below; the Fe-Cp bond as a centre. */
 function cpFe(centres = true): Molecule3D {
@@ -139,5 +140,16 @@ describe("a bond from a metal to a ring's or double bond's centre, in 3D (eta)",
       expect(shaded.primary.length / 7).toBe(viewLines);
       expect(shaded.secondary.length / 7).toBe(viewLines);
     }
+  });
+
+  it("is kept through a step's results: a Cp complex made for a step keeps its stick", () => {
+    const m = cpFe();
+    const keep = keptOf(m);
+    expect(keep.centres).toEqual(m.centres);
+    const xyz = m.atoms.flatMap((a) => [a.x, a.y, a.z]);
+    const { molecules } = resultsOf({ ok: true, kept: [{ compound: 0, number: 1, atoms: m.atoms, bonds: m.bonds, xyz, keep }], aside: [], holds: "conformers", said: "" } as never);
+    expect(molecules[0].centres).toEqual([{ metal: 0, atoms: [2, 3, 4, 5, 6] }]);
+    // and one without keeps none
+    expect(keptOf(cpFe(false)).centres).toBeUndefined();
   });
 });
