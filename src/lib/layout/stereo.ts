@@ -114,12 +114,6 @@ export function placeStereo(
   tetra: ReadonlyMap<number, Tetrahedral>,
   /** Bonds that carry a wedge already, by `key`: another centre's, not to be taken. */
   taken: ReadonlySet<string> = new Set(),
-  /**
-   * Which of two atoms goes first where nothing else tells - two centres
-   * with as many ways to show them, two bonds as good for a wedge: by
-   * default the order the atoms come in.
-   */
-  before: (p: number, q: number) => number = (p, q) => p - q,
 ): Stereo {
   const wedges: Wedge[] = [];
   const hydrogens: { on: number; at: Point }[] = [];
@@ -148,7 +142,7 @@ export function placeStereo(
 
   // centres with fewest ways to show them first, so they get theirs
   const options = (c: number) => mol.neighbours[c].filter((n) => !ringBond(c, n)).length;
-  centres.sort((p, q) => options(p) - options(q) || before(p, q));
+  centres.sort((p, q) => options(p) - options(q) || p - q);
 
   for (const c of centres) {
     const t = tetra.get(c)!;
@@ -182,7 +176,7 @@ export function placeStereo(
     const outOfRings = mol.neighbours[c].filter((n) => !ringBond(c, n));
     if (hasH && (mol.systemOf[c] >= 0 && outOfRings.length === 0)) choices.push({ to: -1, rank: -10 });
     else if (hasH) choices.push({ to: -1, rank: 5 + (wideEnds.has(c) ? 10 : 0) });
-    choices.sort((p, q) => p.rank - q.rank || (p.to < 0 || q.to < 0 ? p.to - q.to : before(p.to, q.to)));
+    choices.sort((p, q) => p.rank - q.rank || p.to - q.to);
 
     // Where an H drawn on this centre goes. Its wedge's sense is fixed by
     // the configuration wherever it points, where its other bonds lie in

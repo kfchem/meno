@@ -626,12 +626,6 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   it). Aslant into a ring, or into lovastatin's ring with its double bond,
   it reads as pointing into the ring; it goes outside where there is room.
   An H with three rings or more round its atom keeps to the most room.
-- Centres are put on those with the fewest ways to show them first; of
-  centres with as many ways, and of bonds as good for a wedge, the
-  structure's order is tried and the other, and the whole drawing that
-  reads better kept: an H drawn on one centre takes the room another's
-  might have had (sparteine's two bridgehead H's, each with its own
-  side only one way round).
 - A ring atom's two groups - erythromycin's OH and methyl on one carbon -
   each show which face they are on: the one in front on a wedge, the other
   behind on hashes.

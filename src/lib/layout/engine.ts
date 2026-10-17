@@ -740,21 +740,12 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   });
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
   const final = new Map(x.map((v, i) => [i, { x: v, y: y[i] }]));
-  // (centres and bonds alike for a wedge taken in the structure's order
-  // and in the other: an H drawn on one centre takes the room another's
-  // might have had - sparteine's - and the whole drawing that reads
-  // better is kept; as well, the first)
-  const ways = stereoWays(mol, final, tetra).map((stereo) => {
-    // and an axis of chirality, by a wedge at an end of it
-    for (const axis of input.axes ?? []) {
-      const w = axisWedge(mol, final, axis);
-      if (w) stereo.wedges.push(w);
-    }
-    return stereo;
-  });
-  const drawnWays = ways.map((stereo) => ({ x, y, depth, solid, bold, toward, dashed: [] as [number, number][], ...stereo }));
-  const scores = drawnWays.length > 1 ? drawnWays.map((out) => drawingScore(input, mol, out)) : [0];
-  const stereo = ways[scores.reduce((b, v, i) => (v < scores[b] - 1e-9 ? i : b), 0)];
+  // and an axis of chirality, by a wedge at an end of it
+  const stereo = placeStereo(mol, final, tetra);
+  for (const axis of input.axes ?? []) {
+    const w = axisWedge(mol, final, axis);
+    if (w) stereo.wedges.push(w);
+  }
   // a cluster's metals in contact, dashed
   const dashed: [number, number][] = [];
   for (const u of mol.units) {
@@ -763,19 +754,6 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     for (const a of ms) for (const b of mol.neighbours[a]) if (a < b && ms.includes(b)) dashed.push([a, b]);
   }
   return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo, wholeToo };
-}
-
-/**
- * The stereochemistry drawn as `placeStereo` puts it, centres and bonds
- * alike for a wedge taken in the structure's order (`byStructure`) and,
- * where that can tell, in the other: each a drawing of its own.
- */
-function stereoWays(mol: Molecule, pos: Map<number, Point>, tetra: ReadonlyMap<number, Tetrahedral>): Stereo[] {
-  const same = byStructure(mol);
-  const first = placeStereo(mol, pos, tetra, undefined, same);
-  if (tetra.size < 2) return [first];
-  const other = placeStereo(mol, pos, tetra, undefined, (p, q) => same(q, p));
-  return JSON.stringify(other) === JSON.stringify(first) ? [first] : [first, other];
 }
 
 /**
@@ -1738,56 +1716,51 @@ function stereoScore(
   centres: readonly number[],
 ): number {
   const index = new Map(piece.map((a, i) => [a, i]));
-  // (in each way it can be put, the best)
-  const ways = stereoWays(mol, new Map(piece.map((a) => [a, pos.get(a)!])), new Map(centres.map((c) => [c, mol.tetra.get(c)!])));
-  return Math.min(
-    ...ways.map((stereo) => {
-      const x = piece.map((a) => pos.get(a)!.x);
-      const y = piece.map((a) => pos.get(a)!.y);
-      const edges: [number, number][] = [];
-      const orders: number[] = [];
-      for (const [k, i] of mol.bondIndex) {
-        const [a, b] = k.split(",").map(Number);
-        if (!index.has(a)) continue;
-        edges.push([index.get(a)!, index.get(b)!]);
-        orders.push(mol.bonds[i].order);
-      }
-      const elements = piece.map((a) => mol.el[a]);
-      const hydrogens = piece.map((a) => mol.hs[a]);
-      const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
-      const perspective = piece.map((a) => solid[a] || lift?.has(a) || false);
-      const depths = piece.map((a) => lift?.get(a) ?? depth[a] ?? null);
-      const drawnH = new Map<number, number>();
-      for (const h of stereo.hydrogens) {
-        const on = index.get(h.on)!;
-        x.push(h.at.x);
-        y.push(h.at.y);
-        elements.push("H");
-        hydrogens.push(0);
-        labelled.push(true);
-        perspective.push(false);
-        depths.push(null);
-        edges.push([on, x.length - 1]);
-        orders.push(1);
-        hydrogens[on] = Math.max(0, hydrogens[on] - 1);
-        drawnH.set(on, x.length - 1);
-      }
-      const wedged = stereo.wedges.flatMap((w) => {
-        const from = index.get(w.from)!;
-        const to = w.to === -1 ? drawnH.get(from) : index.get(w.to);
-        const e = edges.findIndex(([a, b]) => (a === from && b === to) || (b === from && a === to));
-        return e >= 0 ? [e] : [];
-      });
-      const tetra = [
-        ...piece.map((a) => {
-          const t = mol.tetra.get(a);
-          return t && { neighbours: t.neighbours.map((b) => (b < 0 ? -1 : index.get(b)!)), volume: t.volume };
-        }),
-        ...stereo.hydrogens.map(() => undefined),
-      ];
-      return layoutMetrics({ x, y, edges, orders, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+  const stereo = placeStereo(mol, new Map(piece.map((a) => [a, pos.get(a)!])), new Map(centres.map((c) => [c, mol.tetra.get(c)!])));
+  const x = piece.map((a) => pos.get(a)!.x);
+  const y = piece.map((a) => pos.get(a)!.y);
+  const edges: [number, number][] = [];
+  const orders: number[] = [];
+  for (const [k, i] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (!index.has(a)) continue;
+    edges.push([index.get(a)!, index.get(b)!]);
+    orders.push(mol.bonds[i].order);
+  }
+  const elements = piece.map((a) => mol.el[a]);
+  const hydrogens = piece.map((a) => mol.hs[a]);
+  const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
+  const perspective = piece.map((a) => solid[a] || lift?.has(a) || false);
+  const depths = piece.map((a) => lift?.get(a) ?? depth[a] ?? null);
+  const drawnH = new Map<number, number>();
+  for (const h of stereo.hydrogens) {
+    const on = index.get(h.on)!;
+    x.push(h.at.x);
+    y.push(h.at.y);
+    elements.push("H");
+    hydrogens.push(0);
+    labelled.push(true);
+    perspective.push(false);
+    depths.push(null);
+    edges.push([on, x.length - 1]);
+    orders.push(1);
+    hydrogens[on] = Math.max(0, hydrogens[on] - 1);
+    drawnH.set(on, x.length - 1);
+  }
+  const wedged = stereo.wedges.flatMap((w) => {
+    const from = index.get(w.from)!;
+    const to = w.to === -1 ? drawnH.get(from) : index.get(w.to);
+    const e = edges.findIndex(([a, b]) => (a === from && b === to) || (b === from && a === to));
+    return e >= 0 ? [e] : [];
+  });
+  const tetra = [
+    ...piece.map((a) => {
+      const t = mol.tetra.get(a);
+      return t && { neighbours: t.neighbours.map((b) => (b < 0 ? -1 : index.get(b)!)), volume: t.volume };
     }),
-  );
+    ...stereo.hydrogens.map(() => undefined),
+  ];
+  return layoutMetrics({ x, y, edges, orders, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
