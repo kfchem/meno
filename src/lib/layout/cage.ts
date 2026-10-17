@@ -1906,7 +1906,7 @@ const setsOf = new WeakMap<RingSystem, number[][][]>();
  * where they are independent of the shorter rings and of one another. A
  * ring of nine atoms or more is kept as the system has it: no cage has one.
  */
-function smallestSets(mol: Molecule, sys: RingSystem): number[][][] {
+export function smallestSets(mol: Molecule, sys: RingSystem): number[][][] {
   const known = setsOf.get(sys);
   if (known) return known;
   const own = sys.rings.map((i) => mol.rings[i]);
@@ -2112,18 +2112,21 @@ function roomFault(mol: Molecule, sys: RingSystem, pos: Map<number, Point>, pts:
   const inSys = new Set(sys.atoms);
   const lens = bonds.map(([a, b]) => Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y));
   const mean = lens.reduce((s, v) => s + v, 0) / Math.max(lens.length, 1);
+  // (read against every ring of every smallest set the system has, where
+  // it has more than one: the same drawing reads the same whichever set
+  // it was laid out from)
+  const sets = smallestSets(mol, sys);
+  const every = sets.length > 1 ? [...new Map(sets.flat().map((r) => [[...r].sort((p, q) => p - q).join(","), r] as const)).values()] : null;
   let fault = 0;
   sys.atoms.forEach((a, i) => {
     const out = mol.neighbours[a].filter((b) => !inSys.has(b));
     if (!out.length) return;
     const at = pts[i];
     const own = mol.neighbours[a].filter((b) => inSys.has(b)).map((b) => Math.atan2(pos.get(b)!.y - at.y, pos.get(b)!.x - at.x));
-    const centres = mol.ringsOf[a]
-      .filter((r) => sys.rings.includes(r))
-      .map((r) => {
-        const c = centroid(mol.rings[r].map((v) => pos.get(v)!));
-        return Math.atan2(c.y - at.y, c.x - at.x);
-      });
+    const centres = (every ? every.filter((r) => r.includes(a)) : mol.ringsOf[a].filter((r) => sys.rings.includes(r)).map((r) => mol.rings[r])).map((r) => {
+      const c = centroid(r.map((v) => pos.get(v)!));
+      return Math.atan2(c.y - at.y, c.x - at.x);
+    });
     const [t] = splitOutside(own, centres, 1);
     if (t == null) return;
     const p = { x: at.x + mean * Math.cos(t), y: at.y + mean * Math.sin(t) };

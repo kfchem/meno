@@ -28,6 +28,7 @@ import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./nam
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
+import { drawnRingSets, keptFlat } from "./ringSets";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
@@ -261,7 +262,8 @@ const CAGE_VIEW_MARGIN = 3;
 type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number>; whole: Set<number> };
 
 function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[]; wholeToo: number[] } {
-  const mol = perceive(input);
+  // (each bridged system with its rings the smallest set it lies flat from best)
+  const mol = drawnRingSets(perceive(input), layoutFlat);
   const local = new Map<number, Map<number, Point>>();
   const depth = new Array<number | null>(mol.n).fill(null);
   const hints = new Map<number, Map<number, Point>>();
@@ -1055,7 +1057,10 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
-function layoutFlat(mol: Molecule, sys: RingSystem): SystemLayout {
+export function layoutFlat(mol: Molecule, sys: RingSystem): SystemLayout {
+  // (as laid out already in choosing its rings)
+  const kept = keptFlat(mol, sys);
+  if (kept) return kept;
   let flat = placeRingSystem(mol, sys);
   const rings = sys.rings.map((r) => mol.rings[r]);
   const bridged = rings.some((r, j) =>
