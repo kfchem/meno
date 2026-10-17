@@ -29,6 +29,24 @@ describe("words on the page typed as they are meant", () => {
     for (const w of ["DCC", "DCM, rt", "1,2-DCE", "dCTP", "pdc ", "Bu3SnH, AIBN, DCE"]) expect(typing(w)).toBe(w);
   });
 
+  it("set a space after a comma typed straight before a word, once the word has ended", () => {
+    expect(typing("Pd(OAc)2,PPh3")).toBe("Pd(OAc)2, PPh3");
+    expect(typing("rt,12 h")).toBe("rt, 12 h");
+    expect(typing("K2CO3,DMF,80dc")).toBe("K2CO3, DMF, 80 °C");
+    expect(typing("THF,0dc,2 h")).toBe("THF, 0 °C, 2 h");
+    // (one there already stays one; none before the word has ended)
+    expect(typing("Pd(OAc)2, PPh3")).toBe("Pd(OAc)2, PPh3");
+    expect(typing("rt,1", false)).toBe("rt,1");
+  });
+
+  it("set no space after a comma that is part of a name: between locants, and between numbers", () => {
+    for (const w of ["1,2-DCE", "2,6-lutidine", "1,4-dioxane", "1',2'-dideoxy", "2,2,6,6-tetramethylpiperidine", "4a,8a-dihydro", "N,N-DMF", "N,O-bis(trimethylsilyl)acetamide", "(R,R)-DIPAMP", "(S,S)-Ph-BPE", "(E,Z)-diene", "(1R,2S)-ephedrine", "1,000 g"])
+      expect(typing(w)).toBe(w);
+    // (and with words around them, as conditions are written)
+    expect(typing("2,6-lutidine,TBSOTf")).toBe("2,6-lutidine, TBSOTf");
+    expect(typing("N,N-DMF,rt")).toBe("N,N-DMF, rt");
+  });
+
   it("begin a list's item with a bullet for a hyphen or a star typed at a line's start", () => {
     expect(typing("- first")).toBe("• first");
     expect(typing("* first")).toBe("• first");
