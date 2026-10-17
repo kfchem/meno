@@ -79,8 +79,8 @@ export default function ExtendPreview2D() {
 
     let end: { x: number; y: number };
     const free = extend.stroke?.kind === "bond" && extend.stroke.free;
-    if (target.atomId != null || target.pathIndex != null) {
-      // closing onto an atom: the bond goes to it
+    if (target.atomId != null || target.pathIndex != null || target.ring) {
+      // closing onto an atom, or a metal's onto a ring: the bond goes to it, or to the ring's centre
       end = target.end;
       curAngRef.current = want;
       angVelRef.current = 0;

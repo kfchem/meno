@@ -1518,6 +1518,11 @@ export type EditorState = {
    * given none): one undo step (document `setStereoShown`).
    */
   setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
+  /**
+   * Metal `metal` bound to a ring through all its atoms - one bond to a star
+   * at its centre, its endpoints the ring's atoms (chem/eta) - as one edit.
+   */
+  bindRing: (metal: number, ring: readonly number[]) => void;
   /** A chain drawn from a new atom on empty space, as one edit. */
   drawStrokeAt: (start: { x: number; y: number }, nodes: readonly StrokeNode[]) => void;
   suppressDoubleClick: (ms?: number) => void;

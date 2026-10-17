@@ -216,6 +216,26 @@ export function endpointsHeld(model: Model): Model {
   return changed ? { ...model, bonds } : model;
 }
 
+/**
+ * Metal `metal` bound to `ring` through all its atoms: one bond from the
+ * metal to a star at the ring's centre, its endpoints the ring's atoms, as
+ * the CTfile's multi-centre bond is (ATTACH=ALL; chem/eta). Nothing, where
+ * an atom is missing or the metal is one of them.
+ */
+export function bindRing(doc: WorkspaceDocument, metal: number, ring: readonly number[]): WorkspaceDocument {
+  const at = new Map(doc.model.atoms.map((a) => [a.id, a]));
+  if (!at.has(metal) || ring.length < 2 || ring.includes(metal) || !ring.every((id) => at.has(id))) return doc;
+  const star = doc.nextId;
+  const x = ring.reduce((s, id) => s + at.get(id)!.x, 0) / ring.length;
+  const y = ring.reduce((s, id) => s + at.get(id)!.y, 0) / ring.length;
+  const bond: Bond = { id: star + 1, a: metal, b: star, order: 1, coordination: true, endpoints: [...ring], attach: "all", stereo: "none", stereoOrient: "principle" };
+  return {
+    ...doc,
+    nextId: star + 2,
+    model: { atoms: [...doc.model.atoms, { id: star, x, y, r: 0.9, el: "*" }], bonds: [...doc.model.bonds, bond] },
+  };
+}
+
 /** A row of PDFs put down clear of those already on the page: moved along to the right, a place at a time, until none of them, nor their names, lies over another. */
 export function clearOfPdfs<T extends Omit<PdfItem, "id">>(row: T[], others: readonly Omit<PdfItem, "id">[]): T[] {
   const room = (p: Omit<PdfItem, "id">) => pdfRoom(p);

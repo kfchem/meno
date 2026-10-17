@@ -104,7 +104,9 @@ export function createInteractionSlice(set: SetState, get: GetState) {
         const nodes = pointer
           ? finishStroke(st.model, stroke, pointer, NOMINAL_BOND_LENGTH)
           : stroke.nodes;
-        if (nodes.length && stroke.baseId === NEW_ATOM && stroke.start) st.drawStrokeAt(stroke.start, nodes);
+        // (a bond from a metal ending inside a ring: one bond to the ring's centre - chem/eta)
+        if (stroke.kind === "bond" && nodes.length === 1 && nodes[0].ring) st.bindRing(stroke.baseId, nodes[0].ring);
+        else if (nodes.length && stroke.baseId === NEW_ATOM && stroke.start) st.drawStrokeAt(stroke.start, nodes);
         else if (nodes.length) st.drawStroke(stroke.baseId, nodes, stroke.kind);
       }
       set((prev: EditorState) => ({

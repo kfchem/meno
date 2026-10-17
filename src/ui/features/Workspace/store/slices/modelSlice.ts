@@ -266,6 +266,10 @@ export const createModelSlice = (
     doc.edit("draw chain", (d) => ops.addStrokeAt(d, start, nodes));
   },
 
+  bindRing: (metal: number, ring: readonly number[]) => {
+    doc.edit("bind ring", (d) => ops.bindRing(d, metal, ring));
+  },
+
   drawStroke: (
     baseId: number,
     nodes: Parameters<typeof ops.addStroke>[2],

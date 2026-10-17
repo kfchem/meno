@@ -7,7 +7,9 @@
  * hovered, picked or labelled, it stands at its atoms' centre wherever they
  * go, and it goes with its bond.
  */
+import { isMetal } from "../../../../lib/layout/perceive";
 import type { Atom, Bond, Model } from "../store/types";
+import { ringsOf } from "../utils/rings";
 
 type Graph = { atoms: readonly Atom[]; bonds: readonly Bond[] };
 
@@ -118,4 +120,49 @@ export function withTheirStars(model: Graph, ids: Set<number>): Set<number> {
     if (star != null && b.endpoints.every((e) => out.has(e))) out.add(star);
   }
   return out;
+}
+
+/** Whether `p` is inside the outline `pts` (by the even-odd rule). */
+function inside(p: { x: number; y: number }, pts: readonly { x: number; y: number }[]): boolean {
+  let within = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i];
+    const b = pts[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) within = !within;
+  }
+  return within;
+}
+
+const ringsKept = new WeakMap<readonly Bond[], { atoms: readonly Atom[]; rings: number[][] }>();
+
+/**
+ * The ring a bond drawn from metal `metal` binds through all its atoms when
+ * it ends at `p` inside it, on no atom: the smallest ring of the drawing
+ * whose outline holds `p`, the metal not in it and not already bound to it
+ * so - its atoms in order round it, and its centre, where the bond goes.
+ */
+export function etaRingAt(model: Graph, metal: number, p: { x: number; y: number }): { ring: number[]; centre: { x: number; y: number } } | null {
+  const m = model.atoms.find((a) => a.id === metal);
+  if (!m || !isMetal(m.el)) return null;
+  let kept = ringsKept.get(model.bonds);
+  if (!kept || kept.atoms !== model.atoms) {
+    kept = { atoms: model.atoms, rings: ringsOf({ atoms: [...model.atoms], bonds: [...model.bonds] }).map((r) => r.ids) };
+    ringsKept.set(model.bonds, kept);
+  }
+  const at = new Map(model.atoms.map((a) => [a.id, a]));
+  let best: { ring: number[]; area: number } | null = null;
+  for (const ring of kept.rings) {
+    if (ring.includes(metal)) continue;
+    const pts = ring.map((id) => at.get(id)!);
+    if (!inside(p, pts)) continue;
+    const area = Math.abs(pts.reduce((s, q, i) => s + q.x * pts[(i + 1) % pts.length].y - pts[(i + 1) % pts.length].x * q.y, 0));
+    if (!best || area < best.area) best = { ring, area };
+  }
+  if (!best) return null;
+  const ring = best.ring;
+  const inRing = new Set(ring);
+  const bound = model.bonds.some(
+    (b) => (b.a === metal || b.b === metal) && b.endpoints?.length === ring.length && b.endpoints.every((e) => inRing.has(e)),
+  );
+  return bound ? null : { ring, centre: middleOf(ring, at)! };
 }
