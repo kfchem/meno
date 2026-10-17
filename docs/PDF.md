@@ -1142,7 +1142,12 @@ workspace holds.
   its letters one path (Boc, MeO), is read letter by letter, each sized on
   its own. A letter whose small form is its capital made smaller (c C,
   o O, s S, v V, w W, x X, z Z) is told by the capitals beside it on its
-  line: as tall as they, a capital; well under, small. A letter that could
+  line: as tall as they, a capital; well under, small - and one set alone,
+  no letter beside it (an O at a bond's end), by the height most of the
+  figure's other capitals share. A round dot, solid - one outline, as wide
+  as it is tall, filling its box as a disc does, nothing drawn within it -
+  is no letter: a mark a scheme sets at a bond's end (an o and an e have
+  their holes). A letter that could
   be another (l or I, O or 0) is read as the one that makes its label
   read; one that matched weakly is marked ("Its letters are drawn as
   shapes: read as "Cl"."). A stem with a dot just over it, however thin
