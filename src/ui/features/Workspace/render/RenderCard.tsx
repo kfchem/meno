@@ -36,7 +36,7 @@ export default function RenderCard({
   const rememberOptions = useAppSettings((s) => s.rememberOptions);
   const [kind, setKind] = useState<Kind>(saved.render?.kind === "film" ? "film" : "picture");
   // (the looks this plugin declares, after the canvas's)
-  const own = renderOptions(kind, motions, surfaces, plugin.roleLooks.render);
+  const own = renderOptions(kind, motions, surfaces, plugin.roleLooks.render, plugin.roleMotions.render);
   const theirs = (plugin.roleOptions.render ?? []).filter((o) => kind === "film" || o.id !== "quality");
   const [chosen, setChosen] = useState<Partial<Record<Kind, OptionValues>>>({});
   const [chosenTheirs, setChosenTheirs] = useState<OptionValues | null>(null);

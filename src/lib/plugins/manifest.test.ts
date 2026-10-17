@@ -119,6 +119,9 @@ describe("a plugin's manifest", () => {
     ];
     const declared = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], looks }] })?.roles[0].looks;
     expect(declared).toEqual([{ id: "jelly", label: "Jelly", description: "See-through.", parts: { shading: "toon", sticks: "stopped" }, own: true, seeThrough: true }]);
+    // (motions, each declared in full: an id - none of Meno's own -, a label, a description; what is not understood left out)
+    const motions = [{ id: "ripple", label: "Ripple", description: "A ripple." }, { id: "turn", label: "Meno's own" }, { id: "No Id", label: "Bad" }, { id: "plain" }, { id: "ripple", label: "Twice" }];
+    expect(acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], motions }] })?.roles[0].motions).toEqual([{ id: "ripple", label: "Ripple", description: "A ripple." }]);
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);

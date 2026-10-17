@@ -22,7 +22,7 @@ import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
 import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
-import { finishEntry } from "./renderOptions";
+import { finishEntry, motionEntry } from "./renderOptions";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -200,7 +200,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
       paths.set(decl.name, where);
     }
     const client = await pluginClient(plugin);
-    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish) };
+    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) };
     const prepared = readPrepared(await client.prepare("render", [entry], options, cores), 1);
     if (typeof prepared === "string") return fail(prepared);
     const p = prepared[0];
@@ -251,7 +251,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   }
   try {
     const client = await pluginClient(plugin);
-    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish) };
+    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) };
     const said = (await client.collect("render", [entry], options, {}, log, state)) as { why?: unknown; made?: unknown };
     if (typeof said?.why === "string") return fail(said.why.trim().slice(0, 300) || "It did not say why");
     const made = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;
