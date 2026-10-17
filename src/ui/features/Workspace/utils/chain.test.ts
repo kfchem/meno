@@ -148,6 +148,41 @@ describe("a chain traced on its honeycomb", () => {
     const back = lead(c, [{ x: 0, y: 0 }]);
     expect(closedRing(back)).toBeNull();
   });
+
+  it("keeps a ring it has closed when led back over the bond that closed it, as onto a ring fused there", () => {
+    const centre = { x: 0, y: L };
+    const ring = lead(startChain({ x: 0, y: 0 }, [], L), round(centre, L, -Math.PI / 2, 1.0, 60), 3);
+    expect(closedRing(ring)).toBe(6);
+    // the bond that closed it came from the point up and to the left: back over it, and on past that point
+    const before = cellOf(ring.honeycomb, ring.walk[ring.walk.length - 2]);
+    const c = lead(ring, [before, { x: before.x - 0.9 * L, y: before.y - 0.4 * L }]);
+    expect(closedRing(c)).toBe(6);
+    expect(c.walk.slice(0, 7)).toEqual(ring.walk);
+  });
+
+  it("takes back a ring it has just closed when led straight back round the whole of it", () => {
+    const centre = { x: 0, y: L };
+    const ring = lead(startChain({ x: 0, y: 0 }, [], L), round(centre, L, -Math.PI / 2, 1.0, 60), 3);
+    expect(closedRing(ring)).toBe(6);
+    const back = lead(ring, round(centre, L, -Math.PI / 2, -1.0, 60), 3);
+    expect(closedRing(back)).toBeNull();
+    expect(back.walk.length).toBeLessThanOrEqual(2);
+  });
+
+  it("takes back a chain gone on from fused rings when led back along it, and keeps the rings", () => {
+    const h = (Math.sqrt(3) / 2) * L;
+    // round the hexagon above the start, then round the one to its right
+    let c = lead(startChain({ x: 0, y: 0 }, [], L), round({ x: 0, y: L }, 0.85 * L, -Math.PI / 2, 1.0, 60), 3);
+    c = lead(c, round({ x: 2 * h, y: L }, 0.85 * L, Math.PI, -1.0, 60), 3);
+    const rings = c.walk.length;
+    // on, out to the right and down, and back again
+    const head = cellOf(c.honeycomb, c.walk[c.walk.length - 1]);
+    const out = lead(c, [{ x: 4 * h, y: 0 }, { x: 6 * h, y: -0.2 * L }]);
+    expect(out.walk.length).toBeGreaterThan(rings);
+    const back = lead(out, [{ x: 4 * h, y: 0 }, { x: head.x, y: head.y }]);
+    expect(back.walk.length).toBeLessThanOrEqual(rings);
+    expect(new Set(back.walk).size).toBe(10);
+  });
 });
 
 describe("the trail a chain leaves, as it is drawn", () => {
