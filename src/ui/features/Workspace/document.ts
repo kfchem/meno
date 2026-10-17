@@ -32,7 +32,7 @@ import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/cal
 import { readResults } from "../../../lib/calc/results";
 import type { CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { fitSets } from "./workflow/model";
+import { fitSets, membersSettled } from "./workflow/model";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -179,7 +179,7 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(withOneMagnification(next, before), before), before), cost: stepCost });
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(membersSettled(fitSets(withOneMagnification(next, before), before), before), before), cost: stepCost });
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
