@@ -23,7 +23,7 @@ import {
   type Grown,
 } from "./assemble";
 import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
-import { hydrogenRunsInto, hydrogenSpot, layoutMetrics, type LayoutMetrics } from "./metrics";
+import { hydrogenRunsInto, hydrogenSpot, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
@@ -236,6 +236,8 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
     perspective: [...out.solid, ...out.hydrogens.map(() => false)],
     depth: [...out.depth, ...out.hydrogens.map(() => null)],
     tetra: input.atoms.map((a) => a.tetra),
+    labelRoom: 0,
+    inkRoom: 0,
   });
 }
 
@@ -449,6 +451,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         score: kept(scorer(mol, piece, d, q, 0, false)),
         scoreH: kept(scorer(mol, piece, d, q, 1)),
         scoreFan: kept(scorer(mol, piece, d, q, 1, undefined, true)),
+        scoreRoom: kept(scorer(mol, piece, d, q, 1, undefined, undefined, 1, LABEL_ROOM)),
         lift,
       };
     };
@@ -478,7 +481,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       })
       .map((c) => ({ ...c, score: c.m.score(c.pos) }))
       .sort(bestFirst(mol, piece));
-    let best: { pos: Grown; score: number; m: Measures; mirrored: boolean };
+    let best: { pos: Grown; score: number; m: Measures; mirrored: boolean; drafted?: Grown };
     // (each start - flat, turned at each angle - carried through the steps
     // below on its own, its best few at each: a start that grows a little
     // worse can be set right to a better drawing)
@@ -528,12 +531,35 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // (each set right to the end - its sugars faced, room made for its
     // H's and names, its fans settled)
     const finish = (cand: (typeof set)[number]) => {
-      const { scoreH, scoreFan } = cand.m;
-      let done = { ...faceSugars(mol, piece, cand.pos, scoreH(cand.pos), scoreH, sides), m: cand.m, mirrored: cand.mirrored };
-      done = { ...roomForHydrogens(mol, piece, done.pos, done.score, scoreH, fixed), m: done.m, mirrored: done.mirrored };
+      const { scoreH, scoreFan, scoreRoom } = cand.m;
+      const faced = { ...faceSugars(mol, piece, cand.pos, scoreH(cand.pos), scoreH, sides), m: cand.m, mirrored: cand.mirrored };
+      // (the drawing as it stands before room is made for labels: what sets
+      // it square, below - a label's bond turned to clear another's ink does
+      // not turn the whole)
+      const drafted = faced.pos;
+      // (a stereocentre of a solid that the drawing shows for sure, read
+      // with its depth, keeps showing it: tetrodotoxin's, none wedged - each
+      // cage's depth, in a mirrored frame, as seen from its other side)
+      const seen = [...depth];
+      if (cand.mirrored) {
+        for (const [i, view] of others) if (piece.includes(mol.systems[i].atoms[0])) view.depth.forEach((z, a) => (seen[a] = z));
+      }
+      const shows = (p: Grown, c: number) => {
+        const x = new Array<number>(mol.n).fill(0);
+        const y = new Array<number>(mol.n).fill(0);
+        for (const [a, q] of p) [x[a], y[a]] = [q.x, q.y];
+        const groups = groupDepths(mol, seen, solid);
+        const d = seen.map((z, a) => z ?? groups.get(a) ?? null);
+        // (read as the drawing is read at the end: with every centre of the solid)
+        const own = mol.systems[mol.systemOf[c]].atoms.filter((a) => solid[a] && input.atoms[a].tetra);
+        return !byAHair(input, mol, x, y, d, own, groups, [c]).has(c);
+      };
+      // (and a label on a bare vertex given room with the H's - an acid's O
+      // on the corner of a ring - but not counted in turning a sugar to its face)
+      const roomy = roomForHydrogens(mol, piece, faced.pos, scoreRoom(faced.pos), scoreRoom, fixed, (c) => solid[c] && mol.tetra.has(c), shows).pos;
       // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
-      const settled = settleFans(mol, piece, done.pos, scoreFan(done.pos), scoreFan, fixed).pos;
-      return { pos: settled, score: scoreH(settled), m: done.m, mirrored: done.mirrored };
+      const settled = settleFans(mol, piece, roomy, scoreFan(roomy), scoreFan, fixed).pos;
+      return { pos: settled, score: scoreH(settled), m: faced.m, mirrored: faced.mirrored, drafted };
     };
     // Drawings that read as well as each other here - phorbol's skeleton
     // turned end for end - can still read otherwise once their wedges are
@@ -548,13 +574,14 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const drawn = finished.map((c) => {
         // (as it will be set on the page: squared up)
         const pos = new Map(c.pos);
-        if (!fixed(piece) && !c.m.lift) squareUp(mol, piece, pos);
+        if (!fixed(piece) && !c.m.lift) squareUp(mol, piece, pos, c.drafted);
         return stereoScore(mol, piece, pos, c.m.lift, depth, measured, centres);
       });
       const k = drawn.reduce((b, v, i) => (v < drawn[b] - 1e-9 ? i : b), 0);
       best = finished[k];
     } else best = finish(set[0]);
     const { lift } = best.m;
+    const drafted = best.drafted ?? best.pos;
     // (the blades it was drawn with turned: their depth, and so drawn)
     if (lift) {
       for (const [v, l] of lift) {
@@ -573,7 +600,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     }
     // rings crowded round an atom (PPh3 on a metal), turned as a propeller
     propellers(mol, piece, best.pos, depth, measured, turned);
-    if (!fixed(piece) && !turned.some((side) => side.some((v) => here.has(v)))) squareUp(mol, piece, best.pos);
+    if (!fixed(piece) && !turned.some((side) => side.some((v) => here.has(v)))) squareUp(mol, piece, best.pos, drafted);
     else standUp(mol, piece, best.pos);
     const xs = piece.map((a) => best.pos.get(a)!.x);
     const ys = piece.map((a) => best.pos.get(a)!.y);
@@ -687,13 +714,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   // that leaves more than one such atom - of a ring fused flat onto the
   // solid too, at its depth there - is at the mean of theirs, whichever
   // comes first.
-  const withSolid = new Set(mol.systemOf.filter((sys, a) => sys >= 0 && solid[a]));
-  const groupDepth = new Map<number, number>();
-  for (let d = 0; d < mol.n; d++) {
-    if (depth[d] != null) continue;
-    const from = mol.neighbours[d].filter((c) => withSolid.has(mol.systemOf[c]) && depth[c] != null && mol.systemOf[d] !== mol.systemOf[c]);
-    if (from.length) groupDepth.set(d, from.reduce((sum, c) => sum + depth[c]!, 0) / from.length);
-  }
+  const groupDepth = groupDepths(mol, depth, solid);
   groupDepth.forEach((z, d) => (depth[d] = z));
   // a ring in perspective - bound face-on, or turned on its bond - drawn as
   // Haworth drew rings: a bond with both its atoms near, bold; one running
@@ -756,6 +777,18 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo, wholeToo };
 }
 
+/** Each group's first atom off a solid, at the mean depth of the solid's atoms it leaves (`laidOut`). */
+function groupDepths(mol: Molecule, depth: readonly (number | null)[], solid: readonly boolean[]): Map<number, number> {
+  const withSolid = new Set(mol.systemOf.filter((sys, a) => sys >= 0 && solid[a]));
+  const out = new Map<number, number>();
+  for (let d = 0; d < mol.n; d++) {
+    if (depth[d] != null) continue;
+    const from = mol.neighbours[d].filter((c) => withSolid.has(mol.systemOf[c]) && depth[c] != null && mol.systemOf[d] !== mol.systemOf[c]);
+    if (from.length) out.set(d, from.reduce((sum, c) => sum + depth[c]!, 0) / from.length);
+  }
+  return out;
+}
+
 /**
  * Of the `centres` of a solid, drawn at `x`, `y` and `depth` with no wedge,
  * those that read as given only by a hair, as Meno reads a drawing
@@ -772,6 +805,8 @@ function byAHair(
   centres: readonly number[],
   /** Groups' first atoms, as near as the solid's atoms they leave: still bonds out of the solid, turned as the rest. */
   groups: ReadonlyMap<number, number> = new Map(),
+  /** Which of the centres to test: all, unless given (the rest are read as centres still). */
+  test: readonly number[] = centres,
 ): Set<number> {
   const out = new Set<number>();
   if (!centres.length) return out;
@@ -784,7 +819,7 @@ function byAHair(
     ...(a.tetra && centres.includes(i) ? { centre: true } : {}),
   }));
   const bonds: DrawnBond[] = input.bonds.map(({ a, b, order }) => ({ a, b, order }));
-  for (const c of centres) {
+  for (const c of test) {
     const t = input.atoms[c].tetra!;
     const reads = (as: DrawnAtom[]) => {
       const u = readStereo(as, bonds).tetra.get(c);
@@ -1393,9 +1428,10 @@ const SMALL_SIDE = 10;
 /**
  * A piece with no ring that can lie square - its rings all five-membered,
  * say, or none - has nothing setting it on the lattice but its other bonds:
- * turn it the little way that brings them nearest.
+ * turn it the little way that brings them nearest, as they lie in `ref`
+ * (the drawing before its last small moves).
  */
-function squareUp(mol: Molecule, piece: number[], pos: Grown): void {
+function squareUp(mol: Molecule, piece: number[], pos: Grown, ref: Grown = pos): void {
   const here = new Set(piece);
   const square = mol.rings.some(
     (r) =>
@@ -1408,8 +1444,8 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown): void {
   for (const [k] of mol.bondIndex) {
     const [a, b] = k.split(",").map(Number);
     if (!here.has(a) || mol.ringBonds.has(k)) continue;
-    const p = pos.get(a)!;
-    const q = pos.get(b)!;
+    const p = ref.get(a)!;
+    const q = ref.get(b)!;
     dirs.push(Math.atan2(q.y - p.y, q.x - p.x));
   }
   if (!dirs.length) return;
@@ -1768,6 +1804,8 @@ type Measures = {
   score: (pos: Grown) => number;
   scoreH: (pos: Grown) => number;
   scoreFan: (pos: Grown) => number;
+  /** As scoreH, with a label on a bare vertex counted too (`roomForHydrogens`). */
+  scoreRoom: (pos: Grown) => number;
   lift: Map<number, number> | null;
 };
 
@@ -1937,6 +1975,8 @@ export function roomForHydrogens(
   startScore: number,
   score: (pos: Grown) => number,
   fixed: (atoms: readonly number[]) => boolean = () => false,
+  centre: (a: number) => boolean = () => false,
+  shows: (pos: Grown, centre: number) => boolean = () => true,
 ): { pos: Grown; score: number } {
   let pos = start;
   let current = startScore;
@@ -1972,6 +2012,31 @@ export function roomForHydrogens(
     }
     // and each name's letters, likewise
     for (const [a, hits] of namesInTheWay(mol, piece, p)) out.set(a, [...new Set([...(out.get(a) ?? []), ...hits])]);
+    // and a label on a bare vertex (an acid's O on the corner of a ring)
+    const onVertices = labelsOnVertices(
+      piece.map((a) => p.get(a)!.x),
+      piece.map((a) => p.get(a)!.y),
+      1,
+      piece.map((a) => mol.el[a] !== "C" && mol.el[a] !== "*"),
+      (i, j) => mol.neighbours[piece[i]].includes(piece[j]),
+    );
+    for (const [i, { vertex }] of onVertices) out.set(piece[i], [...new Set([...(out.get(piece[i]) ?? []), piece[vertex]])]);
+    // and two labels whose ink, H's and all, comes near (two HO's one over the other)
+    const at = new Map(piece.map((a, i) => [a, i]));
+    const near = labelsCrowding(
+      piece.map((a) => p.get(a)!.x),
+      piece.map((a) => p.get(a)!.y),
+      1,
+      piece.map((a) => mol.el[a]),
+      piece.map((a) => mol.hs[a]),
+      piece.map((a) => mol.el[a] !== "C" && mol.el[a] !== "*"),
+      piece.map((a) => mol.neighbours[a].flatMap((b) => (at.has(b) ? [at.get(b)!] : []))),
+      (i, j) => mol.neighbours[piece[i]].includes(piece[j]),
+    );
+    for (const { a: i, b: j } of near) {
+      out.set(piece[i], [...new Set([...(out.get(piece[i]) ?? []), piece[j]])]);
+      out.set(piece[j], [...new Set([...(out.get(piece[j]) ?? []), piece[i]])]);
+    }
     return out;
   };
   // the small moves of an atom, or of a branch hung from a bond - larger
@@ -2011,7 +2076,30 @@ export function roomForHydrogens(
       }
     }
     const best = bestMove(order);
+    // (a group off a stereocentre of a solid drawn in perspective, which
+    // the drawing shows for sure: no move that leaves it unsure - the way
+    // the group's bond goes is what shows it)
+    const sure = new Map<number, boolean>();
+    const keeps = (trial: Grown, from: number) => {
+      if (!centre(from)) return true;
+      if (!sure.has(from)) sure.set(from, shows(pos, from));
+      return !sure.get(from) || shows(trial, from);
+    };
     for (const { side, from, to, own, wide } of branches.values()) {
+      // the branch on the other side of the chain it hangs from, where that
+      // is a chain atom with nothing else on it: the other way a zigzag
+      // goes (a CH2OH's HO turned off the HO a bond under it)
+      const before = mol.neighbours[from].length === 2 ? mol.neighbours[from].find((v) => v !== to)! : -1;
+      if (before >= 0 && here.has(before) && !mol.ringBonds.has(from < before ? `${from},${before}` : `${before},${from}`)) {
+        const trial = new Map(pos);
+        const pa = trial.get(before)!;
+        const pb = trial.get(from)!;
+        for (const v of side) trial.set(v, mirror(trial.get(v)!, pa, pb));
+        const s = score(trial);
+        // (offered after every turn: a turn past 60 degrees is none of them)
+        const key = { kind: own ? 0 : 1, atoms: [from, to], step: (2 * 61 + 1) * stretches.length };
+        if (s < current - 1e-6 && best.wouldTake(s, key) && crossingsOf(bonds, trial) <= crossings && keeps(trial, from)) best.offer(trial, s, key);
+      }
       for (const t of turns(wide)) {
         for (const [i, by] of stretches.entries()) {
           if (!t && !by) continue;
@@ -2021,7 +2109,7 @@ export function roomForHydrogens(
           const s = score(trial);
           const key = { kind: own ? 0 : 1, atoms: [from, to], step: turnStep(t) * stretches.length + i };
           // (no move that crosses more bonds)
-          if (s < current - 1e-6 && best.wouldTake(s, key) && crossingsOf(bonds, trial) <= crossings) best.offer(trial, s, key);
+          if (s < current - 1e-6 && best.wouldTake(s, key) && crossingsOf(bonds, trial) <= crossings && keeps(trial, from)) best.offer(trial, s, key);
         }
       }
     }
@@ -2182,6 +2270,8 @@ export function scorer(
   hydrogenRoom?: number,
   sugarFaces?: boolean,
   hydrogenInk?: boolean,
+  labelRoom?: number,
+  inkRoom?: number,
 ): (pos: Grown) => number {
   const index = new Map(piece.map((a, i) => [a, i]));
   const edges: [number, number][] = [];
@@ -2231,6 +2321,9 @@ export function scorer(
       // a molecule is turned comes first - and made room for last, with
       // the H's)
       ...(hydrogenRoom === 0 ? { nameRoom: NAME_ROOM_FIRST } : {}),
+      // (and labels near a vertex or each other, only where asked: made room for last)
+      labelRoom: labelRoom ?? 0,
+      inkRoom: inkRoom ?? 0,
       sugarFaces,
     }).score;
 }
