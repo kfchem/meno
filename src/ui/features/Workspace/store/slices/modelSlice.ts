@@ -226,6 +226,13 @@ export const createModelSlice = (
     });
   },
 
+  setAtomNumbers: (of: Parameters<typeof ops.setAtomNumbers>[1], show: boolean) => {
+    doc.edit(show ? "show atom numbers" : "hide atom numbers", (d) => ops.setAtomNumbers(d, of, show));
+  },
+  setAtomNumberKind: (molecules: readonly number[], kind: Parameters<typeof ops.setAtomNumberKind>[2]) => {
+    doc.edit("atom numbers' kind", (d) => ops.setAtomNumberKind(d, molecules, kind));
+  },
+
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => {
     doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
   },

@@ -145,6 +145,7 @@ export default function PartMenu({
   target,
   records,
   stereo,
+  numbers,
   onDelete,
   onCleanUp,
   onMake3d,
@@ -370,6 +371,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
+  /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
+  numbers?: { items: { name: string; run: () => void }[]; kinds: { name: string; checked: boolean; run: () => void }[] };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
   /**
@@ -446,7 +449,15 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
-  const stereoItem: Item[] = stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : [];
+  const stereoItem: Item[] = [
+    ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
+    ...(numbers
+      ? [
+          ...numbers.items.map((it, k) => ({ name: it.name, keys: "", run: it.run, ...(k === 0 && !stereo ? { divider: true } : {}) })),
+          ...numbers.kinds.map((k) => ({ name: k.name, keys: "", run: k.run, checked: k.checked })),
+        ]
+      : []),
+  ];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
