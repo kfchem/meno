@@ -142,9 +142,10 @@ export function placeStereo(
 
   // centres with fewest ways to show them first, so they get theirs
   const options = (c: number) => mol.neighbours[c].filter((n) => !ringBond(c, n)).length;
-  centres.sort((p, q) => options(p) - options(q) || p - q);
 
-  for (const c of centres) {
+  // how a centre would be shown, as things stand: its wedge, and its H
+  // where one is drawn
+  const plan = (c: number) => {
     const t = tetra.get(c)!;
     const at = pos.get(c)!;
     const hasH = t.neighbours.includes(-1);
@@ -185,6 +186,8 @@ export function placeStereo(
     // else wherever round the atom there is most room - away from other
     // atoms and from bonds, and crossing none.
     let hPos: Point | null = null;
+    let hRoom = 0;
+    let hLean = 0;
     if (hasH) {
       // (a labelled atom - an O, an N, an H already drawn - wants more room)
       const others = [...pos.entries()]
@@ -285,6 +288,9 @@ export function placeStereo(
         }
       }
       hPos = { x: at.x + Math.cos(bestT), y: at.y + Math.sin(bestT) };
+      hRoom = bestRoom;
+      // (and, at a fusion, how far off upright it leans)
+      if (fusion) hLean = Math.asin(Math.min(1, Math.abs(Math.cos(bestT))));
     }
     // A wedge that says the configuration only as the bonds round it fall
     // exactly - two of them in a line, or all of them on one side of the
@@ -310,7 +316,7 @@ export function placeStereo(
         !p || lift[i] !== 0 ||
         [-TURN_TEST, TURN_TEST].every((d) => reads(drawn.map((q, j) => (j === i && q ? turnAbout(q, at, d) : q)), lift)),
       );
-    let pick: { choice: Choice; stereo: "up" | "down" } | null = null;
+    let pick: { choice: Choice; stereo: "up" | "down"; strict: boolean } | null = null;
     for (const strict of [true, false]) {
       for (const choice of choices) {
         const place = (n: number) => (n === -1 ? hPos : pos.get(n) ?? null);
@@ -318,7 +324,7 @@ export function placeStereo(
           const lift = t.neighbours.map((n) => (n === choice.to ? (stereo === "up" ? 1 : -1) : 0));
           const drawn = t.neighbours.map((n) => (n === -1 && choice.to !== -1 ? null : place(n)));
           if (strict ? surely(drawn, lift) : reads(drawn, lift)) {
-            pick = { choice, stereo };
+            pick = { choice, stereo, strict };
             break;
           }
         }
@@ -326,6 +332,10 @@ export function placeStereo(
       }
       if (pick) break;
     }
+    return { c, hasH, hPos, hRoom, hLean, pick };
+  };
+  type Plan = ReturnType<typeof plan>;
+  const commit = ({ c, hasH, hPos, pick }: Plan) => {
     for (const choice of pick ? [pick.choice] : []) {
       let done = false;
       for (const stereo of [pick!.stereo]) {
@@ -354,6 +364,73 @@ export function placeStereo(
       }
       if (done) break;
     }
+  };
+
+  // Of centres with as few ways, the one that costs the others near it
+  // least, shown before them, goes first: each is weighed as things stand,
+  // and again once another is shown - an H drawn, or a bond taken, changes
+  // what is left for the rest. Two fusion Hs wanting one spot: the one
+  // that takes it upright may leave the other its ring bond, where the
+  // other way round both lean 30 degrees. Of centres that cost as much,
+  // the one shown best first - a wedge that reads for sure before one that
+  // reads only as the bonds fall, a better bond before a worse, an H with
+  // more room before one with less - and the canonical rank only between
+  // centres shown as well.
+  const quality = (p: Plan): number[] => [
+    p.pick ? (p.pick.strict ? 0 : 1) : 2,
+    p.pick ? p.pick.choice.rank : 0,
+    p.pick?.choice.to === -1 ? -p.hRoom : 0,
+  ];
+  const better = (p: Plan, q: Plan) => {
+    const a = quality(p);
+    const b = quality(q);
+    for (let i = 0; i < a.length; i++) if (Math.abs(a[i] - b[i]) > 1e-9) return a[i] < b[i];
+    return p.c < q.c;
+  };
+  // what a way of showing a centre costs: none at all, the most; one that
+  // reads only as the bonds fall; a wedge on a ring bond as much as an H
+  // left half a bond's room, or one at a fusion of rings laid 60 degrees
+  // off upright
+  const cost = (p: Plan) =>
+    !p.pick
+      ? 20
+      : (p.pick.strict ? 0 : 4) +
+        p.pick.choice.rank / 50 +
+        (p.pick.choice.to === -1 ? 5 * (0.85 - p.hRoom) + (2 * p.hLean) / (Math.PI / 3) : 0);
+  const near = (c: number, d: number) => {
+    const u = pos.get(c)!;
+    const v = pos.get(d)!;
+    return Math.hypot(u.x - v.x, u.y - v.y) < 4;
+  };
+  const left = [...centres];
+  while (left.length) {
+    const fewest = Math.min(...left.map(options));
+    const plans = left.filter((c) => options(c) === fewest).map(plan);
+    let best = plans[0];
+    let least = Infinity;
+    for (const p of plans) {
+      // (what showing it costs the others near it, shown after it)
+      let harm = 0;
+      if (plans.length > 1) {
+        const mark = { w: wedges.length, h: hydrogens.length, used: new Set(used), wide: new Set(wideEnds), narrow: new Set(narrowEnds) };
+        commit(p);
+        for (const q of plans) if (q !== p && near(p.c, q.c)) harm += cost(plan(q.c)) - cost(q);
+        wedges.length = mark.w;
+        hydrogens.length = mark.h;
+        used.clear();
+        mark.used.forEach((v) => used.add(v));
+        wideEnds.clear();
+        mark.wide.forEach((v) => wideEnds.add(v));
+        narrowEnds.clear();
+        mark.narrow.forEach((v) => narrowEnds.add(v));
+      }
+      if (harm < least - 1e-9 || (Math.abs(harm - least) <= 1e-9 && better(p, best))) {
+        least = harm;
+        best = p;
+      }
+    }
+    commit(best);
+    left.splice(left.indexOf(best.c), 1);
   }
   return { wedges, hydrogens };
 }
