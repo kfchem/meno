@@ -998,7 +998,8 @@ Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no
 type for it, a lighter metal of its group standing in and no energies
-given; the same shape twice kept once;
+given; a ring bound through all its atoms, written as a multi-centre bond
+by `chem/etaBound.ts`, held over its metal; the same shape twice kept once;
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
