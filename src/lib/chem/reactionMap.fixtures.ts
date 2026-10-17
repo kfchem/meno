@@ -335,6 +335,59 @@ export function turnedMethyl(): { reactant: Molecule; product: Molecule; product
 }
 
 /**
+ * Chloroacetaldehyde -> acetyl chloride, as one step: the chlorine moves from
+ * the CH2 to the carbonyl carbon and the aldehyde hydrogen the other way -
+ * four bonds made or broken.
+ */
+export function chlorineShift(): { reactant: Molecule; product: Molecule; productOrder: string[] } {
+  const c1: V = [0, 0, 0];
+  const c2: V = [1.51, 0, 0];
+  const up: V = [1.51, 1, 0];
+  const o = place(up, c2, c1, 1.21, 124, 0);
+  const r: Record<string, [string, V]> = {
+    C1: ["C", c1],
+    C2: ["C", c2],
+    O: ["O", o],
+    H1: ["H", place(up, c2, c1, 1.1, 115, 180)],
+    Cl: ["Cl", place(o, c1, c2, 1.79, 111, 100)],
+    Ha: ["H", place(o, c1, c2, 1.09, 110, -20)],
+    Hb: ["H", place(o, c1, c2, 1.09, 110, -140)],
+  };
+  const reactant = molecule(r, [
+    ["C1", "C2", 1],
+    ["C1", "O", 2],
+    ["C1", "H1", 1],
+    ["C2", "Cl", 1],
+    ["C2", "Ha", 1],
+    ["C2", "Hb", 1],
+  ]);
+  const po = place(up, c2, c1, 1.19, 126, 0);
+  const p: Record<string, [string, V]> = {
+    C1: ["C", c1],
+    C2: ["C", c2],
+    O: ["O", po],
+    Cl: ["Cl", place(up, c2, c1, 1.8, 112, 180)],
+    H1: ["H", place(po, c1, c2, 1.09, 110, 10)],
+    Ha: ["H", place(po, c1, c2, 1.09, 110, 130)],
+    Hb: ["H", place(po, c1, c2, 1.09, 110, 250)],
+  };
+  const productOrder = ["Cl", "Hb", "C1", "O", "H1", "C2", "Ha"];
+  const product = molecule(
+    p,
+    [
+      ["C1", "C2", 1],
+      ["C1", "O", 2],
+      ["C1", "Cl", 1],
+      ["C2", "H1", 1],
+      ["C2", "Ha", 1],
+      ["C2", "Hb", 1],
+    ],
+    productOrder,
+  );
+  return { reactant, product, productOrder };
+}
+
+/**
  * A structure with `n` waters beside it, each turned and placed its own way
  * (`seed` shifts them, so that the two sides' waters stand differently): one
  * structure, the waters unbonded to it or to one another.

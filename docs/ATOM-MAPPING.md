@@ -149,7 +149,7 @@ equivalent atoms - may come in the other order. The rounded scores
 
 ### Where Meno departs from ACCeL
 
-Meno departs from the original in eight places. The port keeps them as
+Meno departs from the original in nine places. The port keeps them as
 ACCeL has them (`ACCEL_EXACT`, which the checks below run); Meno maps with
 the departures (`MENO_DEPARTURES`), each marked `[Meno departure: ...]`
 where it is in `accelMapper.ts` and tested beside what ACCeL does with the
@@ -195,6 +195,19 @@ maps as ACCeL does.
   degrees. Meno keeps ACCeL's choice on the first side and pairs it with
   the atom on the other side whose torsion, sign and all, is nearest its
   own; the rest of the group follow as in ACCeL.
+
+- **Fewest bonds made or broken** (`fewestBondChanges`). `_order_maps`
+  ranks the maps by fourteen scores in turn. Among maps with the same first
+  score (metathesis), Meno puts first those that make and break the fewest
+  bonds, hydrogens' included, and only then goes on to ACCeL's second
+  score and the rest. ACCeL's second score counts new bonds between two sp3
+  carbons, and keeping it low can cost more bonds made and broken
+  elsewhere: for chloroacetaldehyde going in one step to acetyl chloride,
+  ACCeL puts first a map in which the oxygen and both CH2 hydrogens change
+  carbons. A single step makes and breaks as few bonds as it can, so Meno
+  counts that first; between maps that change as many bonds, ACCeL's order
+  stands. Like ACCeL's own scores, it orders only the maps the search
+  builds.
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
   `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a

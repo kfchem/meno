@@ -754,6 +754,11 @@ export type Chain = Pair[];
  *   torsion, sign and all, is nearest its own - rather than with the one
  *   furthest from 0 there too, whichever way round (modeler.py 1077-1094,
  *   965-987): a methyl turned 5 degrees is not taken as turned 120.
+ * - `fewestBondChanges`: the maps ordered, after ACCeL's first key
+ *   (metathesis_point), by how many bonds they form or break, those to
+ *   hydrogen included - the fewest first - and only then by ACCeL's other
+ *   keys (modeler.py 1857-1865): an elementary step makes and breaks as few
+ *   bonds as it can.
  */
 export type Departures = {
   firstOfGroupByGeometry: boolean;
@@ -764,6 +769,7 @@ export type Departures = {
   spectatorsByRmsd: boolean;
   spectatorsRefined: boolean;
   signedTorsion: boolean;
+  fewestBondChanges: boolean;
 };
 export const ACCEL_EXACT: Departures = {
   firstOfGroupByGeometry: false,
@@ -774,6 +780,7 @@ export const ACCEL_EXACT: Departures = {
   spectatorsByRmsd: false,
   spectatorsRefined: false,
   signedTorsion: false,
+  fewestBondChanges: false,
 };
 export const MENO_DEPARTURES: Departures = {
   firstOfGroupByGeometry: true,
@@ -784,6 +791,7 @@ export const MENO_DEPARTURES: Departures = {
   spectatorsByRmsd: true,
   spectatorsRefined: true,
   signedTorsion: true,
+  fewestBondChanges: true,
 };
 
 /** What a trace hook is shown of each _get_maps call as it returns: its locals by their Python names. */
@@ -2339,6 +2347,9 @@ export function _order_maps(
     for (const n of atms) mol_num_b.set(n, idx);
   });
 
+  // [Meno departure: fewestBondChanges] each map's bonds formed or broken
+  const bondChanges = new Map<Evaluated, number>();
+
   for (const evaluated_dic of evaluated_dicts) {
     // 1488-1505
     for (const a of atoms_a) a.cache.map_idx = null;
@@ -2359,6 +2370,21 @@ export function _order_maps(
       return ic_map[(idx + atom_map.length) % ic_map.length];
     };
     const numSort = (xs: number[]) => xs.sort((p, q) => p - q);
+
+    if (dep.fewestBondChanges) {
+      let changes = 0;
+      for (const atoms of [atoms_a, atoms_b]) {
+        for (const x of atoms) {
+          for (const y of x.bonds) {
+            if (x.number > y.number) continue;
+            const ix = ic(x);
+            const iy = ic(y);
+            if (ix === null || iy === null || !ix.bonds.includes(iy)) changes += 1;
+          }
+        }
+      }
+      bondChanges.set(evaluated_dic, changes);
+    }
 
     // 1507-1524: pairs whose bonds the map carries over both ways are normal; the rest are bonding
     for (const pair of atom_map) {
@@ -2718,7 +2744,11 @@ export function _order_maps(
 
   // 1857-1865: a stable sort by each key, the last first
   let sorted = evaluated_dicts;
-  for (const k of [...EVALUATION_KEYS].reverse()) sorted = pySorted(sorted, (e) => e[k]);
+  for (const k of [...EVALUATION_KEYS].reverse()) {
+    sorted = pySorted(sorted, (e) => e[k]);
+    // [Meno departure: fewestBondChanges] next after metathesis_point
+    if (dep.fewestBondChanges && k === "reactive_sp3_carbon_penalty") sorted = pySorted(sorted, (e) => bondChanges.get(e)!);
+  }
   trace?.orderMaps?.(sorted);
   return sorted.map((e) => e.map);
 }
