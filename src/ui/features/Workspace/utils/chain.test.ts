@@ -185,6 +185,72 @@ describe("a chain traced on its honeycomb", () => {
   });
 });
 
+describe("a chain come round to a point it went through, to close a ring", () => {
+  const h = (Math.sqrt(3) / 2) * L;
+  /** The pointer led as `lead` leads it, and each time the walk got shorter. */
+  function leadNoting(c: Chain, points: Pt[], steps: number, shorter: number[][]): Chain {
+    let at = c.trail[c.trail.length - 1];
+    for (const p of points)
+      for (let i = 1; i <= steps; i++) {
+        const next = followChain(c, { x: at.x + ((p.x - at.x) * i) / steps, y: at.y + ((p.y - at.y) * i) / steps });
+        if (next.walk.length < c.walk.length) shorter.push([c.walk.length, next.walk.length]);
+        c = next;
+        if (i === steps) at = p;
+      }
+    return c;
+  }
+  /** The walk's atoms and bonds, each once. */
+  const drawnOf = (c: Chain) => ({
+    atoms: new Set(c.walk).size,
+    bonds: new Set(c.walk.slice(1).map((k, i) => [k, c.walk[i]].sort().join(" "))).size,
+  });
+  /** Round a circle with a hand that trembles a little. */
+  const shaky = (centre: Pt, r: number, from: number, turns: number) =>
+    round(centre, r, from, turns, 48).map((p, i) => ({ x: p.x + 0.04 * L * Math.sin(7 * i), y: p.y + 0.04 * L * Math.cos(5 * i) }));
+
+  it("closes the ring at the atom it started from, however wide the hand goes round and either way", () => {
+    for (const r of [0.6, 0.85, 1.1])
+      for (const way of [1, -1]) {
+        const shorter: number[][] = [];
+        const c = leadNoting(startChain({ x: 0, y: 0 }, [], L), shaky({ x: 0, y: L }, r * L, -Math.PI / 2, way * 1.02), 2, shorter);
+        expect(closedRing(c)).toBe(6);
+        expect(shorter).toEqual([]);
+      }
+  });
+
+  it("closes the ring onto an atom some way back along the chain, after the hand went on past it and came back", () => {
+    for (const past of [2, 3])
+      for (const r of [0.7, 0.85, 1.0]) {
+        // out along the zigzag, on past where the ring goes and back; then round the hexagon above
+        let c = lead(startChain({ x: 0, y: 0 }, [], L), [{ x: 2 * h, y: 0 }]);
+        c = lead(c, [{ x: (2 + past) * h, y: 0.25 * L }, { x: 2 * h, y: 0.1 * L }], 4);
+        const chain = c.walk.slice();
+        const shorter: number[][] = [];
+        c = leadNoting(c, shaky({ x: 2 * h, y: L }, r * L, -Math.PI / 2, 1.0), 2, shorter);
+        // (it went to the atom it closes onto: once, it was taken back there)
+        expect(shorter).toEqual([]);
+        expect(c.walk.slice(0, chain.length)).toEqual(chain);
+        expect(drawnOf(c)).toEqual({ atoms: 7, bonds: 7 });
+      }
+  });
+
+  it("closes the ring onto an atom of a ring drawn earlier in the stroke", () => {
+    for (const r of [0.7, 0.85, 1.0])
+      for (const way of [1, -1])
+        for (const past of [1, 2]) {
+          // round the hexagon above the start; on along its bond to the right, along the next ring's bottom and past it, back
+          let c = lead(startChain({ x: 0, y: 0 }, [], L), shaky({ x: 0, y: L }, r * L, -Math.PI / 2, 1.0), 2);
+          c = lead(c, [{ x: h, y: 0.5 * L }, { x: 2 * h, y: 0 }, { x: (2 + past) * h, y: 0.3 * L }, { x: 2 * h, y: 0.1 * L }], 4);
+          // round the hexagon to the right, either way, to the first ring's atom
+          const shorter: number[][] = [];
+          c = leadNoting(c, shaky({ x: 2 * h, y: L }, r * L, -Math.PI / 2, way * 1.1), 2, shorter);
+          // (going round to the left, it first goes back over the bond it last laid: that one, and no more)
+          expect(shorter.every(([from, to]) => from - to === 1)).toBe(true);
+          expect(drawnOf(c)).toEqual({ atoms: 10, bonds: 11 });
+        }
+  });
+});
+
 describe("the trail a chain leaves, as it is drawn", () => {
   const L = 1.8;
   const start = { x: 0, y: 0 };

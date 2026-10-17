@@ -92,9 +92,11 @@ and in particular:
       and the ring stays, so fused rings - naphthalene, phenanthrene - are
       traced in one stroke, ring after ring, over the bonds they share;
       led straight back round the whole of a ring it has just closed, the
-      ring goes. A loop that goes round one ring and on round the next is
-      taken as going round the next where it winds round that ring's
-      middle, though the loop as a whole is not round. Onto an
+      ring goes. Come round to a point it went through, the chain closes
+      the ring there, not taken back to that point, wherever the hand
+      winds round the ring's middle - though the way as a whole is not
+      round, as when it went round another ring first, or on past the
+      point and back. Onto an
       atom already there, it joins it where the ring that closes lies
       along the honeycomb, or where it closes none; elsewhere the point is
       an atom of the chain's own (`utils/stroke`).
