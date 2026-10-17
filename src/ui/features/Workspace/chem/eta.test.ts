@@ -1,0 +1,252 @@
+import { describe, expect, it } from "vitest";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { layoutMolecule } from "../../../../lib/chem/layout2d";
+import { styleOf, DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
+import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
+import { createWorkspaceDocument, emptyWorkspaceDocument, bindRing } from "../document";
+import { drawnOf, structureFileText } from "../fileActions";
+import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import type { Bond, Model } from "../store/types";
+import { editorModelOf } from "../utils/io";
+import { inBox } from "../utils/selection";
+import { startStroke, strokeTarget } from "../utils/stroke";
+import { laidOut } from "./cleanUp";
+import { etaHeld, etaRingAt, hapticStars, starsAtTheirAtoms, withTheirStars } from "./eta";
+
+const L = NOMINAL_BOND_LENGTH;
+
+/** A model drawn by hand: atoms and bonds added in order, ids from 1. */
+function drawing() {
+  let id = 1;
+  const atoms: Model["atoms"] = [];
+  const bonds: Bond[] = [];
+  const atom = (el: string, x: number, y: number) => (atoms.push({ id, x: x * L, y: y * L, r: 0.9, el }), id++);
+  const bond = (a: number, b: number, order: 1 | 2 | 3 = 1) => bonds.push({ id: id++, a, b, order, stereo: "none", stereoOrient: "principle" });
+  const ring = (n: number, cx: number, cy: number, r: number) => {
+    const ids = Array.from({ length: n }, (_, i) => atom("C", cx + r * Math.cos(Math.PI / 2 + (2 * Math.PI * i) / n), cy + r * Math.sin(Math.PI / 2 + (2 * Math.PI * i) / n)));
+    ids.forEach((a, i) => bond(a, ids[(i + 1) % n], i % 2 === 0 && i < n - 1 ? 2 : 1));
+    return ids;
+  };
+  return { atoms, bonds, atom, bond, ring, model: (): Model => ({ atoms: [...atoms], bonds: [...bonds] }) };
+}
+
+/** Ferrocene drawn by hand: Fe, two pentagons, a bond from the iron to each carbon. */
+function ferroceneByHand() {
+  const d = drawing();
+  const fe = d.atom("Fe", 0, 0);
+  const top = d.ring(5, 0, 1.6, 0.85);
+  const bottom = d.ring(5, 0, -1.6, 0.85);
+  for (const a of [...top, ...bottom]) d.bond(fe, a);
+  return { model: d.model(), fe, top, bottom };
+}
+
+/** The eta bonds of a model: from its metal, to its star, binding its atoms. */
+const etaOf = (m: Model) => m.bonds.filter((b) => b.endpoints?.length);
+
+/** One ferrocene, its rings bound by one bond each to a star at its centre. */
+function ferroceneEta() {
+  const { model, fe, top, bottom } = ferroceneByHand();
+  const keep = new Set([...top, ...bottom]);
+  let doc = { ...emptyWorkspaceDocument(), model: { atoms: model.atoms, bonds: model.bonds.filter((b) => !(b.a === fe && keep.has(b.b))) }, nextId: 100 };
+  doc = bindRing(doc, fe, top);
+  doc = bindRing(doc, fe, bottom);
+  return { doc, fe, top, bottom };
+}
+
+describe("a ligand bound through a ring or chain of its atoms (eta), drawn as one bond to its centre", () => {
+  it("is bound by a bond drawn from the metal into the ring: a star at its centre, its endpoints the ring", () => {
+    const { doc, fe, top } = ferroceneEta();
+    const eta = etaOf(doc.model);
+    expect(eta).toHaveLength(2);
+    const b = eta[0];
+    expect(b.a).toBe(fe);
+    expect(b.endpoints).toEqual(top);
+    expect(b.attach).toBe("all");
+    const star = doc.model.atoms.find((a) => a.id === b.b)!;
+    expect(star.el).toBe("*");
+    const ring = doc.model.atoms.filter((a) => top.includes(a.id));
+    expect(star.x).toBeCloseTo(ring.reduce((s, a) => s + a.x, 0) / 5, 9);
+    expect(star.y).toBeCloseTo(ring.reduce((s, a) => s + a.y, 0) / 5, 9);
+    expect(hapticStars(doc.model)).toEqual(new Set(eta.map((e) => e.b)));
+  });
+
+  it("is what a bond drawn from a metal ends on inside a ring, with no atom under the pointer - not from a carbon, not on an atom", () => {
+    const { model, fe, top } = ferroceneByHand();
+    const unbound = { atoms: model.atoms, bonds: model.bonds.filter((b) => b.a !== fe) };
+    const centre = { x: 0, y: 1.6 * L };
+    const t = strokeTarget(unbound, startStroke("bond", fe), centre, L);
+    expect(t?.ring).toEqual(top);
+    expect(t!.end.x).toBeCloseTo(centre.x, 6);
+    expect(t!.end.y).toBeCloseTo(unbound.atoms.filter((a) => top.includes(a.id)).reduce((s, a) => s + a.y, 0) / 5, 6);
+    // on a ring atom: that atom, as any bond
+    const onAtom = unbound.atoms.find((a) => a.id === top[0])!;
+    expect(strokeTarget(unbound, startStroke("bond", fe), onAtom, L)?.ring).toBeUndefined();
+    // from a carbon into a ring: a new atom there, as before (a bridge drawn across)
+    expect(strokeTarget(unbound, startStroke("bond", top[0]), { x: 0, y: -1.6 * L }, L)?.ring).toBeUndefined();
+    // a ring already bound to the metal so is not bound again
+    const { doc } = ferroceneEta();
+    expect(etaRingAt(doc.model, fe, centre)).toBeNull();
+  });
+
+  it("is one undo step drawn through the store, the stroke ending inside the ring", () => {
+    const { model, fe, top } = ferroceneByHand();
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model: { atoms: model.atoms, bonds: model.bonds.filter((b) => b.a !== fe) }, nextId: 200 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    st().startExtend(fe, "bond");
+    st().updateExtend(0.05 * L, 1.55 * L);
+    st().commitExtend();
+    const eta = etaOf(doc.getState().model);
+    expect(eta).toHaveLength(1);
+    expect(eta[0].endpoints).toEqual(top);
+    expect(doc.getState().model.atoms.filter((a) => a.el === "C")).toHaveLength(10);
+    doc.undo();
+    expect(etaOf(doc.getState().model)).toHaveLength(0);
+    expect(doc.getState().model.atoms.some((a) => a.el === "*")).toBe(false);
+  });
+
+  it("keeps its star where its ring is drawn, and out of the way of hover and selection", () => {
+    const { doc, top } = ferroceneEta();
+    const star = etaOf(doc.model)[0].b;
+    // the ring moved without its star: the star drawn, and held, at the ring's centre
+    const moved = doc.model.atoms.map((a) => (top.includes(a.id) ? { ...a, x: a.x + 2 } : a));
+    const drawn = starsAtTheirAtoms(moved, doc.model);
+    expect(drawn.find((a) => a.id === star)!.x).toBeCloseTo(2, 9);
+    const held = etaHeld({ ...doc.model, atoms: moved }, doc.model);
+    expect(held.atoms.find((a) => a.id === star)!.x).toBeCloseTo(2, 9);
+    // a box round the star alone takes nothing; round the ring, the star with it
+    expect(withTheirStars(doc.model, new Set([star]))).toEqual(new Set());
+    const box = inBox(doc.model, { x: -L, y: 0.5 * L }, { x: L, y: 2.6 * L });
+    expect(box.atoms.has(star)).toBe(true);
+    expect(top.every((id) => box.atoms.has(id))).toBe(true);
+    // the canvas's own hover lands on no star
+    const onCanvas = createWorkspaceDocument();
+    onCanvas.reset({ ...onCanvas.getState(), model: doc.model, nextId: doc.nextId });
+    const store = createEditorStore(onCanvas);
+    const at = doc.model.atoms.find((a) => a.id === star)!;
+    expect(store.getState().findAtomNear(at.x, at.y, 0.2 * L)).toBeNull();
+  });
+
+  it("is drawn as one line from the metal that reaches the ring's centre, the star drawn as nothing", () => {
+    const { doc, fe } = ferroceneEta();
+    const m = doc.model;
+    const atoms = m.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y, el: a.el }));
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE), { minLinePx: 0 });
+    const lay = layoutMolecule(atoms, layoutBonds(m.bonds, new Map(m.atoms.map((a, i) => [a.id, i]))), opts, 40);
+    expect(lay.texts.map((t) => t.text)).toEqual(["Fe"]);
+    for (const b of etaOf(m)) {
+      const star = m.atoms.find((a) => a.id === b.b)!;
+      const metal = m.atoms.find((a) => a.id === fe)!;
+      // (one line along the bond, its far end at the centre)
+      const along = lay.lines.filter((l) => Math.abs((l.x2 - l.x1) * (star.y - metal.y) - (l.y2 - l.y1) * (star.x - metal.x)) < 1e-6 && Math.abs(l.x1 - metal.x) < 1e-6 && (l.x2 - l.x1) * (star.x - metal.x) + (l.y2 - l.y1) * (star.y - metal.y) > 0);
+      expect(along).toHaveLength(1);
+      expect(Math.hypot(along[0].x2 - star.x, along[0].y2 - star.y)).toBeLessThan(1e-6);
+    }
+  });
+});
+
+describe("Clean-up of a ligand drawn bonded atom by atom to its metal", () => {
+  it("makes ferrocene's ten Fe-C bonds two bonds to the rings' centres", async () => {
+    const laid = await laidOut(ferroceneByHand().model, styleOf(DEFAULT_STYLE_CHOICE));
+    expect(etaOf(laid).map((b) => b.endpoints!.length)).toEqual([5, 5]);
+    expect(laid.bonds.filter((b) => b.a === 1 || b.b === 1).every((b) => b.endpoints?.length)).toBe(true);
+  });
+
+  it("makes (benzene)Cr(CO)3's six Cr-C bonds one, its carbonyls kept", async () => {
+    const d = drawing();
+    const cr = d.atom("Cr", 0, 0);
+    for (const a of d.ring(6, 0, 1.8, 1)) d.bond(cr, a);
+    for (const [x, y] of [[-1, -0.8], [0, -1.2], [1, -0.8]]) {
+      const c = d.atom("C", x, y);
+      d.bond(cr, c);
+      d.bond(c, d.atom("O", x * 1.8, y * 1.8), 3);
+    }
+    const laid = await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE));
+    expect(etaOf(laid).map((b) => b.endpoints!.length)).toEqual([6]);
+    expect(laid.bonds.filter((b) => (b.a === cr || b.b === cr) && !b.endpoints)).toHaveLength(3);
+  });
+
+  it("makes an allyl's three Pd-C bonds one (eta3), each Pd of the chloride dimer its own", async () => {
+    const d = drawing();
+    const p1 = d.atom("Pd", -1, 0);
+    const p2 = d.atom("Pd", 1, 0);
+    const cl1 = d.atom("Cl", 0, 0.9);
+    const cl2 = d.atom("Cl", 0, -0.9);
+    for (const [p, c] of [[p1, cl1], [p1, cl2], [p2, cl1], [p2, cl2]]) d.bond(p, c);
+    for (const s of [-1, 1]) {
+      const pd = s < 0 ? p1 : p2;
+      const a = d.atom("C", s * 2.1, 0.9);
+      const b = d.atom("C", s * 2.7, 0);
+      const c = d.atom("C", s * 2.1, -0.9);
+      d.bond(a, b, 2);
+      d.bond(b, c);
+      for (const x of [a, b, c]) d.bond(pd, x);
+    }
+    const laid = await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE));
+    const eta = etaOf(laid);
+    expect(eta.map((b) => b.endpoints!.length)).toEqual([3, 3]);
+    expect(new Set(eta.map((b) => b.a))).toEqual(new Set([p1, p2]));
+    // the bridging chlorides kept as drawn
+    expect(laid.bonds.filter((b) => [cl1, cl2].includes(b.a) || [cl1, cl2].includes(b.b))).toHaveLength(4);
+  });
+
+  it("leaves two atoms bonded to a metal as drawn: a metallacyclopropane is drawn so too", async () => {
+    const d = drawing();
+    const pt = d.atom("Pt", 0, 0);
+    const a = d.atom("C", -0.7, 1.2);
+    const b = d.atom("C", 0.7, 1.2);
+    d.bond(a, b, 2);
+    d.bond(pt, a);
+    d.bond(pt, b);
+    d.bond(pt, d.atom("Cl", 0, -1.5));
+    const laid = await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE));
+    expect(etaOf(laid)).toEqual([]);
+  });
+});
+
+describe("a ligand bound so, in a file", () => {
+  const read = (text: string, kind: "mol" | "sdf") => editorModelOf(moleculesToEditorModel(readMoleculesFromText(text, kind)).model);
+
+  it("is written as the multi-centre bond (V3000 ENDPTS, ATTACH=ALL) and read back to the same drawing, in MOL and SD", async () => {
+    const laid = await laidOut(ferroceneByHand().model, styleOf(DEFAULT_STYLE_CHOICE));
+    for (const path of ["ferrocene.mol", "ferrocene.sdf"]) {
+      const s = { ...emptyWorkspaceDocument(), model: laid };
+      const text = structureFileText(drawnOf(s as never), path);
+      expect(text).toContain("V3000");
+      expect(text.match(/ENDPTS=\(5 [\d ]+\) ATTACH=ALL/g)).toHaveLength(2);
+      const back = read(text, path.endsWith(".sdf") ? "sdf" : "mol");
+      expect(back.atoms.map((a) => a.el)).toEqual(laid.atoms.map((a) => a.el));
+      expect(back.bonds).toHaveLength(laid.bonds.length);
+      // each eta bond binding the same ring, by place in the file
+      const placeOf = (m: Model) => new Map(m.atoms.map((a, i) => [a.id, i]));
+      const ringsOf = (m: Model) =>
+        etaOf(m)
+          .map((b) => [...b.endpoints!].map((e) => placeOf(m).get(e)!).sort((p, q) => p - q).join(","))
+          .sort();
+      expect(ringsOf(back)).toEqual(ringsOf(laid));
+      // each star at its ring's centre, as drawn
+      for (const b of etaOf(back)) {
+        const at = new Map(back.atoms.map((a) => [a.id, a]));
+        const ring = b.endpoints!.map((e) => at.get(e)!);
+        const star = at.get(b.b)!.el === "*" ? at.get(b.b)! : at.get(b.a)!;
+        expect(star.el).toBe("*");
+        const cx = ring.reduce((t, a) => t + a.x, 0) / ring.length;
+        expect(Math.abs(star.x - cx)).toBeLessThan(0.01 * L);
+      }
+    }
+  });
+
+  it("drawn with a bond from the metal to each atom (V2000), is read as drawn, and is one bond to each ring's centre after Clean-up", async () => {
+    const { model } = ferroceneByHand();
+    const v2000 = structureFileText(drawnOf({ ...emptyWorkspaceDocument(), model } as never), "ferrocene.mol");
+    expect(v2000).toContain("V2000");
+    const back = read(v2000, "mol");
+    expect(back.bonds).toHaveLength(20);
+    expect(etaOf(back)).toEqual([]);
+    const laid = await laidOut(back, styleOf(DEFAULT_STYLE_CHOICE));
+    expect(etaOf(laid).map((b) => b.endpoints!.length)).toEqual([5, 5]);
+  });
+});
