@@ -8,34 +8,32 @@
 //! a server and back at each sign-in.
 //!
 //! They are taken away by name only - `uv`, `pixi`, `tools` and `jobs`,
-//! never whatever else is in the folder (the settings, the log and the
-//! window's place stay there) - at each start while they are there
+//! never whatever else is in the folder - at each start while they are there
 //! ([`tidy`]), and a plugin's own with it as it is removed
 //! ([`remove_plugin_env`]). While a job there still waits or runs, all of
 //! them are left, as its program may be using its environment; jobs kept
 //! there - finished, their files still a step's - are left too, and the
-//! log says so. On a Mac and on Linux the two folders are one, and there is
-//! nothing to do.
+//! log says so. What else was there - the settings, the log, the window's
+//! place - moves into Meno's roaming folder at a start (folders.rs), and
+//! the old folder goes once nothing is left in it. On a Mac and on Linux
+//! the two folders are one, and there is nothing to do.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager};
 
 /// The folders Meno made in the roaming folder that now live in the local one.
 const MOVED: [&str; 3] = ["uv", "pixi", "tools"];
 /// The jobs' folder there.
 const JOBS: &str = "jobs";
 
-/// The roaming application data folder, where it is not the local one (Windows): none elsewhere.
-pub fn old_folder(app: &AppHandle) -> Option<PathBuf> {
-    let roaming = app.path().app_data_dir().ok()?;
-    let local = app.path().app_local_data_dir().ok()?;
-    (roaming != local).then_some(roaming)
+/// The roaming application data folder a Meno before 0.1.14 kept its settings in (Windows): none elsewhere.
+fn old_folder() -> Option<PathBuf> {
+    crate::folders::old_roaming()
 }
 
 /// The folders in the roaming folder taken away, in the background, at a start: those Meno no longer uses.
-pub fn tidy(app: &AppHandle) {
-    let Some(old) = old_folder(app) else { return };
+pub fn tidy() {
+    let Some(old) = old_folder().filter(|old| real_folder(old)) else { return };
     std::thread::spawn(move || {
         for said in tidy_in(&old) {
             crate::logfile::logged!("{said}");
@@ -82,6 +80,10 @@ pub fn tidy_in(old: &Path) -> Vec<String> {
             said.push(format!("{kept} finished job(s) kept in {}: left there, with their files", jobs.display()));
         }
     }
+    // (and the folder itself, once nothing is left in it: the rest moved at the start, folders.rs)
+    if fs::read_dir(old).is_ok_and(|mut e| e.next().is_none()) && fs::remove_dir(old).is_ok() {
+        said.push(format!("removed {}, no longer used", old.display()));
+    }
     said
 }
 
@@ -99,8 +101,8 @@ fn jobs_kept(jobs: &Path) -> usize {
 /// taken away as the plugin is removed - unless a job there still waits or
 /// runs, whose program may be using it. What could not be taken away is
 /// said in the log, and goes with the rest at a later start ([`tidy`]).
-pub fn remove_plugin_env(app: &AppHandle, rel: &Path, stamp: &Path) {
-    let Some(old) = old_folder(app) else { return };
+pub fn remove_plugin_env(rel: &Path, stamp: &Path) {
+    let Some(old) = old_folder().filter(|old| real_folder(old)) else { return };
     for said in remove_plugin_env_in(&old, rel, stamp) {
         crate::logfile::logged!("{said}");
     }
@@ -220,6 +222,20 @@ mod tests {
         // (none there: nothing to say)
         assert!(remove_plugin_env_in(&old, Path::new("pixi/plugin-none"), Path::new("pixi/stamps/plugin-none.json")).is_empty());
         let _ = fs::remove_dir_all(old);
+    }
+
+    #[test]
+    fn the_folder_goes_once_nothing_is_left_in_it() {
+        let old = roaming();
+        // (its settings, log and window's place moved at the start: folders.rs)
+        for name in ["settings.json", "window.json"] {
+            fs::remove_file(old.join(name)).unwrap();
+        }
+        fs::remove_dir_all(old.join("logs")).unwrap();
+        fs::create_dir_all(old.join("jobs")).unwrap();
+        let said = tidy_in(&old);
+        assert!(!old.exists(), "{said:?}");
+        assert_eq!(said.last().unwrap(), &format!("removed {}, no longer used", old.display()));
     }
 
     #[cfg(unix)]

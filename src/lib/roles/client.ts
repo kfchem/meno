@@ -95,6 +95,8 @@ export type Conformers = {
   bonds: { a1: number; a2: number; order: 1 | 2 | 3 }[];
   frames: number[][];
   energies?: number[];
+  /** The stars at the centres of the rings or chains bound to a metal through all their atoms (V3000 ENDPTS), by atom: placed at each one's centre, and no atoms of the molecule. */
+  stars?: number[];
   field: string;
   /** How they were made, as rows to show - what made them, the method, the force field - in the plugin's words. */
   how?: { label: string; text: string }[];

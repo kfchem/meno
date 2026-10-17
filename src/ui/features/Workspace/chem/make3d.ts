@@ -25,6 +25,7 @@ import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 import { undrawnHydrogens } from "./drawing";
 import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
+import { etaBound } from "./etaBound";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
@@ -100,10 +101,13 @@ export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
     .map((ids) => partOf(model, ids))
     .filter(standsForMolecule)
     .map((part) => {
-      const index = molIndex(part);
+      // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound)
+      const asked = etaBound(part);
+      const index = molIndex(asked);
       return {
-        molblock: chemMolblock(part),
-        atoms: index.atoms.map((a) => a.id),
+        molblock: chemMolblock(asked),
+        // (the drawing's own atoms: the stars etaBound adds come after them, and are no atoms of the drawing)
+        atoms: part.atoms.map((a) => a.id),
         bonds: index.bonds.map((b) => b.id),
         part,
       };
@@ -132,29 +136,42 @@ export function openIn(block: Block, answer: { atoms: number[]; bonds: number[];
  * S show only where they are asked for, as on the drawing.
  */
 export function moleculeOf(c: Conformers, block: Block, several = false): Omit<Molecule3D, "id" | "at"> {
-  const first = c.frames[0] ?? [];
+  // (a multi-centre bond's star, at its ring's centre, is no atom: left out, the rest numbered on - etaBound)
+  const stars = new Set(c.stars ?? []);
+  const kept = c.atoms.flatMap((_, i) => (stars.has(i) ? [] : [i]));
+  const atomAt = new Map(kept.map((i, k) => [i, k]));
+  const bondsKept = c.bonds.flatMap((b, i) => (atomAt.has(b.a1) && atomAt.has(b.a2) ? [i] : []));
+  const bondAt = new Map(bondsKept.map((i, k) => [i, k]));
+  const places = (f: number[]) => kept.flatMap((i) => [f[3 * i] ?? 0, f[3 * i + 1] ?? 0, f[3 * i + 2] ?? 0]);
+  const first = places(c.frames[0] ?? []);
+  const renumbered = (r: Record<string, string> | undefined, at: Map<number, number>) =>
+    Object.fromEntries(Object.entries(r ?? {}).flatMap(([k, v]) => (at.has(Number(k)) ? [[String(at.get(Number(k))), v]] : [])));
+  const chosen = { atoms: renumbered(c.chosen.atoms, atomAt), bonds: renumbered(c.chosen.bonds, bondAt) };
   return {
-    atoms: c.atoms.map((a, i) => ({
-      el: a.el,
-      ...(a.charge ? { charge: a.charge } : {}),
-      // (a radical as drawn: the plugin's answer says none, and a triplet is no singlet)
-      ...(i < block.part.atoms.length && block.part.atoms[i].radical ? { radical: block.part.atoms[i].radical } : {}),
-      x: first[3 * i] ?? 0,
-      y: first[3 * i + 1] ?? 0,
-      z: first[3 * i + 2] ?? 0,
-    })),
-    bonds: c.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order })),
-    ...(c.frames.length > 1 ? { frames: c.frames.slice(1) } : {}),
+    atoms: kept.map((i, k) => {
+      const a = c.atoms[i];
+      return {
+        el: a.el,
+        ...(a.charge ? { charge: a.charge } : {}),
+        // (a radical as drawn: the plugin's answer says none, and a triplet is no singlet)
+        ...(i < block.part.atoms.length && block.part.atoms[i].radical ? { radical: block.part.atoms[i].radical } : {}),
+        x: first[3 * k],
+        y: first[3 * k + 1],
+        z: first[3 * k + 2],
+      };
+    }),
+    bonds: bondsKept.map((i) => ({ a1: atomAt.get(c.bonds[i].a1)!, a2: atomAt.get(c.bonds[i].a2)!, order: c.bonds[i].order })),
+    ...(c.frames.length > 1 ? { frames: c.frames.slice(1).map(places) } : {}),
     energies: c.energies,
-    drawnFrom: c.atoms.map((_, i) => (i < block.part.atoms.length ? block.atoms[i] : null)),
+    drawnFrom: kept.map((i) => (i < block.part.atoms.length ? block.atoms[i] : null)),
     drawnAs: signatureOf(block.part, block.atoms),
     conformerSet: true,
     ...(c.how?.length ? { made: { how: c.how } } : {}),
     stereo: {
-      atoms: numbered(c.cip?.atoms),
-      bonds: numbered(c.cip?.bonds),
-      ...(several && (Object.keys(c.chosen.atoms).length || Object.keys(c.chosen.bonds).length)
-        ? { chosen: { atoms: Object.keys(c.chosen.atoms).map(Number), bonds: Object.keys(c.chosen.bonds).map(Number) } }
+      atoms: numbered(renumbered(c.cip?.atoms, atomAt)),
+      bonds: numbered(renumbered(c.cip?.bonds, bondAt)),
+      ...(several && (Object.keys(chosen.atoms).length || Object.keys(chosen.bonds).length)
+        ? { chosen: { atoms: Object.keys(chosen.atoms).map(Number), bonds: Object.keys(chosen.bonds).map(Number) } }
         : {}),
     },
   };

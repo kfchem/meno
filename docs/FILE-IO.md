@@ -720,7 +720,7 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
   `tauri icon`, the `.icns` put together by `iconutil`, the `.ico` written
   with its images as PNGs.
 - **macOS** (`src-tauri/Info.plist`, merged by Tauri into the app's own):
-  Meno exports the type `com.kfchem.meno.workspace` - extension `meno`,
+  Meno exports the type `dev.kfchem.meno.workspace` - extension `meno`,
   media type `application/vnd.kfchem.meno+zip`, described as "Meno
   workspace" - and opens it as its owner (`LSHandlerRank` Owner, role
   Editor), the document's icon in the app's `Resources`
