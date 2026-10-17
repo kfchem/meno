@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, LINE_LEAST_PX, lineWidth, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
-import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { outlineMaterial } from "./utils/outlineMaterial";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
@@ -191,6 +191,9 @@ export function rendered3d(
       const group = new THREE.Group();
       group.position.set(0, 0, heightOf(molecule, solid, look));
       if (m.turn) group.quaternion.set(...m.turn);
+      // (as large as it is shown: docs/WORKSPACE.md, *Magnified display*)
+      const mag = magnifiedOf(molecule);
+      group.scale.setScalar(mag);
       // its atoms, one ball each (none, for one its look leaves out), and
       // its bonds - those the frame shown has, where they go frame by frame -
       // their hollows shaded as the canvas shades them
@@ -238,7 +241,9 @@ export function rendered3d(
         });
         const heights = Float32Array.from(m.atoms, (_, i) => numberHeight(digits[i], rs[i] / WORLD_PER_ANGSTROM));
         const at = new Float32Array(3 * m.atoms.length);
-        numberPlaces(centres, rs, heights, digits, at, lines.length ? { bonds, r: bondRadiusOf(drawn) * WORLD_PER_ANGSTROM } : null);
+        // (where they stand as the picture shows them: magnified as the molecule is - utils/molecule3d `magnifiedOf`)
+        const seen = rs.map((r) => r * mag);
+        numberPlaces(centres, seen, heights, digits, at, lines.length ? { bonds, r: bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * mag } : null);
         ball.setAttribute("ballNumber", new THREE.InstancedBufferAttribute(nums, 1));
         ball.setAttribute("ballNumberPlace", new THREE.InstancedBufferAttribute(Float32Array.from({ length: 4 * m.atoms.length }, (_, k) => (k % 4 === 3 ? on[k >> 2] : at[3 * (k >> 2) + (k % 4)])), 4));
         ao.numbers.shown.value = 1;
@@ -308,14 +313,14 @@ export function rendered3d(
         const o = outlineMaterial(of.geometry.getAttribute("stickBend") !== undefined);
         const mesh = new THREE.InstancedMesh(geometry, o.material, of.count);
         mesh.instanceMatrix = of.instanceMatrix;
-        o.width.value = lineWidth(drawn.outline, WORLD_PER_ANGSTROM, cssPx / pxPerWorld);
+        o.width.value = lineWidth(drawn.outline, WORLD_PER_ANGSTROM * mag, cssPx / pxPerWorld);
         o.material.color.set(drawn.outlineColor);
         fades.push(o.fade);
         made.push(o.material);
         group.add(mesh);
       }
       // (the molecule's front and back in the camera's depth: it seen from EYE_HEIGHT - or eyeHeight - above, standing as high as it does)
-      const reach = solid.reach[look];
+      const reach = solid.reach[look] * mag;
       const centre = group.position.z - (eyeHeight ?? EYE_HEIGHT);
       for (const u of fades) {
         u.fadeNear.value = centre + reach;

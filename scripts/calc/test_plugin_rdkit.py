@@ -464,3 +464,71 @@ class EtaBound(unittest.TestCase):
         rows = {r["label"]: r["text"] for r in entry["how"]}
         self.assertEqual(rows["Optimised"], "UFF, at most 2000 steps")
         self.assertIn("held, not modelled", rows["Energies"])
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class HalideBridged(unittest.TestCase):
+    """Two metals bridged by two chlorides, as in [Pd(allyl)Cl]2: its Pd2Cl2 ring held together - UFF's angle at a
+    chloride bound twice once pulled it 8 to 12 A apart - and made at all where RDKit's own bounds could not be."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    @staticmethod
+    def block(atoms, bonds):
+        rows = [f"M  V30 {n + 1} {el} {x:.4f} {y:.4f} 0 0{extra}" for n, (el, x, y, extra) in enumerate(atoms)]
+        lines = [f"M  V30 {n + 1} {b}" for n, b in enumerate(bonds)]
+        return "\n".join(["", "  Meno", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB",
+                          f"M  V30 COUNTS {len(atoms)} {len(bonds)} 0 0 0", "M  V30 BEGIN ATOM", *rows, "M  V30 END ATOM",
+                          "M  V30 BEGIN BOND", *lines, "M  V30 END BOND", "M  V30 END CTAB", "M  END"])
+
+    def drawn(self):
+        """As drawn by hand: each allyl's three carbons bound to its Pd by a bond each."""
+        atoms = [("Pd", -1.25, 0, ""), ("Pd", 1.25, 0, ""), ("Cl", 0, 1.125, ""), ("Cl", 0, -1.125, ""),
+                 ("C", -2.625, 1.125, ""), ("C", -3.375, 0, ""), ("C", -2.625, -1.125, ""),
+                 ("C", 2.625, 1.125, ""), ("C", 3.375, 0, ""), ("C", 2.625, -1.125, "")]
+        bonds = ["1 1 3", "1 1 4", "1 2 3", "1 2 4", "2 5 6", "1 6 7", "1 1 5", "1 1 6", "1 1 7",
+                 "2 8 9", "1 9 10", "1 2 8", "1 2 9", "1 2 10"]
+        return self.block(atoms, bonds)
+
+    def from_label(self):
+        """As Meno writes it from the label [Pd(allyl)Cl]2: each allyl bound by one multi-centre bond, the
+        chlorides' second bonds dative."""
+        atoms = [("Pd", -1.9, 0.85, ""), ("C", -4.15, -0.45, ""), ("C", -5.65, -0.45, ""), ("C", -6.4, -1.75, " RAD=2"),
+                 ("*", -5.4, -0.88, ""), ("Cl", 0, 1.75, ""), ("Pd", 1.9, 0.85, ""), ("C", 4.15, -0.45, ""),
+                 ("C", 5.65, -0.45, ""), ("C", 6.4, -1.75, " RAD=2"), ("*", 5.4, -0.88, ""), ("Cl", 0, -0.05, "")]
+        bonds = ["2 2 3", "1 3 4", "9 1 5 ENDPTS=(3 2 3 4) ATTACH=ALL", "1 1 6", "2 8 9", "1 9 10",
+                 "9 7 11 ENDPTS=(3 8 9 10) ATTACH=ALL", "1 7 12", "9 6 7", "9 12 1"]
+        return self.block(atoms, bonds)
+
+    def check(self, entry, slack=0.1):
+        import numpy as np
+        els = [a["el"] for a in entry["atoms"]]
+        pd = [i for i, e in enumerate(els) if e == "Pd"]
+        cl = [i for i, e in enumerate(els) if e == "Cl"]
+        heavy = [i for i, e in enumerate(els) if e not in ("H", "*")]
+        for frame in entry["frames"]:
+            P = np.array(frame).reshape(-1, 3)
+            for m in pd:
+                for x in cl:
+                    self.assertAlmostEqual(float(np.linalg.norm(P[m] - P[x])), 2.27, delta=slack)
+            self.assertLess(float(np.linalg.norm(P[pd[0]] - P[pd[1]])), 4.0)
+            span = max(float(np.linalg.norm(P[i] - P[j])) for i in heavy for j in heavy)
+            self.assertLess(span, 9.0)
+
+    def test_keeps_the_dimer_drawn_by_hand_together(self):
+        # (each allyl bound by three bonds to its Pd, five in all: UFF has no shape for that, and a conformer may come
+        # out uneven - but held together, where every one had Pd-Cl 1.89 and 2.76 A)
+        self.check(self.worker.op_conformers({"molblock": self.drawn(), "count": 4})["isomers"][0], slack=0.4)
+
+    def test_makes_and_keeps_the_dimer_from_its_label_together(self):
+        entry = self.worker.op_conformers({"molblock": self.from_label(), "count": 4})["isomers"][0]
+        self.check(entry)
+        import numpy as np
+        P = np.array(entry["frames"][0]).reshape(-1, 3)
+        for m, ring in ((0, (1, 2, 3)), (6, (7, 8, 9))):
+            for c in ring:
+                self.assertAlmostEqual(float(np.linalg.norm(P[m] - P[c])), 2.1, delta=0.15)

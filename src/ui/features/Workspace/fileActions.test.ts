@@ -3,6 +3,7 @@ import {
   drawingSvg,
   exportKindOf,
   exportKinds,
+  xyzFileText,
   exportPxPerWorld,
   fileNameOf,
   holdsOfDrawn,
@@ -109,8 +110,8 @@ describe("Export", () => {
     expect(exportKinds(structure)).toEqual(["mol", "sdf", "svg"]);
     expect(exportKinds(reaction)).toEqual(["rxn", "mol", "sdf", "svg"]);
     // (molecules in 3D alone: an SD file keeps them; a drawing beside them is a MOL file's too; a PDB file holds them and no drawing)
-    expect(exportKinds(solid)).toEqual(["sdf", "pdb", "svg"]);
-    expect(exportKinds(both)).toEqual(["mol", "sdf", "pdb", "svg"]);
+    expect(exportKinds(solid)).toEqual(["sdf", "pdb", "xyz", "svg"]);
+    expect(exportKinds(both)).toEqual(["mol", "sdf", "pdb", "xyz", "svg"]);
   });
 
   it("offers nothing that would come out empty: words, pictures or arrows alone only as a picture", () => {
@@ -119,7 +120,7 @@ describe("Export", () => {
     // (an arrow and words, with nothing drawn: no reaction to write)
     expect(exportKinds({ solid: false, reaction: true, drawn: false })).toEqual(["svg"]);
     // (an arrow beside molecules in 3D alone: those, as their own files)
-    expect(exportKinds({ solid: true, reaction: true, drawn: false })).toEqual(["sdf", "pdb", "svg"]);
+    expect(exportKinds({ solid: true, reaction: true, drawn: false })).toEqual(["sdf", "pdb", "xyz", "svg"]);
     expect(suggestedExportPath({ savedPath: "/work/a.meno", openedName: null }, { solid: false, reaction: false, drawn: false })).toBe("/work/a.svg");
   });
 
@@ -315,6 +316,38 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     expect(back.molecules3d![0].atoms[1]).toMatchObject({ el: "H", x: 0.8, z: 1 });
     // molecules in 3D alone: their records alone
     expect(structureFileText({ atoms: [], bonds: [], molecules3d: [water3d] }, "/tmp/w.sdf").match(/\$\$\$\$/g)).toHaveLength(1);
+  });
+
+  it("writes XYZ: the atoms in their order, hydrogens too, a block a frame with its energy, and Meno's reader reads it back", () => {
+    const m = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.9572, y: 0, z: 0 },
+        { el: "H", x: -0.2399872, y: 0.9266272, z: -0.00000004 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }],
+      at: { x: 0, y: 0 },
+      frames: [[0, 0, 0.1, 0.96, 0, 0.1, -0.24, 0.93, 0.1]],
+      energies: [-76.0266327341, -76.0261],
+      name: "water.xyz",
+    };
+    const one = xyzFileText([m as never], "t", {});
+    expect(one.split("\n").slice(0, 3)).toEqual(["3", "water E = -76.0266327341 Eh", "O      0.00000000     0.00000000     0.00000000"]);
+    expect(one.match(/^3$/gm)).toHaveLength(1);
+    const all = xyzFileText([m as never], "t", { frames: "all" });
+    expect(all.match(/^3$/gm)).toHaveLength(2);
+    expect(all).toContain("water frame 2/2 E = -76.0261000000 Eh");
+    // (read back: the same atoms in the same order, the frames, the energies)
+    const back = readStructures("xyz", "water.xyz", all).molecules3d![0];
+    expect(back.atoms.map((a) => a.el)).toEqual(["O", "H", "H"]);
+    expect(back.atoms[2].x).toBeCloseTo(-0.2399872, 7);
+    expect(back.frames).toHaveLength(1);
+    expect(back.frames![0][2]).toBeCloseTo(0.1, 6);
+    expect(back.frames![0][3]).toBeCloseTo(0.96, 6);
+    expect(back.energies).toEqual([-76.0266327341, -76.0261]);
+    // (several molecules: their blocks one after another; none: refused)
+    expect(xyzFileText([m as never, { ...m, name: "other.xyz" } as never], "t", {}).match(/^3$/gm)).toHaveLength(2);
+    expect(() => xyzFileText([], "t", {})).toThrow(/no molecules/);
   });
 
   it("holds every frame of each, a record each, numbered, with its energy where it is known, where the writer's options ask", async () => {

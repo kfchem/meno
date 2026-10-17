@@ -146,6 +146,14 @@ Two things worth knowing:
   (`Meno --job <folder>`); `run.ps1` closes only the app (`Get-MenoApp`),
   so that a job goes on as it would when the chemist closes Meno - and a
   scenario that starts jobs leaves them running, to be stopped or waited for.
+- **Only the app is closed.** The executable has other modes besides jobs,
+  each a flag as its first argument: the PDF reader the app starts for
+  itself (`Meno --pdf <cache>`) and, on Windows, the installer's Office
+  registration. Copies running in any of them may be another session's -
+  another worktree's build reading PDFs, say - so `Get-MenoApp` passes them
+  over, and so does everything that counts or closes Meno: the list is
+  `MenoModes.psm1`'s, and `tests/modes.tests.ps1` checks it against the
+  flags `src-tauri/src` defines. A new mode there wants its flag added.
 
 ## What a platform module provides
 

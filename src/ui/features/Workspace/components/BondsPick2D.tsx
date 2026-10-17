@@ -13,6 +13,7 @@ import { onChord } from "../utils/press";
 import { commitInstanceMatrices } from "./instances";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { releaseClicksBond } from "../utils/press";
+import { bondLengthFrom } from "../utils/magnified";
 
 export default function BondsPick2D() {
   const { camera, gl } = useThree();
@@ -244,7 +245,7 @@ export default function BondsPick2D() {
             const a1 = model.atoms.find((a) => a.id === b.a);
             const a2 = model.atoms.find((a) => a.id === b.b);
             if (a1 && a2) {
-              const L = NOMINAL_BOND_LENGTH;
+              const L = bondLengthFrom(model.atoms, a1.id);
               const th = L * 0.3;
               const d1 = Math.hypot(p.x - a1.x, p.y - a1.y);
               const d2 = Math.hypot(p.x - a2.x, p.y - a2.y);
@@ -272,7 +273,7 @@ export default function BondsPick2D() {
             const a1 = model.atoms.find((a) => a.id === b.a);
             const a2 = model.atoms.find((a) => a.id === b.b);
             if (a1 && a2) {
-              const L = NOMINAL_BOND_LENGTH;
+              const L = bondLengthFrom(model.atoms, a1.id);
               const th = L * 0.3;
               const d1 = Math.hypot(p.x - a1.x, p.y - a1.y);
               const d2 = Math.hypot(p.x - a2.x, p.y - a2.y);

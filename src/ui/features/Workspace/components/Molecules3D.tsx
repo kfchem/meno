@@ -784,6 +784,11 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             following={active?.kind === "move" && active.group.includes(m.id)}
             framesOpen={hovered?.id === m.id || sel3d.has(m.id)}
             onFrame={(f) => store.getState().setFrame3d(m.id, f)}
+            // (from its mark: it, and those selected with it - each about its own place)
+            onMagnify={(k, gesture) => {
+              const { sel3d } = store.getState();
+              store.getState().setMagnified3d(sel3d.has(m.id) ? [...sel3d] : [m.id], k, gesture);
+            }}
             hoveredMeasure={hoveredMeasure?.id === m.id ? hoveredMeasure.measure : null}
             rising={rising[m.id]}
             split={splits[m.id]}
