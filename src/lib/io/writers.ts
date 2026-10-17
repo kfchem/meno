@@ -92,6 +92,27 @@ export const WRITERS = {
       },
     ],
   },
+  // (molecules in 3D only: the format holds no drawing, and no bonds)
+  xyz: {
+    id: "xyz",
+    name: "XYZ file",
+    extensions: [".xyz"],
+    takes: "page",
+    by: "meno",
+    options: [
+      {
+        id: "frames",
+        about: "molecules3d",
+        label: "Molecules in 3D",
+        type: "choice",
+        choices: [
+          { value: "shown", label: "The frame shown" },
+          { value: "all", label: "Every frame, a block each" },
+        ],
+        default: "shown",
+      },
+    ],
+  },
   svg: { id: "svg", name: "SVG picture", extensions: [".svg"], takes: "page", by: "meno", options: [] },
 } as const satisfies Record<string, Writer>;
 

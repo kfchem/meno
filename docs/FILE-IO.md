@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`) |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | never | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 1, no migration |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -157,12 +157,12 @@ finds is kept as its own (`combine`); Meno checks every answer (`checked`,
 | Way out | Written by, where | Kinds | Carries |
 | --- | --- | --- | --- |
 | **Save, Save As** (`fileActions.ts`) | main thread, then the fs plugin | `.meno` only | everything on the page, with the files it keeps |
-| **Export…** (the selection's menu; `fileActions.ts`, `lib/io/writers.ts`) | main thread, or the plugin that writes the kind | MOL, SDF, RXN, PDB and SVG by Meno; for molecules in 3D, what the added plugins write | the selection: the drawing; SDF each molecule in 3D at the frame shown, or every frame a record; PDB the molecules in 3D alone; SVG the page as drawn, molecules in 3D as a picture, no record |
+| **Export…** (the selection's menu; `fileActions.ts`, `lib/io/writers.ts`) | main thread, or the plugin that writes the kind | MOL, SDF, RXN, PDB, XYZ and SVG by Meno; for molecules in 3D, what the added plugins write | the selection: the drawing; SDF each molecule in 3D at the frame shown, or every frame a record; PDB the molecules in 3D alone; XYZ the molecules in 3D alone, their atoms only, a block a frame; SVG the page as drawn, molecules in 3D as a picture, no record |
 | **Copy, Cut** (`clipboardActions.ts`) | TS makes each flavour, Rust puts them on the clipboard (`clipboard.rs`) | Mac: the record, MOL, RXN, GVML (with EMF), PNG. Windows: the record, MDLCT and MOL, RXN, GVML, PNG, EMF, DIB, or an OLE object in place of GVML and PNG | the record carries molecules in 3D and their results; a surface promised stays a promise |
 | **Copy as SMILES** | RDKit, then the clipboard as text | SMILES | the selection's structure |
 | **Office live link** (Windows) | TS, then Rust `ole_update` | the record and EMF in the object | as `.meno` does, the surface shown included |
 
-Never written: XYZ, PNG or EMF as files, anything printed or dragged out.
+Never written: PNG or EMF as files, anything printed or dragged out.
 Plugins write nothing that leaves them (a temporary copy of the output,
 deleted); the chemistry worker answers over its pipe.
 
@@ -170,6 +170,38 @@ A saved workspace keeps each molecule's results and, for a promise, the
 output's name and SHA-256: the value of the one shown is kept; the others
 are asked for again only once that output is opened in the session, by the
 reader that gave them, added.
+
+### XYZ written
+
+Export offers XYZ for molecules in 3D (the selection's menu, beside MOL,
+SDF and PDB; molecules in 3D alone: the format holds no drawing and no
+bonds). There is no official specification; Meno writes the common
+definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
+
+- Line 1: the number of atoms. Line 2: a comment. Then one line for each
+  atom: its element's symbol (padded to two), then x, y and z in ångströms,
+  each with eight decimals, in columns. A file of several frames repeats
+  the block, with no blank line between.
+- The atoms are in the order the molecule has them (the numbering a
+  calculation uses, counted from 1) - never reordered - hydrogens included.
+  Charge, isotope and unpaired electrons are not written: the format has no
+  place for them.
+- The comment is the molecule's name (the file's own name where it has
+  none), then, where there are several frames, `frame i/n`, then, where the
+  frame's energy is known, `E = <hartrees to ten decimals> Eh`: for
+  example `water frame 2/3 E = -76.0261000000 Eh`. On one line, and plain
+  text, which programs that read the layout take as a comment. No method
+  is written: Meno does not hold one for an energy.
+- The writer's option *Molecules in 3D* says the frame shown (one block a
+  molecule) or every frame (a block each, in order). Several molecules
+  selected are written as SDF export writes them: one after another, each as
+  it is in its file - not placed on the page as one system.
+- Meno's own reader reads the file back: the same atoms in the same order,
+  the coordinates to the eight decimals, and, of a file of more than one
+  frame, each frame's energy by that `E = ... Eh` pattern - a pattern of
+  Meno's own, which needs no plugin (a program's patterns are its plugin's;
+  `utils/xyzEnergies.ts`). A one-frame file's energy is written but, as for
+  any one-frame XYZ, not read.
 
 ## What is unclear today
 
@@ -464,7 +496,7 @@ How these behave:
 - **Export…** (on the selection's menu since 2026-10-10: what is
   selected, Select all first for the whole page) offers every kind a
   writer added writes, each written by the one assigned:
-  - MOL, SDF, RXN, PDB and SVG, by Meno;
+  - MOL, SDF, RXN, PDB, XYZ and SVG, by Meno;
   - Gaussian's input, by its plugin, where it is added (step 7).
 
   The writer says what it takes: what is selected on the page, or, for a
