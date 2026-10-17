@@ -15,11 +15,12 @@ import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
 import { fillsAmong } from "./rings";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
-import type { Carried3D, Drawn, EditorState, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
+import type { Carried3D, Drawn, EditorState, Member, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
+import { collectionHash, setMembers } from "../workflow/entries";
 import { pdfBytes } from "../../../../lib/pdf/reader";
 import { readPdfs } from "./pdfItems";
 import { pictureBytes } from "../../../../lib/picture/held";
-import { readDrawn } from "./copyPaste";
+import { placesRead, readDrawn } from "./copyPaste";
 import { calcShowing, heldOutput, outputsToKeep, sha256Of } from "../../../../lib/calc/asks";
 import { writeMenoFile } from "../../../../lib/doc/menoFileWriter";
 import type { KeptData } from "../../../../lib/doc/menoFile";
@@ -27,7 +28,10 @@ import type { CalcSource } from "../../../../lib/calc/output";
 import { readWorkflow, type SavedWorkflow } from "../workflow/saved";
 
 export const WORKSPACE = "meno-workspace";
-export const WORKSPACE_VERSION = 1;
+/** The version a workspace's JSON is written at: 2 since sets keep their members (docs/FILE-IO.md, *The workspace file*). */
+export const WORKSPACE_VERSION = 2;
+/** The versions read: 1, its sets' members read from their frames once, as it opens. */
+const READS = [1, 2];
 
 /** What a workspace file holds, read. */
 export type Workspace = {
@@ -92,7 +96,23 @@ export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames
  * is a text's, which it always keeps (`texts`, each text's SHA-256, in
  * order).
  */
-export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(), texts: readonly string[] = []): string {
+export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(), texts: readonly string[] = []): string {
+  // (a result set kept out of the file: its molecules not written, only how many it held and their hash - *Don't keep in the file*)
+  const page = { model: given.model, molecules3d: given.molecules3d, pictures: given.pictures };
+  const notKept = new Set((given.sets ?? []).filter((b) => b.keep === false && b.made).flatMap((b) => setMembers(page, b).molecules));
+  const state = notKept.size ? { ...given, molecules3d: given.molecules3d.filter((m) => !notKept.has(m.id)) } : given;
+  const moleculeAt = new Map(state.molecules3d.map((m, i) => [m.id, i]));
+  const pictureAt = new Map((state.pictures ?? []).map((p, i) => [p.id, i]));
+  // (each set's members by what a file can say them by: a structure by its atoms' ids, kept; a molecule or a picture by its place in its list)
+  const savedSets = (state.sets ?? []).map(({ members, ...b }) => {
+    if (b.keep === false && b.made) return { ...b, notKept: { count: members?.length ?? 0, hash: collectionHash(page, { ...b, members }) } };
+    const saved = (members ?? []).flatMap((m): Member[] => {
+      if ("structure" in m) return [m];
+      if ("molecule" in m) return moleculeAt.has(m.molecule) ? [{ molecule: moleculeAt.get(m.molecule)! }] : [];
+      return pictureAt.has(m.picture) ? [{ picture: pictureAt.get(m.picture)! }] : [];
+    });
+    return members ? { ...b, members: saved } : b;
+  });
   const molecules3d = carriedOf(state).map((m) => {
     if (!m.calc?.source?.path || !kept.has(m.calc.source.sha256)) return m;
     const { path: _, ...source } = m.calc.source;
@@ -126,7 +146,7 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       pluses: state.pluses,
       ...(state.captions.length ? { captions: state.captions } : {}),
       molecules3d,
-      ...(state.sets?.length || state.steps?.length ? { sets: state.sets ?? [], steps: state.steps ?? [], wires: state.wires ?? [] } : {}),
+      ...(state.sets?.length || state.steps?.length ? { sets: savedSets, steps: state.steps ?? [], wires: state.wires ?? [] } : {}),
       ...(state.docStyle ? { style: state.docStyle } : {}),
       // (its styles in 3D, each whole: it opens the same on any computer)
       ...(state.docStyle3d ? { style3d: state.docStyle3d } : {}),
@@ -232,14 +252,26 @@ export function readWorkspace(text: string): Workspace | null {
     pdfs?: unknown;
     pdfShown?: unknown;
   };
-  if (r?.format !== WORKSPACE || r.version !== WORKSPACE_VERSION) return null;
+  if (r?.format !== WORKSPACE || !READS.includes(r.version as number)) return null;
   const drawn = readDrawn(data);
   if (!drawn) return null;
   const rings: Record<string, boolean> = {};
   if (typeof r.aromaticRings === "object" && r.aromaticRings) {
     for (const [k, v] of Object.entries(r.aromaticRings)) if (typeof v === "boolean") rings[k] = v;
   }
-  const workflow = readWorkflow(data);
+  const read = readWorkflow(data);
+  // (each set's members as the ids its molecules and pictures are given as the workspace opens: numbered from the first, in the order read)
+  const places = placesRead(data);
+  const asOpened = (m: Member): Member[] => {
+    if ("structure" in m) return [m];
+    if ("molecule" in m) {
+      const k = places.molecules3d.indexOf(m.molecule);
+      return k < 0 ? [] : [{ molecule: k + 1 }];
+    }
+    const k = places.pictures.indexOf(m.picture);
+    return k < 0 ? [] : [{ picture: k + 1 }];
+  };
+  const workflow = read && r.version === 2 ? { ...read, sets: read.sets.map((b) => (b.members ? { ...b, members: b.members.flatMap(asOpened) } : b)) } : read;
   const texts: SavedText[] = [];
   for (const t of Array.isArray(r.texts) ? (r.texts as Partial<SavedText>[]) : []) {
     if (typeof t?.name !== "string" || typeof t.sha256 !== "string" || !SHA.test(t.sha256)) continue;
