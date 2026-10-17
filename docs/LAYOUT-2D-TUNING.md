@@ -226,6 +226,19 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   reads wrong. Scopolamine (12.2 to 2.1), gelsemine (9.5 to 6.9) and
   tetrodotoxin (16.31 to 16.26) read better; nothing else on the two lists
   changes. Ibogaine, 20.3 to 17.1 by `viewCost` alone, is left as it was.
+- **A solid read with no configuration.** Meno's reader (`drawn.ts`)
+  fits a cage drawn in perspective to its solid, to find the corners a
+  centre's bonds out of the cage can take. It found that solid from the
+  bonds alone, no configuration held, and for tetrodotoxin that is
+  another isomer's - fitted to the page, its atoms 0.37 of a bond (root
+  mean square) from where they are drawn, against 0.14 for the solid the
+  engine drew - with C4's two free corners drawn
+  on one side of it: C4 read as given only by a hair. The solid
+  is now found again with the centres the cage fixes itself held - each
+  with three bonds into the cage, read from those bonds as drawn - and
+  taken where the drawing is the nearer picture of it. C4 reads for sure,
+  and no drawing on the benchmark, held-out and organometallic lists
+  changes.
 - **A double bond is stereo too.** The read-back guards read the
   stereocentres only, and huperzine A's bridge drew a ring's C=C trans
   unnoticed. They read every drawn double bond now (2026-10-13): one the
