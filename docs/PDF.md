@@ -270,6 +270,48 @@ stops being part of the work.
 - **Tied to where it came from**: a picture keeps which PDF, which page
   and which box, and its right-click menu has *Show in the PDF*.
 
+## A new PDF from pages
+
+Asked for by the maintainer on 2026-10-18: simple editing of the PDFs a
+workspace holds, as a chemist needs it for a paper's supporting information.
+**The PDF it is made from is never changed**: what is made is a new PDF of
+its own, put on the page beside it - an icon, as one opened is, clear of the
+PDFs there - one step, which an undo takes back. It is held as any other
+(its bytes in Meno's cache by their SHA-256, and in the workspace's file).
+
+- **Where.** On a PDF's right-click menu, in a group of their own: *Page
+  numbers…*, *Pages…*, *Combine into one PDF* (two or more PDFs selected,
+  right-clicked on one of them or on the selection) and *Save as PDF…*,
+  which writes a PDF's bytes, as they are, to a file picked.
+- **Page numbers…** A card shows the first page with its number where it will
+  be, as it is chosen: 1, 2, 3 or S1, S2, S3 (supporting information's); the
+  first page's number; at the foot's left, middle or right. *Make numbered
+  copy* makes "paper (numbered).pdf": each page's number in Helvetica, 9 pt,
+  its foot 28 pt from the page's foot (a corner's 28 pt from the side), upright
+  on the page as it is shown, however the page is turned.
+- **Pages…** A card of the PDF's pages, drawn small as they come into view: a
+  page dragged goes where it is let go, the others making room, eased; a
+  click selects one, Shift and a click a run, and pages typed ("3-5", "1, 4,
+  7-9") select those. *Turn left* and *Turn right* turn those selected a
+  quarter; *Take out* leaves them out. *Make new PDF* makes one of the pages
+  as they are now ("paper (arranged).pdf"); *Extract selected* one of those
+  selected alone ("paper (pages 3-5).pdf" for a run, "paper (page 2).pdf"
+  for one).
+- **Combine into one PDF** makes "Combined.pdf" of the PDFs selected, in the
+  order they are read on the page - rows top to bottom, each left to right -
+  each one's pages in order. Put in another order after, with *Pages…*.
+- **How it is made** (src-tauri/src/pdfmake.rs): in the PDF reader's own
+  process (*Where it runs*), as its `make`, with PDFium alone: a new
+  document, each page copied into it in the order given
+  (`FPDF_ImportPages`), its turn added to the one it had (`/Rotate`), and a
+  page's number a text object in the standard Helvetica, which needs no font
+  embedded. Pages are copied whole - their words stay words, as they were
+  drawn; a link to another page of the PDF it came from may lead nowhere in
+  a copy without that page.
+- **What a copy does not hold**: writing by hand on a PDF in Meno (*Write on
+  it*) is the workspace's, over its pages, not the PDF's - it stays with the
+  PDF it was written on.
+
 ## A picture
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
