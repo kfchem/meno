@@ -396,7 +396,10 @@ ester as a group does.
 
 A label known any of these ways can be expanded, is counted and written out
 whole, and is what RDKit is asked about; one not known is text. Ar is
-argon's symbol as well as aryl's (GR-9.2): typed, it is argon. The groups
+argon's symbol as well as aryl's (GR-9.2): typed alone, it is argon; drawn
+with a bond, which argon never has, it is aryl's - written as a label, a
+star atom with its alias, as is any element that forms no bonds (He, Ne)
+drawn with one. The groups
 named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,
 2026-10-10): typed, or written by Clean-up, the atom holds the group
