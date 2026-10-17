@@ -53,6 +53,21 @@ function clearOf(label: TextItem | undefined, fontSize: number, opts: LayoutOpti
 }
 
 /**
+ * What of a drawing the arrows are laid by (`pushShapes`), as one string:
+ * its labels and where its lines run - so that a drawing laid out again
+ * the same, as at each frame of a zoom where its lines are held at their
+ * least width on the screen, lays the arrows out no more (found on Windows,
+ * 2026-10-16: with arrows on the page, a zoom stuttered).
+ */
+export function laidKey(drawn: Pick<Layout, "texts" | "lines">): string {
+  // (positions to a millionth of a bond, which is all an arrow could move by)
+  const r = (v: number) => Math.round(v * 1e6);
+  let lines = "";
+  for (const l of drawn.lines) lines += `${r(l.x1)},${r(l.y1)},${r(l.x2)},${r(l.y2)};`;
+  return JSON.stringify(drawn.texts) + "|" + lines;
+}
+
+/**
  * Each arrow's curve, by its id - from and to its ends among `atoms` (in
  * the order the layout's `labels` number them), bent as it says or laid as
  * Meno lays it, clear of the bonds and labels, coming onto an atom from

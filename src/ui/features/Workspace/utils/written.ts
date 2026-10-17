@@ -1,8 +1,7 @@
 import { knownOf, type WrittenAtom, type WrittenMolecule } from "../../../../lib/io/writers";
 import type { Known } from "../../../../lib/options";
 import type { Carried3D } from "../store/types";
-import type { Style3D } from "../../../../lib/chem/style3d";
-import { currentStyle3D } from "../style3d";
+import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import { bondsAt, heightOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
 
 /** A molecule in 3D's atoms' places in one of its frames, where its file had them, in ångströms: x, y, z of each. */
@@ -32,7 +31,7 @@ const stem = (name: string) => name.replace(/\.[^.]*$/, "");
  * that frame, turned as it is seen, where on the page and how high, its
  * file's ångströms kept. With what its atoms carry.
  */
-export function writtenAtoms(m: Carried3D, frame: number | undefined, placed: boolean, style: Style3D = currentStyle3D()): WrittenAtom[] {
+export function writtenAtoms(m: Carried3D, frame: number | undefined, placed: boolean, style: Style3D = STYLE_3D): WrittenAtom[] {
   const xyz = frameXyz(m, frame);
   const n = m.atoms.length;
   const k = WORLD_PER_ANGSTROM;
@@ -70,7 +69,7 @@ export function writtenAtoms(m: Carried3D, frame: number | undefined, placed: bo
  * together on the page is written as it was put together. Called by the
  * name of the file each came from.
  */
-export function writtenOf(molecules: readonly Carried3D[], style: Style3D = currentStyle3D()): WrittenMolecule {
+export function writtenOf(molecules: readonly Carried3D[], style: Style3D = STYLE_3D): WrittenMolecule {
   const atoms: WrittenAtom[] = [];
   const bonds: WrittenMolecule["bonds"] = [];
   for (const m of molecules) {

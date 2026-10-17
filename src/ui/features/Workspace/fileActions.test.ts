@@ -14,12 +14,13 @@ import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
-import { useAppSettings } from "../../../lib/settings/appSettings";
 import { readStructures } from "../../../lib/io/structures";
 import type { OptionValues } from "../../../lib/options";
 import { readPdb } from "../../../lib/chem/pdb";
 import { writtenOf } from "./utils/written";
 import { WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
+import { DEFAULT_STYLE_3D_CHOICE } from "../../../lib/chem/style3d";
 
 const L = NOMINAL_BOND_LENGTH;
 const model: Model = {
@@ -248,17 +249,13 @@ describe("drawingSvg", () => {
       bonds: [1, 2, 3, 4].map((h) => ({ a1: 0, a2: h, order: 1 })),
       at: { x: 6 * L, y: 0 },
     };
-    const was = useAppSettings.getState().style3d;
-    try {
-      expect(drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996)).not.toContain("hidden");
-      useAppSettings.setState({ style3d: { ...was, looks: { [was.primary]: { hydrogens: "carbonHidden" } } } });
-      const hidden = drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996);
-      expect(hidden).toContain(">C\u2013H hidden</text>");
-      // (its other look, the secondary, keeps them)
-      expect(drawingSvg({ ...model, molecules3d: [{ ...methane, look: "secondary" as const }] }, aromatic, ACS_1996)).not.toContain("hidden");
-    } finally {
-      useAppSettings.setState({ style3d: was });
-    }
+    expect(drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996)).not.toContain("hidden");
+    // (in a workspace whose primary style hides them)
+    const hiding = { ...aromatic, docStyle3d: workspace3dOf({ ...DEFAULT_STYLE_3D_CHOICE, looks: { balls: { hydrogens: "carbonHidden" } } }) };
+    const hidden = drawingSvg({ ...model, molecules3d: [methane] }, hiding, ACS_1996);
+    expect(hidden).toContain(">C\u2013H hidden</text>");
+    // (its other look, the secondary, keeps them)
+    expect(drawingSvg({ ...model, molecules3d: [{ ...methane, look: "secondary" as const }] }, hiding, ACS_1996)).not.toContain("hidden");
   });
 
   it("says over a molecule in 3D what its file left out - its hydrogens, its bond orders - one over the other", () => {

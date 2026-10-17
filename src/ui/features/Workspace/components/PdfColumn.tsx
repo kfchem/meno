@@ -42,7 +42,7 @@ import TextFlight, { MarkdownFlight } from "./TextFlight";
 import { columnSettingAt, sheetSetting } from "./textFlightSetting";
 import { drawnSheetBox, iconScaleOf, sheetOfText } from "../utils/textSheets";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import { CARD_H, CARD_W } from "../workflow/look";
 import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from "../../TextEditor/columnText";
 import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
@@ -75,7 +75,7 @@ function bodyBoxOf(st: EditorState, t: WorkspaceText): { x0: number; x1: number;
   }
   const m = st.molecules3d.find((x) => x.id === of.molecule);
   if (!m) return null;
-  const style = currentStyle3D();
+  const style = style3dOf(st);
   const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]));
   return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
 }
@@ -332,11 +332,21 @@ function ColumnPass({
     // drawn: the page; the column's part, cut off where it is; the page on its way
     const W = size.width;
     const H = size.height;
+    const covered = st.cover;
+    // (the page drawn only beside the column, where the column runs the whole height: under it, the column's own
+    // background covers all of it - drawing it there, every frame of a scroll, kept the graphics card full)
+    const beside = (pdf || text) && covered > 0.5 && tall >= H - 0.5;
     r.autoClear = true;
     r.setScissorTest(false);
     r.setViewport(0, 0, W, H);
+    if (beside) {
+      r.clear();
+      r.autoClear = false;
+      r.setScissorTest(true);
+      r.setScissor(0, 0, Math.max(0, W - covered), H);
+    }
     r.render(page, camera);
-    const covered = st.cover;
+    r.setScissorTest(false);
     if ((pdf || text) && covered > 0.5) {
       cam.left = 0;
       cam.right = reader.width;

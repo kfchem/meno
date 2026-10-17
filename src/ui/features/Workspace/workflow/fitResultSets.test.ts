@@ -3,12 +3,13 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
-import { currentStyle3D } from "../style3d";
+import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { reachOverFrames } from "../utils/molecule3d";
 import { setMembers, type Frame } from "./entries";
 import { BETWEEN, SET_TOP } from "./look";
-import { addSet, addStep, moveStep } from "./model";
+import { addSet, addStep } from "./model";
 import { chipWide, fitResultSets, placeResults, type RunWith } from "./run";
+import { style3dIn } from "../../../../lib/chem/workspaceStyle3d";
 
 /** A bent triatomic about the origin: water, or one of its kind. */
 const bent = (el = "O"): Omit<Molecule3D, "id" | "at"> => ({
@@ -133,7 +134,7 @@ describe("a 3D look chosen on the canvas or in Settings", () => {
   /** A canvas's store over a document holding a result set laid out in the 3D look Settings has. */
   function editor() {
     const doc = createWorkspaceDocument();
-    const look: RunWith["extentOf"] = (m, turn) => reachOverFrames({ ...m, id: 0 }, currentStyle3D(), turn);
+    const look: RunWith["extentOf"] = (m, turn) => reachOverFrames({ ...m, id: 0 }, STYLE_3D, turn);
     doc.edit("run", (d) => {
       d = addStep(d, "optimise", 0, 0, {}, "xtb");
       return placeResults(d, d.steps![0], { molecules: [bent(), bent("S"), bent(), bent("S")], aside: [], holds: "molecules" }, { extentOf: look });
@@ -158,23 +159,22 @@ describe("a 3D look chosen on the canvas or in Settings", () => {
     expect(doc.getState()).toBe(before);
   });
 
-  it("in Settings lays the result sets out again with no step of its own, the workspace as saved as it was", () => {
-    useAppSettings.setState({ style3d: { ...choice, primary: "balls", secondary: "space" } });
+  it("in the workspace's styles lays the result sets out again in the same step, which an undo takes back", () => {
     const { doc, state, look } = editor();
-    // (an edit after the run, for an undo to go back over)
-    doc.edit("move step", (d) => moveStep(d, d.steps![0].id, -5, 0));
-    doc.markSaved();
-    const depth = doc.history().undoDepth;
-    useAppSettings.setState({ style3d: { ...choice, primary: "space", secondary: "balls" } });
-    expect(fitted(doc.getState(), look).apart).toBe(false);
-    state().fitResultSets();
-    expect(fitted(doc.getState(), look)).toEqual({ count: 4, inside: true, apart: true });
-    expect(doc.history().undoDepth).toBe(depth);
-    expect(doc.history().dirty).toBe(false);
-    // (and the state before it, as an undo brings it back, laid out for that look too)
+    const before = doc.getState();
+    // (its two swapped: its molecules space-filling now)
+    const ws = state().docStyle3d;
+    state().setDocumentStyle3d({ ...ws, primary: ws.secondary, secondary: ws.primary });
+    const swapped: RunWith["extentOf"] = (m, turn) => reachOverFrames({ ...m, id: 0 }, style3dIn(doc.getState().style3d, choice), turn);
+    expect(fitted(doc.getState(), swapped)).toEqual({ count: 4, inside: true, apart: true });
+    expect(doc.getState().sets![0].x1).toBeGreaterThan(before.sets![0].x1);
+    expect(doc.history().undoLabel).toBe("3D style");
     doc.undo();
-    expect(doc.getState().steps![0].x).toBe(0);
+    expect(doc.getState()).toBe(before);
     expect(fitted(doc.getState(), look)).toEqual({ count: 4, inside: true, apart: true });
+    // (Settings changed since: the workspace keeps its own)
+    useAppSettings.setState({ style3d: { ...choice, primary: "space", secondary: "balls" } });
+    expect(state().docStyle3d).toBe(ws);
   });
 });
 

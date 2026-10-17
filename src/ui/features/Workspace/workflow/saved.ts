@@ -36,6 +36,8 @@ function readSet(v: unknown): WorkflowSet | null {
     x1: Math.max(b.x0, b.x1),
     y1: Math.max(b.y0, b.y1),
     ...(made && isId(made.step) && (SETS.includes(made.holds as SetKind) || made.holds === "pictures") ? { made: { step: made.step, holds: made.holds as SetHolds } } : {}),
+    // (the name the chemist gave it, where they gave one)
+    ...(typeof b.name === "string" && b.name.trim() ? { name: b.name } : {}),
     ...(aside.length ? { aside } : {}),
   };
 }
