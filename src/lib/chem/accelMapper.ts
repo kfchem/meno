@@ -468,6 +468,12 @@ const norm = (a: readonly number[]): number => Math.sqrt(a[0] * a[0] + a[1] * a[
 /** np.rad2deg / np.degrees */
 const DEG = 180 / Math.PI;
 const rad2deg = (x: number): number => x * DEG;
+/**
+ * np.arccos; with `clamp` (Meno's departures), a cosine that rounding has
+ * pushed just past -1 or 1 taken as -1 or 1 - not a number otherwise. A
+ * cosine that is not a number (a zero vector's) stays one either way.
+ */
+export const acosOf = (x: number, clamp: boolean): number => Math.acos(clamp ? Math.min(1, Math.max(-1, x)) : x);
 
 /** numpy's pairwise sum of a contiguous array (pairwise_sum in loops_utils.h). */
 function pairwiseSum(xs: readonly number[], lo = 0, n = xs.length): number {
@@ -700,6 +706,11 @@ export type Chain = Pair[];
  *   order (modeler.py 1069-1071, 1098).
  * - `clampTorsionCosine`: a torsion's cosine kept within [-1, 1], so that an
  *   atom exactly anti is not lost to rounding (modeler.py 980).
+ * - `clampEzCosine`: likewise in _det_ez, so that an exactly anti torsion
+ *   reads as E (modeler.py 951).
+ * - `clampFaceCosine`: likewise in _order_maps' face tests, so that a face
+ *   exactly opposite reads as the other face, not as under 90 degrees
+ *   (modeler.py 1404, 1425, 1441).
  * - `skipUnflaggedFacePair`: a pair of faces, the same forwards and
  *   backwards, with no face flag, left out of the pericyclic score rather
  *   than failing (modeler.py 1720).
@@ -707,10 +718,24 @@ export type Chain = Pair[];
 export type Departures = {
   firstOfGroupByGeometry: boolean;
   clampTorsionCosine: boolean;
+  clampEzCosine: boolean;
+  clampFaceCosine: boolean;
   skipUnflaggedFacePair: boolean;
 };
-export const ACCEL_EXACT: Departures = { firstOfGroupByGeometry: false, clampTorsionCosine: false, skipUnflaggedFacePair: false };
-export const MENO_DEPARTURES: Departures = { firstOfGroupByGeometry: true, clampTorsionCosine: true, skipUnflaggedFacePair: true };
+export const ACCEL_EXACT: Departures = {
+  firstOfGroupByGeometry: false,
+  clampTorsionCosine: false,
+  clampEzCosine: false,
+  clampFaceCosine: false,
+  skipUnflaggedFacePair: false,
+};
+export const MENO_DEPARTURES: Departures = {
+  firstOfGroupByGeometry: true,
+  clampTorsionCosine: true,
+  clampEzCosine: true,
+  clampFaceCosine: true,
+  skipUnflaggedFacePair: true,
+};
 
 /** What a trace hook is shown of each _get_maps call as it returns: its locals by their Python names. */
 export type GetMapsSnapshot = {
@@ -743,13 +768,14 @@ function chainKey(chain: readonly Pair[]): string {
 const symbolIndex = (s: string): number => SYMBOLS.indexOf(s);
 
 /** _det_ez (945-957): whether a-b-c-d is a dihedral over 90 degrees either way (E). */
-export function _det_ez(a: Atom, b: Atom, c: Atom, d: Atom): boolean {
+export function _det_ez(a: Atom, b: Atom, c: Atom, d: Atom, clamp = false): boolean {
   const vab = sub(a.xyz, b.xyz);
   const vcb = sub(c.xyz, b.xyz);
   const vdc = sub(d.xyz, c.xyz);
   const pvac = cross(vab, vcb);
   const pvbd = cross(vdc, vcb);
-  let angle = Math.acos(dot(pvac, pvbd) / (norm(pvac) * norm(pvbd)));
+  // [Meno departure: clampEzCosine] a cosine rounded past -1 or 1 is taken as -1 or 1
+  let angle = acosOf(dot(pvac, pvbd) / (norm(pvac) * norm(pvbd)), clamp);
   if (dot(pvac, cross(pvbd, vcb)) < 0) angle = -angle;
   angle = rad2deg(angle);
   if (angle > 90 || angle < -90) return true;
@@ -781,7 +807,7 @@ export function _get_most_dihedral(a_list: readonly Atom[], b: Atom, c: Atom, d:
     const dbd = norm(pvbd);
     const cos = dot(pvac, pvbd) / (dac * dbd);
     // [Meno departure: clampTorsionCosine] a cosine rounded past -1 or 1 is taken as -1 or 1
-    let angle = Math.acos(clamp ? Math.min(1, Math.max(-1, cos)) : cos);
+    let angle = acosOf(cos, clamp);
     if (dot(pvac, cross(pvbd, vcb)) < 0) angle = -angle;
     angle = Math.abs(rad2deg(angle));
     if (max_dihedral_angle <= angle) {
@@ -1227,8 +1253,8 @@ export function _get_maps(
             }
           }
           if (two_bond_pair === null) continue;
-          const flag_a = _det_ez(two_bond_pair[0], known_as[0], root_pair[0], large_as[0]);
-          const flag_b = _det_ez(two_bond_pair[1], corre_bs[0], root_pair[1], large_bs[0]);
+          const flag_a = _det_ez(two_bond_pair[0], known_as[0], root_pair[0], large_as[0], dep.clampEzCosine);
+          const flag_b = _det_ez(two_bond_pair[1], corre_bs[0], root_pair[1], large_bs[0], dep.clampEzCosine);
           if (flag_a === flag_b) _new_assign([large_as[0], large_bs[0]], root_pair);
           else _new_assign([large_as[0], large_bs[1]], root_pair);
           continue;
@@ -1631,7 +1657,8 @@ export function _order_maps(
     if (non_rea_atoms.length !== 3) return null;
     const nvec = get_normal_vector(non_rea_atoms[0], non_rea_atoms[1], non_rea_atoms[2]);
     const st = norm(center_to_reactive_vec) * norm(nvec);
-    const theta = Math.acos(dot(center_to_reactive_vec, nvec) / st);
+    // [Meno departure: clampFaceCosine] a cosine rounded past -1 or 1 is taken as -1 or 1
+    const theta = acosOf(dot(center_to_reactive_vec, nvec) / st, dep.clampFaceCosine);
     if (rad2deg(theta) >= 90) return false;
     return true;
   };
@@ -1655,7 +1682,8 @@ export function _order_maps(
       return null;
     }
     const st = norm(xvec) * norm(yvec);
-    const theta = Math.acos(dot(xvec, yvec) / st);
+    // [Meno departure: clampFaceCosine]
+    const theta = acosOf(dot(xvec, yvec) / st, dep.clampFaceCosine);
     if (rad2deg(theta) >= 90) return false;
     return true;
   };
@@ -1677,7 +1705,8 @@ export function _order_maps(
       return null;
     }
     const st = norm(xvec) * norm(yvec);
-    const theta = Math.acos(dot(xvec, yvec) / st);
+    // [Meno departure: clampFaceCosine]
+    const theta = acosOf(dot(xvec, yvec) / st, dep.clampFaceCosine);
     if (rad2deg(theta) >= 90) return false;
     return true;
   };

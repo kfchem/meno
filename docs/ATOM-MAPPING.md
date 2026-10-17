@@ -23,7 +23,7 @@ Meno says it is incomplete and writes nothing from it.
 ## How it is done
 
 `src/lib/chem/reactionMap.ts` is Meno's side; `src/lib/chem/accelMapper.ts`
-is ACCeL's mapper, ported, with three departures of Meno's own (*Where
+is ACCeL's mapper, ported, with departures of Meno's own (*Where
 Meno departs from ACCeL*). Both are pure (no DOM, Tauri or network).
 
 `mapReaction({ reactants, products })` takes each side as one or more
@@ -150,9 +150,9 @@ equivalent atoms - may come in the other order. The rounded scores
 
 ### Where Meno departs from ACCeL
 
-Three things the original does were found while checking the port. The
+Five things the original does were found while checking the port. The
 port keeps them as ACCeL has them (`ACCEL_EXACT`, which the checks below
-run); Meno maps with three departures instead (`MENO_DEPARTURES`), each
+run); Meno maps with departures instead (`MENO_DEPARTURES`), each
 marked `[Meno departure: ...]` where it is in `accelMapper.ts`, and each
 tested beside what ACCeL does with the same input
 (`accelMapper.departures.test.ts`). `mapReaction({ ..., accelExact: true })`
@@ -186,9 +186,11 @@ maps as ACCeL does.
   on an oxa-6π electrocyclisation (a dienal closing to a 2H-pyran), for
   one. Meno leaves that pair out of the pericyclic score.
 
-Elsewhere the same `arccos` rounding is kept as ACCeL has it: `_det_ez`
-reads an exactly-anti torsion as not E, and `_order_maps`' face tests
-read a not-a-number angle as under 90°.
+- **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
+  `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
+  number; `_order_maps`' face tests read such an angle as under 90°. Meno
+  keeps those cosines within [-1, 1] too. A cosine that is not a number to
+  begin with (a zero vector's) stays one, in both.
 
 ## How the port was checked
 

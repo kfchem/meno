@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACCEL_EXACT, Atoms, BondType, getMaps, kabsch, type Departures } from "./accelMapper";
+import { ACCEL_EXACT, Atom, Atoms, BondType, _det_ez, acosOf, getMaps, kabsch, type Departures } from "./accelMapper";
 import type { Molecule } from "./molecule";
 import { ETHANE_BONDS, ethaneAtoms, molecule, moved, oxaElectrocyclisation, sn2, trueMap } from "./reactionMap.fixtures";
 
@@ -90,5 +90,42 @@ describe("skipUnflaggedFacePair", () => {
     expect(firstMap(product, reactant, only({ skipUnflaggedFacePair: true }))).toEqual(
       trueMap(["O1", "C2", "C3", "C4", "C5", "C6", "H2", "H3", "H4", "H5", "H6a", "H6b"], productOrder),
     );
+  });
+});
+
+describe("clampEzCosine", () => {
+  // a torsion exactly anti, as written to four places: its cosine rounds just past -1
+  const [a, b, c, d] = [
+    [0.3392, -1.2505, 0.1056],
+    [0, 0, 0],
+    [-1.448, -0.39, 0.0329],
+    [-1.7873, 0.8605, -0.0727],
+  ].map((p) => new Atom("C", p[0], p[1], p[2]));
+
+  it("ACCeL reads an exactly anti torsion as not E (arccos not a number)", () => {
+    // as ACCeL 0.3.0's _det_ez gives for these four points
+    expect(_det_ez(a, b, c, d)).toBe(false);
+  });
+
+  it("Meno reads it as E", () => {
+    expect(_det_ez(a, b, c, d, true)).toBe(true);
+  });
+});
+
+describe("clampFaceCosine", () => {
+  // the face tests ask whether an angle is 90 degrees or more: of a cosine rounded past -1
+  const cos = -1.0000000000000002;
+
+  it("ACCeL reads it as not a number, so under 90 degrees", () => {
+    // np.degrees(np.arccos(-1.0000000000000002)) >= 90 is False
+    expect((acosOf(cos, false) * 180) / Math.PI >= 90).toBe(false);
+  });
+
+  it("Meno reads it as 180 degrees", () => {
+    expect((acosOf(cos, true) * 180) / Math.PI >= 90).toBe(true);
+  });
+
+  it("leaves a cosine that is not a number (a zero vector's) as it was", () => {
+    expect(Number.isNaN(acosOf(NaN, true))).toBe(true);
   });
 });

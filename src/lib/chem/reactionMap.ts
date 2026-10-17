@@ -6,7 +6,7 @@
  * QST3 and matching an IRC's ends need (docs/ATOM-MAPPING.md).
  *
  * The maps are worked out by ./accelMapper, ACCeL's mapper ported as it is,
- * with three departures of Meno's own, each named there (`Departures`;
+ * with departures of Meno's own, each named there (`Departures`;
  * `accelExact` turns them off). This is how Meno hands it its structures and
  * reads its answer:
  *
