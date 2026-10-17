@@ -140,6 +140,25 @@ export function placeStereo(
       ].map((n) => n.box)
     : [];
 
+  // every atom placed, and the H of every label that has one, where the
+  // drawing sets it; and every bond: what an H drawn keeps clear of
+  const atomsAround: { a: number; p: Point; label: boolean }[] = [...pos.entries()].map(([a, p]) => ({ a, p, label: mol.el[a] !== "C" }));
+  for (const [a, p] of pos) {
+    if (mol.el[a] === "C" || !(mol.hs[a] > 0) || !mol.neighbours[a].length) continue;
+    const off = hydrogenSpot(
+      mol.neighbours[a].map((b) => {
+        const v = sub(pos.get(b)!, p);
+        const d = Math.hypot(v.x, v.y) || 1;
+        return { x: v.x / d, y: v.y / d };
+      }),
+    );
+    atomsAround.push({ a, p: { x: p.x + off.x, y: p.y + off.y }, label: true });
+  }
+  const bondsAround = [...mol.bondIndex.keys()]
+    .map((k) => k.split(",").map(Number) as [number, number])
+    .filter(([a, b]) => pos.has(a) && pos.has(b))
+    .map(([a, b]) => [a, b, pos.get(a)!, pos.get(b)!] as const);
+
   // centres with fewest ways to show them first, so they get theirs
   const options = (c: number) => mol.neighbours[c].filter((n) => !ringBond(c, n)).length;
 
@@ -189,27 +208,13 @@ export function placeStereo(
     let hRoom = 0;
     let hLean = 0;
     if (hasH) {
-      // (a labelled atom - an O, an N, an H already drawn - wants more room)
-      const others = [...pos.entries()]
-        .filter(([a]) => a !== c)
-        .map(([a, p]) => ({ p, label: mol.el[a] !== "C" }));
-      others.push(...hydrogens.map((h) => ({ p: h.at, label: true })));
-      // and the H of every label that has one, where the drawing sets it
-      for (const [a, p] of pos) {
-        if (a === c || mol.el[a] === "C" || !(mol.hs[a] > 0) || !mol.neighbours[a].length) continue;
-        const off = hydrogenSpot(
-          mol.neighbours[a].map((b) => {
-            const v = sub(pos.get(b)!, p);
-            const d = Math.hypot(v.x, v.y) || 1;
-            return { x: v.x / d, y: v.y / d };
-          }),
-        );
-        others.push({ p: { x: p.x + off.x, y: p.y + off.y }, label: true });
-      }
-      const bonds = [...mol.bondIndex.keys()]
-        .map((k) => k.split(",").map(Number) as [number, number])
-        .filter(([a, b]) => a !== c && b !== c && pos.has(a) && pos.has(b))
-        .map(([a, b]) => [pos.get(a)!, pos.get(b)!] as const);
+      // (a labelled atom - an O, an N, an H already drawn - wants more room;
+      // only what lies within three bonds can come nearer an H a bond out
+      // than room enough)
+      const close = (p: Point) => Math.hypot(p.x - at.x, p.y - at.y) < 3;
+      const others = atomsAround.filter((o) => o.a !== c && close(o.p));
+      others.push(...hydrogens.filter((h) => close(h.at)).map((h) => ({ a: -1, p: h.at, label: true })));
+      const bonds = bondsAround.filter(([a, b, u, v]) => a !== c && b !== c && (close(u) || close(v))).map(([, , u, v]) => [u, v] as const);
       const own = mol.neighbours[c].map((n) => angleOf(sub(pos.get(n)!, at)));
       // (its own rings, and whether each has a double bond of its own - one
       // no other ring shares, whose second line is drawn inside it)
@@ -397,32 +402,41 @@ export function placeStereo(
       : (p.pick.strict ? 0 : 4) +
         p.pick.choice.rank / 50 +
         (p.pick.choice.to === -1 ? 5 * (0.85 - p.hRoom) + (2 * p.hLean) / (Math.PI / 3) : 0);
-  const near = (c: number, d: number) => {
+  const apart = (c: number, d: number) => {
     const u = pos.get(c)!;
     const v = pos.get(d)!;
-    return Math.hypot(u.x - v.x, u.y - v.y) < 4;
+    return Math.hypot(u.x - v.x, u.y - v.y);
   };
+  // (a centre's plan reads what is shown within about three bonds of it,
+  // and its cost to others what is shown within about seven: each is kept
+  // until something is shown nearer than that)
+  const planned = new Map<number, Plan>();
+  const harmed = new Map<number, number>();
   const left = [...centres];
   while (left.length) {
     const fewest = Math.min(...left.map(options));
-    const plans = left.filter((c) => options(c) === fewest).map(plan);
+    const plans = left.filter((c) => options(c) === fewest).map((c) => planned.get(c) ?? planned.set(c, plan(c)).get(c)!);
     let best = plans[0];
     let least = Infinity;
     for (const p of plans) {
       // (what showing it costs the others near it, shown after it)
-      let harm = 0;
-      if (plans.length > 1) {
-        const mark = { w: wedges.length, h: hydrogens.length, used: new Set(used), wide: new Set(wideEnds), narrow: new Set(narrowEnds) };
-        commit(p);
-        for (const q of plans) if (q !== p && near(p.c, q.c)) harm += cost(plan(q.c)) - cost(q);
-        wedges.length = mark.w;
-        hydrogens.length = mark.h;
-        used.clear();
-        mark.used.forEach((v) => used.add(v));
-        wideEnds.clear();
-        mark.wide.forEach((v) => wideEnds.add(v));
-        narrowEnds.clear();
-        mark.narrow.forEach((v) => narrowEnds.add(v));
+      let harm = harmed.get(p.c);
+      if (harm == null) {
+        harm = 0;
+        if (plans.length > 1) {
+          const mark = { w: wedges.length, h: hydrogens.length, used: new Set(used), wide: new Set(wideEnds), narrow: new Set(narrowEnds) };
+          commit(p);
+          for (const q of plans) if (q !== p && apart(p.c, q.c) < 4) harm += cost(plan(q.c)) - cost(q);
+          wedges.length = mark.w;
+          hydrogens.length = mark.h;
+          used.clear();
+          mark.used.forEach((v) => used.add(v));
+          wideEnds.clear();
+          mark.wide.forEach((v) => wideEnds.add(v));
+          narrowEnds.clear();
+          mark.narrow.forEach((v) => narrowEnds.add(v));
+        }
+        harmed.set(p.c, harm);
       }
       if (harm < least - 1e-9 || (Math.abs(harm - least) <= 1e-9 && better(p, best))) {
         least = harm;
@@ -431,6 +445,10 @@ export function placeStereo(
     }
     commit(best);
     left.splice(left.indexOf(best.c), 1);
+    for (const c of left) {
+      if (apart(c, best.c) < 5) planned.delete(c);
+      if (apart(c, best.c) < 9) harmed.delete(c);
+    }
   }
   return { wedges, hydrogens };
 }
