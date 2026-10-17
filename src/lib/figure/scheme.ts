@@ -22,7 +22,23 @@ export type SchemeArrow = { tail: Point; point: Point; corners: Point[]; form: A
 export type SchemeWords = { text: string; marks: WordsMark[]; box: Box; arrow?: number; align?: "left" };
 
 /** A scheme read: its structures (./read), its arrows, its "+" signs, its words, and how long its bonds are drawn - or would be, by its letters, where it has none. */
-export type SchemeRead = { figure: FigureRead; arrows: SchemeArrow[]; pluses: Point[]; words: SchemeWords[]; bond: number };
+export type SchemeRead = {
+  figure: FigureRead;
+  arrows: SchemeArrow[];
+  pluses: Point[];
+  words: SchemeWords[];
+  bond: number;
+  /** Too many lines were drawn there for a structure - a chart's or a spectrum's - and nothing was read. */
+  tooMany?: true;
+};
+
+/**
+ * The most lines a figure is read with, its traces left out (./drawn): past
+ * it, nothing is read - no structure has so many, a chart or a spectrum
+ * drawn a dot or a stick at a time does, and reading them would hold Meno
+ * up for minutes.
+ */
+export const MOST_LINES = 5000;
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 const len = (s: { a: Point; b: Point }) => dist(s.a, s.b);
@@ -820,6 +836,7 @@ export function readScheme(
   whole: (label: string) => boolean = () => false,
 ): SchemeRead {
   const shapes = shapesOf(drawn);
+  if (shapes.strokes.length > MOST_LINES) return { figure: { atoms: [], bonds: [], bond: 14.4, left: { letters: [] } }, arrows: [], pluses: [], words: [], bond: 14.4, tooMany: true };
   // (how long its bonds are drawn: as most of its lines are - unless, its letters telling, those are arrows, there being no structure)
   const sizes = drawn.letters.map((l) => l.size).sort((a, b) => a - b);
   const byLetters = sizes.length ? 1.44 * sizes[Math.floor(sizes.length / 2)] : 0;
