@@ -74,6 +74,20 @@ describe("layoutMetrics", () => {
     expect(m.overlaps).toBeGreaterThanOrEqual(1);
   });
 
+  it("counts a label on a bond from a little further off than a bare vertex", () => {
+    // a bond from (0, 0) to (1, 0), and an atom 0.35 of a bond above its middle, bonded to one above it
+    const at = (labelled: boolean) =>
+      layoutMetrics({
+        x: [0, 1, 0.5, 0.5],
+        y: [0, 0, 0.35, 1.35],
+        edges: [[0, 1], [2, 3]],
+        labelled: [false, false, labelled, false],
+        elements: ["C", "C", labelled ? "H" : "C", "C"],
+      }).clashes;
+    expect(at(false)).toBe(0);
+    expect(at(true)).toBe(1);
+  });
+
   it("takes a zigzag chain's angles as right, and a straight one's as wrong", () => {
     const h = Math.sqrt(3) / 2;
     const zig = {
