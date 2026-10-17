@@ -69,6 +69,12 @@ export type Geometry = {
    */
   hydrogenInk?: boolean;
   /**
+   * What a label on a bare vertex it is not bonded to counts for, in
+   * crowdings (`labelsOnVertices`): nothing unless given. A layout makes
+   * room for such a label last, with its H's, by moving bonds a little.
+   */
+  labelRoom?: number;
+  /**
    * What a name's letters running into something count for (OTBS over an
    * atom), in crowdings: one unless given. A layout sets its parts first,
    * counting them lightly, and makes room for them last, with its H's.
@@ -227,6 +233,47 @@ export function scoreParts(m: Omit<LayoutMetrics, "score">): Record<keyof typeof
   parts.aspect = w.aspect * Math.max(0, m.aspect - 1);
   parts.macroAspect = w.macroAspect * Math.max(0, m.macroAspect - 1);
   return parts;
+}
+
+/**
+ * How near, in bond lengths, a labelled atom may lie to a bare vertex it is
+ * not bonded to before its letter crowds the bonds meeting there; half a
+ * bond is an overlap.
+ */
+export const LABEL_VERTEX = 0.6;
+
+/**
+ * Each label lying on a bare vertex: nearer than `LABEL_VERTEX`, its letter
+ * running into the bonds that meet there - vancomycin's acid C=O with its
+ * O on the corner of the benzene ring beside it, forskolin's 9-OH on its
+ * ketone's carbon. By label, the vertex nearest it and how far in, 0 to 1
+ * (1 at half a bond, an overlap). `apart` passes over a pair (bonded, or
+ * drawn over each other as a solid is seen).
+ */
+export function labelsOnVertices(
+  x: readonly number[],
+  y: readonly number[],
+  L: number,
+  labelled: readonly boolean[],
+  apart: (a: number, b: number) => boolean,
+): Map<number, { vertex: number; by: number }> {
+  const room = LABEL_VERTEX * L;
+  const into = (LABEL_VERTEX - 0.5) * L;
+  const out = new Map<number, { vertex: number; by: number }>();
+  for (let a = 0; a < x.length; a++) {
+    if (!labelled[a]) continue;
+    for (let b = 0; b < x.length; b++) {
+      if (labelled[b] || a === b) continue;
+      const dx = x[a] - x[b];
+      const dy = y[a] - y[b];
+      if (Math.abs(dx) >= room || Math.abs(dy) >= room) continue;
+      const d = Math.hypot(dx, dy);
+      if (d >= room || apart(a, b)) continue;
+      const by = Math.min(1, (room - d) / into);
+      if (by > (out.get(a)?.by ?? 0)) out.set(a, { vertex: b, by });
+    }
+  }
+  return out;
 }
 
 const TAU = Math.PI * 2;
@@ -841,6 +888,12 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         if (Math.hypot(x[a] - x[b], y[a] - y[b]) < 0.8 * L) crowdedLabels++;
       }
     }
+  }
+  // and, where asked, a label on a bare vertex (`labelsOnVertices`)
+  const labelRoom = g.labelRoom ?? 0;
+  if (labelRoom > 0 && g.labelled) {
+    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null));
+    for (const { by } of near.values()) crowdedLabels += labelRoom * by;
   }
   // and a label's H, where the drawing sets it, clear of every other
   // label, atom and bond: an OH's H is ink as much as its O. A quarter of

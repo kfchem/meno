@@ -575,6 +575,13 @@ an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
 under the symbol to make room, and no move that crosses bonds is taken.
 Nothing else is moved for it: the drawing is set first, its H's last.
+A label lying on a bare vertex it is not bonded to - nearer than 0.6 of a
+bond, its letter running into the bonds that meet there - is given room
+the same way and at the same time (`labelsOnVertices`): vancomycin's acid
+C=O had its O on the corner of the benzene ring beside it, and forskolin's
+9-OH sat on its ketone's carbon. It is counted only then, not while the
+parts are set, nor in turning a sugar to its face (a macrolide's sugar
+turned over for it crowded an OH on an OH), nor on the sheet.
 
 A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take

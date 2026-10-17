@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutMetrics, ringIrregularity, scoreParts } from "./metrics";
+import { labelsOnVertices, layoutMetrics, ringIrregularity, scoreParts } from "./metrics";
 
 /** A regular polygon's atoms and bonds, bond length 1. */
 function polygon(k: number, cx = 0, cy = 0, turn = 0) {
@@ -72,6 +72,16 @@ describe("layoutMetrics", () => {
     });
     expect(m.crossings).toBe(1);
     expect(m.overlaps).toBeGreaterThanOrEqual(1);
+  });
+
+  it("counts a label on a bare vertex only where asked, more the nearer", () => {
+    // an O 0.55 of a bond from the end of another bond, and 0.8 from it
+    const near = { x: [0, 1, 1.55, 2.55], y: [0, 0, 0, 0], edges: [[0, 1], [2, 3]] as [number, number][], labelled: [false, false, true, false] };
+    expect(layoutMetrics(near).crowdedLabels).toBe(0);
+    expect(layoutMetrics({ ...near, labelRoom: 1 }).crowdedLabels).toBeCloseTo(0.5, 6);
+    expect(layoutMetrics({ ...near, x: [0, 1, 1.8, 2.8], labelRoom: 1 }).crowdedLabels).toBe(0);
+    const found = labelsOnVertices(near.x, near.y, 1, near.labelled, () => false);
+    expect([...found.entries()]).toEqual([[2, { vertex: 1, by: expect.closeTo(0.5, 6) }]]);
   });
 
   it("takes a zigzag chain's angles as right, and a straight one's as wrong", () => {

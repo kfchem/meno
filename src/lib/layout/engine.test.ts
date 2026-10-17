@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
 import { layout2D, roomForHydrogens, scorer } from "./engine";
 import { macrocycleShape } from "./macrocycle";
-import { hydrogenSpot, layoutMetrics } from "./metrics";
+import { hydrogenSpot, LABEL_VERTEX, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
@@ -845,6 +845,42 @@ describe("layout2D", () => {
     const h = spot(room.pos);
     expect(h.beside).toBe(true);
     expect(clearOf(h, room.pos.get(3)!)).toBe(true);
+  });
+
+  it("moves a label off a bare vertex last, as it makes room for H's", () => {
+    // 2-methylbutanoic acid drawn by hand with its C=O's O on the corner of
+    // its ethyl, 0.55 of a bond off: no fault the drafts count, and no H in
+    // the way
+    const input: LayoutInput = {
+      atoms: [{ el: "C" }, { el: "C" }, { el: "O" }, { el: "O", hs: 1 }, { el: "C" }, { el: "C" }, { el: "C" }],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 1, b: 2, order: 2 },
+        { a: 1, b: 3, order: 1 },
+        { a: 0, b: 4, order: 1 },
+        { a: 4, b: 5, order: 1 },
+        { a: 0, b: 6, order: 1 },
+      ],
+    };
+    const mol = perceive(input);
+    const pos = new Map([
+      [0, { x: 0, y: 0 }],
+      [1, { x: 1, y: 0 }],
+      [2, { x: 1.5, y: 0.866 }],
+      [3, { x: 1.5, y: -0.866 }],
+      [4, { x: 0.5, y: 0.866 }],
+      [5, { x: 1.25, y: 1.35 }],
+      [6, { x: -1, y: 0 }],
+    ]);
+    const piece = [...pos.keys()];
+    const gap = (p: Map<number, { x: number; y: number }>) => dist(p.get(2)!, p.get(5)!);
+    expect(gap(pos)).toBeLessThan(LABEL_VERTEX);
+    const score = scorer(mol, piece, [], [], 1, undefined, undefined, 1);
+    // (not counted in the H's own score)
+    expect(scorer(mol, piece, [], [], 1)(pos)).toBeLessThan(score(pos));
+    const room = roomForHydrogens(mol, piece, pos, score(pos), score);
+    expect(room.score).toBeLessThan(score(pos));
+    expect(gap(room.pos)).toBeGreaterThanOrEqual(LABEL_VERTEX);
   });
 
   it("sets the pieces of a salt side by side", () => {

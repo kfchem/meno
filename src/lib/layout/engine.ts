@@ -23,7 +23,7 @@ import {
   type Grown,
 } from "./assemble";
 import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
-import { hydrogenRunsInto, hydrogenSpot, layoutMetrics, type LayoutMetrics } from "./metrics";
+import { hydrogenRunsInto, hydrogenSpot, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
@@ -436,6 +436,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const score = kept(scorer(mol, piece, depth, measured, 0, false));
     const scoreH = kept(scorer(mol, piece, depth, measured, 1));
     const scoreFan = kept(scorer(mol, piece, depth, measured, 1, undefined, true));
+    // (and a label on a bare vertex given room with them - an acid's O on
+    // the corner of a ring - but not counted in turning a sugar to its face)
+    const scoreRoom = kept(scorer(mol, piece, depth, measured, 1, undefined, undefined, 1));
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
@@ -478,7 +481,8 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       })
       .sort(bestFirst(mol, piece))[0];
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
-    best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
+    const roomy = roomForHydrogens(mol, piece, best.pos, scoreRoom(best.pos), scoreRoom, fixed).pos;
+    best = { pos: roomy, score: scoreH(roomy), mirrored: best.mirrored };
     // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
     const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
     best = { pos: settled, score: scoreH(settled), mirrored: best.mirrored };
@@ -1802,6 +1806,15 @@ export function roomForHydrogens(
     }
     // and each name's letters, likewise
     for (const [a, hits] of namesInTheWay(mol, piece, p)) out.set(a, [...new Set([...(out.get(a) ?? []), ...hits])]);
+    // and a label on a bare vertex (an acid's O on the corner of a ring)
+    const onVertices = labelsOnVertices(
+      piece.map((a) => p.get(a)!.x),
+      piece.map((a) => p.get(a)!.y),
+      1,
+      piece.map((a) => mol.el[a] !== "C" && mol.el[a] !== "*"),
+      (i, j) => mol.neighbours[piece[i]].includes(piece[j]),
+    );
+    for (const [i, { vertex }] of onVertices) out.set(piece[i], [...new Set([...(out.get(piece[i]) ?? []), piece[vertex]])]);
     return out;
   };
   // the small moves of an atom, or of a branch hung from a bond - larger
@@ -2012,6 +2025,7 @@ export function scorer(
   hydrogenRoom?: number,
   sugarFaces?: boolean,
   hydrogenInk?: boolean,
+  labelRoom?: number,
 ): (pos: Grown) => number {
   const index = new Map(piece.map((a, i) => [a, i]));
   const edges: [number, number][] = [];
@@ -2061,6 +2075,7 @@ export function scorer(
       // a molecule is turned comes first - and made room for last, with
       // the H's)
       ...(hydrogenRoom === 0 ? { nameRoom: NAME_ROOM_FIRST } : {}),
+      labelRoom,
       sugarFaces,
     }).score;
 }
