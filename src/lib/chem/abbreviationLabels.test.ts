@@ -118,6 +118,18 @@ describe("a label written", () => {
     bonds: [{ a1: 0, a2: 1, order: 1 }],
   });
 
+  it("reads outward from a ring at each of its corners: away from the ring on its left side, on along it elsewhere", () => {
+    // (a hexagon, point up, its corners from the top clockwise; NFmoc at each in turn)
+    const ring = Array.from({ length: 6 }, (_, i) => ({ x: L * Math.cos(Math.PI / 2 - (i * Math.PI) / 3), y: L * Math.sin(Math.PI / 2 - (i * Math.PI) / 3) }));
+    const shown = ring.map((_, at) => {
+      const atoms: Atom[] = ring.map((p, i) => ({ id: i + 1, x: p.x, y: p.y, el: i === at ? "NFmoc" : "C" }));
+      const bonds: Bond[] = ring.map((_, i) => ({ a1: i, a2: (i + 1) % 6, order: 1 }));
+      return buildTextLabels(atoms, opts(), bonds)[0].text;
+    });
+    // (top and foot: bonds either side, read on as written; the right side: bonds to its left; the left side: from the right)
+    expect(shown).toEqual(["NFmoc", "NFmoc", "NFmoc", "NFmoc", "FmocN", "FmocN"]);
+  });
+
   it("reads outward from its bond: OTBS with its bond on the left, TBSO on the right", () => {
     const left = two("OTBS", "left");
     const [l] = buildTextLabels(left.atoms, opts(), left.bonds);

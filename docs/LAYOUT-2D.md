@@ -580,7 +580,10 @@ A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take
 (`src/lib/layout/names.ts`). Its first unit sits on its atom and the rest
 follows, read outward from its bond: leftward from a bond coming in from
-the right (TBSO, IUPAC GR-2.3), rightward otherwise; a name of one unit
+the right (TBSO, IUPAC GR-2.3), rightward otherwise - and from its bonds
+where it has several, as a ring's atom has: leftward where they come in
+from the right all together, none leaving to the left (an NFmoc at a
+ring's lower left reads FmocN, away from the ring); a name of one unit
 (TMS, Ph) so is set before such a bond, its last letter on the atom. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
