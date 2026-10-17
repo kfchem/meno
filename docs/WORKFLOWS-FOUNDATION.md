@@ -1,7 +1,8 @@
-# Workflows: the foundation, rebuilt (proposed, 2026-10-16)
+# Workflows: the foundation, rebuilt (agreed 2026-10-17)
 
-A design for the maintainer to review; nothing in it is built. This is its
-fifth revision.
+The design, as the maintainer agreed it on 2026-10-17 after five
+revisions: the record the foundation's PRs (*In order: the PRs*) are built
+from. Nothing in it is built until those PRs say so.
 
 **Why rebuild.** Stage 6 works, and the bug hunts of 2026-10-12 to 10-14
 fixed what they found in it. But several of those bugs came from how the
@@ -442,7 +443,9 @@ result, recorded as adopted, with when.
 
 **This computer's runner knows its resources.** It runs jobs while their
 cores and memory fit what is free, and keeps the order they were asked
-for: a job never jumps ahead of an earlier one.
+for: a job never jumps ahead of an earlier one. A job's cores and memory
+are what its plugin declares; what the runner may use is capped in
+Settings, all cores and three quarters of the memory by default.
 
 **Cluster jobs are submit-and-return.** Meno submits, keeps the job's record
 (scheduler, its job id, the key), and returns. It takes the job up again
@@ -1082,7 +1085,8 @@ open, one plugin to a PR.
    - PLUGINS.md documents the plugin entry, with a version number.
 2. **Identity and symmetry classes**, from the canonical numbering of #319
    and #350 once they are merged; the graph's automorphisms within those
-   classes, capped.
+   classes, capped. Until then *Duplicates* compares atoms in their own
+   order, as today (question P).
 3. **Collections, members and keeping.**
    - Collections in the file; members explicit and in order; the frame's
      gesture as the edit.
@@ -1199,43 +1203,9 @@ quantities its own nodes compute or use: *energy*, *thermal correction*,
 *share*, *degeneracy*, *vibrations*, *group*, *shielding*, *excited
 states*.
 
-## Questions this round raises
+## Questions
 
-Each has a recommendation.
-
-**M. *Tag*, and matching on a chosen property.** Is *Tag* the one node that
-writes IDs, with every node that takes two inputs entry by entry matching on
-a property chosen on it, and an entry with no match, or more than one, sent
-to *rest*?
-*Recommended: yes.* It is the explicit ID the maintainer asked for (question
-A), written where the chemist can see it, and the same for every node.
-
-**N. Where a job key is reused.** Is a job reused only within the same
-workspace, not across workspaces or from a cache on the computer?
-*Recommended: within the workspace.* Its files are kept there, so a `.meno`
-taken elsewhere reuses exactly what it holds, and nothing outside it decides
-what runs.
-
-**O. Outputs Meno cannot account for.** Are these the three: a job folder
-without its record; files whose key is not the job's; outputs of a run Meno
-did not start? And is *Adopt* per job, recorded with when, the
-adopted result marked as such wherever it is shown?
-*Recommended: yes.* Each is a case where Meno would otherwise have to guess.
-
-**P. Duplicates with symmetry before #319 and #350.** Until both are
-merged, does *Duplicates* compare atoms in their own order, as today, with
-symmetry, *Number like* and the automorphisms coming in PR 2?
-*Recommended: yes.* Nothing waits on them but those three.
-
-**Q. The size warning.** Is 500 MB the point at which a save says the
-workspace is large, as a setting?
-*Recommended: yes*, in Settings, General.
-
-**S. This computer's resources.** Does this computer's runner take a job's
-cores and memory from what its plugin declares, against the machine's
-totals, capped in Settings (all cores and three quarters of the memory by
-default)?
-*Recommended: yes.*
+None open. Every question raised in the five rounds is answered below.
 
 ## Answered (2026-10-16)
 
@@ -1275,7 +1245,26 @@ default)?
   runner that knows its resources, cluster jobs submitted and taken up
   again.
 
-**On the fifth draft:**
+**Questions M to S, on the fifth draft (2026-10-17): all as recommended.**
+- **M:** *Tag* is the one node that writes IDs; a node that takes two
+  inputs entry by entry matches them on a property chosen on it; an
+  entry with no match, or more than one, goes to *rest*.
+- **N:** a job is reused only within the same workspace: no cache on the
+  computer decides what runs.
+- **O:** the three cases (a job folder without its record, files whose key
+  is not the job's, outputs of a run Meno did not start) stop the step;
+  *Adopt* is per job, recorded with when, and the adopted result is marked
+  wherever it is shown.
+- **P:** until #319 and #350 are merged, *Duplicates* compares atoms in
+  their own order; symmetry, *Number like* and the automorphisms come with
+  PR 2.
+- **Q:** a save past 500 MB says the workspace is large; the threshold is a
+  setting (Settings, General).
+- **S:** this computer's runner takes a job's cores and memory from what
+  its plugin declares, capped in Settings (all cores and three quarters of
+  the memory by default).
+
+**On the fifth draft, before M to S:**
 - **Atom mapping is a basic Meno feature**, in core, since drawing a
   reaction scheme calls for a map. ACCeL's mapper, the maintainer's own MIT
   code, may be ported; another lane builds it. The *Reaction* node is

@@ -9,13 +9,14 @@ below). Judge it against [PURPOSE.md](PURPOSE.md): a procedure that
 combines several methods, expressed in a form the chemist can read,
 rearrange and run again, with its results beside the molecule it is about.
 
-A rebuild of its foundation is proposed in
-[WORKFLOWS-FOUNDATION.md](WORKFLOWS-FOUNDATION.md) (2026-10-16), for the whole
+A rebuild of its foundation is agreed in
+[WORKFLOWS-FOUNDATION.md](WORKFLOWS-FOUNDATION.md) (2026-10-17), for the whole
 range from computational chemistry to cheminformatics: values and their
 types, entries with properties, collections at any size, and simple nodes of
 one role each - Meno's own and the program plugins' -
 wired into anything from a conformer ensemble's NMR to a ConfoTS-like search
-for transition states. It is for review; nothing in it is built.
+for transition states. It is built in the PRs it lists, in order; until
+each is merged, this file describes what is built.
 
 ## Decided by the maintainer (2026-10-08)
 
@@ -1279,5 +1280,4 @@ structure* step opens without that step (no shim before 1.0).
 
 None left open in what is built (2026-10-08): the seven steps are built
 (*As built*), and what the maintainer changes is folded in here first. The
-proposed rebuild has its own questions (WORKFLOWS-FOUNDATION.md, *Questions
-this round raises*).
+rebuild's questions are all answered (WORKFLOWS-FOUNDATION.md, *Answered*).
