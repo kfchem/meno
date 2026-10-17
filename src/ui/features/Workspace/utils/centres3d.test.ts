@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
 import { bondLines, pictureMarks, solidOf, withCentres } from "./molecule3d";
-import { blocksOf, moleculeOf } from "../chem/make3d";
+import { blocksOf, centresIn, moleculeOf } from "../chem/make3d";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { shadedLines } from "../components/shading3d";
@@ -151,5 +151,22 @@ describe("a bond from a metal to a ring's or double bond's centre, in 3D (eta)",
     expect(molecules[0].centres).toEqual([{ metal: 0, atoms: [2, 3, 4, 5, 6] }]);
     // and one without keeps none
     expect(keptOf(cpFe(false)).centres).toBeUndefined();
+  });
+
+  it("comes from a ligand written as a label too - Cp on an iron, Cp2ZrCl2 - read from the block as written", () => {
+    const fe: Model = {
+      atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "Fe" }, { id: 2, x: 0, y: 1.5, r: 0.9, el: "Cp" }, { id: 3, x: 0, y: -1.5, r: 0.9, el: "Cl" }],
+      bonds: [{ id: 4, a: 1, b: 2, order: 1 }, { id: 5, a: 1, b: 3, order: 1 }],
+    };
+    const [block] = blocksOf(fe, [1]);
+    expect(block.centres).toHaveLength(1);
+    const [c] = block.centres!;
+    expect(c.metal).toBe(0);
+    expect(c.atoms).toHaveLength(5);
+    expect(centresIn(block.molblock)).toEqual(block.centres);
+    const zr: Model = { atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el: "Cp2ZrCl2" }], bonds: [] };
+    const blocks = blocksOf(zr, [1]);
+    expect(blocks).toHaveLength(1);
+    expect(blocks[0].centres?.map((x) => x.atoms.length)).toEqual([5, 5]);
   });
 });
