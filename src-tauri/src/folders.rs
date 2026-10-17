@@ -369,7 +369,18 @@ mod tests {
     #[test]
     fn meno_s_folders_are_named_meno_in_the_system_s_own() {
         assert!(data_dir().is_some_and(|d| d.is_absolute() && d.ends_with(FOLDER)));
-        assert!(local_data_dir().is_some_and(|d| d.is_absolute() && d.ends_with(FOLDER)));
+        // (on Windows in a folder of its own beside Meno itself)
+        let local = if cfg!(windows) { Path::new(FOLDER).join(LOCAL_IN) } else { PathBuf::from(FOLDER) };
+        assert!(local_data_dir().is_some_and(|d| d.is_absolute() && d.ends_with(&local)));
+        // (and where Tauri has it, as this system's config says: tauri.windows.conf.json over tauri.conf.json on Windows)
+        let read = |name: &str| -> serde_json::Value { serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join(name)).unwrap()).unwrap() };
+        let over = |key: &str| {
+            let win = cfg!(windows).then(|| read("tauri.windows.conf.json")["app"]["appDirectoriesOverride"][key].as_str().map(String::from)).flatten();
+            win.or_else(|| read("tauri.conf.json")["app"]["appDirectoriesOverride"][key].as_str().map(String::from)).unwrap()
+        };
+        let under = |var: &str, key: &str| PathBuf::from(over(key).strip_prefix(var).unwrap().trim_start_matches('/'));
+        assert_eq!(local_data_dir(), local_data_base().map(|b| b.join(under("$LOCALDATA", "localData"))));
+        assert_eq!(data_dir(), data_base().map(|b| b.join(under("$DATA", "data"))));
         #[cfg(target_os = "macos")]
         {
             let home = PathBuf::from(std::env::var_os("HOME").unwrap());

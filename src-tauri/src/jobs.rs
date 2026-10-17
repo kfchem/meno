@@ -2911,9 +2911,11 @@ mod tests {
     #[test]
     fn a_runner_finds_meno_s_local_data_folder_as_tauri_has_it() {
         let conf: serde_json::Value = serde_json::from_str(&fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json")).unwrap()).unwrap();
-        assert_eq!(conf["app"]["appDirectoriesOverride"]["localData"], "$LOCALDATA/Meno");
         assert_eq!(conf["productName"], "Meno");
-        assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with("Meno")));
+        // (the folder the app has as its local one: folders.rs checks that against the config)
+        assert_eq!(data_dir_here(), crate::folders::local_data_dir());
+        let local = if cfg!(windows) { Path::new("Meno").join("data") } else { PathBuf::from("Meno") };
+        assert!(data_dir_here().is_some_and(|d| d.is_absolute() && d.ends_with(&local)));
         assert!(plugins_here().is_some_and(|p| p.ends_with(Path::new("resources").join("plugins"))));
     }
 
