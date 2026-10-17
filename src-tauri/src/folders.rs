@@ -12,9 +12,12 @@
 //! The move is done at a start, before anything else uses the folders, and
 //! entry by entry: each renamed into the new folder (the same volume:
 //! instant), or copied and then taken away where a rename cannot be done;
-//! never over a newer file there; links moved as links, never followed. It
-//! may stop part way and is done again at the next start, from where it
-//! stopped. Some things are not moved:
+//! never over a file already there - each renamed whole, one there was
+//! moved already, and what is in the old folder after the first move was
+//! written by an earlier Meno started since, whose fresh settings must not
+//! replace the real ones; links moved as links, never followed. It may stop
+//! part way and is done again at the next start, from where it stopped.
+//! Some things are not moved:
 //!
 //! - the webview's data (`EBWebView`, Windows): its caches, made again;
 //! - the Python environments made (`uv/<name>/venv`, pixi's `.pixi` and its
@@ -178,17 +181,21 @@ fn move_folder(m: &Moved, said: &mut Vec<String>) {
 }
 
 /// `from` moved to `to`: renamed, else copied and taken away; into a folder
-/// already there, entry by entry, never over a newer file. Whether it went.
+/// already there, entry by entry, never over a file there (the old one
+/// dropped). Whether it went.
 fn move_entry(from: &Path, to: &Path, said: &mut Vec<String>) -> bool {
     let Ok(meta) = fs::symlink_metadata(from) else { return false };
     match fs::symlink_metadata(to) {
         Err(_) => {
-            if fs::rename(from, to).is_ok() {
+            if renames() && fs::rename(from, to).is_ok() {
                 return true;
             }
-            // (another volume, or the system would not: copied beside, then put in place whole)
+            // (another volume, or the system would not: copied beside, under a name of its own, then
+            // put in place whole by a rename - so that what is there under its name is there whole; a
+            // copy cut short is taken away as this is done again)
             let Some(parent) = to.parent() else { return false };
             let beside = parent.join(format!("{MOVING}{}", to.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()));
+            let _ = remove_any(&beside);
             let done = copy_all(from, &beside).and_then(|_| fs::rename(&beside, to));
             match done {
                 Ok(()) => {
@@ -213,23 +220,21 @@ fn move_entry(from: &Path, to: &Path, said: &mut Vec<String>) -> bool {
             }
             all
         }
-        Ok(there) => {
-            let newer = |m: &fs::Metadata| m.modified().ok();
-            if newer(&meta) > newer(&there) && !there.is_dir() && !meta.is_dir() {
-                match fs::rename(from, to) {
-                    Ok(()) => return true,
-                    Err(e) => {
-                        said.push(format!("could not move {} ({e}): tried again at the next start", from.display()));
-                        return false;
-                    }
-                }
-            }
-            // (the new folder's is as new, or newer: the old one is no longer wanted)
+        Ok(_) => {
+            // (the new folder's kept, however new the old one: moved already, or the old one an earlier Meno's since)
             remove_all(from, &meta);
-            said.push(format!("{} left out: {} is newer", from.display(), to.display()));
+            said.push(format!("{} left out: {} is there already", from.display(), to.display()));
             true
         }
     }
+}
+
+/// Whether an entry is renamed into place where it can be: always, but in a test of the copy.
+fn renames() -> bool {
+    #[cfg(test)]
+    return !tests::COPY_ONLY.with(|c| c.get());
+    #[cfg(not(test))]
+    true
 }
 
 /// A copy of `from` at `to`, links copied as links.
@@ -324,6 +329,11 @@ fn unbind(root: &Path, maker: &str, said: &mut Vec<String>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    thread_local! {
+        /// Set: every entry copied and then taken away, as from another volume.
+        pub static COPY_ONLY: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    }
 
     fn temp() -> PathBuf {
         let dir = std::env::temp_dir().join(format!("meno-folders-{}", uuid::Uuid::new_v4()));
@@ -504,22 +514,54 @@ mod tests {
     }
 
     #[test]
-    fn a_move_cut_short_is_done_again_from_where_it_stopped_never_over_a_newer_file() {
+    fn a_move_cut_short_is_done_again_from_where_it_stopped_never_over_a_file_there() {
         let base = temp();
         let old = old_folder(&base);
         let new = base.join(FOLDER);
-        // (stopped part way: the log moved, a copy left beside; meanwhile a newer window place written)
+        // (stopped part way: the log and the window's place moved, a copy left beside)
         fs::create_dir_all(&new).unwrap();
         fs::rename(old.join("logs"), new.join("logs")).unwrap();
         write(&new.join(".moving-settings.json"), "half");
-        std::thread::sleep(std::time::Duration::from_millis(20));
-        write(&new.join("window.json"), r#"{"newer":true}"#);
+        write(&new.join("window.json"), r#"{"moved":true}"#);
         let m = Moved { from: old.clone(), to: new.clone(), leave: &[], only: None };
-        move_old(&[m]);
+        move_old(std::slice::from_ref(&m));
         assert!(!old.exists());
         assert_eq!(names(&new), ["jobs", "logs", "pixi", "settings.json", "tools", "uv", "window.json"]);
-        assert_eq!(fs::read_to_string(new.join("window.json")).unwrap(), r#"{"newer":true}"#);
+        assert_eq!(fs::read_to_string(new.join("window.json")).unwrap(), r#"{"moved":true}"#);
+        assert_eq!(fs::read_to_string(new.join("settings.json")).unwrap(), r#"{"granted":["python-env:x"]}"#);
         assert_eq!(fs::read_to_string(new.join("logs/meno.log")).unwrap(), "a line\n");
+        // (then an earlier Meno started: its fresh settings, newer, and a job of its own - the settings left out, the job come across)
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        write(&old.join("settings.json"), "{}");
+        write(&old.join("jobs/0b6f5c1e-0000-4000-8000-000000000009/work/out.txt"), "later");
+        let said = move_old(&[m]);
+        assert!(!old.exists(), "{said:?}");
+        assert_eq!(fs::read_to_string(new.join("settings.json")).unwrap(), r#"{"granted":["python-env:x"]}"#);
+        assert!(new.join("jobs/0b6f5c1e-0000-4000-8000-000000000009/work/out.txt").is_file());
+        assert!(said.iter().any(|s| s.contains("settings.json left out")), "{said:?}");
+        let _ = fs::remove_dir_all(base);
+    }
+
+    #[test]
+    fn where_it_cannot_be_renamed_it_is_copied_whole_and_a_copy_cut_short_goes() {
+        COPY_ONLY.with(|c| c.set(true));
+        let base = temp();
+        let old = old_folder(&base);
+        let new = base.join(FOLDER);
+        // (cut short before: uv's copy half made beside, in Meno's folder and in a folder merged into)
+        write(&new.join(".moving-uv/plugin-x/files/app/app"), "half");
+        write(&new.join("jobs/.moving-0b6f5c1e-0000-4000-8000-000000000001/work/out.txt"), "half");
+        let said = move_old(&[Moved { from: old.clone(), to: new.clone(), leave: &[], only: None }]);
+        COPY_ONLY.with(|c| c.set(false));
+        assert!(!old.exists(), "{said:?}");
+        // (each there whole, under its own name; nothing left beside)
+        assert_eq!(names(&new), ["jobs", "logs", "pixi", "settings.json", "tools", "uv", "window.json"]);
+        assert_eq!(names(&new.join("jobs")), ["0b6f5c1e-0000-4000-8000-000000000001"]);
+        assert_eq!(fs::read_to_string(new.join("jobs/0b6f5c1e-0000-4000-8000-000000000001/work/out.txt")).unwrap(), "done");
+        assert_eq!(fs::read_to_string(new.join("uv/plugin-x/files/app/app")).unwrap(), "x");
+        assert_eq!(names(&new.join("uv/plugin-x")), ["files"]);
+        #[cfg(unix)]
+        assert!(fs::symlink_metadata(new.join("uv/python/cpython-3.12")).is_err());
         let _ = fs::remove_dir_all(base);
     }
 

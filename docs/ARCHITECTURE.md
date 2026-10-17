@@ -1062,9 +1062,14 @@ the data and local data folders are one.
 identifier then, `com.kfchem.meno`. At a start, before anything uses them,
 what is in those is moved into Meno's folders (`folders::move_old`), entry by
 entry: renamed (the same volume), or copied and then taken away where it
-cannot be renamed; never over a newer file; links moved as links. Cut short,
-it is done again from where it stopped at the next start, and the old folder
-goes once it is empty. What the move does goes in Meno's log. Not moved:
+cannot be renamed; never over a file already in Meno's folder - each entry is
+renamed whole, so one there was moved already, and what is in the old folder
+after the first move was written by an earlier Meno started since, whose
+fresh settings must not replace the real ones (the old copy is dropped, and
+the log says so; folders merge entry by entry, so an earlier Meno's new jobs
+still come across); links moved as links. Cut short, it is done again from
+where it stopped at the next start, and the old folder goes once it is
+empty. What the move does goes in Meno's log. Not moved:
 
 - the webview's data (`EBWebView`, Windows): caches, made again;
 - the Python environments made (`uv/<name>/venv`, and pixi's `.pixi` and
