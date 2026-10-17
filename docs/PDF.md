@@ -1052,6 +1052,21 @@ workspace holds.
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
   its corners to another is no bond.
+- **Traces, and too much drawn**: a chart's or a spectrum's trace is no
+  structure's and is left out before anything is read - an open line of
+  more than a hundred corners; a path of more than 150 lines, most of them
+  under 0.6 points long or four in five of them running one way (a
+  spectrum's sticks up from its baseline), or of more than a thousand under
+  1.5 points; however the path is split into parts. A ring's circle drawn
+  as many short lines is closed and kept, and hashes drawn in one path are
+  too few. A structure drawn in a spectrum's corner is read as ever. A
+  figure still of more than 5,000 lines - a chart or a spectrum drawn a
+  dot or a stick at a time, each a path of its own - is read as nothing:
+  "This looks like a chart or a spectrum", at once, rather than holding
+  Meno up for minutes (no structure has so many; a scheme page of many
+  has a thousand or so). The passes that look at every line against the
+  others look only at those near it, on a grid, so that a figure of many
+  thousands of lines is read in time.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall,

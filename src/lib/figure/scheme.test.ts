@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { FigureDrawn, FigureLetter, FigurePath, PathStep } from "./drawn";
-import { readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
+import { MOST_LINES, readScheme, WRITTEN_AS_WORDS, type SchemeRead } from "./scheme";
 import aldol from "./fixtures/aldol-rdkitrxn.json";
 import dielsAlder from "./fixtures/diels-alder-rdkitrxn.json";
 import esterification from "./fixtures/esterification-rdkitrxn.json";
@@ -508,5 +508,22 @@ describe("a reaction drawn by another program", () => {
     const s = readScheme(hydrogenation as unknown as FigureDrawn, () => true, [], () => true);
     expect(s.words.map((w) => w.text)).toEqual(["Pd"]);
     expect(s.figure.atoms.some((a) => a.label === "Pd")).toBe(false);
+  });
+});
+
+describe("a figure of a great many lines", () => {
+  // (a spectrum drawn a dot at a time: each a path of its own, a line a twentieth of a point long)
+  const dots = (n: number) => Array.from({ length: n }, (_, k) => ({ fill: null, stroke: "#000000ff", width: 0.3, d: [["M", 10 + (k % 400) * 0.6, 50 + Math.floor(k / 400) * 0.6], ["L", 10.05 + (k % 400) * 0.6, 50 + Math.floor(k / 400) * 0.6]] }) as FigurePath);
+
+  it("is read as nothing past the most lines a structure has - quickly, a chart's or a spectrum's", () => {
+    const t = performance.now();
+    const read = readScheme({ paths: dots(MOST_LINES + 1000), letters: [], pictures: [] });
+    expect(read.tooMany).toBe(true);
+    expect(read.figure.atoms).toHaveLength(0);
+    expect(performance.now() - t).toBeLessThan(5000);
+  });
+
+  it("is read as ever under it", () => {
+    expect(readScheme({ paths: dots(300), letters: [], pictures: [] }).tooMany).toBeUndefined();
   });
 });

@@ -172,6 +172,7 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   // one whose words are all outlines, no letter written to tell, turned the way most of them read as letters)
   const { drawn, back } = uprightOf(given, given.letters.length || !glyphs.length ? undefined : quarterOfOutlines(given, glyphs));
   const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel);
+  if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
