@@ -653,7 +653,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const own = sys.atoms.filter((a) => solid[a]);
     if (!own.some((a) => input.atoms[a].tetra)) return;
     const shown = shownBySolid(mol, sys, own, (a) => ({ x: x[a], y: y[a] }));
-    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => shown.has(a) && input.atoms[a].tetra));
+    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => shown.has(a) && input.atoms[a].tetra), groupDepth);
     for (const a of own) if (input.atoms[a].tetra && (!shown.has(a) || unsure.has(a))) solid[a] = false;
   });
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
@@ -677,8 +677,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
 /**
  * Of the `centres` of a solid, drawn at `x`, `y` and `depth` with no wedge,
  * those that read as given only by a hair, as Meno reads a drawing
- * (drawn.ts): one of their bonds out of the solid turned 15 degrees either
- * way, they read otherwise, or not at all.
+ * (drawn.ts): one of their bonds out of the solid (to a group's first atom,
+ * as near as the atom it leaves, too) turned 15 degrees either way, they
+ * read otherwise, or not at all.
  */
 function byAHair(
   input: LayoutInput,
@@ -687,6 +688,8 @@ function byAHair(
   y: readonly number[],
   depth: readonly (number | null)[],
   centres: readonly number[],
+  /** Groups' first atoms, as near as the solid's atoms they leave: still bonds out of the solid, turned as the rest. */
+  groups: ReadonlyMap<number, number> = new Map(),
 ): Set<number> {
   const out = new Set<number>();
   if (!centres.length) return out;
@@ -710,7 +713,7 @@ function byAHair(
       continue;
     }
     for (const n of mol.neighbours[c]) {
-      if (depth[n] != null || out.has(c)) continue;
+      if ((depth[n] != null && !groups.has(n)) || out.has(c)) continue;
       for (const deg of [-15, 15]) {
         const r = (deg * Math.PI) / 180;
         const v = { x: x[n] - x[c], y: y[n] - y[c] };
