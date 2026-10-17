@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FRAMES, grow, sidesOf } from "./assemble";
 import { layout2D, roomForHydrogens, scorer } from "./engine";
 import { macrocycleShape } from "./macrocycle";
-import { hydrogenSpot, LABEL_VERTEX, layoutMetrics } from "./metrics";
+import { hydrogenSpot, LABEL_VERTEX, labelsCrowding, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
@@ -881,6 +881,52 @@ describe("layout2D", () => {
     const room = roomForHydrogens(mol, piece, pos, score(pos), score);
     expect(room.score).toBeLessThan(score(pos));
     expect(gap(room.pos)).toBeGreaterThanOrEqual(LABEL_VERTEX);
+  });
+
+  it("turns a CH2OH's HO to the chain's other side, off an HO under it, as it makes room for labels", () => {
+    // an HO a bond up from a ring atom, and a CH2OH beside it whose HO lies
+    // 0.9 of a bond over it, its letters over the other's
+    const input: LayoutInput = {
+      atoms: [{ el: "C" }, { el: "O", hs: 1 }, { el: "C" }, { el: "C" }, { el: "O", hs: 1 }, { el: "C" }, { el: "C" }],
+      bonds: [
+        { a: 0, b: 1, order: 1 },
+        { a: 0, b: 2, order: 1 },
+        { a: 2, b: 3, order: 1 },
+        { a: 3, b: 4, order: 1 },
+        { a: 0, b: 5, order: 1 },
+        { a: 0, b: 6, order: 1 },
+      ],
+    };
+    const mol = perceive(input);
+    const pos = new Map([
+      [0, { x: 0, y: 0 }],
+      [1, { x: 0, y: 1 }],
+      [2, { x: 0.866, y: 0.5 }],
+      [3, { x: 0.866, y: 1.4 }],
+      [4, { x: 0, y: 1.9 }],
+      [5, { x: -0.866, y: -0.5 }],
+      [6, { x: 0.866, y: -0.5 }],
+    ]);
+    const piece = [...pos.keys()];
+    const crowding = (p: Map<number, { x: number; y: number }>) =>
+      labelsCrowding(
+        piece.map((a) => p.get(a)!.x),
+        piece.map((a) => p.get(a)!.y),
+        1,
+        piece.map((a) => mol.el[a]),
+        piece.map((a) => mol.hs[a]),
+        piece.map((a) => mol.el[a] !== "C"),
+        piece.map((a) => mol.neighbours[a]),
+        (a, b) => mol.neighbours[a].includes(b),
+      );
+    expect(crowding(pos).length).toBe(1);
+    const score = scorer(mol, piece, [], [], 1, undefined, undefined, 1, 1);
+    const room = roomForHydrogens(mol, piece, pos, score(pos), score);
+    expect(room.score).toBeLessThan(score(pos));
+    expect(crowding(room.pos)).toEqual([]);
+    // (the HO on the far side of the chain now, its bond as long as before)
+    expect(room.pos.get(4)!.x).toBeGreaterThan(0.866);
+    expect(dist(room.pos.get(3)!, room.pos.get(4)!)).toBeCloseTo(dist(pos.get(3)!, pos.get(4)!), 6);
   });
 
   it("sets the pieces of a salt side by side", () => {
