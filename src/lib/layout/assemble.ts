@@ -23,9 +23,21 @@ import {
 import { metalSlots } from "./hapto";
 import { isMetal, key, METAL_BOND, orderOf, type Molecule } from "./perceive";
 import { MACROCYCLE } from "./ringSystem";
+import { byStructure, ringKey, ringRank } from "./ranks";
 
 /** How the frame is set: turned by a multiple of 60 degrees, and mirrored or not. */
-export type Frame = { turn: number; mirrored: boolean };
+/**
+ * A way of setting a piece's frame down: turned, mirrored, and - where
+ * the piece's root could be either of two ring systems alike in how
+ * central and large they are - which one (`rootSystems`).
+ */
+export type Frame = {
+  turn: number;
+  mirrored: boolean;
+  root?: number;
+  /** For a root system that lies on the lattice no way round: its atom set straight up before the turn (`framesFor`). */
+  ref?: number;
+};
 
 export const FRAMES: Frame[] = [false, true].flatMap((mirrored) =>
   [0, 1, 2, 3, 4, 5].map((k) => ({ turn: (k * Math.PI) / 3, mirrored })),
@@ -59,9 +71,14 @@ export function sidesOf(mol: Molecule): Map<string, number> {
   return out;
 }
 
-/** The middle atom of a piece's longest path: where a structure with no ring starts. */
+/**
+ * The middle atom of a piece's longest path: where a structure with no ring
+ * starts. Of paths as long, the one with carbon chain ends before a
+ * heteroatom's, then by its ends' structure - never by which atom is listed
+ * first; walked from its carbon end, else the end the structure puts first.
+ */
 function middleOfLongestPath(mol: Molecule, piece: number[]): { middle: number; path: number[] } {
-  const far = (s: number) => {
+  const bfs = (s: number) => {
     const d = new Map([[s, 0]]);
     const parent = new Map<number, number>();
     const q = [s];
@@ -74,20 +91,31 @@ function middleOfLongestPath(mol: Molecule, piece: number[]): { middle: number; 
         }
       }
     }
-    // the furthest; among those, a carbon chain's end before a heteroatom's
-    let best = s;
-    for (const v of q) {
-      const better =
-        d.get(v)! > d.get(best)! ||
-        (d.get(v)! === d.get(best)! && mol.el[v] === "C" && mol.el[best] !== "C");
-      if (better) best = v;
-    }
-    const path = [best];
-    while (parent.has(path[path.length - 1])) path.push(parent.get(path[path.length - 1])!);
-    return { end: best, path };
+    return { d, parent };
   };
-  const a = far(piece[0]).end;
-  const { path } = far(a);
+  const same = byStructure(mol);
+  const carbon = (v: number) => (mol.el[v] === "C" ? 1 : 0);
+  let best: { a: number; b: number; length: number; parent: Map<number, number> } | null = null;
+  for (const u of piece) {
+    const { d, parent } = bfs(u);
+    for (const [v, length] of d) {
+      if (v === u) continue;
+      // (each pair once, from a carbon end, as a chain is read - then the
+      // end the structure puts first)
+      const [a, b] = carbon(u) - carbon(v) > 0 || (carbon(u) === carbon(v) && same(u, v) < 0) ? [u, v] : [v, u];
+      if (a !== u) continue;
+      const better =
+        !best ||
+        length > best.length ||
+        (length === best.length &&
+          (carbon(a) + carbon(b) - carbon(best.a) - carbon(best.b) || same(best.a, a) || same(best.b, b)) > 0);
+      if (better) best = { a, b, length, parent };
+    }
+  }
+  if (!best) return { middle: piece[0], path: [piece[0]] };
+  const path = [best.b];
+  while (best.parent.has(path[path.length - 1])) path.push(best.parent.get(path[path.length - 1])!);
+  path.reverse();
   return { middle: path[Math.floor((path.length - 1) / 2)], path };
 }
 
@@ -120,27 +148,26 @@ export function grow(
   };
 
   // a complex is grown from its metal, its ligands round it as the metal's
-  // slots have them (section 7) - the most-bonded metal, where there are
-  // several - where no ring runs through the metal (a chelate through a
-  // ferrocene, dppf's, is closed at the metal instead)
-  const open = (m: number) =>
-    mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
-  const centre = piece
-    .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
-    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || p - q)[0];
-  const root = centre == null ? rootSystem(mol, piece) : -1;
+  // slots have them (section 7)
+  const centre = metalCentre(mol, piece);
+  const root = centre == null ? (frame.root ?? rootSystem(mol, piece)) : -1;
   if (centre != null) {
     pos.set(centre, { x: 0, y: 0 });
     const weight = (l: number) => sides.get(`${centre}>${l}`) ?? 1;
-    const [first, ...rest] = [...mol.neighbours[centre]].sort((p, q) => weight(q) - weight(p) || p - q);
+    const [first, ...rest] = [...mol.neighbours[centre]].sort((p, q) => weight(q) - weight(p) || byStructure(mol)(p, q));
     const placed: [number, number][] = [[first, setFrameAngle(frame, 0)], ...atMetal(mol, sides, centre, first, setFrameAngle(frame, 0), rest)];
     for (const [child, t] of placed) placeChild(mol, pos, local, queue, centre, child, t, transforms, hints, upright);
     queue.push(centre);
   } else if (root >= 0) {
     const L = local.get(root)!;
     const c = centroid([...L.values()]);
+    // (a frame that lies on the lattice no way round turned first so that
+    // the atom the frame names points straight up, not wherever its ring's
+    // first atom was put: the frames are turned from there)
+    const ref = frame.ref ?? -1;
+    const base = ref >= 0 ? Math.PI / 2 - angleOf(sub(L.get(ref)!, c)) : 0;
     // a cage drawn in perspective stays upright, as it was drawn
-    const set = upright.has(root) ? (p: Point) => p : setFrame;
+    const set = upright.has(root) ? (p: Point) => p : (p: Point) => setFrame(rotate(p, base));
     transforms.set(root, (p) => set(sub(p, c)));
     for (const [a, p] of L) pos.set(a, set(sub(p, c)));
     queue.push(...mol.systems[root].atoms);
@@ -253,13 +280,37 @@ export function grow(
 }
 
 /**
+ * The metal a complex is grown from, its ligands round it: the most-bonded
+ * metal, where there are several - where no ring runs through the metal (a
+ * chelate through a ferrocene, dppf's, is closed at the metal instead);
+ * undefined for a piece with none.
+ */
+function metalCentre(mol: Molecule, piece: number[]): number | undefined {
+  const open = (m: number) =>
+    mol.neighbours[m].every((l) => !sideAtoms(mol, m, l).some((v) => v !== l && mol.neighbours[m].includes(v)));
+  return piece
+    .filter((a) => isMetal(mol.el[a]) && mol.systemOf[a] < 0 && mol.neighbours[a].length >= 2 && open(a))
+    .sort((p, q) => mol.neighbours[q].length - mol.neighbours[p].length || byStructure(mol)(p, q))[0];
+}
+
+/**
  * The ring system a piece is built round, its frame: the one nearest all
  * the rest of it (atorvastatin's pyrrole, not one of its phenyls), and of
  * those the largest; -1 for a piece with no ring.
  */
 export function rootSystem(mol: Molecule, piece: number[]): number {
+  return rootSystems(mol, piece)[0] ?? -1;
+}
+
+/**
+ * The ring systems a piece may be grown from: the one nearest all the
+ * rest, then the largest - and, where two or more are as near and as
+ * large and not alike (`ringKey`), each of them, the frames tried from
+ * each (`framesFor`); of systems alike, the one first by canonical rank.
+ */
+export function rootSystems(mol: Molecule, piece: number[]): number[] {
   const systemsHere = [...new Set(piece.map((a) => mol.systemOf[a]).filter((s) => s >= 0))];
-  if (!systemsHere.length) return -1;
+  if (!systemsHere.length) return [];
   const reach = (s: number) => {
     const d = new Map<number, number>();
     const q = [...mol.systems[s].atoms];
@@ -275,28 +326,74 @@ export function rootSystem(mol: Molecule, piece: number[]): number {
     return Math.max(...d.values());
   };
   const far = new Map(systemsHere.map((s) => [s, reach(s)]));
-  return systemsHere.sort(
-    (p, q) =>
-      far.get(p)! - far.get(q)! ||
-      mol.systems[q].atoms.length - mol.systems[p].atoms.length ||
-      mol.systems[q].rings.length - mol.systems[p].rings.length,
-  )[0];
+  const rank = (p: number, q: number) =>
+    far.get(p)! - far.get(q)! ||
+    mol.systems[q].atoms.length - mol.systems[p].atoms.length ||
+    mol.systems[q].rings.length - mol.systems[p].rings.length;
+  const keyOf = (s: number) => ringKey(mol, mol.systems[s].atoms);
+  const sorted = systemsHere.sort(
+    (p, q) => rank(p, q) || (keyOf(p) < keyOf(q) ? -1 : keyOf(p) > keyOf(q) ? 1 : ringRank(mol, mol.systems[p].atoms) - ringRank(mol, mol.systems[q].atoms)),
+  );
+  const out: number[] = [];
+  for (const s of sorted) {
+    if (rank(s, sorted[0]) !== 0) break;
+    if (!out.some((o) => keyOf(o) === keyOf(s))) out.push(s);
+  }
+  return out;
 }
+
+/**
+ * Whether a piece's root system lies on the lattice no way round - its
+ * rings all fives and sevens, proline's pyrrolidine - with no metal to
+ * set it (`framesFor`).
+ */
+function offLattice(mol: Molecule, piece: number[], root: number): boolean {
+  const sys = mol.systems[root];
+  return (
+    sys.rings.every((r) => mol.rings[r].length === 5 || mol.rings[r].length === 7) &&
+    metalCentre(mol, piece) == null &&
+    !sys.atoms.some((a) => isMetal(mol.el[a]) || mol.el[a] === "*")
+  );
+}
+
 
 /**
  * The ways of setting a piece's frame down: turned by sixty degrees at a
  * time, and mirrored - and, for a frame of squares and no hexagons (a
  * penam), by thirty degrees at a time, the square's sides able to lie
- * level and upright either way round.
+ * level and upright either way round. So too for a frame of rings that
+ * lie on the lattice no way round - fives and sevens, proline's
+ * pyrrolidine - set on it only by its bonds out: the bonds out of one
+ * atom alone can lie on the lattice, so it is set with each atom that has
+ * bonds out in turn straight up (`ref`), and turned by thirty degrees from
+ * there - not from where its ring's first atom was put, which went by the
+ * order of the atoms (proline's carboxyl, off another atom, never lay
+ * level). (Not where a metal sets the frame: a complex grown from its
+ * metal, or a frame with a metal in it - PdCl2(dppf)'s.) And from each
+ * root system there may be (`rootSystems`).
  */
 export function framesFor(mol: Molecule, piece: number[]): Frame[] {
-  const root = rootSystem(mol, piece);
-  if (root < 0) return FRAMES;
-  const sizes = mol.systems[root].rings.map((r) => mol.rings[r].length);
-  if (!sizes.includes(4) || sizes.includes(6)) return FRAMES;
-  return [false, true].flatMap((mirrored) =>
-    Array.from({ length: 12 }, (_, k) => ({ turn: (k * Math.PI) / 6, mirrored })),
-  );
+  const roots = rootSystems(mol, piece);
+  if (!roots.length) return FRAMES;
+  return roots.flatMap((root) => {
+    const sys = mol.systems[root];
+    const sizes = sys.rings.map((r) => mol.rings[r].length);
+    const squares = sizes.includes(4) && !sizes.includes(6);
+    // (a three lies on the lattice as a six does; an eight and a macrocycle are shaped on it)
+    const off = offLattice(mol, piece, root);
+    const frames =
+      squares || off
+        ? [false, true].flatMap((mirrored) => Array.from({ length: 12 }, (_, k) => ({ turn: (k * Math.PI) / 6, mirrored })))
+        : FRAMES;
+    // (a frame that lies on the lattice no way round set with each atom
+    // that has bonds out of it in turn straight up - the bonds out of one
+    // atom alone can lie on the lattice - rather than wherever its ring's
+    // first atom was put)
+    const inSys = new Set(sys.atoms);
+    const refs = off ? sys.atoms.filter((a) => mol.neighbours[a].some((v) => !inSys.has(v))) : [];
+    const each = refs.length ? refs.flatMap((ref) => frames.map((f) => ({ ...f, ref }))) : off ? frames.map((f) => ({ ...f, ref: [...sys.atoms].sort(byStructure(mol))[0] })) : frames;
+    return roots.length > 1 ? each.map((f) => ({ ...f, root })) : each;
+  });
 }
 
 function setFrameAngle(frame: Frame, t: number): number {
@@ -364,7 +461,11 @@ function assign(
   const at = pos.get(a)!;
   const k = children.length;
   const weight = (c: number) => sides.get(`${a}>${c}`) ?? 1;
-  const byWeight = [...children].sort((p, q) => weight(q) - weight(p) || p - q);
+  // (the heaviest first; of branches as heavy, by structure - a single bond
+  // before a double one, then by what the atoms are - never by which is
+  // listed first: improve tries the other way round)
+  const same = byStructure(mol);
+  const byWeight = [...children].sort((p, q) => weight(q) - weight(p) || orderOf(mol, a, p) - orderOf(mol, a, q) || same(p, q));
 
   if (isMetal(mol.el[a]) && mol.systemOf[a] < 0 && placed.length === 1) {
     return atMetal(mol, sides, a, placed[0], taken[0], children);
@@ -411,8 +512,8 @@ function assign(
       // a cross: the chain straight through it - a single bond before a
       // double one where it ends - and a double-bonded O above it
       const order = (c: number) => orderOf(mol, a, c);
-      const [first, ...rest] = [...children].sort((u, v) => weight(v) - weight(u) || order(u) - order(v) || u - v);
-      const [hi, lo] = rest.sort((u, v) => order(v) - order(u) || u - v);
+      const [first, ...rest] = [...children].sort((u, v) => weight(v) - weight(u) || order(u) - order(v) || same(u, v));
+      const [hi, lo] = rest.sort((u, v) => order(v) - order(u) || same(u, v));
       const up = Math.sin(slots[1]) >= Math.sin(slots[2]) ? slots[1] : slots[2];
       return [
         [first, slots[0]],
@@ -749,7 +850,15 @@ function placeChild(
   // have something there; mirrored across the bond, if not
   const place = (p: Point) => add(at, rotate(sub(p, c0), turn));
   const mirrored = (p: Point) => add(at, rotate(reflect(sub(p, c0), slot), turn));
-  const T = sides && biarylSyn(mol, pos, sides, a, child, L, place) ? mirrored : place;
+  // (and otherwise the way round the structure gives - its first ring
+  // neighbour of `child` on the left of the bond in - not the way the ring
+  // system happened to be laid out, by the order of its atoms: a phenyl's
+  // double bonds, a ring's groups either side of the bond)
+  const from = pos.get(a)!;
+  const leftOf = (T: (p: Point) => Point, v: number) => cross(sub(at, from), sub(T(L.get(v)!), at));
+  const lead = [...ringNb].sort(byStructure(mol)).find((v) => Math.abs(leftOf(place, v)) > 1e-6);
+  const [base, other] = lead == null || leftOf(place, lead) > 0 ? [place, mirrored] : [mirrored, place];
+  const T = sides && biarylSyn(mol, pos, sides, a, child, L, base) ? other : base;
   transforms.set(s, T);
   for (const [v, p] of L) {
     if (pos.has(v)) continue;
@@ -768,7 +877,8 @@ function reflect(v: Point, t: number): Point {
  * Whether a ring system hung from ring atom `a` by its atom `child`, set
  * down by `place`, has the heavier of what hangs beside `child` on the same
  * side of the bond as the heavier of what hangs beside `a`: false where
- * either has nothing there, or `a` is in no ring.
+ * either has nothing there, or two things as heavy (`besideBond`), or `a`
+ * is in no ring.
  */
 function biarylSyn(
   mol: Molecule,
@@ -781,28 +891,63 @@ function biarylSyn(
 ): boolean {
   const sa = mol.systemOf[a];
   if (sa < 0) return false;
-  /** The ring neighbour of `x` (not `other`) with the most hanging beside it outside its system, and that much. */
-  const heaviest = (x: number, other: number, inSystem: (v: number) => boolean) => {
-    let best: number | null = null;
-    let most = 0;
-    for (const n of mol.neighbours[x]) {
-      if (n === other || !inSystem(n)) continue;
-      const out = mol.neighbours[n].filter((v) => v !== x && !inSystem(v));
-      const w = out.reduce((t, v) => t + (sides.get(`${n}>${v}`) ?? 1), 0);
-      if (w > most) {
-        most = w;
-        best = n;
-      }
-    }
-    return best;
-  };
-  const ha = heaviest(a, child, (v) => mol.systemOf[v] === sa);
-  const hc = heaviest(child, a, (v) => L.has(v));
+  const ha = besideBond(mol, sides, a, child, (v) => mol.systemOf[v] === sa);
+  const hc = besideBond(mol, sides, child, a, (v) => L.has(v));
   if (ha == null || hc == null || !pos.has(ha)) return false;
   const pa = pos.get(a)!;
   const along = sub(place(L.get(child)!), pa);
   const side = (p: Point) => Math.sign(along.x * (p.y - pa.y) - along.y * (p.x - pa.x));
   return side(pos.get(ha)!) === side(place(L.get(hc)!));
+}
+
+/**
+ * The ring neighbour of `x` (not `other`, in its system by `inSystem`)
+ * with the most hanging beside it outside the system - null where none
+ * has anything, or two have as much: then neither side of the bond is the
+ * heavier, whichever neighbour is listed first.
+ */
+function besideBond(mol: Molecule, sides: Map<string, number>, x: number, other: number, inSystem: (v: number) => boolean): number | null {
+  let best: number | null = null;
+  let most = 0;
+  let tied = false;
+  for (const n of mol.neighbours[x]) {
+    if (n === other || !inSystem(n)) continue;
+    const out = mol.neighbours[n].filter((v) => v !== x && !inSystem(v));
+    const w = out.reduce((t, v) => t + (sides.get(`${n}>${v}`) ?? 1), 0);
+    if (w > most) {
+      most = w;
+      best = n;
+      tied = false;
+    } else if (w > 0 && w === most) tied = true;
+  }
+  return tied ? null : best;
+}
+
+/**
+ * Whether a drawing keeps each biaryl's groups beside its bond anti, as
+ * the structure sets them when the second ring is hung (`placeChild`,
+ * `biarylSyn`): BINOL's OH, BINAP's PPh2 either side of the bond. The
+ * steps that set a drawing right after it is grown keep them so.
+ */
+export function antiKept(mol: Molecule, sides: Map<string, number>): (pos: Grown) => boolean {
+  const pairs: [number, number, number, number][] = [];
+  for (const b of mol.bonds) {
+    const [a, c] = [b.a, b.b];
+    const [sa, sc] = [mol.systemOf[a], mol.systemOf[c]];
+    if (b.order !== 1 || sa < 0 || sc < 0 || sa === sc) continue;
+    const ha = besideBond(mol, sides, a, c, (v) => mol.systemOf[v] === sa);
+    const hc = besideBond(mol, sides, c, a, (v) => mol.systemOf[v] === sc);
+    if (ha != null && hc != null) pairs.push([a, c, ha, hc]);
+  }
+  return (pos) =>
+    pairs.every(([a, c, ha, hc]) => {
+      const pa = pos.get(a);
+      const pc = pos.get(c);
+      if (!pa || !pc) return true;
+      const along = sub(pc, pa);
+      const side = (p: Point) => Math.sign(along.x * (p.y - pa.y) - along.y * (p.x - pa.x));
+      return side(pos.get(ha)!) !== side(pos.get(hc)!);
+    });
 }
 
 /**

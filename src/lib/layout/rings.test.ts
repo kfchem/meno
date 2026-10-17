@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { smallestRings, type Edge } from "./rings";
+import { ringsAlike, smallestRings, type Edge } from "./rings";
 import cages from "./testdata/cages.json";
 
 /**
@@ -221,6 +221,60 @@ describe("smallestRings", () => {
     expect(rings[0].every((a) => a < 28)).toBe(true);
     expect(rings[1].every((a) => a >= 28 && a < 56)).toBe(true);
     expect(rings.slice(1000).every((r) => r.length === 6)).toBe(true);
+  });
+});
+
+describe("ringsAlike", () => {
+  /** The rings alike in size to the smallest set, each as its sorted atoms. */
+  const alike = (n: number, edges: readonly Edge[]) => {
+    const neighbours: number[][] = Array.from({ length: n }, () => []);
+    for (const [a, b] of edges) {
+      neighbours[a].push(b);
+      neighbours[b].push(a);
+    }
+    return ringsAlike(smallestRings(n, edges), neighbours)
+      .map((r) => [...r].sort((p, q) => p - q).join(","))
+      .sort();
+  };
+  /** The same graph with its atoms numbered another way, back in the first numbering. */
+  const renumbered = (n: number, edges: readonly Edge[], seed: number) => {
+    const rnd = seeded(seed);
+    const to = Array.from({ length: n }, (_, i) => i);
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(rnd() * (i + 1));
+      [to[i], to[j]] = [to[j], to[i]];
+    }
+    const back = new Array<number>(n);
+    to.forEach((t, i) => (back[t] = i));
+    return alike(n, edges.map(([a, b]) => [to[a], to[b]] as const)).map((k) =>
+      k.split(",").map((a) => back[Number(a)]).sort((p, q) => p - q).join(","),
+    ).sort();
+  };
+
+  it("gives all three of quinuclidine's six-membered cycles, whatever the order of its atoms", () => {
+    // N 0 and C4 3, bridged by 1-2, 4-5 and 6-7
+    const edges: Edge[] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 6], [6, 7], [7, 3]];
+    expect(smallestRings(8, edges)).toHaveLength(2);
+    const rings = alike(8, edges);
+    expect(rings).toEqual(["0,1,2,3,4,5", "0,1,2,3,6,7", "0,3,4,5,6,7"]);
+    for (let seed = 1; seed <= 20; seed++) expect(renumbered(8, edges, seed), `seed ${seed}`).toEqual(rings);
+  });
+
+  it("gives adamantane its four chairs and cubane its six faces", () => {
+    // bridgeheads 0-3, each two of them bridged by one of 4-9
+    const adamantane: Edge[] = [[0, 4], [4, 1], [0, 5], [5, 2], [0, 6], [6, 3], [1, 7], [7, 2], [1, 8], [8, 3], [2, 9], [9, 3]];
+    expect(smallestRings(10, adamantane)).toHaveLength(3);
+    expect(alike(10, adamantane)).toHaveLength(4);
+    const cubane: Edge[] = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]];
+    expect(alike(8, cubane)).toHaveLength(6);
+  });
+
+  it("leaves out a cycle that shorter rings add up to: norbornane's six-membered one, naphthalene's ten", () => {
+    // norbornane: C1 0 and C4 3, bridged by 1-2, 4-5 and C7 6
+    const norbornane: Edge[] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [0, 6], [6, 3]];
+    expect(alike(7, norbornane)).toEqual(["0,1,2,3,6", "0,3,4,5,6"]);
+    const naphthalene: Edge[] = [[0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0], [5, 6], [6, 7], [7, 8], [8, 9], [9, 0]];
+    expect(alike(10, naphthalene)).toHaveLength(2);
   });
 });
 

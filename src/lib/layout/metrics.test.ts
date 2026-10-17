@@ -111,6 +111,33 @@ describe("layoutMetrics", () => {
     expect(layoutMetrics(cf3([-90, 0, 90])).angleError).toBeCloseTo(30, 6);
   });
 
+  it("reads a cage's substituents the same whichever of its alike rings its smallest set holds", () => {
+    // 3-vinylquinuclidine with a methyl on C2, its cage drawn in perspective
+    // as quinine's is: N1 0, C2 1, C3 2, C4 3, C5 4, C6 5, C7 6, C8 7; the
+    // vinyl 8=9 on C3, the methyl 10 on C8. Its three six-membered cycles
+    // are each a ring as small as the rest; any two are a smallest set, and
+    // which two `smallestRings` keeps goes by the order of the atoms
+    const x = [4.43, 3.46, 2.96, 3.93, 4.9, 5.4, 4.43, 3.93, 3.06, 2.2, 3.46];
+    const y = [0.44, 0.18, 1.05, 1.31, 1.05, 0.18, 1.53, 2.33, 2.82, 2.31, -0.82];
+    const edges: [number, number][] = [
+      [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+      [0, 6], [6, 7], [7, 3], [7, 8], [8, 9], [1, 10],
+    ];
+    const orders = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 1];
+    const cycles = [
+      [0, 1, 2, 3, 4, 5],
+      [0, 6, 7, 3, 4, 5],
+      [0, 1, 2, 3, 7, 6],
+    ];
+    const elements = ["N", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C"];
+    const perspective = x.map((_, a) => a < 8);
+    const measure = (rings: number[][]) =>
+      layoutMetrics({ x, y, edges, orders, elements, perspective, rings }).substituentError;
+    const each = [measure([cycles[0], cycles[1]]), measure([cycles[0], cycles[2]]), measure([cycles[1], cycles[2]])];
+    expect(each[1]).toBeCloseTo(each[0], 6);
+    expect(each[2]).toBeCloseTo(each[0], 6);
+  });
+
   it("sees a ring's shape whatever it is turned to", () => {
     const h = polygon(6, 3, 4, 0.7);
     expect(ringIrregularity(h.x, h.y, [0, 1, 2, 3, 4, 5], 1)).toBeCloseTo(0, 9);

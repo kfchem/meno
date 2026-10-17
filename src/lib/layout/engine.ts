@@ -9,6 +9,7 @@
  * best is kept. Bonds come out of length 1.
  */
 import {
+  antiKept,
   flip,
   framesFor,
   flippable,
@@ -24,15 +25,17 @@ import {
 import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
-import { isMetal, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
+import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
-import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, type CageView } from "./cage";
+import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
 import { etaSpins, PAIR_DEPTH, placeEta, placeUnit, unitVariants } from "./hapto";
 import type { Point } from "./geometry";
+import { atomClasses, byStructure, canonicalRanks } from "./ranks";
+import { canonicalRanks as canonicalOrderRanks, reordered, restored, walkOrder } from "./canonical";
 import { greatest, least } from "../chem/lists";
 
 export type { LayoutInput } from "./perceive";
@@ -66,6 +69,71 @@ export type Layout2D = {
 } & Stereo;
 
 export function layout2D(input: LayoutInput): Layout2D {
+  // (laid out with its atoms in the molecule's own order, worked out from
+  // its structure alone - every tie, every sum taken in that order - and
+  // handed back in the order given: the same molecule drawn with its atoms
+  // in any order comes out the same. Atoms the order leaves alike are
+  // alike in everything the layout reads, so the drawing either way is the
+  // same, by symmetry)
+  // (and kept: the same input again, a label's group drawn out at each
+  // relayout, a drawing read back - however its atoms come - laid out once)
+  const given = JSON.stringify(input);
+  const asGiven = laidOutAsGiven.get(given);
+  if (asGiven) {
+    laidOutAsGiven.delete(given);
+    laidOutAsGiven.set(given, asGiven);
+    return structuredClone(asGiven);
+  }
+  const to = walkOrder(input, canonicalOrderRanks(input));
+  const own = reordered(input, to);
+  const key = JSON.stringify(own);
+  let laid = laidOutBefore.get(key);
+  if (laid) {
+    laidOutBefore.delete(key);
+    laidOutBefore.set(key, laid);
+  } else {
+    laid = layoutInOrder(own);
+    laidOutBefore.set(key, laid);
+    if (laidOutBefore.size > LAID_OUT_KEPT) laidOutBefore.delete(laidOutBefore.keys().next().value!);
+  }
+  const out = restored(structuredClone(laid), to);
+  laidOutAsGiven.set(given, structuredClone(out));
+  if (laidOutAsGiven.size > LAID_OUT_KEPT) laidOutAsGiven.delete(laidOutAsGiven.keys().next().value!);
+  return out;
+}
+
+/** The molecules laid out last, by the input as given: each drawing, handed out as a copy. */
+const laidOutAsGiven = new Map<string, Layout2D>();
+
+/** The molecules laid out last, by the molecule written in its own order: the drawing in that order. */
+const laidOutBefore = new Map<string, Layout2D>();
+
+/** How many molecules `layout2D` keeps laid out, the least recently asked for going first. */
+const LAID_OUT_KEPT = 64;
+
+/** Forget the molecules `layout2D` keeps laid out (for tests that lay the same molecule out in several orders). */
+export function forgetLaidOut(): void {
+  laidOutAsGiven.clear();
+  laidOutBefore.clear();
+}
+
+/**
+ * Drawings of a piece best first by `score` - and of two that score the
+ * same, the one that reads left to right as a formula is written: what is
+ * not carbon (a label, an acid's O, a metal's halide) further right. Frames
+ * the measure cannot part, a chain drawn one way round or the other, went by
+ * the order the atoms came in.
+ */
+function bestFirst(mol: Molecule, piece: readonly number[]): (p: { pos: Grown; score: number }, q: { pos: Grown; score: number }) => number {
+  const labels = piece.filter((a) => mol.el[a] !== "C" && mol.el[a] !== "H");
+  const rightward = (pos: Grown) => {
+    const mean = piece.reduce((s, a) => s + pos.get(a)!.x, 0) / piece.length;
+    return labels.reduce((s, a) => s + pos.get(a)!.x - mean, 0);
+  };
+  return (p, q) => (Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : rightward(q.pos) - rightward(p.pos));
+}
+
+function layoutInOrder(input: LayoutInput): Layout2D {
   // Drawn, then read back as Meno reads a drawing (drawn.ts): a ring system
   // drawn as a solid whose stereocentres do not read as given - a bond out
   // of it drawn nearer the other of the two ways the solid leaves free than
@@ -79,9 +147,9 @@ export function layout2D(input: LayoutInput): Layout2D {
   // can still crowd what hangs from it (ginkgolide B's OHs).
   // And the other way: one drawn flat with a fault, where a solid would do,
   // is drawn as the solid too, and that kept where it reads better.
-  const redo: Redo = { alone: new Set(), flat: new Set(), solid: new Set() };
+  const redo: Redo = { alone: new Set(), flat: new Set(), solid: new Set(), whole: new Set() };
   for (;;) {
-    const { out, mol, solidToo } = laidOut(input, redo);
+    const { out, mol, solidToo, wholeToo } = laidOut(input, redo);
     const wrong = [...misread(input, mol, out)].filter((i) => !redo.flat.has(i));
     if (wrong.length) {
       for (const i of wrong) (redo.alone.has(i) ? redo.flat : redo.alone).add(i);
@@ -103,6 +171,23 @@ export function layout2D(input: LayoutInput): Layout2D {
       const solid = laidOut(input, { ...redo, solid: new Set(solids) });
       const score = drawingScore(input, mol, solid.out);
       if (!misread(input, solid.mol, solid.out).size && score < bestScore - 1e-9) [best, bestScore] = [solid.out, score];
+      wholeToo.push(...solid.wholeToo.filter((i) => !wholeToo.includes(i)));
+    }
+    // And a cage with rings fused to it drawn as one whole solid, where its
+    // core was drawn in perspective with those rings flat onto it, or the
+    // system flat: which reads better goes by the whole drawing, not by the
+    // system's own measure - scopolamine's epoxide flat onto its tropane
+    // crowded the ester hung from it.
+    // (and so too a system drawn flat because its cage in perspective, the
+    // rest flat onto it, did not read as given: its whole solid is another
+    // drawing, read back on its own - aconitine's second cage laid flat
+    // onto its first turned a junction, its whole solid did not)
+    const wholes = [...wholeToo.filter((i) => !redo.flat.has(i)), ...[...redo.flat].filter((i) => redo.alone.has(i))];
+    if (wholes.length) {
+      const flat = new Set([...redo.flat].filter((i) => !wholes.includes(i)));
+      const whole = laidOut(input, { ...redo, flat, solid: new Set([...redo.solid, ...wholes]), whole: new Set(wholes) });
+      const score = drawingScore(input, mol, whole.out);
+      if (!misread(input, whole.mol, whole.out).size && score < bestScore - 1e-9) [best, bestScore] = [whole.out, score];
     }
     return best;
   }
@@ -168,10 +253,14 @@ function drawingFaults(input: LayoutInput, mol: Molecule, out: Layout2D): number
 /** How much better another view of a cage must read than its best textbook view to be taken instead. */
 const CAGE_VIEW_MARGIN = 3;
 
-/** The ring systems drawn again: without their view from the other side, flat, or as a solid where they would be flat. */
-type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number> };
+/**
+ * The ring systems drawn again: without their view from the other side,
+ * flat, as a solid where they would be flat, or as one whole solid where
+ * a cage's core would be drawn in perspective with the rest flat onto it.
+ */
+type Redo = { alone: Set<number>; flat: Set<number>; solid: Set<number>; whole: Set<number> };
 
-function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[] } {
+function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule; solidToo: number[]; wholeToo: number[] } {
   const mol = perceive(input);
   const local = new Map<number, Map<number, Point>>();
   const depth = new Array<number | null>(mol.n).fill(null);
@@ -192,8 +281,10 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   // a cage seen from each of its best few sides, chosen among as a
   // macrocycle's shapes are, by what hangs from it (quinine's quinuclidine)
   const cageViews = new Map<number, CageView[]>();
-  // (the systems drawn flat that a solid would do for too)
+  // (the systems drawn flat that a solid would do for too, and those that
+  // could be drawn as one whole solid instead)
   const solidToo: number[] = [];
+  const wholeToo: number[] = [];
   const variantsOf = (i: number) => {
     const e = etaOf.get(i);
     const u = unitOf.get(i);
@@ -223,8 +314,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   };
   mol.systems.forEach((sys, i) => {
     if (etaOf.has(i) || unitOf.has(i)) return setVariant(i, 0);
-    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i));
+    const laid = redo.flat.has(i) ? layoutFlat(mol, sys) : layoutSystem(mol, i, redo.solid.has(i), redo.whole.has(i));
     if (laid.solidToo) solidToo.push(i);
+    if (laid.wholeToo) wholeToo.push(i);
     local.set(i, laid.pos);
     laid.depth?.forEach((d, a) => (depth[a] = d));
     laid.hints?.forEach((m, a) => hints.set(a, m));
@@ -259,6 +351,10 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   const fixed = (atoms: readonly number[]) =>
     atoms.some((a) => upright.has(mol.systemOf[a]) || etaOf.has(mol.systemOf[a]) || unitOf.has(mol.systemOf[a]));
   const sides = sidesOf(mol);
+  // (a biaryl's groups beside its bond kept anti, as they were grown: no
+  // drawing that turns them syn is taken on the way)
+  const keepsAnti = antiKept(mol, sides);
+  const kept = (score: (pos: Grown) => number) => (pos: Grown) => (keepsAnti(pos) ? score(pos) : Infinity);
   // (a flip mirrors a side across a bond's line, which would tip a cage over)
   const flips = flippable(mol, sides).filter(([a, b]) => {
     const beyondB = sides.get(`${a}>${b}`) ?? 0;
@@ -288,7 +384,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     for (let v = 0; v < count; v++) {
       setVariant(i, v);
       // (measured as this one is drawn: a cage's depth is its view's)
-      const score = scorer(mol, piece, depth, measured, 0, false);
+      const score = kept(scorer(mol, piece, depth, measured, 0, false));
       // the frame it grows best in - the best few, for a piece of up to
       // sixty atoms - each tried the other way and untangled where it helps:
       // substituents inside a macrocycle are crowded until then, and the
@@ -299,12 +395,14 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
           const pos = grow(mol, piece, L, frame, sides, H, upright);
           return { pos, score: score(pos) };
         })
-        .sort((p, q) => p.score - q.score);
+        .sort(bestFirst(mol, piece));
       for (const top of grown.slice(0, piece.length <= 60 ? 3 : 1)) {
         const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
         // (a cage's textbook view kept unless another reads clearly better:
         // camphor as it is always drawn, not the other way round)
-        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + (cageViews.has(i) && v ? CAGE_VIEW_MARGIN : 0);
+        // (views as good by the system's own measure go to what hangs from them)
+        const views = cageViews.get(i);
+        const s = untangle(mol, piece, better.pos, better.score, score, fixed).score + (views && v && !views[v].tied ? CAGE_VIEW_MARGIN : 0);
         // (only where clearly better: whatever is tried here - a
         // macrocycle's shapes, a cage's views, the spins of a ring bound
         // face-on to a metal - those alike on the measure keep the order
@@ -335,8 +433,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // H's of labels and the letters of names, last: by turning a sugar
     // over on its link, and by moving bonds a little - an H on a label
     // counting then as much as a label on a label)
-    const score = scorer(mol, piece, depth, measured, 0, false);
-    const scoreH = scorer(mol, piece, depth, measured, 1);
+    const score = kept(scorer(mol, piece, depth, measured, 0, false));
+    const scoreH = kept(scorer(mol, piece, depth, measured, 1));
+    const scoreFan = kept(scorer(mol, piece, depth, measured, 1, undefined, true));
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
@@ -344,7 +443,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const { L, H } = setUp(frame);
       const pos = grow(mol, piece, L, frame, sides, H, upright);
       return { pos, score: score(pos), mirrored: frame.mirrored };
-    }).sort((p, q) => p.score - q.score);
+    }).sort(bestFirst(mol, piece));
     let best = tried[0];
     // every frame tried the other way where it helps, for a small piece;
     // the most promising few for a large one
@@ -355,22 +454,32 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
         ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, false, swapsHere),
         mirrored: cand.mirrored,
       }))
-      .sort((p, q) => p.score - q.score);
+      .sort(bestFirst(mol, piece));
     // and the best few set right within their small sides - every one, for
     // a small piece
-    for (const cand of improved.slice(0, piece.length <= 40 ? improved.length : 3)) {
-      const deeper = {
-        ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere),
-        mirrored: cand.mirrored,
-      };
-      if (deeper.score < best.score - 1e-9) best = deeper;
-    }
-    best = { ...rejoin(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
-    best = { ...untangle(mol, piece, best.pos, best.score, score, fixed), mirrored: best.mirrored };
+    const deeper = improved.slice(0, piece.length <= 40 ? improved.length : 3).map((cand) => ({
+      ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere),
+      mirrored: cand.mirrored,
+    }));
+    // and the best few of those - with the best drawing grown - each
+    // rejoined and untangled, and the one that reads best then kept: a
+    // drawing a little worse before its parts are set can read better
+    // after (Wilkinson's catalyst), and drawings as good may be set right
+    // to drawings that are not. (The best alone, for a piece of more than
+    // eighty atoms, as above: setting right is most of the time a large
+    // piece takes - Stryker's reagent's 126 atoms, its three best drawings
+    // one drawing turned)
+    const pool = deeper.some((d) => d.score <= best.score + 1e-9) ? deeper : [best, ...deeper];
+    const finalists = pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? FINALISTS : 1);
+    best = finalists
+      .map((cand) => {
+        const joined = rejoin(mol, piece, cand.pos, cand.score, score, fixed);
+        return { ...untangle(mol, piece, joined.pos, joined.score, score, fixed), mirrored: cand.mirrored };
+      })
+      .sort(bestFirst(mol, piece))[0];
     best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
     best = { ...roomForHydrogens(mol, piece, best.pos, best.score, scoreH, fixed), mirrored: best.mirrored };
     // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
-    const scoreFan = scorer(mol, piece, depth, measured, 1, undefined, true);
     const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
     best = { pos: settled, score: scoreH(settled), mirrored: best.mirrored };
     // a cage in a mirrored frame is the one seen from its other side
@@ -490,6 +599,21 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const lower = y[p] < y[q] ? p : q;
     for (const b of [p, q]) depth[b] = b === lower ? PAIR_DEPTH : -PAIR_DEPTH;
   }
+  // a group off a solid, its first atom at the depth of the solid's atom it
+  // leaves: where its bond crosses one of the solid's further back, that one
+  // is drawn broken, as in front of it (aconitine's N-ethyl), and a centre
+  // of the solid with a group on it reads by where that group is. An atom
+  // that leaves more than one such atom - of a ring fused flat onto the
+  // solid too, at its depth there - is at the mean of theirs, whichever
+  // comes first.
+  const withSolid = new Set(mol.systemOf.filter((sys, a) => sys >= 0 && solid[a]));
+  const groupDepth = new Map<number, number>();
+  for (let d = 0; d < mol.n; d++) {
+    if (depth[d] != null) continue;
+    const from = mol.neighbours[d].filter((c) => withSolid.has(mol.systemOf[c]) && depth[c] != null && mol.systemOf[d] !== mol.systemOf[c]);
+    if (from.length) groupDepth.set(d, from.reduce((sum, c) => sum + depth[c]!, 0) / from.length);
+  }
+  groupDepth.forEach((z, d) => (depth[d] = z));
   // a ring in perspective - bound face-on, or turned on its bond - drawn as
   // Haworth drew rings: a bond with both its atoms near, bold; one running
   // from the far half to the near one, a wedge toward the viewer, narrow at
@@ -516,11 +640,13 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     }
   }
   for (const d of mol.dienes) d.ring.forEach((a, i) => perspective(a, d.ring[(i + 1) % d.ring.length]));
-  // a stereocentre in a cage drawn in perspective shows itself there - one
-  // in a six-membered ring drawn as a chair or a boat, or in a ring bridged
-  // across another (ibogaine's isoquinuclidine): the way its bonds go, as
-  // drawn, says which way round it is. Any other centre of a solid shows
-  // nothing by its shape, and carries a wedge.
+  // a stereocentre of a solid drawn in perspective shows itself there,
+  // with no wedge, wherever the drawing read with its depth, as Meno reads
+  // one (drawn.ts), says it as given: the way its bonds go says which way
+  // round it is. A wedge there, read flat, can say otherwise - tetrodotoxin's
+  // C4, the nearest atom, its OH and its H both toward the viewer (the
+  // maintainer, 2026-10-17, as R/S is read from the perspective). Any other
+  // centre of a solid carries a wedge.
   // (and only where it reads so for sure: its bonds out of the solid each
   // turned 15 degrees either way, it still reads as given - a bond drawn
   // between the two corners the solid leaves free says nothing)
@@ -528,9 +654,8 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   mol.systems.forEach((sys) => {
     const own = sys.atoms.filter((a) => solid[a]);
     if (!own.some((a) => input.atoms[a].tetra)) return;
-    const shown = shownBySolid(mol, sys, own, (a) => ({ x: x[a], y: y[a] }));
-    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => shown.has(a) && input.atoms[a].tetra));
-    for (const a of own) if (input.atoms[a].tetra && (!shown.has(a) || unsure.has(a))) solid[a] = false;
+    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => input.atoms[a].tetra), groupDepth);
+    for (const a of own) if (input.atoms[a].tetra && unsure.has(a)) solid[a] = false;
   });
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
   const final = new Map(x.map((v, i) => [i, { x: v, y: y[i] }]));
@@ -547,14 +672,15 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const ms = u.cluster.metals;
     for (const a of ms) for (const b of mol.neighbours[a]) if (a < b && ms.includes(b)) dashed.push([a, b]);
   }
-  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo };
+  return { out: { x, y, depth, solid, bold, toward, dashed, ...stereo }, mol, solidToo, wholeToo };
 }
 
 /**
  * Of the `centres` of a solid, drawn at `x`, `y` and `depth` with no wedge,
  * those that read as given only by a hair, as Meno reads a drawing
- * (drawn.ts): one of their bonds out of the solid turned 15 degrees either
- * way, they read otherwise, or not at all.
+ * (drawn.ts): one of their bonds out of the solid (to a group's first atom,
+ * as near as the atom it leaves, too) turned 15 degrees either way, they
+ * read otherwise, or not at all.
  */
 function byAHair(
   input: LayoutInput,
@@ -563,6 +689,8 @@ function byAHair(
   y: readonly number[],
   depth: readonly (number | null)[],
   centres: readonly number[],
+  /** Groups' first atoms, as near as the solid's atoms they leave: still bonds out of the solid, turned as the rest. */
+  groups: ReadonlyMap<number, number> = new Map(),
 ): Set<number> {
   const out = new Set<number>();
   if (!centres.length) return out;
@@ -586,7 +714,7 @@ function byAHair(
       continue;
     }
     for (const n of mol.neighbours[c]) {
-      if (depth[n] != null || out.has(c)) continue;
+      if ((depth[n] != null && !groups.has(n)) || out.has(c)) continue;
       for (const deg of [-15, 15]) {
         const r = (deg * Math.PI) / 180;
         const v = { x: x[n] - x[c], y: y[n] - y[c] };
@@ -731,9 +859,11 @@ type SystemLayout = {
   views?: CageView[];
   /** Drawn flat with a fault, where a solid would do as well: to be tried as that. */
   solidToo?: boolean;
+  /** A cage with rings fused to it, not drawn as one whole solid where it could be: to be tried as that. */
+  wholeToo?: boolean;
 };
 
-function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
+function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false): SystemLayout {
   const sys = mol.systems[i];
   // a cage - norbornane, tropane, quinuclidine, adamantane - is drawn in
   // perspective, the way it always is; anything else flat
@@ -770,18 +900,27 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   const core = cageCore(mol, sys);
   if (!core) return whole && (asSolid || wholeFaults < flatFaults - 1) ? { ...whole, solid: true } : { ...flat, solidToo: !!whole };
   const view = projectCage(mol, core);
+  // (the rings fused flat at the depth of the cage's atoms they are fused
+  // to: each atom one bond further out than the last at the mean depth of
+  // its neighbours set before it - all of a round from the round before,
+  // so that the order of the atoms never decides)
+  const depthOnto = (given: Map<number, number>) => {
+    const depth = new Map(given);
+    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++) {
+      const round = sys.atoms.flatMap((a) => {
+        if (depth.has(a)) return [];
+        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
+        return near.length ? [[a, near.reduce((s, d) => s + d, 0) / near.length] as const] : [];
+      });
+      if (!round.length) break;
+      for (const [a, d] of round) depth.set(a, d);
+    }
+    return depth;
+  };
   const onto = (v: Omit<CageView, "other">) => {
     const pos = new Map(v.pos);
     extendRingSystem(mol, sys, pos);
-    // (the rings fused flat at the depth of the cage's atoms they are fused to)
-    const depth = new Map(v.depth);
-    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++)
-      for (const a of sys.atoms) {
-        if (depth.has(a)) continue;
-        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
-        if (near.length) depth.set(a, near.reduce((s, d) => s + d, 0) / near.length);
-      }
-    return { pos, depth, hints: v.hints, cost: v.cost };
+    return { pos, depth: depthOnto(v.depth), hints: v.hints, cost: v.cost };
   };
   // (and a ring fused onto the cage on a bond that the solid has as a chair
   // or a boat, with no double bond in it, drawn as one by the template -
@@ -820,13 +959,7 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
     }
     if (!any) return null;
     extendRingSystem(mol, sys, pos);
-    const depth = new Map(v.depth);
-    for (let pass = 0; pass < sys.atoms.length && depth.size < sys.atoms.length; pass++)
-      for (const a of sys.atoms) {
-        if (depth.has(a)) continue;
-        const near = mol.neighbours[a].filter((b) => depth.has(b)).map((b) => depth.get(b)!);
-        if (near.length) depth.set(a, near.reduce((s, d) => s + d, 0) / near.length);
-      }
+    const depth = depthOnto(v.depth);
     // (a group axial to such a chair upright, up or down as the solid has it)
     const hints = new Map(v.hints);
     for (const { ring: r, up } of chairs)
@@ -857,9 +990,18 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   let perspChairs = false;
   let seen: CageView = view;
   let rankedBy = Infinity;
-  for (let rank = 0; rank < 4; rank++) {
-    const v = rank ? projectCage(mol, core, rank) : view;
-    if (!v) break;
+  const tried: { v: CageView; p: NonNullable<ReturnType<typeof onto>>; chairs: boolean; by: number }[] = [];
+  const keyOf = (v: Omit<CageView, "other">) => core.atoms.map((a) => `${Math.round(v.pos.get(a)!.x * 20)},${Math.round(v.pos.get(a)!.y * 20)}`).join(";");
+  const looked = new Set<string>();
+  const ranked = [view, ...[1, 2, 3].flatMap((rank) => projectCage(mol, core, rank) ?? [])];
+  // (and, where it has views as good as its best from its other side too -
+  // adamantane - those, to choose among by what hangs from them)
+  const alike = tiedViews(mol, core);
+  for (const v of [...ranked, ...alike]) {
+    const key = keyOf(v);
+    if (looked.has(key)) continue;
+    looked.add(key);
+    const rank = ranked.indexOf(v);
     let flatShows = false;
     for (const chairs of [false, true]) {
       const p = chairs ? ontoChairs(v) : onto(v);
@@ -871,6 +1013,8 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
       if (chairs && !flatShows) continue;
       const f = shows(p) ? flatCost(mol, sys, p.pos, p.depth, true) : Infinity;
       const by = f - (chairs ? 1 : 0);
+      if (f < Infinity) tried.push({ v, p, chairs, by });
+      if (rank < 0) continue;
       if (by < rankedBy - 1e-9) [seen, persp, perspFaults, perspChairs, rankedBy] = [v, p, f, chairs, by];
     }
   }
@@ -881,10 +1025,13 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   // gelsemine's oxindole, its benzene ring otherwise foreshortened)
   const flatOutside = rings.some((r) => !r.every((a) => coreAtoms.has(a)) && r.some((a, k) => orderOf(mol, a, r[(k + 1) % r.length]) === 2));
   const wholeAllowed = !(flatOutside && perspFaults < Infinity);
-  if (whole && wholeAllowed && (asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3) return { ...whole, solid: true };
+  if (whole && wholeAllowed && (asWhole || ((asSolid || wholeFaults < flatFaults - 1) && wholeFaults < perspFaults - 3))) return { ...whole, solid: true };
+  // (and not where a ring fused onto the cage is drawn as the chair the
+  // solid has it as: that is how the fusion is drawn)
+  const wholeToo = !!whole && wholeAllowed && !perspChairs;
   if (perspFaults >= flatFaults - 1 && !(asSolid && perspFaults < Infinity)) {
     if (asSolid && whole && wholeAllowed) return { ...whole, solid: true };
-    return { ...flat, solidToo: !!whole || perspFaults < Infinity };
+    return { ...flat, solidToo: !!whole || perspFaults < Infinity, wholeToo };
   }
   // (an atom of the cage bonded to a ring fused flat onto it shows its
   // configuration by a wedge, as a flat ring's atoms do: its bond into that
@@ -892,7 +1039,19 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false): SystemLayout {
   // seen from its other side, for a mirrored frame, only so too)
   // (seen from its other side the same way, its fused rings chairs where they were)
   const other = seen.other && ((perspChairs && ontoChairs(seen.other)) || onto(seen.other));
-  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}) };
+  // (and each other view as good by the system's own measure, to choose
+  // among by what hangs from it: adamantane alike from its sides, a ring
+  // fused on it leaves the gem-dimethyl room from some of them only)
+  const otherOf = (t: (typeof tried)[number]) => {
+    const o = t.v.other && ((t.chairs && ontoChairs(t.v.other)) || onto(t.v.other));
+    return o && shows(o) ? { other: o } : {};
+  };
+  const ties = tried.filter((t) => t.v !== seen && Math.abs(t.by - rankedBy) < 1e-6);
+  const views: CageView[] = [
+    { ...persp, ...(other && shows(other) ? { other } : {}) },
+    ...ties.map((t) => ({ ...t.p, ...otherOf(t), tied: true as const })),
+  ];
+  return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(ties.length ? { views } : {}), wholeToo };
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
@@ -985,9 +1144,10 @@ export function inkReach(mol: Molecule, a: number, pos: ReadonlyMap<number, Poin
  * Tries each single bond the other way round, and the two groups on a ring
  * atom (`swaps`: the atom, then each group's first atom) each the other's
  * way, keeping what scores better, until nothing does - erythromycin's
- * tertiary OH turned up out of its sugar's way, its methyl across. Then,
- * `deep`, each small side turned over is tried
- * with each bond within it turned back as well: what hangs on it - a
+ * tertiary OH turned up out of its sugar's way, its methyl across. Each
+ * round tries every move from the drawing as it stands and takes the best
+ * (`bestMove`). Then, `deep`, each small side turned over is tried with
+ * each bond within it turned back as well: what hangs on it - a
  * carboxyl's C=O, up - set right again, where turning the side alone would
  * put it wrong; and if that helps, single bonds again.
  */
@@ -1003,20 +1163,20 @@ export function improve(
 ): { pos: Grown; score: number } {
   let pos = start;
   let current = startScore;
+  const order = byMove(mol);
+  const pair = pairByStructure(mol);
+  const flipKeys = flips.map(([a, b]) => ({ kind: 0, atoms: pair(a, b), step: 0 }));
+  const swapKeys = swaps.map(([a, b, c]) => ({ kind: 1, atoms: [a, ...pair(b, c)], step: 0 }));
   const singly = () => {
-    for (let pass = 0; pass < 4; pass++) {
-      let better = false;
-      for (const [a, b] of flips) {
+    for (let round = 0; round < MOVE_ROUNDS; round++) {
+      const best = bestMove(order);
+      flips.forEach(([a, b], k) => {
         const trial = new Map(pos);
         flip(mol, trial, a, b, sides);
         const s = score(trial);
-        if (s < current - 1e-6) {
-          pos = trial;
-          current = s;
-          better = true;
-        }
-      }
-      for (const [a, b, c] of swaps) {
+        if (s < current - 1e-6) best.offer(trial, s, flipKeys[k]);
+      });
+      swaps.forEach(([a, b, c], k) => {
         const trial = new Map(pos);
         const at = trial.get(a)!;
         const tb = angleOf(sub(trial.get(b)!, at));
@@ -1026,43 +1186,124 @@ export function improve(
         turnSide(trial, sb, at, tc - tb);
         turnSide(trial, sc, at, tb - tc);
         const s = score(trial);
-        if (s < current - 1e-6) {
-          pos = trial;
-          current = s;
-          better = true;
-        }
-      }
-      if (!better) break;
+        if (s < current - 1e-6) best.offer(trial, s, swapKeys[k]);
+      });
+      const found = best.found();
+      if (!found) break;
+      pos = found.pos;
+      current = found.score;
     }
   };
   // a side turned over and a bond within it turned back: the best pair
   const doubly = () => {
-    let found: Grown | null = null;
-    for (const [a, b] of flips) {
+    const best = bestMove(order);
+    flips.forEach(([a, b], k) => {
       const beyondB = sides.get(`${a}>${b}`) ?? 0;
       const beyondA = sides.get(`${b}>${a}`) ?? 0;
-      if (Math.min(beyondA, beyondB) > SMALL_SIDE) continue;
+      if (Math.min(beyondA, beyondB) > SMALL_SIDE) return;
       const [from, to] = beyondB <= beyondA ? [a, b] : [b, a];
       const moved = new Set(sideAtoms(mol, from, to));
       const trial = new Map(pos);
       flip(mol, trial, a, b, sides);
-      for (const [c, d] of flips) {
-        if ((c === a && d === b) || !moved.has(c) || !moved.has(d)) continue;
+      flips.forEach(([c, d], j) => {
+        if ((c === a && d === b) || !moved.has(c) || !moved.has(d)) return;
         const again = new Map(trial);
         flip(mol, again, c, d, sides);
         const s = score(again);
-        if (s < current - 1e-6) {
-          current = s;
-          found = again;
-        }
-      }
+        if (s < current - 1e-6) best.offer(again, s, { kind: 2, atoms: [...flipKeys[k].atoms, ...flipKeys[j].atoms], step: 0 });
+      });
+    });
+    const found = best.found();
+    if (found) {
+      pos = found.pos;
+      current = found.score;
     }
-    if (found) pos = found;
     return found != null;
   };
   singly();
   for (let round = 0; deep && round < 2 && doubly(); round++) singly();
   return { pos, score: current };
+}
+
+/** How many moves a drawing is set right by at most, one a round (`improve`, `rejoin`, `untangle`, `faceSugars`, `roomForHydrogens`, `settleFans`). */
+const MOVE_ROUNDS = 60;
+
+/** How much two scores may differ and still be as good: a drawing measures the same in any order of its atoms only to rounding. */
+const AS_GOOD = 1e-9;
+
+/**
+ * A move by what it does, to tell moves as good apart: its kind, the atoms
+ * it moves about (a bond's two either way round sorted by structure; the
+ * end turned about first, where it matters), and the step it takes.
+ */
+type MoveKey = { kind: number; atoms: readonly number[]; step: number };
+
+/**
+ * Moves as good compared by what they do: their kind, then their atoms'
+ * classes (ranks.ts), then their step, and last their atoms' canonical
+ * ranks - never by the order the bonds and atoms are listed in.
+ */
+function byMove(mol: Molecule): (p: MoveKey, q: MoveKey) => number {
+  const c = atomClasses(mol);
+  let canon: number[] | null = null;
+  return (p, q) => {
+    if (p.kind !== q.kind) return p.kind - q.kind;
+    if (p.atoms.length !== q.atoms.length) return p.atoms.length - q.atoms.length;
+    for (let i = 0; i < p.atoms.length; i++) if (c[p.atoms[i]] !== c[q.atoms[i]]) return c[p.atoms[i]] - c[q.atoms[i]];
+    if (p.step !== q.step) return p.step - q.step;
+    canon ??= canonicalRanks(mol);
+    for (let i = 0; i < p.atoms.length; i++) if (canon[p.atoms[i]] !== canon[q.atoms[i]]) return canon[p.atoms[i]] - canon[q.atoms[i]];
+    return 0;
+  };
+}
+
+/** Two atoms either way round, sorted by structure. */
+function pairByStructure(mol: Molecule): (a: number, b: number) => [number, number] {
+  const same = byStructure(mol);
+  return (a, b) => (same(a, b) <= 0 ? [a, b] : [b, a]);
+}
+
+/**
+ * The best of the moves tried from one drawing: the one that scores
+ * lowest, moves as good by `order` - each round of a step that sets a
+ * drawing right takes it, rather than the first that helps, which would
+ * go by the order the bonds are listed in.
+ */
+function bestMove(order: (p: MoveKey, q: MoveKey) => number) {
+  let found: { pos: Grown; score: number; key: MoveKey } | null = null;
+  const beats = (score: number, key: MoveKey) =>
+    !found || score < found.score - AS_GOOD || (score <= found.score + AS_GOOD && order(key, found.key) < 0);
+  return {
+    offer(pos: Grown, score: number, key: MoveKey): void {
+      if (beats(score, key)) found = { pos, score, key };
+    },
+    /**
+     * Whether a move would be taken over the best so far: a costlier test
+     * of it (the bonds it crosses) need only be made then - the best that
+     * passes it is the same, whatever order the moves are tried in.
+     */
+    wouldTake: beats,
+    found: () => found,
+  };
+}
+
+/** A turn by `t` degrees as a move's step: the smaller first, then the way round against the clock before the other. */
+function turnStep(t: number): number {
+  return 2 * Math.abs(t) + (t < 0 ? 1 : 0);
+}
+
+/** How many bonds cross in a drawing of `bonds`. */
+function crossingsOf(bonds: readonly [number, number][], p: Grown): number {
+  let count = 0;
+  for (let i = 0; i < bonds.length; i++) {
+    const [a, b] = bonds[i];
+    for (let j = i + 1; j < bonds.length; j++) {
+      const [c, d] = bonds[j];
+      if (a === c || a === d || b === c || b === d) continue;
+      if (segmentsCross(p.get(a)!, p.get(b)!, p.get(c)!, p.get(d)!)) count++;
+    }
+  }
+  return count;
 }
 
 /** The most atoms a side turned over may have and still be set right within. */
@@ -1122,7 +1363,11 @@ function squareUp(mol: Molecule, piece: number[], pos: Grown): void {
  * each part is drawn well on its own and then joined: the part may be
  * turned a little about the atom it hangs from, or about its own atom at
  * the join, where the whole reads better for it, though the angle there
- * then gives a little from 120 degrees.
+ * then gives a little from 120 degrees. A sugar's ring may be turned
+ * right round about its own atom, or seen from its other face, to face
+ * the way a sugar is drawn; any other ring keeps its bond in along its
+ * own line but for that little. Each round tries every such move from the
+ * drawing as it stands and takes the best (`bestMove`).
  */
 function rejoin(
   mol: Molecule,
@@ -1135,12 +1380,16 @@ function rejoin(
   let pos = start;
   let current = startScore;
   const here = new Set(piece);
+  const order = byMove(mol);
   const joins = [...mol.bondIndex.entries()]
     .filter(([k, i]) => !mol.ringBonds.has(k) && mol.bonds[i].order === 1)
     .map(([k]) => k.split(",").map(Number) as [number, number])
     .filter(([a]) => here.has(a));
-  for (let pass = 0; pass < 2; pass++) {
-    let better = false;
+  // each part a little turned, about either end of its join, or turned
+  // over: the best of every such move from the drawing as it stands, a
+  // round at a time (`bestMove`)
+  for (let round = 0; round < MOVE_ROUNDS; round++) {
+    const best = bestMove(order);
     for (const [a, b] of joins) {
       for (const [from, to] of [
         [a, b],
@@ -1156,17 +1405,20 @@ function rejoin(
         // a little either way about either end of the join; and the part
         // turned right round about its own atom there, in steps of the
         // lattice, where it is a ring that has a way it should face (a
-        // sugar: its oxygen up, its anomeric carbon right)
+        // sugar: its oxygen up, its anomeric carbon right) - not any other
+        // ring, whose bond in would then come in askew
         const moves: [number, number[], number][] = [];
         for (const t of [20, -20, 30, -30]) {
           moves.push([t, side, from], [t, beyond, to]);
         }
-        if (mol.systemOf[to] >= 0) {
+        const facing = inSugarRing(mol, to);
+        if (facing) {
           for (const t of [60, -60, 90, -90, 120, -120, 150, -150, 180]) moves.push([t, beyond, to]);
         }
-        // and, for a ring, the same seen from its other face: mirrored across
-        // the join first - a turn alone cannot change which way round it is
-        const faces = mol.systemOf[to] >= 0 ? [false, true] : [false];
+        // and, for such a ring, the same seen from its other face: mirrored
+        // across the join first - a turn alone cannot change which way round
+        // it is
+        const faces = facing ? [false, true] : [false];
         for (const mirrored of faces) {
           for (const [t, group, pivot] of mirrored ? moves.filter(([, g]) => g === beyond) : moves) {
             // an upright cage is not turned
@@ -1179,16 +1431,15 @@ function rejoin(
             }
             turnSide(trial, group, trial.get(pivot)!, (t * Math.PI) / 180);
             const s = score(trial);
-            if (s < current - 1e-6) {
-              pos = trial;
-              current = s;
-              better = true;
-            }
+            if (s < current - 1e-6) best.offer(trial, s, { kind: (mirrored ? 2 : 0) + (pivot === from ? 0 : 1), atoms: [from, to], step: turnStep(t) });
           }
         }
       }
     }
-    if (!better) break;
+    const found = best.found();
+    if (!found) break;
+    pos = found.pos;
+    current = found.score;
   }
   return { pos, score: current };
 }
@@ -1286,50 +1537,72 @@ function propellers(
       return { x, rings };
     })
     .filter((h) => h.rings.length >= 2 && !faceOn.has(h.x));
-  for (const { x, rings } of hubs) {
-    const sides = rings.map((c) => sideAtoms(mol, x, c));
-    if (!sides.some((side) => side.some((v) => crowded.has(v)))) continue;
-    const at = pos.get(x)!;
-    const was = new Map(sides.flat().map((v) => [v, pos.get(v)!]));
-    const turnTo = (phi: number) => {
-      const trial = new Map(pos);
-      const lift = new Map<number, number>();
-      sides.forEach((side, k) => {
-        const u = sub(pos.get(rings[k])!, at);
-        const len = Math.hypot(u.x, u.y) || 1;
-        const ux = u.x / len;
-        const uy = u.y / len;
-        for (const v of side) {
-          const p = sub(was.get(v)!, at);
-          const along = p.x * ux + p.y * uy;
-          const across = -p.x * uy + p.y * ux;
-          trial.set(v, { x: at.x + along * ux - across * Math.cos(phi) * uy, y: at.y + along * uy + across * Math.cos(phi) * ux });
-          lift.set(v, across * Math.sin(phi));
+  // (every crowded hub tried at every angle from the drawing as it stands,
+  // and the best taken, a round at a time (`bestMove`) - not the first that
+  // helps, which would go by the order the atoms come in)
+  const seen = [...depth];
+  const persp = [...solid];
+  let current = scorer(mol, piece, seen, persp)(pos);
+  const order = byMove(mol);
+  const left = new Set(hubs.map((_, k) => k));
+  while (left.size) {
+    const best = bestMove(order);
+    const lifts = new Map<Grown, Map<number, number>>();
+    const hubOf = new Map<Grown, number>();
+    for (const k of left) {
+      const { x, rings } = hubs[k];
+      const sides = rings.map((c) => sideAtoms(mol, x, c));
+      if (!sides.some((side) => side.some((v) => crowded.has(v)))) continue;
+      const at = pos.get(x)!;
+      PROPELLER.forEach((phi, step) => {
+        const trial = new Map(pos);
+        const lift = new Map<number, number>();
+        sides.forEach((side, j) => {
+          const u = sub(pos.get(rings[j])!, at);
+          const len = Math.hypot(u.x, u.y) || 1;
+          const ux = u.x / len;
+          const uy = u.y / len;
+          for (const v of side) {
+            const p = sub(pos.get(v)!, at);
+            const along = p.x * ux + p.y * uy;
+            const across = -p.x * uy + p.y * ux;
+            trial.set(v, { x: at.x + along * ux - across * Math.cos(phi) * uy, y: at.y + along * uy + across * Math.cos(phi) * ux });
+            lift.set(v, across * Math.sin(phi));
+          }
+        });
+        const d = [...seen];
+        const q = [...persp];
+        for (const [v, l] of lift) {
+          d[v] = l;
+          q[v] = true;
+        }
+        const score = scorer(mol, piece, d, q)(trial);
+        if (score < current - 1e-6) {
+          lifts.set(trial, lift);
+          hubOf.set(trial, k);
+          best.offer(trial, score, { kind: 0, atoms: [x], step });
         }
       });
-      return { trial, lift };
-    };
-    const before = scorer(mol, piece, depth, solid)(pos);
-    let best: { score: number; trial: Grown; lift: Map<number, number> } | null = null;
-    for (const phi of PROPELLER) {
-      const { trial, lift } = turnTo(phi);
-      const seen = [...depth];
-      const persp = [...solid];
-      for (const [v, l] of lift) {
-        seen[v] = l;
-        persp[v] = true;
-      }
-      const score = scorer(mol, piece, seen, persp)(trial);
-      if (!best || score < best.score) best = { score, trial, lift };
     }
-    if (!best || best.score >= before - 1e-6) continue;
-    for (const [v, p] of best.trial) pos.set(v, p);
-    for (const [v, l] of best.lift) depth[v] = l;
-    turned.push(...sides);
+    const found = best.found();
+    if (!found) return;
+    const k = hubOf.get(found.pos)!;
+    for (const [v, p] of found.pos) pos.set(v, p);
+    for (const [v, l] of lifts.get(found.pos)!) {
+      depth[v] = l;
+      seen[v] = l;
+      persp[v] = true;
+    }
+    current = found.score;
+    turned.push(...hubs[k].rings.map((c) => sideAtoms(mol, hubs[k].x, c)));
+    left.delete(k);
     crowded = clashing(mol, piece, pos);
     if (!crowded.size) return;
   }
 }
+
+/** How many of a piece's best drawings are each rejoined and untangled, the best of them kept (of a piece of up to eighty atoms). */
+const FINALISTS = 3;
 
 /** How far a point is from the segment p-q. */
 function toSegment(h: Point, p: Point, q: Point): number {
@@ -1343,7 +1616,9 @@ function toSegment(h: Point, p: Point, q: Point): number {
 /**
  * Where parts are still in each other's way: turn a branch off its ideal
  * angle, a little and then more, and at last stretch the bond it hangs
- * from - each kept only if the drawing scores better for it.
+ * from - each kept only if the drawing scores better for it. Each round
+ * tries every such move from the drawing as it stands and takes the best
+ * (`bestMove`).
  */
 export function untangle(
   mol: Molecule,
@@ -1379,27 +1654,21 @@ export function untangle(
   const bonds = [...mol.bondIndex.keys()]
     .map((k) => k.split(",").map(Number) as [number, number])
     .filter(([a]) => pos.has(a));
-  const crossingsIn = (p: Grown) => {
-    let count = 0;
-    for (let i = 0; i < bonds.length; i++) {
-      const [a, b] = bonds[i];
-      for (let j = i + 1; j < bonds.length; j++) {
-        const [c, d] = bonds[j];
-        if (a === c || a === d || b === c || b === d) continue;
-        if (segmentsCross(p.get(a)!, p.get(b)!, p.get(c)!, p.get(d)!)) count++;
-      }
-    }
-    return count;
-  };
-  const crossed = crossingsIn(pos);
+  const crossed = crossingsOf(bonds, pos);
   let safe = { pos, score: current };
-  for (let round = 0; round < 6; round++) {
+  // (what hangs from a ring bound face-on points straight out from it, as
+  // the ring is seen: moved out along its bond, not turned - Cp*'s methyls)
+  const faceOn = new Set(mol.eta.flatMap((e) => e.atoms));
+  // the best of every move from the drawing as it stands, a round at a
+  // time (`bestMove`)
+  const order = byMove(mol);
+  for (let round = 0; round < MOVE_ROUNDS; round++) {
     const hit = clashing(mol, piece, pos);
     if (!hit.size) break;
     const onAtom = (o: number) =>
       piece.some((v) => v !== o && !mol.neighbours[o].includes(v) && dist(pos.get(v)!, pos.get(o)!) < 0.6);
     const turnable = [...acyclic, ...carbonyls.filter(([, o]) => onAtom(o))];
-    let better = false;
+    const best = bestMove(order);
     for (const [a, b] of turnable) {
       for (const [from, to] of [
         [a, b],
@@ -1407,31 +1676,38 @@ export function untangle(
       ]) {
         const side = sideAtoms(mol, from, to);
         if (side.length > piece.length / 2 || !side.some((v) => hit.has(v))) continue;
-        const moves: ((p: Grown) => void)[] = [];
+        const moves: [MoveKey, (p: Grown) => void][] = [];
         // (an upright cage is moved, not turned)
-        for (const t of fixed(side) ? [] : [15, -15, 30, -30, 45, -45, 60, -60, 90, -90]) {
-          moves.push((p) => turnSide(p, side, p.get(from)!, (t * Math.PI) / 180));
+        for (const t of fixed(side) || (faceOn.has(from) && !faceOn.has(to)) ? [] : [15, -15, 30, -30, 45, -45, 60, -60, 90, -90]) {
+          moves.push([{ kind: 0, atoms: [from, to], step: turnStep(t) }, (p) => turnSide(p, side, p.get(from)!, (t * Math.PI) / 180)]);
         }
-        for (const by of [0.3, 0.6]) {
-          moves.push((p) => stretchSide(p, side, p.get(from)!, p.get(to)!, by));
+        // (a bond drawn at most 0.6 longer than its own length, however
+        // many rounds stretch it)
+        const own = isMetal(mol.el[from]) !== isMetal(mol.el[to]) && mol.el[from] !== "*" && mol.el[to] !== "*" ? METAL_BOND : 1;
+        const now = dist(pos.get(from)!, pos.get(to)!);
+        for (const by of UNTANGLE_STRETCHES) {
+          if (now + by > own + UNTANGLE_STRETCHES[UNTANGLE_STRETCHES.length - 1] + 1e-6) continue;
+          moves.push([{ kind: 1, atoms: [from, to], step: by }, (p) => stretchSide(p, side, p.get(from)!, p.get(to)!, by)]);
         }
-        for (const move of moves) {
+        for (const [key, move] of moves) {
           const trial = new Map(pos);
           move(trial);
           const s = score(trial);
-          if (s < current - 1e-6) {
-            pos = trial;
-            current = s;
-            better = true;
-            if (crossingsIn(trial) <= crossed) safe = { pos, score: current };
-          }
+          if (s < current - 1e-6) best.offer(trial, s, key);
         }
       }
     }
-    if (!better) break;
+    const found = best.found();
+    if (!found) break;
+    pos = found.pos;
+    current = found.score;
+    if (crossingsOf(bonds, pos) <= crossed) safe = { pos, score: current };
   }
-  return crossingsIn(pos) > crossed ? safe : { pos, score: current };
+  return crossingsOf(bonds, pos) > crossed ? safe : { pos, score: current };
 }
+
+/** How much longer `untangle` draws a bond at a time, and in all at most the last. */
+const UNTANGLE_STRETCHES = [0.3, 0.6];
 
 /**
  * What each name's letters (OTBS, NHBz) run into, as the metrics count it:
@@ -1481,7 +1757,8 @@ function namesInTheWay(mol: Molecule, piece: number[], p: Grown): Map<number, nu
  * until the H has room beside its symbol. The drawing writes OH or HO as the bond has
  * it; the H is never moved under the symbol to make room. A name's letters
  * (OTBS, NHBz) are given room the same way. A move that crosses bonds is
- * not taken.
+ * not taken. Each round tries every move for every H in the way, from the
+ * drawing as it stands, and takes the best (`bestMove`).
  */
 export function roomForHydrogens(
   mol: Molecule,
@@ -1497,18 +1774,6 @@ export function roomForHydrogens(
   const bonds = [...mol.bondIndex.keys()]
     .map((k) => k.split(",").map(Number) as [number, number])
     .filter(([a]) => here.has(a));
-  const crossingsIn = (p: Grown) => {
-    let count = 0;
-    for (let i = 0; i < bonds.length; i++) {
-      const [a, b] = bonds[i];
-      for (let j = i + 1; j < bonds.length; j++) {
-        const [c, d] = bonds[j];
-        if (a === c || a === d || b === c || b === d) continue;
-        if (segmentsCross(p.get(a)!, p.get(b)!, p.get(c)!, p.get(d)!)) count++;
-      }
-    }
-    return count;
-  };
   // what each label's H runs into, where the drawing sets it
   const blocked = (p: Grown): Map<number, number[]> => {
     const out = new Map<number, number[]>();
@@ -1541,30 +1806,28 @@ export function roomForHydrogens(
   };
   // the small moves of an atom, or of a branch hung from a bond - larger
   // for a name, whose letters reach further
-  const nudges = (side: number[], from: number, to: number, wide = false): ((p: Grown) => void)[] => {
-    const out: ((p: Grown) => void)[] = [];
-    if (fixed(side)) return out;
-    for (const t of [0, 10, -10, 20, -20, 30, -30, ...(wide ? [45, -45, 60, -60] : [])]) {
-      for (const by of [0, -0.15, 0.15, 0.3, 0.45]) {
-        if (!t && !by) continue;
-        out.push((p) => {
-          if (t) turnSide(p, side, p.get(from)!, (t * Math.PI) / 180);
-          if (by) stretchSide(p, side, p.get(from)!, p.get(to)!, by);
-        });
-      }
-    }
-    return out;
-  };
-  let crossings = crossingsIn(pos);
-  for (let round = 0; round < 3; round++) {
+  const turns = (wide: boolean) => [0, 10, -10, 20, -20, 30, -30, ...(wide ? [45, -45, 60, -60] : [])];
+  const stretches = [0, -0.15, 0.15, 0.3, 0.45];
+  // the best of every move for every H in the way, from the drawing as it
+  // stands, a round at a time (`bestMove`)
+  const order = byMove(mol);
+  let crossings = crossingsOf(bonds, pos);
+  for (let round = 0; round < MOVE_ROUNDS; round++) {
     const now = blocked(pos);
     if (!now.size) break;
-    let better = false;
+    // each branch moved once, by the bond it hangs from - however many H's
+    // it is in the way of - and widely where it is a name's own
+    const branches = new Map<string, { side: number[]; from: number; to: number; own: boolean; wide: boolean }>();
+    const offer = (side: number[], from: number, to: number, own: boolean, wide: boolean) => {
+      if (fixed(side)) return;
+      const k = `${from}>${to}`;
+      const was = branches.get(k);
+      branches.set(k, { side, from, to, own: own || !!was?.own, wide: wide || !!was?.wide });
+    };
     for (const [a, hits] of now) {
-      const moves: ((p: Grown) => void)[] = [];
       // its own bond, where it ends there (an OH, an SH, an NH2, an OTBS)
       const named = isName(mol.el[a]);
-      if (mol.neighbours[a].length === 1 && mol.systemOf[a] < 0) moves.push(...nudges([a], mol.neighbours[a][0], a, named));
+      if (mol.neighbours[a].length === 1 && mol.systemOf[a] < 0) offer([a], mol.neighbours[a][0], a, true, named);
       // or what it runs into: an end atom (a C=O's O), or a small branch
       // out of the rest at it
       for (const o of hits) {
@@ -1573,32 +1836,30 @@ export function roomForHydrogens(
           const side = sideAtoms(mol, p, o);
           // (not one that carries the H's own atom along with it)
           if (side.length > 12 || side.includes(a)) continue;
-          moves.push(...nudges(side, p, o, named && side.length === 1));
+          offer(side, p, o, false, named && side.length === 1);
         }
-      }
-      let found: Grown | null = null;
-      let foundScore = current;
-      let foundCrossings = crossings;
-      for (const move of moves) {
-        const trial = new Map(pos);
-        move(trial);
-        const s = score(trial);
-        if (s < foundScore - 1e-6) {
-          const c = crossingsIn(trial);
-          if (c > crossings) continue;
-          found = trial;
-          foundScore = s;
-          foundCrossings = c;
-        }
-      }
-      if (found) {
-        pos = found;
-        current = foundScore;
-        crossings = foundCrossings;
-        better = true;
       }
     }
-    if (!better) break;
+    const best = bestMove(order);
+    for (const { side, from, to, own, wide } of branches.values()) {
+      for (const t of turns(wide)) {
+        for (const [i, by] of stretches.entries()) {
+          if (!t && !by) continue;
+          const trial = new Map(pos);
+          if (t) turnSide(trial, side, trial.get(from)!, (t * Math.PI) / 180);
+          if (by) stretchSide(trial, side, trial.get(from)!, trial.get(to)!, by);
+          const s = score(trial);
+          const key = { kind: own ? 0 : 1, atoms: [from, to], step: turnStep(t) * stretches.length + i };
+          // (no move that crosses more bonds)
+          if (s < current - 1e-6 && best.wouldTake(s, key) && crossingsOf(bonds, trial) <= crossings) best.offer(trial, s, key);
+        }
+      }
+    }
+    const found = best.found();
+    if (!found) break;
+    pos = found.pos;
+    current = found.score;
+    crossings = crossingsOf(bonds, pos);
   }
   return { pos, score: current };
 }
@@ -1609,7 +1870,8 @@ export function roomForHydrogens(
  * best place often lies between the coarser turns that cleared it of the
  * rest (untangle) - ginkgolide B's, turned off its ring until a methyl
  * touched the corner of the H of the OH beside it. No turn that crosses
- * bonds is taken.
+ * bonds is taken. Each round tries every turn of every fan and takes the
+ * best (`bestMove`).
  */
 function settleFans(
   mol: Molecule,
@@ -1622,35 +1884,34 @@ function settleFans(
   let pos = start;
   let current = startScore;
   const bonds = [...mol.bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]).filter(([a]) => pos.has(a));
-  const crossingsIn = (p: Grown) => {
-    let count = 0;
-    for (let i = 0; i < bonds.length; i++)
-      for (let j = i + 1; j < bonds.length; j++) {
-        const [a, b] = bonds[i];
-        const [c, d] = bonds[j];
-        if (a !== c && a !== d && b !== c && b !== d && segmentsCross(p.get(a)!, p.get(b)!, p.get(c)!, p.get(d)!)) count++;
-      }
-    return count;
-  };
-  for (const a of piece) {
+  const fans = piece.flatMap((a) => {
     const ends = tridentEnds(mol, a);
-    if (!ends) continue;
+    if (!ends) return [];
     const end = mol.neighbours[a].find((v) => !ends.includes(v))!;
     const side = sideAtoms(mol, end, a);
-    if (fixed(side)) continue;
-    const crossings = crossingsIn(pos);
-    let found: Grown | null = null;
-    for (let t = -45; t <= 45; t += 5) {
-      if (!t) continue;
-      const trial = new Map(pos);
-      turnSide(trial, side, trial.get(end)!, (t * Math.PI) / 180);
-      const s = score(trial);
-      if (s < current - 1e-6 && crossingsIn(trial) <= crossings) {
-        found = trial;
-        current = s;
+    return fixed(side) ? [] : [{ a, end, side }];
+  });
+  if (!fans.length) return { pos, score: current };
+  // the best turn of any fan from the drawing as it stands, a round at a
+  // time (`bestMove`)
+  const order = byMove(mol);
+  for (let round = 0; round < MOVE_ROUNDS; round++) {
+    const crossings = crossingsOf(bonds, pos);
+    const best = bestMove(order);
+    for (const { a, end, side } of fans) {
+      for (let t = -45; t <= 45; t += 5) {
+        if (!t) continue;
+        const trial = new Map(pos);
+        turnSide(trial, side, trial.get(end)!, (t * Math.PI) / 180);
+        const s = score(trial);
+        const key = { kind: 0, atoms: [end, a], step: turnStep(t) };
+        if (s < current - 1e-6 && best.wouldTake(s, key) && crossingsOf(bonds, trial) <= crossings) best.offer(trial, s, key);
       }
     }
-    if (found) pos = found;
+    const found = best.found();
+    if (!found) break;
+    pos = found.pos;
+    current = found.score;
   }
   return { pos, score: current };
 }
@@ -1659,7 +1920,8 @@ function settleFans(
  * A sugar hung on a macrolide seen from the face its carbons number
  * clockwise from, the aglycone staying as it is: turned over on one side or
  * the other of its glycosidic O, and swung round that link as far as it
- * must be to clear the rest. No move that crosses bonds is taken.
+ * must be to clear the rest. No move that crosses bonds is taken. Each
+ * round tries every sugar's moves and takes the best (`bestMove`).
  */
 function faceSugars(
   mol: Molecule,
@@ -1677,33 +1939,25 @@ function faceSugars(
   const bonds = [...mol.bondIndex.keys()]
     .map((k) => k.split(",").map(Number) as [number, number])
     .filter(([a]) => here.has(a));
-  const crossingsIn = (p: Grown) => {
-    let count = 0;
-    for (let i = 0; i < bonds.length; i++) {
-      const [a, b] = bonds[i];
-      for (let j = i + 1; j < bonds.length; j++) {
-        const [c, d] = bonds[j];
-        if (a === c || a === d || b === c || b === d) continue;
-        if (segmentsCross(p.get(a)!, p.get(b)!, p.get(c)!, p.get(d)!)) count++;
-      }
-    }
-    return count;
-  };
-  let crossings = crossingsIn(pos);
-  for (let round = 0; round < 2; round++) {
-    let better = false;
+  // the best of every sugar's moves from the drawing as it stands, a round
+  // at a time (`bestMove`)
+  const order = byMove(mol);
+  const pair = pairByStructure(mol);
+  let crossings = crossingsOf(bonds, pos);
+  for (let round = 0; round < MOVE_ROUNDS; round++) {
+    const best = bestMove(order);
     for (const [a, b] of links) {
       const side = sideAtoms(mol, a, b);
-      let found: Grown | null = null;
-      let foundScore = current;
-      let foundCrossings = crossings;
       // (turned over across the link's line, the sugar's ring lies askew:
       // the turns that set it square on the lattice again, and others)
       const flipped = new Map(pos);
       flip(mol, flipped, a, b, sides);
-      const ringBond = bonds.find(
+      // (the ring's bond to square up by, the same in any order: the one
+      // whose atoms come first by structure)
+      const ringBonds = bonds.filter(
         ([u, v]) => side.includes(u) && side.includes(v) && mol.ringBonds.has(u < v ? `${u},${v}` : `${v},${u}`),
       );
+      const ringBond = ringBonds.length ? ringBonds.map(([u, v]) => pair(u, v)).sort((p, q) => order({ kind: 0, atoms: p, step: 0 }, { kind: 0, atoms: q, step: 0 }))[0] : null;
       const turns = [0, 15, -15, 30, -30, 45, -45, 60, -60];
       if (ringBond) {
         const t = (angleOf(sub(flipped.get(ringBond[1])!, flipped.get(ringBond[0])!)) * 180) / Math.PI;
@@ -1714,22 +1968,16 @@ function faceSugars(
         const trial = new Map(flipped);
         if (t) turnSide(trial, side, trial.get(a)!, (t * Math.PI) / 180);
         const s = score(trial);
-        if (s < foundScore - 1e-6) {
-          const c = crossingsIn(trial);
-          if (c > crossings) continue;
-          found = trial;
-          foundScore = s;
-          foundCrossings = c;
-        }
-      }
-      if (found) {
-        pos = found;
-        current = foundScore;
-        crossings = foundCrossings;
-        better = true;
+        const key = { kind: 0, atoms: [a, b], step: turnStep(t) };
+        // (no move that crosses more bonds)
+        if (s < current - 1e-6 && best.wouldTake(s, key) && crossingsOf(bonds, trial) <= crossings) best.offer(trial, s, key);
       }
     }
-    if (!better) break;
+    const found = best.found();
+    if (!found) break;
+    pos = found.pos;
+    current = found.score;
+    crossings = crossingsOf(bonds, pos);
   }
   return { pos, score: current };
 }
@@ -1741,15 +1989,18 @@ function sugarLinks(mol: Molecule): [number, number][] {
   for (let o = 0; o < mol.n; o++) {
     if (mol.el[o] !== "O" || mol.systemOf[o] >= 0 || mol.neighbours[o].length !== 2) continue;
     const [p, q] = mol.neighbours[o];
-    const sugar = (c: number) =>
-      mol.ringsOf[c].some((r) => {
-        const ring = mol.rings[r];
-        return (ring.length === 5 || ring.length === 6) && ring.filter((a) => mol.el[a] === "O").length === 1;
-      });
-    if (macro(p) && sugar(q)) out.push([p, o], [o, q]);
-    else if (macro(q) && sugar(p)) out.push([q, o], [o, p]);
+    if (macro(p) && inSugarRing(mol, q)) out.push([p, o], [o, q]);
+    else if (macro(q) && inSugarRing(mol, p)) out.push([q, o], [o, p]);
   }
   return out;
+}
+
+/** Whether an atom is in a sugar's ring: five- or six-membered, with one oxygen in it. */
+function inSugarRing(mol: Molecule, a: number): boolean {
+  return mol.ringsOf[a].some((r) => {
+    const ring = mol.rings[r];
+    return (ring.length === 5 || ring.length === 6) && ring.filter((v) => mol.el[v] === "O").length === 1;
+  });
 }
 
 /** The benchmark's score for a piece as laid out. */

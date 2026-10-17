@@ -30,6 +30,8 @@ import {
 } from "./geometry";
 import { keepsDoubles, macrocycleKeeping, macrocycleShapes, type RingDouble } from "./macrocycle";
 import type { Molecule, RingSystem } from "./perceive";
+import { byStructure, ringKey, ringRank } from "./ranks";
+import { flatCost } from "./cage";
 
 /** Rings this size and over are macrocycles, drawn as a closed zigzag. */
 export const MACROCYCLE = 9;
@@ -53,13 +55,23 @@ function squareStart(n: number): number {
  * the macrocycles are then chains drawn between rings already regular.
  * That ring, or null for any other system.
  */
-function hubOf(rings: number[][]): number[] | null {
+function hubOf(mol: Molecule, rings: number[][]): number[] | null {
   const macro = rings.filter((r) => r.length >= MACROCYCLE);
   const runsThrough = (r: number[]) => macro.filter((m) => r.filter((a) => m.includes(a)).length >= 3).length;
-  if (macro.length === 1) return blockHub(rings, macro[0]);
+  if (macro.length === 1) return blockHub(mol, rings, macro[0]);
   if (macro.length < 2) return null;
   const hubs = rings.filter((r) => r.length === 6 && runsThrough(r) >= 2);
-  return hubs.sort((p, q) => runsThrough(q) - runsThrough(p))[0] ?? null;
+  // (rings alike in that by their atoms, then by the canonical rank: never the one listed first)
+  return hubs.sort((p, q) => runsThrough(q) - runsThrough(p) || byRing(mol)(p, q))[0] ?? null;
+}
+
+/** Two rings compared by their atoms as the structure has them (`ringKey`), then by the canonical rank (`ringRank`). */
+function byRing(mol: Molecule): (p: readonly number[], q: readonly number[]) => number {
+  return (p, q) => {
+    const kp = ringKey(mol, p);
+    const kq = ringKey(mol, q);
+    return kp < kq ? -1 : kp > kq ? 1 : ringRank(mol, p) - ringRank(mol, q);
+  };
 }
 
 /**
@@ -67,19 +79,23 @@ function hubOf(rings: number[][]): number[] | null {
  * rifampicin's ansa chain through its naphthofuranone - starts from the
  * block, which stays regular: the macrocycle is then a chain drawn round
  * from it, as an ansa bridge is. The six-membered ring of the block it
- * runs through fused to the most others, or null.
+ * runs through by the most atoms, then fused to the most others, or null.
  */
-function blockHub(rings: number[][], macro: number[]): number[] | null {
+function blockHub(mol: Molecule, rings: number[][], macro: number[]): number[] | null {
   const small = rings.filter((r) => r.length < MACROCYCLE);
   const fused = (r: number[]) => small.filter((q) => q !== r && q.filter((a) => r.includes(a)).length === 2).length;
-  const hubs = small.filter((r) => r.length === 6 && r.filter((a) => macro.includes(a)).length >= 3 && fused(r) >= 1);
-  return hubs.sort((p, q) => fused(q) - fused(p))[0] ?? null;
+  const shared = (r: number[]) => r.filter((a) => macro.includes(a)).length;
+  const hubs = small.filter((r) => r.length === 6 && shared(r) >= 3 && fused(r) >= 1);
+  // (the one the macrocycle shares the most atoms with, then the most
+  // fused, then by its atoms: rings tied in how fused they are went to the
+  // one listed first)
+  return hubs.sort((p, q) => shared(q) - shared(p) || fused(q) - fused(p) || byRing(mol)(p, q))[0] ?? null;
 }
 
 export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
   const rings = sys.rings.map((i) => mol.rings[i]);
   const big = Math.max(0, ...rings.map((r) => r.length));
-  if (big < MACROCYCLE || hubOf(rings)) return 1;
+  if (big < MACROCYCLE || hubOf(mol, rings)) return 1;
   return Math.max(...rings.filter((r) => r.length === big).map((r) => shapesFor(mol, r).length));
 }
 
@@ -144,6 +160,9 @@ export function placeRingSystem(
 ): Map<number, Point> {
   const pos = new Map<number, Point>();
   const rings = sys.rings.map((i) => mol.rings[i]);
+  rings.forEach((r, i, all) => {
+    if (r.length >= MACROCYCLE) all[i] = alongOuterSides(r, all);
+  });
   const placedRing = new Set<number>();
 
   // first: the largest macrocycle; else a six-membered ring, or a four,
@@ -158,18 +177,42 @@ export function placeRingSystem(
   // the bridge inside - taxol's A ring, and its eight-membered B
   const bridgedFrom = (r: number[]) =>
     rings.some((q) => q !== r && q.length > r.length && q.filter((a) => r.includes(a)).length >= 3) ? 1 : 0;
-  const ordered = [...rings].sort((p, q) => {
+  // (by structure: the ring with the most bonds out of the system - the
+  // one the rest hangs from - then by its atoms)
+  const inSys = new Set(sys.atoms);
+  const outs = (r: readonly number[]) => r.reduce((n, a) => n + mol.neighbours[a].filter((b) => !inSys.has(b)).length, 0);
+  const byKey = (p: readonly number[], q: readonly number[]) => {
+    const o = outs(q) - outs(p);
+    if (o) return o;
+    const kp = ringKey(mol, p);
+    const kq = ringKey(mol, q);
+    return kp < kq ? -1 : kp > kq ? 1 : 0;
+  };
+  const byOrder = (p: number[], q: number[]) => {
     const pm = p.length >= MACROCYCLE ? p.length : 0;
     const qm = q.length >= MACROCYCLE ? q.length : 0;
     if (pm !== qm) return qm - pm;
     if (fit(p) !== fit(q)) return fit(q) - fit(p);
     if (bridgedFrom(p) !== bridgedFrom(q)) return bridgedFrom(q) - bridgedFrom(p);
-    const f = fusedCount(q) - fusedCount(p);
-    if (f) return f;
-    return q.length - p.length;
-  });
+    return fusedCount(q) - fusedCount(p) || q.length - p.length;
+  };
+  // (rings alike in all that by their atoms, never by which is listed first)
+  const ordered = [...rings].sort((p, q) => byOrder(p, q) || byKey(p, q));
   // (or the ring asked for: a bridged system is tried from each)
-  const first = start != null ? mol.rings[start] : hubOf(rings) ?? ordered[0];
+  const hub = start != null ? null : hubOf(mol, rings);
+  // rings alike in all that each tried first, the system that reads best
+  // kept: which was listed first is no reason
+  if (start == null && !hub) {
+    const tied = ordered.filter((r) => r.length < MACROCYCLE && byOrder(r, ordered[0]) === 0);
+    if (tied.length > 1) {
+      const layouts = tied
+        .sort((p, q) => byKey(p, q) || ringRank(mol, p) - ringRank(mol, q))
+        .map((r) => placeRingSystem(mol, sys, variant, sys.rings[rings.indexOf(r)]));
+      return bestOf(mol, sys, layouts);
+    }
+  }
+  const first = start != null ? mol.rings[start] : hub ?? ordered[0];
+  const firstAt = rings.indexOf(first);
 
   // a macrocycle that runs mostly through other rings is a ring of rings,
   // round a circle; one that runs through a ring or two on its way
@@ -181,7 +224,12 @@ export function placeRingSystem(
   );
   const shapes = first.length >= MACROCYCLE ? shapesFor(mol, first) : [];
   if (first.length >= MACROCYCLE && through.size >= 0.4 * first.length && shortLinks(first, through)) {
-    ringOfBlocks(mol, first, rings, pos).forEach((i) => placedRing.add(i));
+    // (run along the side of each ring that carries the fewest groups,
+    // where two sides are as long: the groups on that side face into the
+    // ring of rings)
+    const barer = alongBarerSides(mol, sys, first, rings);
+    rings[firstAt] = barer;
+    ringOfBlocks(mol, barer, rings, pos).forEach((i) => placedRing.add(i));
   } else if (first.length >= MACROCYCLE) {
     const shape = shapes[variant % shapes.length];
     const at = macrocycleFit(mol, first, shape, rings);
@@ -192,7 +240,7 @@ export function placeRingSystem(
     first.forEach((a, i) => pos.set(a, scale(dir(t0 - (i * 2 * Math.PI) / first.length), r)));
   }
   dentForTrans(mol, first, pos);
-  placedRing.add(rings.indexOf(first));
+  placedRing.add(firstAt);
 
   // A bridged pair of rings has three bridges between its bridgeheads: the
   // path they share and each one's own. The shortest is drawn inside the
@@ -220,33 +268,137 @@ export function placeRingSystem(
     }),
   );
 
-  while (placedRing.size < rings.length) {
-    // next: the ring most fused to what is placed - on a side before a
-    // bridge, a bridge before one touching at an atom (spiro)
-    let next = -1;
-    let nextRank = -Infinity;
-    rings.forEach((r, i) => {
-      if (placedRing.has(i)) return;
-      const shared = r.filter((a) => pos.has(a)).length;
-      if (!shared) return;
-      const waiting = waitsFor.has(i) && !placedRing.has(waitsFor.get(i)!);
-      const rank =
-        (waiting ? -5000 : 0) +
-        (shared === 2 ? 1000 : shared > 2 ? 500 : 0) +
-        (r.length === 6 ? 50 : 0) +
-        (r.length < MACROCYCLE ? 20 : 0) -
-        r.length;
-      if (rank > nextRank) {
-        nextRank = rank;
-        next = i;
+  const rules = chainRules(mol, sys);
+  // (how many orders of the rings left are tried at most, where rings alike
+  // could each go next)
+  let orders = RING_ORDERS;
+  const placeRest = (pos: Map<number, Point>, placedRing: Set<number>): Map<number, Point> => {
+    while (placedRing.size < rings.length) {
+      // next: the ring most fused to what is placed - on a side before a
+      // bridge, a bridge before one touching at an atom (spiro)
+      let next: number[] = [];
+      let nextRank = -Infinity;
+      rings.forEach((r, i) => {
+        if (placedRing.has(i)) return;
+        const shared = r.filter((a) => pos.has(a)).length;
+        if (!shared) return;
+        const waiting = waitsFor.has(i) && !placedRing.has(waitsFor.get(i)!);
+        const rank =
+          (waiting ? -5000 : 0) +
+          (shared === 2 ? 1000 : shared > 2 ? 500 : 0) +
+          (r.length === 6 ? 50 : 0) +
+          (r.length < MACROCYCLE ? 20 : 0) -
+          r.length;
+        if (rank > nextRank) [nextRank, next] = [rank, [i]];
+        else if (rank === nextRank) next.push(i);
+      });
+      if (!next.length) break;
+      next.sort((i, j) => byKey(rings[i], rings[j]) || ringRank(mol, rings[i]) - ringRank(mol, rings[j]));
+      // rings alike in that could each go next: each tried, the system that
+      // reads best kept (once the orders tried run out, the first by their
+      // atoms, then by the canonical rank)
+      if (next.length > 1 && orders > next.length) {
+        orders -= next.length;
+        return bestOf(
+          mol,
+          sys,
+          next.map((i) => {
+            const p = new Map(pos);
+            placeRing(rings[i], p, rings, rules);
+            dentForTrans(mol, rings[i], p);
+            return placeRest(p, new Set([...placedRing, i]));
+          }),
+        );
       }
-    });
-    if (next < 0) break;
-    placeRing(rings[next], pos, rings, chainRules(mol, sys));
-    dentForTrans(mol, rings[next], pos);
-    placedRing.add(next);
+      placeRing(rings[next[0]], pos, rings, rules);
+      dentForTrans(mol, rings[next[0]], pos);
+      placedRing.add(next[0]);
+    }
+    return pos;
+  };
+  return placeRest(pos, placedRing);
+}
+
+/** How many layouts of a ring system are tried at most where rings alike could each go next (`placeRingSystem`). */
+const RING_ORDERS = 8;
+
+/**
+ * Of a ring system's layouts, the one that reads best flat - its faults,
+ * the room its bonds out have, its rings' shapes - the first of those as
+ * good.
+ */
+function bestOf(mol: Molecule, sys: RingSystem, layouts: Map<number, Point>[]): Map<number, Point> {
+  let best = layouts[0];
+  let least = Infinity;
+  for (const pos of layouts) {
+    if (sys.atoms.some((a) => !pos.has(a))) continue;
+    const c = flatCost(mol, sys, pos, undefined, true) + 20 * misshapen(mol, sys, pos);
+    if (c < least - 1e-9) [best, least] = [pos, c];
   }
-  return pos;
+  return best;
+}
+
+/**
+ * A macrocycle run along the barer side of each ring it passes by two or
+ * more atoms where the ring's two sides between them are as long: the
+ * smallest set of rings holds one side by the order of the atoms, and the
+ * groups on the side it holds face into the macrocycle. Of the two, the
+ * side whose atoms carry fewer groups out of the ring system (a glucose's
+ * ring O and C5, its CH2OH, not its C2 and C3 with their OHs: an
+ * alpha-cyclodextrin's twelve OHs crowded inside it, in one order), the
+ * same in any order; sides alike in that are left as they are.
+ */
+function alongBarerSides(mol: Molecule, sys: RingSystem, macro: number[], rings: number[][]): number[] {
+  const inSys = new Set(sys.atoms);
+  return alongLighterSides(macro, rings, (atoms) => atoms.reduce((s, a) => s + mol.neighbours[a].filter((b) => !inSys.has(b)).length, 0));
+}
+
+/**
+ * A macrocycle run along the outer side of each ring it passes where two
+ * sides are as long: the side whose atoms are in fewer of the system's other
+ * rings, not through a fusion - rifampicin's ansa chain along its
+ * naphthalene's free edge, not across the junction into the next ring,
+ * which the smallest set held in some orders of the atoms.
+ */
+function alongOuterSides(macro: number[], rings: number[][]): number[] {
+  return alongLighterSides(macro, rings, (atoms) => atoms.reduce((s, a) => s + rings.filter((q) => q !== macro && q.length < MACROCYCLE && q.includes(a)).length, 0));
+}
+
+/** A macrocycle run along the side of each ring it passes that `weigh` finds lighter, where two sides are as long; sides as heavy are left. */
+function alongLighterSides(macro: number[], rings: number[][], weigh: (atoms: readonly number[]) => number): number[] {
+  const groups = weigh;
+  let m = macro;
+  for (const r of rings) {
+    if (r === macro || r.length > 8) continue;
+    const n = m.length;
+    const shared = r.filter((a) => m.includes(a));
+    if (shared.length < 3 || shared.length === r.length) continue;
+    // the passage in the macrocycle's order: its first atom, the ones
+    // inside, its last - one run of the ring's atoms
+    const at = m.findIndex((a, t) => r.includes(a) && !r.includes(m[(t - 1 + n) % n]));
+    if (at < 0) continue;
+    const run: number[] = [];
+    for (let k = 0; k < n && r.includes(m[(at + k) % n]); k++) run.push(m[(at + k) % n]);
+    if (run.length !== shared.length) continue;
+    const inner = run.slice(1, -1);
+    // the ring's other way from the passage's first atom to its last
+    const k = r.length;
+    const ia = r.indexOf(run[0]);
+    const step = r[(ia + 1) % k] === run[1] ? -1 : 1;
+    const other: number[] = [];
+    for (let j = 1; j < k; j++) {
+      const v = r[(((ia + step * j) % k) + k) % k];
+      if (v === run[run.length - 1]) break;
+      other.push(v);
+    }
+    if (other.length !== inner.length || other.some((v) => m.includes(v))) continue;
+    if (groups(other) >= groups(inner)) continue;
+    m = m.map((v, t) => {
+      const j = (t - at + n) % n;
+      return j >= 1 && j <= inner.length ? other[j - 1] : v;
+    });
+  }
+  return m;
 }
 
 /**
@@ -578,7 +730,13 @@ type ChainCis = (x: number, u: number, v: number, y: number) => boolean | null;
  * placed atoms, by how big each is, to leave outside the ring it closes
  * rather than shut in it (`loads`, read when the chain is drawn).
  */
-type ChainRules = { cis: ChainCis; neighbours: readonly (readonly number[])[]; loads: (pos: Map<number, Point>) => { at: Point; weight: number }[] };
+type ChainRules = {
+  cis: ChainCis;
+  neighbours: readonly (readonly number[])[];
+  loads: (pos: Map<number, Point>) => { at: Point; weight: number }[];
+  /** Two atoms by their structure (`byStructure`): which end a run is drawn from, where nothing else tells. */
+  before: (p: number, q: number) => number;
+};
 
 function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
   const inSys = new Set(sys.atoms);
@@ -603,7 +761,7 @@ function chainRules(mol: Molecule, sys: RingSystem): ChainRules {
       }
       return weight ? [{ at: pos.get(a)!, weight }] : [];
     });
-  return { cis: chainCis(mol), neighbours: mol.neighbours, loads };
+  return { cis: chainCis(mol), neighbours: mol.neighbours, loads, before: byStructure(mol) };
 }
 
 function chainCis(mol: Molecule): ChainCis {
@@ -642,9 +800,40 @@ function placeRing(ring: number[], pos: Map<number, Point>, rings: number[][] = 
       j = (j + 1) % n;
     }
     // a macrocycle's run is a chain, drawn as one: a zigzag, never an arc
-    if (n >= MACROCYCLE && run.length >= 3) placeChainRun(ring[i], ring[j], run, pos, rings, rules);
+    if (n >= MACROCYCLE && run.length >= 3) placeChainFrom(ring[i], ring[j], run, pos, rings, rules);
     else placeRun(ring[i], ring[j], run, n, pos);
   }
+}
+
+/**
+ * A macrocycle's run between placed atoms `p` and `q` drawn as a chain
+ * (`placeChainRun`), from one end or the other. The search sets the
+ * chain's first bond where it likes and closes onto the far end where it
+ * must, its angles giving there. So it starts from the end whose atom has
+ * more bonds of its own still to place - a group hung from it, a ring yet
+ * to come - which need the room the closing would take: rifampicin's ansa
+ * chain from its ketal carbon, which carries a methyl, not from the
+ * naphthalene carbon its amide closes onto. Ends alike in that are each
+ * searched from and the better kept; searches as good go by the ends'
+ * structure. The order of the ring's atoms never decides.
+ */
+function placeChainFrom(p: number, q: number, run: number[], pos: Map<number, Point>, rings: number[][], rules?: ChainRules): void {
+  const back = [...run].reverse();
+  const own = (end: number, first: number) => (rules ? rules.neighbours[end].filter((v) => v !== first && !pos.has(v)).length : 0);
+  const fromP = own(p, run[0]);
+  const fromQ = own(q, back[0]);
+  if (fromP !== fromQ) {
+    if (fromP > fromQ) placeChainRun(p, q, run, pos, rings, rules);
+    else placeChainRun(q, p, back, pos, rings, rules);
+    return;
+  }
+  const there = new Map(pos);
+  const other = new Map(pos);
+  const thereCost = placeChainRun(p, q, run, there, rings, rules);
+  const otherCost = placeChainRun(q, p, back, other, rings, rules);
+  const first = Math.abs(thereCost - otherCost) > 1e-9 ? thereCost < otherCost : !rules || rules.before(p, q) <= 0;
+  const kept = first ? there : other;
+  for (const v of run) pos.set(v, kept.get(v)!);
 }
 
 /**
@@ -892,7 +1081,7 @@ function placeChainRun(
   pos: Map<number, Point>,
   rings: number[][] = [],
   rules?: ChainRules,
-): void {
+): number {
   const cis = rules?.cis;
   const loads = rules ? rules.loads(pos) : [];
   // the six-membered rings the run passes through, yet to be drawn: where
@@ -966,7 +1155,10 @@ function placeChainRun(
         // (still able to reach the far end)
         if (dist(p, b) > left + 1e-9) continue;
         let cost = st.cost + crowd(p) + 5 * crosses(last, p) + onGhost(p, st.ghosts);
-        for (let j = 0; j < st.at.length - 1; j++) if (dist(p, st.at[j]) < 0.9) cost += 20;
+        // (nor onto either end of the run, which the placed atoms' crowding
+        // leaves out: the far end only while the run is still bonds from it)
+        for (const q of [a, ...st.at.slice(0, -1)]) if (dist(p, q) < 0.9) cost += 20;
+        if (left >= 2 && dist(p, b) < 0.9) cost += 20;
         // a zigzag turns each way in turn; a corner is two turns alike
         if (turn === st.turn && ring < 0) cost += 0.3;
         // (a double bond's cis or trans as given: its chain neighbours cis
@@ -982,7 +1174,9 @@ function placeChainRun(
           const u = step >= 2 ? st.at[step - 2] : a;
           const fresh = rest(ring, u, last, p, run[step - 1], run[step]);
           for (const g of fresh) {
-            cost += crowd(g);
+            // (the run's two ends crowded as placed atoms are: the rest of a
+            // hexagon is bonded to neither)
+            cost += crowd(g) + (dist(g, a) < 0.6 ? 50 : 0) + (dist(g, b) < 0.6 ? 50 : 0);
             for (const q of [a, ...st.at, p]) if (dist(q, g) < 0.9) cost += 20;
           }
           ghosts = [...ghosts, ...fresh];
@@ -1067,7 +1261,7 @@ function placeChainRun(
   }
   if (!best) {
     placeRun(from, to, run, run.length + 2, pos);
-    return;
+    return Infinity;
   }
   // the strain of closing it shared out along the chain: bonds 1, each
   // chain atom's neighbours a 120-degree angle apart, clear of what is
@@ -1100,6 +1294,7 @@ function placeChainRun(
   const found = [a, ...best, b];
   const kept = wrongAlong(line) > wrongAlong(found) ? found : line;
   run.forEach((atom, i) => pos.set(atom, kept[i + 1]));
+  return bestCost;
 }
 
 /** Whether a point lies inside a polygon, its corners in order. */
