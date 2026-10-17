@@ -19,7 +19,9 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import { etaBondedAtomByAtom, type CisTrans } from "../../../../lib/layout/perceive";
+import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
+import { allylArc, ARC_DEPTH } from "../../../../lib/chem/allylArc";
+import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
@@ -275,8 +277,19 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     if (d) return [{ id: b.id, stereo: b.stereo, stereoOrient: b.stereoOrient, ...d }];
     return [];
   });
+  // each η3-allyl posed as the maintainer draws one (2026-10-18): its
+  // middle carbon away from its metal, its arc towards it
+  const systems = [
+    ...(job.bound ?? []),
+    ...part.bonds.flatMap((b) => {
+      if (!b.endpoints?.length || b.attach === "any") return [];
+      const star = byId.get(b.b)?.el === "*" ? b.b : b.a;
+      return [{ metal: star === b.b ? b.a : b.b, atoms: b.endpoints, star }];
+    }),
+  ];
+  poseAllyls(atoms, added, part, systems, k);
   // each ring or chain bound to its metal atom by atom: one bond to its
-  // centre for the bonds to its atoms (chem/eta)
+  // centre - an allyl's, its arc's middle - for the bonds to its atoms (chem/eta)
   const eta: NonNullable<Relayout["eta"]> = [];
   if (job.bound?.length) {
     const placedAt = new Map(atoms.map((a) => [a.id, a]));
@@ -284,7 +297,10 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       const inSys = new Set(sys.atoms);
       const drop = part.bonds.filter((b) => (b.a === sys.metal && inSys.has(b.b)) || (b.b === sys.metal && inSys.has(b.a))).map((b) => b.id);
       const at = sys.atoms.map((id) => placedAt.get(id)!);
-      eta.push({ metal: sys.metal, atoms: sys.atoms, bonds: drop, x: mid(at.map((a) => a.x)), y: mid(at.map((a) => a.y)) });
+      const chain = allylChain({ endpoints: sys.atoms }, part.bonds);
+      const metal = placedAt.get(sys.metal);
+      const centre = chain && metal ? allylArc(placedAt.get(chain[0])!, placedAt.get(chain[2])!, placedAt.get(chain[1])!, metal).middle : { x: mid(at.map((a) => a.x)), y: mid(at.map((a) => a.y)) };
+      eta.push({ metal: sys.metal, atoms: sys.atoms, bonds: drop, ...centre });
     }
   }
   const dropped = new Set(eta.flatMap((e) => e.bonds));
@@ -294,6 +310,84 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");
   }
   return change;
+}
+
+/**
+ * Each η3-allyl among `systems` (a metal and the atoms it binds as one -
+ * three in a chain) posed as the maintainer draws one (2026-10-18): the
+ * ligand it is part of - what is bonded to it, but for its metal - turned
+ * whole about the middle of its end carbons so that its middle carbon
+ * points away from its metal and its arc (lib/chem/allylArc) faces it, and
+ * moved so that the arc's middle stands a bond (`bond`) from the metal. A
+ * ligand bonded to another metal too, or to its own by another way, is left
+ * as it is laid out. `atoms` and `added` (hydrogens new to the drawing) are
+ * moved in place.
+ */
+function poseAllyls(
+  atoms: Relayout["atoms"],
+  added: NonNullable<Relayout["added"]>,
+  part: Model,
+  systems: readonly { metal: number; atoms: readonly number[]; star?: number }[],
+  bond: number,
+): void {
+  if (!systems.length) return;
+  const el = new Map(part.atoms.map((a) => [a.id, a.el]));
+  const at = new Map(atoms.map((a, i) => [a.id, i]));
+  for (const sys of systems) {
+    const chain = allylChain({ endpoints: [...sys.atoms] }, part.bonds);
+    const mi = at.get(sys.metal);
+    if (!chain || mi == null || chain.some((id) => !at.has(id))) continue;
+    // the ligand: what is bonded to the chain, not through a metal or a haptic bond
+    const ligand = new Set<number>(chain);
+    const queue = [...chain];
+    let alone = true;
+    while (queue.length && alone) {
+      const u = queue.shift()!;
+      for (const b of part.bonds) {
+        if (b.endpoints?.length || (b.a !== u && b.b !== u)) continue;
+        const v = b.a === u ? b.b : b.a;
+        if (v === sys.metal || ligand.has(v)) continue;
+        if (isMetal(el.get(v) ?? "")) {
+          alone = false;
+          break;
+        }
+        ligand.add(v);
+        queue.push(v);
+      }
+    }
+    if (!alone) continue;
+    const p = (id: number) => atoms[at.get(id)!];
+    const [e1, m, e2] = chain.map(p);
+    const metal = atoms[mi];
+    const chord = Math.hypot(e2.x - e1.x, e2.y - e1.y);
+    if (chord < 1e-9) continue;
+    const c = { x: (e1.x + e2.x) / 2, y: (e1.y + e2.y) / 2 };
+    // (towards the ligand from its metal, and the way its middle carbon points now)
+    const cx = (e1.x + m.x + e2.x) / 3 - metal.x;
+    const cy = (e1.y + m.y + e2.y) / 3 - metal.y;
+    const d = Math.hypot(cx, cy);
+    if (d < 1e-9) continue;
+    const u = { x: cx / d, y: cy / d };
+    const theta = Math.atan2(u.y, u.x) - Math.atan2(m.y - c.y, m.x - c.x);
+    const cos = Math.cos(theta);
+    const sin = Math.sin(theta);
+    // (the arc's middle a bond from the metal: the end carbons' middle that and the arc's depth further)
+    const to = { x: metal.x + u.x * (bond + ARC_DEPTH * chord), y: metal.y + u.y * (bond + ARC_DEPTH * chord) };
+    const move = (q: { x: number; y: number }) => {
+      const x = q.x - c.x;
+      const y = q.y - c.y;
+      return { x: to.x + x * cos - y * sin, y: to.y + x * sin + y * cos };
+    };
+    for (const id of ligand) {
+      const i = at.get(id);
+      if (i != null) atoms[i] = { ...atoms[i], ...move(atoms[i]) };
+    }
+    for (const h of added) if (ligand.has(h.on)) Object.assign(h, move(h));
+    if (sys.star != null && at.has(sys.star)) {
+      const [f1, fm, f2] = chain.map(p);
+      atoms[at.get(sys.star)!] = { ...atoms[at.get(sys.star)!], ...allylArc(f1, f2, fm, metal).middle };
+    }
+  }
 }
 
 /**

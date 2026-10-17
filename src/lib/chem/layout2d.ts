@@ -1,4 +1,5 @@
 import "./fonts";
+import { allylArc } from "./allylArc";
 import { ARIAL } from "./arial";
 import { labelFont, type LabelFont } from "./labelFonts";
 import { ringSidesOf } from "./aromaticSides";
@@ -3412,6 +3413,38 @@ export function ringCircles(
   return { circles, edges: aromaticEdges };
 }
 
+/**
+ * An η3-allyl's arc (lib/chem/allylArc), where `b` is the haptic bond of
+ * one - three atoms bonded in a chain, its ends not bonded to each other:
+ * short straight pieces from one end carbon to the other on the metal's
+ * side, as wide as the bond's line, the corners between them finished as a
+ * wave's are; none otherwise.
+ */
+function allylArcPrimitives(atoms: Atom[], bonds: readonly Bond[], b: Bond, widthPx: number | undefined): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[] } | null {
+  if (b.endpoints?.length !== 3 || b.attach === "any" || widthPx == null) return null;
+  const indexOf = new Map(atoms.map((a, i) => [a.id, i]));
+  const e = b.endpoints.map((id) => indexOf.get(id));
+  if (e.some((i) => i == null)) return null;
+  const bonded = (u: number, v: number) => bonds.some((x) => !x.endpoints?.length && ((x.a1 === u && x.a2 === v) || (x.a1 === v && x.a2 === u)));
+  const k = [0, 1, 2].find((k) => {
+    const [p, q] = e.filter((_, i) => i !== k) as number[];
+    return bonded(p, e[k]!) && bonded(q, e[k]!) && !bonded(p, q);
+  });
+  if (k == null) return null;
+  const metal = atoms[b.a1].el === "*" ? atoms[b.a2] : atoms[b.a1];
+  const [p, q] = e.filter((_, i) => i !== k) as number[];
+  const { points } = allylArc(atoms[p], atoms[q], atoms[e[k]!], metal);
+  const lines: LineSeg[] = [];
+  for (let i = 1; i < points.length; i++) lines.push({ x1: points[i - 1].x, y1: points[i - 1].y, x2: points[i].x, y2: points[i].y, widthPx });
+  const bends: Bend[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const prev = lines[i - 1];
+    const next = lines[i];
+    bends.push({ at: { x: next.x1, y: next.y1 }, dirs: [vnorm({ x: prev.x1 - prev.x2, y: prev.y1 - prev.y2 }), vnorm({ x: next.x2 - next.x1, y: next.y2 - next.y1 })] });
+  }
+  return { lines, bends, ends: [points[0], points[points.length - 1]] };
+}
+
 export function buildAllPrimitives(
   atoms: Atom[],
   bonds: Bond[],
@@ -3625,6 +3658,13 @@ export function buildAllPrimitives(
         const L = Math.hypot(atoms[b.a2].x - atoms[b.a1].x, atoms[b.a2].y - atoms[b.a1].y);
         crowded.push({ atoms: [atoms[b.a1].id, atoms[b.a2].id], need: ((t.a + t.b) / t.room) * L });
       }
+    }
+    // (an η3-allyl's bond: besides its line to the arc's middle, the arc itself, as the bond's own ink)
+    const arc = allylArcPrimitives(atoms, bonds, b, r.lines[0]?.widthPx);
+    if (arc) {
+      r.lines.push(...arc.lines);
+      r.bends = [...(r.bends ?? []), ...arc.bends];
+      r.ends = [...(r.ends ?? []), ...arc.ends];
     }
     const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);

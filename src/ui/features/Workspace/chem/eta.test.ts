@@ -12,7 +12,9 @@ import { editorModelOf } from "../utils/io";
 import { inBox } from "../utils/selection";
 import { startStroke, strokeTarget } from "../utils/stroke";
 import { laidOut } from "./cleanUp";
-import { etaHeld, etaRingAt, hapticStars, starsAtTheirAtoms, withTheirStars } from "./eta";
+import { allylChain, etaHeld, etaRingAt, hapticStars, starsAtTheirAtoms, withTheirStars } from "./eta";
+import { allylArc } from "../../../../lib/chem/allylArc";
+import { selectedParts } from "../components/selectionParts";
 
 const L = NOMINAL_BOND_LENGTH;
 
@@ -345,5 +347,121 @@ describe("an alkene bound through both its carbons (eta2), drawn either way and 
     const two = structureFileText(drawnOf({ ...emptyWorkspaceDocument(), model: d.model() } as never), "zeise.mol");
     expect(two).not.toMatch(/ENDPTS/);
     expect(editorModelOf(moleculesToEditorModel(readMoleculesFromText(two, "mol")).model).bonds).toHaveLength(d.model().bonds.length);
+  });
+});
+
+describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the maintainer, 2026-10-18)", () => {
+  /** A Pd allyl chloride as drawn: Pd below a chain C=C-C bent away from it, bound by one bond, and two chlorides. */
+  function allylPd() {
+    const d = drawing();
+    const pd = d.atom("Pd", 0, 0);
+    const a = d.atom("C", -0.87, 1.5);
+    const m = d.atom("C", 0, 2);
+    const c = d.atom("C", 0.87, 1.5);
+    d.bond(a, m, 2);
+    d.bond(m, c);
+    d.bond(pd, d.atom("Cl", -1, -1));
+    d.bond(pd, d.atom("Cl", 1, -1));
+    const doc = bindRing({ ...emptyWorkspaceDocument(), model: d.model(), nextId: 100 }, pd, [a, m, c]);
+    return { model: etaHeld(doc.model), pd, a, m, c };
+  }
+  const where = (model: Model) => new Map(model.atoms.map((x) => [x.id, x]));
+
+  it("has its star - where the metal's line ends - at the middle of its arc, not at the chain's centre", () => {
+    const { model, pd, a, m, c } = allylPd();
+    const at = where(model);
+    const [b] = etaOf(model);
+    const star = at.get(b.b)!;
+    const expected = allylArc(at.get(a)!, at.get(c)!, at.get(m)!, at.get(pd)!).middle;
+    expect(star.x).toBeCloseTo(expected.x, 9);
+    expect(star.y).toBeCloseTo(expected.y, 9);
+    // (between the chain and the metal, below the line between its end carbons)
+    expect(star.y).toBeLessThan(at.get(a)!.y);
+    expect(star.y).toBeGreaterThan(at.get(pd)!.y);
+    // (moved with its atoms: there again where they are drawn)
+    const moved = model.atoms.map((x) => (x.id === pd ? { ...x, x: x.x + 2 * L } : x));
+    const shown = where({ ...model, atoms: starsAtTheirAtoms(moved, model) });
+    const again = allylArc(at.get(a)!, at.get(c)!, at.get(m)!, shown.get(pd)!).middle;
+    expect(shown.get(b.b)!.x).toBeCloseTo(again.x, 9);
+  });
+
+  it("is drawn as its chain, an arc from one end carbon to the other and one line from the metal to the arc's middle - the file keeps its multi-centre bond", () => {
+    const { model, pd, a, c } = allylPd();
+    const at = where(model);
+    const [b] = etaOf(model);
+    expect(b.endpoints).toHaveLength(3);
+    expect(b.attach).toBe("all");
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE), { minLinePx: 0 });
+    const lay = layoutMolecule(model.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(model.bonds, new Map(model.atoms.map((x, i) => [x.id, i]))), opts, 40);
+    const star = at.get(b.b)!;
+    const near = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-6;
+    // (the line to the star, ending there)
+    expect(lay.lines.some((l) => near({ x: l.x2, y: l.y2 }, star) || near({ x: l.x1, y: l.y1 }, star))).toBe(true);
+    // (the arc: pieces end to end from one end carbon to the other)
+    const arc = allylArc(at.get(a)!, at.get(c)!, at.get(model.atoms.find((x) => x.id === b.endpoints![1])!.id)!, at.get(pd)!).points;
+    for (let k = 1; k < arc.length; k++) expect(lay.lines.some((l) => near({ x: l.x1, y: l.y1 }, arc[k - 1]) && near({ x: l.x2, y: l.y2 }, arc[k]))).toBe(true);
+    // a ring bound so keeps its line to its centre, and no arc
+    const { doc } = ferroceneEta();
+    const fl = layoutMolecule(doc.model.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(doc.model.bonds, new Map(doc.model.atoms.map((x, i) => [x.id, i]))), opts, 40);
+    expect(fl.lines.length).toBeLessThan(lay.lines.length + 30);
+    expect(allylChain(etaOf(doc.model)[0], doc.model.bonds)).toBeNull();
+  });
+
+  it("is shaded as selected with its arc, piece by piece", () => {
+    const { model } = allylPd();
+    const [b] = etaOf(model);
+    const parts = selectedParts(model, new Set(), new Set([b.id]));
+    expect([...parts.keys()].filter((k) => k.startsWith(`b${b.id}~`))).toHaveLength(16);
+  });
+
+  it("in the chloride dimer, each allyl's arc bulges towards its own palladium", async () => {
+    const d = drawing();
+    const p1 = d.atom("Pd", -1, 0);
+    const p2 = d.atom("Pd", 1, 0);
+    const cl1 = d.atom("Cl", 0, 0.9);
+    const cl2 = d.atom("Cl", 0, -0.9);
+    for (const [p, cc] of [[p1, cl1], [p1, cl2], [p2, cl1], [p2, cl2]]) d.bond(p, cc);
+    for (const s of [-1, 1]) {
+      const pd = s < 0 ? p1 : p2;
+      const x = d.atom("C", s * 2.1, 0.9);
+      const y = d.atom("C", s * 2.7, 0);
+      const z = d.atom("C", s * 2.1, -0.9);
+      d.bond(x, y, 2);
+      d.bond(y, z);
+      for (const e of [x, y, z]) d.bond(pd, e);
+    }
+    const laid = etaHeld(await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE)));
+    const at = where(laid);
+    for (const b of etaOf(laid)) {
+      const chain = allylChain(b, laid.bonds)!;
+      expect(chain).not.toBeNull();
+      const pd = at.get(b.a)!;
+      const star = at.get(b.b)!;
+      const [e1, mid, e2] = chain.map((id) => at.get(id)!);
+      // (the star on the metal's side of the line between the end carbons, the middle carbon on the other)
+      const side = (p: { x: number; y: number }) => (e2.x - e1.x) * (p.y - e1.y) - (e2.y - e1.y) * (p.x - e1.x);
+      expect(Math.sign(side(star))).toBe(Math.sign(side(pd)));
+      expect(Math.sign(side(mid))).toBe(-Math.sign(side(pd)));
+      // (posed by Clean-up: the line between its end carbons across the metal's line, the arc's middle a bond from the metal)
+      const across = ((e2.x - e1.x) * (star.x - pd.x) + (e2.y - e1.y) * (star.y - pd.y)) / (Math.hypot(e2.x - e1.x, e2.y - e1.y) * Math.hypot(star.x - pd.x, star.y - pd.y));
+      expect(Math.abs(across)).toBeLessThan(1e-6);
+      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeGreaterThan(0.8);
+      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeLessThan(1.3);
+    }
+  });
+
+  it("is told from a three-membered ring bound so (cyclopropenyl), which keeps its line to the centre", () => {
+    const d = drawing();
+    const ni = d.atom("Ni", 0, 0);
+    const ring = d.ring(3, 0, 1.6, 0.6);
+    const doc = bindRing({ ...emptyWorkspaceDocument(), model: d.model(), nextId: 100 }, ni, ring);
+    const model = etaHeld(doc.model);
+    const [b] = etaOf(model);
+    expect(allylChain(b, model.bonds)).toBeNull();
+    const at = where(model);
+    const cx = ring.reduce((s, id) => s + at.get(id)!.x, 0) / 3;
+    const cy = ring.reduce((s, id) => s + at.get(id)!.y, 0) / 3;
+    expect(at.get(b.b)!.x).toBeCloseTo(cx, 9);
+    expect(at.get(b.b)!.y).toBeCloseTo(cy, 9);
   });
 });

@@ -672,7 +672,9 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
   2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
   each bonded to the metal, an allyl, but not two, a three-membered ring
-  with the metal being how a metallacyclopropane is drawn as well): the metal on its axis, a bond
+  with the metal being how a metallacyclopropane is drawn as well; an
+  η3-allyl, once laid out, posed with its middle carbon away from the
+  metal and its arc towards it, EDITOR-2D.md *An η3-allyl*): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the

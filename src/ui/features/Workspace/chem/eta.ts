@@ -8,6 +8,7 @@
  * go, and it goes with its bond.
  */
 import { isMetal } from "../../../../lib/layout/perceive";
+import { allylArc } from "../../../../lib/chem/allylArc";
 import type { Atom, Bond, Model } from "../store/types";
 import { ringsOf } from "../utils/rings";
 
@@ -45,12 +46,60 @@ function middleOf(ids: readonly number[], at: ReadonlyMap<number, { x: number; y
 }
 
 /**
+ * Of a haptic bond, its atoms as an η3-allyl - three, bonded in a chain,
+ * its ends not bonded to each other - in order, an end first, then the
+ * middle, then the other end; null for a ring or anything else.
+ */
+export function allylChain(b: Pick<Bond, "endpoints">, bonds: readonly Bond[]): [number, number, number] | null {
+  const e = b.endpoints;
+  if (e?.length !== 3) return null;
+  const bonded = (u: number, v: number) => bonds.some((x) => !x.endpoints?.length && ((x.a === u && x.b === v) || (x.a === v && x.b === u)));
+  for (const k of [0, 1, 2]) {
+    const mid = e[k];
+    const [p, q] = e.filter((_, i) => i !== k);
+    if (bonded(p, mid) && bonded(q, mid) && !bonded(p, q)) return [p, mid, q];
+  }
+  return null;
+}
+
+/**
+ * An η3-allyl's arc (lib/chem/allylArc), its atoms and metal at `at`: the
+ * points along it, from one end carbon to the other - what is shaded and
+ * banded with its bond as it is selected or under the pointer; null for any
+ * other bond.
+ */
+export function allylArcOf(b: Bond, at: ReadonlyMap<number, { x: number; y: number; el: string }>, bonds: readonly Bond[]): { x: number; y: number }[] | null {
+  const chain = allylChain(b, bonds);
+  if (!chain) return null;
+  const metal = at.get(at.get(b.a)?.el === "*" ? b.b : b.a);
+  const pts = chain.map((id) => at.get(id));
+  if (!metal || !pts.every((p) => p)) return null;
+  return allylArc(pts[0]!, pts[2]!, pts[1]!, metal).points;
+}
+
+/**
+ * Where a haptic bond's star stands, its atoms at `at`: at their centre -
+ * a ring's, Cp's - or, an η3-allyl's, at the middle of its arc on its
+ * metal's side, where the metal's line ends (lib/chem/allylArc); null
+ * where any is missing.
+ */
+export function starPlace(b: Bond, at: ReadonlyMap<number, { x: number; y: number }>, bonds: readonly Bond[], star: number): { x: number; y: number } | null {
+  const chain = allylChain(b, bonds);
+  const metal = at.get(b.a === star ? b.b : b.a);
+  if (chain && metal) {
+    const pts = chain.map((id) => at.get(id));
+    if (pts.every((p) => p)) return allylArc(pts[0]!, pts[2]!, pts[1]!, metal).middle;
+  }
+  return middleOf(b.endpoints!, at);
+}
+
+/**
  * A model's haptic bonds held to what they bind, after an edit: a bond
  * whose ring is no longer whole - an atom of it deleted, or merged onto
  * another - goes, with its star, as does a star whose bond has gone (the
  * bond deleted, its metal deleted), so that a star is never left on the
- * drawing as an atom of its own; and each star stands at its atoms' centre,
- * where they have moved. `before` is the model as it was before the edit.
+ * drawing as an atom of its own; and each star stands where its bond ends
+ * (`starPlace`: its atoms' centre, an allyl's arc), where they have moved. `before` is the model as it was before the edit.
  */
 export function etaHeld(model: Model, before?: Model): Model {
   const has = model.bonds.some((b) => b.endpoints?.length);
@@ -75,7 +124,7 @@ export function etaHeld(model: Model, before?: Model): Model {
     if (!b.endpoints?.length || b.attach === "any") continue;
     const star = at.get(b.b)?.el === "*" ? b.b : at.get(b.a)?.el === "*" ? b.a : null;
     if (star == null) continue;
-    const p = middleOf(b.endpoints, at);
+    const p = starPlace(b, at, bonds, star);
     const s = at.get(star)!;
     if (p && (Math.abs(p.x - s.x) > 1e-9 || Math.abs(p.y - s.y) > 1e-9)) to.set(star, p);
   }
@@ -97,7 +146,7 @@ export function starsAtTheirAtoms<T extends { id: number; x: number; y: number }
   for (const b of model.bonds) {
     if (!b.endpoints?.length || b.attach === "any") continue;
     const star = stars.has(b.b) ? b.b : stars.has(b.a) ? b.a : null;
-    const p = star == null ? null : middleOf(b.endpoints, at);
+    const p = star == null ? null : starPlace(b, at, model.bonds, star);
     const s = star == null ? undefined : at.get(star);
     if (p && s && (s.x !== p.x || s.y !== p.y)) to.set(star!, p);
   }

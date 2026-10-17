@@ -1,4 +1,4 @@
-import { hapticStars } from "../chem/eta";
+import { allylArcOf, hapticStars } from "../chem/eta";
 import type { Model } from "../store/types";
 
 type Point = { x: number; y: number };
@@ -32,6 +32,9 @@ export function selectedParts(shown: Model, atoms: ReadonlySet<number>, bonds: R
     const p = at.get(b.a);
     const q = at.get(b.b);
     if (p && q) parts.set(`b${b.id}`, { bond: { p: { x: p.x, y: p.y }, q: { x: q.x, y: q.y } } });
+    // (an η3-allyl's bond: its arc shaded with it, piece by piece - chem/eta)
+    const arc = b.endpoints?.length === 3 ? allylArcOf(b, at, shown.bonds) : null;
+    for (let k = 1; arc && k < arc.length; k++) parts.set(`b${b.id}~${k}`, { bond: { p: arc[k - 1], q: arc[k] } });
   }
   return parts;
 }
