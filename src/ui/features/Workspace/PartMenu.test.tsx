@@ -108,16 +108,27 @@ describe("the right-click menu", () => {
   });
 
   it("keeps a PDF's page icons in their places, the way on that is not there shown but not to be pressed", () => {
-    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNext: none };
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNext: none, onNumbers: none, onPages: none, onSave: none };
     const { html } = menu(target({ kind: "pdf", id: 1 }), { pdf });
     expect(html).toMatch(/aria-label="Previous page"[^>]*disabled=""/);
     expect(html).not.toMatch(/aria-label="Next page"[^>]*disabled=""/);
   });
 
   it("offers a PDF's pages spread, some in places of their own, put back in their rows", () => {
-    const spread = { spread: true, icon: false, onSpread: none, onIcon: none, onRead: none };
+    const spread = { spread: true, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: spread }).listed).not.toContain("Put pages in rows");
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
+  });
+
+  it("offers a new PDF from a PDF - its pages numbered, or arranged - and it written to a file; several selected, made one", () => {
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
+    const one = menu(target({ kind: "pdf", id: 1 }), { pdf });
+    expect(one.listed).toEqual(expect.arrayContaining(["Page numbers…", "Pages…", "Save as PDF…"]));
+    expect(one.listed).not.toContain("Combine into one PDF");
+    // (a rule above the group: it begins one)
+    expect(one.html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Page numbers…/);
+    const two = menu(target({ kind: "pdf", id: 1 }), { pdf, onCombinePdfs: none });
+    expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
   });
 
   it("offers words' size, bold, italic and a list among their icons - ticked as they are - and how their lines lie listed", () => {
@@ -179,9 +190,12 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
     const t = target({ kind: "molecule3d", id: 1 });
     const { listed, html } = menu(t, { molecule3d: molecule3d({ chosen: 0, onOrdersFromDictionary: none, onOrdersFromSmiles: none, onEstimateOrders: none, onAddHydrogens: none }) });
     expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens"]);
-    // (one line, above the first of them)
-    expect(html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
-    expect(html).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
+    // (first in the list, under the icons' row and its line: no rule of its own)
+    expect(html).not.toContain('role="separator"');
+    // (after another item: one line, above the first of them)
+    const after = menu(t, { molecule3d: molecule3d({ chosen: 0, onTurnLikeDrawing: none, onOrdersFromDictionary: none, onOrdersFromSmiles: none }) }).html;
+    expect(after).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
+    expect(after).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
     expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Add hydrogens"]);
   });
   it("offers its magnification, and back to its true size where it is not at it", () => {
@@ -201,5 +215,33 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
 describe("the menu of writing by hand", () => {
   it("offers its colour and Delete, as icons", () => {
     expect(menu(target({ kind: "ink", id: 1 }), { onColour: none }).icons).toEqual(["Colour…", "Delete writing"]);
+  });
+});
+
+describe("a menu's rules", () => {
+  it("are drawn only between items shown: never first, never two together, never last - a group left empty draws none", async () => {
+    const { withRules } = await import("./menuRules");
+    const rules = (items: { name: string; divider?: boolean }[]) => withRules(items).map((i) => (i.divider ? `| ${i.name}` : i.name));
+    expect(rules([{ name: "a", divider: true }, { name: "b" }, { name: "c", divider: true }])).toEqual(["a", "b", "| c"]);
+    expect(rules([])).toEqual([]);
+    // (a group whose items are all left out: nothing of it, not its rule)
+    expect(rules([{ name: "a" }, ...[].map((name: string) => ({ name, divider: true })), { name: "b", divider: true }])).toEqual(["a", "| b"]);
+  });
+
+  it("puts no rule under the row of icons, nor at the top of a menu with none, whatever a menu's first listed item says", () => {
+    // (on empty space, a workspace in a document's object: the first command listed begins a group)
+    const m = menu(target({}), { canvas: [{ name: "Fit to content", keys: "", run: none, divider: true }, { name: "Styles…", keys: "", run: none, divider: true }] });
+    expect(m.listed).toEqual(["Fit to content", "Styles…"]);
+    const rest = m.html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "");
+    expect(rest.indexOf('role="separator"')).toBeGreaterThan(rest.indexOf("Fit to content"));
+    expect(rest.match(/role="separator"/g)).toHaveLength(1);
+    // (a molecule in 3D whose first listed item begins a group: its rule not drawn under the icons)
+    const m3 = menu(target({ kind: "molecule3d", id: 1 }), {
+      molecule3d: { otherLook: { name: "Ball and stick", atoms: "balls", run: none }, onResetTurn: none, onTurnOnce: none, onRemake: none, onCut: none, onCopy: none } as never,
+    });
+    const listed3 = m3.html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "");
+    const first = listed3.indexOf('role="menuitem"');
+    expect(first).toBeGreaterThan(-1);
+    expect(listed3.slice(0, first)).not.toContain('role="separator"');
   });
 });

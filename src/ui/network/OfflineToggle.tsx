@@ -25,7 +25,8 @@ export default function OfflineToggle() {
           : "Online: Meno asks before anything first uses the network. Click to work offline."
       }
       className={clsx(
-        "relative h-7 rounded-md flex items-center gap-1 px-1.5 text-xs transition-colors duration-150 ease-meno",
+        // (as wide as Save and Settings beside it while it is only its icon, as large as theirs: the three evenly spaced)
+        "relative h-7 min-w-7 rounded-md flex items-center justify-center gap-1 px-[0.3125rem] text-xs transition-colors duration-150 ease-meno",
         offline
           ? "bg-accel-lightaccent text-accel-accent hover:opacity-90"
           : "text-gh-gray hover:bg-gray-200 hover:text-gh-black",
@@ -33,7 +34,7 @@ export default function OfflineToggle() {
     >
       <AnimatePresence mode="popLayout" initial={false}>
         <motion.span key={offline ? "off" : "on"} {...FADE} className="flex">
-          {offline ? <SignalSlashIcon className="h-4 w-4" /> : <GlobeAltIcon className="h-4 w-4" />}
+          {offline ? <SignalSlashIcon className="h-4.5 w-4.5" /> : <GlobeAltIcon className="h-4.5 w-4.5" />}
         </motion.span>
       </AnimatePresence>
       <AnimatePresence initial={false}>

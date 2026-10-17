@@ -94,7 +94,8 @@ function TextMenu({ x, y, target }: NonNullable<ReturnType<typeof useTextMenu.ge
       ))}
       {take && found.length > 0 && target.text && (
         <>
-          <div className="my-1 border-t border-gh-line" role="separator" />
+          {/* (a rule only between it and what is above it: none at the top) */}
+          {items.length > 0 && <div className="my-1 border-t border-gh-line" role="separator" />}
           <button
             role="menuitem"
             tabIndex={-1}
