@@ -1,7 +1,7 @@
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { AnimatePresence } from "motion/react";
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   LOOK_3D_FIELDS,
   look3dPreset,
@@ -41,12 +41,9 @@ import AtomColours from "./AtomColours";
 export default function Style3DEditor({
   choice,
   onChange,
-  children,
 }: {
   choice: Style3DChoice;
   onChange: (next: Style3DChoice) => void;
-  /** More settings, laid out with these: who makes molecules in 3D, say. */
-  children?: ReactNode;
 }) {
   const style = useMemo(() => style3dOf(choice), [choice]);
   // the style being set - and shown - and the one asking to hide its hydrogens
@@ -161,14 +158,20 @@ export default function Style3DEditor({
             </div>
           </section>
         ))}
-        {children}
       </div>
       <div className={roomy ? "w-[26rem] shrink-0 sticky top-4" : "order-first"}>
-        <div className="text-xs font-semibold uppercase tracking-wider text-gh-gray">Preview</div>
+        {/* (what it shows, said: the style being set, as a molecule in it is drawn) */}
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-xs font-semibold uppercase tracking-wider text-gh-gray">Preview</span>
+          <span className="min-w-0 truncate text-sm font-medium text-gh-black">{editedName}</span>
+        </div>
         <div className="mt-2 h-80 rounded-lg border border-gh-line bg-white overflow-hidden" aria-label={`A molecule drawn in ${editedName}`}>
           <Preview3D style={shownStyle} look={shownLook} onDouble={() => setEditing(choice[other])} />
         </div>
-        <p className="mt-1.5 text-[11px] text-gh-gray">Drag the molecule to turn it; double-click it for {styleName3d(choice, choice[other])}.</p>
+        <p className="mt-1.5 text-[11px] text-gh-gray">
+          A molecule in {editedName}, the style being set, as it looks on the canvas and in exported pictures. Drag it to turn it;
+          double-click it for {styleName3d(choice, choice[other])}.
+        </p>
       </div>
       <AnimatePresence>
         {asking && (
