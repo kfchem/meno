@@ -400,6 +400,11 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
     // (the arc: pieces end to end from one end carbon to the other)
     const arc = allylArc(at.get(a)!, at.get(c)!, at.get(model.atoms.find((x) => x.id === b.endpoints![1])!.id)!, at.get(pd)!).points;
     for (let k = 1; k < arc.length; k++) expect(lay.lines.some((l) => near({ x: l.x1, y: l.y1 }, arc[k - 1]) && near({ x: l.x2, y: l.y2 }, arc[k]))).toBe(true);
+    // (its chain drawn as two single bonds, its C=C as drawn kept in the drawing: the arc says it is delocalised)
+    const singles = { ...model, bonds: model.bonds.map((x) => (x.order === 2 ? { ...x, order: 1 as const } : x)) };
+    const ls = layoutMolecule(singles.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(singles.bonds, new Map(singles.atoms.map((x, i) => [x.id, i]))), opts, 40);
+    expect(lay.lines).toEqual(ls.lines);
+    expect(model.bonds.some((x) => x.order === 2)).toBe(true);
     // a ring bound so keeps its line to its centre, and no arc
     const { doc } = ferroceneEta();
     const fl = layoutMolecule(doc.model.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(doc.model.bonds, new Map(doc.model.atoms.map((x, i) => [x.id, i]))), opts, 40);

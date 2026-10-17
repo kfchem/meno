@@ -35,18 +35,11 @@ export function allylArc(a: Pt, b: Pt, mid: Pt, metal: Pt): { points: Pt[]; midd
   const centre = { x: m.x - n.x * (r - s), y: m.y - n.y * (r - s) };
   const angle = (p: Pt) => Math.atan2(p.y - centre.y, p.x - centre.x);
   const t0 = angle(a);
-  let sweep = angle(b) - t0;
-  // (the short way round, through the arc's middle)
-  const tm = angle({ x: m.x + n.x * s, y: m.y + n.y * s });
-  const within = (t: number) => {
-    let u = t - t0;
-    while (u < 0) u += 2 * Math.PI;
-    let w = sweep;
-    while (w < 0) w += 2 * Math.PI;
-    return u <= w;
-  };
-  if (!within(tm)) sweep = sweep > 0 ? sweep - 2 * Math.PI : sweep + 2 * Math.PI;
-  else if (sweep < 0) sweep += 2 * Math.PI;
+  // (the arc's middle halfway round it: the way from `a` to it, twice over - less than half the circle, the arc being shallow)
+  let half = angle({ x: m.x + n.x * s, y: m.y + n.y * s }) - t0;
+  while (half > Math.PI) half -= 2 * Math.PI;
+  while (half <= -Math.PI) half += 2 * Math.PI;
+  const sweep = 2 * half;
   const points = Array.from({ length: PIECES + 1 }, (_, k) => {
     if (k === 0) return a;
     if (k === PIECES) return b;

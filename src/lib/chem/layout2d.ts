@@ -3414,6 +3414,41 @@ export function ringCircles(
 }
 
 /**
+ * Of a haptic bond `b`, its atoms as an η3-allyl - three, bonded in a chain,
+ * its ends not bonded to each other - by index, an end, the middle, the
+ * other end; null for a ring or anything else.
+ */
+function allylChainOf(atoms: Atom[], bonds: readonly Bond[], b: Bond): [number, number, number] | null {
+  if (b.endpoints?.length !== 3 || b.attach === "any") return null;
+  const indexOf = new Map(atoms.map((a, i) => [a.id, i]));
+  const e = b.endpoints.map((id) => indexOf.get(id));
+  if (e.some((i) => i == null)) return null;
+  const bonded = (u: number, v: number) => bonds.some((x) => !x.endpoints?.length && ((x.a1 === u && x.a2 === v) || (x.a1 === v && x.a2 === u)));
+  for (const k of [0, 1, 2]) {
+    const [p, q] = e.filter((_, i) => i !== k) as number[];
+    if (bonded(p, e[k]!) && bonded(q, e[k]!) && !bonded(p, q)) return [p, e[k]!, q];
+  }
+  return null;
+}
+
+/**
+ * The bonds as drawn, an η3-allyl's two bonds single whatever their orders
+ * (the maintainer, 2026-10-18): its arc says it is one delocalised system,
+ * as a ring's circle does. The drawing's own bonds keep their orders.
+ */
+function allylsSingle(atoms: Atom[], bonds: Bond[]): Bond[] {
+  if (!bonds.some((b) => b.endpoints?.length === 3)) return bonds;
+  const single = new Set<string>();
+  for (const b of bonds) {
+    const chain = allylChainOf(atoms, bonds, b);
+    if (!chain) continue;
+    for (const [u, v] of [[chain[0], chain[1]], [chain[1], chain[2]]]) single.add(u < v ? `${u}-${v}` : `${v}-${u}`);
+  }
+  if (!single.size) return bonds;
+  return bonds.map((b) => (!b.endpoints?.length && b.order !== 1 && single.has(b.a1 < b.a2 ? `${b.a1}-${b.a2}` : `${b.a2}-${b.a1}`) ? { ...b, order: 1 } : b));
+}
+
+/**
  * An η3-allyl's arc (lib/chem/allylArc), where `b` is the haptic bond of
  * one - three atoms bonded in a chain, its ends not bonded to each other:
  * short straight pieces from one end carbon to the other on the metal's
@@ -3421,19 +3456,11 @@ export function ringCircles(
  * wave's are; none otherwise.
  */
 function allylArcPrimitives(atoms: Atom[], bonds: readonly Bond[], b: Bond, widthPx: number | undefined): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[] } | null {
-  if (b.endpoints?.length !== 3 || b.attach === "any" || widthPx == null) return null;
-  const indexOf = new Map(atoms.map((a, i) => [a.id, i]));
-  const e = b.endpoints.map((id) => indexOf.get(id));
-  if (e.some((i) => i == null)) return null;
-  const bonded = (u: number, v: number) => bonds.some((x) => !x.endpoints?.length && ((x.a1 === u && x.a2 === v) || (x.a1 === v && x.a2 === u)));
-  const k = [0, 1, 2].find((k) => {
-    const [p, q] = e.filter((_, i) => i !== k) as number[];
-    return bonded(p, e[k]!) && bonded(q, e[k]!) && !bonded(p, q);
-  });
-  if (k == null) return null;
+  if (widthPx == null) return null;
+  const chain = allylChainOf(atoms, bonds, b);
+  if (!chain) return null;
   const metal = atoms[b.a1].el === "*" ? atoms[b.a2] : atoms[b.a1];
-  const [p, q] = e.filter((_, i) => i !== k) as number[];
-  const { points } = allylArc(atoms[p], atoms[q], atoms[e[k]!], metal);
+  const { points } = allylArc(atoms[chain[0]], atoms[chain[2]], atoms[chain[1]], metal);
   const lines: LineSeg[] = [];
   for (let i = 1; i < points.length; i++) lines.push({ x1: points[i - 1].x, y1: points[i - 1].y, x2: points[i].x, y2: points[i].y, widthPx });
   const bends: Bend[] = [];
@@ -3460,6 +3487,7 @@ export function buildAllPrimitives(
   reach: BondReach[];
   crowded: Crowded[];
 } {
+  bonds = allylsSingle(atoms, bonds);
   const lines: LineSeg[] = [];
   const polys: Poly[] = [];
   const circles: Circle[] = [];

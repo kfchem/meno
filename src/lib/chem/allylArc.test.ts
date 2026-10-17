@@ -27,4 +27,23 @@ describe("an η3-allyl's arc", () => {
     const there = allylArc(b, a, mid, { x: 0, y: -2 });
     expect(there.middle.y).toBeCloseTo(-ARC_DEPTH * 1.732, 9);
   });
+
+  it("is the shallow arc between the ends however the allyl is turned on the page", () => {
+    for (let k = 0; k < 24; k++) {
+      const th = (k * Math.PI) / 12;
+      const turn = (p: { x: number; y: number }) => ({ x: p.x * Math.cos(th) - p.y * Math.sin(th), y: p.x * Math.sin(th) + p.y * Math.cos(th) });
+      const { points, middle } = allylArc(turn(a), turn(b), turn(mid), turn({ x: 0, y: -2 }));
+      // (every point within the arc's depth of the line between the ends, and between them along it)
+      const along = turn({ x: 1, y: 0 });
+      for (const p of points) {
+        const u = p.x * along.x + p.y * along.y;
+        const v = -p.x * along.y + p.y * along.x;
+        expect(Math.abs(u)).toBeLessThanOrEqual(0.866 + 1e-9);
+        expect(v).toBeLessThanOrEqual(1e-9);
+        expect(v).toBeGreaterThanOrEqual(-ARC_DEPTH * 1.732 - 1e-9);
+      }
+      expect(points[8].x).toBeCloseTo(middle.x, 9);
+      expect(points[8].y).toBeCloseTo(middle.y, 9);
+    }
+  });
 });
