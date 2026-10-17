@@ -5,13 +5,14 @@
  * geometry alone.
  */
 import type { XyzEnergyDecl } from "../lib/plugins/manifest";
+import { factor } from "../lib/units";
 
-/** One unit's number in hartrees (CODATA 2018: 1 Eh = 27.211386245988 eV = 627.5094740631 kcal/mol = 2625.4996394799 kJ/mol). */
+/** One unit's number in hartrees, from Meno's units table (a manifest names the hartree in words). */
 const TO_HARTREE: Record<XyzEnergyDecl["unit"], number> = {
   hartree: 1,
-  eV: 1 / 27.211386245988,
-  "kcal/mol": 1 / 627.5094740631,
-  "kJ/mol": 1 / 2625.4996394799,
+  eV: factor("eV", "Eh"),
+  "kcal/mol": factor("kcal/mol", "Eh"),
+  "kJ/mol": factor("kJ/mol", "Eh"),
 };
 
 /** A pattern of a plugin, ready: what it finds on a comment line, in hartrees, or nothing. */

@@ -142,3 +142,24 @@ export function knownOf(m: WrittenMolecule): Record<Known, string | number> {
   if ((electrons - unpaired) % 2 !== 0) unpaired += 1;
   return { charge, multiplicity: unpaired + 1, name: m.name ?? "" };
 }
+
+/** A molecule's charge and spin multiplicity, and where each came from: given (by the chemist, or the calculation it was read from), or its atoms. */
+export type Species = { charge: number; multiplicity: number; from: { charge: "given" | "atoms"; multiplicity: "given" | "atoms" } };
+
+/**
+ * A molecule's charge and spin multiplicity by Meno's one rule
+ * (docs/WORKFLOWS-FOUNDATION.md, *The entry*): what it was given, where it
+ * was given one - a whole charge, a multiplicity of one or more - else what
+ * its atoms say (`knownOf`). Every place that tells a program, a writer or
+ * a step a molecule's charge and spin asks here.
+ */
+export function speciesOf(m: WrittenMolecule, given?: { charge?: number | null; multiplicity?: number | null }): Species {
+  const known = knownOf(m);
+  const charge = Number.isInteger(given?.charge) ? given!.charge! : null;
+  const multiplicity = Number.isInteger(given?.multiplicity) && given!.multiplicity! > 0 ? given!.multiplicity! : null;
+  return {
+    charge: charge ?? Number(known.charge),
+    multiplicity: multiplicity ?? Number(known.multiplicity),
+    from: { charge: charge != null ? "given" : "atoms", multiplicity: multiplicity != null ? "given" : "atoms" },
+  };
+}

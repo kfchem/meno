@@ -6,6 +6,8 @@
  * it.
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
+import { geometryKey, type Entry, type EntryAtom, type Property } from "../../../../lib/entry";
+import { speciesOf } from "../../../../lib/io/writers";
 import type { Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
@@ -215,4 +217,39 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
 export function compoundLetter(i: number): string {
   const a = "abcdefghijklmnopqrstuvwxyz";
   return i < 26 ? a[i] : compoundLetter(Math.floor(i / 26) - 1) + a[i % 26];
+}
+
+/**
+ * A step's entry read as Meno's entry record (lib/entry, PR 1 of
+ * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
+ * its geometry, its species by Meno's one rule, and what has been found of
+ * it as properties - its energy (in hartrees, at its geometry), its
+ * degeneracy, its compound as its group, its number, its name - and the
+ * molecule it was a frame of as its lineage.
+ */
+export function entryOfSet(e: SetEntry, id: string): Entry {
+  const atoms: EntryAtom[] = e.atoms.map((a) => ({
+    el: a.el,
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
+  }));
+  const at = { geometry: geometryKey(e.xyz) };
+  const properties: Record<string, Property> = {
+    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
+    number: { value: e.number, unit: "none", status: "computed" },
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, status: "computed" as const } } : {}),
+    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
+  };
+  const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
+  return {
+    id,
+    from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
+    structure: { atoms, bonds: e.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order as 1 | 2 | 3 })) },
+    geometry: { kind: "3d", xyz: [...e.xyz] },
+    species: speciesOf(written, e),
+    properties,
+    status: "done",
+  };
 }
