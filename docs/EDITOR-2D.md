@@ -87,8 +87,8 @@ and in particular:
     with it as it is selected and banded with it as it is under the
     pointer, and drawn the same in SVG, PNG and EMF. Clean-up poses the
     allyl so: its middle carbon away from the metal, the line between its
-    end carbons across the metal's, the curve's middle a bond and a quarter
-    from the metal. Only the drawing: the file keeps the multi-centre bond
+    end carbons across the metal's, the curve's middle a bond and a half from
+    the metal. Only the drawing: the file keeps the multi-centre bond
     (ENDPTS, ATTACH=ALL) as it is; a ring - Cp, an arene, a cyclopropenyl -
     keeps its line to its centre; nothing changes in 3D.
   - **An alkene bound through both its carbons** (eta2; 2026-10-17) may be

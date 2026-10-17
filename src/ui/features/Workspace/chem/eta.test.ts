@@ -461,11 +461,11 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
       const side = (p: { x: number; y: number }) => (e2.x - e1.x) * (p.y - e1.y) - (e2.y - e1.y) * (p.x - e1.x);
       expect(Math.sign(side(mid))).toBe(-Math.sign(side(pd)));
       expect(Math.sign(side(star))).toBe(-Math.sign(side(pd)));
-      // (posed by Clean-up: the line between its end carbons across the metal's line, the curve's middle a bond and a quarter from the metal)
+      // (posed by Clean-up: the line between its end carbons across the metal's line, the curve's middle a bond and a half from the metal)
       const across = ((e2.x - e1.x) * (star.x - pd.x) + (e2.y - e1.y) * (star.y - pd.y)) / (Math.hypot(e2.x - e1.x, e2.y - e1.y) * Math.hypot(star.x - pd.x, star.y - pd.y));
       expect(Math.abs(across)).toBeLessThan(1e-6);
-      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeGreaterThan(1.1);
-      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeLessThan(1.4);
+      const bond = (Math.hypot(mid.x - e1.x, mid.y - e1.y) + Math.hypot(mid.x - e2.x, mid.y - e2.y)) / 2;
+      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / bond).toBeCloseTo(1.5, 2);
     }
   });
 

@@ -287,7 +287,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       return [{ metal: star === b.b ? b.a : b.b, atoms: b.endpoints, star }];
     }),
   ];
-  poseAllyls(atoms, added, part, systems, k);
+  poseAllyls(atoms, added, part, systems);
   // each ring or chain bound to its metal atom by atom: one bond to its
   // centre - an allyl's, its arc's middle - for the bonds to its atoms (chem/eta)
   const eta: NonNullable<Relayout["eta"]> = [];
@@ -319,8 +319,8 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
  * whole about the middle of its end carbons so that its middle carbon
  * points away from its metal - its delocalisation curve (lib/chem/allylArc)
  * inside it, on the metal's side - and moved so that the curve's middle
- * stands a bond and a quarter (`bond` the drawing's) from the metal: room
- * for the line past the metal's label. A
+ * stands a bond and a half (the drawing's) from the metal: room for the
+ * line past the metal's label. A
  * ligand bonded to another metal too, or to its own by another way, is left
  * as it is laid out. `atoms` and `added` (hydrogens new to the drawing) are
  * moved in place.
@@ -330,11 +330,17 @@ function poseAllyls(
   added: NonNullable<Relayout["added"]>,
   part: Model,
   systems: readonly { metal: number; atoms: readonly number[]; star?: number }[],
-  bond: number,
 ): void {
   if (!systems.length) return;
   const el = new Map(part.atoms.map((a) => [a.id, a.el]));
   const at = new Map(atoms.map((a, i) => [a.id, i]));
+  // (the drawing's bond, as laid out: the middle length of its bonds between atoms that are no metal and no star)
+  const plain = (id: number) => !isMetal(el.get(id) ?? "") && el.get(id) !== "*";
+  const lengths = part.bonds
+    .filter((b) => !b.endpoints?.length && plain(b.a) && plain(b.b) && at.has(b.a) && at.has(b.b))
+    .map((b) => Math.hypot(atoms[at.get(b.a)!].x - atoms[at.get(b.b)!].x, atoms[at.get(b.a)!].y - atoms[at.get(b.b)!].y))
+    .sort((p, q) => p - q);
+  const bond = lengths[lengths.length >> 1] || NOMINAL_BOND_LENGTH;
   for (const sys of systems) {
     const chain = allylChain({ endpoints: [...sys.atoms] }, part.bonds);
     const mi = at.get(sys.metal);
@@ -373,7 +379,8 @@ function poseAllyls(
     const theta = Math.atan2(u.y, u.x) - Math.atan2(m.y - c.y, m.x - c.x);
     const cos = Math.cos(theta);
     const sin = Math.sin(theta);
-    // (turned about the end carbons' middle; then moved so that the curve's middle is a bond and a quarter from the metal)
+    // (turned about the end carbons' middle; then moved so that the curve's middle is a bond and a half from the metal:
+    // room for the line past the metal's label, which reaches further one side than the other)
     const turn = (q: { x: number; y: number }) => {
       const x = q.x - c.x;
       const y = q.y - c.y;
@@ -381,7 +388,7 @@ function poseAllyls(
     };
     const [t1, tm, t2] = [e1, m, e2].map(turn);
     const middle = allylCurve(t1, tm, t2).middle;
-    const shift = { x: metal.x + u.x * 1.25 * bond - middle.x, y: metal.y + u.y * 1.25 * bond - middle.y };
+    const shift = { x: metal.x + u.x * 1.5 * bond - middle.x, y: metal.y + u.y * 1.5 * bond - middle.y };
     const move = (q: { x: number; y: number }) => {
       const r = turn(q);
       return { x: r.x + shift.x, y: r.y + shift.y };
