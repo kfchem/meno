@@ -19,7 +19,7 @@ import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
-import { ringsBondedAtomByAtom, type CisTrans } from "../../../../lib/layout/perceive";
+import { etaBondedAtomByAtom, type CisTrans } from "../../../../lib/layout/perceive";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
 import type { Bond, Model } from "../store/types";
@@ -33,6 +33,8 @@ export type LayoutJob = {
   ids: number[];
   /** The bonds from a metal to each atom of a ring bound so, by their atoms' ids (`pairKey`): not the engine's, which has a star for them. */
   loose?: Set<string>;
+  /** Each ring or chain bound so: its metal and its atoms, by id - made one bond to its centre as it is laid out. */
+  bound?: { metal: number; atoms: number[] }[];
   /** The H atoms taken as their centre's own H, by the centre's input index. */
   folded: Map<number, number[]>;
 };
@@ -132,11 +134,12 @@ export function layoutJob(part: Model): LayoutJob {
   };
   const ids = kept.map((i) => part.atoms[i].id);
   // A ring bound to a metal atom by atom - ferrocene drawn by hand, a bond
-  // from the iron to each carbon - is given to the engine as a haptic
-  // bond's is, a star at its centre bonded to the metal, and laid out
-  // face-on (the maintainer, 2026-10-13); the bonds to its atoms stay in
-  // the drawing as drawn, from the metal to each atom where it now is.
-  const bound = ringsBondedAtomByAtom(input);
+  // from the iron to each carbon - or a chain of three or more (an allyl)
+  // is given to the engine as a haptic bond's is, a star at its centre
+  // bonded to the metal, and laid out face-on (the maintainer, 2026-10-13);
+  // laid out, the bonds to its atoms become that one bond (chem/eta, the
+  // maintainer, 2026-10-17).
+  const bound = etaBondedAtomByAtom(input);
   if (!bound.length) return { input, ids, folded };
   const dropped = new Set(bound.flatMap((r) => r.bonds));
   const atoms = [...input.atoms];
@@ -146,7 +149,8 @@ export function layoutJob(part: Model): LayoutJob {
     bonds.push({ a: atoms.length - 1, b: r.metal, order: 1 });
   }
   const loose = new Set(bound.flatMap((r) => r.ring.map((a) => pairKey(ids[a], ids[r.metal]))));
-  return { input: { ...input, atoms, bonds }, ids, folded, loose };
+  const systems = bound.map((r) => ({ metal: ids[r.metal], atoms: r.ring.map((a) => ids[a]) }));
+  return { input: { ...input, atoms, bonds }, ids, folded, loose, bound: systems };
 }
 
 const pairKey = (p: number, q: number) => (p < q ? `${p},${q}` : `${q},${p}`);
@@ -271,7 +275,20 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
     if (d) return [{ id: b.id, stereo: b.stereo, stereoOrient: b.stereoOrient, ...d }];
     return [];
   });
-  const change: Relayout = { atoms, bonds, added, removed };
+  // each ring or chain bound to its metal atom by atom: one bond to its
+  // centre for the bonds to its atoms (chem/eta)
+  const eta: NonNullable<Relayout["eta"]> = [];
+  if (job.bound?.length) {
+    const placedAt = new Map(atoms.map((a) => [a.id, a]));
+    for (const sys of job.bound) {
+      const inSys = new Set(sys.atoms);
+      const drop = part.bonds.filter((b) => (b.a === sys.metal && inSys.has(b.b)) || (b.b === sys.metal && inSys.has(b.a))).map((b) => b.id);
+      const at = sys.atoms.map((id) => placedAt.get(id)!);
+      eta.push({ metal: sys.metal, atoms: sys.atoms, bonds: drop, x: mid(at.map((a) => a.x)), y: mid(at.map((a) => a.y)) });
+    }
+  }
+  const dropped = new Set(eta.flatMap((e) => e.bonds));
+  const change: Relayout = { atoms, bonds: dropped.size ? bonds.filter((b) => !dropped.has(b.id)) : bonds, added, removed, ...(eta.length ? { eta } : {}) };
   if (style) roomForLabels(part, change, style);
   if (!saysTheSame(part, change)) {
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");

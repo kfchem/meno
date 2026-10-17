@@ -497,6 +497,12 @@ export type Relayout = {
   }[];
   /** Atoms to take away, with their bonds. */
   removed?: number[];
+  /**
+   * Rings and chains bound to a metal atom by atom, each made one bond from
+   * the metal to a new star at (`x`, `y`), its endpoints `atoms`, for the
+   * bonds `bonds` (chem/eta).
+   */
+  eta?: { metal: number; atoms: number[]; bonds: number[]; x: number; y: number }[];
 };
 
 /**
@@ -507,7 +513,8 @@ export type Relayout = {
 export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDocument {
   const to = new Map(change.atoms.map((a) => [a.id, a]));
   const gone = new Set(change.removed ?? []);
-  let changed = gone.size > 0 || (change.added?.length ?? 0) > 0;
+  const unbonded = new Set((change.eta ?? []).flatMap((e) => e.bonds));
+  let changed = gone.size > 0 || (change.added?.length ?? 0) > 0 || (change.eta?.length ?? 0) > 0;
   // (marks put by hand, put back where the drawing puts them: they were put for the drawing as it was)
   const atoms = doc.model.atoms.flatMap((a): Atom[] => {
     if (gone.has(a.id)) return [];
@@ -528,7 +535,7 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
   });
   const patch = new Map(change.bonds.map((b) => [b.id, b]));
   const bonds = doc.model.bonds.flatMap((b): Bond[] => {
-    if (gone.has(b.a) || gone.has(b.b)) return [];
+    if (gone.has(b.a) || gone.has(b.b) || unbonded.has(b.id)) return [];
     const p = patch.get(b.id);
     const display = p && "display" in p ? p.display : b.display;
     const laid = to.has(b.a) && to.has(b.b);
@@ -551,6 +558,11 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
     const id = nextId++;
     atoms.push({ id, x: h.x, y: h.y, r: 0.9, el: "H" });
     bonds.push({ id: nextId++, a: h.on, b: id, order: 1, stereo: h.stereo, stereoOrient: h.stereoOrient });
+  }
+  for (const e of change.eta ?? []) {
+    const star = nextId++;
+    atoms.push({ id: star, x: e.x, y: e.y, r: 0.9, el: "*" });
+    bonds.push({ id: nextId++, a: e.metal, b: star, order: 1, coordination: true, endpoints: [...e.atoms], attach: "all", stereo: "none", stereoOrient: "principle" });
   }
   // (electron-pushing arrows on what was laid out bent as Meno bends them again, as marks are put back)
   const pushes = (doc.pushes ?? []).map((p) => {

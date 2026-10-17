@@ -11,8 +11,9 @@
  *   is any label that names a ligand only in a complex (CO, NH3, =CHPh),
  *   which is otherwise written as no element;
  * - a ring drawn with a bond from the metal to each of its atoms (ferrocene
- *   by hand): those bonds become one such bond, so that the ring's atoms are
- *   not taken for carbons with a bond too many.
+ *   by hand), or a chain of three or more so (an allyl): those bonds become
+ *   one such bond, so that its atoms are not taken for carbons with a bond
+ *   too many.
  *
  * The drawing's own atoms keep their places in the block, the stars made
  * for it come after them, so that the 3D structure's atoms stay tied to the
@@ -21,7 +22,7 @@
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { placedStructure } from "../../../../lib/chem/abbreviationPlace";
 import { ligandStructure, namedLigand } from "../../../../lib/chem/ligands";
-import { isMetal, ringsBondedAtomByAtom, type LayoutInput } from "../../../../lib/layout/perceive";
+import { etaBondedAtomByAtom, isMetal, type LayoutInput } from "../../../../lib/layout/perceive";
 import type { Model } from "../store/types";
 
 type Atom = Model["atoms"][number];
@@ -72,7 +73,8 @@ export function etaBound(part: Model): Model {
     atoms: part.atoms.map((a) => ({ el: a.el })),
     bonds: part.bonds.map((b) => ({ a: index.get(b.a)!, b: index.get(b.b)!, order: b.order })),
   };
-  const rings = ringsBondedAtomByAtom(input);
+  // (a chain of three or more so bonded - an allyl - as well, as Clean-up makes it: chem/eta)
+  const rings = etaBondedAtomByAtom(input);
   if (!rings.length) return { ...part, atoms, bonds: part.bonds.map(flipped) };
   const gone = new Set(rings.flatMap((r) => r.bonds));
   const bonds: Bond[] = part.bonds.filter((_, i) => !gone.has(i)).map(flipped);

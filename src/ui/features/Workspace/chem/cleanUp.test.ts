@@ -458,21 +458,37 @@ describe("a sandwich drawn by hand, a bond from the metal to each ring atom (the
       ...Array.from({ length: 10 }, (_, i) => ({ id: 40 + i, a: 1, b: 2 + i, order: 1, stereo: "none", stereoOrient: "principle" }) as Bond),
     ],
   };
-  it("is laid out as the sandwich a written-out Cp2Fe is: each ring face-on, one over the metal and one under, its bonds kept", async () => {
+  it("is laid out as the sandwich a written-out Cp2Fe is: each ring face-on, one over the metal and one under, its ten bonds two to the rings' centres", async () => {
     const laid = await laidOut(ferrocene);
-    expect(laid.atoms).toHaveLength(11);
-    expect(laid.bonds).toHaveLength(20);
+    // the ten Fe-C bonds two bonds to stars at the rings' centres (the maintainer, 2026-10-17)
+    expect(laid.atoms).toHaveLength(13);
+    expect(laid.bonds).toHaveLength(12);
+    const eta = laid.bonds.filter((b) => b.endpoints?.length);
+    expect(eta.map((b) => [...b.endpoints!].sort((p, q) => p - q))).toEqual(expect.arrayContaining([[2, 3, 4, 5, 6], [7, 8, 9, 10, 11]]));
+    for (const b of eta) {
+      expect(b.a).toBe(1);
+      expect(b.attach).toBe("all");
+      expect(laid.atoms.find((a) => a.id === b.b)?.el).toBe("*");
+    }
+    expect(laid.bonds.filter((b) => (b.a === 1 || b.b === 1) && !b.endpoints)).toEqual([]);
     const at = new Map(laid.atoms.map((a) => [a.id, a]));
     const fe = at.get(1)!;
     const middle = (ids: number[]) => ({ x: ids.reduce((s, i) => s + at.get(i)!.x, 0) / ids.length, y: ids.reduce((s, i) => s + at.get(i)!.y, 0) / ids.length });
     const [top, bottom] = [middle([2, 3, 4, 5, 6]), middle([7, 8, 9, 10, 11])];
+    // each star at its ring's centre
+    for (const b of eta) {
+      const c = middle(b.endpoints!);
+      expect(Math.hypot(at.get(b.b)!.x - c.x, at.get(b.b)!.y - c.y)).toBeLessThan(1e-6);
+    }
     // on the metal's axis, either side of it
     expect(Math.sign(top.y - fe.y)).toBe(-Math.sign(bottom.y - fe.y));
     expect(Math.abs(top.x - fe.x)).toBeLessThan(0.2 * NOMINAL_BOND_LENGTH);
     // each ring's own bonds crossing none of the other's, nor each other
     const ringBonds = laid.bonds.filter((b) => b.a !== 1 && b.b !== 1);
-    const idx = new Map(laid.atoms.map((a, i) => [a.id, i]));
-    const m = layoutMetrics({ x: laid.atoms.map((a) => a.x), y: laid.atoms.map((a) => a.y), edges: ringBonds.map((b) => [idx.get(b.a)!, idx.get(b.b)!] as const), orders: ringBonds.map((b) => b.order) });
+    // (the stars no atoms to measure: each is drawn as nothing)
+    const drawn = laid.atoms.filter((a) => a.el !== "*");
+    const idx = new Map(drawn.map((a, i) => [a.id, i]));
+    const m = layoutMetrics({ x: drawn.map((a) => a.x), y: drawn.map((a) => a.y), edges: ringBonds.map((b) => [idx.get(b.a)!, idx.get(b.b)!] as const), orders: ringBonds.map((b) => b.order) });
     expect(m.crossings).toBe(0);
     expect(m.overlaps).toBe(0);
     // in perspective, as Haworth drew rings: some edges bold

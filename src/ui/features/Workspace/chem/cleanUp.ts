@@ -193,6 +193,7 @@ export async function cleanUp(
       bonds: changes.flatMap((c) => c.bonds),
       added: changes.flatMap((c) => c.added ?? []),
       removed: changes.flatMap((c) => c.removed ?? []),
+      eta: changes.flatMap((c) => c.eta ?? []),
     },
     labels,
   );
