@@ -1044,6 +1044,8 @@ export type EditorState = {
   hoveredPicture: number | null;
   /** Pictures put where they were made for - renders' - that come onto the page as the view is: it eased to them as they were begun, and moves no more. */
   picturesLaid: ReadonlySet<number>;
+  /** Where renders under way will put what they make, in the page's units (render/renders): kept clear by what is put on the page meanwhile. */
+  renderFrames: readonly { x0: number; y0: number; x1: number; y1: number }[];
   setHoveredPicture: (id: number | null) => void;
   /** The pictures selected, by id: besides `sel`, which is the drawing's. */
   selPictures: Set<number>;

@@ -60,6 +60,8 @@ import { boxOf, progressOf, rendersOf, startRender, stopRenders } from "./render
 import { askOf, renderOptions } from "./renderOptions";
 import type { RenderAsk } from "./renderScene";
 import { valuesOf } from "../../../../lib/options";
+import { freePlace, pageBoxes } from "../utils/freePlace";
+import { styleOf } from "../../../../lib/chem/style";
 import { useReaders } from "../../../../lib/calc/workers";
 import { addMolecule3d, addPicture, createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, madeStoreOf, storeOf } from "../store";
@@ -229,6 +231,10 @@ describe("where a render lands", () => {
     expect(overlap(boxOf(r.at), figure)).toBe(false);
     expect(overlap(boxOf(r.at), r.around)).toBe(false);
     expect(overlap(boxOf(r.at), boxOf(r2.at))).toBe(false);
+    // (kept clear meanwhile by what is put on the page: a file opened there goes elsewhere)
+    expect(one.st().renderFrames).toEqual([boxOf(r.at), boxOf(r2.at)]);
+    const boxes = pageBoxes(one.st(), styleOf(one.st().docStyle));
+    expect(freePlace(boxes, { x0: -1, x1: 1, y0: -1, y1: 1 }, { x: r.at.x, y: r.at.y }, 1.5)).not.toEqual({ x: r.at.x, y: r.at.y });
     // what it makes, put just where it was shown
     for (const job of [r.job!, r2.job!]) Object.assign(jobs.get(job)!, { state: "done", ended: Date.now() });
     madeFiles.set(`/jobs/${r.job}/film.mp4`, mp4(3));
@@ -239,5 +245,7 @@ describe("where a render lands", () => {
     const films = one.st().pictures.filter((p) => p.media === "video/mp4");
     expect(films).toHaveLength(2);
     expect(films.map(({ x, y, w, h }) => ({ x, y, w, h }))).toEqual(expect.arrayContaining([r.at, r2.at]));
+    // (landed: their frames kept clear no more)
+    expect(one.st().renderFrames).toEqual([]);
   });
 });

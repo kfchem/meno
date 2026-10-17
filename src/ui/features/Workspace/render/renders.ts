@@ -68,7 +68,14 @@ const stores = new WeakMap<EditorStore, UseBoundStore<StoreApi<Renders>>>();
 /** The renders of a workspace, by its store. */
 export function rendersOf(store: EditorStore): UseBoundStore<StoreApi<Renders>> {
   let r = stores.get(store);
-  if (!r) stores.set(store, (r = create<Renders>(() => ({ list: [] }))));
+  if (!r) {
+    stores.set(store, (r = create<Renders>(() => ({ list: [] }))));
+    // (their frames kept clear by what is put on the page meanwhile - a file opened, a set placed: utils/freePlace `pageBoxes`)
+    r.subscribe((s, was) => {
+      if (s.list.length === was.list.length && s.list.every((x, i) => x.at === was.list[i].at)) return;
+      store.setState({ renderFrames: s.list.map((x) => boxOf(x.at)) });
+    });
+  }
   return r;
 }
 
@@ -196,7 +203,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const w = page.maxX - page.minX;
   const h = page.maxY - page.minY;
   const st = store.getState();
-  const there = [...pageBoxes(st, styleOf(st.docStyle)), ...renders.getState().list.map((r) => boxOf(r.at))];
+  const there = pageBoxes(st, styleOf(st.docStyle));
   const place = freePlace(there, { x0: -w / 2, x1: w / 2, y0: -h / 2, y1: h / 2 }, { x: page.maxX + NOMINAL_BOND_LENGTH + w / 2, y: (page.minY + page.maxY) / 2 }, NOMINAL_BOND_LENGTH);
   const at = { x: place.x, y: place.y, w, h };
   const around = { x0: page.minX, x1: page.maxX, y0: page.minY, y1: page.maxY };

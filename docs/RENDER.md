@@ -172,7 +172,9 @@ as large as it will be - beside the molecules, on the right, as large as
 they are drawn; or, where something lies there, in the free space nearest
 it, clear of all on the page and of other renders' frames - saying how
 far it is and what its job said last, with a button that stops it. What
-it makes lands just there, in the frame's place.
+it makes lands just there, in the frame's place; meanwhile the frame is
+kept clear, as all on the page is, by what is put there - a file opened,
+a set placed - so that nothing comes under where it lands.
 Where it fails, the frame says why; the button puts it away. The view
 eases to the frame and the molecules once, as the render is begun, where
 they are not all in view; what it makes lands as the view then is, never
