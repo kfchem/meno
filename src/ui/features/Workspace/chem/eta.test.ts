@@ -412,11 +412,13 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
     expect(allylChain(etaOf(doc.model)[0], doc.model.bonds)).toBeNull();
   });
 
-  it("is shaded as selected with its arc, piece by piece", () => {
+  it("is shaded as selected with its arc, in four pieces from one end carbon to the other", () => {
     const { model } = allylPd();
     const [b] = etaOf(model);
     const parts = selectedParts(model, new Set(), new Set([b.id]));
-    expect([...parts.keys()].filter((k) => k.startsWith(`b${b.id}~`))).toHaveLength(16);
+    const pieces = [...parts.entries()].filter(([k]) => k.startsWith(`b${b.id}~`)).map(([, v]) => v.bond!);
+    expect(pieces).toHaveLength(4);
+    for (let k = 1; k < 4; k++) expect(pieces[k].p).toEqual(pieces[k - 1].q);
   });
 
   it("in the chloride dimer, each allyl's arc bulges towards its own palladium", async () => {
