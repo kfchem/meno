@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
 import TextBody from "../TextEditor";
@@ -13,6 +13,7 @@ import { useEditor, useEditorStore } from "./store";
 import type { PdfFind, PdfItem, WordPlace, WorkspaceText } from "./store/types";
 import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
+import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
@@ -85,15 +86,27 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   const setPdfWidth = useEditor((s) => s.setPdfColumnWidth);
   const canvas = room || window.innerWidth;
   const widest = Math.max(COLUMN_NARROWEST, canvas * COLUMN_WIDEST);
-  const width = columnWidthFor(canvas, !!pdf, pdf ? pdfWidth : textWidth);
+  // (filling the workspace: as wide as the canvas, over all of it, the tabs and its own header kept)
+  const filled = useEditor((s) => s.columnFilled);
+  const width = filled ? canvas : columnWidthFor(canvas, !!pdf, pdf ? pdfWidth : textWidth);
   const setWidth = pdf ? setPdfWidth : setTextWidth;
   const [dragging, setDragging] = useState(false);
   // (how much of the canvas it covers, as it slides and as it is dragged: what is in view is the rest)
   const store = useEditorStore();
   // (the width the canvas lays a PDF out at in it - not changed as it shuts on what it showed)
   const showing = open && !!(shown || pdf);
+  // (going over to filling the workspace, or back: what it shows laid out at its width as it eases there, frame by
+  // frame - laid out at once at the width it goes to, a page jumped to its new size first, and the column then eased)
+  const easing = useRef(false);
+  const [eased, setEased] = useState<number | null>(null);
+  const filledBefore = useRef(filled);
+  useLayoutEffect(() => {
+    if (filledBefore.current === filled) return;
+    filledBefore.current = filled;
+    if (showing) easing.current = true;
+  }, [filled, showing]);
   useEffect(() => {
-    if (showing) store.getState().setColumnWidth(width);
+    if (showing && !easing.current) store.getState().setColumnWidth(width);
   }, [showing, width, store]);
   const [el, setEl] = useState<HTMLDivElement | null>(null);
   useEffect(() => {
@@ -101,7 +114,14 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
       store.getState().setCover(0);
       return;
     }
-    const seen = new ResizeObserver(() => store.getState().setCover(el.getBoundingClientRect().width));
+    const seen = new ResizeObserver(() => {
+      const now = el.getBoundingClientRect().width;
+      store.getState().setCover(now);
+      if (easing.current) {
+        setEased(now);
+        store.getState().setColumnWidth(now);
+      }
+    });
     seen.observe(el);
     return () => {
       seen.disconnect();
@@ -122,10 +142,16 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
             exit={{ width: 0, opacity: 0 }}
             // (dragged, it follows the pointer)
             transition={dragging ? { duration: 0 } : { duration: DURATION.move, ease: EASE_SLIDE }}
+            onAnimationComplete={() => {
+              if (!easing.current) return;
+              easing.current = false;
+              setEased(null);
+              store.getState().setColumnWidth(width);
+            }}
             className={clsx("absolute top-0 right-0 z-20 h-full overflow-hidden", dragging && "select-none")}
           >
-            <Column texts={texts} read={read} shown={shown} pdf={pdf} width={width} />
-            <Edge width={width} widest={widest} setWidth={setWidth} setDragging={setDragging} />
+            <Column texts={texts} read={read} shown={shown} pdf={pdf} width={eased ?? width} />
+            {!filled && <Edge width={width} widest={widest} setWidth={setWidth} setDragging={setDragging} />}
           </motion.div>
         )}
       </AnimatePresence>
@@ -144,6 +170,8 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
   // (a text just made to be written in: given the keys as it shows)
   const toWrite = useEditor((s) => s.textToWrite);
   const closeTexts = useEditor((s) => s.closeTexts);
+  const filled = useEditor((s) => s.columnFilled);
+  const setFilled = useEditor((s) => s.setColumnFilled);
   const [error, setError] = useState<string | null>(null);
   // (a Markdown text read formatted, or its source written)
   const markdown = !!shown && isMarkdown(shown.name);
@@ -193,6 +221,15 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
             <ArrowUpTrayIcon className="h-4 w-4" />
           </button>
         )}
+        <button
+          onClick={() => setFilled(!filled)}
+          aria-label={filled ? "Back beside the canvas" : "Fill the workspace"}
+          aria-pressed={filled}
+          title={`${filled ? "Back beside the canvas" : "Fill the workspace"} (${shortcutLabel("F", true)})`}
+          className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center hover:bg-gh-base"
+        >
+          {filled ? <ArrowsPointingInIcon className="h-4 w-4" /> : <ArrowsPointingOutIcon className="h-4 w-4" />}
+        </button>
         <button
           onClick={closeTexts}
           aria-label="Hide texts"

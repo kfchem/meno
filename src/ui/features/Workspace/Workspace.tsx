@@ -99,7 +99,7 @@ import {
   isDeleteKey,
   isFitKey,
   isDeselectKey,
-  isFindKey,
+  isFillKey, isFindKey,
   isSelectAllKey,
   IS_MAC,
   presentIntent,
@@ -892,6 +892,10 @@ function WorkspaceContent({
         else if (what === "copy") void clip.copy();
         else if (what === "cut") void clip.cut();
         else void clip.paste(pasteTarget());
+      } else if (isFillKey(e) && st.textsOpen && (st.pdfShown != null || st.textShown != null)) {
+        // the PDF or text in the column filling the workspace, or back beside the canvas
+        e.preventDefault();
+        st.setColumnFilled(!st.columnFilled);
       } else if (isFindKey(e) && st.pdfs.length) {
         // looking for words in the PDFs (docs/PDF.md, *Search*)
         e.preventDefault();
@@ -902,6 +906,9 @@ function WorkspaceContent({
       } else if (isDeselectKey(e) && st.pdfFind && !menu) {
         // (Esc closes the search of PDFs, wherever the keys are)
         st.setPdfFind(null);
+      } else if (isDeselectKey(e) && st.columnFilled && !menu) {
+        // (then Esc takes the column filling the workspace back beside the canvas)
+        st.setColumnFilled(false);
       } else if (isDeselectKey(e) && (selected || st.chosen3d || st.pdfSel || st.pdfBox) && !busy && !menu) {
         // (Esc with the menu open closes the menu only)
         st.clearSel();

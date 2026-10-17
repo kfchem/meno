@@ -712,9 +712,13 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   of file, who reads it, who else adds to it, and who writes it. Meno's
   own parts show there as "Meno".
 - **The other roles are chosen where they are used:**
-  - in *Chemistry*, who parses SMILES, checks a structure and assigns R/S;
-  - in *Molecules in 3D*, who makes a structure in 3D and its conformers,
-    and by what method;
+  - in *Chemistry* - what is done on a structure drawn, at once, and who
+    does it (the maintainer, 2026-10-17) - who parses SMILES, checks a
+    structure and assigns R/S, and, on a card of their own, *Molecules in
+    3D*, who makes a structure in 3D and its conformers, and by what
+    method, its stereoisomers, a formula drawn from it, and its renders.
+    (*Molecules in 3D* itself is how they look and turn; a workflow step's
+    defaults are in *Calculations*);
   - in a workflow step, who runs it, defaulting to the choice in Settings.
 - **A choice taken away gives way** (the maintainer, 2026-10-12): when the
   plugin chosen for a role is taken away and another plugin that fills it

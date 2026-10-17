@@ -5,6 +5,7 @@ import { useLeaving } from "../../theme/leaving";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
+import { withRules } from "./menuRules";
 import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
@@ -801,7 +802,7 @@ export default function PartMenu({
         ? [
             { name: "Paste", keys: shortcut("V"), run: clipboard.onPaste, icon: MENU_ICONS.paste },
             { name: "Select all", keys: shortcut("A"), run: clipboard.onSelectAll, icon: MENU_ICONS.selectAll },
-            ...canvas.map((item, i) => ({ ...item, divider: i > 0 && item.divider })),
+            ...canvas,
           ]
         : [
           // an atom's charge - the + and - keys do it too - and its radical
@@ -842,7 +843,7 @@ export default function PartMenu({
   const row = items.filter((i) => i.icon && !i.compact);
   const compact = items.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
-  const list = items.filter((i) => !i.icon);
+  const list = withRules(items.filter((i) => !i.icon));
   const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     if (!item.keep) onClose();

@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { withRules } from "../Workspace/menuRules";
 
 /** An item of a card's menu: what it is called, what it does, whether it can be done, and a line above it. */
 export type CardMenuItem = { name: string; run: () => void; disabled?: boolean; divider?: boolean };
@@ -66,7 +67,7 @@ export default function CardMenu({
       style={place}
       onContextMenu={(e) => e.preventDefault()}
     >
-      {items.map((item) => (
+      {withRules(items).map((item) => (
         <div key={item.name}>
           {item.divider && <div className="my-1 border-t border-gh-line" />}
           <button
