@@ -1077,7 +1077,14 @@ workspace holds.
   where any do: where every line meets the others square - a frame, a
   graph's axes - and no wedge is drawn, no structure is drawn, and none
   is read. A cyclobutane drawn alone, a square, and a schematic box (rings
-  drawn edge-on as rectangles) are read as no structure so too.
+  drawn edge-on as rectangles) are read as no structure so too. A table's
+  lines are no bonds, wherever in the figure it stands: level and upright
+  lines bounding cells - two level lines over each other's stretch, two
+  upright between them from one to the other - where two cells or more
+  share a side, as a table's rows and columns do, and short level or
+  upright lines set within those cells, its dashes; a structure beside it
+  is read as ever. A ring is never drawn so; a Fischer projection's
+  crossing lines make no cells.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.

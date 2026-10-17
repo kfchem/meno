@@ -196,6 +196,28 @@ describe("a figure's shapes", () => {
   });
 });
 
+describe("a table beside a structure", () => {
+  // (a ring of six, and a table of three rows and three columns, its cells a bond high, a dash in one)
+  const ring: P[] = Array.from({ length: 6 }, (_, i) => [30 + L * Math.cos((Math.PI / 3) * i + Math.PI / 6), 30 + L * Math.sin((Math.PI / 3) * i + Math.PI / 6)]);
+  const hexagon = ring.map((p, i) => stroke(p, ring[(i + 1) % 6]));
+  const grid: FigurePath[] = [];
+  for (let r = 0; r <= 3; r++) for (let c = 0; c < 3; c++) grid.push(stroke([100 + c * 2 * L, 10 + r * L], [100 + (c + 1) * 2 * L, 10 + r * L]));
+  for (let c = 0; c <= 3; c++) for (let r = 0; r < 3; r++) grid.push(stroke([100 + c * 2 * L, 10 + r * L], [100 + c * 2 * L, 10 + (r + 1) * L]));
+  const dash = stroke([100 + 0.8 * L, 10 + 1.5 * L], [100 + 1.2 * L, 10 + 1.5 * L]);
+
+  it("reads the structure and not the table: its lines are no bonds", () => {
+    const s = read(figure([...hexagon, ...grid, dash]));
+    expect(s.atoms).toHaveLength(6);
+    expect(s.bonds).toHaveLength(6);
+  });
+
+  it("still reads a cross of lines with no cells", () => {
+    // (a chain drawn upright, a line across it at each of two atoms - as a Fischer projection is drawn)
+    const cross = [stroke([50, 0], [50, L]), stroke([50, L], [50, 2 * L]), stroke([50, 2 * L], [50, 3 * L]), stroke([50 - L, L], [50, L]), stroke([50, L], [50 + L, L]), stroke([50 - L, 2 * L], [50, 2 * L]), stroke([50, 2 * L], [50 + L, 2 * L])];
+    expect(read(figure(cross)).atoms).toHaveLength(8);
+  });
+});
+
 describe("how long a figure's bonds are", () => {
   it("is the length most share, the longer of two as common", () => {
     expect(bondLength([14.4, 14.4, 14.3, 10, 10, 10, 3, 2])).toBeCloseTo(14.4, 1);
