@@ -79,10 +79,12 @@ one whose drawing reads best - by a measure that reads every set's
 rings, not the one it came from - the canonical rank deciding only
 between drawings as good. Ibogaine's isoquinuclidine laid from one pair
 of its three six-membered cycles crowds its bonds out (18.98 by
-`flatCost`, with their room); from either other pair, 2.45 and 2.50, and
-the whole lies flat. At most eight sets are tried, those whose rings are
-bridged across one another least where a system has more. A cage is not:
-it is drawn from its solid, which reads the same from every set.
+`flatCost`, with their room); from either other pair, 2.45 and 2.50 -
+still a bond crossing another by its N, so that its cage in perspective
+is drawn instead, as the whole drawing reads better. At most eight sets
+are tried, those whose rings are bridged across one another least where
+a system has more. A cage is not: it is drawn from its solid, which
+reads the same from every set.
 
 ## What a good drawing is
 
@@ -335,7 +337,12 @@ they hang from.
   them, seen from either hand - each of those is tried with what hangs from
   it too, none favoured: which came first went by the order of the atoms,
   and a gem-dimethyl on a ring fused to adamantane had room from some of
-  them only. Of these and the flat
+  them only. And each other side within 3 of the best by the system alone
+  is tried with what hangs from it as well, taken only where that reads
+  better by the 3, as a cage's next textbook views are: the system alone
+  sees none of the H's and labels round it, and ibogaine's isoquinuclidine
+  from its best side by itself put the H at its junction against the
+  indole's NH, where another side leaves both clear. Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
   better. Then the whole drawing decides, measured as it will be drawn -

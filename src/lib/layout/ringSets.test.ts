@@ -5,6 +5,7 @@ import { perceive, type LayoutInput, type Molecule, type RingSystem } from "./pe
 import { drawnRingSets, MOST_SETS_TRIED, ringSetsToTry, withRingSet } from "./ringSets";
 import { placeRingSystem } from "./ringSystem";
 import { fromSmiles } from "./testdata/fromSmiles";
+import { segmentsCross } from "./geometry";
 
 const ibogaine = "CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC";
 
@@ -87,8 +88,33 @@ describe("the smallest set of rings a bridged system is drawn from", () => {
     expect(shape(layout2D(reversed))).toBe(shape(layout2D(input)));
   });
 
-  it("lays ibogaine flat, its isoquinuclidine from the two cycles that leave it room", () => {
-    const out = layout2D(fromSmiles(ibogaine));
-    expect(out.solid.some(Boolean)).toBe(false);
+  it("draws ibogaine with neither a bond crossing by its N nor its junction H against the indole's NH", () => {
+    // (flat from its best set, two bonds crossed by the N; its cage from its
+    // best side by the system alone, the H against the NH: its cage from
+    // another side within the margin, both clear)
+    const g = fromSmiles(ibogaine);
+    const out = layout2D(g);
+    const x = [...out.x];
+    const y = [...out.y];
+    const el = g.atoms.map((a) => a.el);
+    const bonds = g.bonds.map(({ a, b }) => [a, b] as [number, number]);
+    for (const h of out.hydrogens) {
+      x.push(h.at.x);
+      y.push(h.at.y);
+      el.push("H");
+      bonds.push([h.on, x.length - 1]);
+    }
+    const labelled = el.map((e, i) => (e !== "C" ? i : -1)).filter((i) => i >= 0);
+    for (const a of labelled)
+      for (const b of labelled)
+        if (a < b && !bonds.some(([p, q]) => (p === a && q === b) || (p === b && q === a))) expect(Math.hypot(x[a] - x[b], y[a] - y[b])).toBeGreaterThan(1);
+    // (no two bonds crossing where neither is drawn in perspective, broken behind the other)
+    const flat = (a: number) => out.depth[a] == null;
+    const pt = (a: number) => ({ x: x[a], y: y[a] });
+    for (const [i, [p, q]] of bonds.entries())
+      for (const [r, s] of bonds.slice(i + 1)) {
+        if ([r, s].includes(p) || [r, s].includes(q) || ![p, q, r, s].every(flat)) continue;
+        expect(segmentsCross(pt(p), pt(q), pt(r), pt(s))).toBe(false);
+      }
   });
 });
