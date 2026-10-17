@@ -462,36 +462,45 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       .flatMap((frame) => {
         const { L, H } = setUp(frame);
         const pos = grow(mol, piece, L, frame, sides, H, upright);
-        const out = [{ pos, m: flat, mirrored: frame.mirrored }];
-        if (hubs.length) {
-          for (const phi of PROPELLER) {
+        const out = [{ pos, m: flat, start: 0, mirrored: frame.mirrored }];
+        // (where the blades grown flat are crowded: on a bond, crossing
+        // one, on an atom - as at the end, below)
+        const crowded = hubs.length ? clashing(mol, piece, pos) : new Set<number>();
+        if (hubs.some((hub) => hub.rings.some((c) => sideAtoms(mol, hub.x, c).some((v) => crowded.has(v))))) {
+          PROPELLER.forEach((phi, k) => {
             const trial = new Map(pos);
             const lift = new Map<number, number>();
             for (const hub of hubs) turnBlades(mol, hub, phi, trial, lift);
-            out.push({ pos: trial, m: measuresFor(lift), mirrored: frame.mirrored });
-          }
+            out.push({ pos: trial, m: measuresFor(lift), start: k + 1, mirrored: frame.mirrored });
+          });
         }
         return out;
       })
       .map((c) => ({ ...c, score: c.m.score(c.pos) }))
       .sort(bestFirst(mol, piece));
-    let best = tried[0];
+    let best: { pos: Grown; score: number; m: Measures; mirrored: boolean };
+    // (each start - flat, turned at each angle - carried through the steps
+    // below on its own, its best few at each: a start that grows a little
+    // worse can be set right to a better drawing)
+    const starts = [...new Set(tried.map((c) => c.start))];
+    const ofEach = <T extends { start: number }>(list: T[], n: number) => starts.flatMap((start) => list.filter((c) => c.start === start).slice(0, n));
     // every frame tried the other way where it helps, for a small piece;
     // the most promising few for a large one
     const worth = piece.length <= 80 ? framesFor(mol, piece).length : 4;
-    const improved = tried
-      .slice(0, worth)
+    const improved = ofEach(tried, worth)
       .map((cand) => ({
         ...improve(mol, cand.pos, cand.score, flipsHere, sides, cand.m.score, false, swapsHere),
         m: cand.m,
+        start: cand.start,
         mirrored: cand.mirrored,
       }))
       .sort(bestFirst(mol, piece));
     // and the best few set right within their small sides - every one, for
     // a small piece
-    const deeper = improved.slice(0, piece.length <= 40 ? improved.length : 3).map((cand) => ({
+    const deeper = ofEach(improved, piece.length <= 40 ? improved.length : 3).map((cand) => ({
       ...improve(mol, cand.pos, cand.score, flipsHere, sides, cand.m.score, true, swapsHere),
       m: cand.m,
+      start: cand.start,
       mirrored: cand.mirrored,
     }));
     // and the best few of those - with the best drawing grown - each
@@ -502,12 +511,16 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // eighty atoms, as above: setting right is most of the time a large
     // piece takes - Stryker's reagent's 126 atoms, its three best drawings
     // one drawing turned)
-    const pool = deeper.some((d) => d.score <= best.score + 1e-9) ? deeper : [best, ...deeper];
-    const finalists = pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? FINALISTS : 1);
+    const finalists = starts.flatMap((start) => {
+      const grown = tried.find((c) => c.start === start)!;
+      const own = deeper.filter((c) => c.start === start);
+      const pool = own.some((d) => d.score <= grown.score + 1e-9) ? own : [grown, ...own];
+      return pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? FINALISTS : 1);
+    });
     const set = finalists
       .map((cand) => {
         const joined = rejoin(mol, piece, cand.pos, cand.score, cand.m.score, fixed);
-        return { ...untangle(mol, piece, joined.pos, joined.score, cand.m.score, fixed), m: cand.m, mirrored: cand.mirrored };
+        return { ...untangle(mol, piece, joined.pos, joined.score, cand.m.score, fixed), m: cand.m, start: cand.start, mirrored: cand.mirrored };
       })
       .sort(bestFirst(mol, piece));
     // (each set right to the end - its sugars faced, room made for its
