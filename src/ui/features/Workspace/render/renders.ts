@@ -30,6 +30,8 @@ import { style3dOf } from "../style3d";
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pictureToAdd } from "../utils/pictures";
+import { freePlace, pageBoxes } from "../utils/freePlace";
+import { styleOf } from "../../../../lib/chem/style";
 import { surfaceOf } from "../utils/surfaces";
 import { carriedOf } from "../utils/workspace";
 import { readPrepared } from "../workflow/programs";
@@ -39,8 +41,10 @@ import { renderScene, type RenderAsk, type Shown3D } from "./renderScene";
 export type Rendering = {
   key: number;
   kind: "picture" | "film";
-  /** Where what it makes will lie, in the page's units. */
+  /** Where what it makes will lie, in the page's units: its middle, its width and height. */
   at: { x: number; y: number; w: number; h: number };
+  /** Where what it renders lies, in the page's units: what is brought into view with it. */
+  around: { x0: number; x1: number; y0: number; y1: number };
   state: "preparing" | "waiting" | "running" | "finishing" | "failed";
   /** How far it is: frames done of all, as its job says. */
   done?: number;
@@ -56,12 +60,22 @@ export type Rendering = {
 };
 
 type Renders = { list: Rendering[] };
+
+/** A render's place as a box, in the page's units. */
+export const boxOf = (at: Rendering["at"]) => ({ x0: at.x - at.w / 2, x1: at.x + at.w / 2, y0: at.y - at.h / 2, y1: at.y + at.h / 2 });
 const stores = new WeakMap<EditorStore, UseBoundStore<StoreApi<Renders>>>();
 
 /** The renders of a workspace, by its store. */
 export function rendersOf(store: EditorStore): UseBoundStore<StoreApi<Renders>> {
   let r = stores.get(store);
-  if (!r) stores.set(store, (r = create<Renders>(() => ({ list: [] }))));
+  if (!r) {
+    stores.set(store, (r = create<Renders>(() => ({ list: [] }))));
+    // (their frames kept clear by what is put on the page meanwhile - a file opened, a set placed: utils/freePlace `pageBoxes`)
+    r.subscribe((s, was) => {
+      if (s.list.length === was.list.length && s.list.every((x, i) => x.at === was.list[i].at)) return;
+      store.setState({ renderFrames: s.list.map((x) => boxOf(x.at)) });
+    });
+  }
   return r;
 }
 
@@ -182,12 +196,18 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const shown = await shownOf(store, ids);
   if (closing.aborted) return;
   const rendered = renderScene(shown, style3dOf(store.getState()), ask);
-  // (beside them, on the right: as large as they are drawn)
+  // (as large as they are drawn, beside them on the right - or, where something lies there, in the free space
+  // nearest it: clear of all on the page and of other renders' places, by a bond's length. Where it will lie,
+  // and where it is put)
   const { page } = rendered;
   const w = page.maxX - page.minX;
   const h = page.maxY - page.minY;
-  const at = { x: page.maxX + NOMINAL_BOND_LENGTH + w / 2, y: (page.minY + page.maxY) / 2, w, h };
-  renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, state: "preparing", started: Date.now() }] }));
+  const st = store.getState();
+  const there = pageBoxes(st, styleOf(st.docStyle));
+  const place = freePlace(there, { x0: -w / 2, x1: w / 2, y0: -h / 2, y1: h / 2 }, { x: page.maxX + NOMINAL_BOND_LENGTH + w / 2, y: (page.minY + page.maxY) / 2 }, NOMINAL_BOND_LENGTH);
+  const at = { x: place.x, y: place.y, w, h };
+  const around = { x0: page.minX, x1: page.maxX, y0: page.minY, y1: page.maxY };
+  renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, around, state: "preparing", started: Date.now() }] }));
 
   const settings = useAppSettings.getState();
   const { slots, cores } = runningOf(settings.calculations);

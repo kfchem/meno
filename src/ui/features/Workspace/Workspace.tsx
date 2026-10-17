@@ -33,11 +33,11 @@ import {
   SnapArc2D,
   Selection2D,
 } from "./components";
-import { ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ExclamationTriangleIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { chordedPress } from "./utils/press";
 import { AnimatePresence, motion } from "motion/react";
-import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, RISE } from "../../theme/motion";
+import { CANVAS_RESIZE, DURATION, EASE_SLIDE, FADE, LEAVE, RISE } from "../../theme/motion";
 import DocumentStylePanel from "./DocumentStylePanel";
 import ArrowStylePanel from "./ArrowStylePanel";
 import SaveAbbreviationPanel from "./SaveAbbreviationPanel";
@@ -272,6 +272,7 @@ function WorkspaceContent({
     handleWrapperMouseLeave,
     handleWrapperClick,
     dropZone,
+    dropping,
     openFilesAt,
     importError,
     dismissImportError,
@@ -1525,6 +1526,22 @@ function WorkspaceContent({
           </button>
         </motion.div>
       )}
+      </AnimatePresence>
+      {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
+          none - until what it brings is placed, or the card saying why not takes its place */}
+      <AnimatePresence>
+        {active && dropping && (
+          <motion.div
+            key={`dropping-${dropping.key}`}
+            exit={{ opacity: 0, transition: LEAVE }}
+            role="status"
+            aria-label="Opening what was dropped"
+            className="meno-drop-mark pointer-events-none absolute z-40 flex h-7 w-7 items-center justify-center rounded-full border border-gh-line bg-white/95 shadow-sm"
+            style={{ left: dropping.x - (dropRef.current?.getBoundingClientRect().left ?? 0) - 14, top: dropping.y - (dropRef.current?.getBoundingClientRect().top ?? 0) - 14 }}
+          >
+            <ArrowPathIcon className="h-4 w-4 text-gh-gray animate-spin motion-reduce:animate-none [animation-duration:2s]" aria-hidden />
+          </motion.div>
+        )}
       </AnimatePresence>
       <AnimatePresence>
         {active && (chem.state === "setting-up" || chem.state === "starting" || working3d) && (

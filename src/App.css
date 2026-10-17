@@ -146,6 +146,12 @@ body {
   animation: meno-fade-out 120ms var(--ease-meno-leave) both;
 }
 
+/* A file dropped being read: its mark comes after a moment - a quick one shows none - and fades in as the page is
+   held by a large one's reading, the browser's own animation going on (Workspace's drop mark). */
+.meno-drop-mark {
+  animation: meno-fade-in 160ms var(--ease-meno) 220ms both;
+}
+
 /* A chip on the page - a molecule's frames chip, a measurement's value -
    grows and shrinks with the page, as its cards and sets do: drawn at the
    page's scale, `--page` (components/PageScale), from where it hangs; and

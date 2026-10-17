@@ -2,13 +2,12 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef } from "react";
 import { useThree } from "@react-three/fiber";
 import type * as THREE from "three";
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { useEditorStore } from "../store";
 import PageHtml from "../components/PageHtml";
 import { setViewGoal } from "../components/viewGoal";
 import { pageAt } from "../utils/page";
 import { HTML_DISTANCE, PX } from "../workflow/look";
-import { rendersOf, stopRender, type Rendering } from "./renders";
+import { boxOf, rendersOf, stopRender, type Rendering } from "./renders";
 
 /**
  * Renders under way on the page (docs/RENDER.md): each where what it makes
@@ -27,11 +26,12 @@ export default function Renders2D() {
     const added = list.filter((r) => r.key > seen.current);
     if (!added.length) return;
     seen.current = Math.max(...added.map((r) => r.key));
-    // (what it makes, and what it renders - as large, on its left)
-    const x0 = Math.min(...added.map((r) => r.at.x - 1.5 * r.at.w - NOMINAL_BOND_LENGTH));
-    const x1 = Math.max(...added.map((r) => r.at.x + r.at.w / 2));
-    const y0 = Math.min(...added.map((r) => r.at.y - r.at.h / 2));
-    const y1 = Math.max(...added.map((r) => r.at.y + r.at.h / 2));
+    // (where what it makes will lie, and what it renders)
+    const boxes = added.flatMap((r) => [boxOf(r.at), r.around]);
+    const x0 = Math.min(...boxes.map((b) => b.x0));
+    const x1 = Math.max(...boxes.map((b) => b.x1));
+    const y0 = Math.min(...boxes.map((b) => b.y0));
+    const y1 = Math.max(...boxes.map((b) => b.y1));
     const cam = camera as THREE.OrthographicCamera;
     const a = pageAt(-1, -1, cam);
     const c = pageAt(1, 1, cam);
