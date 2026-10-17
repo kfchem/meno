@@ -154,6 +154,18 @@ describe("a figure's shapes", () => {
     expect(r.atoms).toHaveLength(4);
   });
 
+  it("takes a line drawn down a wedge, within it, for the wedge's own: no bond beside it", () => {
+    // (a ring carbon's three bonds, and a wedge up to its H - a line drawn down the wedge's middle as well, under its fill)
+    const c: P = [50, 50];
+    const h = step(c, 90, 0.8);
+    const paths = [stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, -90)), wedge(c, along(c, h, 0.75)), stroke(along(c, h, 0.75), c)];
+    const s = read(figure(paths, word("H", h)));
+    expect(s.atoms).toHaveLength(5);
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-H up"]);
+    // (and the line alone, no wedge over it, still a bond)
+    expect(read(figure([stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, 90))])).atoms).toHaveLength(4);
+  });
+
   it("leaves out what is drawn in paper's colour", () => {
     const white = { ...filled([0, 0], [10, 0], [10, 10], [0, 10]), fill: "#ffffffff" };
     expect(shapesOf(figure([white])).blobs).toHaveLength(0);
