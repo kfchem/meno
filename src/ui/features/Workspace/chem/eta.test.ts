@@ -451,6 +451,10 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
     }
     const laid = etaHeld(await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE)));
     const at = where(laid);
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE), { minLinePx: 0 });
+    const margin = opts.labelMarginPx ?? opts.fontPx * 0.16;
+    const lay = layoutMolecule(laid.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(laid.bonds, new Map(laid.atoms.map((x, i) => [x.id, i]))), opts, 40);
+    const seen: number[] = [];
     for (const b of etaOf(laid)) {
       const chain = allylChain(b, laid.bonds)!;
       expect(chain).not.toBeNull();
@@ -461,12 +465,19 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
       const side = (p: { x: number; y: number }) => (e2.x - e1.x) * (p.y - e1.y) - (e2.y - e1.y) * (p.x - e1.x);
       expect(Math.sign(side(mid))).toBe(-Math.sign(side(pd)));
       expect(Math.sign(side(star))).toBe(-Math.sign(side(pd)));
-      // (posed by Clean-up: the line between its end carbons across the metal's line, the curve's middle a bond and a half from the metal)
+      // (posed by Clean-up: the line between its end carbons across the metal's line, the metal's line seen 0.7 of a bond
+      // long between the Pd's label and the curve - the same both sides, though "Pd" reaches further right than left)
       const across = ((e2.x - e1.x) * (star.x - pd.x) + (e2.y - e1.y) * (star.y - pd.y)) / (Math.hypot(e2.x - e1.x, e2.y - e1.y) * Math.hypot(star.x - pd.x, star.y - pd.y));
       expect(Math.abs(across)).toBeLessThan(1e-6);
       const bond = (Math.hypot(mid.x - e1.x, mid.y - e1.y) + Math.hypot(mid.x - e2.x, mid.y - e2.y)) / 2;
-      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / bond).toBeCloseTo(1.5, 2);
+      const middle = allylCurve(e1, mid, e2, opts.doubleOffsetPx).middle;
+      const line = lay.lines.find((l) => Math.abs(Math.hypot(l.x2 - middle.x, l.y2 - middle.y) - margin) < 1e-6)!;
+      expect(line).toBeDefined();
+      seen.push(Math.hypot(line.x2 - line.x1, line.y2 - line.y1) / bond);
     }
+    expect(seen).toHaveLength(2);
+    for (const s of seen) expect(s).toBeCloseTo(0.7, 1);
+    expect(Math.abs(seen[0] - seen[1])).toBeLessThan(0.05);
   });
 
   it("is told from a three-membered ring bound so (cyclopropenyl), which keeps its line to the centre", () => {

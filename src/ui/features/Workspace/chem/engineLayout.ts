@@ -14,7 +14,7 @@
  * the stereochemistry the old one said.
  */
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
+import { labelTrims, layoutMolecule, showsLabel } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
@@ -287,7 +287,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       return [{ metal: star === b.b ? b.a : b.b, atoms: b.endpoints, star }];
     }),
   ];
-  poseAllyls(atoms, added, part, systems);
+  poseAllyls(atoms, added, part, systems, style);
   // each ring or chain bound to its metal atom by atom: one bond to its
   // centre - an allyl's, its arc's middle - for the bonds to its atoms (chem/eta)
   const eta: NonNullable<Relayout["eta"]> = [];
@@ -318,20 +318,33 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
  * ligand it is part of - what is bonded to it, but for its metal - turned
  * whole about the middle of its end carbons so that its middle carbon
  * points away from its metal - its delocalisation curve (lib/chem/allylArc)
- * inside it, on the metal's side - and moved so that the curve's middle
- * stands a bond and a half (the drawing's) from the metal: room for the
- * line past the metal's label. A
+ * inside it, on the metal's side - and moved so that the metal's line is
+ * seen `LINE_SEEN` of the drawing's bond long, from past the metal's label
+ * (as the style draws it, whichever way it reaches) to short of the
+ * curve. A
  * ligand bonded to another metal too, or to its own by another way, is left
  * as it is laid out. `atoms` and `added` (hydrogens new to the drawing) are
  * moved in place.
  */
+/** How long the metal's line to an η3-allyl's curve is seen after Clean-up, as a share of the drawing's bond. */
+const LINE_SEEN = 0.7;
+
 function poseAllyls(
   atoms: Relayout["atoms"],
   added: NonNullable<Relayout["added"]>,
   part: Model,
   systems: readonly { metal: number; atoms: readonly number[]; star?: number }[],
+  style?: DrawingStyle,
 ): void {
   if (!systems.length) return;
+  // (where the metal's line starts, past its label, and where it stops, short of the curve: as the drawing will have them)
+  const opts = style ? editorLayoutOptions(style, { minLinePx: 0 }) : null;
+  const zoom = style ? (style.bondLengthPt * 96) / 72 / NOMINAL_BOND_LENGTH : 1;
+  const past = (metalEl: string, u: { x: number; y: number }) =>
+    opts
+      ? labelTrims([{ id: 0, x: 0, y: 0, el: metalEl }, { id: 1, x: u.x, y: u.y, el: "*" }], { a1: 0, a2: 1, order: 1, endpoints: [1] }, opts, zoom).a
+      : null;
+  const margin = opts ? (opts.labelMarginPx ?? opts.fontPx * 0.16) : 0;
   const el = new Map(part.atoms.map((a) => [a.id, a.el]));
   const at = new Map(atoms.map((a, i) => [a.id, i]));
   // (the drawing's bond, as laid out: the middle length of its bonds between atoms that are no metal and no star)
@@ -379,8 +392,9 @@ function poseAllyls(
     const theta = Math.atan2(u.y, u.x) - Math.atan2(m.y - c.y, m.x - c.x);
     const cos = Math.cos(theta);
     const sin = Math.sin(theta);
-    // (turned about the end carbons' middle; then moved so that the curve's middle is a bond and a half from the metal:
-    // room for the line past the metal's label, which reaches further one side than the other)
+    // (turned about the end carbons' middle; then moved so that the metal's line is seen LINE_SEEN of a bond long between
+    // its label and the curve - a label reaching further one side than the other, Pd's "d", taken as drawn; with no style,
+    // the curve's middle a bond and a half from the metal)
     const turn = (q: { x: number; y: number }) => {
       const x = q.x - c.x;
       const y = q.y - c.y;
@@ -388,7 +402,9 @@ function poseAllyls(
     };
     const [t1, tm, t2] = [e1, m, e2].map(turn);
     const middle = allylCurve(t1, tm, t2).middle;
-    const shift = { x: metal.x + u.x * 1.5 * bond - middle.x, y: metal.y + u.y * 1.5 * bond - middle.y };
+    const start = past(el.get(sys.metal) ?? "", u);
+    const far = start == null ? 1.5 * bond : start + LINE_SEEN * bond + margin;
+    const shift = { x: metal.x + u.x * far - middle.x, y: metal.y + u.y * far - middle.y };
     const move = (q: { x: number; y: number }) => {
       const r = turn(q);
       return { x: r.x + shift.x, y: r.y + shift.y };
