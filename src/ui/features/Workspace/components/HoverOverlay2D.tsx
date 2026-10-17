@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lineHalfOf, type BondReach } from "../../../../lib/chem/layout2d";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { bandAround } from "./hoverBand";
-import { allylArcOf } from "../chem/eta";
+import { allylCurveOf } from "../chem/eta";
 
 /** A band `half` wide either side of a line through `pts`, as an outline: along one side, then back along the other. */
 function bandAlong(pts: readonly { x: number; y: number }[], half: number): { x: number; y: number }[] {
@@ -134,9 +134,9 @@ export default function HoverOverlay2D() {
       const swing = Math.sin(Math.PI * band.pulse);
       const w = targetWorld * widthAt(band.u) * (1 - 0.25 * swing);
       const opacity = Math.min(1, ALPHA.highlight * easeOutCubic(band.u) * (1 + 0.35 * swing));
-      // (an η3-allyl's bond: its arc banded with it - chem/eta)
+      // (an η3-allyl's bond: its curve banded with it - chem/eta)
       const bond = model.bonds.find((b) => b.id === id);
-      const arc = bond?.endpoints?.length === 3 ? allylArcOf(bond, new Map(drawn.atoms.map((a) => [a.id, a])), model.bonds) : null;
+      const arc = bond?.endpoints?.length === 3 ? allylCurveOf(bond, new Map(drawn.atoms.map((a) => [a.id, a])), model.bonds) : null;
       const key = `${a1.x},${a1.y},${a2.x},${a2.y},${w},${drawn.laidAt},${k >= 0 ? JSON.stringify(reach) : ""},${arc ? `${arc[0].x},${arc[0].y},${arc[arc.length - 1].x},${arc[arc.length - 1].y}` : ""}`;
       if (key !== band.drawnAt) {
         band.drawnAt = key;

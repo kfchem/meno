@@ -13,7 +13,7 @@ import { inBox } from "../utils/selection";
 import { startStroke, strokeTarget } from "../utils/stroke";
 import { laidOut } from "./cleanUp";
 import { allylChain, etaHeld, etaRingAt, hapticStars, starsAtTheirAtoms, withTheirStars } from "./eta";
-import { allylArc } from "../../../../lib/chem/allylArc";
+import { allylCurve } from "../../../../lib/chem/allylArc";
 import { selectedParts } from "../components/selectionParts";
 
 const L = NOMINAL_BOND_LENGTH;
@@ -350,7 +350,7 @@ describe("an alkene bound through both its carbons (eta2), drawn either way and 
   });
 });
 
-describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the maintainer, 2026-10-18)", () => {
+describe("an η3-allyl, drawn as its chain with a delocalisation curve just inside it (the maintainer, 2026-10-18; IUPAC GR-1.7.2, GR-6)", () => {
   /** A Pd allyl chloride as drawn: Pd below a chain C=C-C bent away from it, bound by one bond, and two chlorides. */
   function allylPd() {
     const d = drawing();
@@ -367,26 +367,25 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
   }
   const where = (model: Model) => new Map(model.atoms.map((x) => [x.id, x]));
 
-  it("has its star - where the metal's line ends - at the middle of its arc, not at the chain's centre", () => {
-    const { model, pd, a, m, c } = allylPd();
+  it("has its star - where the metal's line ends - at the middle of its curve, inside the chain, not at the chain's centre", () => {
+    const { model, a, m, c } = allylPd();
     const at = where(model);
     const [b] = etaOf(model);
     const star = at.get(b.b)!;
-    const expected = allylArc(at.get(a)!, at.get(c)!, at.get(m)!, at.get(pd)!).middle;
+    const expected = allylCurve(at.get(a)!, at.get(m)!, at.get(c)!).middle;
     expect(star.x).toBeCloseTo(expected.x, 9);
     expect(star.y).toBeCloseTo(expected.y, 9);
-    // (between the chain and the metal, below the line between its end carbons)
-    expect(star.y).toBeLessThan(at.get(a)!.y);
-    expect(star.y).toBeGreaterThan(at.get(pd)!.y);
+    // (inside the "^": under the middle carbon, above the line between the end carbons)
+    expect(star.y).toBeLessThan(at.get(m)!.y);
+    expect(star.y).toBeGreaterThan(at.get(a)!.y);
     // (moved with its atoms: there again where they are drawn)
-    const moved = model.atoms.map((x) => (x.id === pd ? { ...x, x: x.x + 2 * L } : x));
+    const moved = model.atoms.map((x) => ([a, m, c].includes(x.id) ? { ...x, x: x.x + 2 * L } : x));
     const shown = where({ ...model, atoms: starsAtTheirAtoms(moved, model) });
-    const again = allylArc(at.get(a)!, at.get(c)!, at.get(m)!, shown.get(pd)!).middle;
-    expect(shown.get(b.b)!.x).toBeCloseTo(again.x, 9);
+    expect(shown.get(b.b)!.x).toBeCloseTo(expected.x + 2 * L, 9);
   });
 
-  it("is drawn as its chain, an arc from one end carbon to the other and one line from the metal to the arc's middle - the file keeps its multi-centre bond", () => {
-    const { model, pd, a, c } = allylPd();
+  it("is drawn as its chain, its curve just inside it and one line from the metal to the curve's middle - the file keeps its multi-centre bond", () => {
+    const { model, a, m, c } = allylPd();
     const at = where(model);
     const [b] = etaOf(model);
     expect(b.endpoints).toHaveLength(3);
@@ -397,8 +396,8 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
     const near = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-6;
     // (the line to the star, ending there)
     expect(lay.lines.some((l) => near({ x: l.x2, y: l.y2 }, star) || near({ x: l.x1, y: l.y1 }, star))).toBe(true);
-    // (the arc: pieces end to end from one end carbon to the other)
-    const arc = allylArc(at.get(a)!, at.get(c)!, at.get(model.atoms.find((x) => x.id === b.endpoints![1])!.id)!, at.get(pd)!).points;
+    // (the curve: pieces end to end, just inside the chain)
+    const arc = allylCurve(at.get(a)!, at.get(m)!, at.get(c)!).points;
     for (let k = 1; k < arc.length; k++) expect(lay.lines.some((l) => near({ x: l.x1, y: l.y1 }, arc[k - 1]) && near({ x: l.x2, y: l.y2 }, arc[k]))).toBe(true);
     // (and in a picture of it - SVG, and PNG and EMF from the same lines - the arc's pieces as drawn)
     const svg = createSVG(lay, opts);
@@ -425,7 +424,7 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
     for (let k = 1; k < 4; k++) expect(pieces[k].p).toEqual(pieces[k - 1].q);
   });
 
-  it("in the chloride dimer, each allyl's arc bulges towards its own palladium", async () => {
+  it("in the chloride dimer, each allyl posed with its middle carbon away from its own palladium, its curve inside it", async () => {
     const d = drawing();
     const p1 = d.atom("Pd", -1, 0);
     const p2 = d.atom("Pd", 1, 0);
@@ -449,11 +448,11 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
       const pd = at.get(b.a)!;
       const star = at.get(b.b)!;
       const [e1, mid, e2] = chain.map((id) => at.get(id)!);
-      // (the star on the metal's side of the line between the end carbons, the middle carbon on the other)
+      // (the middle carbon and the star - the curve's middle - on the side of the line between the end carbons away from the metal)
       const side = (p: { x: number; y: number }) => (e2.x - e1.x) * (p.y - e1.y) - (e2.y - e1.y) * (p.x - e1.x);
-      expect(Math.sign(side(star))).toBe(Math.sign(side(pd)));
       expect(Math.sign(side(mid))).toBe(-Math.sign(side(pd)));
-      // (posed by Clean-up: the line between its end carbons across the metal's line, the arc's middle a bond from the metal)
+      expect(Math.sign(side(star))).toBe(-Math.sign(side(pd)));
+      // (posed by Clean-up: the line between its end carbons across the metal's line, the curve's middle a bond and a quarter from the metal)
       const across = ((e2.x - e1.x) * (star.x - pd.x) + (e2.y - e1.y) * (star.y - pd.y)) / (Math.hypot(e2.x - e1.x, e2.y - e1.y) * Math.hypot(star.x - pd.x, star.y - pd.y));
       expect(Math.abs(across)).toBeLessThan(1e-6);
       expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeGreaterThan(1.1);

@@ -20,7 +20,7 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import { readStereo, sameConfiguration } from "../../../../lib/layout/drawn";
 import type { Layout2D, LayoutInput } from "../../../../lib/layout/engine";
 import { etaBondedAtomByAtom, isMetal, type CisTrans } from "../../../../lib/layout/perceive";
-import { allylArc, ARC_DEPTH } from "../../../../lib/chem/allylArc";
+import { allylCurve } from "../../../../lib/chem/allylArc";
 import { allylChain } from "./eta";
 import type { Tetrahedral } from "../../../../lib/layout/stereo";
 import { relayout, emptyWorkspaceDocument, type Relayout } from "../document";
@@ -299,7 +299,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       const at = sys.atoms.map((id) => placedAt.get(id)!);
       const chain = allylChain({ endpoints: sys.atoms }, part.bonds);
       const metal = placedAt.get(sys.metal);
-      const centre = chain && metal ? allylArc(placedAt.get(chain[0])!, placedAt.get(chain[2])!, placedAt.get(chain[1])!, metal).middle : { x: mid(at.map((a) => a.x)), y: mid(at.map((a) => a.y)) };
+      const centre = chain && metal ? allylCurve(placedAt.get(chain[0])!, placedAt.get(chain[1])!, placedAt.get(chain[2])!).middle : { x: mid(at.map((a) => a.x)), y: mid(at.map((a) => a.y)) };
       eta.push({ metal: sys.metal, atoms: sys.atoms, bonds: drop, ...centre });
     }
   }
@@ -317,10 +317,10 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
  * three in a chain) posed as the maintainer draws one (2026-10-18): the
  * ligand it is part of - what is bonded to it, but for its metal - turned
  * whole about the middle of its end carbons so that its middle carbon
- * points away from its metal and its arc (lib/chem/allylArc) faces it, and
- * moved so that the arc's middle stands a bond and a quarter (`bond`
- * the drawing's) from the metal - room for the line past the metal's
- * label. A
+ * points away from its metal - its delocalisation curve (lib/chem/allylArc)
+ * inside it, on the metal's side - and moved so that the curve's middle
+ * stands a bond and a quarter (`bond` the drawing's) from the metal: room
+ * for the line past the metal's label. A
  * ligand bonded to another metal too, or to its own by another way, is left
  * as it is laid out. `atoms` and `added` (hydrogens new to the drawing) are
  * moved in place.
@@ -373,12 +373,18 @@ function poseAllyls(
     const theta = Math.atan2(u.y, u.x) - Math.atan2(m.y - c.y, m.x - c.x);
     const cos = Math.cos(theta);
     const sin = Math.sin(theta);
-    // (the arc's middle a bond and a quarter from the metal: the end carbons' middle that and the arc's depth further)
-    const to = { x: metal.x + u.x * (1.25 * bond + ARC_DEPTH * chord), y: metal.y + u.y * (1.25 * bond + ARC_DEPTH * chord) };
-    const move = (q: { x: number; y: number }) => {
+    // (turned about the end carbons' middle; then moved so that the curve's middle is a bond and a quarter from the metal)
+    const turn = (q: { x: number; y: number }) => {
       const x = q.x - c.x;
       const y = q.y - c.y;
-      return { x: to.x + x * cos - y * sin, y: to.y + x * sin + y * cos };
+      return { x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos };
+    };
+    const [t1, tm, t2] = [e1, m, e2].map(turn);
+    const middle = allylCurve(t1, tm, t2).middle;
+    const shift = { x: metal.x + u.x * 1.25 * bond - middle.x, y: metal.y + u.y * 1.25 * bond - middle.y };
+    const move = (q: { x: number; y: number }) => {
+      const r = turn(q);
+      return { x: r.x + shift.x, y: r.y + shift.y };
     };
     for (const id of ligand) {
       const i = at.get(id);
@@ -387,7 +393,7 @@ function poseAllyls(
     for (const h of added) if (ligand.has(h.on)) Object.assign(h, move(h));
     if (sys.star != null && at.has(sys.star)) {
       const [f1, fm, f2] = chain.map(p);
-      atoms[at.get(sys.star)!] = { ...atoms[at.get(sys.star)!], ...allylArc(f1, f2, fm, metal).middle };
+      atoms[at.get(sys.star)!] = { ...atoms[at.get(sys.star)!], ...allylCurve(f1, fm, f2).middle };
     }
   }
 }

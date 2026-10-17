@@ -1,5 +1,5 @@
 import "./fonts";
-import { allylArc } from "./allylArc";
+import { allylCurve } from "./allylArc";
 import { ARIAL } from "./arial";
 import { labelFont, type LabelFont } from "./labelFonts";
 import { ringSidesOf } from "./aromaticSides";
@@ -3433,8 +3433,8 @@ function allylChainOf(atoms: Atom[], bonds: readonly Bond[], b: Bond): [number, 
 
 /**
  * The bonds as drawn, an η3-allyl's two bonds single whatever their orders
- * (the maintainer, 2026-10-18): its arc says it is one delocalised system,
- * as a ring's circle does. The drawing's own bonds keep their orders.
+ * (the maintainer, 2026-10-18; IUPAC GR-6.4: the curve is the delocalised
+ * system, the single bonds its frame), as a ring's circle does. The drawing's own bonds keep their orders.
  */
 function allylsSingle(atoms: Atom[], bonds: Bond[]): Bond[] {
   if (!bonds.some((b) => b.endpoints?.length === 3)) return bonds;
@@ -3449,18 +3449,17 @@ function allylsSingle(atoms: Atom[], bonds: Bond[]): Bond[] {
 }
 
 /**
- * An η3-allyl's arc (lib/chem/allylArc), where `b` is the haptic bond of
- * one - three atoms bonded in a chain, its ends not bonded to each other:
- * short straight pieces from one end carbon to the other on the metal's
- * side, as wide as the bond's line, the corners between them finished as a
- * wave's are; none otherwise.
+ * An η3-allyl's delocalisation curve (lib/chem/allylArc), where `b` is the
+ * haptic bond of one - three atoms bonded in a chain, its ends not bonded
+ * to each other: short straight pieces just inside the chain, solid and as
+ * wide as the bond's line (IUPAC GR-6.2), the corners between them finished
+ * as a wave's are; none otherwise.
  */
-function allylArcPrimitives(atoms: Atom[], bonds: readonly Bond[], b: Bond, widthPx: number | undefined): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[] } | null {
+function allylCurvePrimitives(atoms: Atom[], bonds: readonly Bond[], b: Bond, widthPx: number | undefined): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[] } | null {
   if (widthPx == null) return null;
   const chain = allylChainOf(atoms, bonds, b);
   if (!chain) return null;
-  const metal = atoms[b.a1].el === "*" ? atoms[b.a2] : atoms[b.a1];
-  const { points } = allylArc(atoms[chain[0]], atoms[chain[2]], atoms[chain[1]], metal);
+  const { points } = allylCurve(atoms[chain[0]], atoms[chain[1]], atoms[chain[2]]);
   const lines: LineSeg[] = [];
   for (let i = 1; i < points.length; i++) lines.push({ x1: points[i - 1].x, y1: points[i - 1].y, x2: points[i].x, y2: points[i].y, widthPx });
   const bends: Bend[] = [];
@@ -3687,8 +3686,8 @@ export function buildAllPrimitives(
         crowded.push({ atoms: [atoms[b.a1].id, atoms[b.a2].id], need: ((t.a + t.b) / t.room) * L });
       }
     }
-    // (an η3-allyl's bond: besides its line to the arc's middle, the arc itself, as the bond's own ink)
-    const arc = allylArcPrimitives(atoms, bonds, b, r.lines[0]?.widthPx);
+    // (an η3-allyl's bond: besides its line to the curve's middle, the curve itself, as the bond's own ink)
+    const arc = allylCurvePrimitives(atoms, bonds, b, r.lines[0]?.widthPx);
     if (arc) {
       r.lines.push(...arc.lines);
       r.bends = [...(r.bends ?? []), ...arc.bends];

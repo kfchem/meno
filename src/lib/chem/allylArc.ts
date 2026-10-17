@@ -1,50 +1,82 @@
 /**
  * An η3-allyl as it is drawn bound to its metal (the maintainer,
- * 2026-10-18): its three carbons a bent chain of two single bonds, and on
- * the metal's side an arc from one end carbon to the other - the
- * delocalisation arc - whose middle the metal's one line meets. A ring
- * bound so (Cp, an arene) keeps its line to its centre. Only the drawing:
- * the file keeps the multi-centre bond (ENDPTS, ATTACH=ALL) as ever.
+ * 2026-10-18; IUPAC 2008, GR-1.7.2 and GR-6): its three carbons a bent
+ * chain of two single bonds, its middle carbon away from the metal; just
+ * inside it, on the metal's side, a curve parallel to it - the
+ * delocalisation curve, shallow, solid, as wide as a single bond (GR-6.2),
+ * kept from each bond by about a double bond's spacing (GR-6.1) and
+ * reaching nearly to the end carbons; and one plain line from the curve's
+ * middle to the metal. A ring bound so (Cp, an arene) keeps its line to its
+ * centre. Only the drawing: the file keeps the multi-centre bond (ENDPTS,
+ * ATTACH=ALL) as ever.
  */
 
 type Pt = { x: number; y: number };
 
-/** How deep the arc is: its sagitta, as a share of the distance between the end carbons. */
-export const ARC_DEPTH = 0.22;
-/** How many straight pieces the arc is drawn in. */
+/** How far the curve keeps from the chain's bonds, as a share of their length: about a double bond's spacing (GR-6.1). */
+export const CURVE_GAP = 0.18;
+/** How far along each bond, from the middle carbon, the curve reaches. */
+export const CURVE_REACH = 0.85;
+/** How many straight pieces the curve is drawn in. */
 const PIECES = 16;
 
 /**
- * The arc of an allyl whose end carbons are at `a` and `b`, its middle one
- * at `mid`, bound to a metal at `metal`: points along it from `a` to `b`,
- * bulging towards the metal (or, the metal on the line between the ends,
- * away from the middle carbon), and its middle, where the metal's line
- * ends.
+ * The delocalisation curve of an allyl whose end carbons are at `a` and
+ * `b` and its middle one at `mid`: points along it from `a`'s end to
+ * `b`'s, just inside the chain - on the side of its angle - parallel to
+ * it, and its middle, where the metal's line ends.
  */
-export function allylArc(a: Pt, b: Pt, mid: Pt, metal: Pt): { points: Pt[]; middle: Pt } {
-  const c = Math.hypot(b.x - a.x, b.y - a.y);
-  const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
-  if (c < 1e-9) return { points: [a, b], middle: m };
-  let n = { x: -(b.y - a.y) / c, y: (b.x - a.x) / c };
-  const towards = (p: Pt) => n.x * (p.x - m.x) + n.y * (p.y - m.y);
-  const side = Math.abs(towards(metal)) > 1e-6 * c ? Math.sign(towards(metal)) : -Math.sign(towards(mid)) || 1;
-  n = { x: n.x * side, y: n.y * side };
-  const s = ARC_DEPTH * c;
-  // (the circle through both ends and the arc's middle: its radius, its centre behind the chord)
-  const r = (c * c) / 4 / (2 * s) + s / 2;
-  const centre = { x: m.x - n.x * (r - s), y: m.y - n.y * (r - s) };
-  const angle = (p: Pt) => Math.atan2(p.y - centre.y, p.x - centre.x);
-  const t0 = angle(a);
-  // (the arc's middle halfway round it: the way from `a` to it, twice over - less than half the circle, the arc being shallow)
-  let half = angle({ x: m.x + n.x * s, y: m.y + n.y * s }) - t0;
-  while (half > Math.PI) half -= 2 * Math.PI;
-  while (half <= -Math.PI) half += 2 * Math.PI;
-  const sweep = 2 * half;
+export function allylCurve(a: Pt, mid: Pt, b: Pt): { points: Pt[]; middle: Pt } {
+  const la = Math.hypot(a.x - mid.x, a.y - mid.y);
+  const lb = Math.hypot(b.x - mid.x, b.y - mid.y);
+  const len = (la + lb) / 2;
+  if (la < 1e-9 || lb < 1e-9) return { points: [mid, mid], middle: mid };
+  const ua = { x: (a.x - mid.x) / la, y: (a.y - mid.y) / la };
+  const ub = { x: (b.x - mid.x) / lb, y: (b.y - mid.y) / lb };
+  const gap = CURVE_GAP * len;
+  // (inside the angle: along its bisector, as far from both bonds as the gap - a straight chain, to one side)
+  let bis = { x: ua.x + ub.x, y: ua.y + ub.y };
+  let bl = Math.hypot(bis.x, bis.y);
+  if (bl < 1e-6) {
+    bis = { x: -ua.y, y: ua.x };
+    bl = 1;
+  }
+  bis = { x: bis.x / bl, y: bis.y / bl };
+  const sinHalf = Math.max(0.2, Math.abs(ua.x * bis.y - ua.y * bis.x));
+  const middle = { x: mid.x + (bis.x * gap) / sinHalf, y: mid.y + (bis.y * gap) / sinHalf };
+  // (each end the gap inside its bond, most of the way to its end carbon)
+  const inside = (u: Pt, l: number) => {
+    let n = { x: -u.y, y: u.x };
+    if (n.x * bis.x + n.y * bis.y < 0) n = { x: -n.x, y: -n.y };
+    return { x: mid.x + u.x * l * CURVE_REACH + n.x * gap, y: mid.y + u.y * l * CURVE_REACH + n.y * gap };
+  };
+  const p = inside(ua, la);
+  const q = inside(ub, lb);
+  // the circle through both ends and the middle, and the arc of it between them through the middle
+  const d = 2 * (p.x * (middle.y - q.y) + middle.x * (q.y - p.y) + q.x * (p.y - middle.y));
+  if (Math.abs(d) < 1e-12) return { points: [p, middle, q], middle };
+  const s = (v: Pt) => v.x * v.x + v.y * v.y;
+  const centre = {
+    x: (s(p) * (middle.y - q.y) + s(middle) * (q.y - p.y) + s(q) * (p.y - middle.y)) / d,
+    y: (s(p) * (q.x - middle.x) + s(middle) * (p.x - q.x) + s(q) * (middle.x - p.x)) / d,
+  };
+  const r = Math.hypot(p.x - centre.x, p.y - centre.y);
+  const angle = (v: Pt) => Math.atan2(v.y - centre.y, v.x - centre.x);
+  const norm = (t: number) => {
+    while (t > Math.PI) t -= 2 * Math.PI;
+    while (t <= -Math.PI) t += 2 * Math.PI;
+    return t;
+  };
+  const t0 = angle(p);
+  const toMiddle = norm(angle(middle) - t0);
+  const toEnd = norm(angle(q) - t0);
+  // (from p through the middle to q: the way round that passes the middle first)
+  const sweep = Math.sign(toEnd) === Math.sign(toMiddle) && Math.abs(toEnd) > Math.abs(toMiddle) ? toEnd : toEnd - Math.sign(toEnd || 1) * 2 * Math.PI;
   const points = Array.from({ length: PIECES + 1 }, (_, k) => {
-    if (k === 0) return a;
-    if (k === PIECES) return b;
+    if (k === 0) return p;
+    if (k === PIECES) return q;
     const t = t0 + (sweep * k) / PIECES;
     return { x: centre.x + r * Math.cos(t), y: centre.y + r * Math.sin(t) };
   });
-  return { points, middle: { x: m.x + n.x * s, y: m.y + n.y * s } };
+  return { points, middle };
 }

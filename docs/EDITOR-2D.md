@@ -68,22 +68,27 @@ and in particular:
     is to the system as a whole (IUPAC GR-1.7); it is not stopped short at
     the ring's edge or its circle. A label on a metal - Cp, allyl - stays a
     label, and written out it is this bond.
-  - **An η3-allyl** (the maintainer, 2026-10-18) is drawn as its three
-    carbons - a bent chain of two single bonds - and, on the metal's side,
-    an arc from one end carbon to the other, following the chain: the
-    delocalisation arc. The metal's one line meets the arc's middle - not
-    the chain's centre, nor its middle carbon - so its star stands there
-    (`chem/eta` `starPlace`, `lib/chem/allylArc`: the arc a circle's,
-    bulging towards the metal by 0.22 of the distance between the end
-    carbons). The arc is the bond's own ink: in its colour and width,
-    magnified with its structure, shaded with it as it is selected and
-    banded with it as it is under the pointer, and drawn the same in SVG,
-    PNG and EMF. Clean-up poses the allyl so: its middle carbon away from
-    the metal, the line between its end carbons across the metal's, the
-    arc's middle a bond and a quarter from the metal. Only the drawing: the file keeps
-    the multi-centre bond (ENDPTS, ATTACH=ALL) as it is; a ring - Cp, an
-    arene, a cyclopropenyl - keeps its line to its centre; nothing changes
-    in 3D.
+  - **An η3-allyl** (the maintainer, 2026-10-18; IUPAC 2008 GR-1.7.2 and
+    GR-6) is drawn as its three carbons - a bent chain of two single
+    bonds, its middle carbon away from the metal - with its delocalisation
+    curve (curves show delocalisation, GR-6.3) just inside it on the
+    metal's side: parallel to the chain and
+    convex the same way, as far from each bond as about a double bond's
+    spacing (0.18 of the bond's length, within GR-6.1's band), reaching most
+    of the way to the end carbons, solid and as wide as a single bond
+    (GR-6.2). The metal's one plain line meets the curve's middle, so its
+    star stands there (`chem/eta` `starPlace`, `lib/chem/allylArc`
+    `allylCurve`). The chain's two bonds are drawn single whatever their
+    orders - the curve is the delocalised system, the single bonds its frame
+    (GR-6.4); the drawing keeps its bonds as drawn. The curve is the bond's
+    own ink: in its colour and width, magnified with its structure, shaded
+    with it as it is selected and banded with it as it is under the
+    pointer, and drawn the same in SVG, PNG and EMF. Clean-up poses the
+    allyl so: its middle carbon away from the metal, the line between its
+    end carbons across the metal's, the curve's middle a bond and a quarter
+    from the metal. Only the drawing: the file keeps the multi-centre bond
+    (ENDPTS, ATTACH=ALL) as it is; a ring - Cp, an arene, a cyclopropenyl -
+    keeps its line to its centre; nothing changes in 3D.
   - **An alkene bound through both its carbons** (eta2; 2026-10-17) may be
     drawn either way, and each stays as drawn: two bonds from the metal,
     one to each carbon - as a metallacyclopropane is drawn too, and never
