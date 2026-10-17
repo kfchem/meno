@@ -28,7 +28,6 @@ What MolNexTR is less sure of than `UNSURE_BELOW` is said to be unsure.
 
 import base64
 import contextlib
-import functools
 import io
 import json
 import os
@@ -48,19 +47,22 @@ FILES = sys.argv[1] if len(sys.argv) > 1 else None
 _model = {}
 
 
+def graphs_unwritten(coords, symbols, edges, images=None, num_workers=1):
+    """The model's graphs left unwritten as SMILES and molfiles: Meno takes its atoms and bonds as predicted, and writing
+    a graph as predicted - in RDKit - can run without end, or crash the process, on a picture that is no structure."""
+    return [""] * len(coords), [""] * len(coords), 0.0
+
+
 def model():
     """MolNexTR, loaded once from its trained model, on the CPU: the same on every computer."""
     if "it" not in _model:
         if not FILES or not os.path.isfile(os.path.join(FILES, WEIGHTS)):
             raise RuntimeError("MolNexTR's trained model is not here: add MolNexTR again in Settings, Plugins.")
-        import itertools
         import torch
-        import MolNexTR.chemical as mc
         import MolNexTR.model as mm
 
-        # (one picture read at a time, in this one process - its one-process path given itertools, which it uses)
-        mc.itertools = itertools
-        mm.convert_graph_to_smiles = functools.partial(mc.convert_graph_to_smiles, num_workers=1)
+        # (its atoms and bonds read; the graph not written as SMILES, which Meno does not take)
+        mm.convert_graph_to_smiles = graphs_unwritten
         with contextlib.redirect_stdout(sys.stderr):
             _model["it"] = mm.molnextr(os.path.join(FILES, WEIGHTS), torch.device("cpu"))
     return _model["it"]

@@ -1436,7 +1436,11 @@ that this does not count against a worker's start).
 **What the workers do besides**: each reads one picture at a time, in its
 one process; what a model prints as it reads goes to stderr, stdout being
 Meno's answers; and a package reading never loads, pyonmttok, is left out
-of MolNexTR's lock.
+of MolNexTR's lock. Each takes the atoms and bonds its model predicts and
+leaves the model's own step of writing them as SMILES and a molfile
+undone (`graphs_unwritten`): Meno does not use what it writes, and
+writing a graph predicted from a picture that is no structure can run
+without end or crash the worker's process.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.
