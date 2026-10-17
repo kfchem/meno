@@ -19,7 +19,7 @@ import { openWorkspacesFrom } from "../../../../lib/clipboard";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
 import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
 import type { Drawn } from "../store/types";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import { lookOf, rowAbout, rowAfter, solidOf } from "../utils/molecule3d";
 import { openedAsStack } from "../utils/stacks";
 import type { DropZone, Dropped } from "../../../../lib/drop";
@@ -100,7 +100,7 @@ export function useStructureEvents(
   ): ImportedScheme => {
     const a = result.arrow;
     const solids = (result.molecules3d ?? []).map((m) => ({ ...m, id: 0, at }));
-    const style = currentStyle3D();
+    const style = style3dOf(store.getState());
     // (several - an SD file's records - a stack, standing in one place, one
     // shown at a time: utils/stacks; numbered as the document's own when added.
     // An output's jobs stand side by side)

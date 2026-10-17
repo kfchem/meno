@@ -35,7 +35,7 @@ import { bandsAbout, stageOf } from "./stage";
 import { setViewDriven, setViewGoal } from "../components/viewGoal";
 import { setPresentingWindow, windowFullScreen } from "../../../presenting";
 import { filmPlaying, playFilm, restartFilm } from "../components/pictureTextures";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import { bondRadiusOf } from "../../../../lib/chem/style3d";
 import { lookOf, onMolecule, poseOf, solidOf } from "../utils/molecule3d";
 import { eyeOf, FRAME_ORDER, pageAt } from "../utils/page";
@@ -148,7 +148,7 @@ export default function Presenter() {
     const moleculeAt = (e: { clientX: number; clientY: number }): number | null => {
       const p = pageOf(e);
       const s = st();
-      const style = currentStyle3D();
+      const style = style3dOf(store.getState());
       for (let i = s.molecules3d.length - 1; i >= 0; i--) {
         const m = s.molecules3d[i];
         const pose = poseOf(m, solidOf(m, style), lookOf(m), s.turns3d[m.id], s.frames3d[m.id]);
@@ -237,7 +237,7 @@ export default function Presenter() {
           // a molecule turned, as a drag on it turns it on the page
           const len = Math.hypot(dx, dy);
           if (len > 0) {
-            const angle = (currentStyle3D().turnPerHalfWidth * len) / Math.max(gl.domElement.clientWidth / 2, 1);
+            const angle = (style3dOf(store.getState()).turnPerHalfWidth * len) / Math.max(gl.domElement.clientWidth / 2, 1);
             g.axis = new THREE.Vector3(dy, dx, 0).normalize();
             turnBy(g.on, g.axis, angle);
             g.recent = [...g.recent, { t: e.timeStamp, angle, dt: e.timeStamp - g.t }].filter((x) => e.timeStamp - x.t <= RECENT_MS);
@@ -563,7 +563,7 @@ export default function Presenter() {
     cam.updateProjectionMatrix();
     // molecules let go while turning, turning on and slowing
     if (r.spins.size) {
-      const damping = currentStyle3D().turnDamping;
+      const damping = style3dOf(store.getState()).turnDamping;
       for (const [id, sp] of r.spins) {
         const was = st.turns3d[id];
         const q = was ? new THREE.Quaternion(...was) : new THREE.Quaternion();

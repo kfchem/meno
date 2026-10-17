@@ -6,14 +6,14 @@ import type { CardMenuItem } from "./CardMenu";
 export function styleMenuItems3d(
   role: Role3D | null,
   own: boolean,
-  run: { onUse: (role: Role3D) => void; onDuplicate: () => void; onExport: () => void; onRename: () => void; onDelete: () => void },
+  run: { onUse: (role: Role3D) => void; onDuplicate: () => void; onExport: () => void; onRename: () => void; onDelete?: () => void },
 ): CardMenuItem[] {
   return [
     { name: "Use as primary", run: () => run.onUse("primary"), disabled: role === "primary" },
     { name: "Use as secondary", run: () => run.onUse("secondary"), disabled: role === "secondary" },
     { name: "Duplicate", run: run.onDuplicate, divider: true },
     { name: "Export style…", run: run.onExport },
-    ...(own ? [{ name: "Rename", run: run.onRename }, { name: "Delete", run: run.onDelete }] : []),
+    ...(own ? [{ name: "Rename", run: run.onRename }, ...(run.onDelete ? [{ name: "Delete", run: run.onDelete }] : [])] : []),
   ];
 }
 

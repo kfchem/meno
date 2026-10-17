@@ -42,7 +42,7 @@ import TextFlight, { MarkdownFlight } from "./TextFlight";
 import { columnSettingAt, sheetSetting } from "./textFlightSetting";
 import { drawnSheetBox, iconScaleOf, sheetOfText } from "../utils/textSheets";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import { CARD_H, CARD_W } from "../workflow/look";
 import { columnText, keepColumnTexts, markdownReaderOf, useShowsSource } from "../../TextEditor/columnText";
 import { isMarkdown, readMarkdown } from "../../../../lib/text/markdown";
@@ -75,7 +75,7 @@ function bodyBoxOf(st: EditorState, t: WorkspaceText): { x0: number; x1: number;
   }
   const m = st.molecules3d.find((x) => x.id === of.molecule);
   if (!m) return null;
-  const style = currentStyle3D();
+  const style = style3dOf(st);
   const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]));
   return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
 }

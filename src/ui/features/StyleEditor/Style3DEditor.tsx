@@ -190,7 +190,7 @@ const STICKS_ONLY = new Set<string>(["ballScale", "bondRadius", "bondColor"]);
 
 // --- One setting ---------------------------------------------------------------
 
-function Row({
+export function Row({
   field,
   value,
   changed,

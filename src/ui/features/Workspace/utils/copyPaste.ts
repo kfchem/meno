@@ -31,6 +31,7 @@ import { readPdfs } from "./pdfItems";
 import { pdfBounds } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
+import type { Style3D } from "../../../../lib/chem/style3d";
 
 type Pt = { x: number; y: number };
 
@@ -745,7 +746,7 @@ function middleOf(drawn: Drawn): Pt | null {
  * shapes and pictures keep their size in pt (docs/WORKSPACE.md, *Drawing
  * style*). As it is, where k is one.
  */
-export function restyledDrawn(drawn: Drawn, k: number): Drawn {
+export function restyledDrawn(drawn: Drawn, k: number, style3d?: Style3D): Drawn {
   const about = middleOf(drawn);
   if (k === 1 || !about) return drawn;
   const parts = restyled(
@@ -766,6 +767,7 @@ export function restyledDrawn(drawn: Drawn, k: number): Drawn {
     },
     k,
     about,
+    style3d,
   );
   return {
     ...drawn,

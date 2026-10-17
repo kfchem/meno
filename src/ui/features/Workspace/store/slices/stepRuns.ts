@@ -30,7 +30,7 @@ import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from
 import { askOf, finishEntry } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
-import { currentStyle3D } from "../../style3d";
+import { style3dOf } from "../../style3d";
 import { holdPicture } from "../../../../../lib/picture/held";
 import { entryCarried, picturesSaid, placePictures, type Rendered } from "../../workflow/renderStep";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
@@ -534,7 +534,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (!where) return void fail(id, tooOld(plugin.id, decl.name) ?? notFound(decl.label), at, key);
       paths.set(decl.name, where);
     }
-    const style = currentStyle3D();
+    const style = style3dOf(get());
     const turns = get().turns3d;
     const jobs: StepJob[] = [];
     try {

@@ -1031,7 +1031,7 @@ export const SCENE_3D_FIELDS: Style3DField<keyof Scene3D>[] = [
 ];
 
 /** The settings of `raw` that `fields` read, each within its bounds. */
-function acceptFields(raw: unknown, fields: readonly Style3DField[]): Record<string, unknown> {
+export function acceptFields(raw: unknown, fields: readonly Style3DField[]): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   if (typeof raw !== "object" || raw === null) return out;
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {

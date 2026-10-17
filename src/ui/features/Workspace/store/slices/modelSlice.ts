@@ -23,6 +23,8 @@ import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
+import { style3dOf } from "../../style3d";
+import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -367,7 +369,7 @@ export const createModelSlice = (
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
       // (a workflow's parts by their own ids: what a set holds is what lies inside it, whatever the molecules' ids)
       const workflow = ws.workflow ? { ...ws.workflow, nextWorkflowId: nextIdAfter(ws.workflow) } : {};
-      return ops.setDocumentStyle(
+      return ops.setDocumentStyle3d(ops.setDocumentStyle(
         {
           ...next,
           ...workflow,
@@ -388,6 +390,9 @@ export const createModelSlice = (
         },
         // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
         ws.style ?? useAppSettings.getState().drawingStyle,
+      ),
+        // (and its styles in 3D - a file saved before workspaces carried them: Settings' as it opens, fixed from then on)
+        ws.style3d ?? workspace3dOf(useAppSettings.getState().style3d),
       );
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
@@ -464,7 +469,7 @@ export const createModelSlice = (
 
   pasteModel: (given: Drawn) => {
     // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
-    const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
+    const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle), style3dOf(get())) : given;
     // (and its words as large in print: those given no size at the labels' size it was copied in)
     const next = converted.labelPt && converted.captions?.length ? { ...converted, captions: wordsKept(converted.captions, converted.labelPt, labelPtOf(get().docStyle)) } : converted;
     const carried = next.molecules3d ?? [];

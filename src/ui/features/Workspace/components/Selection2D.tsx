@@ -17,7 +17,7 @@ import { shapePlace } from "../document";
 import { cycleTurned } from "../../../../lib/chem/cycle";
 import { strokesBounds, strokeTurned } from "../../../../lib/chem/ink";
 import type { Style3D } from "../../../../lib/chem/style3d";
-import { currentStyle3D, useStyle3D } from "../style3d";
+import { style3dOf, useStyle3D } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf, standingHeight, turnedInPlane, turnedTogether, type Turning3D } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import type { Model, Molecule3D, PictureItem, Turn3D } from "../store/types";
@@ -338,7 +338,7 @@ export default function Selection2D() {
       turnInSpace(e, molecules, e.shiftKey);
       return;
     }
-    const about = selectionExtent(st.model, st.sel.atoms, st.molecules3d, st.sel3d, st.turns3d, st.frames3d, currentStyle3D(), eyeOf(camera)?.z, pics)?.mid;
+    const about = selectionExtent(st.model, st.sel.atoms, st.molecules3d, st.sel3d, st.turns3d, st.frames3d, style3dOf(store.getState()), eyeOf(camera)?.z, pics)?.mid;
     if (!about) return;
     const from = st.model.atoms.filter((a) => st.sel.atoms.has(a.id)).map((a) => ({ id: a.id, x: a.x, y: a.y }));
     // (marks put by hand turned with it: from where they were as the turn began)
@@ -367,7 +367,7 @@ export default function Selection2D() {
     const among = selectionScheme(st);
     const words = among.captions;
     const scheme = among.arrows.length || among.pluses.length || words.length;
-    const carried = molecules.map(turningOf(st.turns3d, currentStyle3D()));
+    const carried = molecules.map(turningOf(st.turns3d, style3dOf(store.getState())));
     const p0 = toWorld(e.clientX, e.clientY);
     const a0 = Math.atan2(p0.y - about.y, p0.x - about.x);
     const gesture = `turn-${performance.now()}`;
@@ -455,13 +455,13 @@ export default function Selection2D() {
    */
   const turnInSpace = (e: PointerEvent, molecules: Molecule3D[], each: boolean) => {
     const st = store.getState();
-    const from = molecules.map(turningOf(st.turns3d, currentStyle3D()));
+    const from = molecules.map(turningOf(st.turns3d, style3dOf(store.getState())));
     const turnsBefore = Object.fromEntries(molecules.map((m) => [m.id, st.turns3d[m.id]]));
     const inPlace = each || from.length === 1;
     let went = false;
     const gesture = `turn-3d-${performance.now()}`;
     const q = new THREE.Quaternion();
-    setHeld(selectionExtent(st.model, st.sel.atoms, st.molecules3d, st.sel3d, st.turns3d, st.frames3d, currentStyle3D(), eyeOf(camera)?.z));
+    setHeld(selectionExtent(st.model, st.sel.atoms, st.molecules3d, st.sel3d, st.turns3d, st.frames3d, style3dOf(store.getState()), eyeOf(camera)?.z));
     let last = { x: e.clientX, y: e.clientY };
     let frame: number | null = null;
     st.beginPanHold(e.pointerId);
@@ -485,7 +485,7 @@ export default function Selection2D() {
       const len = Math.hypot(dx, dy);
       if (len === 0) return;
       // (a drag to the right turns the near side right; down turns it down)
-      const angle = (currentStyle3D().turnPerHalfWidth * len) / Math.max(gl.domElement.clientWidth / 2, 1);
+      const angle = (style3dOf(store.getState()).turnPerHalfWidth * len) / Math.max(gl.domElement.clientWidth / 2, 1);
       q.premultiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(dy, dx, 0).normalize(), angle)).normalize();
       if (frame == null) frame = window.requestAnimationFrame(apply);
     };

@@ -252,7 +252,7 @@ export default function Workflow2D() {
   const selFlow = useEditor((s) => s.selFlow);
   const style3d = useStyle3D();
   const { camera, gl, invalidate } = useThree();
-  // the 3D look Settings has - as the workspace opens, and as it changes: the
+  // the workspace's styles in 3D - as it opens, and as they or Settings' change: the
   // result sets its molecules no longer fit laid out again (workflow/run
   // `fitResultSets`), frames and molecules going over to their new places
   useEffect(() => {
