@@ -1,5 +1,18 @@
 import { describe, expect, it } from "vitest";
+import { elementColour } from "./elements";
 import {
+  COLOUR_SETS_3D,
+  colourSet3d,
+  greyOf,
+  ballCircles,
+  linedBall,
+  lineWidth,
+  LINE_LEAST_PX,
+  paler,
+  FADE_MOST,
+  fadeAt,
+  lookOfStyle,
+  withAtomColour,
   acceptStyle3dChoice,
   atomColour,
   atomRadius,
@@ -20,7 +33,15 @@ import {
   withLookSetting,
   withRole,
   withSharedSetting,
+  styles3d,
+  styleName3d,
+  withDuplicate3d,
+  withRenamed3d,
+  withoutStyle3d,
+  copyName,
+  STYLE_NAME_MOST,
 } from "./style3d";
+import { isOwnStyleId } from "./style";
 
 describe("the 3D style", () => {
   it("draws balls a fifth of the van der Waals radius, as the 3D viewer did - and space-filling, each atom as large as it is", () => {
@@ -138,7 +159,7 @@ describe("a biopolymer's chains in a look", () => {
 
 describe("the 3D style as chosen", () => {
   it("is each role's style, with what was changed of it, and what they share", () => {
-    const style = style3dOf({ primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.2 } }, shared: { keyLight: 2 } });
+    const style = style3dOf({ primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.2 } }, shared: { keyLight: 2 }, own: [] });
     expect(style.primary.roughness).toBe(look3dPreset("glossy").look.roughness);
     expect(style.primary.bondRadius).toBe(0.2);
     expect(style.secondary).toEqual(look3dPreset("space").look);
@@ -171,7 +192,7 @@ describe("the 3D style as chosen", () => {
         primary: "glossy",
         secondary: "nonesuch",
         looks: {
-          glossy: { ballScale: 0.3, bondRadius: 9, bondColor: "#ABCDEF", atoms: "sticks", roughness: "matt", ballSegments: 3, hydrogens: "carbonHidden" },
+          glossy: { ballScale: 0.3, bondRadius: 9, bondColor: "#ABCDEF", atoms: "tubes", roughness: "matt", ballSegments: 3, hydrogens: "carbonHidden" },
           nonesuch: { ballScale: 0.3 },
           space: { keyLight: 2 },
         },
@@ -182,17 +203,268 @@ describe("the 3D style as chosen", () => {
       secondary: "space",
       looks: { glossy: { ballScale: 0.3, bondColor: "#abcdef", hydrogens: "carbonHidden" } },
       shared: { keyLight: 2 },
+      own: [],
     });
   });
 
   it("has a field for every setting but how smooth the balls and sticks are, and every style within the fields' bounds", () => {
     const shown = new Set<string>(LOOK_3D_FIELDS.map((f) => f.key));
-    for (const key of Object.keys(BALL_AND_STICK)) expect(shown.has(key)).toBe(true);
+    // (the atoms' colours have a table of their own: withAtomColour)
+    for (const key of Object.keys(BALL_AND_STICK)) expect(shown.has(key)).toBe(key !== "colours");
     const shared = new Set<string>(SCENE_3D_FIELDS.map((f) => f.key));
     for (const key of Object.keys(SCENE_3D)) expect(shared.has(key)).toBe(key !== "ballSegments" && key !== "bondSegments");
     for (const p of LOOK_3D_PRESETS) {
       const read = acceptStyle3dChoice({ primary: p.id, secondary: p.id === "balls" ? "space" : "balls", looks: { [p.id]: p.look } });
-      expect(read.looks[p.id]).toEqual(Object.fromEntries(Object.entries(p.look).map(([k, v]) => [k, typeof v === "string" ? v.toLowerCase() : v])));
+      const { colours, ...rest } = p.look;
+      expect(read.looks[p.id]).toEqual({
+        ...Object.fromEntries(Object.entries(rest).map(([k, v]) => [k, typeof v === "string" && v.startsWith("#") ? v.toLowerCase() : v])),
+        ...(Object.keys(colours).length ? { colours } : {}),
+      });
     }
+  });
+});
+
+describe("the outlined style, and what it is made of", () => {
+  it("draws a dark line round balls and thin near-black sticks, its back fading, in its own colours - circles on the balls offered, not drawn", () => {
+    const look = look3dPreset("outlined").look;
+    expect(look.atoms).toBe("balls");
+    // (in ångströms: about a pixel and a half at caffeine's fit, 1 pm to a pixel there)
+    expect(look.outline).toBeGreaterThanOrEqual(0.01);
+    expect(look.outline).toBeLessThanOrEqual(0.02);
+    expect(look.bondColouring).toBe("single");
+    expect(look.depthFade).toBeGreaterThan(0);
+    expect(look.roughness).toBeLessThan(0.5);
+    // (hydrogen's ball smaller than carbon's)
+    expect(atomRadius("H", look)).toBeLessThan(atomRadius("C", look));
+    expect(atomColour("H", look)).toBe("#ffffff");
+    // (a bright red)
+    expect(atomColour("O", look)).toBe("#ff1f1f");
+    expect(look.bondRadius).toBeLessThan(BALL_AND_STICK.bondRadius);
+    // (no circles on the balls - but set to three, on every atom, hydrogen's too, as thin as a line)
+    expect(ballCircles(look)).toBe(0);
+    const lined = { ...look, ballLines: "three" as const };
+    expect(ballCircles(lined)).toBe(3);
+    for (const el of ["H", "C", "O", "Li"]) expect(linedBall(el, lined)).toBe(true);
+    expect(look.ballLinesWidth).toBeLessThanOrEqual(look.outline);
+    expect(atomColour("Na", look)).toBe(atomColour("K", look));
+    // (an element it does not colour: as Meno does)
+    expect(atomColour("Br", look)).toBe(atomColour("Br"));
+    // (Meno's own styles draw no line and fade nothing)
+    for (const id of ["balls", "glossy", "space"]) {
+      expect(ballCircles(look3dPreset(id).look)).toBe(0);
+      expect(look3dPreset(id).look.outline).toBe(0);
+      expect(look3dPreset(id).look.depthFade).toBe(0);
+    }
+  });
+
+  it("fades nothing at the front, more toward the back, smoothly, never past its most", () => {
+    expect(fadeAt(0, 1)).toBe(0);
+    expect(fadeAt(1, 1)).toBeCloseTo(FADE_MOST, 12);
+    expect(fadeAt(1, 0.5)).toBeCloseTo(FADE_MOST / 2, 12);
+    expect(fadeAt(0.5, 0)).toBe(0);
+    let last = -1;
+    for (let d = 0; d <= 1.0001; d += 0.05) {
+      const f = fadeAt(d, 0.8);
+      expect(f).toBeGreaterThanOrEqual(last);
+      last = f;
+    }
+    // (out of range, held at its ends)
+    expect(fadeAt(-1, 1)).toBe(0);
+    expect(fadeAt(3, 2)).toBeCloseTo(FADE_MOST, 12);
+  });
+
+  it("takes an element's colour of the user's own over its preset's, and gives it back", () => {
+    let choice = withAtomColour(DEFAULT_STYLE_3D_CHOICE, "outlined", "C", "#202020");
+    expect(lookOfStyle(choice, "outlined").colours.C).toBe("#202020");
+    // (the preset's others kept)
+    expect(lookOfStyle(choice, "outlined").colours.O).toBe(look3dPreset("outlined").look.colours.O);
+    choice = withAtomColour(choice, "balls", "N", "#00FF00");
+    expect(atomColour("N", lookOfStyle(choice, "balls"))).toBe("#00ff00");
+    // (reset: the preset's again, nothing left changed)
+    choice = withAtomColour(choice, "outlined", "C", null);
+    choice = withAtomColour(choice, "balls", "N", atomColour("N"));
+    expect(choice.looks).toEqual({});
+    // (a colour set beside other changes keeps them)
+    const both = withAtomColour(withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "outline", 1), "balls", "O", "#ff8800");
+    expect(both.looks.balls).toEqual({ outline: 1, colours: { O: "#ff8800" } });
+  });
+
+  it("reads its settings and colours back from the settings file, and nothing that does not read", () => {
+    const read = acceptStyle3dChoice({
+      primary: "outlined",
+      secondary: "space",
+      looks: { outlined: { outline: 0.03, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#ABCDEF", colours: { C: "#123456", Xx: "#000000", O: "red", N: 3 } } },
+    });
+    expect(read.looks.outlined).toEqual({ outline: 0.03, depthFade: 0.3, bondColouring: "byAtom", outlineColor: "#abcdef", colours: { C: "#123456" } });
+    const odd = acceptStyle3dChoice({ primary: "outlined", secondary: "balls", looks: { outlined: { outline: 9, depthFade: -1, bondColouring: "rainbow", colours: [] } } });
+    expect(odd.looks.outlined).toBeUndefined();
+  });
+});
+
+describe("lines on the balls", () => {
+  it("are on the atoms chosen: all, all but hydrogen, or carbon alone - none, where the style draws none", () => {
+    const on = (ballLinesOn: "all" | "heavy" | "carbon", ballLines: "none" | "two" | "three" = "two") => ["H", "C", "O"].filter((el) => linedBall(el, { ballLines, ballLinesOn }));
+    expect(on("all")).toEqual(["H", "C", "O"]);
+    expect(on("heavy")).toEqual(["C", "O"]);
+    expect(on("carbon")).toEqual(["C"]);
+    expect(on("all", "none")).toEqual([]);
+    expect(ballCircles({ ballLines: "two" })).toBe(2);
+  });
+
+  it("are read back from the settings file, within their bounds", () => {
+    const read = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 0.02, ballLinesColor: "#334455" } } });
+    expect(read.looks.balls).toEqual({ ballLines: "two", ballLinesOn: "carbon", ballLinesWidth: 0.02, ballLinesColor: "#334455" });
+    const odd = acceptStyle3dChoice({ primary: "balls", secondary: "space", looks: { balls: { ballLines: 2, ballLinesOn: "H", ballLinesWidth: 9 } } });
+    expect(odd.looks.balls).toBeUndefined();
+  });
+});
+
+describe("the colour sets", () => {
+  it("are Jmol's - the elements' own - Bright over Jmol's, and Greys as light as Jmol's", () => {
+    expect(COLOUR_SETS_3D.map((c) => c.id)).toEqual(["jmol", "bright", "greys", "pastel"]);
+    expect(colourSet3d("jmol").name).toBe("Jmol");
+    expect(atomColour("N")).toBe(elementColour("N"));
+    expect(colourSet3d("bright").colour("O")).toBe("#ff1f1f");
+    expect(colourSet3d("bright").colour("Br")).toBe(elementColour("Br"));
+    expect(colourSet3d("greys").colour("H")).toBe("#ffffff");
+    expect(greyOf("#000000")).toBe("#000000");
+    // (a pure red as light as it is: about a third of the way up)
+    expect(greyOf("#ff0000")).toBe("#7f7f7f");
+    expect(colourSet3d("rainbow").id).toBe("jmol");
+  });
+
+  it("are chosen per style, the style's own colours over them, and set back to the set chosen", () => {
+    let choice = withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "colourSet", "greys");
+    expect(atomColour("O", lookOfStyle(choice, "balls"))).toBe(greyOf(elementColour("O")));
+    choice = withAtomColour(choice, "balls", "O", "#ff0000");
+    expect(atomColour("O", lookOfStyle(choice, "balls"))).toBe("#ff0000");
+    // (set back: the grey of the set chosen, nothing of its own left)
+    choice = withAtomColour(choice, "balls", "O", greyOf(elementColour("O")));
+    expect(choice.looks.balls).toEqual({ colourSet: "greys" });
+    expect(look3dPreset("outlined").look.colourSet).toBe("bright");
+    expect(look3dPreset("balls").look.colourSet).toBe("jmol");
+  });
+});
+
+describe("the styles built in", () => {
+  it("draw balls a fifth of each atom's size in Meno's own, 18% in the other balls and sticks, 15% in Outlined", () => {
+    const scale = Object.fromEntries(LOOK_3D_PRESETS.filter((p) => p.look.atoms === "balls").map((p) => [p.id, p.look.ballScale]));
+    expect(scale).toEqual({ balls: 0.2, glossy: 0.18, outlined: 0.15, print: 0.18, pastel: 0.18, modelKit: 0.18 });
+    expect(LOOK_3D_PRESETS.map((p) => p.name)).toEqual(["Ball and stick", "Glossy", "Outlined", "Print", "Pastel", "Model kit", "Sticks", "Space-filling"]);
+  });
+
+  it("draw sticks alone with every atom as thick as a stick, and its sticks", () => {
+    const sticks = look3dPreset("licorice").look;
+    expect(sticks.atoms).toBe("sticks");
+    for (const el of ["H", "C", "Br"]) expect(atomRadius(el, sticks)).toBe(sticks.bondRadius);
+    expect(bondRadiusOf(sticks)).toBe(sticks.bondRadius);
+    expect(sticks.bondColouring).toBe("byAtom");
+  });
+
+  it("print in greys, and Pastel's colours are Jmol's two fifths of the way to white", () => {
+    expect(look3dPreset("print").look.colourSet).toBe("greys");
+    expect(paler("#000000", 0.4)).toBe("#666666");
+    expect(colourSet3d("pastel").colour("O")).toBe(paler(elementColour("O").toLowerCase(), 0.4));
+  });
+
+  it("let every setting be changed in every one of them - none hidden, none fixed", () => {
+    for (const p of LOOK_3D_PRESETS) {
+      for (const f of LOOK_3D_FIELDS) {
+        const now = p.look[f.key];
+        const other =
+          f.kind === "choice" ? f.options.find((o) => o.value !== now)!.value : f.kind === "number" ? (now === f.max ? f.min : f.max) : now === "#123456" ? "#654321" : "#123456";
+        const read = acceptStyle3dChoice(withLookSetting(DEFAULT_STYLE_3D_CHOICE, p.id, f.key, other as never));
+        expect([p.id, f.key, read.looks[p.id]?.[f.key]]).toEqual([p.id, f.key, other]);
+      }
+    }
+  });
+});
+
+describe("the user's own 3D styles", () => {
+  it("are made by duplicating a style as it is set, named '<name> copy', listed after the built-in ones", () => {
+    let choice = withLookSetting(DEFAULT_STYLE_3D_CHOICE, "balls", "ballLines", "three");
+    const made = withDuplicate3d(choice, "balls");
+    choice = made.choice;
+    // (its id its own: "own-" and a random UUID - never another computer's)
+    expect(isOwnStyleId(made.id)).toBe(true);
+    expect(styleName3d(choice, made.id)).toBe("Ball and stick copy");
+    expect(lookOfStyle(choice, made.id)).toEqual(lookOfStyle(choice, "balls"));
+    expect(lookOfStyle(choice, made.id).ballLines).toBe("three");
+    expect(styles3d(choice).map((s) => [s.id, s.own])).toEqual([...LOOK_3D_PRESETS.map((p) => [p.id, false]), [made.id, true]]);
+    // (again: another id, the name taken)
+    const again = withDuplicate3d(choice, "balls");
+    expect(again.id).not.toBe(made.id);
+    expect(styleName3d(again.choice, again.id)).toBe("Ball and stick copy 2");
+    expect(copyName("x".repeat(STYLE_NAME_MOST), () => false).length).toBe(STYLE_NAME_MOST);
+  });
+
+  it("are set as a whole - no changes kept apart, nothing to reset - and draw as they are set", () => {
+    const dup = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "outlined");
+    const id = dup.id;
+    let choice = dup.choice;
+    choice = withLookSetting(choice, id, "ballScale", 0.12);
+    choice = withAtomColour(choice, id, "N", "#00ff00");
+    expect(choice.looks).toEqual({});
+    expect(choice.own[0].look.ballScale).toBe(0.12);
+    expect(atomColour("N", lookOfStyle(choice, id))).toBe("#00ff00");
+    // (its set's colour again: none of its own)
+    choice = withAtomColour(choice, id, "N", colourSet3d("bright").colour("N"));
+    expect(choice.own[0].look.colours.N).toBeUndefined();
+    choice = withRole(choice, "secondary", id);
+    expect(style3dOf(choice).secondary.ballScale).toBe(0.12);
+  });
+
+  it("are renamed - never to nothing, nor to another style's name - and deleted, a role they had going to Meno's own", () => {
+    const dup = withDuplicate3d(DEFAULT_STYLE_3D_CHOICE, "glossy");
+    const id = dup.id;
+    let choice = dup.choice;
+    expect(withRenamed3d(choice, id, "  ")).toBe(choice);
+    expect(withRenamed3d(choice, id, "glossy")).toBe(choice);
+    expect(withRenamed3d(choice, "balls", "Mine")).toBe(choice);
+    choice = withRenamed3d(choice, id, " Lab figures ");
+    expect(styleName3d(choice, id)).toBe("Lab figures");
+    choice = withRole(withRole(choice, "primary", id), "secondary", "balls");
+    const gone = withoutStyle3d(choice, id);
+    expect(gone.own).toEqual([]);
+    // (ball and stick is the secondary: the primary goes to the first built-in style that is not)
+    expect([gone.primary, gone.secondary]).toEqual(["glossy", "balls"]);
+    expect(withoutStyle3d(choice, "balls")).toBe(choice);
+  });
+
+  it("are kept by the settings file, and what does not read is left out", () => {
+    const dup = withDuplicate3d(withLookSetting(DEFAULT_STYLE_3D_CHOICE, "print", "outline", 0.03), "print");
+    const made = withRole(dup.choice, "primary", dup.id);
+    expect(acceptStyle3dChoice(JSON.parse(JSON.stringify(made)))).toEqual(made);
+    const odd = acceptStyle3dChoice({
+      primary: "own-00000000-0000-4000-8000-000000000009",
+      secondary: "space",
+      own: [
+        { id: "own-00000000-0000-4000-8000-000000000001", name: "Glossy", look: {} },
+        { id: "mine", name: "Mine", look: {} },
+        { id: "own-00000000-0000-4000-8000-000000000002", name: "", look: {} },
+        { id: "own-00000000-0000-4000-8000-000000000003", name: "Fine", look: { ballScale: 9, colours: { O: "#123456" } } },
+        { id: "own-00000000-0000-4000-8000-000000000003", name: "Twice", look: {} },
+      ],
+    });
+    expect(odd.own).toEqual([{ id: "own-00000000-0000-4000-8000-000000000003", name: "Fine", look: { ...BALL_AND_STICK, colours: { O: "#123456" } } }]);
+    expect(odd.primary).toBe("balls");
+  });
+});
+
+describe("a style's lines", () => {
+  it("are as wide as set in ångströms, in the molecule's units - growing and shrinking with it", () => {
+    // (20 units to the ångström; a pixel 0.001 of them, far in)
+    expect(lineWidth(0.015, 20, 0.001)).toBeCloseTo(0.3, 9);
+    expect(lineWidth(0.015, 40, 0.001)).toBeCloseTo(0.6, 9);
+  });
+  it("are never thinner on the screen than the least pixels, however far out - and none where set to none", () => {
+    // (far out: a pixel a unit, the line 0.3 of them - drawn as the least instead)
+    expect(lineWidth(0.015, 20, 1)).toBeCloseTo(LINE_LEAST_PX, 9);
+    expect(LINE_LEAST_PX).toBe(0.5);
+    expect(lineWidth(0, 20, 1)).toBe(0);
+  });
+  it("in Print: an outline a little thicker than Outlined's, its circles as wide as Outlined's", () => {
+    expect(look3dPreset("print").look.outline).toBeGreaterThan(look3dPreset("outlined").look.outline);
+    expect(look3dPreset("outlined").look.ballLinesWidth).toBe(BALL_AND_STICK.ballLinesWidth);
   });
 });

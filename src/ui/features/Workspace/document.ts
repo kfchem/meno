@@ -12,13 +12,16 @@ import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
+import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
-import type { Arrow, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
+import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
 import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
+import { GAP_MOST, type Cycle, type CycleBranch } from "../../../lib/chem/cycle";
 import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
 import { sheetOf, sheetRoom } from "./utils/textSheets";
@@ -73,6 +76,13 @@ export type WorkspaceDocument = {
   pageId?: number;
   style: StyleChoice;
   /**
+   * Its styles in 3D, as its drawing style: its primary and its secondary,
+   * each whole, and its light - fixed as it is made, Settings' then, and
+   * changed from its canvas (lib/chem/workspaceStyle3d; docs/WORKSPACE.md,
+   * *Styles in 3D*).
+   */
+  style3d: Workspace3D;
+  /**
    * The atoms *Expand abbreviation* drew out last, which the Clean-up
    * straight after it leaves drawn out (chem/cleanUp). Not saved.
    */
@@ -95,6 +105,9 @@ export type WorkspaceDocument = {
   /** Writing by hand on the page, each piece of it in the order written (docs/PRESENTING.md, *Handwriting*). */
   inks?: Ink[];
   nextInkId?: number;
+  /** Catalytic cycles on the page (lib/chem/cycle; docs/EDITOR-2D.md, *Catalytic cycles*). */
+  cycles?: Cycle[];
+  nextCycleId?: number;
 };
 
 /** Whether it holds nothing: no structure, arrow, "+" sign or words drawn, no molecule in 3D, no text, no workflow. */
@@ -111,6 +124,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.slides?.length &&
     !doc.shapes?.length &&
     !doc.inks?.length &&
+    !doc.cycles?.length &&
     !doc.sets?.length &&
     !doc.steps?.length
   );
@@ -121,9 +135,10 @@ let pages = 0;
 /** A page's id, new (`pageId`). */
 export const newPageId = (): number => ++pages;
 
-export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE): WorkspaceDocument {
+export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE, style3d: Workspace3D = DEFAULT_WORKSPACE_3D): WorkspaceDocument {
   return {
     style,
+    style3d,
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -138,13 +153,13 @@ export function emptyWorkspaceDocument(style: StyleChoice = DEFAULT_STYLE_CHOICE
 }
 
 /**
- * Builds a document for a workspace tab, in `style` - Settings' as it is
- * made, given by whoever makes it (views/registry): this module reads no
- * settings. The tab's data may carry a file to import (`payload`), which
+ * Builds a document for a workspace tab, in `style` and `style3d` -
+ * Settings' as it is made, given by whoever makes it (views/registry):
+ * this module reads no settings. The tab's data may carry a file to import (`payload`), which
  * the view parses and applies, so the document starts empty here - or
  * files opened as text (`texts`), which it starts holding.
  */
-export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE): DocumentStore<WorkspaceDocument> {
+export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEFAULT_STYLE_CHOICE, style3d: Workspace3D = DEFAULT_WORKSPACE_3D): DocumentStore<WorkspaceDocument> {
   const opened = (data as { texts?: unknown } | null | undefined)?.texts;
   const texts = (Array.isArray(opened) ? (opened as Partial<WorkspaceText>[]) : []).flatMap((t) =>
     typeof t?.name === "string" && typeof t.text === "string"
@@ -153,7 +168,7 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   );
   // (PDFs opened on a canvas of their own: in a row from the middle of the page - and pictures likewise)
   const held = (data as { pdfs?: unknown } | null | undefined)?.pdfs;
-  let doc = addTexts(emptyWorkspaceDocument(style), texts).doc;
+  let doc = addTexts(emptyWorkspaceDocument(style, style3d), texts).doc;
   for (const p of pdfsInRow(Array.isArray(held) ? held : [], { x: 0, y: 0 })) doc = addPdf(doc, p);
   const pictures = (data as { pictures?: unknown } | null | undefined)?.pictures;
   for (const p of picturesInRow(Array.isArray(pictures) ? (pictures as PictureToAdd[]) : [], { x: 0, y: 0 })) doc = addPicture(doc, p);
@@ -925,6 +940,8 @@ export type ImportedScheme = {
   pluses?: Omit<Plus, "id">[];
   /** Shapes, from the back. */
   shapes?: Omit<Shape, "id">[];
+  /** Catalytic cycles. */
+  cycles?: Omit<Cycle, "id">[];
   /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), or in a shape it brings (`shapeAt`), where it is. */
   captions?: (Omit<Caption, "id" | "arrow" | "shape"> & { arrowAt?: number; shapeAt?: number })[];
   /** Molecules in 3D a file brings, where they are to stand - and, where it says, the frame each shows (an optimisation's last). */
@@ -937,6 +954,7 @@ export function schemeOf(part: Drawn): ImportedScheme {
     arrows: (part.arrows ?? []).map(({ id: _id, ...a }) => a),
     pluses: (part.pluses ?? []).map(({ id: _id, ...p }) => p),
     shapes: (part.shapes ?? []).map(({ id: _id, ...s }) => s),
+    cycles: (part.cycles ?? []).map(({ id: _id, ...c }) => c),
     captions: (part.captions ?? []).map(({ id: _id, arrow, shape, ...c }) => {
       const at = arrow == null ? -1 : (part.arrows ?? []).findIndex((a) => a.id === arrow);
       const inside = shape == null ? -1 : (part.shapes ?? []).findIndex((x) => x.id === shape);
@@ -960,6 +978,7 @@ export function withImportedScheme(
   // (and the words in a shape it brings, in that shape)
   const firstShape = next.nextShapeId ?? 1;
   for (const sh of scheme?.shapes ?? []) next = addShape(next, sh);
+  for (const cy of scheme?.cycles ?? []) next = addCycle(next, cy);
   for (const { arrowAt, shapeAt, ...c } of scheme?.captions ?? [])
     next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : {}), ...(shapeAt != null ? { shape: firstShape + shapeAt } : {}) });
   // (the frame each shows is the canvas's to keep, not the document's; a
@@ -1192,6 +1211,89 @@ export function addMeasure3d(doc: WorkspaceDocument, id: number, atoms: number[]
     const next = measures.reduce((n, x) => Math.max(n, x.id + 1), 1);
     return { ...m, measures: [...measures, { id: next, atoms: [...atoms] }] };
   });
+}
+
+/** The stereocentres and double bonds a molecule in 3D shows the labels of: those asked for on it, or - none asked for - those its drawing left open. */
+export function stereoShownOf(m: Pick<Molecule3D, "stereo">): { atoms: number[]; bonds: number[] } | null {
+  return m.stereo?.shown ?? m.stereo?.chosen ?? null;
+}
+
+/**
+ * Which R and S, E and Z are shown (docs/EDITOR-2D.md, *R and S*), set for
+ * the drawing's atoms and bonds given, by id, and the molecules in 3D's, by
+ * index - shown, or not. A molecule in 3D given with no atoms and no bonds
+ * is given all of its stereocentres and double bonds. A drawing and the
+ * molecule in 3D made from it each keep their own.
+ */
+export function setStereoShown(
+  doc: WorkspaceDocument,
+  of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] },
+  show: boolean,
+): WorkspaceDocument {
+  const atoms = new Set(of.atoms ?? []);
+  const bonds = new Set(of.bonds ?? []);
+  const flagged = <T extends { id: number; stereoShown?: true }>(x: T, given: Set<number>): T => {
+    if (!given.has(x.id) || !!x.stereoShown === show) return x;
+    if (show) return { ...x, stereoShown: true as const };
+    const { stereoShown: _s, ...rest } = x;
+    return rest as T;
+  };
+  let out = doc;
+  if (atoms.size || bonds.size) {
+    const model = { ...doc.model, atoms: doc.model.atoms.map((a) => flagged(a, atoms)), bonds: doc.model.bonds.map((b) => flagged(b, bonds)) };
+    if (model.atoms.some((a, i) => a !== doc.model.atoms[i]) || model.bonds.some((b, i) => b !== doc.model.bonds[i])) out = { ...out, model };
+  }
+  for (const g of of.molecules ?? []) {
+    out = withMolecule3d(out, g.id, (m) => {
+      const st = m.stereo;
+      if (!st) return m;
+      const all = !g.atoms?.length && !g.bonds?.length;
+      const ga = all ? Object.keys(st.atoms).map(Number) : (g.atoms ?? []).filter((i) => i in st.atoms);
+      const gb = all ? Object.keys(st.bonds).map(Number) : (g.bonds ?? []).filter((i) => i in st.bonds);
+      const was = stereoShownOf(m) ?? { atoms: [], bonds: [] };
+      const next = (now: number[], given: number[]) => (show ? [...new Set([...now, ...given])].sort((x, y) => x - y) : now.filter((i) => !given.includes(i)));
+      const shown = { atoms: next(was.atoms, ga), bonds: next(was.bonds, gb) };
+      if (st.shown && shown.atoms.join() === st.shown.atoms.join() && shown.bonds.join() === st.shown.bonds.join()) return m;
+      return { ...m, stereo: { ...st, shown } };
+    });
+  }
+  return out;
+}
+
+/**
+ * An arrow given its reaction's atom map (chem/atomMap) - or, null, its map
+ * taken away - with what the map shows on the drawing put there or taken
+ * off: each heavy atom's map number, and the reacting centres of the bonds
+ * it makes, breaks or changes in order - where the map is shown, complete,
+ * and of the drawing as it is. The atoms of the map before and of the new
+ * one lose the numbers and centres they had; one step.
+ */
+export function setAtomMap(doc: WorkspaceDocument, arrowId: number, map: ArrowAtomMap | null): WorkspaceDocument {
+  const arrow = doc.arrows.find((a) => a.id === arrowId);
+  if (!arrow) return doc;
+  const before = arrow.atomMap;
+  const inside = new Set<number>([...(before ? mapAtoms(before) : []), ...(map ? mapAtoms(map) : [])]);
+  const marks = map && map.shown && mapStanding({ atomMap: map }, doc.model) === "ready" ? mapMarks(map, doc.model) : null;
+  const atoms = doc.model.atoms.map((a) => {
+    if (!inside.has(a.id)) return a;
+    const n = marks?.numbers.get(a.id);
+    if (n === a.map) return a;
+    const { map: _m, ...rest } = a;
+    return n ? { ...rest, map: n } : rest;
+  });
+  const bonds = doc.model.bonds.map((b) => {
+    if (!inside.has(b.a) || !inside.has(b.b)) return b;
+    const c = marks?.centres.get(b.id);
+    if (c === b.reactingCentre) return b;
+    const { reactingCentre: _c, ...rest } = b;
+    return c ? { ...rest, reactingCentre: c } : rest;
+  });
+  const arrows = doc.arrows.map((a) => {
+    if (a.id !== arrowId) return a;
+    const { atomMap: _a, ...rest } = a;
+    return map ? { ...rest, atomMap: map } : rest;
+  });
+  return { ...doc, arrows, model: { ...doc.model, atoms, bonds } };
 }
 
 /** A measurement's atoms put in another order - the same measurement, the same value: which side setting it moves. */
@@ -1504,6 +1606,8 @@ export type MarkPlaces = {
   slides?: { id: number; x: number; y: number }[];
   /** Writing by hand moved or carried round with the rest: each piece's strokes where they now are. */
   inks?: { id: number; strokes: InkStroke[] }[];
+  /** Catalytic cycles moved, sized, carried round or turned over with the rest: where each one's middle now is, and its radius, the way it goes and its arrows in and out. */
+  cycles?: { id: number; x: number; y: number; r?: number; ccw?: true; branches?: CycleBranch[]; ends?: Record<string, number> }[];
   /** Shapes moved or carried round with the rest: where each now lies, and its tail; their words go with them. */
   shapes?: { id: number; x0: number; y0: number; x1: number; y1: number; tail?: { x: number; y: number } }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
@@ -1526,6 +1630,19 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
     const at = new Map(places.inks.map((p) => [p.id, p.strokes]));
     const placed = { ...doc, inks: (doc.inks ?? []).map((k) => (at.has(k.id) ? { ...k, strokes: at.get(k.id)! } : k)) };
     return placeMarks(placed, { ...places, inks: [] });
+  }
+  if (places?.cycles?.length) {
+    const at = new Map(places.cycles.map((p) => [p.id, p]));
+    const put = (c: Cycle): Cycle => {
+      const p = at.get(c.id)!;
+      // (the way it goes and its arrows, where they are said: a turn-over turns them)
+      const { ccw: _w, ends: _e, ...rest } = c;
+      const ccw = "branches" in p || "ccw" in p ? p.ccw : c.ccw;
+      const ends = "ends" in p ? p.ends : c.ends;
+      return { ...rest, x: p.x, y: p.y, r: p.r ?? c.r, ...(ccw ? { ccw } : {}), ...("branches" in p ? { branches: p.branches } : {}), ...(ends ? { ends } : {}) };
+    };
+    const placed = { ...doc, cycles: (doc.cycles ?? []).map((c) => (at.has(c.id) ? put(c) : c)) };
+    return placeMarks(placed, { ...places, cycles: [] });
   }
   if (places?.shapes?.length) {
     const at = new Map(places.shapes.map((p) => [p.id, p]));
@@ -2065,6 +2182,50 @@ export function removeInks(doc: WorkspaceDocument, ids: Iterable<number>): Works
   return { ...doc, inks: doc.inks.filter((k) => !gone.has(k.id)) };
 }
 
+// --- catalytic cycles --------------------------------------------------------
+
+/** `doc` with a catalytic cycle put on the page; it is numbered `nextCycleId`. One with no radius is not. */
+export function addCycle(doc: WorkspaceDocument, cycle: Omit<Cycle, "id">): WorkspaceDocument {
+  if (!finite(cycle.x, cycle.y, cycle.r) || !(cycle.r > 0)) return doc;
+  const id = doc.nextCycleId ?? 1;
+  return { ...doc, cycles: [...(doc.cycles ?? []), { ...cycle, id }], nextCycleId: id + 1 };
+}
+
+/** A change to a cycle: which way it goes, its arrows coming in and going out, its colour (null: none of its own), its arrows' gap (null: Meno's) and the gaps set by hand at their ends (`endKey`; a null, that end's taken away). */
+export type CyclePatch = { ccw?: boolean; branches?: CycleBranch[]; color?: string | null; gap?: number | null; ends?: Record<string, number | null> };
+
+/** `doc` with the cycle `id` changed as `patch` says. */
+export function updateCycle(doc: WorkspaceDocument, id: number, patch: CyclePatch): WorkspaceDocument {
+  const at = (doc.cycles ?? []).findIndex((c) => c.id === id);
+  if (at < 0) return doc;
+  const { ccw: _w, branches: _b, color: _c, gap: _g, ends: _e, ...rest } = doc.cycles![at];
+  const was = doc.cycles![at];
+  const gap = patch.gap === undefined ? was.gap : patch.gap ?? undefined;
+  const ends = { ...(was.ends ?? {}) };
+  for (const [k, v] of Object.entries(patch.ends ?? {})) {
+    if (v == null || !Number.isFinite(v)) delete ends[k];
+    else ends[k] = Math.min(GAP_MOST, Math.max(0, v));
+  }
+  const ccw = patch.ccw === undefined ? was.ccw : patch.ccw || undefined;
+  const branches = patch.branches === undefined ? was.branches : patch.branches.length ? patch.branches : undefined;
+  const color = patch.color === undefined ? was.color : patch.color ?? undefined;
+  const next: Cycle = {
+    ...rest,
+    ...(ccw ? { ccw: true as const } : {}),
+    ...(branches ? { branches } : {}),
+    ...(color ? { color } : {}),
+    ...(gap != null && Number.isFinite(gap) ? { gap: Math.min(GAP_MOST, Math.max(0, gap)) } : {}),
+    ...(Object.keys(ends).length ? { ends } : {}),
+  };
+  return { ...doc, cycles: doc.cycles!.map((c, i) => (i === at ? next : c)) };
+}
+
+export function removeCycles(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const gone = new Set(ids);
+  if (!doc.cycles?.some((c) => gone.has(c.id))) return doc;
+  return { ...doc, cycles: doc.cycles.filter((c) => !gone.has(c.id)) };
+}
+
 export function removeShapes(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
   const gone = new Set(ids);
   if (!doc.shapes?.some((x) => gone.has(x.id))) return doc;
@@ -2194,6 +2355,11 @@ export function setAromaticEnabled(
  */
 export function setDocumentStyle(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
   return doc.style === style ? doc : { ...doc, style };
+}
+
+/** The workspace in styles in 3D `style3d`, set as they are: its molecules drawn in them. */
+export function setDocumentStyle3d(doc: WorkspaceDocument, style3d: Workspace3D): WorkspaceDocument {
+  return doc.style3d === style3d ? doc : { ...doc, style3d };
 }
 
 export function setRingEnabled(

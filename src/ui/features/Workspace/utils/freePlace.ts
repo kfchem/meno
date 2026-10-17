@@ -7,7 +7,8 @@ import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
 import { CARD_H, CARD_W } from "../workflow/look";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { ImportedScheme } from "../document";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
+import type { Style3D } from "../../../../lib/chem/style3d";
 import { lookOf, solidOf } from "./molecule3d";
 import type { ProcessedFileResult } from "./io";
 
@@ -57,7 +58,7 @@ const NONE = new Set<number>();
  */
 export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   const out = besidesBoxes(
-    { ...st, sel: { atoms: NONE, bonds: NONE }, sel3d: NONE, selCaptions: NONE, selArrows: NONE, selPluses: NONE, selPictures: NONE, selPdfs: NONE, selTexts: NONE, selSlides: NONE, selShapes: NONE, selInks: NONE },
+    { ...st, sel: { atoms: NONE, bonds: NONE }, sel3d: NONE, selCaptions: NONE, selArrows: NONE, selPluses: NONE, selPictures: NONE, selPdfs: NONE, selTexts: NONE, selSlides: NONE, selShapes: NONE, selInks: NONE, selCycles: NONE },
     style,
   );
   for (const b of st.sets ?? []) out.push({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
@@ -115,7 +116,7 @@ export function labelledPart(model: Model): Model {
  * over the arrow - its molecules in 3D, its arrow and its "+" signs, as
  * `scheme` places them about that middle.
  */
-export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, drawingStyle: DrawingStyle): Box {
+export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, drawingStyle: DrawingStyle, style: Style3D): Box {
   const pad = NOMINAL_BOND_LENGTH / 2;
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   const take = (ax: number, ay: number, bx: number, by: number) => {
@@ -130,7 +131,6 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
   // (its "+" signs, each a label's size, as the page measures them: ./extent)
   const plusHalf = editorLayoutOptions(drawingStyle).fontPx / 2;
   for (const p of scheme.pluses ?? []) take(p.x - plusHalf, p.y - plusHalf, p.x + plusHalf, p.y + plusHalf);
-  const style = currentStyle3D();
   (result.molecules3d ?? []).forEach((m, i) => {
     const at = scheme.molecules3d?.[i]?.at;
     if (!at) return;
@@ -153,7 +153,7 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
  */
 export function placeOpened(st: EditorState, result: ProcessedFileResult, scheme: ImportedScheme, at: Pt, drawingStyle: DrawingStyle): Pt & { beyond: boolean } {
   const reach = 24;
-  const place = freePlace(pageBoxes(st, drawingStyle), footOf(result, scheme, drawingStyle), at, NOMINAL_BOND_LENGTH, NOMINAL_BOND_LENGTH, reach);
+  const place = freePlace(pageBoxes(st, drawingStyle), footOf(result, scheme, drawingStyle, style3dOf(st)), at, NOMINAL_BOND_LENGTH, NOMINAL_BOND_LENGTH, reach);
   // (put past the edge of all there is, out of the view, perhaps: the view is to go to it)
   const beyond = Math.max(Math.abs(place.x - at.x), Math.abs(place.y - at.y)) > reach * NOMINAL_BOND_LENGTH;
   return { ...place, beyond };

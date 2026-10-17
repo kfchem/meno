@@ -6,6 +6,7 @@ const good = {
   id: "nbo",
   name: "NBO",
   version: "7.0",
+  uses: [],
   description: "Natural bond orbitals.",
   licence: "Commercial",
   homepage: "https://nbo7.chem.wisc.edu",
@@ -14,6 +15,7 @@ const good = {
   reads: ["gaussian", "nbo-47"],
   writes: [],
   roles: [],
+  xyzEnergies: [],
   steps: [],
   systems: [],
   installed: [],
@@ -27,8 +29,26 @@ describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { writes: _w, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { uses: _uses, writes: _w, xyzEnergies: _x, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
+    // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
+    const declared = acceptManifest({
+      ...good,
+      xyzEnergies: [
+        { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
+        { id: "two", pattern: "no group here", unit: "hartree" },
+        { id: "three", pattern: "(a)(b)" },
+        { id: "Bad Id", pattern: "(\\d+)" },
+        { id: "four", pattern: "([unclosed" },
+        { id: "five", pattern: "^(\\d+)", unit: "furlongs" },
+      ],
+    })?.xyzEnergies;
+    expect(declared).toEqual([
+      { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
+      { id: "five", pattern: "^(\\d+)", unit: "hartree" },
+    ]);
+    // (what it uses: a name and a version each, once; what is not that left out)
+    expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
     expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
@@ -89,6 +109,16 @@ describe("a plugin's manifest", () => {
     // (a role it does by running a program: the program by name - never a path - each once)
     const render = [{ role: "render", programs: ["blender", "../bin/sh", "/usr/bin/blender", "blender"] }];
     expect(acceptManifest({ ...good, reads: [], kinds: [], roles: render })?.roles).toEqual([{ role: "render", programs: ["blender"], options: [] }]);
+    // (looks, each declared in full: an id, a label, parts from Meno's vocabulary or own; the canvas's look is Meno's and not declarable; what is not understood left out)
+    const looks = [
+      { id: "jelly", label: "Jelly", description: "See-through.", own: true, seeThrough: true, parts: { sticks: "stopped", molecules: "not-a-material", band: 5, shading: "toon" } },
+      { id: "meno", label: "Not allowed" },
+      { id: "No Id", label: "Bad id" },
+      { id: "plain" },
+      { id: "jelly", label: "Twice" },
+    ];
+    const declared = acceptManifest({ ...good, reads: [], kinds: [], roles: [{ role: "render", programs: [], looks }] })?.roles[0].looks;
+    expect(declared).toEqual([{ id: "jelly", label: "Jelly", description: "See-through.", parts: { shading: "toon", sticks: "stopped" }, own: true, seeThrough: true }]);
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);

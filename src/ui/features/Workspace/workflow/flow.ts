@@ -4,7 +4,8 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers } from "./entries";
 import { kindInfo, optionsOf, type SetHolds, type SetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
@@ -94,18 +95,88 @@ function hash(text: string, h = 0x811c9dc5): number {
   return h;
 }
 
+/**
+ * What a molecule in 3D adds to a step's key, as text: worked out once for
+ * each molecule - a molecule changed is a new one - since every step's key
+ * is asked on every edit, and a trajectory's frames are many.
+ */
+const keyed = new WeakMap<Molecule3D, readonly string[]>();
+function keyTexts(m: Molecule3D): readonly string[] {
+  let texts = keyed.get(m);
+  if (!texts) {
+    texts = [
+      // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
+      m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
+      `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
+      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}`,
+    ];
+    keyed.set(m, texts);
+  }
+  return texts;
+}
+
+/**
+ * What a drawn structure adds to a step's key, as text: what it is - its
+ * atoms' elements, charges, masses and radicals, its bonds' orders, wedges
+ * and dative bonds (`signatureOf`) - and what its drawing says by where
+ * things lie: on which side of each double bond each neighbour is, the
+ * other end's taken together (cis or trans), and the order the neighbours
+ * go round each atom a wedge starts from. Not where it is drawn: moved
+ * whole, turned, or an atom nudged without crossing a line that matters, it
+ * is the same; mirrored, its wedged centres are not.
+ */
+const drawnKeyed = new WeakMap<Model, Map<string, string>>();
+function drawnKey(model: Model, ids: readonly number[]): string {
+  const known = drawnKeyed.get(model) ?? new Map<string, string>();
+  drawnKeyed.set(model, known);
+  const name = ids.join(",");
+  const had = known.get(name);
+  if (had != null) return had;
+  const of = new Set(ids);
+  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
+  const near = new Map<number, number[]>();
+  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
+  for (const b of bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  const said: string[] = [];
+  for (const a of at.values()) if (a.radical) said.push(`r${a.id}:${a.radical}`);
+  for (const b of bonds) {
+    if (b.dative) said.push(`d${b.a}-${b.b}`);
+    if (b.order === 2) {
+      // (each neighbour's side of the line through the bond, measured the same way at both ends)
+      const p = at.get(b.a)!;
+      const q = at.get(b.b)!;
+      const side = (id: number) => {
+        const n = at.get(id)!;
+        return Math.sign((q.x - p.x) * (n.y - p.y) - (q.y - p.y) * (n.x - p.x));
+      };
+      for (const n of near.get(b.a) ?? []) if (n !== b.b) for (const m of near.get(b.b) ?? []) if (m !== b.a) said.push(`${n}~${m}:${side(n) * side(m)}`);
+    }
+    if (b.stereo && b.stereo !== "none") {
+      // (round the atom it starts from, anticlockwise, from its lowest-numbered neighbour)
+      const c = at.get(b.a)!;
+      const round = (near.get(b.a) ?? [])
+        .map((id) => ({ id, angle: Math.atan2(at.get(id)!.y - c.y, at.get(id)!.x - c.x) }))
+        .sort((u, v) => u.angle - v.angle)
+        .map((u) => u.id);
+      const first = round.indexOf(Math.min(...round));
+      said.push(`w${b.a}:${[...round.slice(first), ...round.slice(0, first)].join(">")}`);
+    }
+  }
+  const key = `${signatureOf(model, ids)}|${said.sort().join(",")}`;
+  known.set(name, key);
+  return key;
+}
+
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const input = inputOf(doc, step.id);
   if (!input) return "";
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
-  for (const m of input.molecules) {
-    // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
-    h = hash(m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"), h);
-    h = hash(`${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`, h);
-    h = hash(`${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}`, h);
-  }
-  h = hash(input.structures.map((s) => s.join(",")).join(";"), h);
+  for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
+  for (const s of input.structures) h = hash(drawnKey(doc.model, s), h);
   return h.toString(36);
 }
 

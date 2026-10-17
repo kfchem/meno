@@ -5,9 +5,12 @@ import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
 import { TAU } from "../../../theme/motion";
 import { buttonHeld } from "./buttonHeld";
-import { atomColour, bondRadiusOf, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
-import { bondLines, bondReach, frameBondsOf, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type Stick } from "../utils/molecule3d";
+import { menoShader } from "../utils/menoShader";
+import { pageScale } from "../utils/pageScale";
+import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
+import { bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -23,12 +26,17 @@ import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
-import { useShading3d } from "./shading3d";
+import { ballLinesOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
+import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { residueOnRay, ribbonMesh, ribbonSpheres, type RibbonSpheres } from "../utils/ribbon";
+import { BALLS_NEAR, BALLS_SETTLE_MS, ballSegmentsFor, largeOn } from "../utils/largeDrawing";
+import { typedValue } from "../utils/typedValue";
+import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
+import { named3d } from "../workflow/selectionSet";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -75,8 +83,20 @@ const FRAME_TAU = 0.06;
 /** How quickly a vibration's swing eases in, and out as it comes to rest, in seconds. */
 const VIBRATION_TAU = 0.25;
 const LOOK_TAU = 0.08;
+/**
+ * The line round the balls (utils/outlineMaterial) is a ball drawn again,
+ * as smooth as the balls up to LINES_FINE_MOST atoms, and of LINES_COARSE
+ * segments past them: measured on 10 648 atoms and 30 492 bonds, a frame
+ * took 14.0 ms with no line, 19.7 ms with lines as smooth as the balls (32
+ * segments) and 16.4 ms with 16 - its rim strays from a circle by under a
+ * pixel up to balls 40 pixels across.
+ */
+const LINES_FINE_MOST = 2000;
+const LINES_COARSE = 16;
 /** How gently the frames' chip follows the molecule's lowest point as it turns, in seconds. */
 const PILL_TAU = 0.12;
+/** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
+const STEREO_TAU = 0.07;
 /** How far above the molecule the mark of hydrogens left out stands, in pixels. */
 const MARK_GAP_PX = 8;
 /** A turn this small is followed at once - a drag's, or a turn on its own; a larger one is gone over to. */
@@ -130,6 +150,15 @@ function follow(v: number, to: number, dt: number, tau: number): number {
   return Math.abs(next - to) < 1e-3 ? to : next;
 }
 
+/**
+ * A copy splitting off the molecule it was made from (a value set on a
+ * result, which is never edited itself): its atoms from that one's places
+ * (`places`, laid as its own frames are) to its own, and its place from that
+ * one's (`at`) to its own, over `seconds` from `start` (`performance.now()`);
+ * `back`, undone, the other way - into that one, and gone.
+ */
+export type Split3D = { places: ArrayLike<number>; at: { x: number; y: number }; start: number; seconds: number; back?: boolean };
+
 export type Molecule3DViewProps = {
   m: Molecule3D;
   style: Style3D;
@@ -155,6 +184,8 @@ export type Molecule3DViewProps = {
   leaving?: () => void;
   /** Rising out of its drawing: where it started, over the drawing, and when; and what is told once it has risen. */
   rising?: Rising3D;
+  /** Splitting off the molecule it is a copy of, a value set on it (`Split3D`): over it at first, as it is, gliding out to its own place as its value goes over to the new one; or, `back`, undone, the other way, and gone. */
+  split?: Split3D;
   /** Its atom whose drawing's atom is under the pointer: lit as if it were. */
   linkedAtom?: number | null;
   /** Its atom under the pointer, as it comes and goes. */
@@ -163,8 +194,8 @@ export type Molecule3DViewProps = {
   onRemake?: () => void;
   /** Its other frames - conformers - drawn over the one it shows. */
   overlay?: boolean;
-  /** Its stereocentres' and double bonds' labels shown: all, only those its drawing left open, or none. */
-  stereoShown: "all" | "chosen" | null;
+  /** Its stereocentres' and double bonds' labels shown, by atom and bond index (document `stereoShownOf`); none, none. */
+  stereoShown: { atoms: readonly number[]; bonds: readonly number[] } | null;
   /**
    * R and S as the drawing writes them: as large as its R and S, on the
    * page or on the screen; in its typeface; in parentheses or not; and how
@@ -224,7 +255,27 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const atoms = useRef<THREE.InstancedMesh>(null!);
   const bonds = useRef<THREE.InstancedMesh>(null);
   const atomHull = useRef<THREE.InstancedMesh>(null!);
+  // the style's line round every ball and stick (utils/outlineMaterial), and how wide it is drawn now and how far the
+  // back fades - each gone over to as the style or the look changes
+  const atomLines = useRef<THREE.InstancedMesh>(null);
+  const bondLines3d = useRef<THREE.InstancedMesh>(null);
+  const outlines = useMemo(() => ({ atoms: outlineMaterial(), bonds: outlineMaterial(), bent: outlineMaterial(true) }), []);
+  useEffect(() => () => {
+    outlines.atoms.material.dispose();
+    outlines.bonds.material.dispose();
+    outlines.bent.material.dispose();
+  }, [outlines]);
+  const lineLook = useRef<{ width: number; fade: number; byAtom: number; circles: [number, number, number]; circleWidth: number } | null>(null);
+  // the atoms' colours as drawn now (linear RGB, three to an atom), and whether they are still going over to the style's
+  const atomCols = useRef<Float32Array | null>(null);
+  const recolour = useRef(true);
   const bondHull = useRef<THREE.InstancedMesh>(null);
+  // the lines that curve in to a lone atom (utils/stickBend), drawn apart - their sticks, the line round them, their highlight: none, where none curves
+  const bentSticks = useRef<THREE.InstancedMesh>(null);
+  const bentLines3d = useRef<THREE.InstancedMesh>(null);
+  const bentHull = useRef<THREE.InstancedMesh>(null);
+  // how far each look's multiple bonds have gone over to one stick (0, as lines; 1, one stick)
+  const oneLevel = useRef({ primary: style.primary.multipleBonds === "one" ? 1 : 0, secondary: style.secondary.multipleBonds === "one" ? 1 : 0 });
   const chosenHull = useRef<THREE.InstancedMesh>(null!);
   const linkedHull = useRef<THREE.Mesh>(null!);
   const markedHull = useRef<THREE.InstancedMesh>(null!);
@@ -286,6 +337,18 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   });
   // how far over to the secondary look it is drawn: 0 the primary, 1 the secondary
   const fill = useRef(look === "secondary" ? 1 : 0);
+  // the segments round its balls: as the style has them - or, on a canvas
+  // drawn lighter, as many as their size on the screen wants
+  // (utils/largeDrawing `ballSegmentsFor`): more at once as they grow, fewer
+  // once the zoom has settled
+  const [segments, setSegments] = useState(style.ballSegments);
+  // (by a loop: spread over a hundred thousand atoms, Math.max overruns the stack)
+  const biggest = useMemo(() => {
+    const most = (r: Float32Array) => r.reduce((a, b) => Math.max(a, b), 0);
+    return { primary: most(solid.radii.primary), secondary: most(solid.radii.secondary) };
+  }, [solid]);
+  const ballSizing = useRef({ zoom: 0, since: 0, timer: 0 });
+  useEffect(() => () => void (ballSizing.current.timer && window.clearTimeout(ballSizing.current.timer)), []);
   const atomsMat = useRef<THREE.MeshStandardMaterial>(null!);
   const bondsMat = useRef<THREE.MeshStandardMaterial>(null);
   // (the atoms either look leaves out, and whether it leaves out any)
@@ -337,12 +400,28 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   }, [holding, m.atoms, m.bonds, n]);
   // each bond's lines, by bond
   const lineBond = useMemo(() => drawn.bonds.flatMap((b, i) => Array.from({ length: linesOf(b.order) }, () => i)), [drawn.bonds]);
+  const bent = useMemo(() => bentLinesOf(drawn, solid), [drawn, solid]);
+  const isBent = useMemo(() => (bent ? Uint8Array.from({ length: lineCount }, (_, k) => (bent.includes(k) ? 1 : 0)) : null), [bent, lineCount]);
+  const bentGeometry = useMemo(() => (bent ? bentStickGeometry(style.bondSegments) : null), [bent, style.bondSegments]);
+  const bentHullGeometry = useMemo(() => (bent ? bentStickGeometry(style.bondSegments) : null), [bent, style.bondSegments]);
+  const bentHullMat = useMemo(() => {
+    return menoShader(new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, toneMapped: false }), "bent-hull", (shader) => withStickBend(shader));
+  }, []);
+  useEffect(() => () => bentGeometry?.dispose(), [bentGeometry]);
+  useEffect(() => () => bentHullGeometry?.dispose(), [bentHullGeometry]);
+  useEffect(() => () => bentHullMat.dispose(), [bentHullMat]);
+  // (their own material, the straight ones' twin: so that straight sticks never pay for the bending)
+  const bentMat = useMemo(() => new THREE.MeshStandardMaterial({ transparent: true, opacity: 1 }), []);
+  useEffect(() => () => bentMat.dispose(), [bentMat]);
+  useLayoutEffect(() => {
+    if (bondsMat.current) teachBent(bentMat, bondsMat.current);
+  });
   // how far each drawn bond is there, on its way to what the frame shown has
   const there = useRef<Float32Array>(Float32Array.from(fb ? fb.present[frameOf(solid, frame)] : []));
   if (fb && there.current.length !== fb.bonds.length) there.current = Float32Array.from(fb.present[frameOf(solid, frame)]);
   // (rising out of a drawing, it is its full size from the first: its atoms grow instead;
   // and coming or going in its stack, it is its full size too: STACK_SWAP_MS)
-  const grown = useRef({ v: leaving || props.rising || props.swap ? 1 : 0, vel: 0, to: leaving ? 0 : 1 });
+  const grown = useRef({ v: leaving || props.rising || props.swap || props.split ? 1 : 0, vel: 0, to: leaving && !props.split?.back ? 0 : 1 });
   // how far its atoms have grown, rising out of a drawing
   const risen = useRef(props.rising ? 0 : 1);
   const level = useRef(0);
@@ -355,6 +434,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // again only when its text changes, not every frame - what the stereo
   // labels keep clear of
   const valueSizes = useRef(new Map<number, { text: string; w: number; h: number }>());
+  // (where each measurement's value stands about its point as last drawn, which it glides on from: valueSpots)
+  const valuesAbout = useRef(new Map<number, SpotAbout>());
   const [measureTexts, setMeasureTexts] = useState<Record<number, string>>({});
   const [shownMeasures, setShownMeasures] = useState<Measure3D[]>(m.measures ?? []);
   const dirty = useRef(true);
@@ -375,38 +456,62 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // its stereocentres' and double bonds' labels: all, or those its drawing left open
   const stereoMarks = useMemo(() => {
     const st = m.stereo;
-    if (!st || !props.stereoShown) return [];
-    const only = props.stereoShown === "chosen" ? st.chosen : null;
-    if (props.stereoShown === "chosen" && !only) return [];
+    const only = props.stereoShown;
+    if (!st || !only) return [];
     // (with the atoms whose ways out it keeps clear of: a centre's
     // neighbours, a double bond's two and theirs)
     const near = (i: number) => m.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
     const out: { key: string; atoms: number[]; around: number[]; text: string }[] = [];
     for (const [i, text] of Object.entries(st.atoms)) {
-      if (!only || only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
+      if (only.atoms.includes(Number(i))) out.push({ key: `a${i}`, atoms: [Number(i)], around: near(Number(i)), text });
     }
     for (const [i, text] of Object.entries(st.bonds)) {
       const b = m.bonds[Number(i)];
-      if (b && (!only || only.bonds.includes(Number(i))))
+      if (b && only.bonds.includes(Number(i)))
         out.push({ key: `b${i}`, atoms: [b.a1, b.a2], around: [...new Set([...near(b.a1), ...near(b.a2)])], text });
     }
     return out;
   }, [m.stereo, m.bonds, props.stereoShown]);
   const stereoAnchors = useRef(new Map<string, { anchor: THREE.Group | null; el: HTMLDivElement | null }>());
+  // (where each stereo label stands about its atom as last drawn, which it glides on from: spotFollowed)
+  const stereoSpots = useRef(new Map<string, SpotAbout>());
   useEffect(() => {
     dirty.current = true;
     invalidate();
   }, [stereoMarks, invalidate]);
 
-  // the molecule itself changed - its atoms, its frames, the style: drawn afresh
+  // each atom's colour in either look, by its element as the look colours it (linear RGB)
+  const atomGoals = useMemo(() => {
+    const of = (look: Style3D["primary"]) => {
+      const out = new Float32Array(3 * n);
+      const col = new THREE.Color();
+      for (let i = 0; i < n; i++) col.set(atomColour(m.atoms[i].el, look)).toArray(out, 3 * i);
+      return out;
+    };
+    return { primary: of(style.primary), secondary: of(style.secondary) };
+  }, [m.atoms, n, style.primary, style.secondary]);
+
+  // the molecule itself changed - its atoms, its frames, the style: drawn afresh - its colours gone over to (below),
+  // or, new, as they are at once
   useLayoutEffect(() => {
-    const col = new THREE.Color();
-    for (let i = 0; i < n; i++) atoms.current.setColorAt(i, col.set(atomColour(m.atoms[i].el)));
-    if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
+    if (!atomCols.current || atomCols.current.length !== 3 * n) {
+      const now = new Float32Array(3 * n);
+      const f = fill.current;
+      for (let k = 0; k < now.length; k++) now[k] = atomGoals.primary[k] + (atomGoals.secondary[k] - atomGoals.primary[k]) * f;
+      atomCols.current = now;
+      const col = new THREE.Color();
+      for (let i = 0; i < n; i++) atoms.current.setColorAt(i, col.fromArray(now, 3 * i));
+      if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
+    }
+    recolour.current = true;
+    // (which balls carry lines, in either look: drawn as far as the look carries them)
+    const lined = new Float32Array(n);
+    for (let i = 0; i < n; i++) lined[i] = linedBall(m.atoms[i].el, style.primary) || linedBall(m.atoms[i].el, style.secondary) ? 1 : 0;
+    atoms.current.geometry.setAttribute("ballLined", new THREE.InstancedBufferAttribute(lined, 1));
     if (places.current.length !== target.length) places.current = Float32Array.from(target);
     dirty.current = true;
     invalidate();
-  }, [m, n, target, style, invalidate]);
+  }, [m, n, target, style, atomGoals, invalidate]);
 
   // measurements come and go, fading
   useEffect(() => {
@@ -527,6 +632,28 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
     let moving = false;
+    // (its balls' segments, by their size on the screen where the canvas is drawn lighter; as the style has them otherwise, at once)
+    {
+      const lighter = largeOn(gl).lighter;
+      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      const bs = ballSizing.current;
+      if (!bs.zoom || Math.abs(Math.log(zoom / bs.zoom)) >= BALLS_NEAR) {
+        bs.zoom = zoom;
+        bs.since = performance.now();
+      }
+      const want = lighter ? ballSegmentsFor(2 * biggest[look] * zoom * gl.getPixelRatio(), style.ballSegments) : style.ballSegments;
+      // (more at once, as balls grow on the screen - fewer only once the zoom has settled)
+      if (want !== segments) {
+        const left = lighter && want < segments ? BALLS_SETTLE_MS - (performance.now() - bs.since) : 0;
+        if (left <= 0) setSegments(want);
+        else if (!bs.timer) {
+          bs.timer = window.setTimeout(() => {
+            bs.timer = 0;
+            invalidate();
+          }, left + 5);
+        }
+      }
+    }
     // another frame: its atoms go there
     let reshaped = dirty.current;
     const p = places.current;
@@ -539,7 +666,17 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     let far = 0;
     const rising = props.rising;
     const riseT = rising ? (performance.now() - rising.start) / 1000 : 0;
-    if (rising?.flat && rising.flat.length === p.length && riseT < RISE_UP) {
+    // splitting off the molecule it is a copy of: from that one's places to its own - or, undone, back
+    const split = props.split;
+    const splitT = split ? Math.max(0, (performance.now() - split.start) / 1000 / split.seconds) : 1;
+    const splitW = split ? easeInOutCubic(split.back ? 1 - splitT : splitT) : 1;
+    if (split && split.places.length === p.length && splitT < 1) {
+      for (let i = 0; i < p.length; i++) p[i] = split.places[i] + (target[i] - split.places[i]) * splitW;
+      reshaped = moving = true;
+    } else if (split?.back && split.places.length === p.length) {
+      for (let i = 0; i < p.length; i++) p[i] = split.places[i];
+      reshaped = true;
+    } else if (rising?.flat && rising.flat.length === p.length && riseT < RISE_UP) {
       // rising out of the drawing: from its atoms on the page to their places in 3D
       const u = easeInOutCubic(riseT / RISE_UP);
       for (let i = 0; i < p.length; i++) p[i] = rising.flat[i] + (target[i] - rising.flat[i]) * u;
@@ -585,6 +722,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       reshaped = moving = true;
     }
     if (refinish) finish(fill.current);
+    // (each look's multiple bonds going over to one stick, or back to lines, as its setting changes: not at a jump)
+    for (const l of ["primary", "secondary"] as const) {
+      const to = style[l].multipleBonds === "one" ? 1 : 0;
+      const at = oneLevel.current[l];
+      if (at === to) continue;
+      const next = follow(at, to, step, LOOK_TAU);
+      oneLevel.current[l] = Math.abs(next - to) < 0.002 ? to : next;
+      reshaped = moving = true;
+    }
     // (as high as it reaches - or where a turn of several put it)
     const height = m.at.z ?? solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * fill.current;
     // where it stands: put back by an undo, it goes there rather than jumps
@@ -609,6 +755,19 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         p.set(target);
         reshaped = true;
         props.onRisen?.();
+      }
+    }
+    // splitting off the one it is a copy of: from over it to its own place - or back over it, and gone
+    else if (split && (splitT < 1 || split.back)) {
+      const w = splitT < 1 ? splitW : 0;
+      shown.current = new THREE.Vector3(split.at.x + (goal.x - split.at.x) * w, split.at.y + (goal.y - split.at.y) * w, goal.z);
+      moving = true;
+      if (split.back && splitT >= 1 && leaving) {
+        // (back over the one it came from, the same as it: gone at once, unseen)
+        placed.current.visible = false;
+        leaving();
+        invalidate();
+        return;
       }
     }
     // (a drag - its own, or the drawing's it is selected with - it follows at once)
@@ -667,7 +826,115 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (atomsMat.current.opacity !== seenBy) {
       atomsMat.current.opacity = seenBy;
       if (bondsMat.current) bondsMat.current.opacity = seenBy;
+      bentMat.opacity = seenBy;
       if (ribbonMat.current) ribbonMat.current.opacity = seenBy;
+    }
+    // the style's atoms' colours, its lines and its depth fade - gone over to as the style or the look changes, never
+    // in a jump (the maintainer's rule: no abrupt changes)
+    {
+      const P = style.primary;
+      const S = style.secondary;
+      const ff = fill.current;
+      const cols = atomCols.current;
+      const recoloured = !!cols && (recolour.current || refinish);
+      if (cols && recoloured) {
+        let going = false;
+        for (let k = 0; k < cols.length; k++) {
+          const to = atomGoals.primary[k] + (atomGoals.secondary[k] - atomGoals.primary[k]) * ff;
+          if (cols[k] === to) continue;
+          cols[k] = follow(cols[k], to, step, LOOK_TAU);
+          if (cols[k] !== to) going = true;
+        }
+        for (let i = 0; i < n; i++) atoms.current.setColorAt(i, colour.fromArray(cols, 3 * i));
+        if (atoms.current.instanceColor) atoms.current.instanceColor.needsUpdate = true;
+        recolour.current = going;
+        if (going) moving = true;
+      }
+      const wantWidth = P.outline + (S.outline - P.outline) * ff;
+      const wantFade = P.depthFade + (S.depthFade - P.depthFade) * ff;
+      const byAtom = (l: Style3D["primary"]) => (l.bondColouring === "byAtom" ? 1 : 0);
+      const wantByAtom = byAtom(P) + (byAtom(S) - byAtom(P)) * ff;
+      const circlesOf = (l: Style3D["primary"]) => {
+        const k = ballCircles(l);
+        return [k >= 2 ? 1 : 0, k >= 2 ? 1 : 0, k >= 3 ? 1 : 0] as const;
+      };
+      const cp = circlesOf(P);
+      const cs = circlesOf(S);
+      const wantCircles = [0, 1, 2].map((a) => cp[a] + (cs[a] - cp[a]) * ff) as [number, number, number];
+      const wantCircleWidth = P.ballLinesWidth + (S.ballLinesWidth - P.ballLinesWidth) * ff;
+      const was = lineLook.current ?? { width: wantWidth, fade: wantFade, byAtom: wantByAtom, circles: wantCircles, circleWidth: wantCircleWidth };
+      const ll = {
+        width: follow(was.width, wantWidth, step, LOOK_TAU),
+        fade: follow(was.fade, wantFade, step, LOOK_TAU),
+        byAtom: follow(was.byAtom, wantByAtom, step, LOOK_TAU),
+        circles: was.circles.map((c, a) => follow(c, wantCircles[a], step, LOOK_TAU)) as [number, number, number],
+        circleWidth: follow(was.circleWidth, wantCircleWidth, step, LOOK_TAU),
+      };
+      if (ll.width !== wantWidth || ll.fade !== wantFade || ll.byAtom !== wantByAtom || ll.circleWidth !== wantCircleWidth || ll.circles.some((c, a) => c !== wantCircles[a])) moving = true;
+      lineLook.current = ll;
+      // (the lines on the balls: their circles, width and colour - the screen's sRGB)
+      const bl = ballLinesOf(atomsMat.current);
+      bl.amount.value.set(...ll.circles);
+      // (in the balls' own units - their radii their instances' scale - so that they grow and shrink with the molecule)
+      bl.width.value = ll.circleWidth * WORLD_PER_ANGSTROM;
+      bl.least.value = LINE_LEAST_PX;
+      bl.colour.value.set(P.ballLinesColor).lerp(colour.set(S.ballLinesColor), ff).convertLinearToSRGB();
+      // (the sticks coloured by their atoms: each line's two ends' colours, as the atoms are coloured now)
+      const bm = bonds.current;
+      if (bm && bondsMat.current) {
+        byAtomOf(bondsMat.current).value = ll.byAtom;
+        const ends = bm.geometry.getAttribute("bondEndA") as THREE.InstancedBufferAttribute | undefined;
+        if (ll.byAtom > 0 && cols && (recoloured || !ends || ends.count !== lineCount)) {
+          const a = new Float32Array(3 * lineCount);
+          const b = new Float32Array(3 * lineCount);
+          for (let k = 0; k < lineCount; k++) {
+            const bond = drawn.bonds[lineBond[k]];
+            if (!bond) continue;
+            for (let c = 0; c < 3; c++) {
+              a[3 * k + c] = cols[3 * bond.a1 + c];
+              b[3 * k + c] = cols[3 * bond.a2 + c];
+            }
+          }
+          bm.geometry.setAttribute("bondEndA", new THREE.InstancedBufferAttribute(a, 3));
+          bm.geometry.setAttribute("bondEndB", new THREE.InstancedBufferAttribute(b, 3));
+          if (bent && bentGeometry) {
+            const pick = (from: Float32Array) => Float32Array.from(bent.flatMap((k) => [from[3 * k], from[3 * k + 1], from[3 * k + 2]]));
+            bentGeometry.setAttribute("bondEndA", new THREE.InstancedBufferAttribute(pick(a), 3));
+            bentGeometry.setAttribute("bondEndB", new THREE.InstancedBufferAttribute(pick(b), 3));
+          }
+        }
+      }
+      const zoom = (camera as THREE.OrthographicCamera).zoom || 1;
+      // (where the molecule's front and back stand in the camera's depth: what fades between)
+      const centre = placed.current.getWorldPosition(fadeCentre).applyMatrix4(camera.matrixWorldInverse).z;
+      // (a screen pixel in the camera's space at the molecule: an orthographic camera's - the canvas's - its zoom's;
+      // a perspective one's - Settings' preview - as far off as the molecule stands)
+      const pc = camera as THREE.PerspectiveCamera;
+      const perPx = pc.isPerspectiveCamera ? (2 * Math.max(-centre, 1e-6) * Math.tan((pc.fov * Math.PI) / 360)) / Math.max(size.height, 1) : 1 / zoom;
+      const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x;
+      const fades = [fadeOf(atomsMat.current, "atoms"), ...(bondsMat.current ? [fadeOf(bondsMat.current, "bonds")] : []), outlines.atoms.fade, outlines.bonds.fade, outlines.bent.fade];
+      for (const u of fades) {
+        u.fadeNear.value = centre + reach;
+        u.fadeFar.value = centre - reach;
+        u.fadeAmount.value = ll.fade;
+      }
+      const pairs: [THREE.InstancedMesh | null, THREE.InstancedMesh | null, ReturnType<typeof outlineMaterial>][] = [
+        [atomLines.current, atoms.current, outlines.atoms],
+        [bondLines3d.current, bonds.current, outlines.bonds],
+        [bentLines3d.current, bentSticks.current, outlines.bent],
+      ];
+      for (const [lines, of, o] of pairs) {
+        if (!lines) continue;
+        lines.visible = ll.width > 1e-5 && !!of?.visible;
+        if (!lines.visible || !of) continue;
+        // (the balls' or sticks' own instances: where they are, it is)
+        if (lines.instanceMatrix !== of.instanceMatrix) lines.instanceMatrix = of.instanceMatrix;
+        lines.count = of.count;
+        // (in the molecule's units, as large as it is drawn now - never under the least pixels)
+        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x, perPx);
+        o.material.color.set(P.outlineColor).lerp(colour.set(S.outlineColor), ff);
+        o.material.opacity = seenBy;
+      }
     }
     // the atom under the pointer, and the chosen atoms' rings
     for (const [i, s] of swell.current) {
@@ -754,7 +1021,16 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       }
     }
     const linesNow = () => {
-      const all = bondLines(drawn, p, bondR);
+      // (each look's ends - going over from one to the other, line by line)
+      const f = fill.current;
+      // (a look's lines - as one stick, as lines, or going over from one to the other: the side lines going into the middle one)
+      const linesOf3d = (l: "primary" | "secondary") => {
+        const k = oneLevel.current[l];
+        const ends = solid.ends[l];
+        return k <= 0 ? bondLines(drawn, p, bondR, ends) : k >= 1 ? bondLines(drawn, p, bondR, ends, true) : linesBetween(bondLines(drawn, p, bondR, ends), bondLines(drawn, p, bondR, ends, true), k);
+      };
+      const same = solid.ends.primary === solid.ends.secondary && oneLevel.current.primary === oneLevel.current.secondary;
+      const all = same || f <= 0 ? linesOf3d("primary") : f >= 1 ? linesOf3d("secondary") : linesBetween(linesOf3d("primary"), linesOf3d("secondary"), f);
       if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]]));
       if (leaves) all.forEach((l, k) => (l.r *= keptOf(drawn.bonds[lineBond[k]])));
       return all;
@@ -764,8 +1040,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       placeAtoms(atoms.current, p, radius, 0);
       if (bonds.current) {
         lines = linesNow();
-        placeBonds(bonds.current, lines, 0);
+        // (those that curve drawn apart: none of them among the straight)
+        placeBonds(bonds.current, isBent ? lines.map((l, k) => (isBent[k] ? { ...l, r: 0 } : l)) : lines, 0);
         bonds.current.visible = bondsShown;
+        if (bent && bentSticks.current && bentGeometry) {
+          const these = bent.map((k) => lines![k]);
+          placeBonds(bentSticks.current, these, 0);
+          bentGeometry.setAttribute("stickBend", new THREE.InstancedBufferAttribute(stickBends(these), 4));
+          bentSticks.current.visible = bondsShown;
+        }
       }
     }
     // its ribbons: as large as the look it is going over to has them - none,
@@ -789,6 +1072,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const lightOn = outPx > 0.02 || holdShown;
     atomHull.current.visible = lightOn;
     if (bondHull.current) bondHull.current.visible = lightOn && bondsShown;
+    if (bentHull.current) bentHull.current.visible = lightOn && bondsShown;
     if (ribbonHull.current) ribbonHull.current.visible = lightOn && ribbonsShown;
     if (lightOn && (reshaped || relit || dirty.current || holdShown)) {
       const w = outPx * px;
@@ -796,21 +1080,26 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       placeAtoms(atomHull.current, p, radius, holdShown ? (i) => Math.max(w, wide * h[i]) : w);
       if (bondHull.current) {
         const all = lines ?? linesNow();
-        placeBonds(
-          bondHull.current,
-          all,
-          holdShown
-            ? (k) => {
-                const b = drawn.bonds[lineBond[k]];
-                return Math.max(w, wide * Math.min(h[b.a1], h[b.a2]));
-              }
-            : w,
-        );
+        const extra = holdShown
+          ? (k: number) => {
+              const b = drawn.bonds[lineBond[k]];
+              return Math.max(w, wide * Math.min(h[b.a1], h[b.a2]));
+            }
+          : w;
+        placeBonds(bondHull.current, isBent ? all.map((l, k) => (isBent[k] ? { ...l, r: 0 } : l)) : all, extra);
+        // (round a curving line, curving as it does)
+        if (bent && bentHull.current && bentHullGeometry) {
+          const these = bent.map((k) => all[k]);
+          const theirs = typeof extra === "number" ? extra : (j: number) => extra(bent[j]);
+          placeBonds(bentHull.current, these, theirs);
+          bentHullGeometry.setAttribute("stickBend", new THREE.InstancedBufferAttribute(stickBends(these, theirs), 4));
+        }
       }
       const k = 1 - (1 - outlineAt(level.current, OUTLINE_BLUE)) * (1 - SELECTED_BLUE * Math.max(selLevel.current, holdMost));
       const colour = blue(k);
       (atomHull.current.material as THREE.MeshBasicMaterial).color.copy(colour);
       if (bondHull.current) (bondHull.current.material as THREE.MeshBasicMaterial).color.copy(colour);
+      bentHullMat.color.copy(colour);
       // (a ribbon's outline: its band pushed out all round - as wide as the selection's while a press is held)
       hullMat.color.copy(colour);
       (hullMat.userData.grow as { value: number }).value = holdShown ? Math.max(w, wide * holdMost) : w;
@@ -919,6 +1208,51 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       }
     }
     if (reshaped || fading || dirty.current) drawMeasures(p);
+    // the measurements' values: on their points - or, where one is in the
+    // way of another, off it and clear of it, kept there while that is
+    // clear (valueSpots) - and glided where they go, as the stereo labels are
+    const valuesPlaced: LabelBox[] = [];
+    if (labels.current.size) {
+      const w = new THREE.Vector3();
+      // (a value's chip grows and shrinks with the page, from its middle: its size on the screen is its own times that)
+      const chipScale = pageScale(camera.zoom || 1);
+      const values: (ValueAt & { id: number; el: HTMLDivElement })[] = [];
+      for (const [id, l] of labels.current) {
+        const level = measureLevels.current.get(id);
+        const parent = l.anchor?.parent;
+        if (!l.anchor || !parent || !l.el || !level || level.v < 0.5) continue;
+        // (each value's size read when its text is new)
+        const text = l.el.textContent ?? "";
+        let box = valueSizes.current.get(id);
+        if (!box || box.text !== text) {
+          box = { text, w: l.el.offsetWidth, h: l.el.offsetHeight };
+          valueSizes.current.set(id, box);
+        }
+        parent.updateWorldMatrix(true, false);
+        const onScreen = (x: number, y: number, z: number) => {
+          parent.localToWorld(w.set(x, y, z)).project(camera);
+          return { x: ((w.x + 1) / 2) * size.width, y: ((1 - w.y) / 2) * size.height };
+        };
+        const o = onScreen(l.anchor.position.x, l.anchor.position.y, l.anchor.position.z);
+        const own = level.m.atoms.map((i) => onScreen(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
+        // (the way off: square to a distance's line, out from an angle's atoms)
+        const way =
+          own.length === 2
+            ? { x: own[0].y - own[1].y, y: own[1].x - own[0].x }
+            : { x: o.x - own.reduce((t, q) => t + q.x, 0) / own.length, y: o.y - own.reduce((t, q) => t + q.y, 0) / own.length };
+        values.push({ o, half: { x: (box.w / 2) * chipScale, y: (box.h / 2) * chipScale }, way: Math.hypot(way.x, way.y) > 1e-9 ? way : { x: 0, y: -1 }, was: valuesAbout.current.get(id), id, el: l.el });
+      }
+      const goals = valueSpots(values);
+      values.forEach((v, k) => {
+        const about = v.was ? spotFollowed(v.was, goals[k], step, STEREO_TAU) : goals[k];
+        valuesAbout.current.set(v.id, about);
+        if (about.a !== goals[k].a || about.r !== goals[k].r) moving = true;
+        const dx = about.r * Math.cos(about.a);
+        const dy = about.r * Math.sin(about.a);
+        v.el.style.transform = dx || dy ? `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)` : "";
+        valuesPlaced.push({ x: v.o.x + dx, y: v.o.y + dy, hx: v.half.x, hy: v.half.y });
+      });
+    }
     // the stereo labels, on their atom - a double bond's, at its middle - and
     // set off from it on the screen, as the drawing's are: clear of its ball,
     // the widest way out between its bonds as it is seen now - or the
@@ -955,20 +1289,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             const shownBonds = fb ? drawn.bonds.filter((_, i) => there.current[i] > 0.5) : m.bonds;
             for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (bondR * g) / px });
           }
-          // (the measurements' values, where they are written now - each
-          // value's size read when its text is new: it is written in a
-          // root of its own, after this one's, so not before it shows)
-          for (const [id, v] of labels.current) {
-            if (!v.anchor?.parent || !v.el || (measureLevels.current.get(id)?.v ?? 0) < 0.5) continue;
-            const text = v.el.textContent ?? "";
-            let size = valueSizes.current.get(id);
-            if (!size || size.text !== text) {
-              size = { text, w: v.el.offsetWidth, h: v.el.offsetHeight };
-              valueSizes.current.set(id, size);
-            }
-            const c = onScreen(v.anchor.parent, v.anchor.position.x, v.anchor.position.y, v.anchor.position.z);
-            placedLabels.push({ x: c.x, y: c.y, hx: size.w / 2, hy: size.h / 2 });
-          }
+          // (the measurements' values, where they are written now: placed above)
+          placedLabels.push(...valuesPlaced);
         }
         const o = onScreen(parent, at.x, at.y, at.z);
         const way = widestWay(mark.around.map((i) => Math.atan2(balls![i].y - o.y, balls![i].x - o.x)));
@@ -980,7 +1302,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         // (every atom near it but its own - a double bond's two among them)
         const own = mark.atoms.length === 1 ? mark.atoms[0] : -1;
         const others = balls.filter((b, i) => i !== own && b.r > 0 && Math.hypot(b.x - o.x, b.y - o.y) < reach + 4 * half.x + b.r);
-        const spot = labelSpot(o, reach, half, way, others, placedLabels, sticks);
+        const best = labelSpot(o, reach, half, way, others, placedLabels, sticks);
+        // (not there at once where its best way changes as the molecule turns: glided round the atom to it, as everything moves)
+        const goal = { a: Math.atan2(best.y - o.y, best.x - o.x), r: Math.hypot(best.x - o.x, best.y - o.y) };
+        const was = stereoSpots.current.get(mark.key);
+        const about = was ? spotFollowed(was, goal, step, STEREO_TAU) : goal;
+        stereoSpots.current.set(mark.key, about);
+        if (about.a !== goal.a || about.r !== goal.r) moving = true;
+        const spot = { ...best, x: o.x + about.r * Math.cos(about.a), y: o.y + about.r * Math.sin(about.a) };
         // (the next keeps a little way off it, not just clear: two side by
         // side read as one, and as either atom's)
         placedLabels.push({ ...spot, hx: spot.hx + STEREO_APART * font, hy: spot.hy + STEREO_APART * font });
@@ -1042,7 +1371,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
 
   // its hollows shaded and its shadow cast, as it stands now (after the frame
   // above has placed its atoms)
-  useShading3d({ turned, atoms, bonds, ribbon, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill });
+  useShading3d({ turned, atoms, bonds, ribbon, atomsMat, bondsMat, m: drawn, solid, frame: frameOf(solid, frame), style, fill, bent: { geometry: bentGeometry, lines: bent } });
 
   /** The atoms' and bonds' finish, `f` of the way from the primary look's to the secondary's. */
   const finish = (f: number) => {
@@ -1060,6 +1389,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       b.roughness = atomsMat.current.roughness;
       b.metalness = atomsMat.current.metalness;
       b.color.set(P.bondColor).lerp(colour.set(S.bondColor), f);
+      bentMat.roughness = b.roughness;
+      bentMat.metalness = b.metalness;
+      bentMat.color.copy(b.color);
     }
   };
 
@@ -1110,14 +1442,22 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           renderOrder={OVER_PAGE}
           frustumCulled={false}
           receiveShadow
+          // (each atom met where its sphere is, worked out exactly, not by its triangles: components/raycast3d)
+          raycast={function (this: THREE.InstancedMesh, rc, hits) {
+            raycastSpheres(this, rc, hits);
+          }}
           onPointerMove={(e) => {
             e.stopPropagation();
             if (e.instanceId != null && e.instanceId !== hoverAtom) setHoverAtom(e.instanceId);
           }}
           onPointerOut={() => setHoverAtom(null)}
         >
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
+        </instancedMesh>
+        {/* the style's line round every ball (utils/outlineMaterial) */}
+        <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
+          <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
         </instancedMesh>
         {lineCount > 0 && (
           <instancedMesh
@@ -1126,6 +1466,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             renderOrder={OVER_PAGE}
             frustumCulled={false}
             receiveShadow
+            // (each bond met where its cylinder is, worked out exactly: components/raycast3d)
+            raycast={function (this: THREE.InstancedMesh, rc, hits) {
+              raycastCylinders(this, rc, hits);
+            }}
             // (pointed at, a bond says what a calculation found of it - where one did)
             onPointerMove={
               pairResults.length
@@ -1140,6 +1484,43 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
             <meshStandardMaterial ref={bondsMat} transparent opacity={1} />
           </instancedMesh>
+        )}
+        {lineCount > 0 && (
+          // (and round every stick)
+          <instancedMesh ref={bondLines3d} args={[undefined, outlines.bonds.material, lineCount]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
+            <cylinderGeometry args={[1, 1, 1, style.bondSegments]} />
+          </instancedMesh>
+        )}
+        {bent && bentGeometry && (
+          // (the lines that curve in to a lone atom, apart - with the rings a curve needs - and the line round them)
+          <>
+            <instancedMesh
+              key={bent.length}
+              ref={bentSticks}
+              args={[bentGeometry, bentMat, bent.length]}
+              renderOrder={OVER_PAGE}
+              frustumCulled={false}
+              receiveShadow
+              onPointerMove={
+                pairResults.length
+                  ? (e) => {
+                      const b = e.instanceId != null ? lineBond[bent[e.instanceId]] : undefined;
+                      if (b != null && b !== hoverBond) setHoverBond(b);
+                    }
+                  : undefined
+              }
+              onPointerOut={pairResults.length ? () => setHoverBond(null) : undefined}
+            />
+            <instancedMesh
+              key={`l${bent.length}`}
+              ref={bentLines3d}
+              args={[bentGeometry, outlines.bent.material, bent.length]}
+              renderOrder={OVER_PAGE}
+              frustumCulled={false}
+              visible={false}
+              raycast={() => {}}
+            />
+          </>
         )}
         {runs.length > 0 && (
           <>
@@ -1193,7 +1574,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           visible={false}
           raycast={() => {}}
         >
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial transparent opacity={1} depthWrite={false} toneMapped={false} />
         </instancedMesh>
         {lineCount > 0 && (
@@ -1209,12 +1590,23 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <meshBasicMaterial transparent opacity={1} depthWrite={false} toneMapped={false} />
           </instancedMesh>
         )}
+        {bent && bentHullGeometry && (
+          <instancedMesh
+            key={`h${bent.length}`}
+            ref={bentHull}
+            args={[bentHullGeometry, bentHullMat, bent.length]}
+            renderOrder={OVER_PAGE - 1}
+            frustumCulled={false}
+            visible={false}
+            raycast={() => {}}
+          />
+        )}
         <mesh ref={linkedHull} renderOrder={OVER_PAGE - 1} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial color={blue(LINKED_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
         </mesh>
         <instancedMesh ref={markedHull} args={[undefined, undefined, n]} renderOrder={OVER_PAGE - 1} frustumCulled={false} visible={false} raycast={() => {}}>
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial color={blue(LINKED_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
         </instancedMesh>
         {card && (
@@ -1232,7 +1624,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           visible={false}
           raycast={() => {}}
         >
-          <sphereGeometry args={[1, style.ballSegments, style.ballSegments]} />
+          <sphereGeometry args={[1, segments, segments]} />
           <meshBasicMaterial color={blue(CHOSEN_BLUE)} transparent opacity={1} depthWrite={false} toneMapped={false} />
         </instancedMesh>
         {m.bonds.length > 0 && (
@@ -1320,7 +1712,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             els={els}
             frame={frameOf(solid, frame)}
             on={!!props.overlay}
-            radius={(style[look].atoms === "balls" ? style[look] : style.primary).bondRadius * WORLD_PER_ANGSTROM}
+            radius={(style[look].atoms !== "space" ? style[look] : style.primary).bondRadius * WORLD_PER_ANGSTROM}
             weights={shares}
           />
         )}
@@ -1361,10 +1753,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {/* (rising out of its drawing, it shows its frames once it has risen) */}
       {/* (read from a calculation, it says what the calculation was - a
           single geometry's only when it is pointed at) */}
-      {(solid.frames.length > 1 || props.onRemake || m.calc || m.edited) && !props.rising && (
+      {(solid.frames.length > 1 || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
-          {/* (one of a stack: its stack's chip says which, not its own - StackChip3D) */}
-          {(solid.frames.length > 1 || m.calc) && !props.stacked ? (
+          {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
+          {(solid.frames.length > 1 || m.calc || named3d(m)) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
@@ -1385,7 +1777,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               results={m.calc?.results}
               unread={m.calc?.unread}
               made={m.made?.how}
+              said={m.said}
               area={gl.domElement}
+              {...(named3d(m) ? { title: m.title } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>
@@ -1438,12 +1832,12 @@ function grownMaterial(): THREE.MeshBasicMaterial {
   const mat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthWrite: false, toneMapped: false });
   const grow = { value: 0 };
   mat.userData.grow = grow;
-  mat.onBeforeCompile = (shader) => {
+  menoShader(mat, "grown", (shader) => {
     shader.uniforms.grow = grow;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nuniform float grow;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\ntransformed += normalize(normal) * grow;");
-  };
+  });
   return mat;
 }
 
@@ -1470,6 +1864,7 @@ function fillGeometry(g: THREE.BufferGeometry, m: { positions: Float32Array; nor
 const mtx = new THREE.Matrix4();
 const toLocal = new THREE.Matrix4();
 const colour = new THREE.Color();
+const fadeCentre = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 const q = new THREE.Quaternion();
 const scale = new THREE.Vector3();
@@ -1554,7 +1949,7 @@ function MeasureField({ text, onSet, onDone }: { text: string; onSet: (value: nu
     field.current?.focus();
     field.current?.select();
   }, []);
-  const read = () => Number(value.trim().replace("\u2212", "-").replace(",", "."));
+  const read = () => typedValue(value);
   return (
     <span className="inline-flex items-baseline">
       <input

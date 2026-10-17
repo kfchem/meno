@@ -1,9 +1,10 @@
 import * as THREE from "three";
+import { bentPieces } from "./stickBend";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
+import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -95,6 +96,69 @@ export function coveredLength(box: LabelBox, s: Stick): number {
     if (t0 >= t1) return 0;
   }
   return (t1 - t0) * Math.hypot(dx, dy);
+}
+
+/** A label's place about its atom on the screen: the way it stands off it (radians, screen y down) and how far, in pixels. */
+export type SpotAbout = { a: number; r: number };
+
+/**
+ * A label's place about its atom, `dt` seconds on from `was` toward `goal`,
+ * following with time constant `tau`: round the atom the shorter way and
+ * out or in together, so that a label whose best way changes as the
+ * molecule turns glides round to it - never across the atom, never past
+ * it. There once within a hundredth of a pixel and of a radian.
+ */
+export function spotFollowed(was: SpotAbout, goal: SpotAbout, dt: number, tau: number): SpotAbout {
+  // (the turn still to go, the shorter way round: within half a turn either way)
+  let turn = (goal.a - was.a) % (2 * Math.PI);
+  if (turn > Math.PI) turn -= 2 * Math.PI;
+  if (turn < -Math.PI) turn += 2 * Math.PI;
+  const keep = Math.exp(-Math.max(dt, 0) / tau);
+  const a = Math.abs(turn * keep) < 0.01 ? goal.a : goal.a - turn * keep;
+  const r = Math.abs((was.r - goal.r) * keep) < 0.01 ? goal.r : goal.r + (was.r - goal.r) * keep;
+  return { a, r };
+}
+
+/** How far a measurement's value may run into another before it is in its way, in pixels; and how clear its own point must be for it to go back there - so that two side by side, the view turning, do not trade places frame by frame. */
+export const VALUE_SLACK_PX = 3;
+/** How far off its point a value moved off it stands, in pixels. */
+export const VALUE_OFF_PX = 3;
+
+/** A measurement's value on the screen: its point (`o`), its half size, the way off it it goes where it must (a distance's square to its line, an angle's out from its atoms), and where it stood last about its point, if it has been placed. */
+export type ValueAt = { o: { x: number; y: number }; half: { x: number; y: number }; way: { x: number; y: number }; was?: SpotAbout };
+
+/**
+ * Where the measurements' values are to stand about their points, in
+ * order, each clear of those before it: on its point while that is clear -
+ * running into one before it by no more than VALUE_SLACK_PX; one moved off
+ * it stays where it is while that is clear, and goes back once its point is
+ * clear by VALUE_SLACK_PX; else off it, the way it goes, clear of them
+ * (labelSpot). Two close together, the view turning slowly, keep their
+ * places rather than trade them frame by frame.
+ */
+export function valueSpots(values: readonly ValueAt[]): SpotAbout[] {
+  const placed: LabelBox[] = [];
+  const boxAt = (v: ValueAt, s: SpotAbout): LabelBox => ({ x: v.o.x + s.r * Math.cos(s.a), y: v.o.y + s.r * Math.sin(s.a), hx: v.half.x, hy: v.half.y });
+  // (how far a box runs into those placed: the most of any, along its lesser way)
+  const into = (b: LabelBox) => {
+    let most = -Infinity;
+    for (const p of placed) most = Math.max(most, Math.min(p.hx + b.hx - Math.abs(p.x - b.x), p.hy + b.hy - Math.abs(p.y - b.y)));
+    return most;
+  };
+  return values.map((v) => {
+    const home: SpotAbout = { a: v.was?.a ?? Math.atan2(v.way.y, v.way.x), r: 0 };
+    const off = v.was && v.was.r > 0;
+    let goal: SpotAbout;
+    if (off && into(boxAt(v, home)) < -VALUE_SLACK_PX) goal = home;
+    else if (off && into(boxAt(v, v.was!)) <= VALUE_SLACK_PX) goal = v.was!;
+    else if (!off && into(boxAt(v, home)) <= VALUE_SLACK_PX) goal = home;
+    else {
+      const spot = labelSpot(v.o, VALUE_OFF_PX, v.half, v.way, [], placed);
+      goal = { a: Math.atan2(spot.y - v.o.y, spot.x - v.o.x), r: Math.hypot(spot.x - v.o.x, spot.y - v.o.y) };
+    }
+    placed.push(boxAt(v, goal));
+    return goal;
+  });
 }
 
 /**
@@ -198,6 +262,13 @@ export type Solid = {
   extent: Record<Look, Float32Array>;
   /** How far it reaches from its centre in any frame, all each look draws. */
   reach: Record<Look, number>;
+  /**
+   * How each look ends a double or triple bond's lines at each atom - where
+   * it is lone, and its ball thinner than they reach, the look's
+   * `doubleEnds` or `tripleEnds`; else none (`endsAt`). None at all, for a
+   * look whose balls cover their lines' ends.
+   */
+  ends: Record<Look, (BondEnds | null)[] | null>;
 };
 
 // (by its atoms, which a move, a new look or a measurement leave as they were)
@@ -237,7 +308,19 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
   const frames = [first, ...(m.frames ?? []).filter((f) => f.length === 3 * n)].map((f) => placesOf(f, n));
   const k = WORLD_PER_ANGSTROM;
   const hidden = { primary: hiddenAtoms(m, style.primary), secondary: hiddenAtoms(m, style.secondary) };
-  const radiiOf = (look: Look) => Float32Array.from(m.atoms, (a, i) => (hidden[look][i] ? 0 : atomRadius(a.el, style[look]) * k));
+  const ends = { primary: endsAt(m, style.primary), secondary: endsAt(m, style.secondary) };
+  const radiiOf = (look: Look) =>
+    Float32Array.from(m.atoms, (a, i) => {
+      if (hidden[look][i]) return 0;
+      const r = atomRadius(a.el, style[look]);
+      const end = ends[look]?.[i];
+      if (!end) return r * k;
+      // (a lone atom a double or triple bond ends at: as large as takes its lines' ends in, for a joint; a little larger than a stick, for a curve)
+      const order = linesOf(m.bonds.find((b) => b.a1 === i || b.a2 === i)?.order ?? 1);
+      const bondR = bondRadiusOf(style[look]);
+      // (a joint as large as takes the lines' ends in; with a curve, no ball of its own: as thin as the lines, inside where they turn)
+      return (end === "joint" ? Math.max(r, bondReach(order, bondR)) : end === "curve" ? BOND_LINE * bondR : r) * k;
+    });
   const radii = { primary: radiiOf("primary"), secondary: radiiOf("secondary") };
   const ribbons = { primary: ribbonsOf(m, style.primary), secondary: ribbonsOf(m, style.secondary) };
   // (a ribbon's backbone atoms reach as far as the ribbon does about them)
@@ -257,7 +340,7 @@ export function solidOf(m: Molecule3D, style: Style3D): Solid {
   };
   const hidesH = { primary: hidesCarbonHydrogens(m, style.primary), secondary: hidesCarbonHydrogens(m, style.secondary) };
   const counted = { primary: countedAtoms(m, style.primary, hidden.primary), secondary: countedAtoms(m, style.secondary, hidden.secondary) };
-  const solid = { frames, radii, hidden, hidesH, counted, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) } };
+  const solid = { frames, radii, hidden, hidesH, counted, ribbons, extent, reach: { primary: reachOf(extent.primary), secondary: reachOf(extent.secondary) }, ends };
   byStyle.set(style, { frames: m.frames, solid });
   return solid;
 }
@@ -444,13 +527,63 @@ export function atomAt(pose: Pose, eye: Eye | undefined, x: number, y: number): 
   return best;
 }
 
+/**
+ * How `look` ends a double or triple bond's lines at each atom: where the
+ * atom is lone - nothing else joins it - and its ball is thinner than the
+ * lines reach, the look's `doubleEnds` or `tripleEnds`; none elsewhere, and
+ * none where they are "plain". Null where it ends none - every atom's ball
+ * covers its lines' ends, or it draws no sticks - so that a look that does
+ * not show them costs nothing for them.
+ */
+export function endsAt(m: Pick<Molecule3D, "atoms" | "bonds">, look: MoleculeLook): (BondEnds | null)[] | null {
+  if (look.atoms === "space" || look.multipleBonds === "one" || (look.doubleEnds === "plain" && look.tripleEnds === "plain")) return null;
+  const lone = multipleEnds(m);
+  const bondR = bondRadiusOf(look);
+  let any = false;
+  const out = m.atoms.map((a, i) => {
+    const order = lone[i];
+    if (!order) return null;
+    const end = order === 2 ? look.doubleEnds : look.tripleEnds;
+    if (end === "plain" || atomRadius(a.el, look) >= bondReach(order, bondR)) return null;
+    any = true;
+    return end;
+  });
+  return any ? out : null;
+}
+
+/** Whether a look's double (2) or triple (3) bond ends can show at all: its sticks alone, or balls of the atoms such bonds end at thinner than its lines reach. */
+export function endsShow(look: MoleculeLook, order: 2 | 3): boolean {
+  if (look.atoms === "space" || look.multipleBonds === "one") return false;
+  const reach = bondReach(order, bondRadiusOf(look));
+  return ["C", "N", "O", "S"].some((el) => atomRadius(el, look) < reach);
+}
+
+/** For each atom a double or triple bond alone ends at, that bond's order; 0 for any other. */
+export function multipleEnds(m: Pick<Molecule3D, "atoms" | "bonds">): Uint8Array {
+  const degree = new Uint8Array(m.atoms.length);
+  const order = new Uint8Array(m.atoms.length);
+  for (const b of m.bonds) {
+    for (const i of [b.a1, b.a2]) {
+      degree[i] = Math.min(255, degree[i] + 1);
+      order[i] = linesOf(b.order) > 1 ? linesOf(b.order) : 0;
+    }
+  }
+  return order.map((o, i) => (degree[i] === 1 ? o : 0));
+}
+
 /** How many lines a bond is drawn with in 3D: a double bond two, a triple three, any other one. */
 export function linesOf(order: number): number {
   return order === 2 ? 2 : order === 3 ? 3 : 1;
 }
 
 /** One line of a bond: from where to where, how thick. */
-export type BondLine = { a: THREE.Vector3; b: THREE.Vector3; r: number };
+export type BondLine = {
+  a: THREE.Vector3;
+  b: THREE.Vector3;
+  r: number;
+  /** A line turning round at a lone atom (utils/stickBend): by how much it comes in there - from where it stands to the bond's axis - and whether that is its `b` end. */
+  bend?: { by: THREE.Vector3; atB: boolean };
+};
 
 /**
  * Each bond's lines, from atom to atom about the molecule's centre: a single
@@ -458,7 +591,7 @@ export type BondLine = { a: THREE.Vector3; b: THREE.Vector3; r: number };
  * side by side - in the plane of a neighbouring atom, so that a double bond
  * lies in the plane its atoms make.
  */
-export function bondLines(m: Molecule3D, places: Float32Array, r: number): BondLine[] {
+export function bondLines(m: Molecule3D, places: Float32Array, r: number, ends?: readonly (BondEnds | null)[] | null, one = false): BondLine[] {
   const near: number[][] = m.atoms.map(() => []);
   for (const b of m.bonds) {
     near[b.a1].push(b.a2);
@@ -472,6 +605,11 @@ export function bondLines(m: Molecule3D, places: Float32Array, r: number): BondL
     const n = linesOf(bond.order);
     if (n === 1) {
       lines.push({ a, b, r });
+      continue;
+    }
+    // (as one stick: the middle line - the first, of a double bond - as thick as a single bond, on the axis; the others there too, of no thickness)
+    if (one) {
+      for (let k = 0; k < n; k++) lines.push({ a: a.clone(), b: b.clone(), r: k === (n === 3 ? 1 : 0) ? r : 0 });
       continue;
     }
     const along = b.clone().sub(a).normalize();
@@ -500,15 +638,79 @@ export function bondLines(m: Molecule3D, places: Float32Array, r: number): BondL
     }
     const thin = r * BOND_LINE;
     const gap = r * BOND_GAP;
+    // (a lone atom at one end, its look ending the lines there its own way - utils/molecule3d `endsAt`; at both, as plain)
+    const endA = ends?.[bond.a1] ?? null;
+    const endB = ends?.[bond.a2] ?? null;
+    const end = endA && endB ? null : (endA ?? endB);
     const offsets = n === 2 ? [-gap / 2, gap / 2] : [-gap, 0, gap];
+    if (end === "main") {
+      // (one full stick on the axis, the others thinner beside it and short of both atoms)
+      lines.push({ a, b, r });
+      const side = r * (1 + MAIN_SPACE) + thin;
+      const len = a.distanceTo(b);
+      const cut = Math.min(len * MAIN_SHORT, len / 2 - 1e-6);
+      const a2 = a.clone().addScaledVector(along, cut);
+      const b2 = b.clone().addScaledVector(along, -cut);
+      for (const o of n === 2 ? [side] : [-side, side]) lines.push({ a: a2.clone().addScaledVector(across, o), b: b2.clone().addScaledVector(across, o), r: thin });
+      continue;
+    }
+    if (end === "fork") {
+      // (each from where it stands at the other atom straight to the lone one's centre)
+      for (const o of offsets) lines.push({ a: a.clone().addScaledVector(across, endA ? 0 : o), b: b.clone().addScaledVector(across, endB ? 0 : o), r: thin });
+      continue;
+    }
+    if (end === "curve") {
+      // (side by side, then turning round at the lone atom as one tube, a half circle: a double bond's two, a triple's
+      // outer two, its middle one running straight in - as thick throughout)
+      for (const o of offsets) {
+        const line: BondLine = { a: a.clone().addScaledVector(across, o), b: b.clone().addScaledVector(across, o), r: thin };
+        if (o !== 0) line.bend = { by: across.clone().multiplyScalar(-o), atB: !!endB };
+        lines.push(line);
+      }
+      continue;
+    }
     for (const o of offsets) lines.push({ a: a.clone().addScaledVector(across, o), b: b.clone().addScaledVector(across, o), r: thin });
   }
   return lines;
 }
 
+/**
+ * Lines `t` of the way from `from` to `to` - a bond's lines as one look
+ * ends them and as another does, line for line, as many either way - so
+ * that a molecule going over from one look to the other goes over smoothly:
+ * where, how thick, and how far a line curves in.
+ */
+export function linesBetween(from: readonly BondLine[], to: readonly BondLine[], t: number): BondLine[] {
+  if (t <= 0) return from as BondLine[];
+  if (t >= 1) return to as BondLine[];
+  return from.map((f, k) => {
+    const g = to[k];
+    const line: BondLine = { a: f.a.clone().lerp(g.a, t), b: f.b.clone().lerp(g.b, t), r: f.r + (g.r - f.r) * t };
+    if (f.bend || g.bend) {
+      const by = (f.bend?.by.clone() ?? new THREE.Vector3()).lerp(g.bend?.by ?? new THREE.Vector3(), t);
+      line.bend = { by, atB: (f.bend ?? g.bend)!.atB };
+    }
+    return line;
+  });
+}
+
+/** The lines of a molecule's bonds that curve in to a lone atom in either look (utils/stickBend): drawn apart. None, where no line does. */
+export function bentLinesOf(m: Molecule3D, solid: Solid): number[] | null {
+  const curves = (ends: Solid["ends"][Look]) => !!ends?.some((e) => e === "curve");
+  if (!curves(solid.ends.primary) && !curves(solid.ends.secondary)) return null;
+  const bent = new Set<number>();
+  for (const look of ["primary", "secondary"] as const) {
+    if (curves(solid.ends[look])) bondLines(m, solid.frames[0], 1, solid.ends[look]).forEach((l, k) => l.bend && bent.add(k));
+  }
+  return bent.size ? [...bent].sort((x, y) => x - y) : null;
+}
+
 /** A double or triple bond's lines: how thick, and how far apart, as a part of a single bond's radius. */
 const BOND_LINE = 0.62;
 const BOND_GAP = 2.4;
+/** A main stick's thinner ones: how far apart from it, as a part of its radius, and how much of the bond's length each end falls short by. */
+const MAIN_SPACE = 0.45;
+const MAIN_SHORT = 0.2;
 
 /** How far a bond's lines reach from its axis, a single bond's radius being `r`. */
 export function bondReach(order: number, r: number): number {
@@ -759,7 +961,7 @@ export function asSeen(
   turn?: Turn3D,
   frame?: number,
   placed = false,
-): { el: string; x: number; y: number; z: number; charge?: number; isotope?: number }[] {
+): { el: string; x: number; y: number; z: number; charge?: number; radical?: Molecule3D["atoms"][number]["radical"]; isotope?: number }[] {
   const n = m.atoms.length;
   const frames = [m.atoms.flatMap((a) => [a.x, a.y, a.z]), ...(m.frames ?? []).filter((f) => f.length === 3 * n)];
   const xyz = frames[Math.min(Math.max(0, Math.round(frame ?? 0)), frames.length - 1)];
@@ -774,7 +976,7 @@ export function asSeen(
       v.y += m.at.y / k;
       v.z += (m.at.z ?? 0) / k;
     }
-    return { el: a.el, x: v.x, y: v.y, z: v.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) };
+    return { el: a.el, x: v.x, y: v.y, z: v.z, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}), ...(a.isotope ? { isotope: a.isotope } : {}) };
   });
 }
 
@@ -797,17 +999,17 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
   const at = (i: number) => new THREE.Vector3(places[3 * i], places[3 * i + 1], places[3 * i + 2]).applyQuaternion(q);
   const balls = m.atoms.map((a, i) => {
     const s = seen(at(i));
-    return { kind: "ball" as const, c: { x: s.x, y: s.y }, r: radii[i] * s.k, color: atomColour(a.el), z: s.z };
+    return { kind: "ball" as const, c: { x: s.x, y: s.y }, r: radii[i] * s.k, color: atomColour(a.el, drawn), z: s.z };
   });
   // (an atom its look leaves out is not drawn, nor a bond to it)
   const left = solid.hidden[look];
   const shown = balls.filter((_, i) => !left[i]);
   const marks: (SolidMark & { z: number })[] = [...shown];
-  if (drawn.atoms === "balls") {
+  if (drawn.atoms !== "space") {
     const turned = new Float32Array(places.length);
     for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
     const bonds = bondsAt(m, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]);
-    for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM)) {
+    for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one").flatMap((l) => (l.r > 0 ? bentPieces(l) : []))) {
       const a = seen(line.a);
       const b = seen(line.b);
       // (which atoms the line runs between: the nearest at each end)
@@ -852,7 +1054,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
  * as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture that
  * leaves out what the molecule has misleads): its hydrogens on carbon
  * hidden; its file's hydrogens missing; its bond orders not known - its
- * own, or a biopolymer's chains' where they are drawn as atoms.
+ * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
+ * its file's it leaves out, their element not read.
  */
 export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
@@ -865,6 +1068,7 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
+    ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];
 }
 

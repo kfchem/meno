@@ -21,6 +21,7 @@ export function fromCtfile(ct: CtMolecule): Molecule {
     // an alias is the label the atom is drawn with: it is what the atom is
     // taken to be (an abbreviation, if the dictionary knows it)
     el: a.alias || a.symbol,
+    ...(a.alias ? { alias: true as const } : {}),
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
     ...(a.mass ? { isotope: a.mass } : {}),

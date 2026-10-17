@@ -89,7 +89,7 @@ async function draw(ask: PartAsk): Promise<DrawnPart> {
 }
 
 /** How many parts are drawn at once: PDFium draws one at a time, and the rest are on their way. */
-const AT_ONCE = 3;
+const AT_ONCE = 4;
 
 type Waiting = { ask: PartAsk; nearness: () => number; wanted: () => boolean; resolve: (d: DrawnPart | null) => void; reject: (e: unknown) => void };
 const queue: Waiting[] = [];

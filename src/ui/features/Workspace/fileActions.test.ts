@@ -14,8 +14,13 @@ import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
-import { useAppSettings } from "../../../lib/settings/appSettings";
 import { readStructures } from "../../../lib/io/structures";
+import type { OptionValues } from "../../../lib/options";
+import { readPdb } from "../../../lib/chem/pdb";
+import { writtenOf } from "./utils/written";
+import { WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { workspace3dOf } from "../../../lib/chem/workspaceStyle3d";
+import { DEFAULT_STYLE_3D_CHOICE } from "../../../lib/chem/style3d";
 
 const L = NOMINAL_BOND_LENGTH;
 const model: Model = {
@@ -49,6 +54,15 @@ describe("structureFileText", () => {
     expect(structureFileText(model, "/tmp/a.sdf", { version: "V3000" })).toContain("M  V30 BEGIN CTAB");
     const reaction = { ...model, arrows: [{ id: 1, x: 3 * L, y: 0, angle: 0, length: 2 * L }] };
     expect(structureFileText(reaction, "/tmp/r.rxn", { version: "V3000" }).startsWith("$RXN V3000")).toBe(true);
+  });
+
+  it("writes an SD file's records in 3D in V3000 too where V3000 is asked for - and offers the choice with molecules in 3D alone", async () => {
+    const water = { atoms: [{ el: "O", x: 0, y: 0, z: 0 }, { el: "H", x: 0.96, y: 0, z: 0 }, { el: "H", x: -0.24, y: 0.93, z: 0 }], bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 0, a2: 2, order: 1 }], at: { x: 0, y: 0 } };
+    const page = { atoms: [], bonds: [], molecules3d: [water] } as unknown as Parameters<typeof structureFileText>[0];
+    expect(structureFileText(page, "/tmp/w.sdf", { version: "V3000" })).toContain("M  V30 BEGIN CTAB");
+    expect(structureFileText(page, "/tmp/w.sdf", {})).not.toContain("M  V30");
+    const { optionsFor, WRITERS } = await import("../../../lib/io/writers");
+    expect(optionsFor(WRITERS.sdf, { drawing: false, molecules3d: true }).map((o) => o.id)).toContain("version");
   });
 
   it("writes an SD file's molecule in 3D past 999 atoms in V3000, every frame of it, and it opens again in 3D", () => {
@@ -153,10 +167,10 @@ describe("Export", () => {
     }
   });
 
-  it("shows a writer's options about what the page holds: no version for molecules in 3D alone, no frames for a drawing alone", () => {
+  it("shows a writer's options about what the page holds: an SD file's version for molecules in 3D alone too, no frames for a drawing alone", () => {
     const ids = (holds: { drawing: boolean; molecules3d: boolean }) => optionsFor(WRITERS.sdf, holds).map((o) => o.id);
     expect(ids({ drawing: true, molecules3d: true })).toEqual(["version", "frames"]);
-    expect(ids({ drawing: false, molecules3d: true })).toEqual(["frames"]);
+    expect(ids({ drawing: false, molecules3d: true })).toEqual(["version", "frames"]);
     expect(ids({ drawing: true, molecules3d: false })).toEqual(["version"]);
     expect(optionsFor(WRITERS.svg, { drawing: true, molecules3d: true })).toEqual([]);
   });
@@ -235,17 +249,13 @@ describe("drawingSvg", () => {
       bonds: [1, 2, 3, 4].map((h) => ({ a1: 0, a2: h, order: 1 })),
       at: { x: 6 * L, y: 0 },
     };
-    const was = useAppSettings.getState().style3d;
-    try {
-      expect(drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996)).not.toContain("hidden");
-      useAppSettings.setState({ style3d: { ...was, looks: { [was.primary]: { hydrogens: "carbonHidden" } } } });
-      const hidden = drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996);
-      expect(hidden).toContain(">C\u2013H hidden</text>");
-      // (its other look, the secondary, keeps them)
-      expect(drawingSvg({ ...model, molecules3d: [{ ...methane, look: "secondary" as const }] }, aromatic, ACS_1996)).not.toContain("hidden");
-    } finally {
-      useAppSettings.setState({ style3d: was });
-    }
+    expect(drawingSvg({ ...model, molecules3d: [methane] }, aromatic, ACS_1996)).not.toContain("hidden");
+    // (in a workspace whose primary style hides them)
+    const hiding = { ...aromatic, docStyle3d: workspace3dOf({ ...DEFAULT_STYLE_3D_CHOICE, looks: { balls: { hydrogens: "carbonHidden" } } }) };
+    const hidden = drawingSvg({ ...model, molecules3d: [methane] }, hiding, ACS_1996);
+    expect(hidden).toContain(">C\u2013H hidden</text>");
+    // (its other look, the secondary, keeps them)
+    expect(drawingSvg({ ...model, molecules3d: [{ ...methane, look: "secondary" as const }] }, hiding, ACS_1996)).not.toContain("hidden");
   });
 
   it("says over a molecule in 3D what its file left out - its hydrogens, its bond orders - one over the other", () => {
@@ -336,6 +346,48 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     expect(shown).toContain("> <Energy (Eh)>\n-75.39\n");
   });
 
+  it("keeps a molecule in 3D's radicals, in the frame it shows and in every frame", () => {
+    const hydroxyl = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0, radical: "doublet" as const },
+        { el: "H", x: 0.97, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 0, y: 0 },
+      frames: [[0, 0, 0, 0.98, 0, 0]],
+      frame: 1,
+      name: "hydroxyl.xyz",
+    };
+    for (const options of [{}, { frames: "all" }] as OptionValues[]) {
+      const text = structureFileText({ atoms: [], bonds: [], molecules3d: [hydroxyl] }, "/tmp/hydroxyl.sdf", options);
+      expect(text).toContain("M  RAD  1   1   2\n");
+      const back = readStructures("sdf", "hydroxyl.sdf", text).molecules3d!;
+      expect(back.map((m) => m.atoms.map((a) => a.radical))).toEqual(back.map(() => ["doublet", undefined]));
+    }
+  });
+
+  it("writes a trajectory's frame with the bonds that frame has, where they go frame by frame", () => {
+    // (two carbons bonded, then 3 Å apart: an XYZ file's frames, bonds by distance)
+    const parting = {
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "C", x: 1.5, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      frames: [[0, 0, 0, 3, 0, 0]],
+      bondsFrom: "distance" as const,
+      at: { x: 0, y: 0 },
+      frame: 1,
+      name: "parting.xyz",
+    };
+    const drawn = { atoms: [], bonds: [], molecules3d: [parting] };
+    const bondsOf = (text: string) => readStructures("sdf", "parting.sdf", text).molecules3d!.map((m) => m.bonds.length);
+    expect(bondsOf(structureFileText(drawn, "/tmp/parting.sdf"))).toEqual([0]);
+    expect(bondsOf(structureFileText(drawn, "/tmp/parting.sdf", { frames: "all" }))).toEqual([1, 0]);
+    expect(structureFileText(drawn, "/tmp/parting.pdb")).not.toMatch(/^CONECT/m);
+    expect(structureFileText({ ...drawn, molecules3d: [{ ...parting, frame: 0 }] }, "/tmp/parting.pdb")).toMatch(/^CONECT/m);
+  });
+
   it("writes molecules in 3D as a PDB file - each a residue, the frame shown or a model for each frame - which reads back as they were", async () => {
     const { processFileContent } = await import("./utils/io");
     const oh = {
@@ -344,26 +396,81 @@ describe("an SD file of a canvas with molecules in 3D", () => {
         { el: "H", x: 0.96, y: 0, z: 0 },
       ],
       bonds: [{ a1: 0, a2: 1, order: 1 }],
-      at: { x: 0, y: 0 },
+      at: { x: 0, y: 0, z: 0 },
       frames: [[0, 0, 0, 0.97, 0, 0], [0, 0, 0, 0.98, 0, 0]],
       frame: 1,
       name: "oh.xyz",
     };
-    const na = { atoms: [{ el: "Na", x: 5, y: 0, z: 0, charge: 1 }], bonds: [], at: { x: 0, y: 0 } };
+    // (as they stand on the page: the sodium 5 Å to the right of the hydroxide's centre, level with it)
+    const na = { atoms: [{ el: "Na", x: 0, y: 0, z: 0, charge: 1 }], bonds: [], at: { x: 5 * WORLD_PER_ANGSTROM, y: 0, z: 0 } };
     // (the drawing beside them is not written: the format holds none)
     const shown = structureFileText({ ...model, molecules3d: [oh, na] }, "/tmp/ions.pdb");
     expect(shown).not.toMatch(/^MODEL/m);
     expect(shown.split("\n").filter((l) => l.startsWith("HETATM")).map((l) => l.substring(22, 26).trim())).toEqual(["1", "1", "2"]);
     const back = await processFileContent("ions.pdb", shown);
     expect(back.model.atoms).toHaveLength(0);
-    expect(back.molecules3d![0].atoms.map((a) => [a.el, a.x, a.charge])).toEqual([["O", 0, -1], ["H", 0.97, undefined], ["Na", 5, 1]]);
+    expect(back.molecules3d![0].atoms.map((a) => [a.el, a.x, a.charge])).toEqual([["O", -0.485, -1], ["H", 0.485, undefined], ["Na", 5, 1]]);
     expect(back.molecules3d![0].bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
     // every frame: a model for each, the sodium where it stands in each
     const all = structureFileText({ atoms: [], bonds: [], molecules3d: [oh, na] }, "/tmp/ions.pdb", { frames: "all" });
     expect(all.match(/^MODEL/gm)).toHaveLength(3);
     const frames = await processFileContent("ions.pdb", all);
     expect(frames.molecules3d).toHaveLength(1);
-    expect(frames.molecules3d![0].frames).toEqual([[0, 0, 0, 0.97, 0, 0, 5, 0, 0], [0, 0, 0, 0.98, 0, 0, 5, 0, 0]]);
+    expect(frames.molecules3d![0].frames).toEqual([[-0.485, 0, 0, 0.485, 0, 0, 5, 0, 0], [-0.49, 0, 0, 0.49, 0, 0, 5, 0, 0]]);
     expect(() => structureFileText(model, "/tmp/none.pdb")).toThrow(/no molecules in 3D/);
+  });
+
+  it("writes several molecules in 3D to a PDB file as they stand on the page, each turned and placed as it is seen; one where its file had it", () => {
+    const k = WORLD_PER_ANGSTROM;
+    const water = (more: { at: { x: number; y: number; z: number }; turn?: [number, number, number, number] }) => ({
+      atoms: [
+        { el: "O", x: 1, y: 2, z: 3 },
+        { el: "H", x: 1.96, y: 2, z: 3 },
+        { el: "H", x: 1, y: 2.96, z: 3 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      name: "water.xyz",
+      ...more,
+    });
+    // (the same file's water twice, 6 Å apart on the page, the second turned a quarter about z)
+    const both = [water({ at: { x: 0, y: 0, z: 10 } }), water({ at: { x: 6 * k, y: 0, z: 10 }, turn: [0, 0, Math.SQRT1_2, Math.SQRT1_2] })];
+    const atoms = readPdb(structureFileText({ atoms: [], bonds: [], molecules3d: both }, "/tmp/waters.pdb")).models[0].atoms;
+    expect(new Set(atoms.map((a) => `${a.x} ${a.y} ${a.z}`)).size).toBe(6);
+    // (as a writer of another kind is given them)
+    writtenOf(both).atoms.forEach((a, i) => {
+      expect(atoms[i].x).toBeCloseTo(a.x, 2);
+      expect(atoms[i].y).toBeCloseTo(a.y, 2);
+      expect(atoms[i].z).toBeCloseTo(a.z, 2);
+    });
+    // (the second's O-H along x turned to along y)
+    expect(atoms[4].x - atoms[3].x).toBeCloseTo(0, 2);
+    expect(atoms[4].y - atoms[3].y).toBeCloseTo(0.96, 2);
+    const alone = readPdb(structureFileText({ atoms: [], bonds: [], molecules3d: [both[1]] }, "/tmp/water.pdb")).models[0].atoms;
+    expect(alone.map((a) => [a.x, a.y, a.z])).toEqual([[1, 2, 3], [1.96, 2, 3], [1, 2.96, 3]]);
+  });
+
+  it("writes heavy water to a PDB file as D2O and opens it again as hydrogens of mass 2", async () => {
+    const { processFileContent } = await import("./utils/io");
+    const d2o = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.957, y: 0, z: 0, isotope: 2 },
+        { el: "H", x: -0.24, y: 0.927, z: 0, isotope: 2 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      at: { x: 0, y: 0, z: 0 },
+      name: "d2o.pdb",
+    };
+    const text = structureFileText({ atoms: [], bonds: [], molecules3d: [d2o] }, "/tmp/d2o.pdb");
+    expect(text.split("\n").filter((l) => l.startsWith("HETATM")).map((l) => l.substring(76, 78).trim())).toEqual(["O", "D", "D"]);
+    const back = await processFileContent("d2o.pdb", text);
+    expect(back.molecules3d![0].atoms.map((a) => [a.el, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
+    expect(back.molecules3d![0].bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 2]]);
   });
 });

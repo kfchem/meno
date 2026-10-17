@@ -1,5 +1,11 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
+  "app": {
+    "appDirectoriesOverride": {
+      "localData": "$LOCALDATA/Meno/data",
+      "cache": "$LOCALDATA/Meno/data"
+    }
+  },
   "bundle": {
     "resources": [
       "resources/plugins/*/manifest.json",
@@ -22,7 +28,9 @@
     ],
     "windows": {
       "nsis": {
-        "installerHooks": "windows/hooks.nsh"
+        "template": "windows/installer.nsi",
+        "installerHooks": "windows/hooks.nsh",
+        "installerIcon": "icons/icon.ico"
       },
       "wix": {
         "fragmentPaths": ["windows/ole.wxs"],

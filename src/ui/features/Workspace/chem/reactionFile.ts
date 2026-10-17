@@ -2,6 +2,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { writeRxnfile, type WriterModel } from "../../../../lib/chem/molWriter";
 import { arrowEnds, reactionRoles } from "../../../../lib/chem/reactionScheme";
 import type { Drawn } from "../store/types";
+import { mapMarks, mapStanding } from "./atomMap";
 import { forFlatReaders } from "./drawing";
 
 /** How near an arrow's tail or point a structure is drawn, at most, for the arrow to show its reaction: in bonds. */
@@ -41,7 +42,9 @@ export function notOneReaction(drawn: Drawn): string | null {
 /**
  * The drawing as an RXN file: each molecule a reactant, a product or a
  * reagent by where it is drawn against the arrow (lib/chem/reactionScheme) -
- * a plain reaction, whatever the arrow's kind -
+ * a plain reaction, whatever the arrow's kind - its atom map's numbers and
+ * reacting centres written, where its arrow has a map of it as drawn, shown
+ * or not (chem/atomMap) -
  * a cage drawn in perspective given its wedges as a MOL file is; in V3000
  * where `version` asks, else in V2000 where V2000 holds it. Throws, saying
  * why, where the drawing is not one reaction.
@@ -49,8 +52,9 @@ export function notOneReaction(drawn: Drawn): string | null {
 export function reactionFileText(drawn: Drawn, title?: string, version: "V3000" | "auto" = "auto"): string {
   const why = notOneReaction(drawn);
   if (why) throw new Error(why);
-  const flat = forFlatReaders(drawn);
-  const roles = reactionRoles(flat, reactionArrows(drawn)[0], drawn.pluses ?? [], NOMINAL_BOND_LENGTH);
+  const arrow = reactionArrows(drawn)[0];
+  const flat = forFlatReaders(withMapMarks(drawn, arrow));
+  const roles = reactionRoles(flat, arrow, drawn.pluses ?? [], NOMINAL_BOND_LENGTH);
   const molecule = (ids: number[]): WriterModel => {
     const inside = new Set(ids);
     return {
@@ -66,4 +70,16 @@ export function reactionFileText(drawn: Drawn, title?: string, version: "V3000" 
     },
     { title, version },
   );
+}
+
+/** The drawing with what the arrow's atom map shows written on its atoms and bonds, where the map is of it as it is drawn; else as it is. */
+function withMapMarks(drawn: Drawn, arrow: Pick<NonNullable<Drawn["arrows"]>[number], "atomMap">): Drawn {
+  const map = arrow.atomMap;
+  if (!map || mapStanding(arrow, drawn) !== "ready") return drawn;
+  const { numbers, centres } = mapMarks(map, drawn);
+  return {
+    ...drawn,
+    atoms: drawn.atoms.map((a) => (numbers.has(a.id) ? { ...a, map: numbers.get(a.id) } : a)),
+    bonds: drawn.bonds.map((b) => (centres.has(b.id) ? { ...b, reactingCentre: centres.get(b.id) } : b)),
+  };
 }

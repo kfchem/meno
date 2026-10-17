@@ -16,13 +16,15 @@ import type { WorkspaceDocument } from "./document";
 import type { Model, PictureItem, WorkflowSet } from "./store/types";
 import { restyled3d } from "./utils/restyle3d";
 import { setMembers, type Frame } from "./workflow/entries";
+import type { Style3D } from "../../../lib/chem/style3d";
+import { style3dOf } from "./style3d";
 
 type Pt = { x: number; y: number };
 const ORIGIN: Pt = { x: 0, y: 0 };
 
 /** The page's parts a change of style converts: a whole document's, or a copy's - those that are there. */
 export type Restylable = Partial<
-  Pick<WorkspaceDocument, "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "texts" | "pdfs" | "pictures" | "slides" | "shapes" | "inks" | "sets" | "steps">
+  Pick<WorkspaceDocument, "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "texts" | "pdfs" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "sets" | "steps">
 >;
 
 /** How long a style prints a bond, in pt. */
@@ -42,13 +44,13 @@ export function pointOfStyle(style: StyleChoice | undefined): number {
  * units; everything else on the page scaled by k; a workflow's sets fitted
  * round what they hold. Where k is 1, `parts` itself.
  */
-export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = ORIGIN): T {
+export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = ORIGIN, style3d?: Style3D): T {
   if (k === 1 || !(k > 0) || !Number.isFinite(k)) return parts;
   const x = (v: number) => about.x + (v - about.x) * k;
   const y = (v: number) => about.y + (v - about.y) * k;
   const out: Restylable = { ...parts };
   if (parts.model) out.model = structuresMoved(parts.model, k, about);
-  if (parts.molecules3d) out.molecules3d = restyled3d(parts.molecules3d, k, about);
+  if (parts.molecules3d) out.molecules3d = restyled3d(parts.molecules3d, k, about, style3d);
   if (parts.arrows)
     out.arrows = parts.arrows.map((a) => ({
       ...a,
@@ -72,6 +74,7 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
     }));
   if (parts.pictures) out.pictures = parts.pictures.map((p) => ({ ...p, x: x(p.x), y: y(p.y), w: p.w * k, h: p.h * k }));
   if (parts.slides) out.slides = parts.slides.map((s) => ({ ...s, x: x(s.x), y: y(s.y), w: s.w * k, h: s.h * k }));
+  if (parts.cycles) out.cycles = parts.cycles.map((c) => ({ ...c, x: x(c.x), y: y(c.y), r: c.r * k }));
   if (parts.shapes)
     out.shapes = parts.shapes.map((s) => ({ ...s, x0: x(s.x0), y0: y(s.y0), x1: x(s.x1), y1: y(s.y1), ...(s.tail ? { tail: { x: x(s.tail.x), y: y(s.tail.y) } } : {}) }));
   if (parts.inks)
@@ -99,8 +102,11 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
  * file opened without one is given one, not converted.)
  */
 export function restyledDocument(doc: WorkspaceDocument, style: StyleChoice): WorkspaceDocument {
+  // (the style it has: no change, and no step to undo)
+  if (doc.style && (doc.style === style || JSON.stringify(doc.style) === JSON.stringify(style))) return doc;
   const k = doc.style ? bondPtOf(doc.style) / bondPtOf(style) : 1;
-  const out = restyled({ ...doc, style }, k);
+  // (its molecules in 3D in its own styles in 3D: how far each reaches)
+  const out = restyled({ ...doc, style }, k, ORIGIN, style3dOf({ docStyle3d: doc.style3d }));
   if (!doc.style || !out.captions?.length) return out;
   const captions = wordsKept(out.captions, labelPtOf(doc.style), labelPtOf(style));
   return captions === out.captions ? out : { ...out, captions };

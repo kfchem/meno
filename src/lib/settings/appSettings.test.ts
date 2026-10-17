@@ -6,14 +6,30 @@ import {
   settingsFileText,
   useAppSettings,
 } from "./appSettings";
+import { BALL_AND_STICK } from "../chem/style3d";
+import { STYLE_PRESETS } from "../chem/style";
+
+describe("how finely the canvas is drawn, as the settings file holds it", () => {
+  it("is twice, from a file from before there was a choice, or one that does not read", () => {
+    expect(acceptAppSettings({}).canvas).toEqual({ resolution: 2 });
+    expect(acceptAppSettings({ canvas: { resolution: 3 } }).canvas).toEqual({ resolution: 2 });
+    expect(acceptAppSettings({ canvas: "fine" }).canvas).toEqual({ resolution: 2 });
+  });
+
+  it("is as the screen shows things, or once, where it says so", () => {
+    expect(acceptAppSettings({ canvas: { resolution: "display" } }).canvas).toEqual({ resolution: "display" });
+    expect(acceptAppSettings({ canvas: { resolution: 1 } }).canvas).toEqual({ resolution: 1 });
+  });
+});
 
 describe("the settings file", () => {
   it("reads back what it wrote", () => {
     const settings = {
-      drawingStyle: { preset: "rsc", changes: { ends: "round" as const } },
-      style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 } },
+      drawingStyle: { preset: "own-00000000-0000-4000-8000-000000000001", changes: { ends: "round" as const }, own: { name: "Group style", style: { ...STYLE_PRESETS[2].style, bondLengthPt: 12 } } },
+      ownDrawingStyles: [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Group style", style: { ...STYLE_PRESETS[2].style, bondLengthPt: 12 } }],
+      style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 }, own: [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Lab figures", look: { ...BALL_AND_STICK, ballScale: 0.16, colours: { O: "#ff2020" } } }] },
       network: { offline: true, granted: ["python-env:console"] },
-      chemistry: { valenceWarnings: false, stereoLabels: true },
+      chemistry: { valenceWarnings: false },
       updates: { asked: true },
       options: { "write:sdf": { version: "V3000", frames: "all" }, export: { kind: "sdf" } },
       abbreviations: [{ label: "Mmt", name: "4-methoxytrityl", smiles: "*C(c1ccccc1)(c1ccccc1)c1ccc(OC)cc1", also: ["MMTr"] }],
@@ -21,6 +37,7 @@ describe("the settings file", () => {
       plugins: { removed: ["rdkit"], roles: { smiles: "rdkit" }, programs: { "orca:orca": "/Applications/orca_6_1_0/orca" }, guided: ["getting-started"] },
       pictures: { dpi: 1200 as const },
       pointer: { wheelUp: "out" as const },
+      canvas: { resolution: "display" as const },
       labels: { smart: false },
       words: { smart: false },
       calculations: { atOnce: 2, cores: 4 },
@@ -43,8 +60,8 @@ describe("the settings file", () => {
     ).toEqual({ offline: false, granted: ["python-env:console"] });
     // a file from before there were chemistry settings, or a setting mangled
     expect(
-      acceptAppSettings({ chemistry: { stereoLabels: "on" } }).chemistry,
-    ).toEqual({ valenceWarnings: true, stereoLabels: false });
+      acceptAppSettings({ chemistry: { valenceWarnings: "on", stereoLabels: true } }).chemistry,
+    ).toEqual({ valenceWarnings: true });
     // a file from before readers were chosen: none chosen; one from before Files, its readers chosen as they were;
     // a choice that is not an id, left out
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
@@ -80,6 +97,12 @@ describe("the settings file", () => {
     // the programs installed separately located: by plugin and program, each a full path
     const programs = { "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe", "orca:../x": "/x", "Bad:p": "/x", "orca:x": "orca", "orca:y": 3 };
     expect(acceptAppSettings({ plugins: { programs } }).plugins.programs).toEqual({ "orca:orca": "/opt/orca/orca", "gaussian:g16": "C:\\G16W\\g16.exe" });
+    // (on a share on the network, as Windows names one - kept for the app to look at; a share without a name, or a path from nowhere, not)
+    const shared = { "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe", "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe", "xtb:xtb": "\\\\", "crest:crest": "apps\\crest.exe" };
+    expect(acceptAppSettings({ plugins: { programs: shared } }).plugins.programs).toEqual({
+      "gaussian:g16": "\\\\fileserver\\apps\\g16w\\g16.exe",
+      "orca:orca": "\\\\?\\UNC\\fileserver\\orca\\orca.exe",
+    });
     // the procedures saved: each with an id, a name and steps - the rest read as they are used
     const procedures = [
       { id: "p-1", name: " Optimise ", saved: 5, flow: { steps: [{}], sets: "x" } },

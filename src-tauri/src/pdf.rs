@@ -394,6 +394,24 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
     }
 }
 
+/// How many PDFs a reader keeps open: the ones last asked about - each open
+/// one holds its pages, and every reader opens what it is asked to draw.
+const OPEN_MOST: usize = 6;
+
+/// `sha` noted as the PDF last asked about, and those asked about longest
+/// ago closed, `most` kept open at most.
+fn keep_open<V>(docs: &mut HashMap<String, V>, used: &mut std::collections::VecDeque<String>, sha: &str, most: usize) {
+    used.retain(|s| s != sha);
+    used.push_back(sha.to_string());
+    while used.len() > most {
+        if let Some(old) = used.pop_front() {
+            docs.remove(&old);
+        }
+    }
+    // (none open that is not noted: one closed by asking is forgotten too)
+    docs.retain(|k, _| used.contains(k));
+}
+
 fn run_reader(cache: &Path) -> i32 {
     let started = Instant::now();
     let mut out = std::io::stdout().lock();
@@ -408,11 +426,16 @@ fn run_reader(cache: &Path) -> i32 {
     let pdfium: &'static Pdfium = Box::leak(Box::new(Pdfium::new(bindings)));
     let _ = write_frame(&mut out, &json!({"id": 0, "ok": true, "bound_ms": ms(started)}), &[]);
     let mut docs: HashMap<String, PdfDocument<'static>> = HashMap::new();
+    let mut used = std::collections::VecDeque::new();
     for line in std::io::stdin().lock().lines() {
         let Ok(line) = line else { break };
         let Ok(ask) = serde_json::from_str::<Value>(&line) else { continue };
         let id = ask["id"].as_u64().unwrap_or(0);
-        let (head, bytes) = match answer(&mut docs, pdfium, cache, &ask) {
+        let answered = answer(&mut docs, pdfium, cache, &ask);
+        if let Some(sha) = ask["sha"].as_str().filter(|s| docs.contains_key(*s)) {
+            keep_open(&mut docs, &mut used, sha, OPEN_MOST);
+        }
+        let (head, bytes) = match answered {
             Ok((mut head, bytes)) => {
                 head["id"] = json!(id);
                 head["ok"] = json!(true);
@@ -430,16 +453,22 @@ fn run_reader(cache: &Path) -> i32 {
 type Waiting = Arc<Mutex<HashMap<u64, tokio::sync::oneshot::Sender<(Value, Vec<u8>)>>>>;
 
 /// The reader, as Meno sees it: started when first wanted, asked, answered.
+/// Its process and its input each behind a lock of its own, apart from
+/// Meno's hold on the reader (`PdfState`): a write waiting for room in a
+/// full pipe - a reader that has stopped reading - holds its input alone,
+/// so that the reader can be stopped meanwhile, which ends the write.
 struct Reader {
-    child: Child,
-    stdin: ChildStdin,
+    child: Mutex<Child>,
+    stdin: Mutex<ChildStdin>,
     waiting: Waiting,
     next: AtomicU64,
 }
 
 impl Drop for Reader {
     fn drop(&mut self) {
-        let _ = self.child.kill();
+        if let Ok(child) = self.child.get_mut() {
+            let _ = child.kill();
+        }
     }
 }
 
@@ -474,24 +503,55 @@ impl Reader {
             // (the reader is gone: whoever waits is told so)
             w.lock().unwrap().clear();
         });
-        Ok(Reader { child, stdin, waiting, next: AtomicU64::new(1) })
+        Ok(Reader { child: Mutex::new(child), stdin: Mutex::new(stdin), waiting, next: AtomicU64::new(1) })
     }
 
-    fn ask(&mut self, mut req: Value) -> Result<tokio::sync::oneshot::Receiver<(Value, Vec<u8>)>, String> {
+    /// Whether the reader has gone.
+    fn gone(&self) -> bool {
+        let mut child = self.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        matches!(child.try_wait(), Ok(Some(_)))
+    }
+
+    /// The reader stopped, and waited for.
+    fn stop(&self) {
+        let mut child = self.child.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+
+    fn ask(&self, mut req: Value) -> Result<tokio::sync::oneshot::Receiver<(Value, Vec<u8>)>, String> {
         let id = self.next.fetch_add(1, Ordering::Relaxed);
         req["id"] = json!(id);
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.waiting.lock().unwrap().insert(id, tx);
         let mut line = serde_json::to_vec(&req).map_err(|e| e.to_string())?;
         line.push(b'\n');
-        self.stdin.write_all(&line).and_then(|_| self.stdin.flush()).map_err(|e| format!("the PDF reader is gone: {e}"))?;
+        let mut stdin = self.stdin.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        stdin.write_all(&line).and_then(|_| stdin.flush()).map_err(|e| format!("the PDF reader is gone: {e}"))?;
         Ok(rx)
     }
 }
 
-/// The reader Meno has started, if any.
-#[derive(Default)]
-pub struct PdfState(Mutex<Option<Reader>>);
+/// The readers Meno has started, if any - each held only while it is looked
+/// at, started or let go, never while it is written to. The first is asked
+/// everything; parts of pages are drawn by all of them in turn (`DRAWERS`),
+/// each a process with its own PDFium - PDFium itself draws on one thread
+/// at a time, so pages are drawn side by side only in readers of their own.
+pub struct PdfState {
+    readers: Mutex<Vec<Option<Arc<Reader>>>>,
+    turn: AtomicU64,
+}
+
+impl Default for PdfState {
+    fn default() -> Self {
+        PdfState { readers: Mutex::new(vec![None; drawers()]), turn: AtomicU64::new(0) }
+    }
+}
+
+/// How many readers draw parts of pages: one fewer than the machine's cores, three at most - each holds what it has opened.
+fn drawers() -> usize {
+    std::thread::available_parallelism().map(|n| n.get().saturating_sub(1)).unwrap_or(1).clamp(1, 3)
+}
 
 fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("pdf");
@@ -499,17 +559,76 @@ fn cache_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
+/// How long a request to the PDF reader may take: a heavy page drawn large, a figure read, at most.
+const REPLY_MOST: std::time::Duration = std::time::Duration::from_secs(90);
+
 async fn ask(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), String> {
-    let rx = {
-        let state = app.state::<PdfState>();
-        let mut guard = state.0.lock().unwrap();
-        // (started the first time, and again where it has gone)
-        if guard.as_mut().map(|r| matches!(r.child.try_wait(), Ok(Some(_)))).unwrap_or(true) {
-            *guard = Some(Reader::start(&cache_dir(app)?)?);
-        }
-        guard.as_mut().unwrap().ask(req)?
+    ask_on(app, 0, req).await
+}
+
+/// A part of a page drawn by the next of the readers in turn - the first
+/// left for all else asked (links, words, figures) where there are others
+/// to draw, so that a hover is not kept waiting behind a page drawn large.
+async fn ask_drawn(app: &tauri::AppHandle, req: Value) -> Result<(Value, Vec<u8>), String> {
+    let state = app.state::<PdfState>();
+    let n = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner).len().max(1);
+    ask_on(app, drawing_slot(state.turn.fetch_add(1, Ordering::Relaxed) as usize, n), req).await
+}
+
+/// Which of `n` readers draws the `turn`th part asked for: the first alone, or the others in turn.
+fn drawing_slot(turn: usize, n: usize) -> usize {
+    if n > 1 { 1 + turn % (n - 1) } else { 0 }
+}
+
+/// `req` asked of reader `slot`: started the first time, and again where it has gone or has not answered in time.
+async fn ask_on(app: &tauri::AppHandle, slot: usize, req: Value) -> Result<(Value, Vec<u8>), String> {
+    // (started, and asked, off the commands' threads: a start waits for the
+    // reader's first word, and a write for room in its pipe - held, they
+    // held a command thread each, and every other PDF request with them)
+    let held = app.clone();
+    let asked = async move {
+        let rx = tauri::async_runtime::spawn_blocking(move || -> Result<_, String> {
+            let state = held.state::<PdfState>();
+            let reader = {
+                let mut guard = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let at = slot.min(guard.len() - 1);
+                // (started the first time, and again where it has gone)
+                if guard[at].as_ref().is_none_or(|r| r.gone()) {
+                    guard[at] = Some(Arc::new(Reader::start(&cache_dir(&held)?)?));
+                }
+                guard[at].as_ref().unwrap().clone()
+            };
+            // (written to with Meno's hold let go: a write waiting for room in a
+            // full pipe holds the reader's input alone, and the reader can be
+            // stopped meanwhile - which ends the write)
+            reader.ask(req)
+        })
+        .await
+        .map_err(|e| e.to_string())??;
+        rx.await.map_err(|_| "the PDF reader stopped".to_string())
     };
-    let (head, bytes) = rx.await.map_err(|_| "the PDF reader stopped".to_string())?;
+    // (the write as well as the answer within the time: a reader that has
+    // stopped reading leaves the write waiting, and only its stop ends it)
+    let (head, bytes) = match tokio::time::timeout(REPLY_MOST, asked).await {
+        Ok(reply) => reply?,
+        Err(_) => {
+            // (held on it past its time: stopped, so that the next request starts it afresh - what else waits is told it stopped)
+            let held = app.clone();
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let state = held.state::<PdfState>();
+                let taken = {
+                    let mut guard = state.readers.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                    let at = slot.min(guard.len() - 1);
+                    guard[at].take()
+                };
+                if let Some(reader) = taken {
+                    reader.stop();
+                }
+            })
+            .await;
+            return Err("the PDF reader did not answer in time, and was started again".to_string());
+        }
+    };
     if head["ok"] != json!(true) {
         return Err(head["why"].as_str().unwrap_or("the PDF reader failed").to_string());
     }
@@ -620,7 +739,7 @@ pub async fn pdf_render(
     h: Option<i64>,
     packed: bool,
 ) -> Result<tauri::ipc::Response, String> {
-    let (head, bytes) = ask(&app, json!({"op": "render", "sha": sha, "page": page, "scale": scale, "x": x, "y": y, "w": w, "h": h, "packed": packed})).await?;
+    let (head, bytes) = ask_drawn(&app, json!({"op": "render", "sha": sha, "page": page, "scale": scale, "x": x, "y": y, "w": w, "h": h, "packed": packed})).await?;
     let mut out = Vec::with_capacity(16 + bytes.len());
     out.extend_from_slice(&(head["w"].as_u64().unwrap_or(0) as u32).to_le_bytes());
     out.extend_from_slice(&(head["h"].as_u64().unwrap_or(0) as u32).to_le_bytes());
@@ -669,6 +788,34 @@ pub async fn pdf_figure(app: tauri::AppHandle, sha: String, page: u32, r#box: [f
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // (L8's review of #318: a write waiting for room in the pipe of a reader
+    // that had stopped reading held Meno's hold on the reader, which its stop
+    // needed - PDFs were dead until Meno was started again)
+    #[cfg(unix)]
+    #[test]
+    fn a_reader_that_stopped_reading_is_stopped_while_a_write_waits_on_it() {
+        let mut child = Command::new("sleep").arg("30").stdin(Stdio::piped()).stdout(Stdio::null()).spawn().unwrap();
+        let stdin = child.stdin.take().unwrap();
+        let reader = Arc::new(Reader { child: Mutex::new(child), stdin: Mutex::new(stdin), waiting: Arc::new(Mutex::new(HashMap::new())), next: AtomicU64::new(1) });
+        let (tx, rx) = std::sync::mpsc::channel();
+        let asking = reader.clone();
+        std::thread::spawn(move || {
+            // (a megabyte a request: the pipe is full at the first, and the write waits)
+            let big = json!({"op": "page", "pad": "x".repeat(1 << 20)});
+            let ended = (0..8).map(|_| asking.ask(big.clone()).map(|_| ())).find(Result::is_err);
+            let _ = tx.send(ended);
+        });
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        assert!(rx.try_recv().is_err(), "the write is waiting");
+        // (stopped from beside it: the write holds the reader's input alone)
+        let started = Instant::now();
+        reader.stop();
+        let ended = rx.recv_timeout(std::time::Duration::from_secs(10)).expect("the write ended once the reader was stopped");
+        assert!(matches!(ended, Some(Err(_))));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+        assert!(reader.gone());
+    }
 
     #[test]
     fn a_pdf_locked_with_a_password_is_said_to_be() {
@@ -953,5 +1100,38 @@ mod tests {
         let info = reader.next_frame(&mut buf).unwrap();
         assert_eq!((info.width, info.height), (w, h));
         assert_eq!(&buf[..info.buffer_size()], &rgba[..]);
+    }
+
+    #[test]
+    fn parts_of_pages_are_drawn_by_the_readers_besides_the_first() {
+        assert_eq!((0..4).map(|t| drawing_slot(t, 1)).collect::<Vec<_>>(), [0, 0, 0, 0]);
+        assert_eq!((0..4).map(|t| drawing_slot(t, 2)).collect::<Vec<_>>(), [1, 1, 1, 1]);
+        assert_eq!((0..4).map(|t| drawing_slot(t, 3)).collect::<Vec<_>>(), [1, 2, 1, 2]);
+    }
+
+    #[test]
+    fn a_reader_keeps_the_pdfs_last_asked_about_open() {
+        let mut docs: HashMap<String, ()> = HashMap::new();
+        let mut used = std::collections::VecDeque::new();
+        for sha in ["a", "b", "c", "a", "d"] {
+            docs.insert(sha.into(), ());
+            keep_open(&mut docs, &mut used, sha, 3);
+        }
+        // (b, asked about longest ago, closed; a, asked about again, kept)
+        let mut open: Vec<_> = docs.keys().cloned().collect();
+        open.sort();
+        assert_eq!(open, ["a", "c", "d"]);
+        // (one closed by asking stays closed)
+        docs.remove("c");
+        keep_open(&mut docs, &mut used, "a", 3);
+        let mut open: Vec<_> = docs.keys().cloned().collect();
+        open.sort();
+        assert_eq!(open, ["a", "d"]);
+    }
+
+    #[test]
+    fn parts_of_pages_are_drawn_by_one_reader_to_three() {
+        let n = drawers();
+        assert!((1..=3).contains(&n), "{n}");
     }
 }

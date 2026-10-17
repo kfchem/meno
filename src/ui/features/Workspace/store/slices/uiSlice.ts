@@ -6,6 +6,10 @@ import type { WorkspaceDocument } from "../../document";
 import { EditorState } from "../types";
 import { StoreApi } from "zustand";
 import type { StyleChoice } from "../../../../../lib/chem/style";
+import { style3dIn, type Workspace3D } from "../../../../../lib/chem/workspaceStyle3d";
+import { useAppSettings } from "../../../../../lib/settings/appSettings";
+import { fitResultSets } from "../../workflow/run";
+import { reachOverFrames } from "../../utils/molecule3d";
 import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
 import { abbreviationOf } from "../../../../../lib/chem/abbreviations";
@@ -146,6 +150,18 @@ export function createUiSlice(
       drag.last = doc.getState();
     },
 
+    setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => {
+      // (its molecules go over to it, eased, as they are drawn: Workspace/style3d `useEasedStyle3D` - and a result
+      // set they no longer fit in it laid out again, its frame widened: the same step to undo)
+      const style = style3dIn(style3d, useAppSettings.getState().style3d);
+      const { turns3d } = get();
+      doc.edit(
+        "3D style",
+        (d) => fitResultSets(ops.setDocumentStyle3d(d, style3d), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id]),
+        coalesceKey ? { coalesceKey } : undefined,
+      );
+    },
+
     easeDocumentStyle: (style: StyleChoice) => {
       // (a preset chosen: its bond eased in, one step - ./styleEase)
       drag = null;
@@ -163,10 +179,10 @@ export function createUiSlice(
     },
 
     // (one colour given to all a selection holds - atoms and bonds, electron
-    // arrows, words, reaction arrows, writing by hand - as one step; the
+    // arrows, words, reaction arrows, writing by hand, catalytic cycles - as one step; the
     // system's chooser dragged through colours, one step for all of it)
     colourTogether: (
-      what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+      what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[]; cycles?: readonly number[] },
       color: string | null,
       gesture?: string,
     ) => {
@@ -177,6 +193,7 @@ export function createUiSlice(
           if (what.words?.length) n = ops.markCaptions(n, what.words, (c) => marksAll(c.text, c.marks, { color }));
           if (what.arrows?.length) n = ops.setArrowForm(n, what.arrows, { color });
           if (what.inks?.length) n = ops.colourInks(n, what.inks, color);
+          for (const id of what.cycles ?? []) n = ops.updateCycle(n, id, { color });
           return n;
         },
         gesture ? gestureStep(`colour:color:${gesture}`) : undefined,

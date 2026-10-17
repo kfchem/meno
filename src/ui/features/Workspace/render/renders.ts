@@ -22,10 +22,11 @@ import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
 import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
+import { finishEntry } from "./renderOptions";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pictureToAdd } from "../utils/pictures";
@@ -107,7 +108,8 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 /** "progress 12/240": how far a job is, as its log says it last. */
 export function progressOf(text: string): { done: number; total: number } | null {
   let found: { done: number; total: number } | null = null;
-  for (const m of text.matchAll(/^progress (\d+)\/(\d+)\s*$/gm)) {
+  // (a line ends with \n, \r\n or a lone \r - as some systems' pipes and a program's own redraws leave it)
+  for (const m of text.matchAll(/(?:^|[\r\n])progress (\d+)\/(\d+)[ \t]*(?=[\r\n]|$)/g)) {
     const done = Number(m[1]);
     const total = Number(m[2]);
     if (total > 0 && done <= total) found = { done, total };
@@ -179,7 +181,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   if (!plugin) return;
   const shown = await shownOf(store, ids);
   if (closing.aborted) return;
-  const rendered = renderScene(shown, currentStyle3D(), ask);
+  const rendered = renderScene(shown, style3dOf(store.getState()), ask);
   // (beside them, on the right: as large as they are drawn)
   const { page } = rendered;
   const w = page.maxX - page.minX;
@@ -198,7 +200,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
       paths.set(decl.name, where);
     }
     const client = await pluginClient(plugin);
-    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps };
+    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish) };
     const prepared = readPrepared(await client.prepare("render", [entry], options, cores), 1);
     if (typeof prepared === "string") return fail(prepared);
     const p = prepared[0];
@@ -249,7 +251,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   }
   try {
     const client = await pluginClient(plugin);
-    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps };
+    const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish) };
     const said = (await client.collect("render", [entry], options, {}, log, state)) as { why?: unknown; made?: unknown };
     if (typeof said?.why === "string") return fail(said.why.trim().slice(0, 300) || "It did not say why");
     const made = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;

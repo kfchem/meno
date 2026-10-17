@@ -96,10 +96,10 @@ function Get-MenoSettingsPath {
     <#
       .SYNOPSIS
       Where the app keeps its settings: settings.json in its data folder,
-      named for its identifier (src-tauri/tauri.conf.json).
+      named Meno (src-tauri/src/folders.rs).
     #>
-    if ($IsWindows) { return Join-Path $env:APPDATA "com.kfchem.meno/settings.json" }
-    return Join-Path $HOME "Library/Application Support/com.kfchem.meno/settings.json"
+    if ($IsWindows) { return Join-Path $env:APPDATA "Meno/settings.json" }
+    return Join-Path $HOME "Library/Application Support/Meno/settings.json"
 }
 
 function Set-GuidesShown {
@@ -173,6 +173,40 @@ function Open-MenoFile {
     Get-MenoWindow -ProcessName Meno -TimeoutSec 10 | Out-Null
     Set-MenoWindow -Width $Width -Height $Height
     Wait-MenoSettled -TimeoutMs 8000 | Out-Null
+}
+
+function Invoke-MenoChainFromHere {
+    <#
+      .SYNOPSIS
+      A chain begun from the atom at a point, by its right-click menu's
+      "Chain from here", traced with the button up; with -ToX and -ToY, led
+      there (through -Via, in -Steps) and ended by a click. Three clicks on an
+      atom began one until 2026-10-16.
+
+      .DESCRIPTION
+      The menu opens at the pointer, its item "Chain from here" first in the
+      list under the icon row: 124 px right of and 130 px below the press, in a
+      shot of a Mac's 2560 px window (an atom well within the canvas).
+    #>
+    param(
+        [Parameter(Mandatory)] [int] $X, [Parameter(Mandatory)] [int] $Y,
+        [int] $ToX, [int] $ToY, [object[]] $Via = @(), [int] $Steps = 20, [scriptblock] $AtStep
+    )
+    Invoke-MenoClick -X $X -Y $Y -Right
+    Start-Sleep -Milliseconds 400
+    Invoke-MenoClick -X ($X + 124) -Y ($Y + 130)
+    Start-Sleep -Milliseconds 250
+    if ($PSBoundParameters.ContainsKey("ToX")) {
+        $points = @($Via) + , @($ToX, $ToY)
+        $way = @(); $from = @($X, $Y)
+        foreach ($to in $points) {
+            for ($i = 1; $i -le $Steps; $i++) { $way += , @([int]($from[0] + ($to[0] - $from[0]) * $i / $Steps), [int]($from[1] + ($to[1] - $from[1]) * $i / $Steps)) }
+            $from = $to
+        }
+        if ($AtStep) { Move-MenoPointerAlong -Path $way -AtStep $AtStep } else { Move-MenoPointerAlong -Path $way }
+        Invoke-MenoClick -X $ToX -Y $ToY
+        Wait-MenoSettled | Out-Null
+    }
 }
 
 function Invoke-MenoQuickAdd {

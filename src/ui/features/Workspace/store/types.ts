@@ -1,13 +1,16 @@
-import type { ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
+import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
+import type { Cycle } from "../../../../lib/chem/cycle";
+export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
 import type { EditorAtom } from "../../../../utils/importers";
 import type { Stroke, StrokeNode } from "../utils/stroke";
 import type { StyleChoice } from "../../../../lib/chem/style";
+import type { Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
 import type { Role3D } from "../../../../lib/chem/style3d";
 import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
@@ -38,6 +41,8 @@ export type Atom = EditorAtom & {
   chargeAt?: MarkAt;
   /** Where its R or S was put by hand, likewise (chem/marks). */
   stereoAt?: MarkAt;
+  /** Its R or S shown, where it is a stereocentre: asked for on it, its structure or a selection holding it (docs/EDITOR-2D.md, *R and S*). */
+  stereoShown?: true;
   /** What was typed for its label, where it was read as something else (obz, read as OBz): had back from its menu. */
   typed?: string;
   /** The colour its label - its charge too - is drawn in, where it is given one (#rrggbb). */
@@ -97,6 +102,8 @@ export type Bond = BondChem & {
   dative?: boolean;
   /** Where its E or Z - an axis's Ra or Sa - was put by hand, from the bond's middle (`MarkAt`). */
   stereoAt?: MarkAt;
+  /** Its E or Z shown, where it has one, as an atom's R or S (`Atom.stereoShown`). */
+  stereoShown?: true;
   /** The colour it is drawn in, where it is given one (#rrggbb). */
   color?: string;
   /** The colour it is highlighted in, behind the drawing, where it is (#rrggbb). */
@@ -131,6 +138,27 @@ export type Arrow = ArrowForm & {
   /** What it sets for itself over the drawing style: its line and its head. */
   look?: ArrowLook;
   color?: string;
+  /** Its reaction's atom map, where one was made (chem/atomMap). */
+  atomMap?: ArrowAtomMap;
+};
+/**
+ * A drawn reaction's atom map, kept on its arrow (docs/ATOM-MAPPING.md, *On
+ * a drawn scheme*): each side in 3D as one structure, as it was mapped, and
+ * the drawn atom each of its atoms is (none for a hydrogen made for it);
+ * every complete map, best first - for each product atom, its reactant
+ * atom - none where the atoms do not all map; the one shown and used; and
+ * whether its numbers and reacting centres are shown on the drawing. What
+ * the drawing was when it was made (chem/make3d `signatureOf`) tells a map
+ * of a drawing changed since.
+ */
+export type ArrowAtomMap = {
+  drawnAs: string;
+  reactant: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  product: { atoms: { el: string; x: number; y: number; z: number; charge?: number }[]; bonds: { a1: number; a2: number; order: number }[]; drawnFrom: (number | null)[] };
+  maps: number[][];
+  complete: boolean;
+  chosen: number;
+  shown: boolean;
 };
 /** A change to an arrow's form and colour: each said is set - its kind, its heads (1 or 2), an equilibrium's full heads, dashes, weight, corners (none: straight) and colour - null or "regular" taking what it set away. */
 export type ArrowFormPatch = {
@@ -424,6 +452,8 @@ export type Molecule3D = {
   conformerSet?: boolean;
   /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
   made?: { how: { label: string; text: string }[] };
+  /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
+  said?: { label: string; text: string }[];
   /**
    * Its bonds are where its atoms stand close enough, as its file gives no
    * bonds - an XYZ file's, a calculation's: frame by frame, so that a bond
@@ -431,11 +461,19 @@ export type Molecule3D = {
    */
   bondsFrom?: "distance";
   /**
-   * Its stereocentres' and double bonds' CIP labels, by atom and bond index;
-   * and which of them its drawing left open - one stereoisomer of several
-   * made from it - so that it is told apart from the others.
+   * How many of its file's atoms it leaves out, their element not read - a
+   * PDB entry's unknown atom (X, UNX), say: said over it (utils/molecule3d
+   * `notesOf`).
    */
-  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] } };
+  atomsLeftOut?: number;
+  /**
+   * Its stereocentres' and double bonds' CIP labels, by atom and bond index;
+   * which of them its drawing left open - one stereoisomer of several made
+   * from it - so that it is told apart from the others; and which are shown
+   * (`shown`), as asked for on it or on them - where none has been, those
+   * its drawing left open (`stereoShownOf`).
+   */
+  stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -513,7 +551,9 @@ export type TextOf = { step: number } | { molecule: number };
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
  * Made by a step: the step, the kind of set it holds - a Render step's,
  * pictures - and the entries the step set aside, listed struck through.
- * Made by the chemist, a set is a compound set.
+ * Made by the chemist, a set is a compound set - named where it was given
+ * a name (`name`: where its structures came from, or the chemist's own),
+ * *Input* where not.
  */
 export type WorkflowSet = {
   id: number;
@@ -522,6 +562,7 @@ export type WorkflowSet = {
   x1: number;
   y1: number;
   made?: { step: number; holds: SetHolds };
+  name?: string;
   aside?: AsideEntry[];
 };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
@@ -618,6 +659,8 @@ export type Drawn = Model & {
   shapes?: Shape[];
   /** Writing by hand carried, each piece whole (docs/PRESENTING.md, *Handwriting*). */
   inks?: Ink[];
+  /** Catalytic cycles carried (lib/chem/cycle). */
+  cycles?: Cycle[];
 };
 
 export type EditorState = {
@@ -842,6 +885,14 @@ export type EditorState = {
    * value cannot be set so.
    */
   setMeasure3d: (id: number, measure: number, value: number, gesture?: string) => number | null;
+  /**
+   * The copy a value set on a result made last (`setMeasure3d`): the
+   * molecule it was made from and the copy, by id, and when - for the view
+   * to bring it into sight and light it a moment (Molecules3D); `undone`,
+   * when an undo took it away again - it goes back into the one it came
+   * from - until a redo puts it back.
+   */
+  copied3d: { from: number; copy: number; at: number; undone?: number } | null;
   /** What is chosen of a molecule measured - as the atoms were chosen - and its value opened to be typed. */
   setChosen3d: () => void;
   setHoveredMeasure3d: (h: { id: number; measure: number } | null) => void;
@@ -1009,6 +1060,17 @@ export type EditorState = {
   selShapes: Set<number>;
   hoveredShape: number | null;
   shapeDraft: ShapeDraft | null;
+  /** The catalytic cycles on the page (lib/chem/cycle); which are selected, which is under the pointer - the view's. */
+  cycles: Cycle[];
+  selCycles: Set<number>;
+  hoveredCycle: number | null;
+  setHoveredCycle: (id: number | null) => void;
+  selectCycles: (ids: Iterable<number>, add?: boolean) => void;
+  /** A cycle put on the page, as one step; its id, or null where none was. */
+  addCycle: (cycle: Omit<Cycle, "id">) => number | null;
+  /** A cycle turned round, given arrows coming in and going out, or a colour - the words by its arrows put where `captions` says - one step, or one a gesture's changes make together. */
+  updateCycle: (id: number, patch: CyclePatch, gesture?: string, captions?: { id: number; x: number; y: number }[]) => void;
+  removeCycle: (id: number) => void;
   /**
    * The arrows and "+" signs selected for themselves - one standing alone,
    * pointing at something on a slide - beside those a selection carries as
@@ -1184,11 +1246,15 @@ export type EditorState = {
    * document as saved as it was - the look is Settings', not the document's.
    */
   fitResultSets: () => void;
-  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away. */
-  forgetStepJobs: (step: Pick<WorkflowStep, "running" | "ran" | "runs">) => void;
+  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
+  forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran" | "runs">) => void;
   /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
+  /** Molecules in 3D put on the page as a set of their own, named `name`, its middle at `at` or the free space nearest it: one step. */
+  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => void;
+  /** A chemist's set named anew; an empty name takes its name away (*Input* again). */
+  renameSet: (id: number, name: string) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
@@ -1263,7 +1329,7 @@ export type EditorState = {
   colourParts: (parts: { atoms: Iterable<number>; bonds: Iterable<number>; pushes?: Iterable<number> }, which: "color" | "highlight", color: string | null, gesture?: string) => void;
   /** One colour given to all a selection holds - atoms and bonds, electron arrows, words, reaction arrows, writing by hand - as one step. */
   colourTogether: (
-    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[] },
+    what: { atoms?: Iterable<number>; bonds?: Iterable<number>; pushes?: Iterable<number>; words?: readonly number[]; arrows?: readonly number[]; inks?: readonly number[]; cycles?: readonly number[] },
     color: string | null,
     gesture?: string,
   ) => void;
@@ -1271,6 +1337,8 @@ export type EditorState = {
   fillRings: (keys: readonly string[], color: string | null, gesture?: string) => void;
   /** The document's own drawing style, if it has one (see useDrawingStyle). */
   docStyle: StyleChoice;
+  /** The workspace's styles in 3D (document.ts `style3d`): what its molecules are drawn in. */
+  docStyle3d: Workspace3D;
   /** Which page the document is (document.ts `pageId`): unset until one is opened from a file. */
   pageId?: number;
   labelEdit: {
@@ -1435,12 +1503,21 @@ export type EditorState = {
    */
   pressHold: { atomId?: number; at?: { x: number; y: number }; start: number } | null;
   setPressHold: (h: EditorState["pressHold"]) => void;
-  /** The bond a double-click on an atom drew, which a third click takes back to draw a chain instead. */
-  /** (`state`: the document as the bond left it - its depth in the history stays the same once the history is full, so it is told by this) */
-  doubleClickBond: { atomId: number; state: object; at: number } | null;
-  noteDoubleClickBond: (atomId: number) => void;
-  /** The double-click's bond on `atomId` taken back, if it is the last edit and has only just been made. */
-  takeBackDoubleClickBond: (atomId: number) => void;
+  /** A press come down on the page, noted: the document and the selection as they were, for `takeBackPress`. */
+  notePress: () => void;
+  /**
+   * The press noted last taken back as if it had never been - a finger that
+   * turned out to be a pinch's first: what it did to the document gone,
+   * leaving nothing to redo, the selection as it was, and its gesture let
+   * go. False where the document could not be put back (an undo since).
+   */
+  takeBackPress: () => boolean;
+  /**
+   * R and S, E and Z shown - or hidden - on the drawing's atoms and bonds
+   * given, by id, and the molecules in 3D's, by index (all of a molecule's,
+   * given none): one undo step (document `setStereoShown`).
+   */
+  setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
   /** A chain drawn from a new atom on empty space, as one edit. */
   drawStrokeAt: (start: { x: number; y: number }, nodes: readonly StrokeNode[]) => void;
   suppressDoubleClick: (ms?: number) => void;
@@ -1523,6 +1600,12 @@ export type EditorState = {
   updateArrow: (id: number, patch: Partial<Arrow>, gesture?: string) => void;
   /** Arrows given a kind, heads, dashes, a weight, corners or a colour - or theirs taken away - as one step. */
   setArrowForm: (ids: readonly number[], patch: ArrowFormPatch, gesture?: string) => void;
+  /** An arrow given its reaction's atom map, or its map taken away (null), what it shows on the drawing with it - one step (chem/atomMap). */
+  setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => void;
+  /** An arrow's atom map shown on the drawing - its numbers and reacting centres - or taken off it, kept: one step. */
+  showAtomMap: (arrowId: number, shown: boolean) => void;
+  /** An arrow's next map, of those its reaction has, shown and used instead: one step. */
+  otherAtomMap: (arrowId: number) => void;
   /** A "+" added, as one step; its id. */
   addPlus: (x: number, y: number) => number;
   removeArrow: (id: number) => void;
@@ -1568,6 +1651,8 @@ export type EditorState = {
   setDocumentStyle: (style: StyleChoice, coalesceKey?: string) => void;
   /** A preset chosen in the Drawing style card: the style taken, its bond eased in from the old one, one step (../styleEase). */
   easeDocumentStyle: (style: StyleChoice) => void;
+  /** The workspace's styles in 3D set: one step to undo - a run of a slider's in one `coalesceKey`. Its molecules go over to them, eased. */
+  setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

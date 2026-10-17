@@ -252,7 +252,7 @@ export default function Workflow2D() {
   const selFlow = useEditor((s) => s.selFlow);
   const style3d = useStyle3D();
   const { camera, gl, invalidate } = useThree();
-  // the 3D look Settings has - as the workspace opens, and as it changes: the
+  // the workspace's styles in 3D - as it opens, and as they or Settings' change: the
   // result sets its molecules no longer fit laid out again (workflow/run
   // `fitResultSets`), frames and molecules going over to their new places
   useEffect(() => {
@@ -595,7 +595,7 @@ export default function Workflow2D() {
                 : count.holds === "molecules"
                   ? `${plural(count.compounds, "compound")}${aside ? ` · ${count.entries} of ${count.entries + aside}` : ""}`
                   : `${plural(count.compounds, "compound")} · ${aside ? `${count.entries} of ${count.entries + aside}` : count.entries}`;
-          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : "Input", count: counted }];
+          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: counted }];
         }),
       ),
     [flow, sets, steps],
@@ -663,6 +663,7 @@ export default function Workflow2D() {
             onGiveDown={(e) => drawFrom(e, { set: b.id })}
             onContextMenu={menuOf("set", b.id)}
             onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
+            {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
           />
         </div>
       );

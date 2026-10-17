@@ -17,8 +17,9 @@ export type Seg = { x1: number; y1: number; x2: number; y2: number };
 /** What a guide shows: lines along edges and middles lined up, and marks across spaces or sizes made the same. */
 export type GuideMarks = { lines: Seg[]; marks: Seg[] };
 
-/** How near, on the screen, something comes before it lines up, in pixels. */
+/** How near, on the screen, something comes before it lines up, in pixels; and how far it may go and still be held, once it has. */
 export const GUIDE_PX = 6;
+export const GUIDE_HOLD_PX = 10;
 
 type Axis = "x" | "y";
 const lo = (b: Box, a: Axis) => (a === "x" ? b.x0 : b.y0);
@@ -77,25 +78,28 @@ function snapAlong(m: Box, others: readonly Box[], a: Axis, reach: number): Snap
  * `others` - each way within `reach`, or not at all - and the lines and
  * marks that show it. `axis` keeps it to one way, the other as asked.
  */
-export function guided(moving: Box, dx: number, dy: number, others: readonly Box[], reach: number, axis?: Axis): { dx: number; dy: number } & GuideMarks {
+export function guided(moving: Box, dx: number, dy: number, others: readonly Box[], reach: number, axis?: Axis, held?: { x?: number; y?: number }): { dx: number; dy: number } & GuideMarks {
   const raw = shifted(moving, dx, dy);
-  const sx = axis === "y" ? null : snapAlong(raw, others, "x", reach);
-  const sy = axis === "x" ? null : snapAlong(raw, others, "y", reach);
+  // (a snap taken is let go only at a larger distance than takes it: `held`, by axis - no flicker at the edge)
+  const sx = axis === "y" ? null : snapAlong(raw, others, "x", held?.x ?? reach);
+  const sy = axis === "x" ? null : snapAlong(raw, others, "y", held?.y ?? reach);
   const ndx = dx + (sx?.delta ?? 0);
   const ndy = dy + (sy?.delta ?? 0);
   const m = shifted(moving, ndx, ndy);
-  return { dx: ndx, dy: ndy, lines: [...(sx ? linesAlong(m, others, "x") : []), ...(sy ? linesAlong(m, others, "y") : [])], marks: [...spaceMarks(m, sx, "x"), ...spaceMarks(m, sy, "y")] };
+  // (a line goes a little past what it joins, to read as a line: twice the reach, a dozen pixels)
+  const past = 2 * reach;
+  return { dx: ndx, dy: ndy, lines: [...(sx ? linesAlong(m, others, "x", past) : []), ...(sy ? linesAlong(m, others, "y", past) : [])], marks: [...spaceMarks(m, sx, "x"), ...spaceMarks(m, sy, "y")] };
 }
 
 /** Lines along each edge or middle of `m` that one of `others` shares, across `a`: from end to end of all that share it. */
-function linesAlong(m: Box, others: readonly Box[], a: Axis): Seg[] {
+function linesAlong(m: Box, others: readonly Box[], a: Axis, past = 0): Seg[] {
   const o = other(a);
   const out: Seg[] = [];
   for (const v of [lo(m, a), mid(m, a), hi(m, a)]) {
     const sharing = others.filter((b) => [lo(b, a), mid(b, a), hi(b, a)].some((t) => Math.abs(t - v) < SAME * Math.max(1, Math.abs(v)) + 1e-9));
     if (!sharing.length) continue;
-    const from = Math.min(lo(m, o), ...sharing.map((b) => lo(b, o)));
-    const to = Math.max(hi(m, o), ...sharing.map((b) => hi(b, o)));
+    const from = Math.min(lo(m, o), ...sharing.map((b) => lo(b, o))) - past;
+    const to = Math.max(hi(m, o), ...sharing.map((b) => hi(b, o))) + past;
     out.push(a === "x" ? { x1: v, y1: from, x2: v, y2: to } : { x1: from, y1: v, x2: to, y2: v });
   }
   return out;

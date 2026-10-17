@@ -21,8 +21,9 @@ import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../.
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
+import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
-import { asSeen } from "./molecule3d";
+import { asSeen, bondsAt } from "./molecule3d";
 import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
@@ -30,6 +31,7 @@ import { readPdfs } from "./pdfItems";
 import { pdfBounds } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
+import type { Style3D } from "../../../../lib/chem/style3d";
 
 type Pt = { x: number; y: number };
 
@@ -109,13 +111,13 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
 
 /**
  * Whether a copy holds what a picture draws - a structure, molecules in 3D,
- * or words, shapes, writing by hand, arrows and "+" signs alone (the
+ * or words, shapes, writing by hand, arrows, "+" signs and catalytic cycles alone (the
  * maintainer's docs/PRESENTING.md: a slide's content goes into pictures, so
  * that it pastes into slides software and word processors). Slides, PDFs,
  * texts' sheets and pictures on the page are not drawn in one.
  */
-export function drawsPicture(p: Pick<Drawn, "atoms" | "molecules3d" | "captions" | "shapes" | "inks" | "arrows" | "pluses" | "pushes">): boolean {
-  return !!(p.atoms.length || p.molecules3d?.length || p.captions?.length || p.shapes?.length || p.inks?.length || p.arrows?.length || p.pluses?.length || p.pushes?.length);
+export function drawsPicture(p: Pick<Drawn, "atoms" | "molecules3d" | "captions" | "shapes" | "inks" | "arrows" | "pluses" | "pushes" | "cycles">): boolean {
+  return !!(p.atoms.length || p.molecules3d?.length || p.captions?.length || p.shapes?.length || p.inks?.length || p.arrows?.length || p.pluses?.length || p.pushes?.length || p.cycles?.length);
 }
 
 /** Meno's own record of a structure on the clipboard, and its version. */
@@ -133,7 +135,7 @@ export function clipItems(part: Drawn): ClipItem[] {
   if (!part.atoms.length) {
     const ms = part.molecules3d ?? [];
     // (a workflow's parts, pictures, PDFs, texts' sheets or slides, alone: Meno's record, which no other program reads)
-    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
+    if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length || part.cycles?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
     const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
@@ -143,7 +145,8 @@ export function clipItems(part: Drawn): ClipItem[] {
         flavor: "mol",
         text: writeMolfile3d(
           seen.flat(),
-          ms.flatMap((m, i) => m.bonds.map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
+          // (each with the bonds the frame it shows has)
+          ms.flatMap((m, i) => bondsAt(m, m.frame).map((b) => ({ a1: b.a1 + offsets[i], a2: b.a2 + offsets[i], order: b.order }))),
           { title: ms.length === 1 ? ms[0].name?.replace(/\.[^.]*$/, "") : undefined },
         ),
       },
@@ -180,6 +183,7 @@ export function recordText(part: Drawn): string {
     ...(part.slides?.length ? { slides: part.slides } : {}),
     ...(part.shapes?.length ? { shapes: part.shapes } : {}),
     ...(part.inks?.length ? { inks: part.inks } : {}),
+    ...(part.cycles?.length ? { cycles: part.cycles } : {}),
     // (PDFs as they lie, by their SHA-256 - not where they were read; texts' sheets with their words)
     ...(part.pdfs?.length ? { pdfs: part.pdfs.map(({ id: _, reading: _r, ...p }) => p) } : {}),
     ...(part.sheets?.length ? { sheets: part.sheets.map((t) => ({ name: t.name, text: t.text, at: t.at, ...(t.icon ? { icon: true } : {}) })) } : {}),
@@ -283,6 +287,7 @@ export function readDrawn(data: unknown): Drawn | null {
     slides?: unknown;
     shapes?: unknown;
     inks?: unknown;
+    cycles?: unknown;
   };
   if (!r || !Array.isArray(r.atoms) || !Array.isArray(r.bonds)) return null;
   const atoms = r.atoms as Partial<Atom>[];
@@ -352,13 +357,15 @@ export function readDrawn(data: unknown): Drawn | null {
     const q = p as { x?: unknown; y?: unknown } | undefined;
     return q && isNum(q.x) && isNum(q.y) && Math.hypot(q.x, q.y) < MARK_REACH ? { x: q.x, y: q.y } : undefined;
   };
-  const withMarks = <T extends { chargeAt?: unknown; stereoAt?: unknown }>(x: T, keys: readonly ("chargeAt" | "stereoAt")[]): T => {
+  const withMarks = <T extends { chargeAt?: unknown; stereoAt?: unknown; stereoShown?: unknown }>(x: T, keys: readonly ("chargeAt" | "stereoAt")[]): T => {
     const out = { ...x };
     for (const k of keys) {
       const at = markAt(x[k]);
       if (at) out[k] = at;
       else delete out[k];
     }
+    // (its R or S - E or Z - shown: only where it says so plainly)
+    if (x.stereoShown !== true) delete out.stereoShown;
     return out;
   };
   // (electron-pushing arrows whose ends read, on atoms and bonds it has)
@@ -429,6 +436,13 @@ export function readDrawn(data: unknown): Drawn | null {
     ...(slides.length ? { slides } : {}),
     ...(shapes.length ? { shapes } : {}),
     ...(() => {
+      const cycles = (Array.isArray(r.cycles) ? r.cycles : []).flatMap((c): Cycle[] => {
+        const read = readCycle(c);
+        return read ? [read] : [];
+      });
+      return cycles.length ? { cycles } : {};
+    })(),
+    ...(() => {
       const inks = (Array.isArray(r.inks) ? r.inks : []).flatMap((k): Ink[] => {
         const read = readInk(k);
         return read ? [read] : [];
@@ -450,6 +464,24 @@ const COLOUR = /^#[0-9a-f]{6}$/i;
 const TITLE_MOST = 400;
 
 /** A shape as a copy or a workspace carries it, where it reads: its kind and where it lies, its tail, and its look - what does not read left as a shape has it unsaid. */
+/** A catalytic cycle read from a record: its middle, radius, way and arrows coming in and going out - those that do not read left out; none, where its place does not read. */
+function readCycle(raw: unknown): Cycle | null {
+  const c = raw as Partial<Record<keyof Cycle, unknown>> | null;
+  if (!c || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || !isNum(c.r) || !(c.r > 0)) return null;
+  const branches = (Array.isArray(c.branches) ? (c.branches as Partial<CycleBranch>[]) : []).filter((b): b is CycleBranch => isEntry(b) && isNum(b.at) && (b.way === "in" || b.way === "out"));
+  return {
+    id: c.id,
+    x: c.x,
+    y: c.y,
+    r: c.r,
+    ...(c.ccw === true ? { ccw: true as const } : {}),
+    ...(branches.length ? { branches: branches.map((b) => ({ at: b.at, way: b.way })) } : {}),
+    ...(typeof c.color === "string" && /^#[0-9a-f]{6}$/i.test(c.color) ? { color: c.color } : {}),
+    ...(isNum(c.gap) && c.gap >= 0 ? { gap: c.gap } : {}),
+    ...(isEntry(c.ends) && Object.values(c.ends as object).every(isNum) ? { ends: { ...(c.ends as Record<string, number>) } } : {}),
+  };
+}
+
 function readShape(raw: unknown): Shape | null {
   const s = raw as Partial<Record<keyof Shape, unknown>> | null;
   if (!s || !isNum(s.id) || !SHAPE_KINDS.includes(s.kind as ShapeKind) || !isNum(s.x0) || !isNum(s.y0) || !isNum(s.x1) || !isNum(s.y1)) return null;
@@ -556,10 +588,13 @@ export function readCarried3D(given: unknown): Carried3D | null {
   if (!bonds.every((b) => isEntry(b) && index(b.a1) && index(b.a2) && Number.isInteger(b.order))) return null;
   const at = m.at as Partial<Pt & { z: number }>;
   if (!isNum(at.x) || !isNum(at.y)) return null;
-  // (what does not read is left out, not the molecule)
-  const frames = (Array.isArray(m.frames) ? (m.frames as unknown[]) : []).filter(
-    (f): f is number[] => Array.isArray(f) && f.length === 3 * n && f.every(isNum),
-  );
+  // (what does not read is left out, not the molecule - and the frame it
+  // showed is still the one shown: where it was left out, the one before it)
+  const listed = Array.isArray(m.frames) ? (m.frames as unknown[]) : [];
+  const whole = (f: unknown): f is number[] => Array.isArray(f) && f.length === 3 * n && f.every(isNum);
+  const frames = listed.filter(whole);
+  const shownFrame = Number.isInteger(m.frame) ? Math.min(Math.max(0, m.frame as number), listed.length) : null;
+  const frame = shownFrame == null ? null : listed.slice(0, shownFrame).filter(whole).length;
   const energies = Array.isArray(m.energies) && m.energies.every(isNum) && m.energies.length === frames.length + 1 ? (m.energies as number[]) : undefined;
   const measures = (Array.isArray(m.measures) ? (m.measures as Partial<Measure3D>[]) : []).filter(
     (x): x is Measure3D => isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
@@ -587,7 +622,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(stackOf(m.stack) ? { stack: stackOf(m.stack) } : {}),
     ...(m.shown === true ? { shown: true as const } : {}),
     ...(turn ? { turn } : {}),
-    ...(Number.isInteger(m.frame) ? { frame: m.frame as number } : {}),
+    ...(frame != null ? { frame } : {}),
     ...(listOf(m.list) ? { list: listOf(m.list) } : {}),
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
@@ -601,6 +636,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
     ...(Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? { framesLeftOut: m.framesLeftOut as number } : {}),
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
+    ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
     ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
     ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
@@ -611,8 +647,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
 }
 
 /**
- * A molecule's CIP labels, by atom and bond index, and which of them its
- * drawing left open - where they read: every index one of its own.
+ * A molecule's CIP labels, by atom and bond index, which of them its
+ * drawing left open, and which are shown - where they read: every index one
+ * of its own.
  */
 function readStereo(given: unknown, atoms: number, bonds: number): Carried3D["stereo"] | undefined {
   const s = given as { atoms?: unknown; bonds?: unknown; chosen?: unknown } | null | undefined;
@@ -632,9 +669,14 @@ function readStereo(given: unknown, atoms: number, bonds: number): Carried3D["st
   if (!a || !b) return undefined;
   const within = (v: unknown, n: number): v is number[] =>
     Array.isArray(v) && v.every((i) => Number.isInteger(i) && i >= 0 && i < n);
-  const c = s.chosen as { atoms?: unknown; bonds?: unknown } | undefined;
-  const chosen = c && within(c.atoms, atoms) && within(c.bonds, bonds) ? { atoms: c.atoms, bonds: c.bonds } : undefined;
-  return { atoms: a, bonds: b, ...(chosen ? { chosen } : {}) };
+  const pair = (v: unknown) => {
+    const c = v as { atoms?: unknown; bonds?: unknown } | undefined;
+    return c && within(c.atoms, atoms) && within(c.bonds, bonds) ? { atoms: c.atoms, bonds: c.bonds } : undefined;
+  };
+  const chosen = pair(s.chosen);
+  // (those shown, as asked for on it)
+  const shown = pair((s as { shown?: unknown }).shown);
+  return { atoms: a, bonds: b, ...(chosen ? { chosen } : {}), ...(shown ? { shown } : {}) };
 }
 
 /**
@@ -680,7 +722,7 @@ function boundingPoints(drawn: Drawn): Pt[] {
       { x: p.x - p.w / 2, y: p.y - p.h / 2 },
       { x: p.x + p.w / 2, y: p.y + p.h / 2 },
     ]),
-    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? []), ...(drawn.shapes ?? []), ...(drawn.inks ?? []).flatMap((k) => strokesBounds(k.strokes, 0) ?? [])].flatMap((b) => [
+    ...[...(drawn.pdfs ?? []).map(pdfBounds), ...(drawn.sheets ?? []).flatMap((t) => drawnSheetBox(t) ?? []), ...(drawn.shapes ?? []), ...(drawn.cycles ?? []).map((c) => ({ x0: c.x - c.r, y0: c.y - c.r, x1: c.x + c.r, y1: c.y + c.r })), ...(drawn.inks ?? []).flatMap((k) => strokesBounds(k.strokes, 0) ?? [])].flatMap((b) => [
       { x: b.x0, y: b.y0 },
       { x: b.x1, y: b.y1 },
     ]),
@@ -704,7 +746,7 @@ function middleOf(drawn: Drawn): Pt | null {
  * shapes and pictures keep their size in pt (docs/WORKSPACE.md, *Drawing
  * style*). As it is, where k is one.
  */
-export function restyledDrawn(drawn: Drawn, k: number): Drawn {
+export function restyledDrawn(drawn: Drawn, k: number, style3d?: Style3D): Drawn {
   const about = middleOf(drawn);
   if (k === 1 || !about) return drawn;
   const parts = restyled(
@@ -720,10 +762,12 @@ export function restyledDrawn(drawn: Drawn, k: number): Drawn {
       ...(drawn.slides ? { slides: drawn.slides } : {}),
       ...(drawn.shapes ? { shapes: drawn.shapes } : {}),
       ...(drawn.inks ? { inks: drawn.inks } : {}),
+      ...(drawn.cycles ? { cycles: drawn.cycles } : {}),
       ...(drawn.flow ? { sets: drawn.flow.sets, steps: drawn.flow.steps } : {}),
     },
     k,
     about,
+    style3d,
   );
   return {
     ...drawn,
@@ -739,6 +783,7 @@ export function restyledDrawn(drawn: Drawn, k: number): Drawn {
     ...(parts.slides ? { slides: parts.slides } : {}),
     ...(parts.shapes ? { shapes: parts.shapes } : {}),
     ...(parts.inks ? { inks: parts.inks } : {}),
+    ...(parts.cycles ? { cycles: parts.cycles } : {}),
     ...(drawn.flow ? { flow: { ...drawn.flow, sets: parts.sets ?? drawn.flow.sets, steps: parts.steps ?? drawn.flow.steps } } : {}),
   };
 }
@@ -760,6 +805,7 @@ export function centredAt<D extends Drawn>(drawn: D, p: Pt): D {
     ...(drawn.slides ? { slides: drawn.slides.map(moved) } : {}),
     ...(drawn.shapes ? { shapes: drawn.shapes.map((x) => shapeMoved(x, { x: dx, y: dy })) } : {}),
     ...(drawn.inks ? { inks: drawn.inks.map((k) => ({ ...k, strokes: k.strokes.map((s) => strokeMoved(s, { x: dx, y: dy })) })) } : {}),
+    ...(drawn.cycles ? { cycles: drawn.cycles.map(moved) } : {}),
     ...(drawn.pdfs ? { pdfs: drawn.pdfs.map(moved) } : {}),
     ...(drawn.sheets ? { sheets: drawn.sheets.map((t) => (t.at ? { ...t, at: moved(t.at) } : t)) } : {}),
     ...(drawn.flow

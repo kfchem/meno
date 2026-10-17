@@ -11,7 +11,7 @@ import {
 import { editorLayoutOptions, layoutBonds, maxFitZoom } from "../layoutOptions";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { chemistry } from "../../../../lib/chem/molecule";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
@@ -42,6 +42,7 @@ export default function FitToContent2D({
   const pictures = useEditor((s) => s.pictures);
   const slides = useEditor((s) => s.slides);
   const shapes = useEditor((s) => s.shapes);
+  const cycles = useEditor((s) => s.cycles);
   const inks = useEditor((s) => s.inks);
   const texts = useEditor((s) => s.texts);
   const sets = useEditor((s) => s.sets);
@@ -68,7 +69,7 @@ export default function FitToContent2D({
     const cam = camera as THREE.OrthographicCamera;
     if (autoFitSuspended) return; // skip while suspended
     const atoms = model.atoms;
-    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && inks.length === 0 && sets.length === 0 && steps.length === 0 && !texts.some((t) => t.at);
+    const empty = atoms.length === 0 && arrows.length === 0 && pluses.length === 0 && molecules3d.length === 0 && captions.length === 0 && pdfs.length === 0 && pictures.length === 0 && slides.length === 0 && shapes.length === 0 && cycles.length === 0 && inks.length === 0 && sets.length === 0 && steps.length === 0 && !texts.some((t) => t.at);
     const firstView = !opened.current;
     opened.current = true;
     const firstContent = !held.current && !empty;
@@ -130,6 +131,12 @@ export default function FitToContent2D({
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
     }
+    // and the catalytic cycles, their arrows going out a little past them (lib/chem/cycle)
+    for (const c of cycles) {
+      const r = c.r + (c.branches?.length ? 2 : 0.3) * NOMINAL_BOND_LENGTH;
+      bounds.min = { x: Math.min(bounds.min.x, c.x - r), y: Math.min(bounds.min.y, c.y - r) };
+      bounds.max = { x: Math.max(bounds.max.x, c.x + r), y: Math.max(bounds.max.y, c.y + r) };
+    }
     // and writing by hand (docs/PRESENTING.md, *Handwriting*)
     for (const k of inks) {
       const b = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
@@ -157,7 +164,7 @@ export default function FitToContent2D({
     // put the camera
     const eyeHeight = eyeOf(camera)?.z;
     const { turns3d, frames3d } = store.getState();
-    const style3d = currentStyle3D();
+    const style3d = style3dOf(store.getState());
     const poses = molecules3d.map((m) =>
       poseOf(m, solidOf(m, style3d), lookOf(m), turns3d[m.id], frames3d[m.id]),
     );
@@ -213,6 +220,7 @@ export default function FitToContent2D({
     pictures,
     slides,
     shapes,
+    cycles,
     inks,
     texts,
     sets,

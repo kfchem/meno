@@ -6,6 +6,7 @@
  * the plugins added are offered. Who does a step says what options it
  * takes.
  */
+import { renderOptions } from "../render/renderOptions";
 import { pluginById, PLUGINS } from "../../../../lib/calc/catalog";
 import { useReaders } from "../../../../lib/calc/workers";
 import { valuesOf, type Option } from "../../../../lib/options";
@@ -94,7 +95,9 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
   const role = decl?.roleOptions && isRole(kind) ? kind : undefined;
   const chosen: Record<string, unknown> = role ? valuesOf(own, useAppSettings.getState().options[roleOptionsRole(role)]) : {};
   // (Meno's own choices for the kind, whoever does it - Render's - then the plugin's)
-  return [...(kindInfo(kind).own ?? []), ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
+  // (Render's: its looks are the plugin's, declared in its manifest)
+  const meno = kind === "render" && plugin?.roleLooks.render ? renderOptions("picture", [], true, plugin.roleLooks.render) : (kindInfo(kind).own ?? []);
+  return [...meno, ...own.map((o) => (o.id in chosen ? ({ ...o, default: chosen[o.id] } as Option) : o))];
 }
 
 /** The options a step takes, as who does it declares them. */

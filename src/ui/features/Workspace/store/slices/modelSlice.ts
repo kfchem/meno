@@ -10,19 +10,21 @@ import { useReadings } from "../../../../../lib/calc/readings";
 import type { ImportedScheme, WorkspaceDocument } from "../../document";
 import type { ArrowLook } from "../../../../../lib/chem/reactionArrow";
 import { ARROW_LENGTH_BONDS } from "../../../../../lib/chem/reactionScheme";
-import { EditorState, Bond, Arrow, Model, Drawn, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
+import { EditorState, Bond, Arrow, Model, Drawn, type ArrowAtomMap, type ArrowFormPatch, type MarkAt, type PushEnd } from "../types";
 import { marksAtOf, turnedOver, turnedOverArrows } from "../../utils/selection";
 import { turnedOverRest, turnOverMiddle } from "../../utils/turnOver";
+import { endsRenamed } from "../../utils/cycles";
 import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
 import { resultKey } from "../../../../../lib/calc/results";
 import type { Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
-import { DOUBLE_CLICK_MS } from "../../constants";
 import { nextIdAfter } from "../../workflow/saved";
 import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
+import { style3dOf } from "../../style3d";
+import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -67,6 +69,12 @@ function added(start: number, model: Model): EditorState["sel"] {
  * Each action is one undo step, except where a gesture produces several edits
  * in a row - those share a coalesce key so a drag stays one step.
  */
+/** What a press may change that a pinch begun with it takes back (`notePress`, `takeBackPress`): the selection, besides the document. */
+const SELECTION_KEYS = ["sel", "selAnchor", "sel3d", "chosen3d", "selFlow", "pdfSel", "pdfBox", "selPictures", "selTexts", "selCaptions", "selPdfs", "selSlides", "selShapes", "selArrows", "selPluses", "selInks"] as const;
+type PressNote = { depth: number; state: WorkspaceDocument; selection: Pick<EditorState, (typeof SELECTION_KEYS)[number]> };
+/** The press noted last, by its document: none once taken back. */
+const pressNotes = new WeakMap<DocumentStore<WorkspaceDocument>, PressNote>();
+
 export const createModelSlice = (
   doc: DocumentStore<WorkspaceDocument>,
   set: SetState,
@@ -170,8 +178,8 @@ export const createModelSlice = (
   },
 
   deleteSelection: () => {
-    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, selShapes, selArrows, selPluses, selInks, steps } = get();
-    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size && !selShapes.size && !selArrows.size && !selPluses.size && !selInks.size) return;
+    const { sel, sel3d, selFlow, selPictures, selTexts, selCaptions, selPdfs, selSlides, selShapes, selArrows, selPluses, selInks, selCycles, steps } = get();
+    if (!sel.atoms.size && !sel.bonds.size && !sel3d.size && !selFlow.sets.size && !selFlow.steps.size && !selPictures.size && !selTexts.size && !selCaptions.size && !selPdfs.size && !selSlides.size && !selShapes.size && !selArrows.size && !selPluses.size && !selInks.size && !selCycles.size) return;
     // the arrows and pluses among it go with it, as with a cut, and those
     // selected for themselves; the molecules in 3D selected, and a
     // workflow's sets and steps, in the same step - but not a step running,
@@ -182,6 +190,7 @@ export const createModelSlice = (
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>
       removeParts(
+        ops.removeCycles(
         ops.removeInks(
         ops.removeShapes(
         ops.removeSlides(
@@ -197,6 +206,8 @@ export const createModelSlice = (
         selShapes,
         ),
         selInks,
+        ),
+        selCycles,
         ),
         selFlow.sets,
         idle,
@@ -214,18 +225,38 @@ export const createModelSlice = (
     });
   },
 
-  noteDoubleClickBond: (atomId: number) =>
-    set((prev: EditorState) => ({
-      ...prev,
-      doubleClickBond: { atomId, state: doc.getState(), at: performance.now() },
-    })),
+  setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => {
+    doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
+  },
 
-  takeBackDoubleClickBond: (atomId: number) => {
-    const d = get().doubleClickBond;
-    set((prev: EditorState) => ({ ...prev, doubleClickBond: null }));
-    if (!d || d.atomId !== atomId || performance.now() - d.at > 2 * DOUBLE_CLICK_MS) return;
-    // (the bond's own step, nothing since: the document still as the bond left it)
-    if (doc.getState() === d.state) doc.undo();
+  showAtomMap: (arrowId: number, shown: boolean) => {
+    const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
+    if (map) doc.edit(shown ? "show atom map" : "hide atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, shown }));
+  },
+
+  otherAtomMap: (arrowId: number) => {
+    const map = get().arrows.find((a) => a.id === arrowId)?.atomMap;
+    if (map && map.maps.length > 1) doc.edit("other atom map", (d) => ops.setAtomMap(d, arrowId, { ...map, chosen: (map.chosen + 1) % map.maps.length, shown: true }));
+  },
+
+  setStereoShown: (of: Parameters<typeof ops.setStereoShown>[1], show: boolean) => {
+    doc.edit(show ? "show R/S" : "hide R/S", (d) => ops.setStereoShown(d, of, show));
+  },
+
+  notePress: () => {
+    const st = get();
+    const selection = Object.fromEntries(SELECTION_KEYS.map((k) => [k, st[k]])) as PressNote["selection"];
+    pressNotes.set(doc, { depth: doc.history().undoDepth, state: doc.getState(), selection });
+  },
+
+  takeBackPress: () => {
+    const note = pressNotes.get(doc);
+    pressNotes.delete(doc);
+    get().endGestures();
+    if (!note) return false;
+    const back = doc.takeBackTo(note.depth, note.state);
+    set((prev: EditorState) => ({ ...prev, ...note.selection }));
+    return back;
   },
 
   drawStrokeAt: (start: { x: number; y: number }, nodes: Parameters<typeof ops.addStroke>[2]) => {
@@ -352,7 +383,7 @@ export const createModelSlice = (
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
       // (a workflow's parts by their own ids: what a set holds is what lies inside it, whatever the molecules' ids)
       const workflow = ws.workflow ? { ...ws.workflow, nextWorkflowId: nextIdAfter(ws.workflow) } : {};
-      return ops.setDocumentStyle(
+      return ops.setDocumentStyle3d(ops.setDocumentStyle(
         {
           ...next,
           ...workflow,
@@ -373,6 +404,9 @@ export const createModelSlice = (
         },
         // (a file saved without one: Settings' style, set as it is - fixed, not converted; opened in a tab, no change made)
         ws.style ?? useAppSettings.getState().drawingStyle,
+      ),
+        // (and its styles in 3D - a file saved before workspaces carried them: Settings' as it opens, fixed from then on)
+        ws.style3d ?? workspace3dOf(useAppSettings.getState().style3d),
       );
     };
     if (start) doc.reset(opened(doc.getState()), "open workspace");
@@ -432,6 +466,7 @@ export const createModelSlice = (
       hovered3d: null,
       hoveredMeasure3d: null,
       measureEdit3d: null,
+      copied3d: null,
       hovered: { atomId: null, bondId: null },
       labelEdit: { active: false, atomId: null, value: "" },
       moveDrag: {
@@ -448,7 +483,7 @@ export const createModelSlice = (
 
   pasteModel: (given: Drawn) => {
     // (from a workspace in another style: converted by its bond over this one's, about its middle - a record that says none, as it is)
-    const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle)) : given;
+    const converted = given.bondPt ? restyledDrawn(given, given.bondPt / bondPtOf(get().docStyle), style3dOf(get())) : given;
     // (and its words as large in print: those given no size at the labels' size it was copied in)
     const next = converted.labelPt && converted.captions?.length ? { ...converted, captions: wordsKept(converted.captions, converted.labelPt, labelPtOf(get().docStyle)) } : converted;
     const carried = next.molecules3d ?? [];
@@ -467,7 +502,10 @@ export const createModelSlice = (
     // (arrows and "+" signs: a reaction's, or alone - one pointing at something)
     const arrows = next.arrows ?? [];
     const pluses = next.pluses ?? [];
-    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length && !shapes.length && !inks.length && !arrows.length && !pluses.length) return;
+    // (catalytic cycles, with what lies on them pasted with them)
+    const cycles = next.cycles ?? [];
+    if (!next.atoms.length && !carried.length && !flow.sets.length && !flow.steps.length && !pictures.length && !words.length && !pdfs.length && !sheets.length && !slides.length && !shapes.length && !inks.length && !arrows.length && !pluses.length && !cycles.length) return;
+    const startCycle = doc.getState().nextCycleId ?? 1;
     const startArrow = doc.getState().nextArrowId;
     const startPlus = doc.getState().nextPlusId ?? 1;
     const startSlide = doc.getState().nextSlideId ?? 1;
@@ -483,10 +521,16 @@ export const createModelSlice = (
     // 3D pasted with its drawing is tied to the pasted drawing - and a
     // workflow's parts numbered on from its counter, wired as they were)
     const idOf = new Map(next.atoms.map((a, k) => [a.id, start + k]));
-    const tied = { ...next, molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))) };
+    // (and a cycle's gaps set by hand kept for what they were of, numbered anew)
+    const wordsOf = new Map(words.map((w, k) => [w.id, startCaption + k]));
+    const tied = {
+      ...next,
+      molecules3d: carried.map((m) => relinked(m, next, (id) => idOf.get(id))),
+      ...(cycles.length ? { cycles: cycles.map((c) => endsRenamed(c, (id) => idOf.get(id), (id) => wordsOf.get(id))) } : {}),
+    };
     let pastedFlow: { sets: number[]; steps: number[] } = { sets: [], steps: [] };
     const pasted = doc.edit("paste", (d) => {
-      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length ? ops.withImportedScheme(d, ops.schemeOf(next)) : d;
+      const model = next.atoms.length || carried.length ? ops.withImportedScheme(ops.appendModel(d, next), ops.schemeOf(tied)) : words.length || shapes.length || arrows.length || pluses.length || cycles.length ? ops.withImportedScheme(d, ops.schemeOf(tied)) : d;
       const withPictures = pictures.reduce((doc2, { id: _, ...p }) => ops.addPicture(doc2, p), model);
       const withPdfs = pdfs.reduce((doc2, { id: _, reading: _r, ...p }) => ops.addPdf(doc2, p), withPictures);
       const withSlides = inks.reduce((doc2, { id: _, ...k }) => ops.addInk(doc2, k), slides.reduce((doc2, { id: _, ...s }) => ops.addSlide(doc2, s), withPdfs));
@@ -521,6 +565,7 @@ export const createModelSlice = (
       selSlides: new Set(slides.map((_, i) => startSlide + i)),
       selShapes: new Set(shapes.map((_, i) => startShape + i)),
       selInks: new Set(inks.map((_, i) => startInk + i)),
+      selCycles: new Set(cycles.map((_, i) => startCycle + i)),
       // (the arrows and "+" signs pasted selected for themselves too: those among the atoms are carried with them, once)
       selArrows: new Set(arrows.map((_, i) => startArrow + i)),
       selPluses: new Set(pluses.map((_, i) => startPlus + i)),

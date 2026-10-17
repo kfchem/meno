@@ -5,10 +5,10 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
-import { canWire, givesOf, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
+import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
 import { KCAL_PER_HARTREE, boltzmann, keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
 import { rmsd } from "./rmsd";
-import { addSet, addStep, connect, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
+import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
 import { doerOf } from "./doers";
@@ -110,6 +110,51 @@ describe("what a set holds", () => {
     // made smaller than what it holds: as it was made
     doc.edit("size", (d) => resizeSet(d, 1, { x0: 0, y0: -0.5, x1: 1.5, y1: 1 }));
     expect(frame()).toEqual({ x0: 0, y0: -0.5, x1: 1.5, y1: 1 });
+  });
+
+  it("on a page of a thousand structures, is what it is on a page of one - its structures found once for the page, whichever set asks", () => {
+    // (chains of seven atoms, forty to a row - their ids the other way round from the order they lie)
+    const chains: number[][] = [];
+    const drawn: WorkspaceDocument["model"] = { atoms: [], bonds: [] };
+    for (let k = 0; k < 1000; k++) {
+      const ids = [0, 1, 2, 3, 4, 5, 6].map((i) => 7000 - 7 * k - i);
+      ids.forEach((id, i) => drawn.atoms.push({ id, x: (k % 40) * 12 + i * 1.3, y: -Math.floor(k / 40) * 3 + (i % 2) * 0.75, r: 0.9, el: "C" }));
+      ids.slice(1).forEach((id, i) => drawn.bonds.push({ id: 7 * k + i + 1, a: ids[i], b: id, order: 1 }));
+      chains.push(ids);
+    }
+    const sorted = (s: number[][]) => s.map((ids) => [...ids].sort((a, b) => a - b));
+    const all = { x0: -2, y0: -80, x1: 480, y1: 2 };
+    const left = { x0: -2, y0: -80, x1: 238, y1: 2 };
+    const page = { ...emptyWorkspaceDocument(), model: drawn };
+    // in the order they lie: row by row, each left to right
+    expect(sorted(setMembers(page, all).structures)).toEqual(sorted(chains));
+    expect(sorted(setMembers(page, left).structures)).toEqual(sorted(chains.filter((_, k) => k % 40 < 20)));
+    // the last chain's end drawn on past the frame's right edge: it grows as it would for that chain alone
+    const moved = (model: WorkspaceDocument["model"]) => ({ ...model, atoms: model.atoms.map((a) => (a.id === 1 ? { ...a, x: a.x + 5 } : a)) });
+    const before = addSet(page, all);
+    const grown = fitSets({ ...before, model: moved(before.model) }, before);
+    const last = new Set(chains[999]);
+    const alone = addSet({ ...page, model: { atoms: drawn.atoms.filter((a) => last.has(a.id)), bonds: drawn.bonds.filter((b) => last.has(b.a)) } }, all);
+    const grownAlone = fitSets({ ...alone, model: moved(alone.model) }, alone);
+    expect(grown.sets![0].x1).toBeGreaterThan(all.x1);
+    expect(grown.sets).toEqual(grownAlone.sets);
+    // (the very same structures for every set asking of the page: found once, not again for each set)
+    const everything = setMembers(page, all).structures;
+    expect(setMembers(page, left).structures.every((ids) => everything.includes(ids))).toBe(true);
+  });
+
+  it("finds a drawing's structures once for every set asking, and again only once it is drawn on", () => {
+    const drawn: WorkspaceDocument["model"] = {
+      atoms: [0, 1, 2, 3].map((i) => ({ id: i + 1, x: i * 1.3, y: 0, r: 0.9, el: "C" })),
+      bonds: [1, 2, 3].map((i) => ({ id: 10 + i, a: i, b: i + 1, order: 1 as const })),
+    };
+    const page = { ...emptyWorkspaceDocument(), model: drawn };
+    const one = setMembers(page, { x0: -2, y0: -2, x1: 6, y1: 2 }).structures[0];
+    const other = setMembers(page, { x0: -1, y0: -1, x1: 5, y1: 1 }).structures[0];
+    // (the very same structure, found once for the two sets)
+    expect(other).toBe(one);
+    const changed = { ...page, model: { ...drawn, atoms: drawn.atoms.map((a) => ({ ...a })) } };
+    expect(setMembers(changed, { x0: -2, y0: -2, x1: 6, y1: 2 }).structures[0]).not.toBe(one);
   });
 
   it("is a compound per frame, unless it is a conformer set", () => {
@@ -233,13 +278,13 @@ describe("Meno's own steps", () => {
     expect(pauses).toBe(2);
   });
 
-  it("lay a conformer in Duplicates over only those kept that could be alike - five thousand distinct ones, not each over every other", () => {
-    const many = shaken(5_000, 0.6);
+  it("lay a conformer in Duplicates over only those kept that could be alike - two thousand distinct ones, not each over every other", () => {
+    const many = shaken(2_000, 0.6);
     let laid = 0;
     const kept = keptApart(many, 0.125, (p, q) => (laid++, rmsd(p, q)));
-    expect(kept).toHaveLength(5_000);
-    // (every one over every one kept before it: 12,497,500)
-    expect(laid).toBeLessThan(50_000);
+    expect(kept).toHaveLength(2_000);
+    // (every one over every one kept before it: 1,999,000 - counted, not timed: a busy machine is slow, not wrong)
+    expect(laid).toBeLessThan(20_000);
   });
 
   const entries = (m: Omit<Molecule3D, "id">, set: "molecules" | "conformers") => setEntries([{ ...m, id: 1 }], set);
@@ -341,6 +386,20 @@ describe("Meno's own steps", () => {
     // (and the canvas's own shares, where no step found them)
     near(populations(m.energies!, m.degeneracies));
   });
+
+  it("give no populations at 0 K or below - none to give, rather than NaN or the highest energy the most", () => {
+    for (const temperature of [0, -5]) {
+      const out = runMeno("populations", entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers"), "conformers", { temperature });
+      expect(out.ok).toBe(false);
+    }
+  });
+
+  it("give shares of a long run of energies - three hundred thousand - without overrunning the stack", () => {
+    const many = Array.from({ length: 300_000 }, (_, i) => kcal(i % 7));
+    const w = boltzmann(many, 298.15);
+    expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9);
+    expect(w[0]).toBeGreaterThan(w[1]);
+  });
 });
 
 describe("running", () => {
@@ -386,6 +445,19 @@ describe("running", () => {
     expect(resultOf(doc, 3)!.aside).toBeUndefined();
   });
 
+  it("runs first a step changed however far back, and every step from it on - each on what the one before it gave anew", () => {
+    // (… → Energy window (3) → Duplicates → Populations)
+    let doc = addStep(addStep(chain(), "duplicates", 35, 0), "populations", 50, 0);
+    const [duplicates, populations] = doc.steps!.slice(2).map((s) => s.id);
+    doc = connect(connect(doc, { step: 3 }, duplicates), { step: duplicates }, populations);
+    doc = runStep(doc, populations, W);
+    doc = updateStep(doc, 3, { options: { window: 5 } });
+    expect(doc.steps!.map((s) => stateOf(doc, s, "meno"))).toEqual(["done", "changed", "done", "done"]);
+    doc = runStep(doc, populations, { ...W, now: 2000 });
+    expect(doc.steps!.map((s) => stateOf(doc, s, "meno"))).toEqual(["done", "done", "done", "done"]);
+    expect(doc.steps!.map((s) => s.ran!.at)).toEqual([1000, 2000, 2000, 2000]);
+  });
+
   it("says a step has changed when what comes in changes only in a charge", () => {
     let doc = runStep(chain(), 3, W);
     expect(stateOf(doc, doc.steps![0], "meno")).toBe("done");
@@ -413,6 +485,63 @@ describe("running", () => {
   });
 });
 
+describe("a step's key, on structures drawn", () => {
+  type Drawn = { id: number; el: string; x: number; y: number; r: number };
+  const atom = (id: number, el: string, x: number, y: number): Drawn => ({ id, el, x, y, r: 0.9 });
+  /** (Z)-but-2-ene, its methyls above the double bond; and CHFClBr, a wedge from C to F: both drawn in one set, wired into a conformer search. */
+  function drawn(atoms: Drawn[] = [
+    atom(1, "C", -0.5, 0.87),
+    atom(2, "C", 0, 0),
+    atom(3, "C", 1, 0),
+    atom(4, "C", 1.5, 0.87),
+    atom(5, "C", 5, 0),
+    atom(6, "F", 5, 1),
+    atom(7, "Cl", 5.87, -0.5),
+    atom(8, "Br", 4.13, -0.5),
+  ]): WorkspaceDocument {
+    const bonds = [
+      { id: 1, a: 1, b: 2, order: 1 },
+      { id: 2, a: 2, b: 3, order: 2 },
+      { id: 3, a: 3, b: 4, order: 1 },
+      { id: 4, a: 5, b: 6, order: 1, stereo: "up" },
+      { id: 5, a: 5, b: 7, order: 1 },
+      { id: 6, a: 5, b: 8, order: 1 },
+    ];
+    let doc: WorkspaceDocument = { ...emptyWorkspaceDocument(), model: { atoms: atoms as never, bonds: bonds as never }, nextId: 9 };
+    doc = addSet(doc, { x0: -3, y0: -3, x1: 8, y1: 3 });
+    doc = addStep(doc, "conformers", 12, 0);
+    return connect(doc, { set: 1 }, 2);
+  }
+  const keyOf = (doc: WorkspaceDocument) => inputKey(doc, doc.steps![0], "rdkit");
+  const moved = (doc: WorkspaceDocument, f: (a: Drawn) => Drawn) => ({ ...doc, model: { ...doc.model, atoms: (doc.model.atoms as unknown as Drawn[]).map(f) as never } });
+
+  it("changes with an atom's element", () => {
+    const doc = drawn();
+    expect(inputOf(doc, 2)!.structures).toHaveLength(2);
+    expect(keyOf(moved(doc, (a) => (a.id === 1 ? { ...a, el: "N" } : a)))).not.toBe(keyOf(doc));
+  });
+
+  it("changes with an atom moved across a double bond, or a wedged centre's neighbours mirrored - what the drawing says changed", () => {
+    const doc = drawn();
+    // (a methyl moved below the double bond: E, not Z)
+    expect(keyOf(moved(doc, (a) => (a.id === 4 ? { ...a, y: -0.87 } : a)))).not.toBe(keyOf(doc));
+    // (Cl and Br swapped round the wedged carbon: its other enantiomer)
+    expect(keyOf(moved(doc, (a) => (a.id === 7 ? { ...a, x: 4.13 } : a.id === 8 ? { ...a, x: 5.87 } : a)))).not.toBe(keyOf(doc));
+  });
+
+  it("stays the same where the drawing says the same: moved whole, turned, an atom nudged - or the page looked at anew", () => {
+    const doc = drawn();
+    const key = keyOf(doc);
+    expect(keyOf(moved(doc, (a) => ({ ...a, x: a.x + 0.4, y: a.y - 0.3 })))).toBe(key);
+    // (each turned a quarter round its own middle)
+    const turned = (a: Drawn, cx: number, cy: number) => ({ ...a, x: cx - (a.y - cy), y: cy + (a.x - cx) });
+    expect(keyOf(moved(doc, (a) => (a.id <= 4 ? turned(a, 0.5, 0.435) : turned(a, 5, 0))))).toBe(key);
+    expect(keyOf(moved(doc, (a) => (a.id === 4 ? { ...a, x: a.x + 0.2, y: a.y - 0.3 } : a)))).toBe(key);
+    // (asked again, of the same page: the same)
+    expect(keyOf({ ...doc })).toBe(key);
+  });
+});
+
 describe("saving", () => {
   it("keeps sets, steps and wires as they are, and leaves out what does not read", async () => {
     const { readWorkflow, nextIdAfter } = await import("./saved");
@@ -432,6 +561,11 @@ describe("saving", () => {
     });
     expect(odd).toEqual({ sets: [{ id: 1, x0: 0, y0: 0, x1: 2, y1: 2 }], steps: [], wires: [] });
     expect(readWorkflow({})).toBeUndefined();
+  });
+
+  it("reads back the name a set was given", () => {
+    const saved = JSON.parse(JSON.stringify({ sets: [{ id: 1, x0: 0, y0: 0, x1: 2, y1: 2, name: "Ligands" }, { id: 2, x0: 0, y0: 0, x1: 2, y1: 2, name: 7 }] }));
+    expect(readWorkflow(saved)!.sets.map((b) => b.name)).toEqual(["Ligands", undefined]);
   });
 
   it("reads back a step's earlier runs, each with what it gave - a molecule that does not read left out", () => {

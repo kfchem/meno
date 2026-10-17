@@ -84,7 +84,9 @@ export type Like = Record<number, [number, number, number]>;
  * One stereoisomer's conformers: its atoms - those of the block in their
  * order, then the hydrogens made for them - its bonds by index, each
  * conformer's coordinates in angstroms, laid over the first, and its energy
- * in hartrees, lowest first; the force field's name; and the CIP label of
+ * in hartrees, lowest first - none where no force field had parameters for a
+ * metal in it, and the conformers are not ranked; the force field's name
+ * ("none" where none was used); and the CIP label of
  * every stereocentre and double bond, and of those that were left open and
  * chosen, by the block's atom and bond index.
  */
@@ -92,7 +94,9 @@ export type Conformers = {
   atoms: { el: string; charge: number }[];
   bonds: { a1: number; a2: number; order: 1 | 2 | 3 }[];
   frames: number[][];
-  energies: number[];
+  energies?: number[];
+  /** The stars at the centres of the rings or chains bound to a metal through all their atoms (V3000 ENDPTS), by atom: placed at each one's centre, and no atoms of the molecule. */
+  stars?: number[];
   field: string;
   /** How they were made, as rows to show - what made them, the method, the force field - in the plugin's words. */
   how?: { label: string; text: string }[];

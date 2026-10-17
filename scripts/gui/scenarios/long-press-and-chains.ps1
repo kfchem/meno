@@ -5,7 +5,7 @@
 #   the structure; one undo puts it back. Let go where it was held, it
 #   selects and that is all: no label is edited once the double-click
 #   time is over.
-# - Three clicks on an atom, the third dragged: a chain out of it along the
+# - Chain from an atom's menu, led by the pointer: a chain out of it along the
 #   honeycomb that opens out from the atom; led back - a little beside the
 #   way it went - it takes its bonds back, and closes no ring for that.
 # - Quick Add's chain on empty space, then the pointer led with the button
@@ -41,10 +41,9 @@ Save-Step "held-let-go"
 Send-MenoKey Escape
 Wait-MenoSettled | Out-Null
 
-# the left ethane's upper carbon: three clicks, the third dragged out to
-# the right and partly back, a little lower
-Invoke-MenoClick -X 772 -Y 877 -Count 2
-Invoke-MenoDrag -FromX 772 -FromY 877 -Via @(, @(1172, 900)) -ToX 960 -ToY 905 -Count 3 -Steps 20 -StepMs 35 -AtStep {
+# the left ethane's upper carbon: Chain from here, led out to the right and
+# partly back, a little lower
+Invoke-MenoChainFromHere -X 772 -Y 877 -Via @(,@(1172, 900)) -ToX 960 -ToY 905 -Steps 20 -AtStep {
     param($i)
     if ($i -eq 3) { Save-Step "chain-opening" }
     if ($i -eq 20) { Save-Step "chain-out" }

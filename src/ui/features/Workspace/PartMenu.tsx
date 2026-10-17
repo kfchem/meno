@@ -18,7 +18,7 @@ export type MenuTarget = {
    * The atom, bond, reaction arrow or "+" right-clicked, or a molecule in 3D
    * or a measurement on one; null, when it was nothing.
    */
-  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | null;
+  kind: "atom" | "bond" | "arrow" | "plus" | "caption" | "pdf" | "picture" | "text" | "molecule3d" | "measure3d" | "set" | "step" | "wire" | "push" | "ring" | "slide" | "shape" | "ink" | "cycle" | null;
   /** Its id: for a measurement, its molecule's; for a ring, one of its atoms'. */
   id: number | null;
   /** A ring right-clicked inside: its key (utils/rings). */
@@ -75,6 +75,14 @@ export type MenuClipboard = {
  * the right end of them); without, in the list under them, a rule above it
  * where `divider` says.
  */
+/** The gaps a cycle's arrows can keep from what is on it, in bonds, as its menu offers them. */
+const CYCLE_GAPS: readonly (readonly [number, string])[] = [
+  [0.25, "Arrows close"],
+  [0.5, "Arrows a little apart"],
+  [0.75, "Arrows apart"],
+  [1, "Arrows well apart"],
+];
+
 type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
@@ -95,6 +103,8 @@ export type MenuMolecule3D = {
   onSetChosen?: () => void;
   /** Turned back to face as its file has it. */
   onResetTurn: () => void;
+  /** Turned once round about the screen's up, and back as it was - with the others selected with it, each about its own centre. */
+  onTurnOnce: () => void;
   /** It alone, cut or copied. */
   onCut: () => void;
   onCopy: () => void;
@@ -133,6 +143,7 @@ export type MenuMolecule3D = {
 export default function PartMenu({
   target,
   records,
+  stereo,
   onDelete,
   onCleanUp,
   onMake3d,
@@ -143,6 +154,7 @@ export default function PartMenu({
   onRadical,
   radical,
   onExpand,
+  onChain,
   asTyped,
   onArrowStyle,
   onEditText,
@@ -170,6 +182,7 @@ export default function PartMenu({
   slide,
   onSlideAround,
   shape,
+  cycle,
   onBoxAround,
   canvas = [],
   clipboard,
@@ -196,6 +209,8 @@ export default function PartMenu({
   radical: boolean;
   /** An abbreviation's atoms drawn out; unset, where the atom is none. */
   onExpand?: () => void;
+  /** Where the atom can take another bond: a chain begun from it, traced with the button up. */
+  onChain?: () => void;
   /** Its label as it was typed (obz, read as OBz), and the label made that again; unset, where it was read as typed. */
   asTyped?: { typed: string; run: () => void };
   /** A reaction arrow's own line and head, in a panel beside the canvas. */
@@ -245,6 +260,8 @@ export default function PartMenu({
     /** A box drawn on it put on the page as a picture, or copied as one. */
     onPutBox?: () => void;
     onCopyBox?: () => void;
+    /** The coordinates in the words selected, or in the box drawn, shown as structures to place in 3D (lib/io/coordinates). */
+    onStructures?: () => void;
     /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
     onWrite?: () => void;
   };
@@ -253,7 +270,7 @@ export default function PartMenu({
   /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
   onReadStructure?: () => void;
   /** What a text whose sheet was right-clicked can do: read in the column, made an icon or full size. */
-  text?: { icon: boolean; onRead: () => void; onIcon: () => void };
+  text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
   /** The selection made a set, a workflow's input; unset, where it holds no whole structure or molecule in 3D. */
@@ -290,6 +307,24 @@ export default function PartMenu({
     weight: ArrowWeight | "regular";
     setWeight: (weight: ArrowWeight | "regular") => void;
     onStraighten?: () => void;
+    /**
+     * Its reaction's atom map (docs/ATOM-MAPPING.md, *On a drawn scheme*):
+     * how it stands - none made, made of a drawing changed since, made with
+     * atoms that do not all map, or ready - whether it is shown, how many
+     * maps there are to step through, and what can be done: made (again),
+     * shown or hidden, the next map taken, the reaction written in 3D.
+     */
+    atomMap?: {
+      standing: "none" | "changed" | "incomplete" | "ready";
+      shown: boolean;
+      maps: number;
+      /** Which of them is in use, from 0: the best first. */
+      chosen: number;
+      onMake: () => void;
+      onShow: (shown: boolean) => void;
+      onOther: () => void;
+      onExport: () => void;
+    };
   };
   /** The part - an atom, a bond, a ring, the selection - given a colour, a highlight or a fill, in a card where the menu was. */
   onColour?: () => void;
@@ -320,6 +355,8 @@ export default function PartMenu({
     onFront: () => void;
     onBack: () => void;
   };
+  /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
+  cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void; onResetEnd?: () => void; onResetAll?: () => void };
   /** A rounded rectangle made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
@@ -329,6 +366,8 @@ export default function PartMenu({
   molecule3d?: MenuMolecule3D;
   /** The stack of drawings what was right-clicked is a record of (utils/stacks): whether it is laid out as a grid, and laid out so, or stacked again. */
   records?: { spread: boolean; run: () => void };
+  /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
+  stereo?: { name: string; run: () => void };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
   onClose: () => void;
@@ -396,6 +435,7 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
+  const stereoItem: Item[] = stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : [];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -403,6 +443,7 @@ export default function PartMenu({
         // (the other look, one step away: the 3D style's secondary, or back to its primary)
         { name: molecule3d.otherLook.name, keys: "", run: molecule3d.otherLook.run, icon: MENU_ICONS[molecule3d.otherLook.atoms] },
         { name: "Reset orientation", keys: "", run: molecule3d.onResetTurn, icon: MENU_ICONS.resetTurn },
+        { name: "Turn once", keys: "", run: molecule3d.onTurnOnce, icon: MENU_ICONS.turnOnce },
       ]
     : [];
   const moleculeList: Item[] = molecule3d
@@ -448,6 +489,7 @@ export default function PartMenu({
           { name: "Copy", keys: keys ? shortcut("C") : "", run: molecule3d.onCopy, icon: MENU_ICONS.copy },
           ...moleculeRow,
           del("Delete molecule", keys),
+          ...stereoItem,
           ...moleculeList,
           // (rendered, by a plugin added that renders)
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender, divider: moleculeList.length > 0 }] : []),
@@ -488,6 +530,22 @@ export default function PartMenu({
                   ] as const
                 ).map(([w, name], i) => ({ name, keys: "", run: () => arrow.setWeight(w), checked: arrow.weight === w, divider: i === 0 })),
               ]
+            : []),
+          // (its reaction's atom map: made; shown or hidden, another taken, written in 3D - or said to be incomplete)
+          ...(arrow?.atomMap
+            ? arrow.atomMap.standing === "ready"
+              ? [
+                  { name: arrow.atomMap.shown ? "Hide atom map" : "Show atom map", keys: "", run: () => arrow.atomMap!.onShow(!arrow.atomMap!.shown), divider: true },
+                  // (which of how many is in use: most differ only in where the hydrogens go, which the drawing does not show)
+                  ...(arrow.atomMap.maps > 1 ? [{ name: "Other map", keys: `${arrow.atomMap.chosen + 1} of ${arrow.atomMap.maps}`, run: arrow.atomMap.onOther, keep: true }] : []),
+                  { name: "Export reaction in 3D…", keys: "", run: arrow.atomMap.onExport },
+                ]
+              : [
+                  { name: "Atom map", keys: "", run: arrow.atomMap.onMake, divider: true },
+                  ...(arrow.atomMap.standing === "incomplete" ? [{ name: "Atom map incomplete", keys: "", run: () => {}, disabled: true }] : []),
+                  // (one of a drawing changed since, still shown: taken off it)
+                  ...(arrow.atomMap.standing === "changed" && arrow.atomMap.shown ? [{ name: "Hide atom map", keys: "", run: () => arrow.atomMap!.onShow(false) }] : []),
+                ]
             : []),
           { name: "Arrow style…", keys: "", run: onArrowStyle, divider: true },
         ]
@@ -547,6 +605,7 @@ export default function PartMenu({
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
           ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
+          ...(pdf?.onStructures ? [{ name: "3D structures", keys: "", run: pdf.onStructures }] : []),
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
           ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
@@ -557,6 +616,7 @@ export default function PartMenu({
             ? [
                 { name: "Read", keys: "", run: text.onRead, icon: MENU_ICONS.read },
                 { name: text.icon ? "Show full size" : "Minimize to an icon", keys: "", run: text.onIcon, icon: text.icon ? MENU_ICONS.fullSize : MENU_ICONS.toIcon },
+                ...(text.onStructures ? [{ name: "3D structures", keys: "", run: text.onStructures }] : []),
               ]
             : []),
           del("Delete text"),
@@ -600,6 +660,20 @@ export default function PartMenu({
         ]
       : target.kind === "ink"
       ? [...colour, del("Delete writing")]
+      : target.kind === "cycle" && cycle
+      ? [
+          ...colour,
+          { name: "Arrow coming in", keys: "", run: cycle.onIn },
+          { name: "Arrow going out", keys: "", run: cycle.onOut },
+          ...(cycle.onRemoveArrow ? [{ name: "Remove this arrow", keys: "", run: cycle.onRemoveArrow }] : []),
+          { name: cycle.ccw ? "Turn clockwise" : "Turn anticlockwise", keys: "", run: cycle.onTurn, divider: true },
+          // (how far its arrows stop short of what is on it, ticked as it is)
+          ...CYCLE_GAPS.map(([gap, name], i) => ({ name, keys: "", run: () => cycle.setGap(gap), checked: Math.abs(cycle.gap - gap) < 1e-6, ...(i === 0 ? { divider: true } : {}) })),
+          // (ends set by hand given back the cycle's gap: the arrow's right-clicked, or all)
+          ...(cycle.onResetEnd ? [{ name: "Reset this arrow's gap", keys: "", run: cycle.onResetEnd, divider: true }] : []),
+          ...(cycle.onResetAll ? [{ name: "Reset all arrow gaps", keys: "", run: cycle.onResetAll, ...(cycle.onResetEnd ? {} : { divider: true }) }] : []),
+          del("Delete cycle"),
+        ]
       : target.kind === "set"
       ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
       : target.kind === "step"
@@ -636,6 +710,7 @@ export default function PartMenu({
           ...(onExport ? [{ name: "Export…", keys: "", run: onExport, divider: !drawing && moleculeList.length > 0 }] : []),
           // (its molecules in 3D rendered, by a plugin added that renders)
           ...(onRender ? [{ name: "Render…", keys: "", run: onRender }] : []),
+          ...stereoItem,
           ...(drawing
             ? [
                 { name: "Turn over left to right", keys: "", run: () => onTurnOver("vertical"), divider: true },
@@ -696,11 +771,13 @@ export default function PartMenu({
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
+                ...(onChain ? [{ name: "Chain from here", keys: "", run: onChain }] : []),
                 { name: radical ? "No unpaired electron" : "Unpaired electron", keys: "", run: onRadical },
                 ...(onExpand ? [{ name: "Expand abbreviation", keys: "", run: onExpand }] : []),
                 ...(asTyped ? [{ name: `As typed: ${asTyped.typed}`, keys: "", run: asTyped.run }] : []),
               ]
             : []),
+          ...stereoItem,
           { name: "Select this structure", keys: "", run: onSelectStructure },
           ...stackItem,
         ];
@@ -759,6 +836,8 @@ export default function PartMenu({
                       ? "Shape"
                     : target.kind === "ink"
                       ? "Writing"
+                    : target.kind === "cycle"
+                      ? "Catalytic cycle"
                       : "Canvas"
       }
       tabIndex={-1}
@@ -855,7 +934,9 @@ export default function PartMenu({
                 }
               : undefined
           }
-          className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none"
+          // (one that says how something stands, not done: shown, not taken)
+          disabled={item.disabled}
+          className="w-full h-8 px-3 flex items-center justify-between gap-4 text-left whitespace-nowrap transition-colors duration-150 ease-meno hover:bg-gh-base focus:bg-gh-base outline-none disabled:text-gh-gray disabled:hover:bg-transparent"
         >
           <span>{item.name}</span>
           {item.checked ? <CheckIcon aria-label="Chosen" className="h-4 w-4 text-gh-gray" /> : <kbd className="font-sans text-xs text-gh-gray">{item.keys}</kbd>}

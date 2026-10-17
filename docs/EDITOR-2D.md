@@ -51,9 +51,10 @@ and in particular:
   - A bond led within reach of an atom closes onto it, and so does one led
     onto an atom however far away - a long bond closes a ring too; the
     preview shows it closed before the button comes up.
-  - **Chains** (agreed 2026-10-03): three clicks on an atom draw a chain,
-    and so does Quick Add's *Chain* from empty space - led by a drag, or,
-    the last click (or the press on the icon) let go where it was, traced
+  - **Chains** (agreed 2026-10-03): Quick Add's *Chain* from empty space
+    draws a chain, and so does *Chain from here* on an atom's right-click
+    menu (shown where the atom can take another bond) - led by a drag, or,
+    the press on the icon let go where it was (the menu's: at once), traced
     with the button up until a click ends it; Escape lets it go, and so
     does undo (Cmd/Ctrl+Z) while any gesture is under way - a chain, a
     shape, an arrow, a stroke of ink, a drag, a box, a handle's resize, a
@@ -63,12 +64,15 @@ and in particular:
     the words' own, as in a text field, and never the document's under
     them (`wordsUnderWay`). A gesture lost - the window left, the pointer
     taken from it - is let go the same way, and its flags with it, so that
-    no undo after it is taken for it (`letLostGesturesGo`). The third
-    click takes back the bond the double-click drew. (Two clicks on empty
-    space drew one until 2026-10-08, when the maintainer gave the
-    double-click there to *Quick Add*, below; three did until 2026-10-10,
-    when the maintainer moved the chain from empty space into Quick Add, so
-    that Quick Add need not wait to see whether a third click comes.)
+    no undo after it is taken for it (`letLostGesturesGo`). Three
+    clicks on an atom are not a chain gesture, nor are they anywhere: a
+    third click is a click like the first (the maintainer, 2026-10-16: it
+    misfired - double-clicking OH again and again, or a click then a
+    double-click, kept starting one). (Two clicks on empty space drew one
+    until 2026-10-08, when the maintainer gave the double-click there to
+    *Quick Add*, below; three did until 2026-10-10, when the maintainer
+    moved the chain from empty space into Quick Add; three on an atom drew
+    one until 2026-10-16.)
     - It runs on a honeycomb of the drawing's own lengths and angles laid
       out from its start (`utils/honeycomb`), turned so that a bond the
       atom already has is one of its own; across at 30 degrees from empty
@@ -143,6 +147,34 @@ moving, and slows to a stop: as fast as it went over its last 64 ms, unless
 held still for 80 ms first (`lib/input/glide.ts`). Chromium's pinch, as the
 wheel with Ctrl, has no end of its own: it ends once no step has come for
 80 ms.
+
+**Touch and pinch.** On a touch screen one finger does what the left
+button does: from empty space it moves the view. A second finger makes a
+pinch of it where it comes down within 200 ms of the first, or before the
+first has gone a bond's length on the screen, or while the first moves the
+view - whatever the first came down on: what the first began is taken
+back as if it had never been, no bond, no move, no selection, nothing to
+redo (`notePress`, `takeBackPress`). The view then zooms as far as the two
+spread or close, about the point between them, and moves as that point
+moves, so what is under the fingers stays under them (`lib/input/pinch.ts`);
+let go while still zooming, it glides as a trackpad's pinch does. A second
+finger later than that, the first drawing or moving, is no press at all. A
+pen writes as before.
+
+On Windows a pinch - two fingers on a precision touchpad, as on a
+Surface's, or on its touch screen - is the user's only where WebView2's
+`IsPinchZoomEnabled` lets it be, and Meno's webview is made with it off
+together with its zoom by Ctrl and the wheel or the keys (Tauri's
+`zoomHotkeysEnabled`). A setting takes effect from the next navigation, so
+on Windows Meno makes its main window itself (`"create": false` in
+tauri.conf.json) at about:blank, hidden, turns the pinch on, and only then
+loads the page - once (`src-tauri/src/pinch.rs`). Ctrl with the wheel or
+the keys still zooms nothing of the WebView's own. The page takes every pinch for itself: a
+touchpad's comes as the wheel with Ctrl held, which the canvas follows as
+on a Mac and whose default the page prevents everywhere (`main.tsx`), so
+that it zooms the page nowhere; a touch screen's finds no pinch allowed
+but the canvas's (`touch-action: none` on the canvas, `pan-x pan-y` on the
+page, `App.css`), and a list still scrolls under a finger.
 A drawing is laid out again as the view zooms only once the zoom has
 moved a hundredth from the one it was laid out at: the last of a wheel's
 zoom, in steps too small to see for most of a second, lays nothing out
@@ -189,7 +221,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | An electron-pushing arrow | full head, fishhook (the one it has marked), colour; Delete | from the charge or from a lone pair (from an atom with a negative charge), lone pair (where it leaves an atom that has one), bend as Meno does (where it was bent by hand) |
 | The selection | cut, copy, paste (opened on empty space), the other look and reset its turn (opened on a molecule in 3D), clean up, 3D, colour; Delete | that molecule's own (opened on a molecule in 3D), copy as SMILES, export, render (its molecules in 3D), turn over either way, lay out as a grid or stack again (opened on a record of a stack), a slide around it, a box around it, use as input, save as abbreviation |
 | Inside a ring, nothing selected | colour | select its structure |
-| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, R and S, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
+| Empty space | paste, select all | open, save as, new text (in a tab's own workspace), present (with slides), fit, the texts, find in PDFs, drawing style, run all (with steps), stop all (while one runs) |
 | A molecule in 3D | cut, copy, the other look, reset its turn; Delete | measure what is chosen, set its distance, angle or torsion angle, all its conformers (or frames), lay out as a grid or stack again (one of a stack), its lists, its output, turn like its drawing, make it again, draw its formula; bond orders from the CCD (a PDB entry), from SMILES, estimated from distances (where they are unknown), add hydrogens; render |
 | Words on the page | edit, size, bold, italic, bullets, colour; Delete | align left, centre, right, justify; superscript, subscript; as wide as its words, show in the PDF |
 | A PDF | read, previous page, next page (its pages stacked), an icon or full size; Delete | copy (words chosen on it), put on the page, copy picture, read as structure (a box drawn on it), spread or gather pages, put pages in rows (spread, some in places of their own), write on it |
@@ -199,7 +231,8 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
-| An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; arrow style |
+| An arrow | colour; Delete | reaction arrow, equilibrium, retrosynthetic or no reaction (the one it is ticked); a head at the end or heads at both ends (an equilibrium: half or full heads; a retrosynthetic: neither); dashed line; straighten (where it turns); thin, regular or thick line; atom map (a reaction drawn on either side of it: made; then show or hide it, other map, export reaction in 3D - or said incomplete); arrow style |
+| A catalytic cycle | colour; Delete | an arrow coming in or going out where it was right-clicked, remove the arrow there (on one), turn clockwise or anticlockwise, how far its arrows stop short of what is on it (close, a little apart, apart, well apart; the one it is ticked), reset this arrow's gap (on one set by hand), reset all arrow gaps (where any is) |
 | A measurement | Delete | set its distance, angle or torsion angle |
 | A set, a "+", a wire | Delete | save as procedure (a set) |
 
@@ -510,7 +543,7 @@ Both go together, because both touch every layer.
 - **Scope.** An application default; a document's own style over it; and
   per-bond and per-atom overrides over that (a coloured atom, a bold bond).
 - **Where it is set.** Settings holds the application's style, and
-  *Drawing style…* (a right-click on empty space) gives a
+  *Styles…* (a right-click on empty space) gives a
   document one of its own. Either is
   a preset - ACS 1996, RSC, Wiley or Nature - and what was changed from it;
   every setting has its name, description, unit and range in
@@ -708,8 +741,9 @@ All hover-based, as above.
   drawn, not the way it was - each structure where it was.)
 - Valence warnings, and R/S shown on request (RDKit). (PR #53: a ring round
   an atom with too many bonds, saying what is wrong under the pointer; R/S
-  and E/Z from a button on the canvas; both in Settings › Chemistry, and
-  never in an exported picture.)
+  and E/Z from a button on the canvas, later shown on what they are asked
+  for on; valence warnings in Settings › Chemistry; neither in an exported
+  picture.)
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
@@ -743,11 +777,21 @@ All hover-based, as above.
     they look further off at that, and the maintainer asked for them
     nearer (2026-10-05): 15% in Meno's style and the other bare ones. On a
     molecule in 3D, the same share beyond its ball.
-  - Hidden unless asked for, on the drawing and in 3D (the maintainer,
-    2026-10-10): *Show R/S and E/Z* (the menu, or Settings › Chemistry;
-    named for both, the maintainer, 2026-10-13) shows them; making every stereoisomer a drawing leaves open shows each
-    one's open centres, to tell them apart (docs/WORKSPACE.md, *Told
-    apart*).
+  - **Shown on what they are asked for on** (the maintainer, 2026-10-15;
+    before, one switch showed them all). Hidden unless asked for. The
+    right-click menu of an atom that can be a stereocentre says *Show
+    R/S*, of a double bond *Show E/Z*, of a structure's selection or a
+    molecule in 3D *Show R/S and E/Z* - *Hide* where all of it is shown
+    already (named for what they show, the maintainer, 2026-10-13). On a
+    molecule in 3D, the atom under the pointer where it has a label, else
+    what is chosen in it, else all of it. Kept in the document - each
+    atom's and bond's own, `stereoShown`, on a drawing; a molecule in 3D's
+    `stereo.shown` - as one undo step, in the workspace's file and in a
+    copy; a drawing and the molecule in 3D made from it each keep their
+    own. A molecule in 3D made with the other stereoisomers its drawing
+    leaves open shows its open centres until it is asked otherwise, to
+    tell them apart (docs/WORKSPACE.md, *Told apart*). Settings no longer
+    has a switch for them; one in an old settings file is not read.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -778,6 +822,12 @@ All hover-based, as above.
     nothing, Escape or a right press lets it go. Being drawn, it is in the
     highlight's colour until it has an end. No key draws one (drawing by
     extension, 2026-09-27).
+  - A zoom costs as much with arrows on the page as without (the
+    maintainer, 2026-10-16: with them, a zoom stuttered): they are laid
+    out again only as what they are laid by changes - the atoms, the
+    labels, the bonds' lines - not as the drawing is laid out again the
+    same at each frame of a zoom; and what takes the pointer round each,
+    unseen until the pointer is on it, is not drawn until it is lit.
   - Anchored: it is kept by the atoms and bonds it leaves and reaches, not
     by where it was drawn, so it goes with them as they are moved, turned,
     turned over (bent to its other side, as a mirror shows it) and cleaned
@@ -935,6 +985,64 @@ All hover-based, as above.
     an arrow alone shows no reaction. Pictures - SVG, EMF, those copied -
     fill each line or dash, head and cross as a shape of its own, in the
     arrow's colour.
+- **Catalytic cycles** (the maintainer, 2026-10-15): a circle on the
+  page, and what is placed on it, round which a cycle's reaction arrows
+  run (`lib/chem/cycle`, `Cycles2D`, `utils/cycles`).
+  - **Put down from Quick Add**, its *Catalytic cycle*, where Quick Add
+    was opened: four and a half bonds from its middle to its line.
+  - **On it** is a structure or words whose middle - of the box round
+    what is drawn, its labels' letters included, the H of HO and all -
+    lies within six tenths of a bond of its line. One
+    let go within a bond of the line, dragged or put down from Quick Add's
+    SMILES, is put on it, moved straight out from the middle or in. What
+    is on a cycle is not kept with it: it is what lies on its line, so
+    that it is moved along the circle, or off it, as anything is moved.
+  - **Its arrows**: the circle breaks round each thing on it, each side on
+    its own where it first comes within half a bond of what is
+    drawn - a bond as wide as it is drawn, a label's letters, words - or,
+    where it comes no nearer, where it comes nearest; so each stretch
+    ends just short of what it points at, however much of the box round
+    a structure is empty where the circle passes. Each stretch between two
+    neighbours is a curved reaction arrow, clockwise unless turned from
+    its menu. With nothing on it, it is a whole circle with no head. The
+    stretches follow as a thing is dragged along the line; the circle
+    opens round what comes on to it and closes after what goes off it,
+    eased. The arrows take the drawing style's reaction arrows' look, and
+    the cycle's colour, from its menu.
+  - **Arrows coming in and going out**, from the menu a right-click on
+    its line opens, where it was right-clicked: one coming in curves in
+    from outside and joins the circle along the way it goes; one going out
+    leaves it so and curves out, its head at its far end. Each is given
+    words at its far end, typed at once, which go with the cycle; *Remove
+    this arrow* takes the one there away. One put there grows - in from
+    its far end, or out from the circle - and one taken away goes the
+    same way back.
+  - **Turned round** from its menu, each stretch's head travels along it
+    to its other end, smallest half way, where it turns; the arrows coming
+    in and going out swing across to the other side of where they join,
+    their words carried with them - one step.
+  - **Selected** by a click on its line, or taken hold of by holding
+    still on it a moment; selected, a drag moves it with what is on it and
+    the words at its arrows' ends, and its handle at the lower right sizes
+    it, what is on it moved out or in with the line - each one undo step.
+  - **How far its arrows stop short** (the maintainer, 2026-10-16): half
+    a bond, or what its menu sets for the cycle - a quarter, half, three
+    quarters or a whole bond. Selected, each end of its arrows shows a
+    handle: dragged back, that end stops further short; forward, nearer -
+    kept for that end of that structure or those words however they are
+    moved, and with them when copied. Its menu gives ends back the
+    cycle's own: *Reset this arrow's gap*, right-clicked on an arrow (or
+    on the break by an end) set by hand, and *Reset all arrow gaps* - a
+    double-click on a handle does nothing of the kind, so that a careful
+    setting is not lost by chance (the maintainer, 2026-10-16). Each change
+    is one step, eased.
+    It is selected with all, copied or cut alone or with the rest, and
+    carried round or turned over with what is selected: turned over, it
+    goes the other way and its arrows in and out join it mirrored.
+  - **Saved** in the .meno and in Meno's own copies, pasted and restyled
+    as the rest of the drawing; in pictures - SVG, EMF, those copied - its
+    arrows are reaction arrows, the curves as corners close along them.
+    Nothing arranges what is on it: where it goes is where it is put.
 - **Text** (the maintainer, 2026-10-08: reagents' labels): words on the
   page - a reaction's reagents and conditions, or anything else
   (`lib/chem/captions`, `Captions2D`, `CaptionTyping2D`).
@@ -1232,8 +1340,9 @@ traced from reference drawings.
   drawn in - and PNG. The SVG export draws what the canvas draws (PR #36),
   at ACS 1996's own size (PR #43); PNG to come.
 - No buttons on the canvas (2026-10-04): Open (Ctrl/Cmd+O), Save As, New
-  text, Fit to content (Ctrl/Cmd+1), R/S and E/Z and Drawing style are on the
-  right-click menu on empty space; Save is a button in the title bar, by
+  text, Fit to content (Ctrl/Cmd+1) and Drawing style are on the
+  right-click menu on empty space (R/S and E/Z on the menus of what they
+  are shown on); Save is a button in the title bar, by
   Settings, and Ctrl/Cmd+S; Export is on the selection's menu; Clean-up
   and 3D structures of everything are Select all and the selection's menu
   (or Ctrl/Cmd+Shift+K on nothing); a SMILES is drawn from Quick Add.

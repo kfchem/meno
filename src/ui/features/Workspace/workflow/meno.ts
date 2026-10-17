@@ -298,6 +298,8 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
 /** Each conformer's Boltzmann population within its compound at `kelvin`. */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
+  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
+  if (!(kelvin > 0)) return { ok: false, said: "The temperature must be above 0 K" };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
     // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)

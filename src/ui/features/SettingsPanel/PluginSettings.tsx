@@ -89,6 +89,7 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         <div className="text-sm text-gh-black">
           {p.name} <span className="text-gh-gray">{p.version}</span>
         </div>
+        {p.uses.length > 0 && <p className="text-xs text-gh-gray mt-0.5">Uses {p.uses.map((u) => `${u.name} ${u.version}`).join(", ")}</p>}
         <p className="text-xs text-gh-gray mt-0.5">{p.description}</p>
         {runs(p) && (
           <>

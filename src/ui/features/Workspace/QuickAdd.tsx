@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import { CalculationsGlyph, ProcedureGlyph, StepGlyph } from "./workflow/icons";
@@ -9,9 +9,10 @@ import type { StepKind } from "./workflow/kinds";
 import type { QuickGroup } from "./workflow/offered";
 import { SHAPE_KINDS, SHAPE_NAMES, type ShapeKind } from "../../../lib/chem/shapes";
 import { swallowPress, togglesOn } from "./utils/press";
+import { readCoordinates, type CoordinateStructure } from "../../../lib/io/coordinates";
 
 /** What Quick Add puts down where it was opened. */
-export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "slide" | "pen";
+export type QuickAddChoice = "bond" | "text" | "arrow" | "plus" | "push" | "cycle" | "slide" | "pen";
 
 /** What opens below Quick Add's row: nothing, the calculations, the field a SMILES is typed in, or the shapes. */
 type QuickPanel = "none" | "calculations" | "smiles" | "shapes";
@@ -96,6 +97,19 @@ const ROW: { id: QuickAddChoice | "chain" | "smiles" | "shapes"; name: string; i
     ),
   },
   {
+    id: "cycle",
+    name: "Catalytic cycle",
+    // (a circle of curved arrows, as a cycle is drawn)
+    icon: (
+      <>
+        <path d="M10 3.5 A6.5 6.5 0 0 1 16.2 12" />
+        <path d="M14.4 11.2 L16.6 14.1 L17.9 10.7 Z" fill="currentColor" />
+        <path d="M14 15.6 A6.5 6.5 0 0 1 4.2 13.2" />
+        <path d="M3.8 9.4 A6.5 6.5 0 0 1 7 4.2" />
+      </>
+    ),
+  },
+  {
     id: "slide",
     name: "Slide",
     // (a frame, its number at its corner, as the page shows a slide)
@@ -153,6 +167,7 @@ export default function QuickAdd({
   onArrow,
   onShape,
   onSmiles,
+  onCoordinates,
   onStep,
   onProcedure,
   onClose,
@@ -175,6 +190,8 @@ export default function QuickAdd({
   onShape?: (kind: ShapeKind, press: React.PointerEvent) => void;
   /** A SMILES drawn where Quick Add was opened: done, or failing with what to say. */
   onSmiles: (smiles: string) => Promise<void>;
+  /** Coordinates pasted in the SMILES field - a paper's, copied from a PDF: the structures they hold, shown before they are placed (lib/io/coordinates). */
+  onCoordinates?: (structures: CoordinateStructure[]) => void;
   onStep: (kind: StepKind, by: string) => void;
   onProcedure?: (id: string) => void;
   onClose: () => void;
@@ -232,6 +249,29 @@ export default function QuickAdd({
     }
   };
   const [place] = useState(() => placeQuickAdd(x, y, within, sizeOf(wired ? "calculations" : "none"), QUICK_PANELS.map(sizeOf)));
+  // (as it is laid out - not as it was reckoned: a row wider than its sum, at a display scale, reaches past the canvas - it is eased back within it)
+  const [back, setBack] = useState({ dx: 0, dy: 0 });
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const parent = el?.offsetParent;
+    if (!el || !parent) return;
+    const fit = () => {
+      const a = el.getBoundingClientRect();
+      const b = parent.getBoundingClientRect();
+      const dx = a.right > b.right - 4 ? Math.min(0, b.right - 4 - a.right) : 0;
+      const dy = a.bottom > b.bottom - 4 ? Math.min(0, b.bottom - 4 - a.bottom) : 0;
+      const l = a.left + dx < b.left + 4 ? b.left + 4 - (a.left + dx) : 0;
+      const t = a.top + dy < b.top + 4 ? b.top + 4 - (a.top + dy) : 0;
+      setBack((was) => {
+        const next = { dx: was.dx + dx + l, dy: was.dy + dy + t };
+        return next.dx === was.dx && next.dy === was.dy ? was : next;
+      });
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   return (
     <motion.div
       ref={ref}
@@ -241,7 +281,7 @@ export default function QuickAdd({
       aria-label="Add"
       data-guide="quick-add"
       className="absolute z-50 rounded-lg border border-gh-line bg-white p-1 shadow-lg"
-      style={{ left: place.left, top: place.top, transformOrigin: place.origin }}
+      style={{ left: place.left + back.dx, top: place.top + back.dy, transformOrigin: place.origin, transition: "left 150ms ease-out, top 150ms ease-out" }}
     >
       {!wired && (
         <div className="flex items-center gap-0.5">
@@ -285,7 +325,7 @@ export default function QuickAdd({
       {!wired && (
         <div className="grid transition-[grid-template-rows,opacity] duration-200 ease-meno" style={{ gridTemplateRows: open === "smiles" ? "1fr" : "0fr", opacity: open === "smiles" ? 1 : 0 }}>
           <div className="overflow-hidden" inert={open !== "smiles"}>
-            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} />
+            <SmilesField width={width - 8} open={open === "smiles"} onSmiles={onSmiles} onCoordinates={onCoordinates} />
           </div>
         </div>
       )}
@@ -369,9 +409,20 @@ export default function QuickAdd({
 /**
  * Where a SMILES is typed, below Quick Add's row: Enter draws it - the
  * first time, once the plugin that reads SMILES is set up - and what went
- * wrong, if anything, is said under it.
+ * wrong, if anything, is said under it. Coordinates pasted in it are read
+ * whole, their lines' ends and all, which the field itself would drop.
  */
-function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; onSmiles: (smiles: string) => Promise<void> }) {
+function SmilesField({
+  width,
+  open,
+  onSmiles,
+  onCoordinates,
+}: {
+  width: number;
+  open: boolean;
+  onSmiles: (smiles: string) => Promise<void>;
+  onCoordinates?: (structures: CoordinateStructure[]) => void;
+}) {
   const [text, setText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -407,7 +458,15 @@ function SmilesField({ width, open, onSmiles }: { width: number; open: boolean; 
           setText(e.target.value);
           setError(null);
         }}
-        placeholder="SMILES"
+        onPaste={(e) => {
+          const pasted = e.clipboardData.getData("text/plain");
+          // (no SMILES reads as coordinates: an atom is an element and three numbers with decimal points)
+          const structures = onCoordinates ? readCoordinates(pasted) : [];
+          if (!structures.length) return;
+          e.preventDefault();
+          onCoordinates!(structures);
+        }}
+        placeholder={onCoordinates ? "SMILES or coordinates" : "SMILES"}
         aria-label="SMILES"
         spellCheck={false}
         autoCorrect="off"

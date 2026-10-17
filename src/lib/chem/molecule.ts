@@ -198,8 +198,12 @@ export function valenceOrder(b: BondChem & { order: number; dative?: boolean }, 
   return b.hydrogen ? 0 : b.order;
 }
 
-/** An atom as a file gives it: where it is, in the file's own units. */
-export type ParsedAtom = AtomChem & { x: number; y: number; z: number };
+/**
+ * An atom as a file gives it: where it is, in the file's own units; and
+ * `alias` where its `el` is the text a file shows for it (a V2000 "A"
+ * line), not an element's symbol - its letters' case as written.
+ */
+export type ParsedAtom = AtomChem & { x: number; y: number; z: number; alias?: true };
 /**
  * A bond as a file gives it, between atoms by index: its CTfile bond type
  * (1 to 10) as `order`, and its stereo as V2000 codes - a single bond's 1
@@ -259,6 +263,17 @@ export function implicitHydrogens(
   if (radical === "doublet") valence -= 1;
   else if (radical) valence -= 2;
   return Math.max(0, valence - bondOrderSum);
+}
+
+/**
+ * Whether an atom can take another bond: its element's valence, as its
+ * charge and unpaired electron leave it, is not yet met by bonds whose
+ * orders sum to `bondOrderSum`. An element with no valence here - a metal -
+ * always can; hydrogen takes one.
+ */
+export function canTakeBond(el: string, bondOrderSum: number, charge = 0, radical?: Radical): boolean {
+  if (el === "H") return bondOrderSum < 1;
+  return VALENCE[el] ? implicitHydrogens(el, bondOrderSum, charge, radical) > 0 : true;
 }
 
 /** A charge as a formula writes it: +, 2+, − (a minus sign, not a hyphen), 3−. */

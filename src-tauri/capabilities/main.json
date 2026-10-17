@@ -24,7 +24,9 @@
         { "path": "$RESOURCE" },
         { "path": "$RESOURCE/**/*" },
         { "path": "$APPDATA" },
-        { "path": "$APPDATA/**/*" }
+        { "path": "$APPDATA/**/*" },
+        { "path": "$APPLOCALDATA" },
+        { "path": "$APPLOCALDATA/**/*" }
       ]
     },
     {

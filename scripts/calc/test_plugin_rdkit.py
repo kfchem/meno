@@ -135,3 +135,332 @@ class WhyUnreadable(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class EquivalentAtoms(unittest.TestCase):
+    """Conformers RDKit makes keep each equivalent hydrogen and branch in the place it has in the first."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def embedded(self, smiles, count=1):
+        from rdkit.Chem import AllChem
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        ids = list(AllChem.EmbedMultipleConfs(mol, count, randomSeed=11))
+        self.assertTrue(ids)
+        return mol, ids
+
+    def copy_with(self, mol, moves):
+        """The first conformer, twice; the second with atoms moved to others' places: {new place of atom: atom whose place it takes}."""
+        from rdkit.Chem import rdchem
+        conf = rdchem.Conformer(mol.GetConformer(0))
+        base = [mol.GetConformer(0).GetAtomPosition(i) for i in range(mol.GetNumAtoms())]
+        for a, b in moves.items():
+            conf.SetAtomPosition(a, base[b])
+        conf.SetId(1)
+        mol.AddConformer(conf, assignId=False)
+        return base
+
+    def atoms_after(self, smiles, where):
+        mol, _ = self.embedded(smiles)
+        return mol
+
+    def neighbours(self, mol, pattern, ordinal=0):
+        q = Chem.MolFromSmarts(pattern)
+        return mol.GetSubstructMatches(q)[ordinal]
+
+    def settled(self, smiles, moves_of):
+        mol, _ = self.embedded(smiles)
+        moves = moves_of(mol)
+        base = self.copy_with(mol, moves)
+        self.worker.settle_equivalents(mol, [0, 1])
+        now = [mol.GetConformer(1).GetAtomPosition(i) for i in range(mol.GetNumAtoms())]
+        worst = max((now[i] - base[i]).Length() for i in range(mol.GetNumAtoms()))
+        return mol, worst
+
+    def test_puts_a_ch2s_two_hydrogens_back_on_their_sides(self):
+        def moves(mol):
+            c = [a for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.GetTotalNumHs(includeNeighbors=True) == 2][0]
+            h = [x.GetIdx() for x in c.GetNeighbors() if x.GetAtomicNum() == 1]
+            return {h[0]: h[1], h[1]: h[0]}
+        _, worst = self.settled("C[C@H](O)CC", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_puts_a_ring_ch2s_hydrogens_back_beside_a_stereocentre(self):
+        def moves(mol):
+            ring = [a for a in mol.GetAtoms() if a.IsInRing() and a.GetSymbol() == "C" and a.GetTotalNumHs(includeNeighbors=True) == 2][1]
+            h = [x.GetIdx() for x in ring.GetNeighbors() if x.GetAtomicNum() == 1]
+            return {h[0]: h[1], h[1]: h[0]}
+        _, worst = self.settled("C[C@H]1CCCCC1=O", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_turns_a_methyl_the_least(self):
+        def moves(mol):
+            me = [a for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.GetDegree() == 4 and a.GetTotalNumHs(includeNeighbors=True) == 3][0]
+            h = [x.GetIdx() for x in me.GetNeighbors() if x.GetAtomicNum() == 1]
+            return {h[0]: h[1], h[1]: h[2], h[2]: h[0]}
+        _, worst = self.settled("C[C@H](O)CC", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_never_moves_a_heavy_atom_but_in_a_whole_branch(self):
+        def moves(mol):
+            c = [a for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.GetTotalNumHs(includeNeighbors=True) == 2][0]
+            h = [x.GetIdx() for x in c.GetNeighbors() if x.GetAtomicNum() == 1]
+            return {h[0]: h[1], h[1]: h[0]}
+        mol, _ = self.settled("C[C@H](O)CC", moves)
+        for a in mol.GetAtoms():
+            if a.GetAtomicNum() > 1:
+                d = (mol.GetConformer(1).GetAtomPosition(a.GetIdx()) - mol.GetConformer(0).GetAtomPosition(a.GetIdx())).Length()
+                self.assertLess(d, 1e-6)
+
+    def branches_swapped(self, mol, root_a, root_b):
+        """Moves that put two equivalent branches in each other's places: atoms in the order of a walk by ranks."""
+        ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False, includeChirality=False))
+        def walk(root, parent):
+            out, queue, seen = [], [root], {root, parent}
+            for a in queue:
+                out.append(a)
+                for x in sorted((y.GetIdx() for y in mol.GetAtomWithIdx(a).GetNeighbors() if y.GetIdx() not in seen), key=lambda i: (ranks[i], i)):
+                    seen.add(x)
+                    queue.append(x)
+            return out
+        a = walk(root_a[0], root_a[1])
+        b = walk(root_b[0], root_b[1])
+        self.assertEqual(len(a), len(b))
+        moves = {}
+        for x, y in zip(a, b):
+            moves[x] = y
+            moves[y] = x
+        return moves
+
+    def test_puts_an_isopropyls_methyls_back_beside_a_stereocentre(self):
+        def moves(mol):
+            ch = [a for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.GetDegree() == 4 and a.GetTotalNumHs(includeNeighbors=True) == 1 and
+                  sum(1 for x in a.GetNeighbors() if x.GetSymbol() == "C" and x.GetTotalNumHs(includeNeighbors=True) == 3) == 2][0]
+            me = [x.GetIdx() for x in ch.GetNeighbors() if x.GetSymbol() == "C" and x.GetTotalNumHs(includeNeighbors=True) == 3]
+            return self.branches_swapped(mol, (me[0], ch.GetIdx()), (me[1], ch.GetIdx()))
+        _, worst = self.settled("CC(C)[C@@H](C)O", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_puts_a_tert_butyls_methyls_back(self):
+        def moves(mol):
+            q = [a for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.GetDegree() == 4 and a.GetTotalNumHs(includeNeighbors=True) == 0][0]
+            me = [x.GetIdx() for x in q.GetNeighbors() if x.GetTotalNumHs(includeNeighbors=True) == 3]
+            return self.branches_swapped(mol, (me[0], q.GetIdx()), (me[1], q.GetIdx()))
+        _, worst = self.settled("CC(C)(C)C1CCCCC1", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_puts_a_dimethylamines_methyls_back(self):
+        def moves(mol):
+            n = [a for a in mol.GetAtoms() if a.GetSymbol() == "N"][0]
+            me = [x.GetIdx() for x in n.GetNeighbors() if x.GetTotalNumHs(includeNeighbors=True) == 3]
+            return self.branches_swapped(mol, (me[0], n.GetIdx()), (me[1], n.GetIdx()))
+        _, worst = self.settled("CN(C)CC", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_puts_a_trifluoromethyls_fluorines_back(self):
+        def moves(mol):
+            f = [a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "F"]
+            return {f[0]: f[1], f[1]: f[2], f[2]: f[0]}
+        _, worst = self.settled("FC(F)(F)c1ccccc1", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_flips_a_pendant_phenyl_back(self):
+        def moves(mol):
+            ring = [a for a in mol.GetAtoms() if a.GetIsAromatic()]
+            ipso = [a for a in ring if any(not x.GetIsAromatic() and x.GetAtomicNum() > 1 for x in a.GetNeighbors())][0]
+            ortho = [x.GetIdx() for x in ipso.GetNeighbors() if x.GetIsAromatic()]
+            para_side = []
+            m = {}
+            def hs(i):
+                return [x.GetIdx() for x in mol.GetAtomWithIdx(i).GetNeighbors() if x.GetAtomicNum() == 1]
+            meta = [[x.GetIdx() for x in mol.GetAtomWithIdx(o).GetNeighbors() if x.GetIsAromatic() and x.GetIdx() != ipso.GetIdx()][0] for o in ortho]
+            for pair in ((ortho[0], ortho[1]), (meta[0], meta[1])):
+                m[pair[0]], m[pair[1]] = pair[1], pair[0]
+                h0, h1 = hs(pair[0]), hs(pair[1])
+                m[h0[0]], m[h1[0]] = h1[0], h0[0]
+            return m
+        _, worst = self.settled("c1ccccc1C(C)C", moves)
+        self.assertLess(worst, 1e-4)
+
+    def test_keeps_every_hydrogens_side_across_twenty_conformers(self):
+        # (butan-2-ol and a methylcyclohexane: each CH2's hydrogens keep the sign of their signed volume of the reference)
+        import numpy as np
+        for smiles in ["C[C@H](O)CC", "C[C@H]1CCCCC1"]:
+            mol = Chem.MolFromSmiles(smiles)
+            entry = self.worker.conformers(mol, count=20)
+            frames = entry["frames"]
+            self.assertGreater(len(frames), 1)
+            full = Chem.AddHs(mol)
+            for c in full.GetAtoms():
+                hs = [x.GetIdx() for x in c.GetNeighbors() if x.GetAtomicNum() == 1]
+                heavy = [x.GetIdx() for x in c.GetNeighbors() if x.GetAtomicNum() > 1]
+                if len(hs) != 2 or len(heavy) != 2:
+                    continue
+                def sign(f, h):
+                    P = np.array(f).reshape(-1, 3)
+                    p = P[c.GetIdx()]
+                    return np.sign(np.linalg.det(np.array([P[heavy[0]] - p, P[heavy[1]] - p, P[h] - p])))
+                ref = [sign(frames[0], h) for h in hs]
+                for f in frames[1:]:
+                    self.assertEqual([sign(f, h) for h in hs], ref, (smiles, c.GetIdx()))
+
+    def test_is_done_by_the_conformer_search_alone(self):
+        # (nothing read from a calculation, nor any other program's conformers, passes through it)
+        text = WORKER.read_text(encoding="utf-8")
+        self.assertEqual(text.count("settle_equivalents(mol, kept)"), 1)
+        for other in ("cclib", "pyscf", "xtb", "crest", "orca", "gaussian"):
+            self.assertNotIn("settle_equivalents", (ROOT / "src-tauri/resources/plugins" / other / "worker.py").read_text(encoding="utf-8"))
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class Metals(unittest.TestCase):
+    """A metal's bonds come out at their lengths, and its shape as UFF has it - or, where UFF has no type for it, as
+    a lighter metal of its group shapes it, with no energies; never pushed off, as UFF with no terms for it did."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles, count=10):
+        return self.worker.conformers(Chem.MolFromSmiles(smiles), count=count)
+
+    def lengths_and_angles(self, entry, frame, symbol):
+        import math
+        import numpy as np
+        P = np.array(entry["frames"][frame]).reshape(-1, 3)
+        m = next(i for i, a in enumerate(entry["atoms"]) if a["el"] == symbol)
+        near = {b["a2"] if b["a1"] == m else b["a1"]: b for b in entry["bonds"] if m in (b["a1"], b["a2"])}
+        lengths = {j: float(np.linalg.norm(P[j] - P[m])) for j in near}
+        ids = sorted(near)
+        angles = sorted(
+            math.degrees(math.acos(max(-1.0, min(1.0, float(np.dot(P[i] - P[m], P[j] - P[m]) / lengths[i] / lengths[j])))))
+            for x, i in enumerate(ids) for j in ids[x + 1:]
+        )
+        return {entry["atoms"][j]["el"]: round(d, 2) for j, d in lengths.items()}, angles, lengths
+
+    def test_closes_a_palladacycle_through_the_metal(self):
+        # (the maintainer's: a ring of fifteen closed through Pd - UFF without a type for Pd put it 8 to 25 A away)
+        entry = self.made("C1CCCCCCCCCCCC(C)C[Pd]1")
+        for f in range(len(entry["frames"])):
+            _, angles, lengths = self.lengths_and_angles(entry, f, "Pd")
+            for d in lengths.values():
+                self.assertAlmostEqual(d, 2.08, delta=0.1)
+        self.assertEqual(entry["field"], "UFF")
+        self.assertTrue(entry["energies"])
+
+    def test_makes_a_square_planar_palladium(self):
+        entry = self.made("Cl[Pd](Cl)(P(C)(C)C)P(C)(C)C")
+        lengths, angles, _ = self.lengths_and_angles(entry, 0, "Pd")
+        self.assertAlmostEqual(lengths["Cl"], 2.32, delta=0.06)
+        self.assertAlmostEqual(lengths["P"], 2.41, delta=0.06)
+        self.assertGreater(angles[-1], 165)
+        self.assertGreater(angles[-2], 165)
+        self.assertTrue(all(80 < a < 100 for a in angles[:4]), angles)
+
+    def test_makes_an_octahedral_iron(self):
+        entry = self.made("Cl[Fe-3](Cl)(Cl)(Cl)(Cl)Cl", count=3)
+        _, angles, _ = self.lengths_and_angles(entry, 0, "Fe")
+        self.assertTrue(all(85 < a < 95 for a in angles[:12]), angles)
+        self.assertTrue(all(a > 170 for a in angles[12:]), angles)
+
+    def test_shapes_a_ruthenium_carbene_with_iron_standing_in_and_gives_no_energies(self):
+        # (a Grubbs-type catalyst: UFF has no type RDKit can give Ru - it stopped on a missing parameter)
+        entry = self.made("Cl[Ru](Cl)(=Cc1ccccc1)(P(C)(C)C)P(C)(C)C", count=5)
+        self.assertNotIn("energies", entry)
+        lengths, angles, _ = self.lengths_and_angles(entry, 0, "Ru")
+        self.assertAlmostEqual(lengths["Cl"], 2.24, delta=0.08)
+        self.assertAlmostEqual(lengths["P"], 2.36, delta=0.1)
+        self.assertGreater(angles[-1], 160)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertIn("Fe standing in for Ru", rows["Optimised"])
+        self.assertIn("no parameters for Ru", rows["Energies"])
+
+    def test_says_where_nothing_could_be_optimised(self):
+        # (osmium with eight bonds: no geometry of UFF's fits it, so none stands in)
+        mol = Chem.MolFromSmiles("Cl[Os](Cl)(Cl)(Cl)(Cl)(Cl)(Cl)Cl")
+        if mol is None:
+            self.skipTest("RDKit read no eight-bonded osmium here")
+        entry = self.worker.conformers(mol, count=2)
+        self.assertNotIn("energies", entry)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertTrue(rows["Optimised"].startswith("not: no force field here has parameters for Os"), rows)
+
+    def test_holds_the_same_radii_as_the_app(self):
+        import re
+        text = (ROOT / "src/lib/chem/elements.ts").read_text(encoding="utf-8")
+        app = {
+            sym: tuple(None if v.strip() == "null" else int(v) for v in r.split(","))
+            for sym, r in re.findall(r'symbol: "(\w+)",[^\n]*?radii: \[([^\]]*)\]', text)
+        }
+        self.assertEqual(self.worker.RADII, app)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class EtaBound(unittest.TestCase):
+    """A ring bound to a metal through all its atoms, written as the CTfile's multi-centre bond (a bond to a star
+    at its centre, ENDPTS its atoms, ATTACH=ALL): held over its metal, its star at its centre, its cyclopentadienide
+    counted as one - and no energies, the holds being no force field's."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    @staticmethod
+    def ferrocene(radical=False):
+        """Ferrocene as Meno writes it from a drawing: Fe 1, two Kekule rings of five carbons drawn neutral
+        (2-6, 7-11), a star at each ring's centre (12, 13) - each ring's carbon with no double bond in it a CH2,
+        or, from a Cp label, a CH with an unpaired electron."""
+        import math
+        rows, bonds = ["M  V30 1 Fe 0 0 0 0"], []
+        for k, (base, y) in enumerate(((2, 1.5), (7, -1.5))):
+            for i in range(5):
+                rad = " RAD=2" if radical and i == 4 else ""
+                rows.append(f"M  V30 {base + i} C {math.cos(2 * math.pi * i / 5):.4f} {y + 0.3 * math.sin(2 * math.pi * i / 5):.4f} 0 0{rad}")
+            for i in range(5):
+                bonds.append((2 if i in (0, 2) else 1, base + i, base + (i + 1) % 5))
+        rows += ["M  V30 12 * 0 1.5 0 0", "M  V30 13 * 0 -1.5 0 0"]
+        lines = [f"M  V30 {n + 1} {t} {a} {b}" for n, (t, a, b) in enumerate(bonds)]
+        lines += ["M  V30 11 9 1 12 ENDPTS=(5 2 3 4 5 6) ATTACH=ALL", "M  V30 12 9 1 13 ENDPTS=(5 7 8 9 10 11) ATTACH=ALL"]
+        return "\n".join(["", "  Meno", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", "M  V30 COUNTS 13 12 0 0 0",
+                          "M  V30 BEGIN ATOM", *rows, "M  V30 END ATOM", "M  V30 BEGIN BOND", *lines, "M  V30 END BOND",
+                          "M  V30 END CTAB", "M  END"])
+
+    def made(self, block):
+        return self.worker.op_conformers({"molblock": block})["isomers"][0]
+
+    def test_holds_each_ring_over_its_metal_with_its_star_at_its_centre(self):
+        import numpy as np
+        for radical in (False, True):
+            entry = self.made(self.ferrocene(radical))
+            self.assertEqual(entry["stars"], [11, 12])
+            for frame in entry["frames"]:
+                P = np.array(frame).reshape(-1, 3)
+                for star, ring in ((11, range(1, 6)), (12, range(6, 11))):
+                    centre = P[list(ring)].mean(axis=0)
+                    self.assertLess(float(np.linalg.norm(P[star] - centre)), 1e-3)
+                    for c in ring:
+                        self.assertAlmostEqual(float(np.linalg.norm(P[c] - P[0])), 2.06, delta=0.06)
+
+    def test_counts_each_ring_as_a_cyclopentadienide_not_a_ch2_nor_a_radical(self):
+        for radical in (False, True):
+            entry = self.made(self.ferrocene(radical))
+            els = [a["el"] for a in entry["atoms"]]
+            self.assertEqual(els.count("H"), 10, radical)
+            self.assertEqual(entry["atoms"][0]["charge"], 2)
+            self.assertEqual(sum(a["charge"] for a in entry["atoms"][1:11]), -2)
+
+    def test_gives_no_energies_and_says_why(self):
+        entry = self.made(self.ferrocene())
+        self.assertNotIn("energies", entry)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertEqual(rows["Optimised"], "UFF, at most 2000 steps")
+        self.assertIn("held, not modelled", rows["Energies"])

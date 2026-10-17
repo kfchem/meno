@@ -253,6 +253,23 @@ Taken on 2026-10-03:
     Every turn by the handle is one undo step, Shift's and one molecule's
     alone too (agreed 2026-10-04), and the undo puts the turns back; a
     drag on a molecule itself turns only the view.
+  - **Turn once** (the maintainer, 2026-10-16: the one motion Meno's
+    own canvas makes of itself; every other is a renderer's - docs/RENDER.md).
+    In a molecule's right-click menu, beside *Reset orientation*: it turns
+    once round about the screen's up, through its centre - the near side
+    going right - over 4 s along the quintic smootherstep
+    (6t^5 - 15t^4 + 10t^3), so that it starts and stops with neither speed
+    nor acceleration; and it comes to rest exactly as it was turned
+    before. What goes with the molecule - its labels, its surfaces - turns
+    with it. Several selected, chosen on one of them, turn together, each
+    about its own centre. It is the view's, as a drag's turn is: no undo
+    step, and nothing to undo, since it ends where it began. No setting:
+    its length and its way round are fixed. Any press, Escape, or a turn
+    given one of them meanwhile - a drag, *Reset orientation* - stops it
+    gently: it slows to rest over 0.4 s from the speed it had, its speed
+    falling along 1 - smoothstep, so nothing jumps, and is the chemist's
+    from there (`utils/turnOnce`). In a talk, a right-press on a molecule
+    turns it once (docs/PRESENTING.md).
 - **What a 3D molecule looks like** starts from the 3D viewer's look:
   - atom size and colour, material and light, and the turn's inertia,
     near enough;
@@ -457,6 +474,27 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, lowest
   first. Of two enantiomers, one is made as the other's mirror image, so
   the two have the same conformers and shares.
+- **A metal's bonds hold** (2026-10-17). A bond drawn to a d- or f-block
+  metal is embedded at its covalent length (Pyykkö's radii, as Meno's own)
+  with the metal's ligands kept apart, and the metal is given UFF's own
+  geometry for it: square planar for Ni, Pd, Pt and Au (their angles held
+  at 90 and 180 degrees), tetrahedral or octahedral for the rest. Where UFF
+  has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
+  metal of its group stands in for its shape while its bonds are held at
+  their own lengths, and no energies are given: the chip says so, and the
+  conformers are not ranked or weighted. Before, UFF without terms for a
+  metal pushed it 8 to 25 Å off its ring, or stopped.
+- **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
+  asked about as the CTfile's multi-centre bond - a bond from the metal to a
+  star at the ring's centre, ENDPTS its atoms, ATTACH=ALL - however it is
+  drawn: a haptic bond; a label on the metal that names a ligand bound so
+  in a complex (Cp, allyl - and CO, NH3 and the rest of the ligands named
+  only in a complex, as those ligands); or a ring with a bond from the metal
+  to each of its atoms (ferrocene by hand). The plugin holds each of its
+  atoms at the covalent length plus 0.15 Å from the metal, counts a ring of
+  five or a chain of three drawn neutral as the cyclopentadienide or allyl
+  anion it is bound as (not a CH2, nor radical carbons), and gives no
+  energies; the star is no atom of the molecule in 3D.
 - **A haptic bond binds its ring whole** (2026-10-13): where an atom of
   the ring it binds is deleted or merged onto another, or it is pasted or
   taken as part of a structure without its ring, it binds none - a plain
@@ -477,9 +515,11 @@ Taken on 2026-10-13:
   Several rise one after another, in a row.
 - **Told apart.** Made with the other stereoisomers its drawing leaves
   open, a stereoisomer's centres that were left open carry their R and S
-  always, every centre's while R and S are shown; made alone - one
-  configuration chosen - it carries them only while they are shown, as
-  the drawing does (the maintainer, 2026-10-10: hidden unless asked for). They are
+  until it is asked otherwise; made alone - one configuration chosen - it
+  carries them only where they are asked for, on it, an atom of it or a
+  selection holding it (the maintainer, 2026-10-10: hidden unless asked
+  for; 2026-10-15: asked for on what they are shown on, docs/EDITOR-2D.md,
+  *R and S*). They are
   as large as the drawing's R and S, and written as the drawing's style
   writes them (bare, or in parentheses), in blue. Each is set clear of
   its atom - beyond its ball by as much as the drawing's style sets them
@@ -487,7 +527,21 @@ Taken on 2026-10-13:
   nearest way round that covers no other atom, no measurement's value
   and no bond (an atom hidden counts for more than a bond covered) - and
   a little way off the others (2026-10-05: on Windows, an (S) sat on a
-  value or on a bond in some frames as the molecule turned).
+  value or on a bond in some frames as the molecule turned). As the
+  molecule turns and the best way changes, a label glides round its atom
+  to it, the shorter way, on a 70 ms time constant - never across the
+  atom, never in a jump (the maintainer, 2026-10-15).
+- **Measurements' values keep apart.** Each value stands on its point
+  while that is clear of the values before it; where another is in its
+  way it moves off - square to a distance's line, out from an angle's
+  atoms - and stays where it went until its point is clear again by
+  3 px, so that two side by side, the view turning, keep their places
+  rather than trading them. It glides where it goes, as the R and S do.
+- **Under what is beside and over the page.** R and S, values, chips and
+  cards are drawn in the page's HTML layer: its own stacking context,
+  clipped to the canvas. They are cut at the canvas's edge as the drawing
+  is, and never stand over the panel beside it, the window bar, the
+  tabs, the column, the cards or the menus (the maintainer, 2026-10-15).
 - **Tied to the drawing.** An atom hovered in either lights in the other.
   Drawn otherwise since - atoms, bonds or wedges, not where they are - the
   molecule stays as it is and says so under its frames, with *Make
@@ -772,6 +826,25 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
 
 ## Drawing style
 
+- **Styles of the user's own** (the maintainer, 2026-10-15: "in both 2D and
+  3D, I can't add new styles of my own"). *Save as style…*, under the
+  presets in a workspace's Drawing style or Settings', keeps the style as
+  it is set as one of the user's own, named, in Meno's settings - not in a
+  workspace - and offered below the built-in presets in every workspace,
+  marked *Your own*. A right-click on a style duplicates it into the user's
+  own, exports it (*Export style…*, FILE-IO.md, *What a .meno holds*), and
+  renames or deletes one of theirs; the built-in ones are only duplicated.
+  A workspace drawn in an own style carries the whole of it
+  (`StyleChoice.own`), so it opens the same where that style is not: there
+  it is offered as *In this workspace*. An own style is known by "own-"
+  and a random UUID, so that one carried from another computer is never
+  taken for one made here; and where the workspace's copy is not the
+  user's own of that id as it is now - changed or renamed since - it is a
+  card of its own too, the one chosen, and picking or renaming the user's
+  acts on theirs alone. Style files opened together are asked about in
+  turn. Styles in 3D follow the same rules (*Styles in 3D*, *A workspace's
+  styles in 3D*).
+
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
 pull request (`agent/style-one-per-workspace`): L8 the change of style and
 what it converts, hunter C the style's place and its card, hunter A the
@@ -887,6 +960,37 @@ molecules in 3D.
   start; a paste across styles; bodies in 3D kept together; page objects
   exporting at the same size.
 
+## Drawing resolution
+
+How finely the canvas is drawn: Settings, General, *Drawing resolution*
+(the maintainer, 2026-10-17, from a comparison of the choices on 100 % and
+150 % screens).
+- **2×** (the default, as before there was a choice): twice as many pixels
+  each way as the canvas's size on the page, whatever the screen. The
+  sharpest; on a screen that shows things once (100 %) the graphics card
+  draws four times the screen's pixels.
+- **Matching the screen**: as finely as the screen itself shows things -
+  once at 100 %, 1.25 at 125 %, 1.5 at 150 %, twice on a Retina screen -
+  never finer than twice. Nothing is scaled between the canvas and the
+  screen, so thin lines do not shimmer as the view moves; followed as the
+  window goes to another screen.
+- **1×**: once, whatever the screen: the lightest.
+
+The comparison (2026-10-17), drawn and then shown on a screen as a
+compositor shows it, against a drawing four times as fine: 1.25 times was
+the least faithful on either screen; on a 100 % screen, 1.5 times was no
+sharper than once and shimmered nearly twice as much as the view moved, a
+3:2 scaling; on a 150 % screen, 1.5 times - its own - was sharp and still.
+Hence the screen's own as the middle choice rather than a number.
+
+The choice applies at once. Everything on the canvas that depends on its
+pixels reads them as it is drawn: PDF pages' tiles, a text's or a
+Markdown sheet's letters, molecules in 3D (how round their balls are drawn,
+their shade and their key light). A line's least width, picking and the
+pointer's reach are in the screen's own units and do not change. Pictures
+made of the drawing - exported, copied, rendered, a talk's - are drawn at
+their own sizes, whichever is chosen.
+
 ## Styles in 3D
 
 Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
@@ -895,11 +999,173 @@ in a single step - seeing a molecule as ball and stick and as
 space-filling side by side is better science than either alone.
 
 - **A list of styles.** Ball and stick (the 3D viewer's look, Meno's
-  first), Glossy and Space-filling. Each is set on its own in Settings,
-  under Molecules in 3D: whether it draws balls and sticks or
-  space-filling, ball size, bond thickness and colour, the surface, and
-  whether the hydrogens on carbon are shown. Changes are kept per style,
+  first), Glossy, Outlined, Print, Pastel, Model kit, Sticks and
+  Space-filling. Each is set on its own in Settings, under Molecules in
+  3D, every setting in every style (none is hidden or fixed by a style;
+  one another setting makes moot is greyed out while it does): whether it
+  draws balls and sticks, sticks alone or space-filling, ball size, bond thickness, its sticks in one colour or
+  coloured by their atoms, its lines, the surface, whether the hydrogens
+  on carbon are shown, and its atoms' colours. Changes are kept per style,
   marked, and taken back one at a time or all at once.
+- **Lines** (the maintainer, 2026-10-15: "its mark is the lines"). A
+  style may draw a thin line round every ball and every stick - in the
+  molecule's own units (the maintainer, 2026-10-15: "the outline's
+  thickness to change with zoom"), set in ångströms and shown in Settings
+  in picometres, so that it grows and shrinks with the molecule as the
+  balls and sticks do, never thinner on the screen than half a pixel, so
+  that far out it does not shimmer away (`lineWidth`, `LINE_LEAST_PX`) -
+  and in a colour of its own - and fade
+  what lies further back in a molecule toward the page, from none to
+  strong, so that its front reads first: nothing at the front, growing
+  smoothly toward the back, at most 70% of the way to the page. The line
+  is each ball and stick drawn again, only its back, pushed out along its
+  normal by the line's width (utils/outlineMaterial): it shows round every
+  edge, and where one part passes in front of another. It shares the
+  balls' and sticks' own instances, so it costs the GPU their triangles
+  again and the CPU nothing however many there are - measured on 10 648
+  atoms and 30 492 bonds, 14.0 ms a frame with no line and 16.4 ms with
+  one, its balls drawn coarser past 2000 atoms (19.7 ms as smooth as the
+  balls). A pass over the finished picture finding its edges was set
+  aside: it would draw lines round the page's drawing as well, and needs
+  the scene drawn again for its normals.
+- **Lines on the balls** (the maintainer, 2026-10-15: "the cross lines").
+  A style may draw great circles on its balls - two or three, crossing as
+  a globe's equator and meridians do, about the molecule's own axes, so
+  that they turn with it and lie the same way on every atom - on every
+  atom's ball, every one's but hydrogen's, or carbon's alone, in the same
+  units as the outline - so the two keep their proportion at any zoom -
+  and in a colour of their own. They are worked out
+  in the ball's shader from its normal, which in the molecule's frame is
+  the ball's own (a ball is never turned on its own): no geometry, and
+  nothing on the CPU for each atom.
+- **Ball sizes** (the maintainer, 2026-10-15). Ball and stick's balls
+  are a fifth of each atom's van der Waals size, Outlined's 15%, and the
+  other balls and sticks' - Glossy, Print, Pastel and Model kit - 18%.
+- **Outlined.** Glossy balls - hydrogen's small - and thin near-black
+  sticks, each ball and stick drawn round with a near-black line 1.5 pm
+  wide, the back fading by half, in the Bright colours. Its lines on the
+  balls are None (the maintainer, 2026-10-15), to be turned on in
+  Settings: three, on every atom, 1 pm wide, as its settings keep them. At caffeine's fit in a window
+  1280 pixels wide, a picometre is about a pixel: the widths were chosen
+  to look there as they did when they were set in pixels.
+- **Print.** Matt balls in Greys, black sticks, a black line 2 pm wide
+  round each - a little bolder than Outlined's - and the back fading: for figures printed in black and white.
+- **Pastel.** Soft matt balls in the Pastel colours, light grey sticks,
+  the hollows gently shaded.
+- **Model kit.** Glossy plastic balls in the Bright colours and thick
+  sticks, each half in its atom's colour.
+- **Sticks.** Sticks alone: each atom a ball exactly as thick as its
+  sticks, so that they join smoothly, each half of a stick in its atom's
+  colour. Its ball size is moot, and shown faint. Picked, measured and
+  drawn in pictures as balls and sticks are.
+- **Bond ends** (the maintainer, 2026-10-15). Where a double or triple
+  bond ends at a lone atom - nothing else joins it - whose ball is
+  thinner than the bond's lines reach, those lines' ends would stick out
+  past it: in practice, sticks alone. Each style chooses how they end,
+  *Double bond ends* and *Triple bond ends*, each one of:
+  - *Curve* (Sticks' own): the lines run straight and side by side till
+    as far short of the atom as they stand off the bond's axis, then turn
+    round there as one tube - a half circle centred on the axis, its apex
+    on the atom - as thick throughout, with no ball; a triple bond's two
+    outer lines turn round so, its middle one running straight in, its
+    end inside the turn. Each such stick is bent in its vertex shader
+    (utils/stickBend): its rings swept round square to the curve, so that
+    it stays as thick; its shading, its colours' halves, the line round it
+    and its highlight follow the curve. Pictures draw it the same; a render
+    plugin is given it as straight pieces along it.
+  - *Joint*: the lines as they are, the atom's ball as large as takes all
+    their ends in.
+  - *Main stick*: one full stick on the axis, the others thinner beside it
+    and short of both atoms.
+  - *Fork*: each line from where it stands at the other atom straight to
+    the lone atom's centre.
+  - *Plain*: as they always were.
+
+  The setting is faint where a style's balls cover the ends. **Hidden ends
+  cost nothing** (the maintainer: "don't make it heavier for things that
+  normally can't be seen"): for a style whose ends are Plain - every
+  built-in style but Sticks - or whose balls take every such end in, no
+  end is worked out and nothing is drawn apart. The sticks that bend are drawn apart from the others, in a
+  material of their own and with rings close together toward their ends,
+  so that straight sticks never pay for the bending: measured on 12 170
+  atoms and 33 536 sticks (a 22-cube grid with 1 739 lone oxygens on double
+  bonds) in ball and stick, 12.1 ms a frame before and 12.1-12.2 ms after,
+  and the bond lines worked out in 9 ms either way.
+- **Colour sets** (the maintainer, 2026-10-15: "each style decides a
+  colour set"). A style draws its atoms in one set of element colours,
+  chosen under it in Settings: *Jmol* - Jmol's default element colours
+  (jmol.sourceforge.net, *Jmol Colors*; lib/chem/elements.ts), Meno's
+  from its first release and its own styles' - *Bright*, Outlined's:
+  carbon a mid grey, oxygen a bright red, sulfur yellow, fluorine and
+  chlorine light green, the alkali metals lavender, the others as Jmol's -
+  and *Greys*, each element a grey as light as its Jmol colour (its
+  relative luminance), for figures printed in black and white - and
+  *Pastel*, each element's Jmol colour taken two fifths of the way to
+  white. Every set gives each of the 118 elements a colour; darmstadtium
+  to oganesson (110 to 118) are a light grey (#cccccc, Pastel's paler) in
+  every set. A style's sticks coloured by their atoms take each half's
+  colour from its atom.
+- **Atom colours** (the maintainer, 2026-10-16: every element, not a fixed
+  few). Over its colour set, a style can give any element a colour of its
+  own, under *Atom colours* in Settings: the periodic table of all 118, as
+  the IUPAC's table lays it out (18 groups; group 3 of periods 6 and 7
+  holding the lanthanoids' and the actinoids' places, the two series in
+  rows of 15 below), each cell filled with the element's colour as the
+  style draws it, its symbol in black or white, whichever reads more
+  (lib/chem/periodicTable, `inkOn`); and the elements most drawn - H, C,
+  N, O, F, P, S, Cl, Br, I, B, Si - in a row above it. A click on a cell
+  opens the colour picker. A changed cell is ringed in the accent; it is
+  set back to the colour set's from its right-click menu, or from the line
+  under the table, which names the element last chosen (*Ruthenium (Ru,
+  44)*, its colour) - and all at once from *Back to Jmol's colours (n)*
+  beside the heading. Where the column is narrow, the table scrolls inside
+  its own box; the page does not.
+- **Multiple bonds** (the maintainer, 2026-10-15). A style draws a double
+  or triple bond as two or three thinner lines side by side, or as one
+  stick, as thick as a single bond - Outlined's, as its reference draws
+  them. With one stick, the bond ends are moot, and shown faint. The
+  change is eased: the side lines go into the middle one.
+- **Settings' page** (the maintainer, 2026-10-15). At the top, two slots,
+  Primary and Secondary, each with its molecule drawn live and turnable;
+  below them every other style, built in and the user's own, each with a
+  still picture (drawn once, a frame apart, all with one renderer - a
+  context for each took the live ones' away). A style dragged onto a slot
+  takes it, the one there going back to the list; one slot's dragged onto
+  the other, the two change places - the card following the pointer, and
+  each card going to its new place eased, not jumping. A press, or Enter,
+  sets a style below; a right-click, or the menu key, offers Use as
+  primary, Use as secondary, Duplicate, Export style… - and, for the user's
+  own, Rename and Delete. A built-in style's changes are kept apart,
+  marked, and taken back by Reset; the user's own is set as a whole.
+- **A workspace's styles in 3D** (the maintainer, 2026-10-16: as a
+  workspace carries its drawing style). A workspace is drawn in its own
+  primary and secondary, fixed as it is made - Settings' then, each whole:
+  a built-in style with what was changed of it, or one of the user's own -
+  and from then on changed only from it: Settings' are for new workspaces
+  (lib/chem/workspaceStyle3d). Its file carries them whole (FILE-IO.md,
+  *The workspace file*), so it opens the same on any computer. A
+  right-click on empty space, *Styles…*, opens the workspace's styles: its
+  drawing style, and under *Molecules in 3D* the same slots and cards as
+  Settings' page - its two in the slots, Settings' styles below, and one
+  it carries that this computer's Settings has none like (made on another
+  computer, or changed in Settings since) on a card of its own, *In this
+  workspace*. A style dragged onto a slot, or given a role from its menu,
+  becomes the workspace's as it is now, whole - one step to undo, a result
+  set its molecules no longer fit laid out again in the same step - and
+  the molecules go over to it: each number and colour of the looks eased
+  from what it was (ball size, bond thickness, lines, atoms' colours), the
+  rest at once, as a change of drawing style eases its bond (at once past
+  20 000 atoms). Duplicate copies a style - a carried one too - into the
+  user's own; Rename acts on the user's style alone; nothing is deleted
+  from here. **What travels with it** (the lane's call, 2026-10-16): what
+  changes the picture - the light from all round and from above right,
+  the shadows, an orbital's colours and how ribbons are coloured, set
+  under the cards, one step each; how a drag turns a molecule and how it
+  coasts, and how a very large drawing is drawn lighter, are the
+  viewer's, and stay in Settings. Talks, pictures and files exported, and
+  a render asked for *as the canvas draws it* follow the workspace's
+  styles. A workspace saved before they were carried opens in Settings'
+  as they are then, and keeps them.
 - **Two roles.** One style is the primary - every molecule's look to
   begin with - and one the secondary. Each style's card in Settings says
   which it is; giving a style the other's role swaps the two, so the
@@ -921,7 +1187,24 @@ space-filling side by side is better science than either alone.
 - **No jump.** Going over, each atom's ball grows or shrinks between its
   two radii, the bonds thicken or give way, the bond colour and the
   surface's gloss go over, and the molecule rises or sinks to stand as
-  high as it now reaches - all on one 80 ms time constant.
+  high as it now reaches - all on one 80 ms time constant. So do the
+  atoms' colours, the lines' width and colour, the depth fade and the
+  sticks' colouring, as the look or a setting changes.
+- **A shader that does not compile.** Meno's own shaders - lines on the
+  balls, the line round them, sticks that bend - each name themselves
+  (utils/menoShader). One that a graphics card will not compile is said in
+  Meno's log, with its name and the card's own words for what was wrong
+  (nothing of the document), and from then on is drawn as its plain
+  three.js material: a molecule loses a line or a shade, never its atoms.
+  A test reads each of them for a word GLSL keeps back - the one that
+  once made every ball vanish was `half` - and for brackets that do not
+  close.
+- **Pictures as the canvas.** A copied or exported picture of a molecule
+  in 3D draws its style's colours, lines and depth fade as the canvas
+  does - its lines in proportion to the molecule at any size, being in
+  its units, and never thinner than half a pixel of the screen (a picture
+  at 300 dpi, 300/96 of its own) - and a render plugin is given its atoms'
+  colours.
 - **Hydrogens on carbon, hidden only past a warning** (the maintainer's
   ruling and wording, 2026-10-10). Many synthetic chemists like them out
   of the way; but a molecule without them looks smaller, flatter and more
@@ -1001,6 +1284,13 @@ slowing it - and in the pictures made of it.
   ribbons stand for (the maintainer's choice, 2026-10-13), so a large
   protein in ribbons is drawn lighter as it would be as atoms; those a
   look leaves out otherwise (hydrogens on carbon, water) are not.
+  Its balls are drawn with as many segments as their size on the screen
+  wants (the maintainer, 2026-10-13): the style's 32 from about 40 pixels
+  across, down to 8 under about 8 - within about 0.3 of a pixel of a
+  circle at each, so that the change is not seen; more at once as balls
+  grow, fewer once the zoom has settled (`utils/largeDrawing`
+  `ballSegmentsFor`). A box of 33 000 waters (100 000 atoms) turned at
+  183 ms a frame with 32, and turns at 33 ms.
 - **In pictures too.** A picture of molecules in 3D shades their hollows
   and casts their shadows as the canvas does, with every ball and stick,
   in a finer shadow map, however many atoms; shaded on the screen, at the
@@ -1060,6 +1350,16 @@ the rest is for later, through a plugin.
   12*, or the output's name) under it. A drag that began on the result
   goes on editing the copy, and the copy and the drag are one undo step.
   A molecule of its own is edited in place.
+- **The copy is seen splitting off** (the maintainer, 2026-10-15). It
+  starts over the result, the same shape and turned the same, and glides
+  out to its place as the value set goes over from the old to the new -
+  0.45 s, longer where its place is far, never faster than 14 bond
+  lengths a second, at most 1.1 s. Where its place is out of view, the
+  view glides as far as shows it and the result - or, where both do not
+  fit, the copy - the zoom kept. Once there it is lit a moment, as
+  anything just put down. Undone, it slides back into the result and is
+  gone, and the view goes back where it was, unless it has been moved
+  since; a redo splits it off again.
 - **Stereo labels follow.** A centre turned inside out has its R and S
   swapped, and a double bond turned past square its E and Z (the
   priorities round them are as they were). The drawing is not told: a 3D
@@ -1109,6 +1409,27 @@ reading in Meno is.
   Space-filling every atom, so a double-click goes from the fold to the
   protein's surface and its pockets, and back. Going over, the ribbon
   shrinks to its line as the atoms grow, and back.
+- **Water.** Water is a residue named HOH or DOD, as the wwPDB's Chemical
+  Component Dictionary names water and heavy water - or one named as a
+  molecular dynamics program writes water in a PDB file, where its atoms
+  are a water's (one oxygen, otherwise at most two hydrogens; a TIP4P or
+  TIP5P model's massless sites have no element and are not read): SOL,
+  GROMACS's (its reference manual, *Topology file formats*:
+  https://manual.gromacs.org/current/reference-manual/topologies/topology-file-formats.html;
+  its `share/top/residuetypes.dat`); WAT, Amber's, as tleap writes it (its
+  tutorial *Adding Water and Ions with tleap*:
+  https://ambermd.org/tutorials/advanced/tutorial8/loop4.php;
+  `residuetypes.dat`); and TIP, CHARMM's TIP3 as a PDB file's residue
+  name (columns 18-20) reads it, and its TIP4 and TIP5 (CHARMM's *io*
+  documentation: https://academiccharmm.org/documentation/version/c48b2/io;
+  `residuetypes.dat`). The atoms are asked as well because SOL is also a
+  dictionary component, L-sorbose. Names that are components and no
+  program documents as water are never water: T3P (thymidine
+  3'-phosphate), SPC, T4P, T5P, OHH and T3H (all in
+  `residuetypes.dat`, all components: https://www.rcsb.org/ligand/T3P and
+  so on); nor H2O, which no program's documentation gives (the maintainer,
+  2026-10-13). A solvated frame of streptavidin (1STP in 3 778 waters)
+  draws the same 103 atoms with its water named HOH, SOL, WAT or TIP3.
 - **Pointing.** A ribbon lights its outline as a molecule's does; pointed
   at, a residue says its name, number and chain. A click on a ribbon
   chooses the residue's backbone atom, which can be measured.
@@ -1226,7 +1547,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   (cut short, or with a place that does not read: never without a word);
   *Atoms in one place* where atoms of it stood within 0.1 Å of another as
   it was read - a damaged file, or none of a molecule's - which are given
-  no bond. Said as *C–H hidden* is:
+  no bond; *1 atom left out*, *3 atoms left out* where its file has atoms
+  whose element does not read - a PDB entry's unknown atom (X, UNX) - and
+  the molecule leaves them out. Said as *C–H hidden* is:
   over the molecule at any zoom, one over another, and in every picture
   made of it (SVG, PNG, EMF).
 - **Found from its shape.** As a molecule comes in, opened or pasted,

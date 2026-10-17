@@ -94,8 +94,41 @@ export type WriteDecl = {
   grammar?: GrammarDecl;
 };
 
+/**
+ * How a program writes a frame's energy on an XYZ file's comment line: `pattern`, a regular expression with one capture group
+ * holding the number (matched without regard to case); `unit` the number's, converted to hartrees. A frame's energy is read
+ * only by the patterns of the plugins added: Meno knows no program's way of writing it.
+ */
+export const ENERGY_UNITS = ["hartree", "eV", "kcal/mol", "kJ/mol"] as const;
+export type XyzEnergyDecl = { id: string; pattern: string; unit: (typeof ENERGY_UNITS)[number] };
+
+/**
+ * A look a render plugin declares (docs/RENDER.md, docs/PLUGINS.md): its id, what the card calls it, a short description,
+ * and what it is made of - a bundle of Meno's own parts (`parts`: what the molecules and the surfaces are made of, how it is
+ * shaded and outlined; any left out are the plain ones), or `own`: made with materials and light of the plugin's own, the
+ * molecules left as the scene's file has them. `seeThrough`: what is inside a ball shows, so the card offers where its sticks
+ * stop. The options that adjust it are the role's, each `when` this look is chosen.
+ */
+export type LookParts = {
+  molecules?: string;
+  surfaces?: string;
+  shading?: string;
+  band?: number;
+  outlines?: string;
+  outline?: number;
+  outline_colour?: string;
+  sticks?: string;
+};
+export type LookDecl = { id: string; label: string; description?: string; parts?: LookParts; own?: true; seeThrough?: true };
+
 /** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
-export type RoleDecl = { role: RoleId; programs: string[]; options: Option[] };
+export type RoleDecl = {
+  role: RoleId;
+  programs: string[];
+  options: Option[];
+  /** The looks it makes, each declared in full, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
+  looks?: LookDecl[];
+};
 
 /**
  * A kind of step a plugin fills (docs/WORKFLOWS.md, *What changes in the
@@ -201,12 +234,17 @@ export const lockOf = (maker: Maker) => (maker === "pixi" ? "pixi.lock" : "requi
 /** A plugin's worker, in its folder. */
 export const WORKER = "worker.py";
 
+/** A program or library a plugin wraps, and the version its lock or pin fixes (a test checks it against them). */
+export type UsesDecl = { name: string; version: string };
+
 /** A plugin's manifest, as Meno reads it. */
 export type Manifest = {
   id: string;
   name: string;
-  /** Its version: that of what it brings - the version its environment's lock pins, or its own. */
+  /** Its own version, semver, bumped whenever its files change (docs/PLUGINS.md, *Versions*). What it uses is `uses`, never this. */
   version: string;
+  /** The programs and libraries it wraps, each with the version its lock or pin fixes: said beside its own version. */
+  uses: UsesDecl[];
   /** One line on what it is. */
   description: string;
   licence: string;
@@ -219,6 +257,8 @@ export type Manifest = {
   reads: string[];
   /** The kinds it writes, of its own. */
   writes: WriteDecl[];
+  /** How the XYZ files its program writes carry a frame's energy on a comment line, from that program's documentation (docs/FILE-IO.md). */
+  xyzEnergies: XyzEnergyDecl[];
   /** The roles it fills besides reading and writing files. */
   roles: RoleDecl[];
   /** The kinds of step it fills, each once. */
@@ -299,6 +339,85 @@ function kindOf(v: unknown): KindDecl | null {
 }
 
 /** A program's name, as a job is given it: a name, not a path. */
+/** The ways a plugin says its program writes an XYZ frame's energy: an id, and a pattern that compiles and has one capture group - what is not that is left out. */
+function acceptXyzEnergies(v: unknown): XyzEnergyDecl[] {
+  const out: XyzEnergyDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || typeof r.pattern !== "string" || r.pattern.length > 200) continue;
+    const unit = (ENERGY_UNITS as readonly string[]).includes(r.unit as string) ? (r.unit as XyzEnergyDecl["unit"]) : "hartree";
+    try {
+      // (one capture group: its alternative with the empty string gives the match and one group)
+      if (new RegExp(`${r.pattern}|`, "i").exec("")!.length !== 2) continue;
+    } catch {
+      continue;
+    }
+    out.push({ id: r.id, pattern: r.pattern, unit });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+const LOOK_ID = /^[a-z][a-z0-9-]{0,39}$/;
+const LOOK_MOLECULES = ["meno", "glossy", "metal", "glass", "matte", "clay", "white"];
+const LOOK_SURFACES = ["meno", "glass", "glossy", "matte"];
+const LOOK_SHADING = ["lit", "toon"];
+const LOOK_OUTLINES = ["none", "thin", "outer", "mixed"];
+const LOOK_COLOURS = ["black", "white", "grey"];
+const LOOK_STICKS = ["shown", "stopped"];
+const oneOf = (v: unknown, among: readonly string[]) => (typeof v === "string" && among.includes(v) ? v : undefined);
+const inRange = (v: unknown, least: number, most: number) => (typeof v === "number" && Number.isFinite(v) && v >= least && v <= most ? v : undefined);
+
+/** The looks a render role declares, each checked: an id, a label, and parts from the vocabulary Meno's render knows - what is not understood is left out. */
+function acceptLooks(v: unknown): LookDecl[] {
+  const seen = new Set<string>();
+  const out: LookDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !LOOK_ID.test(r.id) || seen.has(r.id) || r.id === "meno") continue;
+    const label = typeof r.label === "string" ? r.label.trim().slice(0, 80) : "";
+    if (!label) continue;
+    seen.add(r.id);
+    const description = typeof r.description === "string" && r.description.trim() ? r.description.trim().slice(0, 200) : undefined;
+    const p = (r.parts ?? {}) as Record<string, unknown>;
+    const parts: LookParts = {};
+    const put = <K extends keyof LookParts>(k: K, x: LookParts[K] | undefined) => {
+      if (x !== undefined) parts[k] = x;
+    };
+    put("molecules", oneOf(p.molecules, LOOK_MOLECULES));
+    put("surfaces", oneOf(p.surfaces, LOOK_SURFACES));
+    put("shading", oneOf(p.shading, LOOK_SHADING));
+    put("band", inRange(p.band, 0.05, 1));
+    put("outlines", oneOf(p.outlines, LOOK_OUTLINES));
+    put("outline", inRange(p.outline, 0.5, 20));
+    put("outline_colour", oneOf(p.outline_colour, LOOK_COLOURS));
+    put("sticks", oneOf(p.sticks, LOOK_STICKS));
+    out.push({
+      id: r.id,
+      label,
+      ...(description ? { description } : {}),
+      ...(Object.keys(parts).length ? { parts } : {}),
+      ...(r.own === true ? { own: true as const } : {}),
+      ...(r.seeThrough === true ? { seeThrough: true as const } : {}),
+    });
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
+/** What a plugin says it uses: each a name and the version its lock fixes; what is not that is left out. */
+function acceptUses(v: unknown): UsesDecl[] {
+  const out: UsesDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    const name = typeof r?.name === "string" ? r.name.trim().slice(0, 40) : "";
+    const version = typeof r?.version === "string" ? r.version.trim().slice(0, 40) : "";
+    if (name && version && !out.some((u) => u.name === name)) out.push({ name, version });
+    if (out.length >= 6) break;
+  }
+  return out;
+}
+
 const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
 
 /** The kinds of step a manifest's step says - each one Meno defines - with what they share. */
@@ -556,7 +675,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
           if (typeof r?.role !== "string" || !isRole(r.role)) return null;
           const programs = [...new Set(list(r.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
           // (options only for a role that takes them)
-          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [] };
+          const looks = acceptLooks(r.looks);
+          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [], ...(looks.length ? { looks } : {}) };
         },
         (r) => r.role,
       )
@@ -587,6 +707,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     id,
     name,
     version,
+    uses: acceptUses(m.uses),
     description: text(m.description, 300) ?? "",
     licence: text(m.licence, 60) ?? "",
     homepage: text(m.homepage, 200) ?? "",
@@ -594,6 +715,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     kinds,
     reads: readable,
     writes,
+    xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
     roles,
     steps,
     systems,

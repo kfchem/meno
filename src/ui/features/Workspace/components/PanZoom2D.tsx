@@ -8,6 +8,9 @@ import { setViewPanning, letViewGoalGo, pressMovedUnder, setPressMovedUnder, too
 import { PageHtmlLayer } from "./coverLayer";
 import { TAU, follow } from "../../../theme/motion";
 import { glideSpeed, recentMoves, type Move } from "../../../../lib/input/glide";
+import { fingersStep, makesPinch, pinchedView, type Pt } from "../../../../lib/input/pinch";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { gestureUnderWay } from "../store/gesture";
 import { movedUnderPress, stillPointer, viewMoved, type View } from "../../../../lib/input/stillPointer";
 import { MOV_PX } from "../constants";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -270,6 +273,106 @@ export function PanZoom2D() {
       pinch = null;
       pinchLetGo();
     };
+    // Two fingers on a touch screen: a pinch, as a trackpad's - zoomed about
+    // the point between them, and moved as it moves (lib/input/pinch). A
+    // second finger come down soon after the first, or before the first has
+    // gone a bond's length, or while it moves the view, makes a pinch of it,
+    // whatever the first came down on: what the first began is taken back
+    // as if it had never been - no bond, no move, no selection - and both
+    // are the pinch's alone. Otherwise the first goes on, and the second is
+    // no press at all. (On a Mac a trackpad's pinch comes as gestures, above.)
+    const touches = new Map<number, Pt>();
+    let first: { id: number; at: Pt; t: number } | null = null;
+    let fingers: { a: number; b: number } | null = null;
+    const unheard = new Set<number>();
+    const keep = (e: PointerEvent) => {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    };
+    const onTouchDown = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      const at = { x: e.clientX, y: e.clientY };
+      if (touches.size === 0) {
+        touches.set(e.pointerId, at);
+        first = { id: e.pointerId, at, t: e.timeStamp };
+        // (heard before the page hears the press: what it does can be taken back)
+        store.getState().notePress();
+        return;
+      }
+      keep(e);
+      const st = store.getState();
+      const panning = (maybe.current.active && maybe.current.id === first?.id) || dragging.current;
+      const cam = camera as THREE.OrthographicCamera;
+      const now = first ? touches.get(first.id) : undefined;
+      const pinches =
+        !fingers && touches.size === 1 && first && now && !st.inkMode && !viewDriven(camera) && makesPinch({ ...first, now }, e.timeStamp, NOMINAL_BOND_LENGTH * cam.zoom, panning);
+      if (!pinches || !first) {
+        unheard.add(e.pointerId);
+        return;
+      }
+      // (what the first finger began let go of by its own Escape, as a gesture lost is, then taken back whole)
+      if (gestureUnderWay(st)) window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+      store.getState().takeBackPress();
+      // (the first finger's pan given way to the pinch: no glide, no pan as well)
+      maybe.current.active = false;
+      dragging.current = false;
+      vel.current.set(0, 0);
+      recent.current = [];
+      try {
+        dom.releasePointerCapture(first.id);
+      } catch {}
+      letViewGoalGo(camera);
+      zoomGlide.current = 0;
+      pinchSteps.current = [];
+      setViewPanning(true);
+      setPressMovedUnder(camera, true);
+      touches.set(e.pointerId, at);
+      fingers = { a: first.id, b: e.pointerId };
+      invalidate();
+    };
+    const onTouchMove = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      if (unheard.has(e.pointerId)) return keep(e);
+      const was = touches.get(e.pointerId);
+      if (!was) return;
+      const at = { x: e.clientX, y: e.clientY };
+      touches.set(e.pointerId, at);
+      if (!fingers || (e.pointerId !== fingers.a && e.pointerId !== fingers.b)) return;
+      keep(e);
+      const other = touches.get(e.pointerId === fingers.a ? fingers.b : fingers.a)!;
+      if (viewDriven(camera)) return;
+      const cam = camera as THREE.OrthographicCamera;
+      const r = dom.getBoundingClientRect();
+      const next = pinchedView({ x: pos.current.x, y: pos.current.y, zoom: cam.zoom }, r, fingersStep(was, other, at, other), MIN_ZOOM, MAX_ZOOM);
+      const t = performance.now();
+      pinchSteps.current = [...recentMoves(pinchSteps.current, t, RECENT_MS), { t, d: Math.log(next.zoom / cam.zoom) }];
+      cam.zoom = next.zoom;
+      cam.updateProjectionMatrix();
+      pos.current.set(next.x, next.y);
+      zoomLeft.current = 0;
+      invalidate();
+    };
+    const onTouchUp = (e: PointerEvent) => {
+      if (e.pointerType !== "touch") return;
+      if (unheard.delete(e.pointerId)) return keep(e);
+      touches.delete(e.pointerId);
+      if (first?.id === e.pointerId) first = null;
+      if (!fingers || (e.pointerId !== fingers.a && e.pointerId !== fingers.b)) return;
+      // (both fingers the pinch's to their end: the one left is no press either)
+      keep(e);
+      const left = e.pointerId === fingers.a ? fingers.b : fingers.a;
+      touches.delete(left);
+      unheard.add(left);
+      first = null;
+      fingers = null;
+      setViewPanning(false);
+      pointer.current.moved();
+      pinchLetGo();
+    };
+    window.addEventListener("pointerdown", onTouchDown, true);
+    window.addEventListener("pointermove", onTouchMove, true);
+    window.addEventListener("pointerup", onTouchUp, true);
+    window.addEventListener("pointercancel", onTouchUp, true);
     const readWheel = wheelReader();
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
@@ -350,6 +453,10 @@ export function PanZoom2D() {
     // the canvas: they are heard on the box the canvas's events are, where
     // drei's Html lays what has no layer of its own)
     const box = events.connected instanceof HTMLElement ? events.connected : dom;
+    // (no pan or zoom of the system's own from a touch or a pen over the page - which would take the pointers back as they go: the pinch
+    // is the view's; what is laid on the page in its own layer keeps its own, so that a list there still scrolls under a finger)
+    dom.style.touchAction = "none";
+    box.style.touchAction = "none";
     box.addEventListener("wheel", onWheel, { passive: false });
     box.addEventListener("gesturestart", onGestureStart);
     box.addEventListener("gesturechange", onGestureChange);
@@ -373,6 +480,10 @@ export function PanZoom2D() {
     layer?.addEventListener("gestureend", onGestureEnd);
     return () => {
       if (pinchEnd != null) window.clearTimeout(pinchEnd);
+      window.removeEventListener("pointerdown", onTouchDown, true);
+      window.removeEventListener("pointermove", onTouchMove, true);
+      window.removeEventListener("pointerup", onTouchUp, true);
+      window.removeEventListener("pointercancel", onTouchUp, true);
       dom.removeEventListener("pointercancel", lostPan);
       dom.removeEventListener("lostpointercapture", lostPan);
       window.removeEventListener("blur", lostPan);

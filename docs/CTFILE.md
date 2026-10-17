@@ -110,7 +110,7 @@ atoms at its ends, as a dative bond does not: an ammine stays NH3.
 |---|---|---|
 | An Rgroup (R# with M  RGP / RGROUPS) | R with its number superscript: R¹, R¹,². Typed as R1. | GR-9.1: a superscript number; a subscript is not acceptable, being read as a count. |
 | An atom list (L with M  ALS, or V3000's [..]) | The list in brackets, [N,O]; NOT [N,O] for a NOT list. | GR-9.1: a list in a label is enclosed in brackets. |
-| An alias (A line) | The atom is drawn as - and taken to be - its alias. | |
+| An alias (A line) | The atom is drawn as - and taken to be - its alias, its letters' case as written: CO is carbon monoxide, Co cobalt, HO a hydroxy. One in small letters only is read as an element's symbol where it is one (co is Co), as a label typed so is. | |
 | A contracted abbreviation (SUP not expanded, or the old G line) | One atom, labelled, where the group's first attachment is, holding the atoms and bonds it stands for (`abbrev`); its bonds out leave from it. *Expand abbreviation*, in its menu, draws them out, turned with its bond. | |
 | An expanded abbreviation | Its atoms. | |
 | Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3. |
@@ -501,10 +501,11 @@ and what is sent to the RDKit plugin to draw as a formula or to find bond
 orders and hydrogens for - is written by `writeMolfile3d`, its header
 saying 3D: V2000 wherever it can be, and V3000 past 999 atoms or bonds, a
 coordinate or a symbol wider than V2000's field, or a coordination or
-hydrogen bond (types 9 and 10). V3000 gives a charge and an isotope on the
-atom (CHG=, MASS=) where V2000 has M  CHG and M  ISO lines. A PDB entry
-such as 1STP, 1001 atoms, is past 999. V3000 strings that hold a blank, a
-quote, a double quote, "=", "(" or ")" are written in double quotes, and
-so are those that end in "-", which at a line's end continues it: a
-counter-anion's label beside a complex, Nu- or OTf-, read back as "NuEND"
-when written bare.
+hydrogen bond (types 9 and 10). V3000 gives a charge, a radical and an
+isotope on the atom (CHG=, RAD=, MASS=) where V2000 has M  CHG, M  RAD and
+M  ISO lines, a radical coded as the format codes it: 1 singlet, 2
+doublet, 3 triplet. A PDB entry such as 1STP, 1001 atoms, is past 999.
+V3000 strings that hold a blank, a quote, a double quote, "=", "(" or ")"
+are written in double quotes, and so are those that end in "-", which at a
+line's end continues it: a counter-anion's label beside a complex, Nu- or
+OTf-, read back as "NuEND" when written bare.

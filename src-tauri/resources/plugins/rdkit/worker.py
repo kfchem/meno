@@ -30,6 +30,7 @@ each atom's element, place, charge and radical, the bonds by index:
 """
 
 import json
+import math
 import re
 import os
 import sys
@@ -534,6 +535,675 @@ def reflected(entry):
     }
 
 
+# --- the same atoms, the same places: conformers of equivalent branches ---------------------------------
+
+#: How many whole branches a group may have for every way of laying them out to be tried (4! = 24).
+MOST_BRANCHES = 4
+#: The largest pendant ring turned about its bond, and how many of its symmetries are tried.
+MOST_RING_ATOMS = 16
+MOST_SYMMETRIES = 64
+
+
+def settle_equivalents(mol, cids):
+    """Conformers of one molecule made by RDKit, their equivalent branches given the same places as in the
+    first. RDKit's embedding takes no account of which of a CH2's two hydrogens, or of an isopropyl's two methyls,
+    is which: one index can be on one side in one conformer and on the other in the next, and switching between
+    them moves them across each other. Here each equivalent group - neighbours of one atom of the same rank in
+    the graph (no chirality), each the root of a branch that joins the rest only through it: H's, a methyl, a
+    t-butyl, CF3, an oxygen of a nitro group - is laid out as it is in the first conformer, as the whole branches
+    permute (an atom with its branch, its atoms by their ranks), whichever way fits best in the parent's frame:
+    the sum of squared distances, the parent and the atoms about it laid over the first's. A pendant ring that
+    is symmetric about its bond (phenyl) may flip likewise. Went from the molecule's centre outward, so that a
+    branch's own groups are settled after the branch is. Local and greedy: no automorphism of the whole molecule
+    is searched for. Only heavy atoms of whole branches move, and only to places an equivalent branch had.
+    The first conformer is the reference and is not touched; `mol`'s conformers `cids` are changed in place."""
+    import itertools
+    import numpy as np
+
+    if len(cids) < 2:
+        return
+    n = mol.GetNumAtoms()
+    nbrs = [[x.GetIdx() for x in a.GetNeighbors()] for a in mol.GetAtoms()]
+    ranks = list(Chem.CanonicalRankAtoms(mol, breakTies=False, includeChirality=False))
+    # from the centre outward: the atom of the least eccentricity, the lowest index of them
+    def distances(src):
+        d = {src: 0}
+        order = [src]
+        for a in order:
+            for b in nbrs[a]:
+                if b not in d:
+                    d[b] = d[a] + 1
+                    order.append(b)
+        return d, order
+
+    best = None
+    for a in range(n):
+        d, _ = distances(a)
+        if len(d) != n:
+            return  # (more than one molecule: left as it is)
+        ecc = max(d.values())
+        if best is None or ecc < best[0]:
+            best = (ecc, a)
+    depth, order = distances(best[1])
+    parent = {best[1]: None}
+    for a in order:
+        for b in nbrs[a]:
+            if b not in parent and depth[b] == depth[a] + 1:
+                parent[b] = a
+
+    def branch_of(p, c):
+        """The atoms hanging from p by c alone - None where c's side joins the rest of the molecule another way."""
+        seen = {c}
+        stack = [c]
+        while stack:
+            a = stack.pop()
+            for b in nbrs[a]:
+                if b == p:
+                    if a != c:
+                        return None
+                    continue
+                if b not in seen:
+                    seen.add(b)
+                    stack.append(b)
+        return seen
+
+    def symmetries(root, bset):
+        """The maps of a pendant ring's atoms onto themselves that keep its root, by ranks and bonds."""
+        atoms = sorted(bset, key=lambda a: (depth[a], a))
+        found = []
+
+        def extend(i, m, used):
+            if len(found) >= MOST_SYMMETRIES:
+                return
+            if i == len(atoms):
+                found.append(dict(m))
+                return
+            a = atoms[i]
+            if a == root:
+                m[a] = a
+                used.add(a)
+                extend(i + 1, m, used)
+                used.discard(a)
+                return
+            for t in sorted(bset):
+                if t in used or ranks[t] != ranks[a] or len(nbrs[t]) != len(nbrs[a]):
+                    continue
+                if all((m[b] in nbrs[t]) == (b in nbrs[a]) for b in m if b in bset):
+                    m[a] = t
+                    used.add(t)
+                    extend(i + 1, m, used)
+                    used.discard(t)
+                    del m[a]
+
+        extend(0, {}, set())
+        return found
+
+    groups = []  # (p, [branches as lists of atoms, root first], whether more than one)
+    ambiguous = set()
+    for p in order:
+        pend = {}
+        for c in nbrs[p]:
+            bset = branch_of(p, c)
+            if bset is not None:
+                pend[c] = bset
+        by_rank = {}
+        for c in pend:
+            by_rank.setdefault(ranks[c], []).append(c)
+        for roots in by_rank.values():
+            roots.sort()
+            if len(roots) > 1 and len(roots) <= MOST_BRANCHES:
+                groups.append((p, roots, pend))
+                for c in roots:
+                    ambiguous |= pend[c]
+            elif len(roots) == 1:
+                bset = pend[roots[0]]
+                bonds_inside = sum(1 for a in bset for b in nbrs[a] if b in bset) // 2
+                if bonds_inside >= len(bset) and len(bset) <= MOST_RING_ATOMS:
+                    moved = symmetries(roots[0], bset)
+                    if len(moved) > 1:
+                        groups.append((p, roots, pend))
+                        # (atoms every symmetry keeps - the root, the para atom - stay where the frame can lean on them)
+                        ambiguous |= {a for a in bset if any(m[a] != a for m in moved)}
+
+    def pair_up(ra, rb, bset_a, bset_b):
+        """A map of one branch onto an equivalent one - a parallel walk, equal ranks at each step, bonds kept - or None."""
+        m = {ra: rb}
+        queue = [(ra, rb)]
+        for a, b in queue:
+            ca = sorted((x for x in nbrs[a] if x in bset_a and x not in m), key=lambda x: (ranks[x], x))
+            cb = sorted((x for x in nbrs[b] if x in bset_b and x not in m.values()), key=lambda x: (ranks[x], x))
+            if len(ca) != len(cb) or [ranks[x] for x in ca] != [ranks[x] for x in cb]:
+                return None
+            for x, y in zip(ca, cb):
+                m[x] = y
+                queue.append((x, y))
+        if len(m) != len(bset_a) or len(set(m.values())) != len(m):
+            return None
+        for a in bset_a:
+            for b in nbrs[a]:
+                if b in bset_a and m[b] not in nbrs[m[a]]:
+                    return None
+        return m
+
+    def handedness(roots_at, anchors_at, centre):
+        """The signs of the triple products of the vectors from the centre to the roots and to the atoms about it, each triple with a root."""
+        vs = [np.asarray(x) - centre for x in roots_at + anchors_at]
+        k = len(roots_at)
+        out = []
+        for i, j, l in itertools.combinations(range(len(vs)), 3):
+            if min(i, j, l) < k:
+                out.append(1 if float(np.linalg.det(np.array([vs[i], vs[j], vs[l]]))) > 0 else -1)
+        return tuple(out)
+
+    settled = set(range(n)) - ambiguous
+    seen_roots = {}
+    for p, roots, pend in groups:
+        key = (p, tuple(roots))
+        if key in seen_roots:
+            continue
+        seen_roots[key] = True
+        branches = [pend[c] for c in roots]
+        inside = set().union(*branches)
+        # candidate re-labellings of the branches' atoms: new place of a <- old place of m[a]
+        cands = []
+        if len(roots) > 1:
+            maps = {}
+            ok = True
+            for i, ri in enumerate(roots):
+                for j, rj in enumerate(roots):
+                    mm = pair_up(ri, rj, branches[i], branches[j])
+                    if mm is None:
+                        ok = False
+                    maps[(i, j)] = mm
+            if not ok:
+                continue
+            for perm in itertools.permutations(range(len(roots))):
+                cand = {}
+                for i, j in enumerate(perm):
+                    cand.update(maps[(i, j)])
+                cands.append(cand)
+        else:
+            cands = symmetries(roots[0], branches[0])
+            if len(cands) < 2:
+                continue
+        # the parent's frame: it and the atoms about it, outside the branches - those settled; where they are too few
+        # or lie in a line, those of an equivalent pair too, which a flip of theirs may still turn
+        shell = {p}
+        for x in nbrs[p]:
+            if x not in inside:
+                shell.add(x)
+                shell.update(y for y in nbrs[x] if y not in inside)
+        if len(roots) == 1:
+            shell.add(roots[0])
+        reference = mol.GetConformer(cids[0])
+
+        def usable(atoms):
+            pts = np.array([list(reference.GetAtomPosition(x)) for x in atoms])
+            return len(atoms) >= 3 and np.linalg.matrix_rank(pts - pts.mean(axis=0), tol=1e-3) >= 2
+
+        frame = sorted(x for x in shell if x in settled or x == p or (len(roots) == 1 and x == roots[0]))
+        if not usable(frame):
+            frame = sorted(shell)
+            if not usable(frame):
+                continue
+        anchors = sorted(x for x in nbrs[p] if x not in inside)[:2]
+        ref = {x: np.array(mol.GetConformer(cids[0]).GetAtomPosition(x)) for x in set(frame) | inside | {p} | set(anchors)}
+        for cid in cids[1:]:
+            conf = mol.GetConformer(cid)
+            now = conf.GetPositions()  # (all at once: one array per atom took 40 s for a Grubbs catalyst's 30)
+            P = np.array([now[x] for x in frame])
+            Q = np.array([ref[x] for x in frame])
+            pc, qc = P.mean(axis=0), Q.mean(axis=0)
+            u, _, vt = np.linalg.svd((P - pc).T @ (Q - qc))
+            d = np.sign(np.linalg.det(vt.T @ u.T)) or 1.0
+            rot = vt.T @ np.diag([1.0, 1.0, d]) @ u.T
+            def placed(x):
+                return rot @ (now[x] - pc) + qc
+            scored = []
+            for cand in cands:
+                cost = sum(float(np.sum((placed(cand[a]) - ref[a]) ** 2)) for a in inside)
+                scored.append(cost)
+            identity = next((k for k, c in enumerate(cands) if all(c[a] == a for a in inside)), 0)
+            # (first its handedness: the roots and the atoms about their parent keep the sense they have in the first - a CH2's hydrogens
+            # keep their sides, a methyl's its cyclic order - and then the fit)
+            keep = list(range(len(cands)))
+            if len(roots) > 1 and len(roots) + len(anchors) >= 3:
+                p_now = now[p]
+                want = handedness([ref[r] for r in roots], [ref[x] for x in anchors], ref[p])
+                same = [
+                    k for k, cand in enumerate(cands)
+                    if handedness([now[cand[r]] for r in roots], [now[x] for x in anchors], p_now) == want
+                ]
+                if same:
+                    keep = same
+            pick = min(keep, key=lambda k: scored[k] if k != identity else scored[k] - 1e-9)
+            if pick != identity and (identity not in keep or scored[pick] < scored[identity] - 1e-6):
+                chosen = cands[pick]
+                for a in inside:
+                    x = now[chosen[a]]
+                    conf.SetAtomPosition(a, Point3D(float(x[0]), float(x[1]), float(x[2])))
+        settled |= inside
+
+
+
+# --- metals ------------------------------------------------------------------
+
+# A metal's bonds, as ETKDG and UFF are given them. ETKDG's bounds for a bond
+# to a metal come from radii that put Pd-Cl near 2.7 A, and its ligands may
+# meet; UFF types a metal from its hybridization, which RDKit does not perceive
+# for one (it said "Unrecognized hybridization" for Pd, and with no terms for
+# its bonds pushed it 8 to 25 A away or crashed). So a metal's bonds are given
+# their covalent lengths, its ligands kept apart, and it is typed for UFF as a
+# geometry UFF has for it; where UFF has none, nothing is optimised, and the
+# chip says so.
+
+#: Pyykko's single-, double- and triple-bond covalent radii, in picometres:
+#: the same as src/lib/chem/elements.ts (whose comment gives the sources), held
+#: so by test_plugin_rdkit.py.
+RADII = {
+    "H": (32, None, None), "He": (46, None, None), "Li": (133, 124, None), "Be": (102, 90, 85),
+    "B": (85, 78, 73), "C": (75, 67, 60), "N": (71, 60, 54), "O": (63, 57, 53), "F": (64, 59, 53),
+    "Ne": (67, 96, None), "Na": (155, 160, None), "Mg": (139, 132, 127), "Al": (126, 113, 111),
+    "Si": (116, 107, 102), "P": (111, 102, 94), "S": (103, 94, 95), "Cl": (99, 95, 93),
+    "Ar": (96, 107, 96), "K": (196, 193, None), "Ca": (171, 147, 133), "Sc": (148, 116, 114),
+    "Ti": (136, 117, 108), "V": (134, 112, 106), "Cr": (122, 111, 103), "Mn": (119, 105, 103),
+    "Fe": (116, 109, 102), "Co": (111, 103, 96), "Ni": (110, 101, 101), "Cu": (112, 115, 120),
+    "Zn": (118, 120, None), "Ga": (124, 117, 121), "Ge": (121, 111, 114), "As": (121, 114, 106),
+    "Se": (116, 107, 107), "Br": (114, 109, 110), "Kr": (117, 121, 108), "Rb": (210, 202, None),
+    "Sr": (185, 157, 139), "Y": (163, 130, 124), "Zr": (154, 127, 121), "Nb": (147, 125, 116),
+    "Mo": (138, 121, 113), "Tc": (128, 120, 110), "Ru": (125, 114, 103), "Rh": (125, 110, 106),
+    "Pd": (120, 117, 112), "Ag": (128, 139, 137), "Cd": (136, 144, None), "In": (142, 136, 146),
+    "Sn": (140, 130, 132), "Sb": (140, 133, 127), "Te": (136, 128, 121), "I": (133, 129, 125),
+    "Xe": (131, 135, 122), "Cs": (232, 209, None), "Ba": (196, 161, 149), "La": (180, 139, 139),
+    "Ce": (163, 137, 131), "Pr": (176, 138, 128), "Nd": (174, 137, None), "Pm": (173, 135, None),
+    "Sm": (172, 134, None), "Eu": (168, 134, None), "Gd": (169, 135, 132), "Tb": (168, 135, None),
+    "Dy": (167, 133, None), "Ho": (166, 133, None), "Er": (165, 133, None), "Tm": (164, 131, None),
+    "Yb": (170, 129, None), "Lu": (162, 131, 131), "Hf": (152, 128, 122), "Ta": (146, 126, 119),
+    "W": (137, 120, 115), "Re": (131, 119, 110), "Os": (129, 116, 109), "Ir": (122, 115, 107),
+    "Pt": (123, 112, 110), "Au": (124, 121, 123), "Hg": (133, 142, None), "Tl": (144, 142, 150),
+    "Pb": (144, 135, 137), "Bi": (151, 141, 135), "Po": (145, 135, 129), "At": (147, 138, 138),
+    "Rn": (142, 145, 133), "Fr": (223, 218, None), "Ra": (201, 173, 159), "Ac": (186, 153, 140),
+    "Th": (175, 143, 136), "Pa": (169, 138, 129), "U": (170, 134, 118), "Np": (171, 136, 116),
+    "Pu": (172, 135, None), "Am": (166, 135, None), "Cm": (166, 136, None), "Bk": (168, 139, None),
+    "Cf": (168, 140, None), "Es": (165, 140, None), "Fm": (167, None, None),
+    "Md": (173, 139, None), "No": (176, 159, None), "Lr": (161, 141, None), "Rf": (157, 140, 131),
+    "Db": (149, 136, 126), "Sg": (143, 128, 121), "Bh": (141, 128, 119), "Hs": (134, 125, 118),
+    "Mt": (129, 125, 113), "Ds": (128, 116, 112), "Rg": (121, 116, 118), "Cn": (122, 137, 130),
+    "Nh": (136, None, None), "Fl": (143, None, None), "Mc": (162, None, None),
+    "Lv": (175, None, None), "Ts": (165, None, None), "Og": (157, None, None),
+}
+
+#: How far a metal's bond may be from its covalent length while embedding (A).
+METAL_BOND_SLACK = 0.05
+#: The narrowest angle two ligands of one metal are let make while embedding (degrees).
+NARROWEST_AT_METAL = 75.0
+#: UFF's geometries for a metal, in the digit its atom types use, and the
+#: hybridization RDKit types each from: tetrahedral, square planar, octahedral,
+#: then the rest - tried in this order for up to four bonds, octahedral first
+#: for more.
+UFF_GEOMETRY = {
+    "3": Chem.HybridizationType.SP3,
+    "4": Chem.HybridizationType.SP2D,
+    "6": Chem.HybridizationType.SP3D2,
+    "5": Chem.HybridizationType.SP3D,
+    "1": Chem.HybridizationType.SP,
+    "2": Chem.HybridizationType.SP2,
+}
+#: What each geometry is called on the chip.
+GEOMETRY_WORDS = {"1": "linear", "2": "trigonal", "3": "tetrahedral", "4": "square planar", "5": "trigonal bipyramidal", "6": "octahedral"}
+
+
+def is_metal(atom):
+    """A d- or f-block atom: one ETKDG and UFF need told about."""
+    z = atom.GetAtomicNum()
+    return 21 <= z <= 30 or 39 <= z <= 48 or 57 <= z <= 80 or 89 <= z <= 112
+
+
+def covalent_length(bond):
+    """A bond's length from its atoms' covalent radii, for its order where
+    both have a radius for it, else as single (A)."""
+    a, b = bond.GetBeginAtom().GetSymbol(), bond.GetEndAtom().GetSymbol()
+    k = {Chem.BondType.DOUBLE: 1, Chem.BondType.TRIPLE: 2}.get(bond.GetBondType(), 0)
+    ra, rb = RADII.get(a, (None,) * 3), RADII.get(b, (None,) * 3)
+    if ra[k] is None or rb[k] is None:
+        k = 0
+    if ra[0] is None or rb[0] is None:
+        return None
+    return (ra[k] + rb[k]) / 100.0
+
+
+#: How much longer than its covalent length a metal's bond to each atom of a
+#: ring or chain bound through all its atoms (eta) is taken to be (A): Meno's
+#: rule, which gives ferrocene's Fe-C as about 2.06, ruthenocene's Ru-C 2.15,
+#: bis(benzene)chromium's Cr-C 2.12 and zirconocene dichloride's Zr-C 2.44,
+#: against about 2.05, 2.19, 2.14 and 2.50 measured.
+ETA_EXTRA = 0.15
+#: How near an atom of an eta system and another ligand's donor of the same
+#: metal may come (A).
+ETA_CLEAR = 2.6
+
+
+def eta_systems(mol):
+    """Each ring or chain bound to a metal through all its atoms, as the
+    CTfile writes one - a bond from the metal to a star at its centre, its
+    ENDPTS the atoms, ATTACH=ALL (RDKit keeps the bond as a dative one to a
+    dummy atom, the ENDPTS as its property): [(metal, star, atoms)]."""
+    found = []
+    for bond in mol.GetBonds():
+        if not bond.HasProp("_MolFileBondEndPts"):
+            continue
+        a, z = bond.GetBeginAtom(), bond.GetEndAtom()
+        star, metal = (z, a) if z.GetAtomicNum() == 0 else (a, z)
+        if star.GetAtomicNum() != 0 or not is_metal(metal):
+            continue
+        words = bond.GetProp("_MolFileBondEndPts").strip("()").split()
+        atoms = [int(w) - 1 for w in words[1:]]
+        if len(atoms) >= 2 and all(0 <= i < mol.GetNumAtoms() for i in atoms):
+            found.append((metal.GetIdx(), star.GetIdx(), atoms))
+    return found
+
+
+def as_ligand_anions(mol, eta):
+    """A ring of five or a chain of three carbons bound through all its
+    atoms and drawn neutral - one carbon not double-bonded within it, with
+    two hydrogens or an unpaired electron - taken as the cyclopentadienide
+    or allyl anion it is bound as, the metal one charge higher, as a
+    complex's formula balances it (src/lib/chem/ligands.ts): not a ring with
+    a CH2 in it, nor radical carbons. Whether any was."""
+    changed = False
+    for metal, _, atoms in eta:
+        inside = set(atoms)
+        system = [mol.GetAtomWithIdx(i) for i in atoms]
+        if len(atoms) not in (3, 5) or any(a.GetSymbol() != "C" or a.GetFormalCharge() for a in system):
+            continue
+        lone = [
+            a for a in system
+            if not any(b.GetBondType() == Chem.BondType.DOUBLE and b.GetOtherAtomIdx(a.GetIdx()) in inside for b in a.GetBonds())
+        ]
+        if len(lone) != 1:
+            continue
+        c = lone[0]
+        held = sum(b.GetBondTypeAsDouble() for b in c.GetBonds() if b.GetBondType() != Chem.BondType.DATIVE)
+        c.SetFormalCharge(-1)
+        c.SetNumRadicalElectrons(0)
+        c.SetNoImplicit(True)
+        c.SetNumExplicitHs(max(0, 3 - int(round(held))))
+        m = mol.GetAtomWithIdx(metal)
+        m.SetFormalCharge(m.GetFormalCharge() + 1)
+        changed = True
+    if changed:
+        mol.UpdatePropertyCache(strict=False)
+        problem = Chem.SanitizeMol(mol, catchErrors=True)
+        if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+            raise ValueError(f"cannot make sense of the structure ({problem})")
+    return changed
+
+
+def eta_length(mol, metal, atom):
+    """A metal's distance to an atom of an eta system it binds (A), or None."""
+    rm = RADII.get(mol.GetAtomWithIdx(metal).GetSymbol(), (None,))[0]
+    ra = RADII.get(mol.GetAtomWithIdx(atom).GetSymbol(), (None,))[0]
+    return None if rm is None or ra is None else (rm + ra) / 100.0 + ETA_EXTRA
+
+
+def metal_bounds(mol, eta=()):
+    """ETKDG's bounds for a molecule with metals: each metal's bonds at their
+    covalent lengths, and its ligands at least NARROWEST_AT_METAL apart as
+    seen from it - but for two joined otherwise within two bonds, as a
+    chelate's ends or a ring bound through each of its atoms (ferrocene)
+    are; None where it has no metal bonded, or the bounds cannot be made to
+    agree."""
+    from rdkit import DistanceGeometry
+    metals = [a for a in mol.GetAtoms() if is_metal(a) and a.GetDegree()]
+    if not metals:
+        return None
+    bm = rdDistGeom.GetMoleculeBoundsMatrix(mol)
+    stars = {star for _, star, _ in eta}
+    # (how far apart atoms are with the metals' bonds left out)
+    apart = Chem.RWMol(mol)
+    for m in sorted((m.GetIdx() for m in metals), reverse=True):
+        for n in [n.GetIdx() for n in apart.GetAtomWithIdx(m).GetNeighbors()]:
+            apart.RemoveBond(m, n)
+    hops = Chem.GetDistanceMatrix(apart, force=True)  # (not the copy's cached one, with the metal's bonds)
+
+    def put(i, j, low, high):
+        i, j = min(i, j), max(i, j)
+        bm[i][j] = high  # (upper bounds above the diagonal, lower below)
+        bm[j][i] = low
+
+    for m in metals:
+        i = m.GetIdx()
+        length = {}
+        for bond in m.GetBonds():
+            d = covalent_length(bond)
+            if d is None:
+                continue
+            j = bond.GetOtherAtomIdx(i)
+            length[j] = d
+            put(i, j, d - METAL_BOND_SLACK, d + METAL_BOND_SLACK)
+        near = sorted(length)
+        cos = math.cos(math.radians(NARROWEST_AT_METAL))
+        for x, j in enumerate(near):
+            for k in near[x + 1:]:
+                if hops[j][k] <= 2:
+                    continue
+                dj, dk = length[j], length[k]
+                low = math.sqrt(dj * dj + dk * dk - 2 * dj * dk * cos)
+                lo, hi = min(j, k), max(j, k)
+                put(j, k, max(bm[hi][lo], low), max(dj + dk + 2 * METAL_BOND_SLACK, low))
+    # an eta system over its metal: each of its atoms at its eta length, its star anywhere (set at its
+    # centre after), the atoms on it let come near the metal, and other ligands' donors kept off it
+    n = mol.GetNumAtoms()
+    for metal, star, atoms in eta:
+        for k in range(n):
+            if k != star:
+                put(k, star, 0.0, 100.0)
+        donors = [x.GetIdx() for x in mol.GetAtomWithIdx(metal).GetNeighbors() if x.GetIdx() not in stars]
+        for c in atoms:
+            d = eta_length(mol, metal, c)
+            if d is not None:
+                put(metal, c, d - METAL_BOND_SLACK, d + METAL_BOND_SLACK)
+            for x in mol.GetAtomWithIdx(c).GetNeighbors():
+                k = x.GetIdx()
+                if k not in atoms and k != metal and k != star:
+                    lo, hi = min(k, metal), max(k, metal)
+                    bm[hi][lo] = min(bm[hi][lo], 2.5)
+            for k in donors:
+                lo, hi = min(k, c), max(k, c)
+                bm[hi][lo] = max(bm[hi][lo], ETA_CLEAR)
+                bm[lo][hi] = max(bm[lo][hi], ETA_CLEAR)
+    if not DistanceGeometry.DoTriangleSmoothing(bm):
+        return None
+    return bm
+
+
+#: A square-planar metal's angles while UFF optimises (degrees): RDKit types
+#: Pd, Pt, Ni and Au as square planar (Pd4+2) only from SP2D, for which its
+#: angle terms have their one minimum at 90 degrees, and four ligands then
+#: settled near tetrahedral. So two trans and four cis angles are held.
+TRANS_AT_METAL = (172.0, 180.0)
+CIS_AT_METAL = (85.0, 95.0)
+
+
+def planar_angles(mol, cid):
+    """The angles to hold at each square-planar metal with four bonds, in one
+    conformer: its two trans pairs those of its ligands that are furthest
+    apart there as embedded, the rest cis - so that cis and trans isomers
+    both come out of a search, as embedding left them. [(i, metal, j, (low, high))]"""
+    pos = mol.GetConformer(cid).GetPositions()
+    held = []
+    for atom in mol.GetAtoms():
+        if not is_metal(atom) or atom.GetDegree() != 4 or atom.GetHybridization() != Chem.HybridizationType.SP2D:
+            continue
+        c = atom.GetIdx()
+        nb = [n.GetIdx() for n in atom.GetNeighbors()]
+
+        def angle(i, j):
+            u, v = pos[i] - pos[c], pos[j] - pos[c]
+            cos = float((u * v).sum() / math.sqrt(float((u * u).sum() * (v * v).sum())))
+            return math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+
+        pairings = [((0, 1), (2, 3)), ((0, 2), (1, 3)), ((0, 3), (1, 2))]
+        trans = max(pairings, key=lambda pr: sum(angle(nb[a], nb[b]) for a, b in pr))
+        for x in range(4):
+            for y in range(x + 1, 4):
+                held.append((nb[x], c, nb[y], TRANS_AT_METAL if (x, y) in trans else CIS_AT_METAL))
+    return held
+
+
+#: A metal UFF has no type for, and the lighter one of its group that stands
+#: in for it while UFF optimises: the stand-in's angle terms shape it, and its
+#: bonds are held at its own covalent lengths. Its energies are not the
+#: metal's, so none are given.
+STAND_IN = {"Ru": "Fe", "Os": "Fe", "Rh": "Co", "Ir": "Co", "W": "Mo", "Zr": "Ti", "Hf": "Ti", "Y": "Sc"}
+#: How strongly a stood-in metal's bonds, and any metal's ligands' distance
+#: apart, are held (kcal/mol/A^2): UFF's octahedral and square-planar angle
+#: terms have a minimum at 0 degrees too, and two ligands of a metal are
+#: never kept apart by their van der Waals terms (they are 1-3), so without
+#: this two ligands could settle 30 degrees apart.
+HOLD_BOND = 500.0
+HOLD_APART = 100.0
+
+
+def ligands_apart(mol):
+    """Each metal's ligands held at least NARROWEST_AT_METAL apart as seen
+    from it, as metal_bounds keeps them while embedding: [(j, k, low, high)]."""
+    apart = Chem.RWMol(mol)
+    metals = [a.GetIdx() for a in mol.GetAtoms() if is_metal(a) and a.GetDegree() > 1]
+    for m in sorted(metals, reverse=True):
+        for n in [n.GetIdx() for n in apart.GetAtomWithIdx(m).GetNeighbors()]:
+            apart.RemoveBond(m, n)
+    hops = Chem.GetDistanceMatrix(apart, force=True)  # (not the copy's cached one, with the metal's bonds)
+    cos = math.cos(math.radians(NARROWEST_AT_METAL))
+    held = []
+    for m in metals:
+        length = {b.GetOtherAtomIdx(m): covalent_length(b) for b in mol.GetAtomWithIdx(m).GetBonds()}
+        near = sorted(j for j, d in length.items() if d is not None)
+        for x, j in enumerate(near):
+            for k in near[x + 1:]:
+                if hops[j][k] > 2:
+                    dj, dk = length[j], length[k]
+                    held.append((j, k, math.sqrt(dj * dj + dk * dk - 2 * dj * dk * cos), dj + dk + 1.0))
+    return held
+
+
+def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=False):
+    """UFF's optimisation of each conformer of a molecule with metals: its
+    metals' ligands kept apart, its square-planar metals' angles held
+    (planar_angles), `bonds` held at their lengths and `apart` [(i, j, low,
+    high)] kept so - done on `ff_mol`, the molecule with stand-ins, where one
+    is given, and the places taken back; with `interfrag`, nothing between
+    its fragments counted but these (an eta system's metal and ring are).
+    As UFFOptimizeMoleculeConfs answers: (not converged, energy) each, the
+    energy UFF's own, without the holding terms."""
+    ff_mol = ff_mol or mol
+    apart = ligands_apart(mol) + list(apart)
+
+    def uff(cid):
+        return rdForceFieldHelpers.UFFGetMoleculeForceField(ff_mol, confId=cid, ignoreInterfragInteractions=interfrag)
+
+    def held_by(cid):
+        ff = uff(cid)
+        for i, j, d in bonds:
+            ff.UFFAddDistanceConstraint(i, j, False, d, d, HOLD_BOND)
+        for j, k, low, high in apart:
+            ff.UFFAddDistanceConstraint(j, k, False, low, high, HOLD_APART)
+        return ff
+
+    angles = {cid: planar_angles(ff_mol, cid) for cid in ids}
+    more = {}
+    if not any(angles.values()):
+        # (the same terms for every conformer: optimised at once, on every core)
+        done = rdForceFieldHelpers.OptimizeMoleculeConfs(ff_mol, held_by(ids[0]), numThreads=0, maxIters=iters)
+        more = {cid: m for cid, (m, _) in zip(ids, done)}
+    else:
+        for cid in ids:
+            ff = held_by(cid)
+            for i, c, j, (low, high) in angles[cid]:
+                ff.UFFAddAngleConstraint(i, c, j, False, low, high, 200.0)
+            ff.Initialize()
+            more[cid] = ff.Minimize(maxIts=iters)
+    if ff_mol is not mol:
+        for cid in ids:
+            conf = mol.GetConformer(cid)
+            for k, p in enumerate(ff_mol.GetConformer(cid).GetPositions()):
+                conf.SetAtomPosition(k, Point3D(float(p[0]), float(p[1]), float(p[2])))
+    return [(more[cid], uff(cid).CalcEnergy()) for cid in ids]
+
+
+def uff_stood_in(mol, ids, iters, eta=()):
+    """Each conformer optimised by UFF with STAND_IN's metals standing in for
+    those it has no type for, their bonds held at their own covalent lengths;
+    and each eta system's star taken out of it (a lone hydrogen with no
+    interactions: the force field has no star), the system held at its eta lengths over
+    its metal, the metal typed for its sites - an eta system one - and
+    nothing between fragments counted but what is held. False where a metal
+    has no stand-in, or UFF still lacks a parameter."""
+    rw = Chem.RWMol(mol)
+    sites = {}
+    for metal, star, _ in eta:
+        rw.RemoveBond(metal, star)
+        sites[metal] = sites.get(metal, 0) + 1
+    for metal in sites:
+        sites[metal] += rw.GetAtomWithIdx(metal).GetDegree()
+    for _, star, _ in eta:
+        a = rw.GetAtomWithIdx(star)
+        a.SetAtomicNum(1)
+        a.SetNoImplicit(True)
+    ff_mol = rw.GetMol()
+    ff_mol.UpdatePropertyCache(strict=False)
+    Chem.GetSymmSSSR(ff_mol)  # (its rings found again, its bonds to the stars gone)
+    for atom in ff_mol.GetAtoms():
+        if atom.GetSymbol() in STAND_IN and sites.get(atom.GetIdx(), atom.GetDegree()) <= 6:
+            atom.SetAtomicNum(Chem.GetPeriodicTable().GetAtomicNumber(STAND_IN[atom.GetSymbol()]))
+    typed = typed_for_uff(ff_mol, sites)
+    if any(digit is None for _, digit in typed) or not rdForceFieldHelpers.UFFHasAllMoleculeParams(ff_mol):
+        return False
+    stars = {star for _, star, _ in eta}
+    bonds = [(b.GetBeginAtomIdx(), b.GetEndAtomIdx(), covalent_length(b)) for b in mol.GetBonds()
+             if (b.GetBeginAtom().GetSymbol() in STAND_IN or b.GetEndAtom().GetSymbol() in STAND_IN)
+             and covalent_length(b) is not None]
+    apart = []
+    for metal, star, atoms in eta:
+        for c in atoms:
+            d = eta_length(mol, metal, c)
+            if d is not None:
+                bonds.append((metal, c, d))
+            for k in (x.GetIdx() for x in mol.GetAtomWithIdx(metal).GetNeighbors()):
+                if k not in stars:
+                    apart.append((c, k, ETA_CLEAR, 100.0))
+    uff_with_metals(mol, ids, iters, ff_mol=ff_mol, bonds=bonds, apart=apart, interfrag=bool(eta))
+    return True
+
+
+def typed_for_uff(mol, sites=None):
+    """Each metal given the hybridization UFF types it from, as the geometry
+    UFF has for it that suits its number of bonds - or of `sites`, by atom,
+    where given (an eta system one site); and what each was taken as, for
+    the chip: [(symbol, geometry digit or None)]."""
+    said = []
+    for atom in mol.GetAtoms():
+        bound = (sites or {}).get(atom.GetIdx(), atom.GetDegree())
+        if not is_metal(atom) or not bound:
+            continue
+        if bound > 6:
+            # (a ring bound through each of its atoms: no geometry of UFF's fits it)
+            said.append((atom.GetSymbol(), None))
+            continue
+        order = "3465" + "12" if bound <= 4 else "6534" + "12"
+        took = None
+        for digit in order:
+            trial = Chem.Mol(mol)
+            trial.GetAtomWithIdx(atom.GetIdx()).SetHybridization(UFF_GEOMETRY[digit])
+            if rdForceFieldHelpers.GetUFFVdWParams(trial, atom.GetIdx(), atom.GetIdx()) is not None:
+                took = digit
+                break
+        if took:
+            atom.SetHybridization(UFF_GEOMETRY[took])
+        said.append((atom.GetSymbol(), took))
+    return said
+
+
 def conformers_of(iso, how, made):
     """A stereoisomer's conformers. Of two enantiomers, the one whose SMILES
     comes first is made, and the other is its mirror image: the same shapes
@@ -562,12 +1232,25 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
     MMFF94s or UFF, as asked - UFF where MMFF has no parameters), lowest
     energy first, the same shape twice kept once, and each laid over the
     first by its heavy atoms; and how they were made, said as rows to show
-    (`how`)."""
+    (`how`). A metal's bonds are embedded at their covalent lengths; where
+    no force field has parameters for it, the embedded shapes are kept as
+    they are, with no energies, and the rows say why. An eta system is held
+    over its metal (eta_systems), its star set at its centre, which `stars`
+    names; it gives no energies."""
+    eta = eta_systems(mol)
     mol = Chem.AddHs(mol)
     params = rdDistGeom.ETKDGv3()
     params.randomSeed = seed
     params.pruneRmsThresh = same
     params.numThreads = 0  # (every core)
+    bounds = metal_bounds(mol, eta)
+    if bounds is not None:
+        params.SetBoundsMat(bounds)
+    if eta:
+        # (an eta system is a fragment of its own, placed by the bounds to its metal: embedded together, from
+        # random coordinates, which a star at no fixed place needs)
+        params.embedFragmentsSeparately = False
+        params.useRandomCoords = True
     ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=count, params=params))
     if not ids:
         # (a crowded cage embeds from random coordinates where it does not otherwise)
@@ -576,23 +1259,52 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
     if not ids:
         raise ValueError("no 3D structure could be made of it")
     asked = field
-    if field in ("MMFF94", "MMFF94s") and rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
+    metals = typed_for_uff(mol)
+    eta_metals = {mol.GetAtomWithIdx(metal).GetSymbol() for metal, _, _ in eta}
+    stood_in = False
+    untyped = sorted({el for el, digit in metals if digit is None})
+    if eta:
+        # (the stars and the systems' bonds are not UFF's: held, as uff_stood_in holds them, with no energies)
+        field, results = None, None
+        stood_in = uff_stood_in(mol, ids, iters, eta)
+        untyped = sorted({el for el, digit in metals if digit is None and el in STAND_IN})
+    elif field in ("MMFF94", "MMFF94s") and rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
         results = rdForceFieldHelpers.MMFFOptimizeMoleculeConfs(mol, numThreads=0, maxIters=iters, mmffVariant=field)
+    elif not untyped and rdForceFieldHelpers.UFFHasAllMoleculeParams(mol):
+        field = "UFF"
+        results = uff_with_metals(mol, ids, iters) if metals else rdForceFieldHelpers.UFFOptimizeMoleculeConfs(mol, numThreads=0, maxIters=iters)
     else:
-        field, results = "UFF", rdForceFieldHelpers.UFFOptimizeMoleculeConfs(mol, numThreads=0, maxIters=iters)
-    energy = {cid: e for cid, (_, e) in zip(ids, results)}
+        # (UFF with no terms for an atom pushed it far off, or stopped on a missing parameter: it is not used
+        # as it is - a lighter metal of the group stands in where one may, and no energies are given)
+        field, results = None, None
+        stood_in = uff_stood_in(mol, ids, iters)
+    energy = {cid: e for cid, (_, e) in zip(ids, results)} if results else None
+    for _, star, atoms in eta:
+        for cid in ids:
+            conf = mol.GetConformer(cid)
+            c = conf.GetPositions()[atoms].mean(axis=0)
+            conf.SetAtomPosition(star, Point3D(float(c[0]), float(c[1]), float(c[2])))
     heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
+    # (an eta system's ring turns freely under the holds, its atoms alike: two shapes that are one turned by
+    # the ring's symmetry are the same one, as its best RMSD over the molecule's symmetries says)
+    plain = Chem.RemoveHs(mol, sanitize=False) if eta else None
     kept = []
-    for cid in sorted(ids, key=lambda c: energy[c]):
+    for cid in sorted(ids, key=lambda c: energy[c]) if energy else ids:
         if kept:
             # (laid over the lowest, which keeps it so for the overlay)
             rms = rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
+            if plain is not None and any(
+                rdMolAlign.GetBestRMS(plain, plain, prbId=cid, refId=k, maxMatches=1000) < same for k in kept
+            ):
+                continue
             if rms < same or any(
                 rdMolAlign.CalcRMS(mol, mol, prbId=cid, refId=k, map=[[(i, i) for i in heavy]]) < same
                 for k in kept[1:]
             ):
                 continue
         kept.append(cid)
+    # (the equivalent hydrogens and branches in the same places in each, as in the lowest - only here, of conformers RDKit made)
+    settle_equivalents(mol, kept)
     shown = Chem.Mol(mol)
     Chem.Kekulize(shown, clearAromaticFlags=True)
     return {
@@ -604,14 +1316,24 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
         "frames": [
             [round(v, 4) for p in mol.GetConformer(cid).GetPositions() for v in p] for cid in kept
         ],
-        "energies": [energy[cid] / KCAL_PER_HARTREE for cid in kept],
-        "field": field,
+        **({"energies": [energy[cid] / KCAL_PER_HARTREE for cid in kept]} if energy else {}),
+        **({"stars": sorted(star for _, star, _ in eta)} if eta else {}),
+        "field": field or ("UFF" if stood_in else "none"),
         # (short rows: the chip says them in a narrow card)
         "how": [
             {"label": "Embedded", "text": "ETKDG v3"},
             {"label": "Random seed", "text": f"{seed}"},
-            {"label": "Optimised", "text": f"{field}, at most {iters} steps"},
-            *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field != asked else []),
+            *([{"label": "Optimised", "text": f"{field}, at most {iters} steps"}] if field else [
+                {"label": "Optimised", "text": f"UFF, at most {iters} steps"
+                 + "".join(f", {STAND_IN[el]} standing in for {el}" for el in untyped)} if stood_in else
+                {"label": "Optimised", "text": "not: no force field here has parameters for " + " or ".join(untyped or ["it"])},
+                {"label": "Energies", "text": "none: \u03b7-bound rings are held, not modelled" if eta
+                 else "none: UFF has no parameters for " + " or ".join(untyped or ["it"])},
+            ]),
+            *([{"label": "Asked for", "text": f"{asked}, which has no parameters for it"}] if field and field != asked else []),
+            *[{"label": el, "text": "bonds at covalent lengths, \u03b7 rings held over it" if el in eta_metals
+               else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths"}
+              for el, d in sorted(set(metals), key=lambda x: (x[0], x[1] or ""))],
             {"label": "Kept", "text": f"{len(kept)} of {count} sought"},
             {"label": "Alike within", "text": f"{same:g} \u00c5 (heavy atoms' RMSD)"},
             {"label": "Made by", "text": f"RDKit {rdBase.rdkitVersion}"},
@@ -628,6 +1350,7 @@ def op_conformers(m):
     `like` gives a configuration (see `kept`) are made so, and count as
     chosen."""
     drawn = read(m["molblock"])
+    as_ligand_anions(drawn, eta_systems(drawn))
     atoms, bonds = open_stereo(drawn)
     mol = kept(drawn, m.get("like"))
     isomers = isomers_of(mol)
@@ -818,10 +1541,10 @@ def op_collect(m):
             "schema": 1,
             "program": "RDKit",
             "version": made.get("version"),
-            "method": f"ETKDG v3, {made.get('field', 'MMFF94')}",
+            "method": f"ETKDG v3, {made.get('field', 'MMFF94')}" if made.get("field") != "none" else "ETKDG v3, not optimised",
             "atoms": [a["el"] for a in made["atoms"]],
             "frames": made["frames"],
-            "energies": made["energies"],
+            "energies": made.get("energies"),
             "results": [],
         })
     return {"outputs": outputs}

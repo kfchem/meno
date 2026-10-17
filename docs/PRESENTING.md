@@ -98,7 +98,11 @@ page; a talk is a way through it.
   corner.
 - **In a slide**: a drag on a molecule in 3D turns it and lets it coast, as
   on the page, and two clicks show it in its other look - for the talk
-  alone, the workspace's look as it was; a film plays from
+  alone, the workspace's look as it was; a right-press on it - the talk
+  shows no menu - turns it once round and back as it was, as *Turn once*
+  does on the page (docs/WORKSPACE.md), a press stopping it gently, and
+  where it was turned once when the talk began it comes back to as the
+  talk ends; a film plays from
   its start as its slide comes, and a click on it pauses it or plays it on.
   A click elsewhere goes on. A drag elsewhere, the wheel and a pinch move
   and zoom the view freely - for a question; the veil goes meanwhile, and
@@ -188,7 +192,15 @@ words, a width they break into lines at, and how their lines lie.
   drawing's lengths and angles.
 - **Held off** while Cmd (Mac) or Ctrl (Windows) is held during the drag;
   Shift keeps the move across or up and down.
-- **Fading in and out**, as everything in Meno does.
+- **Fading in and out** (the maintainer, 2026-10-15: they flickered):
+  each guide fades in over 100 ms and out over 150 ms; one that is there
+  for less than 80 ms - an alignment passed in a fast drag - is not shown
+  at all, the snap itself not affected; one that moves to another line
+  glides there, not away and back (`presenting/guideFade`). A guide once
+  taken is held to 10 pixels, not 6, so that it does not come and go as
+  the pointer passes the edge - in a move, and as a box, words or a shape
+  are made larger or smaller alike; and a line goes 12 pixels past what it
+  joins, at each end, to read as a line.
 
 ## Handwriting
 

@@ -9,7 +9,8 @@ import {
 import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import type { Caption, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
+import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -23,6 +24,7 @@ import { createPicturesSlice } from "./slices/picturesSlice";
 import { createWorkflowSlice } from "./slices/workflowSlice";
 import { createSlidesSlice } from "./slices/slidesSlice";
 import { createShapesSlice } from "./slices/shapesSlice";
+import { createCyclesSlice } from "./slices/cyclesSlice";
 import { createInksSlice } from "./slices/inksSlice";
 import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
@@ -63,6 +65,8 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     steps: doc.steps ?? NO_STEPS,
     wires: doc.wires ?? NO_WIRES,
     docStyle: doc.style,
+    // (a document made before workspaces carried them: Meno's own)
+    docStyle3d: doc.style3d ?? DEFAULT_WORKSPACE_3D,
     pageId: doc.pageId,
     texts: doc.texts ?? NO_TEXTS,
     pdfs: doc.pdfs ?? NO_PDFS,
@@ -70,6 +74,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     slides: doc.slides ?? NO_SLIDES,
     shapes: doc.shapes ?? NO_SHAPES,
     inks: doc.inks ?? NO_INKS,
+    cycles: doc.cycles ?? NO_CYCLES,
   };
 }
 
@@ -107,6 +112,7 @@ const NO_PICTURES: PictureItem[] = [];
 const NO_SLIDES: Slide[] = [];
 const NO_SHAPES: Shape[] = [];
 const NO_INKS: Ink[] = [];
+const NO_CYCLES: Cycle[] = [];
 
 /** The pictures selected, kept to those the document still has. */
 function picturesHeld(sel: Set<number>, pictures: readonly { id: number }[]): Set<number> {
@@ -178,6 +184,20 @@ function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>, travell
   };
 }
 
+/**
+ * The copy a value set on a result made, as the document now is: undone -
+ * taken away by the undo of the step that made it - or put back by its
+ * redo, and so made again; none once it, or the one it was made from, has
+ * gone some other way.
+ */
+export function copiedHeld(c: EditorState["copied3d"], molecules: readonly { id: number }[], history: { redoDepth: number; redoLabel?: string }): EditorState["copied3d"] {
+  if (!c) return c;
+  if (!molecules.some((m) => m.id === c.from)) return null;
+  const there = molecules.some((m) => m.id === c.copy);
+  if (!there) return c.undone != null ? c : history.redoDepth > 0 && /^set /.test(history.redoLabel ?? "") ? { ...c, undone: performance.now() } : null;
+  return c.undone != null ? { from: c.from, copy: c.copy, at: performance.now() } : c;
+}
+
 export function connectStoreToDocument(
   store: EditorStore,
   doc: DocumentStore<WorkspaceDocument>,
@@ -211,10 +231,13 @@ export function connectStoreToDocument(
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
         selSlides: picturesHeld(prev.selSlides, mirrored.slides),
         selShapes: picturesHeld(prev.selShapes, mirrored.shapes),
+        selCycles: picturesHeld(prev.selCycles, mirrored.cycles),
+        hoveredCycle: prev.hoveredCycle != null && !mirrored.cycles.some((c) => c.id === prev.hoveredCycle) ? null : prev.hoveredCycle,
         selArrows: picturesHeld(prev.selArrows, mirrored.arrows),
         selPluses: picturesHeld(prev.selPluses, mirrored.pluses ?? []),
         selInks: picturesHeld(prev.selInks, mirrored.inks),
         hoveredInk: prev.hoveredInk != null && !mirrored.inks.some((k) => k.id === prev.hoveredInk) ? null : prev.hoveredInk,
+        copied3d: copiedHeld(prev.copied3d, mirrored.molecules3d, doc.history()),
         hoveredShape: prev.hoveredShape != null && !mirrored.shapes.some((s) => s.id === prev.hoveredShape) ? null : prev.hoveredShape,
         hoveredSlide: prev.hoveredSlide != null && !mirrored.slides.some((s) => s.id === prev.hoveredSlide) ? null : prev.hoveredSlide,
         // (a talk given from slides an undo took away: ended; from fewer, at the last there is)
@@ -292,6 +315,7 @@ export function createEditorStore(
     chosen3d: null,
     hoveredMeasure3d: null,
     measureEdit3d: null,
+    copied3d: null,
     hoveredArrow: null,
     hoveredPush: null,
     pushDraw: null,
@@ -305,6 +329,8 @@ export function createEditorStore(
     selSlides: new Set<number>(),
     hoveredSlide: null,
     selShapes: new Set<number>(),
+    selCycles: new Set<number>(),
+    hoveredCycle: null,
     selArrows: new Set<number>(),
     selPluses: new Set<number>(),
     hoveredShape: null,
@@ -334,7 +360,6 @@ export function createEditorStore(
     askUndo: null,
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
-    doubleClickBond: null,
     fitNonce: 0,
     autoFitSuspended: false,
     labelEdit: { active: false, atomId: null, value: "" },
@@ -365,6 +390,7 @@ export function createEditorStore(
     ...createWorkflowSlice(doc, set, get),
     ...createSlidesSlice(doc, set, get),
     ...createShapesSlice(doc, set),
+    ...createCyclesSlice(doc, set),
     ...createInksSlice(doc, set),
     ...createRecordsSlice(doc, set, get),
   }));
@@ -424,7 +450,7 @@ export function EditorProvider({
   children: ReactNode;
 }) {
   const doc = useMemo(
-    () => document ?? createWorkspaceDocument(undefined, useAppSettings.getState().drawingStyle),
+    () => document ?? createWorkspaceDocument(undefined, useAppSettings.getState().drawingStyle, workspace3dOf(useAppSettings.getState().style3d)),
     // A different tab identity means a different canvas, so a canvas without a
     // document of its own gets a fresh one rather than keeping the old tab's.
     // eslint-disable-next-line react-hooks/exhaustive-deps

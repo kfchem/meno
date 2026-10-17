@@ -1,42 +1,40 @@
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
-import { setCursor } from "../../theme/cursors";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import clsx from "clsx";
 import { AnimatePresence } from "motion/react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import * as THREE from "three";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   LOOK_3D_FIELDS,
-  LOOK_3D_PRESETS,
   look3dPreset,
   lookOfStyle,
+  ownStyle3d,
   SCENE_3D,
   SCENE_3D_FIELDS,
   style3dOf,
+  styleName3d,
+  withAtomColour,
   withLookSetting,
-  withRole,
   withSharedSetting,
   type MoleculeLook,
   type Role3D,
   type Scene3D,
-  type Style3D,
   type Style3DChoice,
   type Style3DField,
 } from "../../../lib/chem/style3d";
-import type { Turn3D } from "../Workspace/store/types";
-import Molecule3DView from "../Workspace/components/Molecule3DView";
-import KeyLight3D from "../Workspace/components/KeyLight3D";
-import { solidOf } from "../Workspace/utils/molecule3d";
+import { endsShow } from "../Workspace/utils/molecule3d";
 import HideHydrogensAsk from "./HideHydrogensAsk";
 import { useAtLeastWide } from "./sideBySide";
-import { SAMPLE_3D } from "./sample3d";
+import Preview3D from "./Preview3D";
+import StylePicker3D from "./StylePicker3D";
+import AtomColours from "./AtomColours";
 
 /**
- * How molecules in 3D look and turn (docs/WORKSPACE.md, *Styles in 3D*): a
- * list of styles, each set as the drawing style is (./StyleEditor), of
- * which one is the primary - every molecule's look to begin with - and one
- * the secondary, a double-click away; and what they all share, the light
- * and the turning. Beside them a molecule drawn in the style being set,
+ * How molecules in 3D look and turn (docs/WORKSPACE.md, *Styles in 3D*):
+ * the primary and the secondary - every molecule's look to begin with, and
+ * the one a double-click away - and the other styles, built in and the
+ * user's own (./StylePicker3D); each set as the drawing style is
+ * (./StyleEditor) - a built-in one's changes kept apart, to be taken back;
+ * the user's own set as a whole - and what they all share, the light and
+ * the turning. Beside them a molecule drawn in the style being set,
  * which can be turned, to try how turning feels, and double-clicked, to go
  * over to the other look as a molecule on the canvas does.
  */
@@ -52,9 +50,14 @@ export default function Style3DEditor({
 }) {
   const style = useMemo(() => style3dOf(choice), [choice]);
   // the style being set - and shown - and the one asking to hide its hydrogens
-  const [editing, setEditing] = useState(choice.primary);
+  const [chosen, setEditing] = useState(choice.primary);
+  // (one of the user's own, deleted: the primary instead)
+  const editing = ownStyle3d(choice, chosen) || look3dPreset(chosen).id === chosen ? chosen : choice.primary;
   const [asking, setAsking] = useState<string | null>(null);
-  const edited = look3dPreset(editing);
+  const own = !!ownStyle3d(choice, editing);
+  const editedName = styleName3d(choice, editing);
+  // (what a setting goes back to: a built-in style's own; the user's own, as it is - nothing to go back to)
+  const edited = own ? lookOfStyle(choice, editing) : look3dPreset(editing).look;
   const look = lookOfStyle(choice, editing);
   const changes = choice.looks[editing] ?? {};
   const changed = Object.keys(changes).length;
@@ -78,16 +81,19 @@ export default function Style3DEditor({
   return (
     <div ref={setBox} className={roomy ? "flex gap-8 items-start" : "flex flex-col gap-6"}>
       <div className="min-w-0 flex-1">
-        <Styles choice={choice} editing={editing} onEdit={setEditing} onChange={onChange} />
+        <StylePicker3D choice={choice} style={style} editing={editing} onEdit={setEditing} onChange={onChange} />
         <div className="mt-6 flex items-center gap-2">
-          <h3 className="flex-1 text-sm font-semibold text-gh-black">{edited.name}</h3>
+          <h3 className="flex-1 text-sm font-semibold text-gh-black">
+            {editedName}
+            {own && <span className="ml-2 text-xs font-normal text-gh-gray">Your style</span>}
+          </h3>
           {changed > 0 && (
             <button
               onClick={() => onChange({ ...choice, looks: Object.fromEntries(Object.entries(choice.looks).filter(([id]) => id !== editing)) })}
               className="h-8 px-3 rounded-md border border-gh-line bg-white text-xs text-gh-black hover:bg-gh-base whitespace-nowrap"
-              title={`Take all ${changed} changes to ${edited.name} back`}
+              title={`Take all ${changed} changes to ${editedName} back`}
             >
-              Reset {edited.name} ({changed})
+              Reset {editedName} ({changed})
             </button>
           )}
         </div>
@@ -102,11 +108,16 @@ export default function Style3DEditor({
                   field={f}
                   value={look[f.key]}
                   changed={f.key in changes}
-                  was={{ value: edited.look[f.key], from: edited.name }}
+                  was={{ value: edited[f.key], from: editedName }}
                   onSet={(v) => setLook(f.key, v as never)}
                   warn={f.key === "hydrogens" && look.hydrogens === "carbonHidden"}
-                  // (what space-filling has none of: there, but faint)
-                  faint={look.atoms === "space" && STICKS_ONLY.has(f.key)}
+                  // (what space-filling has none of, or sticks alone, or bond ends its balls cover: there, but faint)
+                  faint={
+                    (look.atoms === "space" && STICKS_ONLY.has(f.key)) ||
+                    (look.atoms === "sticks" && f.key === "ballScale") ||
+                    (f.key === "doubleEnds" && !endsShow(look, 2)) ||
+                    (f.key === "tripleEnds" && !endsShow(look, 3))
+                  }
                   // (what another setting makes moot - how deep a shade there is none of)
                   off={!!f.unless && look[f.unless.key as keyof typeof look] === f.unless.is}
                 />
@@ -114,6 +125,12 @@ export default function Style3DEditor({
             </div>
           </section>
         ))}
+        <AtomColours
+          look={look}
+          preset={own ? { ...look, colours: {} } : edited}
+          onSet={(el, colour) => onChange(withAtomColour(choice, editing, el, colour))}
+          onReset={(els) => onChange(els.reduce((c, el) => withAtomColour(c, editing, el, null), choice))}
+        />
         <div className="mt-8 flex items-center gap-2">
           <h3 className="flex-1 text-sm font-semibold text-gh-black">Every style</h3>
           {sharedChanged > 0 && (
@@ -148,10 +165,10 @@ export default function Style3DEditor({
       </div>
       <div className={roomy ? "w-[26rem] shrink-0 sticky top-4" : "order-first"}>
         <div className="text-xs font-semibold uppercase tracking-wider text-gh-gray">Preview</div>
-        <div className="mt-2 h-80 rounded-lg border border-gh-line bg-white overflow-hidden" aria-label={`A molecule drawn in ${edited.name}`}>
-          <Preview style={shownStyle} look={shownLook} onDouble={() => setEditing(choice[other])} />
+        <div className="mt-2 h-80 rounded-lg border border-gh-line bg-white overflow-hidden" aria-label={`A molecule drawn in ${editedName}`}>
+          <Preview3D style={shownStyle} look={shownLook} onDouble={() => setEditing(choice[other])} />
         </div>
-        <p className="mt-1.5 text-[11px] text-gh-gray">Drag the molecule to turn it; double-click it for {look3dPreset(choice[other]).name}.</p>
+        <p className="mt-1.5 text-[11px] text-gh-gray">Drag the molecule to turn it; double-click it for {styleName3d(choice, choice[other])}.</p>
       </div>
       <AnimatePresence>
         {asking && (
@@ -171,80 +188,9 @@ export default function Style3DEditor({
 /** A style's settings for its balls and sticks, which space-filling draws none of. */
 const STICKS_ONLY = new Set<string>(["ballScale", "bondRadius", "bondColor"]);
 
-// --- The styles ----------------------------------------------------------------
-
-/**
- * The list of styles: each with what it looks like, chosen to be set by a
- * click; and which is the primary and which the secondary, each given by a
- * press on its name in the style's card - which sets and shows that style
- * too; given the other's, the two change places.
- */
-function Styles({
-  choice,
-  editing,
-  onEdit,
-  onChange,
-}: {
-  choice: Style3DChoice;
-  editing: string;
-  onEdit: (id: string) => void;
-  onChange: (next: Style3DChoice) => void;
-}) {
-  return (
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] gap-2" role="list" aria-label="Styles">
-      {LOOK_3D_PRESETS.map((p) => {
-        const on = p.id === editing;
-        const changed = Object.keys(choice.looks[p.id] ?? {}).length > 0;
-        return (
-          <div
-            key={p.id}
-            role="listitem"
-            onClick={() => onEdit(p.id)}
-            className={clsx(
-              "text-left rounded-lg border px-3 pt-2 pb-2.5 cursor-pointer transition-colors",
-              on ? "border-accel-base bg-accel-lightbase/40 ring-1 ring-accel-base" : "border-gh-line bg-white hover:bg-gh-base",
-            )}
-          >
-            <button className="block w-full text-left" aria-pressed={on} onClick={() => onEdit(p.id)}>
-              <div className="text-sm font-medium text-gh-black">
-                {p.name}
-                {changed && <span className="ml-1 text-accel-base" title="Changed">•</span>}
-              </div>
-              <div className="text-[11px] leading-snug text-gh-gray line-clamp-2">{p.description}</div>
-            </button>
-            <div className="mt-2 flex gap-1" role="group" aria-label={`${p.name}'s role`}>
-              {(["primary", "secondary"] as const).map((role) => {
-                const is = choice[role] === p.id;
-                return (
-                  <button
-                    key={role}
-                    aria-pressed={is}
-                    onClick={(e) => {
-                      // (and it is the style set and shown)
-                      e.stopPropagation();
-                      onChange(withRole(choice, role, p.id));
-                      onEdit(p.id);
-                    }}
-                    className={clsx(
-                      "h-6 px-2 rounded-full border text-[11px] transition-colors",
-                      is ? "border-accel-base bg-accel-base text-white" : "border-gh-line bg-white text-gh-gray hover:text-gh-black hover:bg-gh-base",
-                    )}
-                  >
-                    {role === "primary" ? "Primary" : "Secondary"}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 // --- One setting ---------------------------------------------------------------
 
-function Row({
+export function Row({
   field,
   value,
   changed,
@@ -366,148 +312,3 @@ function Control({ field, value, onSet }: { field: Style3DField; value: unknown;
     </div>
   );
 }
-
-// --- Preview -------------------------------------------------------------------
-
-/** A turn left to itself stops below this speed, in radians a second. */
-const STILL = 0.02;
-/** How the sample is first seen: tipped back a little and turned, so its ring is not seen edge on. */
-const FIRST_TURN = (() => {
-  const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-0.5, 0.35, 0.1));
-  return [q.x, q.y, q.z, q.w] as Turn3D;
-})();
-
-/** The preview's field of view, in degrees, and how gently its camera goes to another look's distance, in seconds. */
-const FOV = 30;
-const FRAMING_TAU = 0.12;
-
-function Preview({ style, look, onDouble }: { style: Style3D; look: Role3D; onDouble: () => void }) {
-  // (far enough back for a molecule twice the size of its space-filling self)
-  const far = useMemo(() => solidOf(SAMPLE_3D, style).reach.secondary * 16, [style]);
-  return (
-    <Canvas frameloop="demand" dpr={[1, 2]} camera={{ position: [0, 0, far / 2], fov: FOV, near: 0.1, far }} onDoubleClick={onDouble}>
-      <ambientLight intensity={style.ambientLight} />
-      <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
-      <Framing style={style} look={look} />
-      <Turnable style={style} look={look} />
-    </Canvas>
-  );
-}
-
-/**
- * The camera, as far off as the sample needs in its look to fit however it
- * is turned - going there, not jumping, when the look changes.
- */
-function Framing({ style, look }: { style: Style3D; look: Role3D }) {
-  const { camera, invalidate } = useThree();
-  const solid = useMemo(() => solidOf(SAMPLE_3D, style), [style]);
-  const placed = useRef(false);
-  useEffect(() => invalidate(), [look, invalidate]);
-  useFrame((_, dt) => {
-    // (it stands as high as it reaches; seen from that far again, and as much once more to fit)
-    const reach = solid.reach[look];
-    const to = reach + (reach * 1.15) / Math.tan(((FOV / 2) * Math.PI) / 180);
-    const z = camera.position.z;
-    const next = placed.current ? to + (z - to) * Math.exp(-Math.min(dt, 1 / 30) / FRAMING_TAU) : to;
-    placed.current = true;
-    camera.position.set(0, 0, Math.abs(next - to) < 1e-3 ? to : next);
-    camera.lookAt(0, 0, reach);
-    if (camera.position.z !== to) invalidate();
-  });
-  return null;
-}
-
-/** The sample, turned by a drag as a molecule on the canvas is - at the speed, and with the coasting, the style sets. */
-function Turnable({ style, look }: { style: Style3D; look: Role3D }) {
-  const [turn, setTurn] = useState<Turn3D>(FIRST_TURN);
-  const { gl, invalidate } = useThree();
-  const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
-  const styleRef = useRef(style);
-  styleRef.current = style;
-  const turnBy = (axis: THREE.Vector3, angle: number) =>
-    setTurn((was) => {
-      const q = new THREE.Quaternion(...was).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
-      return [q.x, q.y, q.z, q.w];
-    });
-
-  useEffect(() => {
-    const dom = gl.domElement;
-    let drag: { x: number; y: number; t: number; recent: { t: number; angle: number; dt: number }[]; axis: THREE.Vector3 } | null = null;
-    const onDown = (e: PointerEvent) => {
-      if (e.button !== 0) return;
-      dom.setPointerCapture(e.pointerId);
-      spin.current = null;
-      drag = { x: e.clientX, y: e.clientY, t: e.timeStamp, recent: [], axis: new THREE.Vector3(0, 1, 0) };
-      setCursor(dom, "turning");
-    };
-    const onMove = (e: PointerEvent) => {
-      if (!drag) return;
-      const dx = e.clientX - drag.x;
-      const dy = e.clientY - drag.y;
-      const len = Math.hypot(dx, dy);
-      if (!len) return;
-      const angle = (styleRef.current.turnPerHalfWidth * len) / Math.max(dom.clientWidth / 2, 1);
-      // (a drag to the right turns the near side right; down turns it down)
-      const axis = new THREE.Vector3(dy, dx, 0).normalize();
-      turnBy(axis, angle);
-      drag.recent = [...drag.recent, { t: e.timeStamp, angle, dt: e.timeStamp - drag.t }].filter((r) => e.timeStamp - r.t <= 64);
-      drag = { ...drag, x: e.clientX, y: e.clientY, t: e.timeStamp, axis };
-      invalidate();
-    };
-    const onUp = (e: PointerEvent) => {
-      if (!drag) return;
-      const took = drag.recent.reduce((a, r) => a + r.dt, 0);
-      const speed = drag.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
-      if (e.timeStamp - drag.t < 80 && speed > STILL) spin.current = { axis: drag.axis, speed };
-      drag = null;
-      setCursor(dom, "turn");
-      invalidate();
-    };
-    setCursor(dom, "turn");
-    dom.addEventListener("pointerdown", onDown);
-    dom.addEventListener("pointermove", onMove);
-    dom.addEventListener("pointerup", onUp);
-    dom.addEventListener("pointercancel", onUp);
-    return () => {
-      dom.removeEventListener("pointerdown", onDown);
-      dom.removeEventListener("pointermove", onMove);
-      dom.removeEventListener("pointerup", onUp);
-      dom.removeEventListener("pointercancel", onUp);
-    };
-  }, [gl, invalidate]);
-
-  // let go while turning, it turns on, slowing as the style says
-  useFrame((_, dt) => {
-    const s = spin.current;
-    if (!s) return;
-    turnBy(s.axis, s.speed * dt);
-    s.speed *= Math.pow(1 - styleRef.current.turnDamping, dt * 60);
-    if (s.speed < STILL) spin.current = null;
-    invalidate();
-  });
-
-  return (
-    <Molecule3DView
-      m={SAMPLE_3D}
-      style={style}
-      look={look}
-      frame={0}
-      turn={turn}
-      lit={0}
-      selected={false}
-      chosen={NONE}
-      chosenBonds={NONE}
-      holding={null}
-      following={false}
-      framesOpen={false}
-      onFrame={() => {}}
-      hoveredMeasure={null}
-      // (a sample, with no R and S on it)
-      stereoShown={null}
-      stereoFont={NO_STEREO_FONT}
-    />
-  );
-}
-
-const NO_STEREO_FONT = { size: 0, units: "px" as const, family: "", parentheses: false, gap: 0 };
-const NONE: number[] = [];

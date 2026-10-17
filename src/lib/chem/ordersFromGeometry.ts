@@ -184,6 +184,9 @@ function smallRings(atoms: readonly GeoAtom[], near: number[][]): number[][] {
 const isFlat = (atoms: readonly GeoAtom[], r: number[]) =>
   r.every((_, k) => Math.abs(torsion(...([0, 1, 2, 3].map((j) => atoms[r[(k + j) % r.length]]) as [GeoAtom, GeoAtom, GeoAtom, GeoAtom]))) <= FLAT);
 
+/** The steps the estimate has taken: each ring entry looked through, each node of the search - counted so that a test can tell work in step with size from work that is not, which time on a busy machine cannot. */
+export const work = { steps: 0 };
+
 /**
  * A molecule's bond orders and formal charges estimated from its atoms'
  * places (see above). Bonds to metals stay single; so does every bond of a
@@ -209,6 +212,7 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
   // the bonds that may be more than single, each with what each order costs against its length
   const candidates: Candidate[] = [];
   bonds.forEach((bd, k) => {
+    work.steps++;
     const { a1, a2 } = bd;
     if (!counted(a1) || !counted(a2) || a1 === a2 || atoms[a1].el === "H" || atoms[a2].el === "H") return;
     const ra = range[a1];
@@ -327,10 +331,14 @@ function solve(part: Candidate[], range: Range[], rings: number[][], ringsOf: nu
   }
   // the part's rings, each settled as the last bond about its atoms is chosen
   const here = new Set<number>();
-  for (const x of atomsIn) for (const k of ringsOf[x]) here.add(k);
+  for (const x of atomsIn) {
+    work.steps += 1 + ringsOf[x].length;
+    for (const k of ringsOf[x]) here.add(k);
+  }
   const ringsHere = [...here].sort((p, q) => p - q).map((k) => rings[k]);
   const settledAt: number[][] = part.map(() => []);
   ringsHere.forEach((r, k) => {
+    work.steps += r.length;
     const last = Math.max(...r.flatMap((x) => byAtom[x].map((j) => local.get(all[j]) ?? -1)));
     if (last >= 0) settledAt[last].push(k);
   });
@@ -375,6 +383,7 @@ function solve(part: Candidate[], range: Range[], rings: number[][], ringsOf: nu
   let bestCost = Infinity;
   let nodes = 0;
   const visit = (i: number, cost: number): boolean => {
+    work.steps++;
     if (++nodes > MOST_NODES) return false;
     if (cost + tail[i] - AROMATIC * ringsAfter[i] >= bestCost) return true;
     if (i === part.length) {

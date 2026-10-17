@@ -96,7 +96,7 @@ describe("Meno's Duplicates, run from the page", () => {
     expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(0);
   });
 
-  it("puts in nothing of what came in before, where that changed while it worked - it says so, and is changed", async () => {
+  it("puts in what it worked out of what came in when it started, where that changed while it worked - and is changed", async () => {
     const { st, step, doc } = page(many());
     gate.shut = true;
     const ran = st().runStep(step);
@@ -108,9 +108,9 @@ describe("Meno's Duplicates, run from the page", () => {
     open();
     await ran;
     const after = st().steps.find((s) => s.id === step)!;
-    expect(after.ran).toMatchObject({ ok: false, said: "What came into it changed while it ran" });
+    expect(after.ran).toMatchObject({ ok: true });
     expect(stateOf(doc.getState(), after, "meno")).toBe("changed");
-    expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(0);
+    expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(1);
   });
 
   it("puts in nothing where it was deleted while it worked", async () => {

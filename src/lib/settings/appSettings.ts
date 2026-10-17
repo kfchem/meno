@@ -8,8 +8,8 @@ import {
   writeTextFile,
 } from "@tauri-apps/plugin-fs";
 import { create } from "zustand";
-import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../chem/style";
-import { acceptStyleChoice } from "../chem/styleFields";
+import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem/style";
+import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
 import { acceptStyle3dChoice, DEFAULT_STYLE_3D_CHOICE, type Style3DChoice } from "../chem/style3d";
 import { acceptColours, DEFAULT_COLOURS, type ColourSettings } from "../chem/palette";
 import { setCustomAbbreviations, structureProblem, type CustomAbbreviation } from "../chem/abbreviations";
@@ -24,6 +24,8 @@ import { isRole } from "../plugins/roles";
 export type AppSettings = {
   /** The drawing style a structure is drawn in unless its document has its own. */
   drawingStyle: StyleChoice;
+  /** The user's own drawing styles, offered below the built-in ones in every workspace (lib/chem/style `OwnStyle2D`). */
+  ownDrawingStyles: OwnStyle2D[];
   /** How molecules in 3D look, and how they turn. */
   style3d: Style3DChoice;
   network: NetworkSettings;
@@ -41,6 +43,8 @@ export type AppSettings = {
   pictures: PictureSettings;
   /** How the mouse and the trackpad work the canvas. */
   pointer: PointerSettings;
+  /** How finely the canvas is drawn. */
+  canvas: CanvasSettings;
   /** How an atom's label is read as it is typed. */
   labels: LabelSettings;
   /** How words on the page are written as they are typed. */
@@ -73,6 +77,14 @@ export type CalculationSettings = {
 /** The most jobs at once, and cores for each, Settings takes. */
 export const JOBS_AT_ONCE_MOST = 64;
 export const CORES_MOST = 1024;
+
+/**
+ * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
+ * twice as finely as its size on the screen - the sharpest, and as before -
+ * as finely as the screen itself shows things, or once. Pictures made of it
+ * are drawn at their own sizes, whichever is chosen.
+ */
+export type CanvasSettings = { resolution: 2 | "display" | 1 };
 
 /** How the mouse and the trackpad work the canvas: which way a turn of the wheel zooms. */
 export type PointerSettings = {
@@ -135,10 +147,8 @@ export type UpdateSettings = {
 
 /** What the plugin that does the checks points out on a structure as it is drawn. */
 export type ChemistrySettings = {
-  /** Atoms with more bonds than they can have. */
+  /** Atoms with more bonds than they can have. (R and S, E and Z are shown on what they are asked for on, and kept in the document: docs/EDITOR-2D.md, *R and S*.) */
   valenceWarnings: boolean;
-  /** R and S at stereocentres, E and Z at double bonds. */
-  stereoLabels: boolean;
 };
 
 export type NetworkSettings = {
@@ -150,9 +160,10 @@ export type NetworkSettings = {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   drawingStyle: DEFAULT_STYLE_CHOICE,
+  ownDrawingStyles: [],
   style3d: DEFAULT_STYLE_3D_CHOICE,
   network: { offline: false, granted: [] },
-  chemistry: { valenceWarnings: true, stereoLabels: false },
+  chemistry: { valenceWarnings: true },
   updates: { asked: false },
   options: {},
   abbreviations: [],
@@ -160,6 +171,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   plugins: { removed: [], roles: {}, programs: {}, guided: [] },
   pictures: { dpi: 600 },
   pointer: { wheelUp: "in" },
+  canvas: { resolution: 2 },
   labels: { smart: true },
   words: { smart: true },
   calculations: {},
@@ -176,6 +188,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
   const r = raw as Record<string, unknown>;
   return {
     drawingStyle: acceptStyleChoice(r.drawingStyle),
+    ownDrawingStyles: acceptOwnStyles2d(r.ownDrawingStyles),
     style3d: acceptStyle3dChoice(r.style3d),
     network: acceptNetwork(r.network),
     chemistry: acceptChemistry(r.chemistry),
@@ -186,6 +199,7 @@ export function acceptAppSettings(raw: unknown): AppSettings {
     plugins: acceptPlugins(r.plugins),
     pictures: acceptPictures(r.pictures),
     pointer: acceptPointer(r.pointer),
+    canvas: acceptCanvas(r.canvas),
     labels: { smart: (r.labels as { smart?: unknown } | undefined)?.smart !== false },
     words: { smart: (r.words as { smart?: unknown } | undefined)?.smart !== false },
     calculations: acceptCalculations(r.calculations),
@@ -217,6 +231,12 @@ function acceptProcedures(raw: unknown): SavedProcedure[] {
     const list = (x: unknown) => (Array.isArray(x) ? x : []);
     return [{ id, name, saved: typeof r.saved === "number" && Number.isFinite(r.saved) ? r.saved : 0, flow: { sets: list(f.sets), steps: f.steps, wires: list(f.wires) } }];
   });
+}
+
+/** How finely the canvas is drawn, as the file holds it; what does not read - a file from before there was a choice - twice. */
+function acceptCanvas(raw: unknown): CanvasSettings {
+  const r = (raw as { resolution?: unknown } | null)?.resolution;
+  return { resolution: r === 1 || r === "display" ? r : 2 };
 }
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */
@@ -266,12 +286,12 @@ function acceptPlugins(raw: unknown): PluginSettings {
     // (the roles Meno defines only)
     for (const [role, plugin] of Object.entries(r.roles)) if (isRole(role) && id(plugin)) roles[role] = plugin;
   }
-  // (each a place the chemist located: a full path, of some length)
+  // (each a place the chemist located: a full path, of some length - on Windows a drive's, or a share's on the network (\\server\share\...); whether a program is there is the app's to say)
   const programs: Record<string, string> = {};
   if (r.programs && typeof r.programs === "object" && !Array.isArray(r.programs)) {
     for (const [key, path] of Object.entries(r.programs)) {
       const [plugin, program] = key.split(":");
-      if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/])/.test(path)) programs[key] = path;
+      if (id(plugin) && /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/.test(program ?? "") && typeof path === "string" && path.length <= 1024 && /^(\/|[A-Za-z]:[\\/]|\\\\[^\\/])/.test(path)) programs[key] = path;
     }
   }
   return { removed, roles, programs, guided };
@@ -318,12 +338,10 @@ function acceptUpdates(raw: unknown): UpdateSettings {
 function acceptChemistry(raw: unknown): ChemistrySettings {
   const d = DEFAULT_APP_SETTINGS.chemistry;
   if (typeof raw !== "object" || raw === null) return d;
-  const { valenceWarnings, stereoLabels } = raw as Record<string, unknown>;
+  const { valenceWarnings } = raw as Record<string, unknown>;
   return {
     valenceWarnings:
       typeof valenceWarnings === "boolean" ? valenceWarnings : d.valenceWarnings,
-    stereoLabels:
-      typeof stereoLabels === "boolean" ? stereoLabels : d.stereoLabels,
   };
 }
 
@@ -379,6 +397,7 @@ type SettingsState = AppSettings & {
   /** What went wrong reading or writing the file, if anything. */
   error: string | null;
   setDrawingStyle: (choice: StyleChoice) => void;
+  setOwnDrawingStyles: (own: OwnStyle2D[]) => void;
   setStyle3d: (choice: Style3DChoice) => void;
   setNetwork: (network: NetworkSettings) => void;
   setChemistry: (chemistry: ChemistrySettings) => void;
@@ -390,6 +409,7 @@ type SettingsState = AppSettings & {
   setPlugins: (plugins: PluginSettings) => void;
   setPictures: (pictures: PictureSettings) => void;
   setPointer: (pointer: PointerSettings) => void;
+  setCanvas: (canvas: CanvasSettings) => void;
   setLabels: (labels: LabelSettings) => void;
   setWords: (words: WordSettings) => void;
   setCalculations: (calculations: CalculationSettings) => void;
@@ -405,9 +425,9 @@ export const useAppSettings = create<SettingsState>((set, get) => {
   const scheduleSave = () => {
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
-      const { drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours } = get();
+      const { drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, canvas, labels, words, calculations, procedures, colours } = get();
       writeSettingsText(
-        settingsFileText({ drawingStyle, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, labels, words, calculations, procedures, colours }),
+        settingsFileText({ drawingStyle, ownDrawingStyles, style3d, network, chemistry, updates, options, abbreviations, files, plugins, pictures, pointer, canvas, labels, words, calculations, procedures, colours }),
       ).then(
         () => set({ error: null }),
         (e) => set({ error: `Settings could not be saved: ${String(e)}` }),
@@ -420,6 +440,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     error: null,
     setDrawingStyle: (drawingStyle) => {
       set({ drawingStyle });
+      scheduleSave();
+    },
+    setOwnDrawingStyles: (ownDrawingStyles) => {
+      set({ ownDrawingStyles });
       scheduleSave();
     },
     setStyle3d: (style3d) => {
@@ -448,6 +472,10 @@ export const useAppSettings = create<SettingsState>((set, get) => {
     },
     setPointer: (pointer) => {
       set({ pointer });
+      scheduleSave();
+    },
+    setCanvas: (canvas) => {
+      set({ canvas });
       scheduleSave();
     },
     setLabels: (labels) => {

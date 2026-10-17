@@ -55,6 +55,7 @@ src/
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
   lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
+  lib/chem/reactionMap.ts a reaction's full atom map in 3D, hydrogens included (accelMapper.ts: ACCeL's mapper, ported; docs/ATOM-MAPPING.md)
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
@@ -89,6 +90,8 @@ src-tauri/
   src/net.rs              the network: tasks, the proxy, the record
   src/jobs.rs             jobs: Meno's job mode (`--job <folder>`), the queue, logs, stopping
   src/logfile.rs          Meno's log, `<app data>/logs/meno.log` (see *Meno's log*)
+  src/pinch.rs            Windows: the main window made with WebView2's pinch let through, before its page loads
+                          (EDITOR-2D.md, *Touch and pinch*); elsewhere it is made from its config in setup
   capabilities/           permission sets for the main window
   resources/plugins/<id>/ a plugin, a folder of its own: manifest.json, its worker, its lock
                           (uv's requirements.lock, or pixi's pixi.toml and pixi.lock);
@@ -225,12 +228,35 @@ the tab's, not the canvas's (`TabFiles` round `CanvasBoundary`:
 the title bar's Save, Ctrl/Cmd+S and closing the tab with Save still write
 the document, and a save that fails says so under the canvas's card.
 
+## The main window's size and place (`windowstate.rs`)
+
+The main window's frame - its size in logical pixels, its place in the
+desktop's physical ones - and whether it was maximized or full screen (never
+minimized) are kept in `window-state.json` in Meno's data folder, not in the
+settings: written a moment after the last move or resize, and as it closes.
+They are put back in setup, before the window is first shown: its config makes
+it hidden, and `restore` shows it, so it never appears at the default size and
+moves (the no-abrupt-changes rule). Where the kept frame is not mostly on a
+monitor there is now - one unplugged, a resolution or scale changed - it is
+brought onto the nearest, its title bar within reach, or centred at the default
+size where there is none (`place`, with its tests). The size kept is the
+inner one - what `set_size` takes - and the place the outer one, so that a
+frameless window's larger outer frame on Windows does not grow it at every
+start. On Windows the window's own placement is kept as it is
+(`GetWindowPlacement`: the normal frame, maximized or not) and given back
+with the window still hidden (`SetWindowPlacement`, `SW_HIDE`: the system's
+own caption is never seen), maximized hidden where it was, and then shown by
+Tauri as elsewhere, so that the frame it goes back to as it is unmaximized
+round-trips exactly - the size set and read back is not the same measure
+there, and was asynchronous. Elsewhere the inner size is kept. The talk's window and any
+other are not kept. Tauri's window API only; no crate of its own.
+
 ## Meno's log
 
 A release started from the Finder or Explorer has no terminal, so what
 Meno says of itself is written to a file as well, `<app data>/logs/meno.log`
-(on a Mac in `~/Library/Application Support/com.kfchem.meno/logs/`, on
-Windows in `%APPDATA%\com.kfchem.meno\logs\`). Everything still goes where it
+(on a Mac in `~/Library/Application Support/Meno/logs/`, on
+Windows in `%APPDATA%\Meno\logs\`). Everything still goes where it
 went before, to stderr and the page's console.
 
 - **What goes in**: a line saying which Meno started (its version, the
@@ -257,10 +283,10 @@ went before, to stderr and the page's console.
   write to it too. The page sends at most 100 lines a minute; those past
   that are counted, and the next line says how many were left out. A line
   from the page is cut at 4000 bytes.
-- The log is begun before Tauri is built, in the data folder as the system
-  says it (its folder for apps' data, and Meno's identifier), so that a
-  panic as Meno starts is in it; where Tauri has the folder elsewhere it
-  carries on there. Lines from before either, in the first moments, are
+- The log is begun before Tauri is built, in Meno's data folder as
+  `folders.rs` finds it - the one Tauri has too (*Where Meno keeps what*) -
+  so that a panic as Meno starts is in it; where Tauri has the folder
+  elsewhere it carries on there. Lines from before either, in the first moments, are
   kept, up to 200, and written once it is begun.
 - **Settings > General, *Open log folder*** shows the log in the Finder or
   Explorer (`log_spot`: the log itself, or its folder, made first where
@@ -576,10 +602,12 @@ not taken from either.
   starts with them, its own changes never written back. Quick Add offers
   the plugins added, each with its kinds (`workflow/offered.ts`).
 - **Running** (`store/slices/stepRuns.ts`): the steps to run - those
-  asked for, and before each those that have not run or have changed -
-  each started once the step before it has ended well, those that do not
-  wait on one another at once (`runSteps`; *Run from here* adds the steps
-  after, *Run all* every step not done); each run - Meno's at once, as
+  asked for, and before each the furthest back that has not run or has
+  changed, and every step from it on (`chainTo`: a step done takes anew
+  what one changed before it gives) - each started once the step before
+  it has ended well, those that do not wait on one another at once
+  (`runSteps`; *Run from here* adds the steps after, *Run all* every step
+  not done and every step after one); each run - Meno's at once, as
   one edit; a plugin's conformer search on structures drawn in its worker
   (RDKit's, through the roles' `conformers`, with the step's options); a
   plugin's step on entries alone at once, `run`
@@ -622,7 +650,7 @@ not taken from either.
 ### Jobs
 
 A program a step runs - xTB's, say - runs as a job (`src-tauri/src/jobs.rs`,
-`lib/jobs.ts`): in a folder of its own, `<app data>/jobs/<id>/`, apart from
+`lib/jobs.ts`): in a folder of its own, `<local app data>/jobs/<id>/`, apart from
 Meno, so that it goes on when Meno closes (WORKFLOWS.md, *When Meno
 closes*).
 
@@ -657,6 +685,11 @@ closes*).
   runner looks for - stops it and everything it started: asked, then made
   to after 3 s (macOS, Linux); at once (Windows). The runner writes how it
   ended in `state.json`, whole each time (written beside it, then renamed).
+- **A runner asked to go** - SIGTERM, SIGINT or SIGHUP (macOS, Linux: a
+  logout, `kill`, Activity Monitor's *Quit*) - stops its program as *Stop*
+  does, writes the job stopped, and goes (`run_as_runner`): its program,
+  in a group of its own, is never left running with the job read as gone.
+  On Windows the job object takes it with the runner, however it goes.
 - **A finished job's folder is taken away** (*Remove*, *Clear finished
   jobs' files*) by moving it out of the jobs' way first, under a name no
   job has (`.taken-…`), then removing it: one a program still holds a file
@@ -964,7 +997,11 @@ undo step.
 A drawn structure made in 3D (`Workspace/chem/make3d.ts`, stage 2 of
 docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
-(ETKDG, then MMFF94 or UFF, on every core; the same shape twice kept once;
+(ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
+their covalent lengths and the metal typed for UFF, or, where UFF has no
+type for it, a lighter metal of its group standing in and no energies
+given; a ring bound through all its atoms, written as a multi-centre bond
+by `chem/etaBound.ts`, held over its metal; the same shape twice kept once;
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
@@ -990,12 +1027,77 @@ double bond drawn cis - is laid out by RDKit's own depictor instead. Meno
 lays both drawings out again with its own engine; only their
 stereochemistry and scale come from these coordinates.
 
-The venv lives under the app data dir at `uv/<profile>/venv`; a stamp file
-(`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only when
-the lock or Python version changes. uv runs with its Python downloads
-(`uv/python`) and cache (`uv/cache`) under the app data dir too, only
+The venv lives under the local app data dir at `uv/<profile>/venv`; a stamp
+file (`uv/stamps/<profile>.json`) stores the lock-file hash so setup reruns only
+when the lock or Python version changes. uv runs with its Python downloads
+(`uv/python`) and cache (`uv/cache`) under the local app data dir too, only
 uv-managed Pythons, and no user uv configuration (`uv_command` in `lib.rs`):
 nothing of Meno's environments lands in the user's own directories.
+
+### Where Meno keeps what
+
+Meno's folders are named `Meno` in the system's folders for applications'
+data, local data and caches (`folders.rs`; tauri.conf.json's
+`appDirectoriesOverride`, so that Tauri's `app_*_dir`, the webview's
+`BaseDirectory`, the file scopes and the job runner all find the same ones):
+
+| | Mac | Windows | Linux |
+| --- | --- | --- | --- |
+| data: settings, the log, the window's place | `~/Library/Application Support/Meno` | `%APPDATA%\Meno` | `$XDG_DATA_HOME/Meno` |
+| local data: environments, tools, jobs, plugins' downloads | the data folder | `%LOCALAPPDATA%\Meno\data` | the data folder |
+| caches: PDFs' pages, ligand data | `~/Library/Caches/Meno` | the local data folder | `$XDG_CACHE_HOME/Meno` |
+
+The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
+in the webview) holds what is large and of this computer alone: uv's and pixi's
+environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
+download. On Windows it is in the local application data folder, not the
+roaming `%APPDATA%` one, which a domain may copy to a server and back at each
+sign-in and keep within a quota; the settings and the network log stay in the
+roaming one. It is a folder of its own in `%LOCALAPPDATA%\Meno`, where Meno is
+installed for one user: the page may write in its local data folder (the file
+scopes in `capabilities/main.json`), and never over Meno itself, its PDF
+library or the plugins' scripts it runs. The installer writes only its own
+files there, so an update leaves the folder as it is; the uninstaller takes
+it away only when asked to delete Meno's data as well. On a Mac and on Linux
+the data and local data folders are one.
+
+**From before 0.1.14.** A Meno before 0.1.14 named its folders by its
+identifier then, `com.kfchem.meno`. At a start, before anything uses them,
+what is in those is moved into Meno's folders (`folders::move_old`), entry by
+entry: renamed (the same volume), or copied and then taken away where it
+cannot be renamed; never over a file already in Meno's folder - each entry is
+renamed whole, so one there was moved already, and what is in the old folder
+after the first move was written by an earlier Meno started since, whose
+fresh settings must not replace the real ones (the old copy is dropped, and
+the log says so; folders merge entry by entry, so an earlier Meno's new jobs
+still come across); links moved as links. Cut short, it is done again from
+where it stopped at the next start, and the old folder goes once it is
+empty. What the move does goes in Meno's log. Not moved:
+
+- the webview's data (`EBWebView`, Windows): caches, made again;
+- the Python environments made (`uv/<name>/venv`, and pixi's `.pixi` and
+  `activation.json`), which name the folder they were made in, and links in
+  `uv/python` left pointing nowhere: each environment is set up again at its
+  first use, from uv's and pixi's caches and Pythons, which move, so that
+  little or nothing is downloaded - and nothing asked, as the settings with
+  what was allowed move, and each plugin's record of being set up (its
+  stamp) and its downloaded files stay;
+- while a job of the old folder waits or runs: the environments, tools and
+  jobs, as its program may be using them; they move at a start after it has
+  ended (where meanwhile uv's or pixi's was made again in the new folder,
+  that one is kept and the old one taken away);
+- on a Mac and on Linux, of the old caches folder only Meno's own (`pdf`,
+  `ccd`): the rest is the system's.
+
+A Meno before 0.1.13 kept all of it in the roaming folder on Windows; nothing
+of that is moved - plugins are set up again as they are next used - and what
+was left there is taken away (`roaming.rs`), by name only: `uv`, `pixi` and
+`tools` at each start while they are there, and a plugin's environment there
+as the plugin is removed; `jobs` only where it holds no job. While a job there
+still waits or runs, everything there is left, as its program may be using its
+environment; jobs kept there are left with their files. The rest of that
+folder - the settings, the log, the window's place - moves as above, and the
+folder goes once it is empty. What is left, and why, goes in Meno's log.
 
 ### PDFs
 
@@ -1290,8 +1392,8 @@ path it is given:
 - `py_env_*`: the webview names no tool - uv is the one `tools.rs` pins;
   `lockPath` must be a plugin's own lock in its folder,
   `resources/plugins/<id>/`: uv's `requirements.lock`, made in exactly
-  `<app data>/uv/plugin-<id>/venv` (`venvHome`), or pixi's `pixi.lock`, made in
-  `<app data>/pixi/plugin-<id>` - Meno has no Python environment of its own
+  `<local app data>/uv/plugin-<id>/venv` (`venvHome`), or pixi's `pixi.lock`, made in
+  `<local app data>/pixi/plugin-<id>` - Meno has no Python environment of its own
   (2026-10-13: the console's and the workflows' locks are gone); relative paths may not contain `..`, `.` or absolute/drive
   prefixes; `pythonVersion` must look like `3.12` or `3.12.4`; `purpose` must
   be `python-env:<name>` - never a purpose that needs no asking.
@@ -1302,7 +1404,7 @@ path it is given:
   (Japanese Windows). What a sidecar or a setup says is read a line at a time,
   a line not UTF-8 read as near as it can be (`each_line`) - never taken for its end.
 - `ext_spawn_sidecar`: `entry` must be an absolute `python`/`python3`/`python.exe`
-  inside `<app data>/uv/` or `<app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
+  inside `<local app data>/uv/` or `<local app data>/pixi/`; `args` may start with `-u` / `-B`, followed by an
   absolute `.py` script that is a plugin's `worker.py` in `resources/plugins/<id>/`, in that
   plugin's own environment (`SIDECAR_SCRIPTS`); later arguments go to the script unchanged.
 - A worker is pointed at the proxy with no task, so what it reaches for is
@@ -1333,7 +1435,7 @@ path it is given:
   32 folders deep, and no more than 10,000 files and folders are looked
   at. The runner (`Meno --job <folder>`) checks it all again before it
   runs anything, whoever started it: its folder must be
-  `<app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
+  `<local app data>/jobs/<id>`, links resolved (`runner_folder`, which runs the
   job in the folder it checked), and what it is to run - the program, the programs after it, their arguments against
   the files in its work folder, their environment - what `job_start`
   would give (`spec_allowed`). Otherwise it writes a Failed record into
@@ -1361,7 +1463,7 @@ Adding a new worker or interpreter flag means extending these rules
 `lib.rs`.
 
 Files the chemist's own: the webview's file scope (`capabilities/main.json`)
-reaches only the app's data and resources. A file is written elsewhere only
+reaches only the app's data (roaming and local) and resources. A file is written elsewhere only
 where the system's save dialog was answered - Save, Save As, Export - since
 the dialog plugin adds the path it gives back to the file scope, for that
 path alone and for the session; nothing else outside the app's own folders
@@ -1435,6 +1537,10 @@ to be able to work with nothing going out at all.
   update is checked against the updater's public key (`tauri.conf.json`)
   before it is installed, which is as Meno quits; a development build, and
   a Meno Windows started for Office, neither look nor install. On Windows
+  it waits while jobs wait or run (`held`, `INSTALL_STOPS_JOBS`): the
+  installer ends every process of Meno's executable, the jobs' runners
+  among them, so it is installed neither as Meno quits nor by *Restart
+  now* until none do (docs/WORKFLOWS.md, *When Meno closes*). On Windows
   the installer is left in a folder of the temporary directory
   (`Meno-<version>-updater-…`), which Meno takes away as it starts once it
   is some minutes old (`tidy_after_updates`). Releases:

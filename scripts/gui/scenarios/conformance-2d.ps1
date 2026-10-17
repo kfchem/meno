@@ -6,7 +6,7 @@
 # - "long-press-selects": a press held still on an atom selects the whole
 #   structure, the shade spread from the atom.
 # - "double-click-bond": a double-click on an atom draws one bond.
-# - "triple-click-chain": three clicks on an atom begin a chain the pointer
+# - "triple-click-chain" (its name kept for comparison): Chain from an atom's menu begins a chain the pointer
 #   leads; a click ends it.
 # - "double-click-empty": a double-click on empty space opens Quick Add.
 # - "long-press-box": held still on empty space and dragged: a box.
@@ -65,7 +65,7 @@ Save-Step "double-click-bond"
 Undo
 Calm
 
-Invoke-MenoClick -X 1487 -Y 948 -Count 3
+Invoke-MenoChainFromHere -X 1487 -Y 948
 Move-MenoPointerAlong -Path @(@(1540, 980), @(1600, 1020), @(1680, 1000), @(1760, 1040)) -StepMs 40
 Start-Sleep -Milliseconds 300
 Hand 1760 1040

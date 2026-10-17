@@ -240,6 +240,8 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     expect(kept("CO")).toBe("CO");
     expect(kept("Co")).toBe("Co");
     expect(kept("co")).toBe("Co");
+    // (as it is typed too: the label alone decides, wherever the atom is - on a metal or not)
+    expect(["CO", "Co", "co"].map(live)).toEqual(["CO", "Co", "Co"]);
     expect(kept("NH")).toBe("NH");
     expect(kept("nh")).toBe("NH");
     expect(kept("OC")).toBe("OC");
