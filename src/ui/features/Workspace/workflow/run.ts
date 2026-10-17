@@ -444,6 +444,17 @@ function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecul
  * molecule of its own - an optimised one with the path that led to it as
  * its frames, ending at it, and what its calculation says.
  */
+/**
+ * The charge and spin an entry came in with from a calculation, where it
+ * leaves a step that is not one (Meno's own: they say no calculation of
+ * their own): kept as what the molecule knows of its calculation, so that
+ * the next step is told them, not what its atoms say.
+ */
+export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<string, never> {
+  if (e.charge == null && e.multiplicity == null) return {};
+  return { calc: { readers: [], ...(e.charge != null ? { charge: e.charge } : {}), ...(e.multiplicity != null ? { multiplicity: e.multiplicity } : {}) } };
+}
+
 function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   // (the shares a step worked out - Meno's Populations - else those the program that found them gave)
@@ -457,7 +468,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
         bonds: e.bonds.map((b) => ({ ...b })),
         ...(path ? { frames: [...path.slice(1).map((f) => [...f]), [...e.xyz]], path: true as const } : {}),
         ...(energies ? { energies } : {}),
-        ...(e.calc ? { calc: e.calc } : {}),
+        ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
         ...e.keep,
       };
@@ -481,7 +492,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
       ...(degeneracies ? { degeneracies } : {}),
-      ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : {}),
+      ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
       ...(first as Worked).keep,

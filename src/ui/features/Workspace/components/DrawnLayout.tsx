@@ -212,7 +212,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // has them.
   // (each atom as it was drawn last)
   const shown = useRef<LAtom[]>([]);
-  const glide = useRef<{ plan: GlidePlan; from: Map<number, Pt>; start: number } | null>(null);
+  const glide = useRef<{ plan: GlidePlan; from: Map<number, Pt>; start: number; sizes?: Map<number, number> } | null>(null);
   const planned = useRef<LAtom[] | null>(null);
   // (the whole drawing as it was when last planned: a record of a stack of
   // drawings coming into sight - its stack laid out as a grid - goes from
@@ -271,15 +271,27 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
         }
         // (the structures that moved: the rest stay as they are drawn, laid out as they were)
         const parts = partsOf(model.atoms, model.bonds).filter((part) => part.some((id) => moved.has(id)));
-        glide.current = { plan: planGlide(from, to, parts), from, start: performance.now() };
+        // (and how large each was shown, where that changes: it goes over to it as it goes - docs/WORKSPACE.md, *Magnified display*)
+        const sizes = new Map<number, number>();
+        for (let i = 0; i < atoms.length; i++) {
+          const s = was(atoms[i], i) as (Pt & { magnified?: number }) | undefined;
+          if (s && (s.magnified ?? 1) !== (atoms[i].magnified ?? 1)) sizes.set(atoms[i].id, s.magnified ?? 1);
+        }
+        glide.current = { plan: planGlide(from, to, parts), from, start: performance.now(), sizes };
       }
     }
     const g = glide.current;
-    const on = g ? glideAt(g.plan, g.from, easeOut((performance.now() - g.start) / GLIDE_MS)) : null;
+    const e = g ? easeOut((performance.now() - g.start) / GLIDE_MS) : 1;
+    const on = g ? glideAt(g.plan, g.from, e) : null;
     const out = on
       ? atoms.map((a) => {
-          const p = on.get(a.id);
-          return p ? { ...a, x: p.x, y: p.y, ...(a.z != null && p.z != null ? { z: p.z } : {}) } : a;
+          const k0 = g?.sizes?.get(a.id);
+          // (one going over to another magnification: straight there, each atom from where it was - a growing is no turn)
+          const f = k0 != null ? g?.from.get(a.id) : undefined;
+          const p = f ? { x: f.x + (a.x - f.x) * Math.min(1, e), y: f.y + (a.y - f.y) * Math.min(1, e) } : on.get(a.id);
+          // (as large as it is shown on its way: k going over with its places)
+          const k = k0 == null ? null : Math.round((k0 + ((a.magnified ?? 1) - k0) * Math.min(1, e)) * 100) / 100;
+          return p ? { ...a, x: p.x, y: p.y, ...(a.z != null && p.z != null ? { z: p.z } : {}), ...(k != null ? { magnified: k } : {}) } : a;
         })
       : atoms;
     shown.current = out;

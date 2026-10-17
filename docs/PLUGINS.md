@@ -661,6 +661,37 @@ The same for every plugin and for Meno's own parts:
     *Response*). Meno's own writers run on the page: an SVG picture of
     molecules in 3D needs the page's WebGL.
 
+### The entry a plugin is given
+
+Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
+
+```
+{
+  "schema": 1,
+  "name": "...",                      (where it has one)
+  "atoms": [{"el", "x", "y", "z", "charge"?, "radical"?, "isotope"?, "mass"?}],
+  "bonds": [{"a1", "a2", "order"}],
+  "charge": 0,
+  "multiplicity": 1,
+  "files": [{"kind", "name", "text"}]  (where the step takes some)
+}
+```
+
+- `schema` is the entry's version (`src/lib/entry.ts`, `ENTRY_SCHEMA`),
+  1 for the entry as described here. A change to what an entry holds
+  comes with the next number, so that a plugin can tell which it is given.
+- The atoms are in the entry's fixed numbering: a plugin answers with
+  them in the same order (WORKFLOWS-FOUNDATION.md, *The numbering is
+  fixed*), mapping back any its program reorders.
+- Places are in ångströms. `mass` is the isotope's in daltons, where
+  Meno knows it.
+- `charge` and `multiplicity` are by Meno's one rule
+  (`src/lib/io/writers.ts`, `speciesOf`): what the calculation the
+  molecule was read from said, where it said; else what its atoms say.
+- Energies a plugin gives back are in hartrees; Meno converts any other
+  unit with its units table (`src/lib/units.ts`, CODATA 2018), never a
+  plugin's own factor.
+
 ## Settings
 
 - **Plugins.** A tab of its own that lists every plugin on offer, added or

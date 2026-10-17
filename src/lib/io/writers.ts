@@ -92,6 +92,27 @@ export const WRITERS = {
       },
     ],
   },
+  // (molecules in 3D only: the format holds no drawing, and no bonds)
+  xyz: {
+    id: "xyz",
+    name: "XYZ file",
+    extensions: [".xyz"],
+    takes: "page",
+    by: "meno",
+    options: [
+      {
+        id: "frames",
+        about: "molecules3d",
+        label: "Molecules in 3D",
+        type: "choice",
+        choices: [
+          { value: "shown", label: "The frame shown" },
+          { value: "all", label: "Every frame, a block each" },
+        ],
+        default: "shown",
+      },
+    ],
+  },
   svg: { id: "svg", name: "SVG picture", extensions: [".svg"], takes: "page", by: "meno", options: [] },
 } as const satisfies Record<string, Writer>;
 
@@ -141,4 +162,25 @@ export function knownOf(m: WrittenMolecule): Record<Known, string | number> {
   let unpaired = m.atoms.reduce((n, a) => n + (a.radical ? UNPAIRED[a.radical] : 0), 0);
   if ((electrons - unpaired) % 2 !== 0) unpaired += 1;
   return { charge, multiplicity: unpaired + 1, name: m.name ?? "" };
+}
+
+/** A molecule's charge and spin multiplicity, and where each came from: given (by the chemist, or the calculation it was read from), or its atoms. */
+export type Species = { charge: number; multiplicity: number; from: { charge: "given" | "atoms"; multiplicity: "given" | "atoms" } };
+
+/**
+ * A molecule's charge and spin multiplicity by Meno's one rule
+ * (docs/WORKFLOWS-FOUNDATION.md, *The entry*): what it was given, where it
+ * was given one - a whole charge, a multiplicity of one or more - else what
+ * its atoms say (`knownOf`). Every place that tells a program, a writer or
+ * a step a molecule's charge and spin asks here.
+ */
+export function speciesOf(m: WrittenMolecule, given?: { charge?: number | null; multiplicity?: number | null }): Species {
+  const known = knownOf(m);
+  const charge = Number.isInteger(given?.charge) ? given!.charge! : null;
+  const multiplicity = Number.isInteger(given?.multiplicity) && given!.multiplicity! > 0 ? given!.multiplicity! : null;
+  return {
+    charge: charge ?? Number(known.charge),
+    multiplicity: multiplicity ?? Number(known.multiplicity),
+    from: { charge: charge != null ? "given" : "atoms", multiplicity: multiplicity != null ? "given" : "atoms" },
+  };
 }

@@ -5,17 +5,17 @@
  * published methods. Each takes the entries that came in and says which
  * it keeps, which it sets aside, and what it found; or why it could not.
  */
-import { knownOf } from "../../../../lib/io/writers";
+import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
+import { boltzmann } from "../../../../lib/boltzmann";
+import { factor } from "../../../../lib/units";
 
-/** Kilocalories per mole in a hartree (CODATA 2018). */
-export const KCAL_PER_HARTREE = 627.5094740631;
-/** The gas constant in hartrees per kelvin: R over the joules per mole in a hartree (CODATA 2018). */
-const R_HARTREE = 8.314462618 / 2625499.6;
+/** Kilocalories per mole in a hartree (Meno's units table). */
+const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 
 /** What a step did: the entries it kept - with their shares, where it found them - and those it set aside, as a set that holds `holds`; or why it could not. */
 export type Outcome =
@@ -117,10 +117,10 @@ function drain<T>(turns: Generator<number, T>): T {
 /**
  * Whether two entries are of the same constitution: the same atoms, in the
  * same order, bonded the same way - and of the same charge and spin, as the
- * programs are told them (lib/io/writers `knownOf`), so that a triplet is
+ * programs are told them (lib/io/writers `speciesOf`), so that a triplet is
  * never a conformer of its singlet.
  */
-export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds">): string {
+export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds" | "charge" | "multiplicity">): string {
   const atoms = e.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}`).join(" ");
   const bonds = e.bonds
     .map((b) => `${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}:${b.order}`)
@@ -129,12 +129,15 @@ export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds">): string {
   return `${atoms}|${bonds}|${speciesOf(e)}`;
 }
 
-/** An entry's charge and spin multiplicity, as the programs are told them (lib/io/writers `knownOf`): entries that differ in them are different species. */
-function speciesOf(e: Pick<SetEntry, "atoms">): string {
-  const { charge, multiplicity } = knownOf({
-    atoms: e.atoms.map((a) => ({ el: a.el, x: 0, y: 0, z: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) })),
-    bonds: [],
-  });
+/**
+ * An entry's charge and spin multiplicity, as the programs are told them
+ * (lib/io/writers `speciesOf`): what a calculation it was read from said,
+ * else what its atoms say. Entries that differ in them are different
+ * species - an anion read from a calculation is no conformer of its neutral.
+ */
+function speciesOf(e: Pick<SetEntry, "atoms" | "charge" | "multiplicity">): string {
+  const atoms = e.atoms.map((a) => ({ el: a.el, x: 0, y: 0, z: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) }));
+  const { charge, multiplicity } = speciesBy({ atoms, bonds: [] }, e);
   return `${charge} ${multiplicity}`;
 }
 
@@ -341,15 +344,3 @@ function chooseOne(entries: readonly SetEntry[], number: number | null, by?: str
   return { ok: true, holds: "molecules", kept, aside, said: by && number == null ? `${said} · ${by}` : said };
 }
 
-/**
- * Boltzmann populations at `kelvin`, from energies in hartrees: each
- * weighed by its degeneracy where given - the forms of it alike, each as
- * likely - the shares adding up to one.
- */
-export function boltzmann(energies: readonly number[], kelvin: number, degeneracies?: readonly number[]): number[] {
-  if (!energies.length) return [];
-  const lowest = least(energies);
-  const w = energies.map((e, i) => (degeneracies?.[i] ?? 1) * Math.exp(-(e - lowest) / (R_HARTREE * kelvin)));
-  const sum = w.reduce((a, b) => a + b, 0);
-  return w.map((x) => x / sum);
-}

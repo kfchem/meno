@@ -196,6 +196,7 @@ import { missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
+import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
@@ -1005,6 +1006,13 @@ function WorkspaceContent({
     measureMolecule && menuMeasure && movingFor(measureMolecule, menuMeasure.id, frameShown(measureMolecule.id))
       ? { atoms: menuMeasure.atoms.length, onSet: () => store.getState().editMeasure3d({ id: measureMolecule.id, measure: menuMeasure.id }) }
       : undefined;
+  // (how large the molecules right-clicked are shown - a selection's, those in it; the first's said: docs/WORKSPACE.md, *Magnified display*)
+  const { sel3d: menuSel3d, sel: menuSel } = store.getState();
+  const magnifyIds = menu?.kind === "molecule3d" && menuMolecule ? (menuSel3d.has(menuMolecule.id) ? [...menuSel3d] : [menuMolecule.id]) : menu?.selection === "here" ? [...menuSel3d] : [];
+  // (and structures in 2D: the one right-clicked, or those the selection holds)
+  const magnifyAtoms = (menu?.kind === "atom" || menu?.kind === "bond") && menuAtom != null && menu.selection !== "here" ? [menuAtom] : menu?.selection === "here" ? [...menuSel.atoms] : [];
+  const magnifyFirst = molecules3d.find((m) => m.id === magnifyIds[0]) ?? model.atoms.find((a) => a.id === magnifyAtoms[0]);
+  const menuMagnify = magnifyFirst ? { now: magnifyFirst.magnified ?? 1, set: (k: number) => store.getState().setMagnified(magnifyAtoms, magnifyIds, k) } : undefined;
   const menu3d: MenuMolecule3D | undefined = menuMolecule
     ? {
         otherLook: (() => {
@@ -1821,6 +1829,7 @@ function WorkspaceContent({
           molecule3d={menu3d}
           records={menuRecords}
           measure3d={measure3dMenu}
+          magnify={menuMagnify}
           onArrowStyle={() => {
             if (menu.kind === "arrow" && menu.id != null) openArrowStyle(menu.id);
           }}
@@ -2351,6 +2360,7 @@ function WorkspaceContent({
           {/* Stacks of drawings: each one's chip, under the record it shows, and one going over to the next (utils/stacks) */}
           <StackSwap2D />
           <StackChips2D />
+          <MagnifiedMarks2D />
         </DrawnLayoutProvider>
         {/* the page's scale, for chips drawn on it in HTML */}
         <PageScale />

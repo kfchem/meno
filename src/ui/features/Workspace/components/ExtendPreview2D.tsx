@@ -7,6 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { strokeTarget } from "../utils/stroke";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { TAU, follow } from "../../../theme/motion";
+import { bondLengthFrom } from "../utils/magnified";
 
 // Preview for a stroke drawn out of an atom (see utils/stroke).
 // - Works out where the bond the pointer is leading ends - springing round
@@ -41,7 +42,7 @@ export default function ExtendPreview2D() {
     const ptr = extend.pointer;
     const target =
       extend.active && extend.stroke && ptr
-        ? strokeTarget(model, extend.stroke, ptr, NOMINAL_BOND_LENGTH)
+        ? strokeTarget(model, extend.stroke, ptr, bondLengthFrom(model.atoms, extend.stroke.baseId))
         : null;
     const seenTo = target && ptr ? 1 : 0;
     if (seen.current !== seenTo) {
@@ -59,7 +60,7 @@ export default function ExtendPreview2D() {
       wasFree.current = false;
       return;
     }
-    const L = NOMINAL_BOND_LENGTH;
+    const L = extend.stroke ? bondLengthFrom(model.atoms, extend.stroke.baseId) : NOMINAL_BOND_LENGTH;
     const tip = target.tip;
     const dt = Math.min(Math.max(dtRaw || 0.016, 0.001), 0.05);
     const toPtr = Math.atan2(ptr.y - tip.y, ptr.x - tip.x);

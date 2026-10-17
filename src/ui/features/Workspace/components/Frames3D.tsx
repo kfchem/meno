@@ -1,7 +1,7 @@
 import PageHtml from "./PageHtml";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
-import { KCAL_PER_HARTREE } from "../workflow/meno";
+import { factor } from "../../../../lib/units";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
 import { greatest, least } from "../../../../lib/chem/lists";
@@ -147,7 +147,7 @@ export function FramesChip({
   // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
   const reading = opened;
   const lowest = energies ? least(energies) : 0;
-  const above = energies?.map((e) => (e - lowest) * KCAL_PER_HARTREE);
+  const above = energies?.map((e) => (e - lowest) * factor("Eh", "kcal/mol"));
   const highest = above ? Math.max(greatest(above), 1e-9) : 1;
   const told = pointed ?? frame;
   // (a long run of frames is given more room)

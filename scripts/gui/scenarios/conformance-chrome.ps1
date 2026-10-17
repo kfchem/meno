@@ -108,14 +108,14 @@ Write-Host "  menu bar: $menus"
 # the one tab closed - nothing drawn on it, nothing to ask - and Meno gone with it; then started again
 Invoke-MenoClick -X 517 -Y 42
 Start-Sleep -Milliseconds 2500
-$left = @(Get-Process -Name Meno -ErrorAction SilentlyContinue | Where-Object { -not (((& /bin/ps -o command= -p $_.Id) -join " ") -match "\s--job\s") })
+$left = @(Get-MenoApp)
 Write-Host ("  last-tab-quits: " + $(if ($left.Count) { "NO - Meno still running" } else { "yes - Meno gone" }))
 if ($Part -eq "first") { return }
 }
 # (started again: the system may have given the front to another program as Meno went - Meno is brought to it)
 try { Start-Meno } catch {
   Write-Host "  (Meno started behind another program: brought to the front)"
-  $again = @(Get-Process -Name Meno -ErrorAction SilentlyContinue | Where-Object { -not (((& /bin/ps -o command= -p $_.Id) -join " ") -match "\s--job\s") })[0].Id
+  $again = @(Get-MenoApp)[0].Id
   & /usr/bin/osascript -e "tell application ""System Events"" to set frontmost of (first process whose unix id is $again) to true" | Out-Null
   Start-Sleep -Milliseconds 1000
   Get-MenoWindow | Out-Null

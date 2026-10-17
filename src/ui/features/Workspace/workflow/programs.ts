@@ -6,7 +6,8 @@
  * runs themselves are the store's (store/slices/workflowSlice).
  */
 import { valueText } from "../../../../lib/calc/results";
-import { knownOf, type WrittenMolecule } from "../../../../lib/io/writers";
+import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
+import { ENTRY_SCHEMA } from "../../../../lib/entry";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
@@ -18,10 +19,10 @@ import type { StepKind } from "./kinds";
  * An entry as a plugin is given it: Meno's plain data - its atoms, each its
  * element, place in ångströms, charge and radical; its bonds by index with
  * their orders; its name - and its charge and spin multiplicity, as Export
- * reads them (lib/io/writers `knownOf`).
+ * reads them (lib/io/writers `speciesOf`).
  */
-/** An entry as a plugin is given it: its molecule - each isotope's mass with it, in daltons, where Meno knows it - its charge and multiplicity, and its files. */
-export type PluginEntry = Omit<WrittenMolecule, "atoms"> & { atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[]; charge: number; multiplicity: number; files?: EntryFile[] };
+/** An entry as a plugin is given it: the entry's version (lib/entry `ENTRY_SCHEMA`); its molecule - each isotope's mass with it, in daltons, where Meno knows it - its charge and multiplicity, and its files (docs/PLUGINS.md, *The entry a plugin is given*). */
+export type PluginEntry = Omit<WrittenMolecule, "atoms"> & { schema: number; atoms: (WrittenMolecule["atoms"][number] & { mass?: number })[]; charge: number; multiplicity: number; files?: EntryFile[] };
 
 /** A file an entry is given besides its geometry (a step's `files`): its kind, by id, its name and its text - the output its molecule was read from. */
 export type EntryFile = { kind: string; name: string; text: string };
@@ -66,9 +67,9 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     const mass = a.isotope ? isotopeMass(a.el, a.isotope) : undefined;
     return mass != null ? { ...a, mass } : a;
   });
-  const known = knownOf(molecule);
-  // (a molecule read from a calculation: the state it was in there; else what its atoms say)
-  return { ...molecule, atoms, charge: e.charge ?? Number(known.charge), multiplicity: e.multiplicity ?? Number(known.multiplicity) };
+  // (a molecule read from a calculation: the state it was in there; else what its atoms say - Meno's one rule)
+  const { charge, multiplicity } = speciesOf(molecule, e);
+  return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity };
 }
 
 /**

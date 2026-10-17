@@ -23,6 +23,7 @@ import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
+import { editAtTrueSize } from "../../utils/trueSize";
 import { style3dOf } from "../../style3d";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
@@ -315,7 +316,8 @@ export const createModelSlice = (
   },
 
   relayout: (change: Parameters<typeof ops.relayout>[1], labels: readonly ops.WrittenAsLabel[] = []) => {
-    const edited = doc.edit("clean up", (d) => ops.relayout(labels.length ? ops.writtenAsLabels(d, labels) : d, change));
+    // (laid out at true size - the places given are - and each structure shown as large as it was: utils/trueSize)
+    const edited = doc.edit("clean up", (d) => editAtTrueSize(d, (t) => ops.relayout(labels.length ? ops.writtenAsLabels(t, labels) : t, change)));
     if (edited && labels.length) forgetDeleted(set);
   },
 
@@ -735,14 +737,15 @@ export const createModelSlice = (
   expandAbbreviation: (id: number) => {
     // (one after another, they are one run of drawing out)
     const run = doc.history().undoLabel === "expand abbreviation" ? (doc.getState().expanded ?? []) : [];
+    // (drawn out at true size, and shown as large as its structure: utils/trueSize)
     doc.edit("expand abbreviation", (d) => {
-      const out = ops.expandAbbreviation(d, id);
+      const out = editAtTrueSize(d, (t) => ops.expandAbbreviation(t, id), id);
       return out === d ? d : { ...out, expanded: [...run, ...(out.expanded ?? [])] };
     });
   },
 
   contractToAbbreviation: (ids: ReadonlySet<number>, label: string) => {
-    if (doc.edit("show as abbreviation", (d) => ops.contractToAbbreviation(d, ids, label))) forgetDeleted(set);
+    if (doc.edit("show as abbreviation", (d) => editAtTrueSize(d, (t) => ops.contractToAbbreviation(t, ids, label), [...ids][0]))) forgetDeleted(set);
   },
 
   setArrowLook: (id: number, look: ArrowLook, coalesceKey?: string) => {

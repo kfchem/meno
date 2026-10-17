@@ -1,5 +1,5 @@
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Model } from "../store";
+import { bondLengthFrom } from "./magnified";
 
 export type Point = { x: number; y: number };
 export type MoveSnapResult = { px: number; py: number; center: Point | null };
@@ -13,7 +13,7 @@ export function computeMoveSnap(
   movingId: number,
   pointer: Point
 ): MoveSnapResult {
-  const L = NOMINAL_BOND_LENGTH;
+  const L = bondLengthFrom(model.atoms, movingId);
   const moving = model.atoms.find((a) => a.id === movingId);
   if (!moving) return { px: pointer.x, py: pointer.y, center: null };
   // neighbors

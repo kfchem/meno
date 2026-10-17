@@ -410,8 +410,10 @@ describe("cleanUp", () => {
     // (the first Clean-up lays the reagent out drawn out in full - 126 atoms,
     // eighteen phenyl rings round six coppers - scoring some 2,400 drawings
     // of it on the way: 3 to 4 s on a quiet machine, and many times that on
-    // one busy with other work, 37 s seen)
-  }, 90_000);
+    // one busy with other work: at a load average of 30 the first Clean-up
+    // took 26 s and the whole test 47 s, at 42 the test 87 s - the second
+    // Clean-up is 0.25 s. The headroom is for such a machine, not for the work.)
+  }, 240_000);
 
   it("writes a protecting group by name, in the same step, and leaves one just drawn out drawn", async () => {
     // tert-butyldimethylsilyl ethyl ether, drawn atom by atom
