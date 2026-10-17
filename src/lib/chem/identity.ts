@@ -30,7 +30,11 @@ const AROMATIC = 4;
  * quinone's (its C=O is no part of a cycle), azulene's middle bond. Which
  * bonds lie on an alternating cycle is the structure's, not the drawing's,
  * so every Kekulé structure of one structure comes to the same form, and
- * its identity cannot split by how its rings were drawn.
+ * its identity cannot split by how its rings were drawn. It follows that
+ * bond-shift isomers are one structure: 1,2-disubstituted cyclooctatetraene
+ * with its substituents across a double bond and across a single one - two
+ * compounds, a barrier apart - has one identity, as joins and duplicates
+ * want it.
  */
 export function aromaticForm(input: LayoutInput): LayoutInput {
   const n = input.atoms.length;

@@ -110,6 +110,15 @@ describe("the aromatic form, Kekulé-free", () => {
     }
   });
 
+  it("takes bond-shift isomers as one structure, by design: 1,2-dimethylcyclooctatetraene, its methyls across a double bond or a single one", () => {
+    // (two compounds with a measurable barrier between them, but two Kekulé structures of one graph: one
+    // identity, as joins and duplicates want it - a known property of the rule, not a surprise)
+    const across = { double: "CC1=C(C)C=CC=CC=C1", single: "CC1C(C)=CC=CC=CC=1" };
+    expect(fromSmiles(across.double).bonds.find((b) => b.a === 1 && b.b === 2)?.order).toBe(2);
+    expect(fromSmiles(across.single).bonds.find((b) => b.a === 1 && b.b === 2)?.order).toBe(1);
+    expect(identityKey(fromSmiles(across.double))).toBe(identityKey(fromSmiles(across.single)));
+  });
+
   it("leaves a structure with one Kekulé structure as drawn: pyrrole, furan, thiophene, imidazole, a quinone", () => {
     for (const smiles of ["C1=CNC=C1", "C1=COC=C1", "C1=CSC=C1", "C1=CN=CN1", "O=C1C=CC(=O)C=C1", "CC=CC=CC"]) {
       const g = fromSmiles(smiles);
