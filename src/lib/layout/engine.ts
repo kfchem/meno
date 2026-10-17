@@ -465,9 +465,12 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // rejoined and untangled, and the one that reads best then kept: a
     // drawing a little worse before its parts are set can read better
     // after (Wilkinson's catalyst), and drawings as good may be set right
-    // to drawings that are not
+    // to drawings that are not. (The best alone, for a piece of more than
+    // eighty atoms, as above: setting right is most of the time a large
+    // piece takes - Stryker's reagent's 126 atoms, its three best drawings
+    // one drawing turned)
     const pool = deeper.some((d) => d.score <= best.score + 1e-9) ? deeper : [best, ...deeper];
-    const finalists = pool.sort(bestFirst(mol, piece)).slice(0, FINALISTS);
+    const finalists = pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? FINALISTS : 1);
     best = finalists
       .map((cand) => {
         const joined = rejoin(mol, piece, cand.pos, cand.score, score, fixed);
@@ -1594,7 +1597,7 @@ function propellers(
   }
 }
 
-/** How many of a piece's best drawings are each rejoined and untangled, the best of them kept. */
+/** How many of a piece's best drawings are each rejoined and untangled, the best of them kept (of a piece of up to eighty atoms). */
 const FINALISTS = 3;
 
 /** How far a point is from the segment p-q. */
