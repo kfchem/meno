@@ -125,6 +125,36 @@ const read = (f: FigureDrawn) => structureOf(readFigure(f, (l) => readDrawnLabel
 const bondsOf = (s: ReturnType<typeof read>) => s.bonds.map((b) => `${s.atoms[b.a].el}${"-=#"[b.order - 1]}${s.atoms[b.b].el}${b.stereo ? ` ${b.stereo}` : ""}`).sort();
 
 describe("a figure's shapes", () => {
+  // (a chain of two bonds, and beside it what a spectrum or a chart is drawn with)
+  const chain = stroke([0, 0], [L * 0.87, -L / 2], [2 * L * 0.87, 0]);
+  const path = (parts: P[][]): FigurePath => ({ fill: null, stroke: "#000000ff", width: 0.3, d: parts.flatMap((pts) => pts.map(([x, y], i): PathStep => [i ? "L" : "M", x, y])) });
+
+  it("leaves a plot's trace out: a path of many short lines, or of many lines one way, or one long open line", () => {
+    // (a spectrum's peaks drawn as sticks up from its baseline, each a part of its own - a few points long, all upright)
+    const sticks = path(Array.from({ length: 1200 }, (_, k): P[] => [[100 + k * 0.2, 200], [100 + k * 0.2, 200 - 2 - (k % 7)]]));
+    // (a trace drawn a step at a time, each step a part: short steps)
+    const steps = path(Array.from({ length: 400 }, (_, k): P[] => [[100 + k * 0.2, 300 + 0.5 * Math.sin(k / 5)], [100 + (k + 1) * 0.2, 300 + 0.5 * Math.sin((k + 1) / 5)]]));
+    // (one long open line of fine steps)
+    const line = path([Array.from({ length: 150 }, (_, k): P => [100 + k * 0.5, 400 + Math.cos(k / 3)])]);
+    const s = shapesOf(figure([chain, sticks, steps, line]));
+    expect(s.strokes).toHaveLength(2);
+  });
+
+  it("keeps a structure's own lines however they are drawn: a ring's circle of many short lines, hashes in one path", () => {
+    const ring = path([Array.from({ length: 128 }, (_, k): P => [50 + 5 * Math.cos((2 * Math.PI * k) / 128), 50 + 5 * Math.sin((2 * Math.PI * k) / 128)])]);
+    const round: FigurePath = { ...ring, d: [...ring.d, ["Z"]] };
+    const hashPath = path(Array.from({ length: 8 }, (_, k): P[] => [[200 + k * 1.6, 100 - k * 0.3], [200 + k * 1.6, 100 + k * 0.3]]));
+    const s = shapesOf(figure([chain, round, hashPath]));
+    // (the chain's two, the hashes' eight, and the circle's lines, every one)
+    expect(s.strokes.length).toBeGreaterThanOrEqual(2 + 8 + 127);
+  });
+
+  it("drops a short line drawn over a longer one among many lines, as among a few", () => {
+    const many = Array.from({ length: 120 }, (_, k) => stroke([k * 20, 500], [k * 20 + 12, 507]));
+    const s = shapesOf(figure([...many, stroke([0, 600], [L, 600]), stroke([2, 600], [5, 600])]));
+    expect(s.strokes).toHaveLength(121);
+  });
+
   it("reads a filled triangle wider than it is long, two sides from its tip as long, as a wedge narrow at that tip", () => {
     // (a wedge cut back to an H set close, as RDKit's ACS 1996 mode draws one: 1.4 long, 1.85 wide)
     const s = shapesOf(figure([filled([103.2, 93.9], [101.7, 93.22], [103.28, 92.25])]));
@@ -163,6 +193,28 @@ describe("a figure's shapes", () => {
     const b = narrowestBox([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 10.5, y: 9.5 }, { x: 0.5, y: -0.5 }]);
     expect(b.long).toBeCloseTo(Math.hypot(10, 10), 1);
     expect(b.short).toBeCloseTo(Math.hypot(0.5, 0.5), 1);
+  });
+});
+
+describe("a table beside a structure", () => {
+  // (a ring of six, and a table of three rows and three columns, its cells a bond high, a dash in one)
+  const ring: P[] = Array.from({ length: 6 }, (_, i) => [30 + L * Math.cos((Math.PI / 3) * i + Math.PI / 6), 30 + L * Math.sin((Math.PI / 3) * i + Math.PI / 6)]);
+  const hexagon = ring.map((p, i) => stroke(p, ring[(i + 1) % 6]));
+  const grid: FigurePath[] = [];
+  for (let r = 0; r <= 3; r++) for (let c = 0; c < 3; c++) grid.push(stroke([100 + c * 2 * L, 10 + r * L], [100 + (c + 1) * 2 * L, 10 + r * L]));
+  for (let c = 0; c <= 3; c++) for (let r = 0; r < 3; r++) grid.push(stroke([100 + c * 2 * L, 10 + r * L], [100 + c * 2 * L, 10 + (r + 1) * L]));
+  const dash = stroke([100 + 0.8 * L, 10 + 1.5 * L], [100 + 1.2 * L, 10 + 1.5 * L]);
+
+  it("reads the structure and not the table: its lines are no bonds", () => {
+    const s = read(figure([...hexagon, ...grid, dash]));
+    expect(s.atoms).toHaveLength(6);
+    expect(s.bonds).toHaveLength(6);
+  });
+
+  it("still reads a cross of lines with no cells", () => {
+    // (a chain drawn upright, a line across it at each of two atoms - as a Fischer projection is drawn)
+    const cross = [stroke([50, 0], [50, L]), stroke([50, L], [50, 2 * L]), stroke([50, 2 * L], [50, 3 * L]), stroke([50 - L, L], [50, L]), stroke([50, L], [50 + L, L]), stroke([50 - L, 2 * L], [50, 2 * L]), stroke([50, 2 * L], [50 + L, 2 * L])];
+    expect(read(figure(cross)).atoms).toHaveLength(8);
   });
 });
 

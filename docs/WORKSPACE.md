@@ -427,6 +427,14 @@ Taken on 2026-10-07:
   - since 2026-10-09 it lies over the canvas's right side, the view
     following it, and the PDFs read there are named among its texts
     (docs/PDF.md, step 2).
+  - **it fills the workspace** (the maintainer, 2026-10-17): *Fill the
+    workspace*, the column's button beside *Hide texts*, or Ctrl/Cmd+Shift+F,
+    has the PDF or text it shows cover the whole canvas, easing out to it as
+    the column opens - the tabs and the column's header kept; *Back beside
+    the canvas* (the same button, or the key again, or Esc once Find is
+    closed) eases it back to the width it had. It is the tab's while it is
+    open, not saved; hiding the column ends it, and another PDF or text
+    shown in it keeps it.
   The small previews on the page, decided on 2026-10-04, are made: each
   text has a sheet on the page with its first lines and its name under it,
   coming as an icon (docs/PDF.md, *A text*).

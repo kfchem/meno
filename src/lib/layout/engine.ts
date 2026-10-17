@@ -435,35 +435,76 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // H's of labels and the letters of names, last: by turning a sugar
     // over on its link, and by moving bonds a little - an H on a label
     // counting then as much as a label on a label)
-    const score = kept(scorer(mol, piece, depth, measured, 0, false));
-    const scoreH = kept(scorer(mol, piece, depth, measured, 1));
-    const scoreFan = kept(scorer(mol, piece, depth, measured, 1, undefined, true));
-    // (and a label on a bare vertex given room with them - an acid's O on
-    // the corner of a ring - but not counted in turning a sugar to its face)
-    const scoreRoom = kept(scorer(mol, piece, depth, measured, 1, undefined, undefined, 1, LABEL_ROOM));
     const here = new Set(piece);
     const flipsHere = flips.filter(([a]) => here.has(a));
     const swapsHere = swaps.filter(([a]) => here.has(a));
-    const tried = framesFor(mol, piece).map((frame) => {
-      const { L, H } = setUp(frame);
-      const pos = grow(mol, piece, L, frame, sides, H, upright);
-      return { pos, score: score(pos), mirrored: frame.mirrored };
-    }).sort(bestFirst(mol, piece));
-    let best = tried[0];
+    // the measures, as the drawing has its depth - with blades turned as
+    // a propeller's (below), as it has them too
+    const measuresFor = (lift: Map<number, number> | null): Measures => {
+      const d = lift ? [...depth] : depth;
+      const q = lift ? [...measured] : measured;
+      for (const [v, l] of lift ?? []) {
+        d[v] = l;
+        q[v] = true;
+      }
+      return {
+        score: kept(scorer(mol, piece, d, q, 0, false)),
+        scoreH: kept(scorer(mol, piece, d, q, 1)),
+        scoreFan: kept(scorer(mol, piece, d, q, 1, undefined, true)),
+        scoreRoom: kept(scorer(mol, piece, d, q, 1, undefined, undefined, 1, LABEL_ROOM)),
+        lift,
+      };
+    };
+    const flat = measuresFor(null);
+    // (aryl rings crowded round an atom - PPh3's round a metal - drawn
+    // from the start turned as a propeller's blades, at each angle, as
+    // well as flat: grown flat, four PPh3 round a metal lie phenyl on
+    // phenyl, and what sets them right then goes by hairs)
+    const hubs = bladeHubs(mol, piece);
+    const tried = framesFor(mol, piece)
+      .flatMap((frame) => {
+        const { L, H } = setUp(frame);
+        const pos = grow(mol, piece, L, frame, sides, H, upright);
+        const out = [{ pos, m: flat, start: 0, mirrored: frame.mirrored }];
+        // (where the blades grown flat are crowded: on a bond, crossing
+        // one, on an atom - as at the end, below)
+        const crowded = hubs.length ? clashing(mol, piece, pos) : new Set<number>();
+        if (hubs.some((hub) => hub.rings.some((c) => sideAtoms(mol, hub.x, c).some((v) => crowded.has(v))))) {
+          PROPELLER.forEach((phi, k) => {
+            const trial = new Map(pos);
+            const lift = new Map<number, number>();
+            for (const hub of hubs) turnBlades(mol, hub, phi, trial, lift);
+            out.push({ pos: trial, m: measuresFor(lift), start: k + 1, mirrored: frame.mirrored });
+          });
+        }
+        return out;
+      })
+      .map((c) => ({ ...c, score: c.m.score(c.pos) }))
+      .sort(bestFirst(mol, piece));
+    let best: { pos: Grown; score: number; m: Measures; mirrored: boolean; drafted?: Grown };
+    // (each start - flat, turned at each angle - carried through the steps
+    // below on its own, its best few at each: a start that grows a little
+    // worse can be set right to a better drawing)
+    const starts = [...new Set(tried.map((c) => c.start))];
+    const ofEach = <T extends { start: number }>(list: T[], n: number) => starts.flatMap((start) => list.filter((c) => c.start === start).slice(0, n));
     // every frame tried the other way where it helps, for a small piece;
-    // the most promising few for a large one
-    const worth = piece.length <= 80 ? tried.length : 4;
-    const improved = tried
-      .slice(0, worth)
+    // the most promising few for a large one - shared among the starts
+    // (as many in all as there are frames, the best few of each)
+    const worth = piece.length <= 80 ? Math.max(FINALISTS, Math.ceil(framesFor(mol, piece).length / starts.length)) : 4;
+    const improved = ofEach(tried, worth)
       .map((cand) => ({
-        ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, false, swapsHere),
+        ...improve(mol, cand.pos, cand.score, flipsHere, sides, cand.m.score, false, swapsHere),
+        m: cand.m,
+        start: cand.start,
         mirrored: cand.mirrored,
       }))
       .sort(bestFirst(mol, piece));
     // and the best few set right within their small sides - every one, for
     // a small piece
-    const deeper = improved.slice(0, piece.length <= 40 ? improved.length : 3).map((cand) => ({
-      ...improve(mol, cand.pos, cand.score, flipsHere, sides, score, true, swapsHere),
+    const deeper = ofEach(improved, piece.length <= 40 ? improved.length : 3).map((cand) => ({
+      ...improve(mol, cand.pos, cand.score, flipsHere, sides, cand.m.score, true, swapsHere),
+      m: cand.m,
+      start: cand.start,
       mirrored: cand.mirrored,
     }));
     // and the best few of those - with the best drawing grown - each
@@ -473,42 +514,82 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // to drawings that are not. (The best alone, for a piece of more than
     // eighty atoms, as above: setting right is most of the time a large
     // piece takes - Stryker's reagent's 126 atoms, its three best drawings
-    // one drawing turned)
-    const pool = deeper.some((d) => d.score <= best.score + 1e-9) ? deeper : [best, ...deeper];
-    const finalists = pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? FINALISTS : 1);
-    best = finalists
+    // one drawing turned; and of each start its best alone, where the
+    // blades are tried turned too)
+    const finalists = starts.flatMap((start) => {
+      const grown = tried.find((c) => c.start === start)!;
+      const own = deeper.filter((c) => c.start === start);
+      const pool = own.some((d) => d.score <= grown.score + 1e-9) ? own : [grown, ...own];
+      return pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? Math.max(1, Math.floor(FINALISTS / starts.length)) : 1);
+    });
+    const set = finalists
       .map((cand) => {
-        const joined = rejoin(mol, piece, cand.pos, cand.score, score, fixed);
-        return { ...untangle(mol, piece, joined.pos, joined.score, score, fixed), mirrored: cand.mirrored };
+        const joined = rejoin(mol, piece, cand.pos, cand.score, cand.m.score, fixed);
+        return { ...untangle(mol, piece, joined.pos, joined.score, cand.m.score, fixed), m: cand.m, start: cand.start, mirrored: cand.mirrored };
       })
-      .sort(bestFirst(mol, piece))[0];
-    best = { ...faceSugars(mol, piece, best.pos, scoreH(best.pos), scoreH, sides), mirrored: best.mirrored };
-    // (the drawing as it stands before room is made for labels: what sets
-    // it square, below - a label's bond turned to clear another's ink does
-    // not turn the whole)
-    const drafted = best.pos;
-    // (a stereocentre of a solid that the drawing shows for sure, read
-    // with its depth, keeps showing it: tetrodotoxin's, none wedged - each
-    // cage's depth, in a mirrored frame, as seen from its other side)
-    const seen = [...depth];
-    if (best.mirrored) {
-      for (const [i, view] of others) if (piece.includes(mol.systems[i].atoms[0])) view.depth.forEach((z, a) => (seen[a] = z));
-    }
-    const shows = (p: Grown, c: number) => {
-      const x = new Array<number>(mol.n).fill(0);
-      const y = new Array<number>(mol.n).fill(0);
-      for (const [a, q] of p) [x[a], y[a]] = [q.x, q.y];
-      const groups = groupDepths(mol, seen, solid);
-      const d = seen.map((z, a) => z ?? groups.get(a) ?? null);
-      // (read as the drawing is read at the end: with every centre of the solid)
-      const own = mol.systems[mol.systemOf[c]].atoms.filter((a) => solid[a] && input.atoms[a].tetra);
-      return !byAHair(input, mol, x, y, d, own, groups, [c]).has(c);
+      .sort(bestFirst(mol, piece));
+    // (each set right to the end - its sugars faced, room made for its
+    // H's and names, its fans settled)
+    const finish = (cand: (typeof set)[number]) => {
+      const { scoreH, scoreFan, scoreRoom } = cand.m;
+      const faced = { ...faceSugars(mol, piece, cand.pos, scoreH(cand.pos), scoreH, sides), m: cand.m, mirrored: cand.mirrored };
+      // (the drawing as it stands before room is made for labels: what sets
+      // it square, below - a label's bond turned to clear another's ink does
+      // not turn the whole)
+      const drafted = faced.pos;
+      // (a stereocentre of a solid that the drawing shows for sure, read
+      // with its depth, keeps showing it: tetrodotoxin's, none wedged - each
+      // cage's depth, in a mirrored frame, as seen from its other side)
+      const seen = [...depth];
+      if (cand.mirrored) {
+        for (const [i, view] of others) if (piece.includes(mol.systems[i].atoms[0])) view.depth.forEach((z, a) => (seen[a] = z));
+      }
+      const shows = (p: Grown, c: number) => {
+        const x = new Array<number>(mol.n).fill(0);
+        const y = new Array<number>(mol.n).fill(0);
+        for (const [a, q] of p) [x[a], y[a]] = [q.x, q.y];
+        const groups = groupDepths(mol, seen, solid);
+        const d = seen.map((z, a) => z ?? groups.get(a) ?? null);
+        // (read as the drawing is read at the end: with every centre of the solid)
+        const own = mol.systems[mol.systemOf[c]].atoms.filter((a) => solid[a] && input.atoms[a].tetra);
+        return !byAHair(input, mol, x, y, d, own, groups, [c]).has(c);
+      };
+      // (and a label on a bare vertex given room with the H's - an acid's O
+      // on the corner of a ring - but not counted in turning a sugar to its face)
+      const roomy = roomForHydrogens(mol, piece, faced.pos, scoreRoom(faced.pos), scoreRoom, fixed, (c) => solid[c] && mol.tetra.has(c), shows).pos;
+      // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
+      const settled = settleFans(mol, piece, roomy, scoreFan(roomy), scoreFan, fixed).pos;
+      return { pos: settled, score: scoreH(settled), m: faced.m, mirrored: faced.mirrored, drafted };
     };
-    const roomy = roomForHydrogens(mol, piece, best.pos, scoreRoom(best.pos), scoreRoom, fixed, (c) => solid[c] && mol.tetra.has(c), shows).pos;
-    best = { pos: roomy, score: scoreH(roomy), mirrored: best.mirrored };
-    // (a tert-butyl or a CF3 settled last, its bonds kept clear of an H's ink)
-    const settled = settleFans(mol, piece, best.pos, scoreFan(best.pos), scoreFan, fixed).pos;
-    best = { pos: settled, score: scoreH(settled), mirrored: best.mirrored };
+    // Drawings that read as well as each other here - phorbol's skeleton
+    // turned end for end - can still read otherwise once their wedges are
+    // put on: an H drawn on a centre may have a clear place in one and
+    // none in the other, and the wedge go on a ring bond instead. Of
+    // those, the one that reads best with its stereochemistry drawn as it
+    // will be; still alike, the first.
+    const tied = set.filter((c) => c.score <= set[0].score + 1e-9);
+    const centres = piece.filter((a) => mol.tetra.has(a) && !solid[a]);
+    if (tied.length > 1 && centres.length) {
+      const finished = tied.map(finish);
+      const drawn = finished.map((c) => {
+        // (as it will be set on the page: squared up)
+        const pos = new Map(c.pos);
+        if (!fixed(piece) && !c.m.lift) squareUp(mol, piece, pos, c.drafted);
+        return stereoScore(mol, piece, pos, c.m.lift, depth, measured, centres);
+      });
+      const k = drawn.reduce((b, v, i) => (v < drawn[b] - 1e-9 ? i : b), 0);
+      best = finished[k];
+    } else best = finish(set[0]);
+    const { lift } = best.m;
+    const drafted = best.drafted ?? best.pos;
+    // (the blades it was drawn with turned: their depth, and so drawn)
+    if (lift) {
+      for (const [v, l] of lift) {
+        depth[v] = l;
+        measured[v] = true;
+      }
+      for (const hub of hubs) turned.push(...hub.rings.map((c) => sideAtoms(mol, hub.x, c)));
+    }
     // a cage in a mirrored frame is the one seen from its other side
     if (best.mirrored) {
       for (const [i, view] of others) {
@@ -1555,24 +1636,8 @@ function propellers(
 ): void {
   let crowded = clashing(mol, piece, pos);
   if (!crowded.size) return;
-  const faceOn = new Set(mol.eta.flatMap((e) => e.atoms));
-  const hubs = piece
-    .map((x) => {
-      // a ring hangs from x by a single bond where nothing else joins it to x's side
-      // (an aryl ring - six atoms, three double bonds - hanging by a single bond, nothing else joining it to x)
-      const rings = mol.neighbours[x].filter((c) => {
-        const s = mol.systemOf[c];
-        if (s < 0 || s === mol.systemOf[x] || faceOn.has(c) || orderOf(mol, x, c) !== 1) return false;
-        if (!mol.ringsOf[c].some((r) => isAryl(mol, mol.rings[r]))) return false;
-        // (a blade hangs from x, it is not what x hangs from: BINAP's
-        // naphthalene, beyond its P, is the rest of the molecule)
-        const side = sideAtoms(mol, x, c);
-        if (side.length * 2 >= piece.length) return false;
-        return !side.some((v) => v !== c && mol.neighbours[x].includes(v));
-      });
-      return { x, rings };
-    })
-    .filter((h) => h.rings.length >= 2 && !faceOn.has(h.x));
+  // (not a hub whose blades were turned already, as the piece was drawn)
+  const hubs = bladeHubs(mol, piece).filter((h) => !h.rings.some((c) => turned.some((side) => side.includes(c))));
   // (every crowded hub tried at every angle from the drawing as it stands,
   // and the best taken, a round at a time (`bestMove`) - not the first that
   // helps, which would go by the order the atoms come in)
@@ -1589,23 +1654,10 @@ function propellers(
       const { x, rings } = hubs[k];
       const sides = rings.map((c) => sideAtoms(mol, x, c));
       if (!sides.some((side) => side.some((v) => crowded.has(v)))) continue;
-      const at = pos.get(x)!;
       PROPELLER.forEach((phi, step) => {
         const trial = new Map(pos);
         const lift = new Map<number, number>();
-        sides.forEach((side, j) => {
-          const u = sub(pos.get(rings[j])!, at);
-          const len = Math.hypot(u.x, u.y) || 1;
-          const ux = u.x / len;
-          const uy = u.y / len;
-          for (const v of side) {
-            const p = sub(pos.get(v)!, at);
-            const along = p.x * ux + p.y * uy;
-            const across = -p.x * uy + p.y * ux;
-            trial.set(v, { x: at.x + along * ux - across * Math.cos(phi) * uy, y: at.y + along * uy + across * Math.cos(phi) * ux });
-            lift.set(v, across * Math.sin(phi));
-          }
-        });
+        turnBlades(mol, hubs[k], phi, trial, lift);
         const d = [...seen];
         const q = [...persp];
         for (const [v, l] of lift) {
@@ -1636,6 +1688,126 @@ function propellers(
     if (!crowded.size) return;
   }
 }
+
+/**
+ * The atoms with aryl rings hanging from them that can be turned as a
+ * propeller's blades: two or more, each by a single bond, nothing else
+ * joining it to the atom's side, and each less than half the piece (PPh3's
+ * phenyls on its P; not BINAP's naphthalene, the rest of the molecule
+ * beyond its P). By structure alone.
+ */
+function bladeHubs(mol: Molecule, piece: number[]): { x: number; rings: number[] }[] {
+  const faceOn = new Set(mol.eta.flatMap((e) => e.atoms));
+  return piece
+    .map((x) => {
+      const rings = mol.neighbours[x].filter((c) => {
+        const s = mol.systemOf[c];
+        if (s < 0 || s === mol.systemOf[x] || faceOn.has(c) || orderOf(mol, x, c) !== 1) return false;
+        if (!mol.ringsOf[c].some((r) => isAryl(mol, mol.rings[r]))) return false;
+        const side = sideAtoms(mol, x, c);
+        if (side.length * 2 >= piece.length) return false;
+        return !side.some((v) => v !== c && mol.neighbours[x].includes(v));
+      });
+      return { x, rings };
+    })
+    .filter((h) => h.rings.length >= 2 && !faceOn.has(h.x));
+}
+
+/**
+ * A hub's blades turned on their bonds out of the page by `phi`, all the
+ * same way round, as `pos` has them: written into `trial`, and how far
+ * each atom turned stands out of the page into `lift`.
+ */
+function turnBlades(mol: Molecule, hub: { x: number; rings: number[] }, phi: number, trial: Grown, lift: Map<number, number>): void {
+  const at = trial.get(hub.x)!;
+  for (const c of hub.rings) {
+    const side = sideAtoms(mol, hub.x, c);
+    const u = sub(trial.get(c)!, at);
+    const len = Math.hypot(u.x, u.y) || 1;
+    const ux = u.x / len;
+    const uy = u.y / len;
+    for (const v of side) {
+      const p = sub(trial.get(v)!, at);
+      const along = p.x * ux + p.y * uy;
+      const across = -p.x * uy + p.y * ux;
+      trial.set(v, { x: at.x + along * ux - across * Math.cos(phi) * uy, y: at.y + along * uy + across * Math.cos(phi) * ux });
+      lift.set(v, across * Math.sin(phi));
+    }
+  }
+}
+
+/**
+ * How a piece reads with its stereochemistry drawn as `placeStereo` puts
+ * it - the H's it draws as atoms, its wedges - by the benchmark's measure,
+ * room made for H's (as `scorer`'s with `hydrogenRoom` 1). For choosing
+ * between drawings alike without it.
+ */
+function stereoScore(
+  mol: Molecule,
+  piece: number[],
+  pos: Grown,
+  lift: Map<number, number> | null,
+  depth: readonly (number | null)[],
+  solid: readonly boolean[],
+  centres: readonly number[],
+): number {
+  const index = new Map(piece.map((a, i) => [a, i]));
+  const stereo = placeStereo(mol, new Map(piece.map((a) => [a, pos.get(a)!])), new Map(centres.map((c) => [c, mol.tetra.get(c)!])));
+  const x = piece.map((a) => pos.get(a)!.x);
+  const y = piece.map((a) => pos.get(a)!.y);
+  const edges: [number, number][] = [];
+  const orders: number[] = [];
+  for (const [k, i] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (!index.has(a)) continue;
+    edges.push([index.get(a)!, index.get(b)!]);
+    orders.push(mol.bonds[i].order);
+  }
+  const elements = piece.map((a) => mol.el[a]);
+  const hydrogens = piece.map((a) => mol.hs[a]);
+  const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
+  const perspective = piece.map((a) => solid[a] || lift?.has(a) || false);
+  const depths = piece.map((a) => lift?.get(a) ?? depth[a] ?? null);
+  const drawnH = new Map<number, number>();
+  for (const h of stereo.hydrogens) {
+    const on = index.get(h.on)!;
+    x.push(h.at.x);
+    y.push(h.at.y);
+    elements.push("H");
+    hydrogens.push(0);
+    labelled.push(true);
+    perspective.push(false);
+    depths.push(null);
+    edges.push([on, x.length - 1]);
+    orders.push(1);
+    hydrogens[on] = Math.max(0, hydrogens[on] - 1);
+    drawnH.set(on, x.length - 1);
+  }
+  const wedged = stereo.wedges.flatMap((w) => {
+    const from = index.get(w.from)!;
+    const to = w.to === -1 ? drawnH.get(from) : index.get(w.to);
+    const e = edges.findIndex(([a, b]) => (a === from && b === to) || (b === from && a === to));
+    return e >= 0 ? [e] : [];
+  });
+  const tetra = [
+    ...piece.map((a) => {
+      const t = mol.tetra.get(a);
+      return t && { neighbours: t.neighbours.map((b) => (b < 0 ? -1 : index.get(b)!)), volume: t.volume };
+    }),
+    ...stereo.hydrogens.map(() => undefined),
+  ];
+  return layoutMetrics({ x, y, edges, orders, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
+}
+
+/** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
+type Measures = {
+  score: (pos: Grown) => number;
+  scoreH: (pos: Grown) => number;
+  scoreFan: (pos: Grown) => number;
+  /** As scoreH, with a label on a bare vertex counted too (`roomForHydrogens`). */
+  scoreRoom: (pos: Grown) => number;
+  lift: Map<number, number> | null;
+};
 
 /** How many of a piece's best drawings are each rejoined and untangled, the best of them kept (of a piece of up to eighty atoms). */
 const FINALISTS = 3;

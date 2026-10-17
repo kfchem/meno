@@ -122,6 +122,9 @@ const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 const RADICAL_CODE = { singlet: 1, doublet: 2, triplet: 3 } as const;
 
 const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
+/** The elements that form no bonds: one drawn with a bond stands for something else - Ar for an aryl group. */
+const NO_BONDS = new Set(["He", "Ne", "Ar"]);
+
 /** The atom types "CTfile Formats" reserves: written as they are. */
 const RESERVED = new Set(["A", "Q", "X", "M", "R", "*", "LP", "R#", "L"]);
 
@@ -144,9 +147,11 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   let nextId = Math.max(0, greatest(model.atoms.map((a) => a.id))) + 1;
   const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const a of model.atoms) {
-    // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds)
-    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev) || RESERVED.has(a.el) || a.list) continue;
     const touching = bonds.filter((b) => b.a === a.id || b.b === a.id);
+    // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds; an element that forms no bonds drawn
+    // with one - Ar, an aryl group's symbol as well as argon's (IUPAC GR-9.2) - is no element: its label, as any other)
+    const bondless = NO_BONDS.has(a.el) && touching.length > 0;
+    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
     const structure: AbbreviationStructure | null =
       a.abbrev ??

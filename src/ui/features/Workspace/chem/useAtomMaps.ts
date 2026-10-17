@@ -3,6 +3,7 @@ import type { Molecule } from "../../../../lib/chem/molecule";
 import { valuesOf } from "../../../../lib/options";
 import { roleOptionsRole } from "../../../../lib/plugins/roles";
 import { chemWorker, rolePlugin } from "../../../../lib/roles/worker";
+import { stopWorker } from "../../../../lib/plugins/process";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { useNotices } from "../../../notices";
 import type { EditorState, Model } from "../store/types";
@@ -82,9 +83,14 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
       const ids = [...reactants.flat(), ...products.flat()];
       const drawnAs = signatureOf(model, ids);
       setMapping({ arrowId, phase: "3d", since: Date.now(), searches: 0 });
-      // (stopped while its structures are made in 3D: nothing goes on once they are)
+      // (stopped while its structures are made in 3D: the worker making them stopped - started afresh when next
+      // asked - and nothing goes on)
       let stopped = false;
-      stopRef.current = () => (stopped = true);
+      const plugin = rolePlugin("conformers");
+      stopRef.current = () => {
+        stopped = true;
+        if (plugin) void stopWorker(plugin.id, `${plugin.name} was stopped while it made a reaction's 3D structures`);
+      };
       try {
         const rs = await sideOf(model, reactants);
         const ps = await sideOf(model, products);
@@ -113,7 +119,7 @@ export function useAtomMaps(store: Store, setChemError: (e: string | null) => vo
             text: "Not every atom of the reaction has its counterpart on the other side, so the map is incomplete and shows no numbers.",
           });
       } catch (e: unknown) {
-        if (!(e instanceof MappingStopped)) setChemError(`No atom map could be made: ${e instanceof Error ? e.message : String(e)}`);
+        if (!(e instanceof MappingStopped) && !stopped) setChemError(`No atom map could be made: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         stopRef.current = null;
         setMapping(null);

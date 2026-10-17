@@ -493,7 +493,13 @@ fills.
   (`lib/plugins/queue.ts`). A request asked after another that is still
   within its own time stops nothing: the worker is busy with the one
   before it, such as a picture plugin loading its model for its first
-  picture, which has five minutes. What else was waiting on the stopped
+  picture, which has five minutes. A picture after that, the model loaded,
+  has a minute and a half: one is read in seconds, the slowest in about
+  half a minute, and one that takes longer is not going to end. The part
+  that asked says *Reading the picture took too long, so nothing was read
+  from it*, and the next picture starts the worker afresh, with the five
+  minutes again for its model (`readByPlugin` in
+  `ui/features/Workspace/utils/figures.ts`). What else was waiting on the stopped
   worker fails with *... was started again: it did not finish what it was
   asked before in time*, which the part that asked shows as its own error
   (the formula banner, a file's reading, a step's log).
@@ -712,9 +718,13 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   of file, who reads it, who else adds to it, and who writes it. Meno's
   own parts show there as "Meno".
 - **The other roles are chosen where they are used:**
-  - in *Chemistry*, who parses SMILES, checks a structure and assigns R/S;
-  - in *Molecules in 3D*, who makes a structure in 3D and its conformers,
-    and by what method;
+  - in *Chemistry* - what is done on a structure drawn, at once, and who
+    does it (the maintainer, 2026-10-17) - who parses SMILES, checks a
+    structure and assigns R/S, and, on a card of their own, *Molecules in
+    3D*, who makes a structure in 3D and its conformers, and by what
+    method, its stereoisomers, a formula drawn from it, and its renders.
+    (*Molecules in 3D* itself is how they look and turn; a workflow step's
+    defaults are in *Calculations*);
   - in a workflow step, who runs it, defaulting to the choice in Settings.
 - **A choice taken away gives way** (the maintainer, 2026-10-12): when the
   plugin chosen for a role is taken away and another plugin that fills it

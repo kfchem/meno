@@ -17,6 +17,13 @@
  *   (2026-10-10) - and stays as it is; so does a hyphen next to a letter
  *   (4-Å MS, Pd-118, 1,2-dichloroethane).
  *
+ * - **Commas:** a comma typed straight before a word gets a space after it,
+ *   once that word has ended: Pd(OAc)2,PPh3 → Pd(OAc)2, PPh3; rt,12 h →
+ *   rt, 12 h. Not where the comma is part of a name, joining two locants -
+ *   numbers, a number and a letter, a capital letter alone, each maybe
+ *   primed: 1,2-DCE, 2,2,6,6-tetramethyl, 1',2', 4a,8a, N,N-DMF, N,O-bis,
+ *   (R,R), (E,Z), (1R,2S) - nor between two numbers, 1,000. Never a second
+ *   space: one already there stays one.
  * - **Bullets:** a hyphen or a star typed at a line's start - after any tabs
  *   - and then a space begins a list's item: "- " → "• " (docs/
  *   EDITOR-2D.md, *Text*).
@@ -46,6 +53,11 @@ const CELSIUS = new RegExp(String.raw`(^|[^\p{L}\p{N}.,])(${NUM})(?:([\-\u2013])
  */
 const RANGE = new RegExp(String.raw`(^|[^\p{L}\p{N}.,'\u2032\-\u2212\u2013])(${NUM})(-)(${UPPER})[.,;:]?$`, "u");
 
+/** A word ended straight after a comma, and the word - with its primes, and a degree sign, °C's - before the comma. */
+const COMMA = /([\p{L}\p{N}'\u2032\u2033\u00b0]*),([\p{L}\p{N}]+)$/u;
+/** A locant, as a name joins them with commas: digits maybe with a letter (1, 12, 4a, 1R), or a capital letter alone (N, O, R, E), maybe primed. */
+const LOCANT = /^(?:\d+\p{L}?|\p{Lu})['\u2032\u2033]*$/u;
+
 /** What ends a word with °C in it: anything but a letter or a digit. */
 const WORDLY = /[\p{L}\p{N}]/u;
 /** What ends a word with a range in it: anything that could not go on with its number either. */
@@ -62,6 +74,15 @@ const isDigit = (ch: string | undefined) => !!ch && ch >= "0" && ch <= "9";
 export function wordEnded(text: string, at: number): Change[] {
   const next = text[at];
   const before = text.slice(0, at);
+  // (a comma straight before the word: a space after it - but not between two locants, a name's - and the word then read as
+  // it ends after that space: 80dc after a comma is 80 °C)
+  const c = COMMA.exec(before);
+  if (c && !(LOCANT.test(c[1]) && LOCANT.test(c[2]))) {
+    const comma = c.index + c[1].length;
+    const spaced = `${text.slice(0, comma + 1)} ${text.slice(comma + 1)}`;
+    const rest = wordEnded(spaced, at + 1).map((x) => ({ ...x, from: x.from > comma + 1 ? x.from - 1 : x.from, to: x.to > comma + 1 ? x.to - 1 : x.to }));
+    return [{ from: comma + 1, to: comma + 1, insert: " " }, ...rest];
+  }
   if (next === undefined || !WORDLY.test(next)) {
     const m = CELSIUS.exec(before);
     if (m) {

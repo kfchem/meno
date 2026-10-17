@@ -113,6 +113,10 @@ export default function ChemistrySettings() {
         )}
       </div>
       <RoleChoices where="chemistry" />
+      {/* (who makes molecules in 3D: done on a structure drawn, at once, as the rest here) */}
+      <div className="mt-6">
+        <RoleChoices where="molecules3d" heading="Molecules in 3D" />
+      </div>
     </div>
   );
 }
