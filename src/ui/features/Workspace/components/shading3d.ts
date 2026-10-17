@@ -54,14 +54,6 @@ function openTerms(n: number): Float32Array {
 }
 
 /**
- * A molecule in 3D shaded as it stands (docs/WORKSPACE.md, *Depth*): its
- * hollows darker - the occlusion of the frame shown, in each of its two
- * looks, worked out off the main thread and gone over to as it comes, as
- * the frame or the look changes - and casting the key light's shadow, by
- * coarse balls and sticks that stand where its own do (utils/shadows3d).
- * Its atoms and bonds take shadows.
- */
-/**
  * Each look's bond lines for a frame's `places`, packed as the occlusion
  * worker takes them (seven numbers a line): what the sticks' shade is
  * worked out for, a line for each stick drawn - with its sticks to ring
@@ -73,6 +65,14 @@ export function shadedLines(m: Molecule3D, places: Float32Array, style: Style3D)
   return { primary: of("primary"), secondary: of("secondary") };
 }
 
+/**
+ * A molecule in 3D shaded as it stands (docs/WORKSPACE.md, *Depth*): its
+ * hollows darker - the occlusion of the frame shown, in each of its two
+ * looks, worked out off the main thread and gone over to as it comes, as
+ * the frame or the look changes - and casting the key light's shadow, by
+ * coarse balls and sticks that stand where its own do (utils/shadows3d).
+ * Its atoms and bonds take shadows.
+ */
 export function useShading3d(o: {
   turned: RefObject<THREE.Group>;
   atoms: RefObject<THREE.InstancedMesh>;
