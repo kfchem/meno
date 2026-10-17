@@ -102,14 +102,25 @@ text*).
 - **Left out**: a page's number set alone ("S12", "Page 3 of 40", "- 4 -")
   and a line of words set again and again (a running head, a journal's
   foot); from a PDF, besides, a line near a page's top or foot set there on
-  another page too, its numbers aside.
+  another page too, its numbers aside. And what only looks like atoms:
+  a crystal structure's table - fractions of its cell, on lines with a
+  value's uncertainty in brackets (`0.29323 (15)`) or a hydrogen's
+  displacement starred (`0.021*`); a table of positions numbered 1, 2, 3
+  with values beside them (an NMR table's shifts), atoms written by
+  atomic numbers that count up one by one as no molecule's do; and a lone
+  atom met among a text's words or another table's numbers (an elemental
+  analysis, a peak list with the page's number in it) - one atom is a
+  structure only where an energy, a charge and multiplicity, a count or a
+  table's heads before it say it is one.
 - **A structure's own**: its name, the line before its atoms nearest them
   that names something - not a note, a table's heads or numbers alone; its
   charge and multiplicity ("0 1", "0,1"); its count of atoms, said ("52
   atoms") or set alone as an XYZ file sets it; and its notes, lines of
   energies, frequencies or its method ("E = -1234.5678 Hartree", "SCF
   Done", "Imaginary frequencies: 1") - those written after a structure's
-  atoms and before the next's name are its.
+  atoms and before the next's name are its. A number set alone is its count
+  where it is as many as its atoms; otherwise, nearer its atoms than any
+  other name, its name - a compound's number set over its coordinates.
 - **Where one ends**: at words between atoms, and where numbered atoms
   begin again at 1, or a count set alone is followed by as many atoms. A
   page's number between two atoms is passed over, unless it counts the
@@ -119,11 +130,17 @@ text*).
   other's place.
 - **Bohr**: where the text says so ("bohr", "a.u.", "atomic units",
   "Units=Bohr"), the lengths are turned into ångströms (CODATA 2018), and
-  the card says so.
+  the card says so - but not where atomic units are said of an energy only
+  ("SCF energy (a.u.) = -154.98"): that says nothing of the lengths.
 - **Columns.** From a PDF, each word where it lies: line by line, a page's
   two columns one after the other, where the words either side of a gap in
   the page's middle half each make whole atoms on their lines - two at
-  least each side - so that a table's x, y and z set far apart stay one.
+  least each side - or one side's atoms stand beside the other's words (a
+  column of each structure's energies beside its atoms), so that a table's
+  x, y and z set far apart stay one. The gap is looked for between lines
+  of numbers only, and a line run on across it as a line runs - a heading
+  over both columns, a word set over the gap - is read whole where it
+  comes.
   Pasted text has no places: two atoms whole on a line are two columns read
   across, each a structure, an atom alone on its line (one column run on
   past the other) given to the one it bonds to as an atom can (no H bonded
