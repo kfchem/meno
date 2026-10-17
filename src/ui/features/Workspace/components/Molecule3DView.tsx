@@ -10,7 +10,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -37,6 +37,7 @@ import { typedValue } from "../utils/typedValue";
 import { raycastCylinders, raycastSpheres } from "./raycast3d";
 import { commitInstanceMatrices } from "./instances";
 import { named3d } from "../workflow/selectionSet";
+import MagnifiedMark from "./MagnifiedMark";
 
 /**
  * Drawn after everything on the page, and depth-tested: what stands off the
@@ -229,6 +230,8 @@ export type Molecule3DViewProps = {
   onSetMeasure?: (measure: number, value: number) => void;
   /** The typing let go of - Escape, or the field left. */
   onEditDone?: () => void;
+  /** Shown `k` times as large as it is (docs/WORKSPACE.md, *Magnified display*) - a drag's run of them in one `gesture`: from its mark, while it is shown magnified. */
+  onMagnify?: (k: number, gesture?: string) => void;
 };
 
 /**
@@ -291,6 +294,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // where the mark of hydrogens left out stands: over its highest atom, followed gently
   const markAnchor = useRef<THREE.Group>(null);
   const markAt = useRef<number | null>(null);
+  // where the mark of how large it is shown stands: at its top right, while it is shown magnified - and whether that mark is in use
+  const magAnchor = useRef<THREE.Group>(null);
+  const [magMarkActive, setMagMarkActive] = useState(false);
   const [hoverAtom, setHoverAtom] = useState<number | null>(null);
   const [hoverBond, setHoverBond] = useState<number | null>(null);
   // its chains as ribbons, where a look draws them so (utils/ribbon): the
@@ -322,6 +328,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const quaternion = useMemo(() => (turn ? new THREE.Quaternion(...turn) : new THREE.Quaternion()), [turn]);
   // how it is turned as drawn: following a drag at once, going over to a turn set afresh
   const shownTurn = useRef<THREE.Quaternion | null>(null);
+  // how large it is shown (docs/WORKSPACE.md, *Magnified display*): going over to a magnification set, not jumping
+  const magShown = useRef(magnifiedOf(m));
 
   // what is drawn now, on its way to what it is to be
   const target = solid.frames[frameOf(solid, frame)];
@@ -731,8 +739,19 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       oneLevel.current[l] = Math.abs(next - to) < 0.002 ? to : next;
       reshaped = moving = true;
     }
+    // (as large as it is shown, going over to it - every point of it so many times as far from its centre)
+    {
+      const to = magnifiedOf(m);
+      const at = magShown.current;
+      if (at !== to) {
+        const next = Math.exp(follow(Math.log(at), Math.log(to), step, LOOK_TAU));
+        magShown.current = Math.abs(Math.log(next / to)) < 1e-3 ? to : next;
+        reshaped = moving = true;
+      }
+    }
+    const mag = magShown.current;
     // (as high as it reaches - or where a turn of several put it)
-    const height = m.at.z ?? solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * fill.current;
+    const height = m.at.z ?? (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * fill.current) * mag;
     // where it stands: put back by an undo, it goes there rather than jumps
     const goal = new THREE.Vector3(m.at.x, m.at.y, height);
     const rise = props.rising;
@@ -790,6 +809,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       moving = true;
     }
     turned.current.quaternion.copy(shownTurn.current);
+    turned.current.scale.setScalar(mag);
     // coming into view from its centre, or going into it
     if (grown.current.v !== grown.current.to || grown.current.vel !== 0) {
       spring(grown.current, step);
@@ -911,7 +931,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       // a perspective one's - Settings' preview - as far off as the molecule stands)
       const pc = camera as THREE.PerspectiveCamera;
       const perPx = pc.isPerspectiveCamera ? (2 * Math.max(-centre, 1e-6) * Math.tan((pc.fov * Math.PI) / 360)) / Math.max(size.height, 1) : 1 / zoom;
-      const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x;
+      const reach = (solid.reach.primary + (solid.reach.secondary - solid.reach.primary) * ff) * placed.current.scale.x * magShown.current;
       const fades = [fadeOf(atomsMat.current, "atoms"), ...(bondsMat.current ? [fadeOf(bondsMat.current, "bonds")] : []), outlines.atoms.fade, outlines.bonds.fade, outlines.bent.fade];
       for (const u of fades) {
         u.fadeNear.value = centre + reach;
@@ -931,7 +951,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         if (lines.instanceMatrix !== of.instanceMatrix) lines.instanceMatrix = of.instanceMatrix;
         lines.count = of.count;
         // (in the molecule's units, as large as it is drawn now - never under the least pixels)
-        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x, perPx);
+        o.width.value = lineWidth(ll.width, WORLD_PER_ANGSTROM * placed.current.scale.x * magShown.current, perPx);
         o.material.color.set(P.outlineColor).lerp(colour.set(S.outlineColor), ff);
         o.material.opacity = seenBy;
       }
@@ -1066,7 +1086,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     // (as wide in pixels whatever the zoom - and, in perspective, however
     // high it stands)
     const eye = eyeOf(camera);
+    // (and, for what is drawn inside it, in its own units - as large as it is shown)
     const px = 1 / (camera.zoom * seenAt(0, 0, height, eye).k);
+    const pxIn = px / mag;
     // the outline
     const outPx = Math.max(outlineAt(level.current, OUTLINE_PX), SELECTED_PX * selLevel.current);
     const lightOn = outPx > 0.02 || holdShown;
@@ -1075,8 +1097,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     if (bentHull.current) bentHull.current.visible = lightOn && bondsShown;
     if (ribbonHull.current) ribbonHull.current.visible = lightOn && ribbonsShown;
     if (lightOn && (reshaped || relit || dirty.current || holdShown)) {
-      const w = outPx * px;
-      const wide = SELECTED_PX * px;
+      const w = outPx * pxIn;
+      const wide = SELECTED_PX * pxIn;
       placeAtoms(atomHull.current, p, radius, holdShown ? (i) => Math.max(w, wide * h[i]) : w);
       if (bondHull.current) {
         const all = lines ?? linesNow();
@@ -1117,7 +1139,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       if (mesh.visible) {
         const i = l.atom!;
         mesh.position.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
-        mesh.scale.setScalar(radius(i) + LINKED_PX * px * l.v);
+        mesh.scale.setScalar(radius(i) + LINKED_PX * pxIn * l.v);
       }
     }
     // the atoms a list's row is of, outlined as the drawing's atom is
@@ -1138,7 +1160,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         const mesh = markedHull.current;
         for (let i = 0; i < n; i++) {
           const v = marks.current.get(i)?.v ?? 0;
-          const r = v > 0.001 ? radius(i) + LINKED_PX * px * v : 0;
+          const r = v > 0.001 ? radius(i) + LINKED_PX * pxIn * v : 0;
           mtx.makeScale(r, r, r).setPosition(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
           mesh.setMatrixAt(i, mtx);
         }
@@ -1155,7 +1177,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       for (const i of card.atoms) if (i < n) at.add(new THREE.Vector3(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
       at.divideScalar(Math.max(1, card.atoms.length));
       const g = Math.max(grown.current.v, 1e-3);
-      const off = (card.atoms.length === 1 ? (radius(card.atoms[0]) * g) / px : 0) + CARD_OFF_PX;
+      const off = (card.atoms.length === 1 ? (radius(card.atoms[0]) * g) / pxIn : 0) + CARD_OFF_PX;
       const parent = a.parent;
       let x = off;
       if (parent) {
@@ -1172,7 +1194,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const mesh = chosenHull.current;
       for (let i = 0; i < n; i++) {
         const v = (rings.current.get(i)?.v ?? 0) * seenOf(i);
-        const r = v > 0.001 ? radius(i) + CHOSEN_PX * px * v : 0;
+        const r = v > 0.001 ? radius(i) + CHOSEN_PX * pxIn * v : 0;
         mtx.makeScale(r, r, r).setPosition(p[3 * i], p[3 * i + 1], p[3 * i + 2]);
         mesh.setMatrixAt(i, mtx);
       }
@@ -1188,7 +1210,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         const v = sleeves.current.get(i)?.v ?? 0;
         a.set(p[3 * bond.a1], p[3 * bond.a1 + 1], p[3 * bond.a1 + 2]);
         b.set(p[3 * bond.a2], p[3 * bond.a2 + 1], p[3 * bond.a2 + 2]);
-        placePiece(sleeveMesh, i, a, b, v > 0.001 ? bondReach(bond.order, bondR) + CHOSEN_PX * px * v : 0);
+        placePiece(sleeveMesh, i, a, b, v > 0.001 ? bondReach(bond.order, bondR) + CHOSEN_PX * pxIn * v : 0);
       });
       commitInstanceMatrices(sleeveMesh);
       sleeveMesh.visible = sleeves.current.size > 0 && bondsShown;
@@ -1284,10 +1306,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         parent.updateWorldMatrix(true, false);
         if (!balls) {
           balls = [];
-          for (let i = 0; i < n; i++) balls.push({ ...onScreen(parent, p[3 * i], p[3 * i + 1], p[3 * i + 2]), r: (radius(i) * g) / px });
+          for (let i = 0; i < n; i++) balls.push({ ...onScreen(parent, p[3 * i], p[3 * i + 1], p[3 * i + 2]), r: (radius(i) * g) / pxIn });
           if (bondsShown) {
             const shownBonds = fb ? drawn.bonds.filter((_, i) => there.current[i] > 0.5) : m.bonds;
-            for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (bondR * g) / px });
+            for (const b of shownBonds) if (balls[b.a1]?.r && balls[b.a2]?.r) sticks.push({ a: balls[b.a1], b: balls[b.a2], r: (bondR * g) / pxIn });
           }
           // (the measurements' values, where they are written now: placed above)
           placedLabels.push(...valuesPlaced);
@@ -1297,7 +1319,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         // (out past the ball - or the bond - as far as the drawing's style
         // sets its R and S off its atoms, of its labels' size; the letters'
         // box a capital's height, and a little for the halo)
-        const reach = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / px + (props.stereoFont.gap * font) / MARK_SCALE;
+        const reach = ((mark.atoms.length === 1 ? radius(mark.atoms[0]) : bondR) * g) / pxIn + (props.stereoFont.gap * font) / MARK_SCALE;
         const half = { x: font * (stereoTextEms(mark.text, props.stereoFont.parentheses) / 2 + 0.1), y: font * 0.45 };
         // (every atom near it but its own - a double bond's two among them)
         const own = mark.atoms.length === 1 ? mark.atoms[0] : -1;
@@ -1335,9 +1357,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       for (let i = 0; i < n; i++) {
         const r = reachOf(i);
         if (r <= 0) continue;
-        v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!);
+        v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!).multiplyScalar(mag);
         const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
-        high = Math.max(high, seen.y + r * seen.k);
+        high = Math.max(high, seen.y + r * mag * seen.k);
       }
       if (Number.isFinite(high)) {
         const above = high - at.y;
@@ -1345,6 +1367,23 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         if (Math.abs(markAt.current - above) > 1e-3) moving = true;
         markAnchor.current.position.set(0, markAt.current / g, -at.z / g);
       }
+    }
+    // the mark of how large it is shown: at its top right on the page
+    if (magAnchor.current) {
+      const g = Math.max(grown.current.v, 1e-3);
+      const at = shown.current;
+      const v = new THREE.Vector3();
+      let right = -Infinity;
+      let top = -Infinity;
+      for (let i = 0; i < n; i++) {
+        const r = reachOf(i);
+        if (r <= 0) continue;
+        v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!).multiplyScalar(mag);
+        const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
+        right = Math.max(right, seen.x + r * mag * seen.k);
+        top = Math.max(top, seen.y + r * mag * seen.k);
+      }
+      if (Number.isFinite(right)) magAnchor.current.position.set((right - at.x) / g, (top - at.y) / g, -at.z / g);
     }
     // its frames, beside it: just below it on the page
     if (pill.current) {
@@ -1357,9 +1396,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         // (an atom its look leaves out is not its lowest)
         const r = reachOf(i);
         if (r <= 0) continue;
-        v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!);
+        v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyQuaternion(shownTurn.current!).multiplyScalar(mag);
         const seen = seenAt(at.x + v.x, at.y + v.y, at.z + v.z, eye);
-        low = Math.min(low, seen.y - r * seen.k);
+        low = Math.min(low, seen.y - r * mag * seen.k);
       }
       const below = low - at.y;
       pillAt.current = pillAt.current == null || reshaped ? below : follow(pillAt.current, below, step, PILL_TAU);
@@ -1799,6 +1838,19 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           look - its frames' chip is below - at any zoom: not a chip that goes
           when the page's words are too small, and never too small or too
           large to read) */}
+      {/* (how large it is shown, while it is not at its true size - while it is hovered or selected, or its mark is in use) */}
+      {magnifiedOf(m) !== 1 && props.onMagnify && !props.rising && (
+        <group ref={magAnchor}>
+          <PageHtml zIndexRange={[35, 25]}>
+            <div
+              className="transition-opacity duration-150"
+              style={{ transform: "translate(4px, -100%)", opacity: lit || selected || magMarkActive ? 1 : 0, pointerEvents: lit || selected || magMarkActive ? "auto" : "none" }}
+            >
+              <MagnifiedMark k={magnifiedOf(m)} onSet={props.onMagnify} onActive={setMagMarkActive} />
+            </div>
+          </PageHtml>
+        </group>
+      )}
       {notesEver.length > 0 && !props.rising && (
         <group ref={markAnchor}>
           <PageHtml zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>

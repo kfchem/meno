@@ -6,7 +6,7 @@
  * their names, and the slides. What a slide is made round
  * (docs/PRESENTING.md).
  */
-import { labelSetOf, layoutMolecule, type Atom as LAtom, type Bond as LBond } from "../../../../lib/chem/layout2d";
+import { labelSetOf, type Atom as LAtom, type Bond as LBond } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
@@ -30,6 +30,7 @@ import { cornersOf } from "./selection";
 import { sheetRoom } from "./textSheets";
 import { selectionScheme } from "./selectionScheme";
 import { boxOf } from "../presenting/slides";
+import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 
 export type Box = { x0: number; y0: number; x1: number; y1: number };
 
@@ -61,7 +62,7 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
       st.model.bonds.filter((x) => index.has(x.a) && index.has(x.b)),
       index,
     );
-    const r = layoutMolecule(la, lb, opts, zoom).bounds;
+    const r = layoutByStructure(la, lb, opts, zoom, structureLayouts()).bounds;
     take(r.min.x, r.min.y, r.max.x, r.max.y);
   }
   // the arrows, "+" signs and words among them, and those selected for themselves

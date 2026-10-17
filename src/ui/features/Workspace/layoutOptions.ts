@@ -41,6 +41,8 @@ export function layoutAtomOf(a: Atom, at?: { x: number; y: number }): LAtom {
     // (its colour, and its highlight)
     ...(a.color ? { color: a.color } : {}),
     ...(a.highlight ? { highlight: a.highlight } : {}),
+    // (shown magnified: laid out in the style so many times over)
+    ...(a.magnified != null && a.magnified !== 1 ? { magnified: a.magnified } : {}),
   };
 }
 

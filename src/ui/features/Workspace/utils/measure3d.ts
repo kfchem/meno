@@ -7,7 +7,7 @@ import { measureLabelBox, type MeasureMark } from "../../../../lib/chem/layout2d
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { COLORS } from "../../../theme/colors";
 import type { Carried3D, Molecule3D } from "../store/types";
-import { frameOf, heightOf, labelSpot, lookOf, solidOf, WORLD_PER_ANGSTROM, type LabelBox } from "./molecule3d";
+import { frameOf, heightOf, labelSpot, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM, type LabelBox } from "./molecule3d";
 import { seenAt, type Eye } from "./page";
 
 /**
@@ -185,9 +185,12 @@ export function measurePictureMarks(m: Carried3D, style: Style3D, size: number, 
   const look = lookOf(molecule);
   const height = heightOf(m, solid, look);
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
+  // (as large as it is shown: docs/WORKSPACE.md, *Magnified display*)
+  const mag = magnifiedOf(m);
   const seenK = (v: THREE.Vector3) => {
-    const p = v.clone().applyQuaternion(q);
-    return seenAt(m.at.x + p.x, m.at.y + p.y, height + p.z, eye);
+    const p = v.clone().applyQuaternion(q).multiplyScalar(mag);
+    const at = seenAt(m.at.x + p.x, m.at.y + p.y, height + p.z, eye);
+    return { ...at, k: at.k * mag };
   };
   const seen = (v: THREE.Vector3) => {
     const at = seenK(v);

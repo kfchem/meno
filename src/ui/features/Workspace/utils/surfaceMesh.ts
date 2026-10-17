@@ -12,7 +12,7 @@ import { givenValue } from "../../../../lib/calc/asks";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import type { Carried3D, Molecule3D } from "../store/types";
 import type { Mesh, Vec3 } from "./isosurface";
-import { frameOf, heightOf, lookOf, solidOf } from "./molecule3d";
+import { frameOf, heightOf, lookOf, magnifiedOf, solidOf } from "./molecule3d";
 import { seenAt, type Eye } from "./page";
 import { surfaceNow } from "./surfaces";
 
@@ -123,6 +123,7 @@ export function pictureSurface(m: Carried3D, style: Style3D, eye?: Eye): { plus:
   const mesh = surfaceNow(shown.grid, frameCentre(m, frameOf(solid, m.frame)), shown.iso, shown.colour);
   const height = heightOf(m, solid, lookOf(m));
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
+  const mag = magnifiedOf(m);
   const p = new THREE.Vector3();
   const min = { x: Infinity, y: Infinity };
   const max = { x: -Infinity, y: -Infinity };
@@ -130,7 +131,7 @@ export function pictureSurface(m: Carried3D, style: Style3D, eye?: Eye): { plus:
     if (!part) continue;
     const xyz = part.positions;
     for (let i = 0; i + 2 < xyz.length; i += 3) {
-      p.set(xyz[i], xyz[i + 1], xyz[i + 2]).applyQuaternion(q);
+      p.set(xyz[i], xyz[i + 1], xyz[i + 2]).applyQuaternion(q).multiplyScalar(mag);
       const s = seenAt(m.at.x + p.x, m.at.y + p.y, height + p.z, eye);
       if (s.x < min.x) min.x = s.x;
       if (s.y < min.y) min.y = s.y;
