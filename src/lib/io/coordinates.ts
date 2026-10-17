@@ -114,12 +114,27 @@ const FRAGMENT = /\b(?:E|G|H|ZPE)(?:\s*\([^)]*\))?\s*=\s*[-+]?\d+\.\d+(?:\s*(?:h
 const STATED = /(\d+)\s*atoms\b|\batoms?\s*[:=]\s*(\d+)|number of atoms\s*[:=]?\s*(\d+)/i;
 const SAYS_BOHR = /\bbohrs?\b|\ba\.\s*u\.|\batomic units\b|units\s*=\s*(?:bohr|au)\b/i;
 const SAYS_ANGSTROM = /\u00e5|\u00e5ngstr\u00f6m|angstr[o\u00f6]m|\bunits\s*=\s*ang/i;
+/** What a line says the units of, besides an energy: the coordinates, the geometry, its lengths. */
+const OF_LENGTHS = /coordinat|geometr|position|distance|length|\bxyz\b/i;
+/**
+ * Whether a line says lengths are in bohr: bohr named, or atomic units -
+ * but not atomic units an energy is given in ("SCF energy (a.u.) =
+ * -154.98"), which say nothing of the lengths.
+ */
+const saysBohr = (l: string) => SAYS_BOHR.test(l) && !(NOTE.test(l) && !OF_LENGTHS.test(l));
+
+/** A value of a crystal structure's table: a number and its uncertainty in brackets, or a displacement starred. */
+const CRYSTAL = /\d\.\d+\s*\(\d{1,3}\)|(?:^|\s)\d*\.\d+\*(?:\s|$)/;
+
+/** A minus however printed - a true minus, a figure dash, a dash - before a number: made one. */
+const MINUS = /[\u2212\u2012\u2013\u2014\ufe63\uff0d](?=\s*[\d.])/g;
+const plainMinus = (t: string) => t.replace(MINUS, "-");
 
 /** The text's lines, a minus however printed made one, page marks and running heads and feet - lines set again and again, words only - left out. */
 function linesOf(text: string): string[] {
   const lines = text
     .replace(/\r\n?/g, "\n")
-    .replace(/[\u2212\u2012\u2013\u2014\ufe63\uff0d](?=\s*[\d.])/g, "-")
+    .replace(MINUS, "-")
     .replace(/\u00a0/g, " ")
     .split("\n")
     .map((l) => l.trim());
@@ -180,12 +195,15 @@ const nameOf = (l: string) =>
 export function readCoordinates(text: string): CoordinateStructure[] {
   const lines = linesOf(text);
   const ts = wordsOf(lines);
-  const bohrAll = SAYS_BOHR.test(text) && !SAYS_ANGSTROM.test(text);
-  // every atom written, in turn
+  const bohrAll = lines.some(saysBohr) && !SAYS_ANGSTROM.test(text);
+  // every atom written, in turn - but a crystal's, its place a fraction of its cell's edges: on a line with a value's
+  // uncertainty in brackets ("0.41270 (14)") or a displacement marked as a hydrogen's ("0.037*"), as a crystal structure's
+  // tables print them
   const recs: Rec[] = [];
   for (let i = 0; i < ts.length; ) {
     const r = recordAt(ts, i);
-    if (r) {
+    if (r && (CRYSTAL.test(lines[r.line] ?? "") || CRYSTAL.test(lines[r.end] ?? ""))) i = r.to;
+    else if (r) {
       const slot = recs.filter((q) => q.line === r.line).length;
       recs.push({ ...r, slot });
       i = r.to;
@@ -230,8 +248,17 @@ export function readCoordinates(text: string): CoordinateStructure[] {
       runs.splice(k--, 1);
     }
   }
-  // (a run of one atom written by its atomic number alone - a row of some other table's numbers - is none)
-  const kept = runs.filter((r) => r.recs.length > 1 || elementOfLabel(ts[r.recs[0].from].t) != null);
+  // (a run of one atom is a structure only where what comes before it says it is one - its energy, its charge and
+  // multiplicity, its count, a table's heads - not one met among some other table's numbers or a text's words, a crystal's
+  // atom with its uncertainties, a peak list's page number; nor one written by its atomic number alone)
+  const geometry = (r: Run) => r.before.some((l) => NOTE.test(l) || HEADING_ONLY.test(l) || STATED.test(l) || /^[+-]?\d+[\s,]+\d+$/.test(l));
+  // (nor a run of atoms written by atomic numbers that count up one by one - 1, 2, 3 - a table's positions with values beside
+  // them, an NMR table's shifts: no molecule's elements run so)
+  const counting = (r: Run) => {
+    const ns = r.recs.map((q) => (q.index == null ? ts[q.from].t : ""));
+    return ns.length >= 3 && ns.every((t, k) => /^\d+$/.test(t) && (k === 0 || Number(t) === Number(ns[k - 1]) + 1));
+  };
+  const kept = runs.filter((r) => !counting(r) && (r.recs.length > 1 || (elementOfLabel(ts[r.recs[0].from].t) != null && geometry(r))));
   const out: CoordinateStructure[] = [];
   kept.forEach((run, n) => {
     // (the words between two structures: the notes said after the first, then - from the first line that may name one - the next's)
@@ -259,16 +286,20 @@ function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: num
   // on the line before its atoms, where that may name it: "TS-1 E = -76.4 Hartree 0 1")
   const last = (said[said.length - 1] ?? "").replace(/(?:^|\s)[+-]?\d+[\s,]+\d+$/, "");
   const before = FRAGMENT.exec(last) ? last.slice(0, last.search(FRAGMENT)).trim() : "";
-  const named = [...said].reverse().find(naming) ?? (before && naming(before) ? before : undefined);
+  // (a number alone on its line is the count of its atoms, as an XYZ file sets it, where it is as many; else, nearer its atoms
+  // than any other name, its name - a compound's number, set alone over its coordinates)
+  const counts = (l: string) => /^\d+$/.test(l) && Number(l) === run.recs.length;
+  const nearest = [...said].reverse().find((l) => naming(l) || (/^\d+$/.test(l) && !counts(l)));
+  const named = nearest ?? (before && naming(before) ? before : undefined);
   // (a note on a line with more before it - the lines' ends made spaces, its name before it: its energies and frequencies alone)
   const notes = said.filter((l) => NOTE.test(l)).flatMap((l) => (l.search(FRAGMENT) > 0 ? [...l.matchAll(new RegExp(FRAGMENT.source, "gi"))].map((m) => m[0].trim()) : [l]));
   // (a charge and a multiplicity on a line of their own - or, the lines' ends made spaces, the last two numbers before the atoms)
   const pair = [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l)) ?? /(?:^|\s)([+-]?\d+)[\s,]+(\d+)$/.exec(said[said.length - 1] ?? "")?.slice(1).join(" ");
   const [charge, multiplicity] = pair ? pair.split(/[\s,]+/).map(Number) : [];
   const stated = said.map((l) => STATED.exec(l)).find((m) => m) ?? null;
-  const alone = said.find((l) => /^\d+$/.test(l));
+  const alone = said.find(counts);
   const count = stated ? Number(stated[1] ?? stated[2] ?? stated[3]) : alone ? Number(alone) : undefined;
-  const bohr = said.some((l) => SAYS_BOHR.test(l)) || (bohrAll && !said.some((l) => SAYS_ANGSTROM.test(l)));
+  const bohr = said.some(saysBohr) || (bohrAll && !said.some((l) => SAYS_ANGSTROM.test(l)));
   const base = {
     name: named ? nameOf(named) : `Structure ${n}`,
     notes,
@@ -412,7 +443,10 @@ export function textOfPages(pages: readonly PlacedPage[]): string {
     const split = gutterOf(kept, pages[i].width);
     if (split == null) out.push(...kept.map(textOfLine));
     else {
-      const side = (left: boolean) => kept.map((l) => ({ ...l, words: l.words.filter((w) => (w.box[2] <= split) === left) })).filter((l) => l.words.length);
+      // (a line run on across the gap as a line runs - a heading over both columns - kept whole, where it comes)
+      const whole = new Set(kept.filter((l) => across(l, split)));
+      const side = (left: boolean) =>
+        kept.map((l) => (whole.has(l) ? (left ? l : { ...l, words: [] }) : { ...l, words: l.words.filter((w) => (w.box[2] <= split) === left) })).filter((l) => l.words.length);
       out.push(...side(true).map(textOfLine), ...side(false).map(textOfLine));
     }
   });
@@ -446,15 +480,15 @@ function lineUp(words: readonly PlacedWord[]): PlacedLine[] {
 
 /** Whether a line's words are one atom, whole. */
 function wholeAtom(words: readonly PlacedWord[]): boolean {
-  const ts = wordsOf([words.map((w) => w.text).join(" ")]);
+  const ts = wordsOf([plainMinus(words.map((w) => w.text).join(" "))]);
   const r = ts.length ? recordAt(ts, 0) : null;
   return !!r && r.to === ts.length;
 }
 
 /** Whether a line's words are part of an atom cut short: an element and one or two of its numbers, or one or two numbers alone. */
 function cutAtom(words: readonly PlacedWord[]): boolean {
-  const nums = words.filter((w) => DECIMAL.test(w.text)).length;
-  const rest = words.filter((w) => !DECIMAL.test(w.text));
+  const nums = words.filter((w) => DECIMAL.test(plainMinus(w.text))).length;
+  const rest = words.filter((w) => !DECIMAL.test(plainMinus(w.text)));
   return nums > 0 && nums < 3 && (rest.length === 0 || (rest.length === 1 && rest[0] === words[0] && elementOfLabel(rest[0].text) != null));
 }
 
@@ -465,8 +499,31 @@ function cutAtom(words: readonly PlacedWord[]): boolean {
  * None, for a page of one column (the gap between an atom's x and its y
  * leaves no atom whole either side).
  */
+/**
+ * Whether a line runs on across a page's gap between columns: a word set
+ * over the gap, or words either side of it set no farther apart than its
+ * words are elsewhere - two and a half times its widest space, or a line's
+ * height with none to go by - no atom among them.
+ */
+function across(l: PlacedLine, split: number): boolean {
+  const a = l.words.filter((w) => w.box[2] <= split);
+  const b = l.words.filter((w) => w.box[0] >= split);
+  if (wholeAtom(a) || wholeAtom(b)) return false;
+  // (a word set over the gap itself)
+  if (l.words.some((w) => w.box[0] < split && w.box[2] > split)) return true;
+  if (!a.length || !b.length) return false;
+  const gaps = l.words.slice(1).map((w, i) => w.box[0] - l.words[i].box[2]);
+  const at = b[0].box[0] - a[a.length - 1].box[2];
+  const others = gaps.filter((g) => g !== at);
+  const em = (a[a.length - 1].box[3] - a[a.length - 1].box[1]) || 9;
+  return at <= (others.length ? 2.5 * Math.max(...others) : em);
+}
+
 function gutterOf(lines: readonly PlacedLine[], width: number): number | null {
+  // (the gap looked for between lines of numbers - atoms, energies - alone: a heading, a paragraph or the page's number set
+  // across both columns does not close it)
   const spans = lines
+    .filter((l) => l.words.filter((w) => DECIMAL.test(plainMinus(w.text))).length >= 3)
     .flatMap((l) => l.words.map((w) => [w.box[0], w.box[2]] as const))
     .sort((a, b) => a[0] - b[0]);
   const gaps: { at: number; wide: number }[] = [];
@@ -479,16 +536,23 @@ function gutterOf(lines: readonly PlacedLine[], width: number): number | null {
     let left = 0;
     let right = 0;
     let cut = 0;
+    let beside = 0;
     for (const l of lines) {
       const a = l.words.filter((w) => w.box[2] <= g.at);
       const b = l.words.filter((w) => w.box[0] >= g.at);
+      // (an atom whole on one side, words on the other - not another column of a table's numbers)
+      const worded = (part: readonly PlacedWord[]) => part.some((w) => /[A-Za-z]{3}/.test(w.text));
+      if ((wholeAtom(a) && worded(b)) || (wholeAtom(b) && worded(a))) beside++;
       for (const part of [a, b]) {
         if (!part.length) continue;
         if (wholeAtom(part)) part === a ? left++ : right++;
         else if (cutAtom(part)) cut++;
       }
     }
-    if (left >= 2 && right >= 2 && cut <= (left + right) / 10) return g.at;
+    // (atoms whole on both sides - or on one, words beside them on the other: a column of atoms beside one of notes)
+    if ((left >= 2 && right >= 2) || ((left >= 2 || right >= 2) && beside >= 2)) {
+      if (cut <= (left + right) / 10) return g.at;
+    }
   }
   return null;
 }

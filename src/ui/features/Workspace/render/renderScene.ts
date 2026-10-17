@@ -16,7 +16,7 @@ import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, typ
 import { tubeAlong, unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
-import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
+import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import type { Carried3D, Molecule3D } from "../store/types";
 
@@ -243,7 +243,9 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
 
     // the molecule: a node where it stands, turned as it is, holding its atoms, bonds and surfaces
     const root = nodes.length;
-    nodes.push({ name: m.name ?? "Molecule", translation: centre, rotation: quat(samples[0].turn), children: [] });
+    // (as large as it is shown, about where it stands: docs/WORKSPACE.md, *Magnified display*)
+    const mag = magnifiedOf(molecule);
+    nodes.push({ name: m.name ?? "Molecule", translation: centre, rotation: quat(samples[0].turn), ...(mag !== 1 ? { scale: [mag, mag, mag] as Vec3 } : {}), children: [] });
     roots.push(root);
     const children = nodes[root].children!;
     if (turning) channels.push({ node: root, path: "rotation", values: continuous(samples.map((x) => x.turn)) });
@@ -258,8 +260,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       children.push(node);
       if (animated) channels.push({ node, path: "translation", values: Float32Array.from(samples.flatMap((x) => [x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]])) });
       for (const x of samples) {
-        v.set(x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]).applyQuaternion(x.turn);
-        reach(centre[0] + v.x, centre[1] + v.y, centre[2] + v.z, r);
+        v.set(x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]).applyQuaternion(x.turn).multiplyScalar(mag);
+        reach(centre[0] + v.x, centre[1] + v.y, centre[2] + v.z, r * mag);
       }
     }
 
@@ -366,10 +368,10 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         if (turning) {
           let most = 0;
           for (let i = 0; i < positions.length; i += 3) most = Math.max(most, Math.hypot(positions[i], positions[i + 1], positions[i + 2]));
-          reach(centre[0], centre[1], centre[2], most);
+          reach(centre[0], centre[1], centre[2], most * mag);
         } else
           for (let i = 0; i < positions.length; i += 3) {
-            v.set(positions[i], positions[i + 1], positions[i + 2]).applyQuaternion(samples[0].turn);
+            v.set(positions[i], positions[i + 1], positions[i + 2]).applyQuaternion(samples[0].turn).multiplyScalar(mag);
             reach(centre[0] + v.x, centre[1] + v.y, centre[2] + v.z, 0);
           }
       }

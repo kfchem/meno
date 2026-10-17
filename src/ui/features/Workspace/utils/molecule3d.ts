@@ -431,8 +431,19 @@ export function standingHeight(s: Solid, look: Look = "primary"): number {
  * How high above the page a molecule's centre is: where a turn of several as
  * one body put it, or else as high as it reaches.
  */
-export function heightOf(m: Pick<Molecule3D, "at">, s: Solid, look: Look = "primary"): number {
-  return m.at.z ?? standingHeight(s, look);
+export function heightOf(m: Pick<Molecule3D, "at" | "magnified">, s: Solid, look: Look = "primary"): number {
+  return m.at.z ?? standingHeight(s, look) * magnifiedOf(m);
+}
+
+/** How large a molecule is shown: 1, at its true size. */
+export function magnifiedOf(m: Pick<Molecule3D, "magnified">): number {
+  const k = m.magnified;
+  return k != null && Number.isFinite(k) && k > 0 ? k : 1;
+}
+
+/** How far a molecule reaches about its centre, in the look shown, as large as it is shown. */
+export function reachOf(m: Pick<Molecule3D, "magnified">, s: Solid, look: Look): number {
+  return s.reach[look] * magnifiedOf(m);
 }
 
 /**
@@ -445,11 +456,13 @@ export type Pose = {
   turn?: Turn3D;
   places: Float32Array;
   radii: Float32Array;
+  /** How large it is shown (`magnifiedOf`): its places and radii taken so many times as far from its centre. */
+  scale?: number;
 };
 
 /** A molecule as it stands in a frame, in a look, turned as it is. */
 export function poseOf(m: Molecule3D, s: Solid, look: Look, turn?: Turn3D, frame?: number): Pose {
-  return { at: m.at, height: heightOf(m, s, look), turn, places: s.frames[frameOf(s, frame)], radii: s.extent[look] };
+  return { at: m.at, height: heightOf(m, s, look), turn, places: s.frames[frameOf(s, frame)], radii: s.extent[look], scale: magnifiedOf(m) };
 }
 
 /** An atom or a bond's end as the camera sees it, taken back to the page: where, how large, how high, and how much larger than it is (`seenAt`). */
@@ -465,11 +478,13 @@ export function seenOnPage(pose: Pose, eye?: Eye): Seen[] {
   const q = pose.turn ? new THREE.Quaternion(...pose.turn) : new THREE.Quaternion();
   const p = new THREE.Vector3();
   const seen: Seen[] = [];
+  const k = pose.scale ?? 1;
   for (let i = 0; i < pose.radii.length; i++) {
-    p.set(pose.places[3 * i], pose.places[3 * i + 1], pose.places[3 * i + 2]).applyQuaternion(q);
+    p.set(pose.places[3 * i], pose.places[3 * i + 1], pose.places[3 * i + 2]).applyQuaternion(q).multiplyScalar(k);
     const z = pose.height + p.z;
     const at = seenAt(pose.at.x + p.x, pose.at.y + p.y, z, eye);
-    seen.push({ x: at.x, y: at.y, r: pose.radii[i] * at.k, z, k: at.k });
+    // (`k`, how large a camera sees it there, times how large it is shown)
+    seen.push({ x: at.x, y: at.y, r: pose.radii[i] * k * at.k, z, k: at.k * k });
   }
   return seen;
 }
@@ -991,7 +1006,12 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
   const radii = solid.radii[look];
   const height = heightOf(m, solid, look);
   const q = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
-  const seen = (p: THREE.Vector3) => ({ ...seenAt(m.at.x + p.x, m.at.y + p.y, height + p.z, eye), z: p.z });
+  // (as large as it is shown: each point so many times as far from its centre, its balls and sticks so many times as large)
+  const mag = magnifiedOf(m);
+  const seen = (p: THREE.Vector3) => {
+    const at = seenAt(m.at.x + p.x * mag, m.at.y + p.y * mag, height + p.z * mag, eye);
+    return { ...at, k: at.k * mag, z: p.z * mag };
+  };
   const at = (i: number) => new THREE.Vector3(places[3 * i], places[3 * i + 1], places[3 * i + 2]).applyQuaternion(q);
   const balls = m.atoms.map((a, i) => {
     const s = seen(at(i));

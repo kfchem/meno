@@ -307,3 +307,24 @@ export function oxaElectrocyclisation(): { reactant: Molecule; product: Molecule
   );
   return { reactant, product, productOrder };
 }
+
+/**
+ * A structure with `n` waters beside it, each turned and placed its own way
+ * (`seed` shifts them, so that the two sides' waters stand differently): one
+ * structure, the waters unbonded to it or to one another.
+ */
+export function withWaters(m: Molecule, n: number, seed: number): Molecule {
+  const atoms = [...m.atoms];
+  const bonds = [...m.bonds];
+  for (let k = 0; k < n; k++) {
+    const t = seed * 0.7 + k * 2.1;
+    const o: V = [6 + 3.1 * Math.cos(t + k), 3.1 * Math.sin(1.3 * t), 2.2 * Math.cos(0.9 * t + k)];
+    const u = unit([Math.cos(t), Math.sin(t), 0.3]);
+    const h1b: V = [o[0] + 0.96 * u[0], o[1] + 0.96 * u[1], o[2] + 0.96 * u[2]];
+    const h2 = place([o[0], o[1], o[2] + 1], h1b, o, 0.96, 104.5, 40 + 30 * k);
+    const at = atoms.length;
+    atoms.push({ el: "O", x: round4(o[0]), y: round4(o[1]), z: round4(o[2]) }, { el: "H", x: round4(h1b[0]), y: round4(h1b[1]), z: round4(h1b[2]) }, { el: "H", x: round4(h2[0]), y: round4(h2[1]), z: round4(h2[2]) });
+    bonds.push({ a1: at, a2: at + 1, order: 1 }, { a1: at, a2: at + 2, order: 1 });
+  }
+  return { atoms, bonds };
+}

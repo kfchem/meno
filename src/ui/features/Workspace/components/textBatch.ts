@@ -82,29 +82,24 @@ export class TextBatch {
 
   /** The label `key` drawn as `runs` (from `item`), as opaque as `opacity`: its members made again, in its chunk. */
   set(key: string, item: object, runs: readonly BatchRun[], opacity: number): void {
+    // (one there already with as many runs: changed in place - its letters set again, the batch's members
+    // the same - so that a label changing at every frame, a structure growing, never takes another's place
+    // while the batch sets its letters anew)
+    const was = this.held.get(key);
+    if (was && was.members.length === runs.length) {
+      runs.forEach((run, i) => dress(was.members[i], run, opacity));
+      for (const t of was.members) t.sync();
+      this.held.set(key, { ...was, item });
+      return;
+    }
     this.drop(key);
     const chunk = this.chunkFor(runs.length);
     const members = runs.map((run) => {
       const t = new Text();
-      t.text = run.text;
       t.font = this.font;
-      t.fontSize = run.size;
-      t.color = run.color;
-      t.fillOpacity = opacity;
-      // (no stroke: its opacity set, not left unset - packed as NaN)
-      t.strokeOpacity = 1;
       t.anchorX = "left";
       t.anchorY = "top-baseline";
-      if (run.bold) {
-        t.outlineWidth = BOLD;
-        t.outlineColor = run.color;
-        t.outlineOpacity = opacity;
-      }
-      if (run.italic) {
-        // (leaning about its baseline: a matrix of its own, as the batch draws each member by its matrix)
-        t.matrixAutoUpdate = false;
-        t.matrix.set(1, ITALIC_SLANT, 0, run.x, 0, 1, 0, run.y, 0, 0, 1, 0, 0, 0, 0, 1);
-      } else t.position.set(run.x, run.y, 0);
+      dress(t, run, opacity);
       t.addEventListener("synccomplete" as never, this.heard);
       // (its letters set now, not only as its chunk is drawn: a batch not shown - WholeTexts2D's next set, waiting to be shown once set - would never set them, and never be shown)
       t.sync();
@@ -201,5 +196,29 @@ export class TextBatch {
     this.count.set(c, 0);
     this.root.add(c);
     return c;
+  }
+}
+
+/** A member of the batch set as a run of a label has it: its letters, size, colour, place - leaning, or bold. */
+function dress(t: Text, run: BatchRun, opacity: number): void {
+  t.text = run.text;
+  t.fontSize = run.size;
+  t.color = run.color;
+  t.fillOpacity = opacity;
+  // (no stroke: its opacity set, not left unset - packed as NaN)
+  t.strokeOpacity = 1;
+  t.outlineWidth = run.bold ? BOLD : 0;
+  if (run.bold) {
+    t.outlineColor = run.color;
+    t.outlineOpacity = opacity;
+  }
+  if (run.italic) {
+    // (leaning about its baseline: a matrix of its own, as the batch draws each member by its matrix)
+    t.matrixAutoUpdate = false;
+    t.matrix.set(1, ITALIC_SLANT, 0, run.x, 0, 1, 0, run.y, 0, 0, 1, 0, 0, 0, 0, 1);
+  } else {
+    t.matrixAutoUpdate = true;
+    t.position.set(run.x, run.y, 0);
+    t.updateMatrix();
   }
 }

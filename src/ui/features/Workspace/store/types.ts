@@ -55,6 +55,13 @@ export type Atom = EditorAtom & {
   unsure?: Unsure;
   /** The stack of drawings it is in, with the record it is of (utils/stacks). */
   stack?: AtomStack;
+  /**
+   * How large its structure is shown (docs/WORKSPACE.md, *Magnified
+   * display*): every atom of a structure says the same; held where it is
+   * shown, so many times as far apart about its centre, and read at its
+   * true size by whatever is chemistry (lib/chem/magnified2d). Unset, 1.
+   */
+  magnified?: number;
 };
 /**
  * Of a stack of drawings - a file's records drawn flat, standing in one
@@ -404,6 +411,12 @@ export type Molecule3D = {
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
   look?: Look3D;
+  /**
+   * How large it is shown (docs/WORKSPACE.md, *Magnified display*): 1.5,
+   * half as large again as it is; unset, at its true size. Applied after
+   * `solidOf`, about its own place - its ångströms stay true.
+   */
+  magnified?: number;
   /** Its atoms' names and residues and its secondary structure, where it is a PDB entry's chains: drawn as ribbons (lib/chem/biopolymer). */
   biopolymer?: Biopolymer;
   /**
@@ -975,6 +988,14 @@ export type EditorState = {
   removeMolecule3d: (id: number) => void;
   /** Molecules in 3D drawn in the primary look or the secondary, in one step. */
   setLook3d: (ids: number[], look: Look3D) => void;
+  /** Molecules in 3D shown `k` times as large as they are, each about its own place (docs/WORKSPACE.md, *Magnified display*): one step - a drag's run of them in one `gesture`. */
+  setMagnified3d: (ids: number[], k: number, gesture?: string) => void;
+  /**
+   * Structures in 2D - each holding one of `atoms` - and molecules in 3D shown
+   * `k` times as large as they are, each about its own centre, in one step - a
+   * drag's run of them in one `gesture` (docs/WORKSPACE.md, *Magnified display*).
+   */
+  setMagnified: (atoms: number[], molecules: number[], k: number, gesture?: string) => void;
   /** What is learnt of a molecule in 3D - its bond orders found from its shape - with no undo step of its own (doc.amend). */
   learnMolecule3d: (id: number, change: (m: Molecule3D) => Molecule3D) => void;
   /** A molecule in 3D changed by the chemist - its bond orders given, its hydrogens added - as one undo step. */

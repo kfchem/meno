@@ -957,7 +957,6 @@ def metal_bounds(mol, eta=()):
     metals = [a for a in mol.GetAtoms() if is_metal(a) and a.GetDegree()]
     if not metals:
         return None
-    bm = rdDistGeom.GetMoleculeBoundsMatrix(mol)
     stars = {star for _, star, _ in eta}
     # (how far apart atoms are with the metals' bonds left out)
     apart = Chem.RWMol(mol)
@@ -965,6 +964,15 @@ def metal_bounds(mol, eta=()):
         for n in [n.GetIdx() for n in apart.GetAtomWithIdx(m).GetNeighbors()]:
             apart.RemoveBond(m, n)
     hops = Chem.GetDistanceMatrix(apart, force=True)  # (not the copy's cached one, with the metal's bonds)
+    try:
+        bm = rdDistGeom.GetMoleculeBoundsMatrix(mol)
+    except RuntimeError:
+        # (RDKit's own bounds can fail for a ring closed only through metals - two metals bridged by
+        # two halides: then those of the molecule without its metals' bonds, which the rest sets)
+        free = apart.GetMol()
+        free.UpdatePropertyCache(strict=False)
+        Chem.GetSymmSSSR(free)
+        bm = rdDistGeom.GetMoleculeBoundsMatrix(free)
 
     def put(i, j, low, high):
         i, j = min(i, j), max(i, j)
@@ -1087,6 +1095,42 @@ def ligands_apart(mol):
     return held
 
 
+#: Halogens bridging two metals (mu-halides, as in [Pd(allyl)Cl]2): UFF's
+#: types for them have a natural angle of 180 degrees, and RDKit's angle term
+#: for an atom it does not take as linear divides by its sine - so such an
+#: atom's angles blow up, pulling the molecule apart. While UFF optimises it
+#: is given the linear form, which stays finite, its bonds to the metals are
+#: held at their lengths, and its angle between them as embedded,
+#: BRIDGE_SLACK degrees either way. The energies given are UFF's with that
+#: form.
+HALOGENS = {"F", "Cl", "Br", "I"}
+BRIDGE_SLACK = 10.0
+
+
+def bridges(mol):
+    """Each halogen bound to two metals or more, and each pair of them, as
+    angles at it: [(metal, halogen, metal)]."""
+    out = []
+    for atom in mol.GetAtoms():
+        if atom.GetSymbol() in HALOGENS:
+            metals = [n.GetIdx() for n in atom.GetNeighbors() if is_metal(n)]
+            out += [(i, atom.GetIdx(), j) for x, i in enumerate(metals) for j in metals[x + 1:]]
+    return out
+
+
+def bridge_angles(mol, cid, bridged):
+    """The angles to hold at each bridging halogen in one conformer: as
+    embedded there, BRIDGE_SLACK either way. [(i, halogen, j, (low, high))]"""
+    pos = mol.GetConformer(cid).GetPositions()
+    held = []
+    for i, c, j in bridged:
+        u, v = pos[i] - pos[c], pos[j] - pos[c]
+        cos = float((u * v).sum() / math.sqrt(float((u * u).sum() * (v * v).sum())))
+        a = math.degrees(math.acos(max(-1.0, min(1.0, cos))))
+        held.append((i, c, j, (max(0.0, a - BRIDGE_SLACK), min(180.0, a + BRIDGE_SLACK))))
+    return held
+
+
 def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=False):
     """UFF's optimisation of each conformer of a molecule with metals: its
     metals' ligands kept apart, its square-planar metals' angles held
@@ -1098,6 +1142,22 @@ def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=
     energy UFF's own, without the holding terms."""
     ff_mol = ff_mol or mol
     apart = ligands_apart(mol) + list(apart)
+    bridged = bridges(ff_mol)
+    if bridged:
+        if ff_mol is mol:
+            ff_mol = Chem.Mol(mol)
+        for _, x, _ in bridged:
+            ff_mol.GetAtomWithIdx(x).SetHybridization(Chem.HybridizationType.SP)
+        # (and its bonds to the metals held at their lengths, as a stood-in metal's are)
+        held = {(min(i, j), max(i, j)) for i, j, _ in bonds}
+        bonds = list(bonds)
+        for i, x, j in bridged:
+            for m in (i, j):
+                bond = mol.GetBondBetweenAtoms(m, x)
+                d = covalent_length(bond)
+                if d is not None and (min(m, x), max(m, x)) not in held:
+                    held.add((min(m, x), max(m, x)))
+                    bonds.append((m, x, d))
 
     def uff(cid):
         return rdForceFieldHelpers.UFFGetMoleculeForceField(ff_mol, confId=cid, ignoreInterfragInteractions=interfrag)
@@ -1110,7 +1170,7 @@ def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=
             ff.UFFAddDistanceConstraint(j, k, False, low, high, HOLD_APART)
         return ff
 
-    angles = {cid: planar_angles(ff_mol, cid) for cid in ids}
+    angles = {cid: planar_angles(ff_mol, cid) + bridge_angles(ff_mol, cid, bridged) for cid in ids}
     more = {}
     if not any(angles.values()):
         # (the same terms for every conformer: optimised at once, on every core)

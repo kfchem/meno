@@ -9,6 +9,7 @@ import {
   startStroke,
   type Stroke,
 } from "../../utils/stroke";
+import { bondLengthFrom } from "../../utils/magnified";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -47,7 +48,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
           atomId,
           pointer: null,
           mode: "snap",
-          stroke: startStroke(kind, atomId, prev.model, undefined, NOMINAL_BOND_LENGTH),
+          stroke: startStroke(kind, atomId, prev.model, undefined, bondLengthFrom(prev.model.atoms, atomId)),
           preview: null,
           tracing,
         },
@@ -76,7 +77,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
           prev.model,
           prev.extend.stroke,
           pointer,
-          NOMINAL_BOND_LENGTH,
+          bondLengthFrom(prev.model.atoms, prev.extend.stroke.baseId),
         );
         return { ...prev, extend: { ...prev.extend, pointer, stroke } };
       }),
@@ -85,7 +86,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
       set((prev: EditorState) => {
         const { stroke, pointer } = prev.extend;
         if (!prev.extend.active || !stroke || !pointer) return prev;
-        const next = holdStroke(prev.model, stroke, pointer, NOMINAL_BOND_LENGTH);
+        const next = holdStroke(prev.model, stroke, pointer, bondLengthFrom(prev.model.atoms, stroke.baseId));
         if (next === stroke) return prev;
         return {
           ...prev,
@@ -102,7 +103,7 @@ export function createInteractionSlice(set: SetState, get: GetState) {
       const { stroke, pointer } = st.extend;
       if (st.extend.active && stroke) {
         const nodes = pointer
-          ? finishStroke(st.model, stroke, pointer, NOMINAL_BOND_LENGTH)
+          ? finishStroke(st.model, stroke, pointer, bondLengthFrom(st.model.atoms, stroke.baseId))
           : stroke.nodes;
         if (nodes.length && stroke.baseId === NEW_ATOM && stroke.start) st.drawStrokeAt(stroke.start, nodes);
         else if (nodes.length) st.drawStroke(stroke.baseId, nodes, stroke.kind);
