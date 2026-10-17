@@ -50,6 +50,11 @@ export function addsToSelection(
 }
 
 /** Ctrl/Cmd+A selects everything - but not while a text field has the keys. */
+/** Ctrl/Cmd+Shift+F has the PDF or text in the column fill the workspace, or go back beside the canvas - not while a text field has the keys. */
+export function isFillKey(event: KeyLike & { altKey?: boolean }): boolean {
+  return (event.ctrlKey || event.metaKey) === true && event.shiftKey === true && !event.altKey && (event.key || "").toLowerCase() === "f" && !isTextTarget(event.target);
+}
+
 /** Ctrl/Cmd+F looks for words, in the PDFs - not while a text field has the keys. */
 export function isFindKey(event: KeyLike & { altKey?: boolean }): boolean {
   return (event.ctrlKey || event.metaKey) === true && !event.shiftKey && !event.altKey && (event.key || "").toLowerCase() === "f" && !isTextTarget(event.target);

@@ -270,6 +270,48 @@ stops being part of the work.
 - **Tied to where it came from**: a picture keeps which PDF, which page
   and which box, and its right-click menu has *Show in the PDF*.
 
+## A new PDF from pages
+
+Asked for by the maintainer on 2026-10-18: simple editing of the PDFs a
+workspace holds, as a chemist needs it for a paper's supporting information.
+**The PDF it is made from is never changed**: what is made is a new PDF of
+its own, put on the page beside it - an icon, as one opened is, clear of the
+PDFs there - one step, which an undo takes back. It is held as any other
+(its bytes in Meno's cache by their SHA-256, and in the workspace's file).
+
+- **Where.** On a PDF's right-click menu, in a group of their own: *Page
+  numbers…*, *Pages…*, *Combine into one PDF* (two or more PDFs selected,
+  right-clicked on one of them or on the selection) and *Save as PDF…*,
+  which writes a PDF's bytes, as they are, to a file picked.
+- **Page numbers…** A card shows the first page with its number where it will
+  be, as it is chosen: 1, 2, 3 or S1, S2, S3 (supporting information's); the
+  first page's number; at the foot's left, middle or right. *Make numbered
+  copy* makes "paper (numbered).pdf": each page's number in Helvetica, 9 pt,
+  its foot 28 pt from the page's foot (a corner's 28 pt from the side), upright
+  on the page as it is shown, however the page is turned.
+- **Pages…** A card of the PDF's pages, drawn small as they come into view: a
+  page dragged goes where it is let go, the others making room, eased; a
+  click selects one, Shift and a click a run, and pages typed ("3-5", "1, 4,
+  7-9") select those. *Turn left* and *Turn right* turn those selected a
+  quarter; *Take out* leaves them out. *Make new PDF* makes one of the pages
+  as they are now ("paper (arranged).pdf"); *Extract selected* one of those
+  selected alone ("paper (pages 3-5).pdf" for a run, "paper (page 2).pdf"
+  for one).
+- **Combine into one PDF** makes "Combined.pdf" of the PDFs selected, in the
+  order they are read on the page - rows top to bottom, each left to right -
+  each one's pages in order. Put in another order after, with *Pages…*.
+- **How it is made** (src-tauri/src/pdfmake.rs): in the PDF reader's own
+  process (*Where it runs*), as its `make`, with PDFium alone: a new
+  document, each page copied into it in the order given
+  (`FPDF_ImportPages`), its turn added to the one it had (`/Rotate`), and a
+  page's number a text object in the standard Helvetica, which needs no font
+  embedded. Pages are copied whole - their words stay words, as they were
+  drawn; a link to another page of the PDF it came from may lead nowhere in
+  a copy without that page.
+- **What a copy does not hold**: writing by hand on a PDF in Meno (*Write on
+  it*) is the workspace's, over its pages, not the PDF's - it stays with the
+  PDF it was written on.
+
 ## A picture
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
@@ -1052,6 +1094,21 @@ workspace holds.
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
   its corners to another is no bond.
+- **Traces, and too much drawn**: a chart's or a spectrum's trace is no
+  structure's and is left out before anything is read - an open line of
+  more than a hundred corners; a path of more than 150 lines, most of them
+  under 0.6 points long or four in five of them running one way (a
+  spectrum's sticks up from its baseline), or of more than a thousand under
+  1.5 points; however the path is split into parts. A ring's circle drawn
+  as many short lines is closed and kept, and hashes drawn in one path are
+  too few. A structure drawn in a spectrum's corner is read as ever. A
+  figure still of more than 5,000 lines - a chart or a spectrum drawn a
+  dot or a stick at a time, each a path of its own - is read as nothing:
+  "This looks like a chart or a spectrum", at once, rather than holding
+  Meno up for minutes (no structure has so many; a scheme page of many
+  has a thousand or so). The passes that look at every line against the
+  others look only at those near it, on a grid, so that a figure of many
+  thousands of lines is read in time.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which
   meet none, do not count, nor a line shorter than its letters are tall,
@@ -1062,7 +1119,14 @@ workspace holds.
   where any do: where every line meets the others square - a frame, a
   graph's axes - and no wedge is drawn, no structure is drawn, and none
   is read. A cyclobutane drawn alone, a square, and a schematic box (rings
-  drawn edge-on as rectangles) are read as no structure so too.
+  drawn edge-on as rectangles) are read as no structure so too. A table's
+  lines are no bonds, wherever in the figure it stands: level and upright
+  lines bounding cells - two level lines over each other's stretch, two
+  upright between them from one to the other - where two cells or more
+  share a side, as a table's rows and columns do, and short level or
+  upright lines set within those cells, its dashes; a structure beside it
+  is read as ever. A ring is never drawn so; a Fischer projection's
+  crossing lines make no cells.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.
@@ -1142,7 +1206,12 @@ workspace holds.
   its letters one path (Boc, MeO), is read letter by letter, each sized on
   its own. A letter whose small form is its capital made smaller (c C,
   o O, s S, v V, w W, x X, z Z) is told by the capitals beside it on its
-  line: as tall as they, a capital; well under, small. A letter that could
+  line: as tall as they, a capital; well under, small - and one set alone,
+  no letter beside it (an O at a bond's end), by the height most of the
+  figure's other capitals share. A round dot, solid - one outline, as wide
+  as it is tall, filling its box as a disc does, nothing drawn within it -
+  is no letter: a mark a scheme sets at a bond's end (an o and an e have
+  their holes). A letter that could
   be another (l or I, O or 0) is read as the one that makes its label
   read; one that matched weakly is marked ("Its letters are drawn as
   shapes: read as "Cl"."). A stem with a dot just over it, however thin
@@ -1409,7 +1478,10 @@ Each about 1.5 GB to download, about 2.2 GB kept; for macOS and Windows
   nearer - a wedge narrow at one end is a hash narrow at the other - so
   the worker looks at the picture for which end its ink draws narrow;
   where it cannot tell, Meno draws it narrow at the end that can be a
-  stereocentre;
+  stereocentre. An end with no other bond (a methyl, an H, a group's
+  label) is never a stereocentre, so a wedge seen narrow there, its other
+  end bonded on, is taken as one whose narrow end could not be told: a
+  label, or a wide end drawn short of it, misleads what is measured;
 - **atoms**: an element as the model reads it, with its charge (its
   notation's hydrogens and stereo marks are not a label); a group's name
   read as a typed label is; an isotope, seldom drawn, is unsure;
@@ -1436,7 +1508,11 @@ that this does not count against a worker's start).
 **What the workers do besides**: each reads one picture at a time, in its
 one process; what a model prints as it reads goes to stderr, stdout being
 Meno's answers; and a package reading never loads, pyonmttok, is left out
-of MolNexTR's lock.
+of MolNexTR's lock. Each takes the atoms and bonds its model predicts and
+leaves the model's own step of writing them as SMILES and a molfile
+undone (`graphs_unwritten`): Meno does not use what it writes, and
+writing a graph predicted from a picture that is no structure can run
+without end or crash the worker's process.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.

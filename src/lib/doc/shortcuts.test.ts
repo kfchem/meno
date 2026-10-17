@@ -6,6 +6,8 @@ import {
   isCleanUpKey,
   isDeleteKey,
   isDeselectKey,
+  isFillKey,
+  isFindKey,
   isFitKey,
   isSelectAllKey,
   keepClipboard,
@@ -99,6 +101,18 @@ describe("isDeleteKey", () => {
     expect(
       isDeleteKey({ key: "Backspace", target: { tagName: "TEXTAREA" } }),
     ).toBe(false);
+  });
+});
+
+describe("the column's keys", () => {
+  it("fills the workspace with what the column shows on Ctrl/Cmd+Shift+F, Find staying Ctrl/Cmd+F - neither in a text field", () => {
+    expect(isFillKey({ key: "F", metaKey: true, shiftKey: true })).toBe(true);
+    expect(isFillKey({ key: "f", ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(isFillKey({ key: "f", ctrlKey: true })).toBe(false);
+    expect(isFillKey({ key: "f", ctrlKey: true, shiftKey: true, altKey: true })).toBe(false);
+    expect(isFillKey({ key: "f", ctrlKey: true, shiftKey: true, target: { tagName: "TEXTAREA" } })).toBe(false);
+    expect(isFindKey({ key: "f", ctrlKey: true, shiftKey: true })).toBe(false);
+    expect(isFindKey({ key: "f", ctrlKey: true })).toBe(true);
   });
 });
 

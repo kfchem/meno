@@ -106,6 +106,22 @@ describe("words written in place", () => {
     expect(on.text).toBe("60d");
   });
 
+  it("set a comma's space as it writes a temperature: a step of its own to undo, the comma then left as typed", () => {
+    const on = writing("");
+    on.smart = () => true;
+    const type = (keys: string) => {
+      for (const k of keys) on.replaceSelection(k);
+    };
+    type("rt,12 ");
+    expect(on.text).toBe("rt, 12 ");
+    on.undo();
+    expect(on.text).toBe("rt,12 ");
+    // (left as typed: typing on, and keeping, leave it so)
+    type("h");
+    on.kept();
+    expect(on.text).toBe("rt,12 h");
+  });
+
   it("leave what is pasted as it is, and write the word last typed as it is meant as they are kept", () => {
     const ed = writing("");
     ed.smart = () => true;

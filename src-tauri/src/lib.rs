@@ -20,6 +20,7 @@ mod drop;
 mod jobs;
 mod logfile;
 mod pdf;
+mod pdfmake;
 mod net;
 mod opened;
 mod pinch;
@@ -993,6 +994,7 @@ pub fn run() {
             logfile::log_spot,
             pdf::pdf_hold_path,
             pdf::pdf_hold_bytes,
+            pdf::pdf_make,
             pdf::pdf_bytes,
             pdf::pdf_render,
             pdf::pdf_links,

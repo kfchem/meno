@@ -87,7 +87,16 @@ and in particular:
       the pointer went enclosing room, not straight back - it closes the
       ring that way makes: round one hexagon, a six-membered ring; round
       two, a ten-membered one; round three, fourteen (`utils/chain`). Led
-      on from there, the ring stays; led back past it, it goes. Onto an
+      on from there, the ring stays; led back past it, it goes. Led back
+      over a bond of a ring it has closed, it goes along that bond again
+      and the ring stays, so fused rings - naphthalene, phenanthrene - are
+      traced in one stroke, ring after ring, over the bonds they share;
+      led straight back round the whole of a ring it has just closed, the
+      ring goes. Come round to a point it went through, the chain closes
+      the ring there, not taken back to that point, wherever the hand
+      winds round the ring's middle - though the way as a whole is not
+      round, as when it went round another ring first, or on past the
+      point and back. Onto an
       atom already there, it joins it where the ring that closes lies
       along the honeycomb, or where it closes none; elsewhere the point is
       an atom of the chain's own (`utils/stroke`).
@@ -1086,6 +1095,16 @@ All hover-based, as above.
     4. **Bullets.** A hyphen or a star alone at a line's start - after
        the tabs that take it a level in - is a bullet (•) as soon as a
        space is typed after it: "- " is "• ", a list's item (below).
+    5. **Commas.** A comma typed straight before a word gets one space
+       after it once that word has ended (the maintainer, 2026-10-17):
+       Pd(OAc)2,PPh3 is Pd(OAc)2, PPh3, rt,12 h rt, 12 h, and a
+       temperature after it is written as ever (DMF,80dc is DMF, 80 °C).
+       Not where the comma is part of a name, joining two locants - digits
+       maybe with a letter, or a capital letter alone, either maybe
+       primed: 1,2-DCE, 2,6-lutidine, 2,2,6,6-tetramethyl-, 1',2', 4a,8a,
+       N,N-DMF, N,O-bis(...), (R,R)-, (E,Z), (1R,2S)- - nor between two
+       numbers, 1,000, which stays as typed. A space already there is
+       never doubled.
 
     Each is a step of its own: one undo gives back the words as typed, and
     that part is then left as typed until it is written again. Settings ›

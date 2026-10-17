@@ -398,6 +398,22 @@ describe("PDFs read in the column", () => {
     expect(state().textsOpen).toBe(false);
   });
 
+  it("fill the workspace from the column and go back beside the canvas - kept as another is shown, ended as the column is hidden", () => {
+    const { state } = editor();
+    state().addTexts([{ name: "notes.txt", text: "hello" }]);
+    state().addPdfs([three], { x: 0, y: 0 });
+    state().readPdf(1);
+    expect(state().columnFilled).toBe(false);
+    state().setColumnFilled(true);
+    state().showText(state().texts[0].id);
+    expect(state().columnFilled).toBe(true);
+    state().setColumnFilled(false);
+    expect(state().columnFilled).toBe(false);
+    state().setColumnFilled(true);
+    state().closeTexts();
+    expect(state()).toMatchObject({ textsOpen: false, columnFilled: false });
+  });
+
   it("go back to the page as the column is hidden on them, and rise into it again as it is shown", () => {
     const { state } = editor();
     state().addTexts([{ name: "notes.txt", text: "hello" }]);

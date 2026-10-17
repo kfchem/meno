@@ -14,6 +14,8 @@ import { SAMPLE_3D, SAMPLE_TURN } from "./sample3d";
 
 /** A turn left to itself stops below this speed, in radians a second. */
 const STILL = 0.02;
+/** How far, in pixels, a press goes before it turns the sample: short of it, it is a click, which picks it (`onTap`). */
+const TURN_PX = 4;
 
 /** The preview's field of view, in degrees, and how gently its camera goes to another look's distance, in seconds. */
 const FOV = 30;
@@ -22,9 +24,11 @@ const FRAMING_TAU = 0.12;
 /**
  * The sample molecule drawn live in a style, as a molecule on the canvas is
  * - turned by a drag, at the speed and with the coasting the style sets -
- * and double-clicked, to go over to the other look.
+ * and double-clicked, to go over to the other look. A click - a press that
+ * goes nowhere - is a click (`onTap`): a turn begins only once a press
+ * has really moved.
  */
-export default function Preview3D({ style, look, onDouble }: { style: Style3D; look: Role3D; onDouble?: () => void }) {
+export default function Preview3D({ style, look, onDouble, onTap }: { style: Style3D; look: Role3D; onDouble?: () => void; onTap?: () => void }) {
   // (far enough back for a molecule twice the size of its space-filling self)
   const far = useMemo(() => solidOf(SAMPLE_3D, style).reach.secondary * 16, [style]);
   return (
@@ -40,7 +44,7 @@ export default function Preview3D({ style, look, onDouble }: { style: Style3D; l
       <ambientLight intensity={style.ambientLight} />
       <KeyLight3D intensity={style.keyLight} shadows={style.shadows} />
       <Framing style={style} look={look} />
-      <Turnable style={style} look={look} />
+      <Turnable style={style} look={look} onTap={onTap} />
     </Canvas>
   );
 }
@@ -69,12 +73,14 @@ function Framing({ style, look }: { style: Style3D; look: Role3D }) {
 }
 
 /** The sample, turned by a drag as a molecule on the canvas is - at the speed, and with the coasting, the style sets. */
-function Turnable({ style, look }: { style: Style3D; look: Role3D }) {
+function Turnable({ style, look, onTap }: { style: Style3D; look: Role3D; onTap?: () => void }) {
   const [turn, setTurn] = useState<Turn3D>(SAMPLE_TURN);
   const { gl, invalidate } = useThree();
   const spin = useRef<{ axis: THREE.Vector3; speed: number } | null>(null);
   const styleRef = useRef(style);
   styleRef.current = style;
+  const tapRef = useRef(onTap);
+  tapRef.current = onTap;
   const turnBy = (axis: THREE.Vector3, angle: number) =>
     setTurn((was) => {
       const q = new THREE.Quaternion(...was).premultiply(new THREE.Quaternion().setFromAxisAngle(axis, angle)).normalize();
@@ -83,16 +89,21 @@ function Turnable({ style, look }: { style: Style3D; look: Role3D }) {
 
   useEffect(() => {
     const dom = gl.domElement;
-    let drag: { x: number; y: number; t: number; recent: { t: number; angle: number; dt: number }[]; axis: THREE.Vector3 } | null = null;
+    // (`moved`: gone far enough from where it was pressed to be a turn, not a click)
+    let drag: { x: number; y: number; t: number; recent: { t: number; angle: number; dt: number }[]; axis: THREE.Vector3; from: { x: number; y: number }; moved: boolean } | null = null;
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
       dom.setPointerCapture(e.pointerId);
       spin.current = null;
-      drag = { x: e.clientX, y: e.clientY, t: e.timeStamp, recent: [], axis: new THREE.Vector3(0, 1, 0) };
-      setCursor(dom, "turning");
+      drag = { x: e.clientX, y: e.clientY, t: e.timeStamp, recent: [], axis: new THREE.Vector3(0, 1, 0), from: { x: e.clientX, y: e.clientY }, moved: false };
     };
     const onMove = (e: PointerEvent) => {
       if (!drag) return;
+      if (!drag.moved) {
+        if (Math.hypot(e.clientX - drag.from.x, e.clientY - drag.from.y) < TURN_PX) return;
+        drag.moved = true;
+        setCursor(dom, "turning");
+      }
       const dx = e.clientX - drag.x;
       const dy = e.clientY - drag.y;
       const len = Math.hypot(dx, dy);
@@ -107,6 +118,12 @@ function Turnable({ style, look }: { style: Style3D; look: Role3D }) {
     };
     const onUp = (e: PointerEvent) => {
       if (!drag) return;
+      if (!drag.moved) {
+        // (a click: what it is in is picked)
+        drag = null;
+        if (e.type === "pointerup") tapRef.current?.();
+        return;
+      }
       const took = drag.recent.reduce((a, r) => a + r.dt, 0);
       const speed = drag.recent.reduce((a, r) => a + r.angle, 0) / (Math.max(took, 16) / 1000);
       if (e.timeStamp - drag.t < 80 && speed > STILL) spin.current = { axis: drag.axis, speed };

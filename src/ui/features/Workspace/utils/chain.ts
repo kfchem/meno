@@ -11,6 +11,10 @@
  *   went encloses room - it closes the ring that way makes: round one
  *   hexagon, a six-membered ring; round two, a ten-membered one; and so on.
  *   Back to such a point without going round, it is taken back to it.
+ * - Led back over a bond of a ring it has closed, it goes along it again:
+ *   fused rings are traced in one stroke, ring after ring, over the bonds
+ *   they share. The ring goes when the chain is led back past it, or
+ *   straight back round the whole of it just after closing it.
  * - It draws the honeycomb's rings and no other (the maintainer, 2026-10-07
  *   and 2026-10-08): a loop that does not come round to a point of the
  *   chain draws no ring of its own, and a ring of another size is drawn by
@@ -79,25 +83,122 @@ export function followChain(c: Chain, pointer: Pt): Chain {
     const came = walk.length >= 2 ? ways.find((o) => o.key === walk[walk.length - 2]) : undefined;
     if (came && best && dist(came, pointer) <= dist(best, pointer) + BACK_MARGIN * L) best = came;
     if (!best || dist(best, pointer) >= dist(head, pointer) - STEP_MARGIN * L) break;
-    if (walk.length >= 2 && best.key === walk[walk.length - 2]) {
-      // back the way it came: the bond goes again
+    // (a bond of a ring the chain has closed: gone along again, not taken
+    // back - a fused ring is traced over the bond it shares, and the ring
+    // stays; it goes when the chain is led back past it, or back round it)
+    const round = wayRound(walk, head.key, best.key);
+    const inRing = round.laid > 0 && round.way != null;
+    if (walk.length >= 2 && best.key === walk[walk.length - 2] && (!inRing || round.laid > 1)) {
+      // back the way it came: the bond goes again - or, gone along again, is left as it was
       walk = walk.slice(0, -1);
       stepAt = stepAt.slice(0, -1);
       continue;
     }
     // round to a point it has been through: the ring the way round makes,
-    // the honeycomb's; back to it without going round, the chain taken
-    // back to it
+    // the honeycomb's - round as a whole, or round the ring it closes; back
+    // to it without going round, the chain taken back to it
     const back = walk.lastIndexOf(best.key);
-    if (back >= 0 && back < walk.length - 1 && !wentRound(best, trail.slice(stepAt[back]), L)) {
+    const loop = back >= 0 ? trail.slice(stepAt[back]) : [];
+    if (
+      back >= 0 &&
+      back < walk.length - 1 &&
+      !inRing &&
+      !wentRound(best, loop, L) &&
+      !(round.way && wentRoundRing(c.honeycomb, round.way, best, loop))
+    ) {
       walk = walk.slice(0, back + 1);
       stepAt = stepAt.slice(0, back);
       continue;
     }
     walk = [...walk, best.key];
     stepAt = [...stepAt, trail.length - 1];
+    // (led back round the whole of a ring it has just closed: the ring taken back)
+    const undone = inRing ? backRound(walk) : -1;
+    if (undone >= 0) {
+      walk = walk.slice(0, undone + 1);
+      stepAt = stepAt.slice(0, undone);
+    }
   }
   return { ...c, trail, walk, stepAt };
+}
+
+/**
+ * The shortest way from `u` to `v` along the bonds the walk has laid, the
+ * bond between them left out - the rest of the ring a bond from `u` to `v`
+ * is, or would be, a bond of; null where there is none. And how many
+ * times the walk has gone along that bond.
+ */
+function wayRound(walk: readonly string[], u: string, v: string): { way: string[] | null; laid: number } {
+  const bonded = new Map<string, Set<string>>();
+  let laid = 0;
+  for (let i = 1; i < walk.length; i++) {
+    const [a, b] = [walk[i - 1], walk[i]];
+    if (a === b) continue;
+    if ((a === u && b === v) || (a === v && b === u)) {
+      laid++;
+      continue;
+    }
+    (bonded.get(a) ?? bonded.set(a, new Set()).get(a)!).add(b);
+    (bonded.get(b) ?? bonded.set(b, new Set()).get(b)!).add(a);
+  }
+  const came = new Map<string, string>([[u, u]]);
+  let edge = [u];
+  while (edge.length) {
+    const next: string[] = [];
+    for (const x of edge)
+      for (const y of bonded.get(x) ?? []) {
+        if (came.has(y)) continue;
+        came.set(y, x);
+        if (y === v) {
+          const way = [v];
+          while (way[way.length - 1] !== u) way.push(came.get(way[way.length - 1])!);
+          return { way: way.reverse(), laid };
+        }
+        next.push(y);
+      }
+    edge = next;
+  }
+  return { way: null, laid };
+}
+
+/**
+ * Where a walk that has just gone round a ring and straight back round it,
+ * the whole way, began the ring: the walk's end the way back of a closed
+ * way round before it. -1 where it has not.
+ */
+function backRound(walk: readonly string[]): number {
+  const end = walk.length - 1;
+  for (let t = end - 1; 2 * t - end >= 0; t--) {
+    let mirrored = true;
+    for (let j = 1; j <= end - t && mirrored; j++) mirrored = walk[t + j] === walk[t - j];
+    if (!mirrored) continue;
+    const from = 2 * t - end;
+    if (walk[from] === walk[t] && t - from >= 6) return from;
+  }
+  return -1;
+}
+
+/**
+ * Whether the pointer went round the ring a bond would close, back to `j`
+ * along `loop`: the way it went, closed, winds round the ring's middle. A
+ * hand that goes round one ring and on round the next, fused to it, has a
+ * way that winds round the first and then the second: round enough for the
+ * second, though not round as a whole.
+ */
+function wentRoundRing(c: Honeycomb, ring: readonly string[], j: Pt, loop: readonly Pt[]): boolean {
+  const cells = ring.map((k) => cellOf(c, k));
+  const mid = { x: cells.reduce((x, p) => x + p.x, 0) / cells.length, y: cells.reduce((y, p) => y + p.y, 0) / cells.length };
+  const path = [j, ...loop];
+  let turned = 0;
+  for (let i = 0; i < path.length; i++) {
+    const p = path[i];
+    const q = path[(i + 1) % path.length];
+    let d = Math.atan2(q.y - mid.y, q.x - mid.x) - Math.atan2(p.y - mid.y, p.x - mid.x);
+    if (d > Math.PI) d -= 2 * Math.PI;
+    if (d < -Math.PI) d += 2 * Math.PI;
+    turned += d;
+  }
+  return Math.abs(turned) > Math.PI;
 }
 
 /**

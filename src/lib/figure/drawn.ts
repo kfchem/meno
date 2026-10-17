@@ -273,10 +273,15 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
       if (!stroked) continue;
     }
     if (!stroked) continue;
+    // (a path of a thousand lines and more, short ones - a spectrum's or a chart's trace, drawn a step at a time - is no structure's)
+    if (traceOf(parts)) continue;
     const w = Math.max(path.width, 0.1);
     const ink = path.stroke!;
     const dash = path.dash ? { dash: true as const } : {};
     for (const p of parts) {
+      // (a line of a hundred corners and more, open - a spectrum's or a chart's trace - is no structure's: no bonds of it; a
+      // ring's circle drawn as many short lines is closed)
+      if (p.pts.length > TRACE && !p.closed) continue;
       if (p.straight.every(Boolean)) {
         const pts = p.closed && dist(p.pts[0], p.pts[p.pts.length - 1]) > 1e-3 ? [...p.pts, p.pts[0]] : p.pts;
         for (let i = 1; i < pts.length; i++) if (dist(pts[i - 1], pts[i]) > 1e-3) out.strokes.push({ a: pts[i - 1], b: pts[i], w, ink, ...dash });
@@ -287,7 +292,7 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   }
   // (a line drawn again over a longer one - a joint drawn as short pieces along the bonds that meet there, as RDKit draws
   // one - is that line's, not a line of its own)
-  out.strokes = out.strokes.filter((s) => !out.strokes.some((t) => t !== s && drawnOver(s, t)));
+  out.strokes = withoutDrawnOver(out.strokes);
   // (a wedge drawn in two colours - black from its stereocentre to its middle, its wide half on in its atom's colour, as RDKit
   // draws one by default - is one wedge: a filled four-cornered shape of another colour, its narrow end at the wedge's wide one,
   // widening on the same way)
@@ -341,8 +346,33 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   const twoTone = new Set<Stroke>();
   for (let merged = true; merged; ) {
     merged = false;
+    // (the lines' ends on a grid, so that each is looked for only among the lines ending near it)
+    const reach = Math.max(2 * out.strokes.reduce((m, q) => Math.max(m, q.w), 0), 1e-3);
+    // (a figure of one colour has none)
+    const inks = new Set(out.strokes.map((q) => q.ink ?? ""));
+    if (inks.size < 2) break;
+    const ends = new Map<string, number[]>();
+    const cellOf = (p: Point) => [Math.floor(p.x / reach), Math.floor(p.y / reach)];
+    const keyOf = (ink: string, cx: number, cy: number) => `${ink}|${cx},${cy}`;
+    out.strokes.forEach((q, k) => {
+      for (const e of [q.a, q.b]) {
+        const [cx, cy] = cellOf(e);
+        const key = keyOf(q.ink ?? "", cx, cy);
+        (ends.get(key) ?? ends.set(key, []).get(key)!).push(k);
+      }
+    });
+    // (the lines ending near a point, of the colours given)
+    const near = (p: Point, of: readonly string[]) => {
+      const [cx, cy] = cellOf(p);
+      const out: number[] = [];
+      for (const ink of of) for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) out.push(...(ends.get(keyOf(ink, cx + dx, cy + dy)) ?? []));
+      return [...new Set(out)];
+    };
+    const all = [...inks];
     for (let i = 0; i < out.strokes.length && !merged; i++) {
-      for (let j = 0; j < out.strokes.length && !merged; j++) {
+      const own = out.strokes[i].ink ?? "";
+      for (const j of near(out.strokes[i].b, all.filter((ink) => ink !== own))) {
+        if (merged) break;
         const [s, t] = [out.strokes[i], out.strokes[j]];
         if (i === j || (s.ink ?? "") === (t.ink ?? "") || s.dash || t.dash || s.outline || t.outline || twoTone.has(s) || twoTone.has(t)) continue;
         const w = Math.max(s.w, t.w);
@@ -356,7 +386,10 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
           const lo = dist(o.a, o.b);
           return lo > 0 && Math.abs(((o.b.x - o.a.x) * (s.b.y - s.a.y) - (o.b.y - o.a.y) * (s.b.x - s.a.x)) / (lo * ls)) < Math.sin((3 * Math.PI) / 180);
         };
-        const others = out.strokes.filter((o, k) => k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w) && !alongside(o));
+        const others = near(s.b, all).filter((k) => {
+          const o = out.strokes[k];
+          return k !== i && k !== j && (dist(o.a, s.b) <= 2 * w || dist(o.b, s.b) <= 2 * w) && !alongside(o);
+        });
         if (others.length) continue;
         out.strokes[i] = { a: s.a, b: t.b, w: Math.max(s.w, t.w), ...(s.ink ? { ink: s.ink } : {}) };
         twoTone.add(out.strokes[i]);
@@ -422,6 +455,84 @@ export function uprightOf(drawn: FigureDrawn, given?: number): { drawn: FigureDr
 }
 
 /** Whether line `s` lies on a longer line `t`, along it and within it, as one drawn again over it. */
+/** The most corners an open line drawn as one part has and may still be a structure's bonds: past it, a trace. */
+const TRACE = 100;
+/**
+ * A path of more lines than `TRACE_LINES`, the most of them shorter than
+ * `TRACE_STEP` points, is a trace - or of more than `TRACE_SOME`, the most
+ * of them shorter than `TRACE_FINE` points: finer than a hash's lines.
+ */
+const TRACE_LINES = 1000;
+const TRACE_STEP = 1.5;
+const TRACE_SOME = 150;
+const TRACE_FINE = 0.6;
+/** ... or more than `TRACE_SOME` lines, this share of them running one way (within ten degrees). */
+const TRACE_ONE_WAY = 0.8;
+
+/** Whether a stroked path's parts are a plot's trace: a great many lines, short ones - however they are split into parts (a step each, or the whole trace one). */
+function traceOf(parts: readonly { pts: Point[] }[]): boolean {
+  let n = 0;
+  for (const p of parts) n += Math.max(p.pts.length - 1, 0);
+  if (n <= TRACE_SOME) return false;
+  const ls: number[] = [];
+  for (const p of parts) for (let i = 1; i < p.pts.length; i++) ls.push(dist(p.pts[i - 1], p.pts[i]));
+  ls.sort((a, b) => a - b);
+  const usual = ls[Math.floor(ls.length / 2)];
+  if (usual < (n > TRACE_LINES ? TRACE_STEP : TRACE_FINE)) return true;
+  // (or drawn as sticks side by side - a spectrum's lines up from its baseline - the most of them one way: no structure's bonds run so)
+  const ways = new Array<number>(36).fill(0);
+  for (const p of parts)
+    for (let i = 1; i < p.pts.length; i++) {
+      const a = Math.atan2(p.pts[i].y - p.pts[i - 1].y, p.pts[i].x - p.pts[i - 1].x);
+      ways[Math.floor((((a % Math.PI) + Math.PI) % Math.PI) / (Math.PI / 36)) % 36]++;
+    }
+  const most = ways.reduce((m, k, i) => Math.max(m, k + ways[(i + 1) % 36]), 0);
+  return most >= TRACE_ONE_WAY * n;
+}
+
+/**
+ * Lines, those drawn over a longer one left out (`drawnOver`): each looked
+ * for among the lines whose boxes take in its middle, on a grid - so that a
+ * figure of many thousands of lines is read in time.
+ */
+function withoutDrawnOver(strokes: readonly Stroke[]): Stroke[] {
+  if (strokes.length < 64) return strokes.filter((s) => !strokes.some((t) => t !== s && drawnOver(s, t)));
+  const lengths = strokes.map((s) => dist(s.a, s.b)).sort((a, b) => a - b);
+  // (cells twice the usual line long - but no more than 256 of them across all the lines - so that none is laid in a great many)
+  const xs = strokes.flatMap((s) => [s.a.x, s.b.x]);
+  const ys = strokes.flatMap((s) => [s.a.y, s.b.y]);
+  const extent = Math.max(xs.reduce((m, v) => Math.max(m, v), -Infinity) - xs.reduce((m, v) => Math.min(m, v), Infinity), ys.reduce((m, v) => Math.max(m, v), -Infinity) - ys.reduce((m, v) => Math.min(m, v), Infinity));
+  const cell = Math.max(lengths[Math.floor(lengths.length / 2)] * 2, extent / 256, 1e-3);
+  const grid = new Map<string, Stroke[]>();
+  for (const t of strokes) {
+    const w = t.w;
+    const [x0, x1] = [Math.min(t.a.x, t.b.x) - w, Math.max(t.a.x, t.b.x) + w].map((v) => Math.floor(v / cell));
+    const [y0, y1] = [Math.min(t.a.y, t.b.y) - w, Math.max(t.a.y, t.b.y) + w].map((v) => Math.floor(v / cell));
+    // (a line across a great many cells - a rule across the page - kept once in a list of its own)
+    if ((x1 - x0 + 1) * (y1 - y0 + 1) > 64) {
+      (grid.get("long") ?? grid.set("long", []).get("long")!).push(t);
+      continue;
+    }
+    for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) (grid.get(`${x},${y}`) ?? grid.set(`${x},${y}`, []).get(`${x},${y}`)!).push(t);
+  }
+  // (each cell's lines longest first: one is drawn over a line half as long again or more, so the look ends at those shorter)
+  const len = new Map(strokes.map((t) => [t, dist(t.a, t.b)]));
+  for (const list of grid.values()) list.sort((p, q) => len.get(q)! - len.get(p)!);
+  const over = (s: Stroke, list: readonly Stroke[]) => {
+    const least = 1.5 * len.get(s)!;
+    for (const t of list) {
+      if (len.get(t)! <= least) return false;
+      if (t !== s && drawnOver(s, t)) return true;
+    }
+    return false;
+  };
+  const long = grid.get("long") ?? [];
+  return strokes.filter((s) => {
+    const key = `${Math.floor((s.a.x + s.b.x) / 2 / cell)},${Math.floor((s.a.y + s.b.y) / 2 / cell)}`;
+    return !over(s, grid.get(key) ?? []) && !over(s, long);
+  });
+}
+
 function drawnOver(s: Stroke, t: Stroke): boolean {
   const lt = dist(t.a, t.b);
   if (lt <= 1.5 * dist(s.a, s.b)) return false;

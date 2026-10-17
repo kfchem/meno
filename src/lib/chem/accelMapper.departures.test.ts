@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { ACCEL_EXACT, Atom, Atoms, BondType, _det_ez, acosOf, getMaps, kabsch, type Departures } from "./accelMapper";
 import type { Molecule } from "./molecule";
-import { ETHANE_BONDS, ethaneAtoms, molecule, moved, oxaElectrocyclisation, sn2, trueMap } from "./reactionMap.fixtures";
+import { ETHANE_BONDS, chlorineShift, ethaneAtoms, molecule, moved, oxaElectrocyclisation, sn2, trueMap, turnedMethyl } from "./reactionMap.fixtures";
 
 /**
- * Meno's three departures from ACCeL, each beside what ACCeL itself does
+ * Meno's departures from ACCeL, each beside what ACCeL itself does
  * with the same input (docs/ATOM-MAPPING.md, *Where Meno departs from
  * ACCeL*). The ACCeL side is the port run exactly (ACCEL_EXACT), which
  * agrees with ACCeL 0.3.0 on each of these inputs.
@@ -127,5 +127,43 @@ describe("clampFaceCosine", () => {
 
   it("leaves a cosine that is not a number (a zero vector's) as it was", () => {
     expect(Number.isNaN(acosOf(NaN, true))).toBe(true);
+  });
+});
+
+describe("signedTorsion", () => {
+  const { reactant, product, productOrder } = turnedMethyl();
+  const unturned = trueMap(["C", "O", "Cl", "H0", "H1", "H2"], productOrder);
+
+  it("ACCeL pairs the hydrogens furthest from 0 degrees on each side, -124 with +125, so the methyl comes out turned 120 degrees", () => {
+    const map = firstMap(product, reactant, ACCEL_EXACT);
+    expect(map).not.toEqual(unturned);
+    expect(map[productOrder.indexOf("H1")]).toBe(3); // product H1 (+125) from reactant H0 (-124)
+  });
+
+  it("Meno pairs it with the one nearest its torsion, sign and all: the methyl turned 5 degrees", () => {
+    expect(firstMap(product, reactant, only({ signedTorsion: true }))).toEqual(unturned);
+  });
+});
+
+describe("fewestBondChanges", () => {
+  const { reactant, product, productOrder } = chlorineShift();
+  const names = ["C1", "C2", "O", "H1", "Cl", "Ha", "Hb"];
+  /** The bonds a map makes or breaks, by the reactant's atom names. */
+  const changes = (map: number[]): string[] => {
+    const bonds = (m: Molecule, name: (i: number) => string) => new Set(m.bonds.map((b) => [name(b.a1), name(b.a2)].sort().join("-")));
+    const before = bonds(reactant, (i) => names[i]);
+    const after = bonds(product, (j) => names[map[j]]);
+    return [...before, ...after].filter((b) => before.has(b) !== after.has(b)).sort();
+  };
+
+  it("ACCeL puts first a map that moves the oxygen and the CH2's hydrogens, to keep from bonding two sp3 carbons", () => {
+    const map = firstMap(product, reactant, ACCEL_EXACT);
+    expect(names[map[productOrder.indexOf("C1")]]).toBe("C2");
+    expect(changes(map).length).toBeGreaterThan(4);
+  });
+
+  it("Meno puts first the map with the fewest bonds made or broken: the chlorine and a hydrogen trade places", () => {
+    const map = firstMap(product, reactant, only({ fewestBondChanges: true }));
+    expect(changes(map)).toEqual(["C1-Cl", "C1-H1", "C2-Cl", "C2-H1"]);
   });
 });

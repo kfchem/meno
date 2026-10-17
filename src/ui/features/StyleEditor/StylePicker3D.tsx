@@ -192,9 +192,9 @@ export default function StylePicker3D({
                   {changed(id) && <span className="text-accel-base" title="Changed">•</span>}
                 </div>
                 {carried?.has(id) && <div className="px-3 text-[11px] leading-snug text-gh-gray">In this workspace</div>}
-                {/* (the molecule live in it: turned by a drag on it, as on the canvas - the card moved by its name) */}
+                {/* (the molecule live in it: turned by a drag on it, as on the canvas - the card moved by its name; a click on it picks the style, as on its name) */}
                 <div className="h-44" onPointerDown={(e) => e.stopPropagation()}>
-                  <Preview3D style={style} look={role} />
+                  <Preview3D style={style} look={role} onTap={() => onEdit(id)} />
                 </div>
               </div>
             </div>

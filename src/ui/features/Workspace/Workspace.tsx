@@ -73,6 +73,8 @@ import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
+import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
+import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
@@ -99,7 +101,7 @@ import {
   isDeleteKey,
   isFitKey,
   isDeselectKey,
-  isFindKey,
+  isFillKey, isFindKey,
   isSelectAllKey,
   IS_MAC,
   presentIntent,
@@ -108,6 +110,7 @@ import {
   undoIntent,
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
+import { stopWorker } from "../../../lib/plugins/process";
 import { useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
@@ -416,6 +419,9 @@ function WorkspaceContent({
   }, [ask3d, model]);
   // (what the plugin is doing for it, said meanwhile)
   const [working3d, setWorking3d] = useState<string | null>(null);
+  // (structures being made in 3D: since when, and how to stop it - the plugin's worker stopped, nothing added)
+  const [making3d, setMaking3d] = useState<number | null>(null);
+  const stop3d = useRef<(() => void) | null>(null);
   // A drawn reaction's atom map, made off the drawing's thread - said
   // meanwhile, and stoppable - and kept on its arrow (chem/useAtomMaps)
   const atomMaps = useAtomMaps(store, setChemError);
@@ -458,6 +464,14 @@ function WorkspaceContent({
     async (blocks: Block[], isomers: "one" | "all", replacing?: Molecule3D) => {
       setWorking3d("Making the 3D structure…");
       setChemError(null);
+      // (stopped: the worker making them stopped - started afresh when next asked - and nothing added)
+      let stopped = false;
+      const plugin = rolePlugin("conformers");
+      stop3d.current = () => {
+        stopped = true;
+        if (plugin) void stopWorker(plugin.id, `${plugin.name} was stopped while it made a 3D structure`);
+      };
+      setMaking3d(Date.now());
       try {
         const chem = await chemWorker("conformers");
         // (the options the plugin takes for the role, as chosen in Settings, Molecules in 3D)
@@ -473,6 +487,7 @@ function WorkspaceContent({
           return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
         });
         for (const block of blocks) {
+          if (stopped) return;
           const isomersMade = await conformersOf(chem, block, isomers, options);
           // (several stereoisomers: their R and S shown, to tell them apart)
           const ms = isomersMade.map((c) => moleculeOf(c, block, isomersMade.length > 1));
@@ -491,6 +506,7 @@ function WorkspaceContent({
             made.push({ m: { ...m, at: row.at[i] }, turn: turned[i].turn, from: turned[i].start, flat: turned[i].flat }),
           );
         }
+        if (stopped) return;
         // (the structure changed meanwhile - an undo took it away - nothing is added)
         if (!blocksStill(blocks, store.getState().model)) {
           setChemError("The drawing changed while its 3D structure was being made, so none was added.");
@@ -500,8 +516,10 @@ function WorkspaceContent({
         // (with no room for them in view, the view takes them in)
         if (!allInView) requestFit();
       } catch (e: unknown) {
-        setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
+        if (!stopped) setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
+        stop3d.current = null;
+        setMaking3d(null);
         setWorking3d(null);
       }
     },
@@ -630,6 +648,8 @@ function WorkspaceContent({
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   // a colour card opened from a menu, where the menu was (ColourCard)
+  // (a card for a new PDF made from one held: its pages numbered, or put in order - docs/PDF.md, *A new PDF from pages*)
+  const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
   const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
@@ -876,6 +896,10 @@ function WorkspaceContent({
         else if (what === "copy") void clip.copy();
         else if (what === "cut") void clip.cut();
         else void clip.paste(pasteTarget());
+      } else if (isFillKey(e) && st.textsOpen && (st.pdfShown != null || st.textShown != null)) {
+        // the PDF or text in the column filling the workspace, or back beside the canvas
+        e.preventDefault();
+        st.setColumnFilled(!st.columnFilled);
       } else if (isFindKey(e) && st.pdfs.length) {
         // looking for words in the PDFs (docs/PDF.md, *Search*)
         e.preventDefault();
@@ -886,6 +910,9 @@ function WorkspaceContent({
       } else if (isDeselectKey(e) && st.pdfFind && !menu) {
         // (Esc closes the search of PDFs, wherever the keys are)
         st.setPdfFind(null);
+      } else if (isDeselectKey(e) && st.columnFilled && !menu) {
+        // (then Esc takes the column filling the workspace back beside the canvas)
+        st.setColumnFilled(false);
       } else if (isDeselectKey(e) && (selected || st.chosen3d || st.pdfSel || st.pdfBox) && !busy && !menu) {
         // (Esc with the menu open closes the menu only)
         st.clearSel();
@@ -1533,7 +1560,7 @@ function WorkspaceContent({
             {...RISE}
             layout
             role="status"
-            className="absolute right-3 bottom-3 z-50 rounded-full border border-gh-line bg-white/95 shadow-sm px-3 py-1.5 text-xs text-gh-gray"
+            className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : "working"} {...FADE} className="block">
@@ -1544,6 +1571,18 @@ function WorkspaceContent({
                     : working3d}
               </motion.span>
             </AnimatePresence>
+            {/* (making in 3D: how long, and stopped as the atom map is) */}
+            {making3d != null && working3d && chem.state !== "setting-up" && chem.state !== "starting" && (
+              <>
+                <Elapsed since={making3d} />
+                <button
+                  onClick={() => stop3d.current?.()}
+                  className="rounded-full px-2 py-0.5 text-gh-black transition-colors duration-150 ease-meno hover:bg-gh-base"
+                >
+                  Stop
+                </button>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1796,6 +1835,23 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {pdfCard &&
+          (() => {
+            const p = store.getState().pdfs.find((x) => x.id === pdfCard.id);
+            if (!p) return null;
+            const Card = pdfCard.kind === "numbers" ? PdfNumbersCard : PdfPagesCard;
+            return (
+              <Card
+                key={`${pdfCard.kind}:${pdfCard.x},${pdfCard.y}`}
+                pdf={p}
+                at={pdfCard}
+                onMade={(held, name) => putBeside(store.getState(), held, name, p)}
+                onClose={() => setPdfCard(null)}
+              />
+            );
+          })()}
+      </AnimatePresence>
+      <AnimatePresence>
         {colourCard && (
           <ColourCard key={`${colourCard.x},${colourCard.y}`} target={colourCard.target} x={colourCard.x} y={colourCard.y} within={colourCard.within} onClose={() => setColourCard(null)} />
         )}
@@ -2017,6 +2073,16 @@ function WorkspaceContent({
               onBack: () => st.orderShapes([sh.id], false),
             };
           })()}
+          onCombinePdfs={(() => {
+            // (two or more PDFs selected - right-clicked on one of them, or on the selection)
+            const st = store.getState();
+            const chosen = st.pdfs.filter((p) => st.selPdfs.has(p.id));
+            if (chosen.length < 2 || (menu.kind === "pdf" ? !st.selPdfs.has(menu.id ?? -1) : menu.selection !== "here")) return undefined;
+            return () =>
+              void combined(chosen)
+                .then(({ held, name, first }) => putBeside(store.getState(), held, name, first))
+                .catch((e: unknown) => setChemError(`Combine failed: ${e instanceof Error ? e.message : String(e)}`));
+          })()}
           onBoxAround={
             menu.selection === "here"
               ? () => {
@@ -2069,6 +2135,9 @@ function WorkspaceContent({
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),
               ...(!p.spread && !p.icon && p.page > 0 ? { onPrevious: () => st.turnPdf(p.id, p.page - 1) } : {}),
               onRead: () => st.readPdf(p.id),
+              onNumbers: () => setPdfCard({ kind: "numbers", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
+              onPages: () => setPdfCard({ kind: "pages", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
+              onSave: () => void savePdfFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
               // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id
