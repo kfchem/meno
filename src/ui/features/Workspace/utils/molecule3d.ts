@@ -424,7 +424,8 @@ const centreBonds = new WeakMap<readonly ParsedBond[], { centres: Molecule3D["ce
  * is drawn as it was.
  */
 export function withCentres(m: Pick<Molecule3D, "atoms" | "centres">, bonds: ParsedBond[]): DrawnBond[] {
-  if (!m.centres?.length) return bonds;
+  // (bonds that hold them already - the molecule as it is drawn, given again - as they are: never twice)
+  if (!m.centres?.length || (bonds as DrawnBond[]).some((b) => b.endpoints?.length)) return bonds;
   const known = centreBonds.get(bonds);
   if (known && known.centres === m.centres) return known.bonds;
   const n = m.atoms.length;

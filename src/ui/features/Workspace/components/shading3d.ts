@@ -61,6 +61,18 @@ function openTerms(n: number): Float32Array {
  * coarse balls and sticks that stand where its own do (utils/shadows3d).
  * Its atoms and bonds take shadows.
  */
+/**
+ * Each look's bond lines for a frame's `places`, packed as the occlusion
+ * worker takes them (seven numbers a line): what the sticks' shade is
+ * worked out for, a line for each stick drawn - with its sticks to ring
+ * centres, once, where `m` is given as drawn already (withCentres).
+ */
+export function shadedLines(m: Molecule3D, places: Float32Array, style: Style3D): { primary: Float32Array; secondary: Float32Array } {
+  const drawn = m.centres?.length ? { ...m, bonds: withCentres(m, m.bonds) } : m;
+  const of = (look: Role3D) => packLines(bondLines(drawn, places, Math.max(bondRadiusOf(style[look]), LEAST_BOND) * WORLD_PER_ANGSTROM));
+  return { primary: of("primary"), secondary: of("secondary") };
+}
+
 export function useShading3d(o: {
   turned: RefObject<THREE.Group>;
   atoms: RefObject<THREE.InstancedMesh>;
@@ -85,12 +97,7 @@ export function useShading3d(o: {
   const n = m.atoms.length;
   const places = solid.frames[frame];
   // each look's bond lines, as the frame has them: what their shade is worked out for
-  const lines = useMemo(() => {
-    // (with its sticks to ring centres, as the molecule draws them: withCentres)
-    const drawn = m.centres?.length ? { ...m, bonds: withCentres(m, m.bonds) } : m;
-    const of = (look: Role3D) => packLines(bondLines(drawn, places, Math.max(bondRadiusOf(style[look]), LEAST_BOND) * WORLD_PER_ANGSTROM));
-    return { primary: of("primary"), secondary: of("secondary") };
-  }, [m, places, style]);
+  const lines = useMemo(() => shadedLines(m, places, style), [m, places, style]);
   // what is worked out for each look - none yet, where it is being worked out
   const got = useRef<{ for: unknown; primary?: Occlusion; secondary?: Occlusion }>({ for: null });
   useEffect(() => {

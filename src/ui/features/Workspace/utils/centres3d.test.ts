@@ -6,6 +6,7 @@ import { bondLines, pictureMarks, solidOf, withCentres } from "./molecule3d";
 import { blocksOf, moleculeOf } from "../chem/make3d";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
+import { shadedLines } from "../components/shading3d";
 
 /** (eta5-Cp)Fe-Cl in 3D, seen from the side: Fe 0, Cl 1 above it, a pentagon 2-6 below; the Fe-Cp bond as a centre. */
 function cpFe(centres = true): Molecule3D {
@@ -116,5 +117,27 @@ describe("a bond from a metal to a ring's or double bond's centre, in 3D (eta)",
     // the star left out, the rest numbered on: Fe 0, ring 1-5, Cl 6
     expect(m.centres).toEqual([{ metal: 0, atoms: [1, 2, 3, 4, 5] }]);
     expect(m.bonds.some((b) => b.a1 === 0 && b.a2 >= 1 && b.a2 <= 5)).toBe(false);
+  });
+
+  it("is shaded once: a shade for each stick drawn, the molecule given as drawn or as it is", () => {
+    const m: Molecule3D = {
+      id: 2,
+      atoms: [{ el: "Pt", x: 0, y: 0, z: 0 }, { el: "C", x: -0.7, y: 0, z: 2 }, { el: "C", x: 0.7, y: 0, z: 2 }],
+      bonds: [{ a1: 1, a2: 2, order: 2 }],
+      at: { x: 0, y: 0 },
+      centres: [{ metal: 0, atoms: [1, 2] }],
+    };
+    // as the view draws it: the C=C and the stick, two bonds - and given again, still two
+    const drawn = { ...m, bonds: withCentres(m, m.bonds) };
+    expect(drawn.bonds).toHaveLength(2);
+    expect(withCentres(drawn, drawn.bonds)).toBe(drawn.bonds);
+    const places = solidOf(m, STYLE_3D).frames[0];
+    const viewLines = bondLines(drawn, places, 0.1).length;
+    expect(viewLines).toBe(3);
+    for (const given of [drawn, m]) {
+      const shaded = shadedLines(given, places, STYLE_3D);
+      expect(shaded.primary.length / 7).toBe(viewLines);
+      expect(shaded.secondary.length / 7).toBe(viewLines);
+    }
   });
 });
