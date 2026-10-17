@@ -96,6 +96,20 @@ describe("a picture read by a plugin", () => {
     expect(kept.bonds[4]).toEqual({ a: 0, b: 1, order: 1, stereo: "up" });
   });
 
+  it("never draws a wedge narrow at an end with no other bond, however the picture seems to draw it", () => {
+    // (C1 with its ring and the CH, and a methyl on C1 by a wedge seen narrow at the methyl - a label or the wide end's
+    // short run misleading what is measured: a methyl is never a stereocentre)
+    const wedged = [...round, { a: 0, b: 1, order: 1 as const }, { a: 0, b: 5, order: 1 as const, stereo: "up" as const, narrow: "b" as const }];
+    const r = pictureFigure({ atoms: atoms.map((a, i) => (i === 5 ? { ...a, x: 100, y: 70 } : a)), bonds: wedged.filter((b) => !(b.a === 1 && b.b === 5)) })!;
+    const wedge = r.bonds.find((b) => b.stereo)!;
+    // (taken as a wedge whose narrow end is not seen: the plugin's nearer and farther kept, from C1)
+    expect(wedge).toMatchObject({ a: 0, b: 5, stereo: "up", facing: true });
+    expect(structureOf(r, reads).bonds.find((b) => b.stereo)).toMatchObject({ a: 0, b: 5, stereo: "up" });
+    // (two ends with other bonds: as the picture draws it)
+    const between = pictureFigure({ atoms, bonds: [...round, { a: 0, b: 1, order: 1, stereo: "up", narrow: "b" }] })!;
+    expect(between.bonds[4]).toEqual({ a: 1, b: 0, order: 1, stereo: "down" });
+  });
+
   it("where the picture does not say which end is narrow, draws it narrow at the end that can be a stereocentre", () => {
     // (C1 has three bonds and a hydrogen: a stereocentre; a methyl cannot be one)
     const methyl = [...round.slice(0, 2), { a: 1, b: 4, order: 1 as const }];

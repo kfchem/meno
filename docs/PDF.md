@@ -1436,7 +1436,10 @@ Each about 1.5 GB to download, about 2.2 GB kept; for macOS and Windows
   nearer - a wedge narrow at one end is a hash narrow at the other - so
   the worker looks at the picture for which end its ink draws narrow;
   where it cannot tell, Meno draws it narrow at the end that can be a
-  stereocentre;
+  stereocentre. An end with no other bond (a methyl, an H, a group's
+  label) is never a stereocentre, so a wedge seen narrow there, its other
+  end bonded on, is taken as one whose narrow end could not be told: a
+  label, or a wide end drawn short of it, misleads what is measured;
 - **atoms**: an element as the model reads it, with its charge (its
   notation's hydrogens and stereo marks are not a label); a group's name
   read as a typed label is; an isotope, seldom drawn, is unsure;
