@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ACCEL_EXACT, Atom, Atoms, BondType, _det_ez, acosOf, getMaps, kabsch, type Departures } from "./accelMapper";
 import type { Molecule } from "./molecule";
-import { ETHANE_BONDS, ethaneAtoms, molecule, moved, oxaElectrocyclisation, sn2, trueMap } from "./reactionMap.fixtures";
+import { ETHANE_BONDS, ethaneAtoms, molecule, moved, oxaElectrocyclisation, sn2, trueMap, turnedMethyl } from "./reactionMap.fixtures";
 
 /**
  * Meno's three departures from ACCeL, each beside what ACCeL itself does
@@ -127,5 +127,20 @@ describe("clampFaceCosine", () => {
 
   it("leaves a cosine that is not a number (a zero vector's) as it was", () => {
     expect(Number.isNaN(acosOf(NaN, true))).toBe(true);
+  });
+});
+
+describe("signedTorsion", () => {
+  const { reactant, product, productOrder } = turnedMethyl();
+  const unturned = trueMap(["C", "O", "Cl", "H0", "H1", "H2"], productOrder);
+
+  it("ACCeL pairs the hydrogens furthest from 0 degrees on each side, -124 with +125, so the methyl comes out turned 120 degrees", () => {
+    const map = firstMap(product, reactant, ACCEL_EXACT);
+    expect(map).not.toEqual(unturned);
+    expect(map[productOrder.indexOf("H1")]).toBe(3); // product H1 (+125) from reactant H0 (-124)
+  });
+
+  it("Meno pairs it with the one nearest its torsion, sign and all: the methyl turned 5 degrees", () => {
+    expect(firstMap(product, reactant, only({ signedTorsion: true }))).toEqual(unturned);
   });
 });

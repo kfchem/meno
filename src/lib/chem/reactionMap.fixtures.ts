@@ -309,6 +309,32 @@ export function oxaElectrocyclisation(): { reactant: Molecule; product: Molecule
 }
 
 /**
+ * Methyl hypochlorite, CH3-O-Cl, at two moments: its methyl turned 5 degrees
+ * about C-O between them (H-C-O-Cl -124, 120, -2 degrees, then -120, 125, 3).
+ */
+export function turnedMethyl(): { reactant: Molecule; product: Molecule; productOrder: string[] } {
+  const at = (torsions: number[]): Record<string, [string, V]> => {
+    const c: V = [0, 0, 0];
+    const o: V = [1.42, 0, 0];
+    const cl = place([1.42, 1, 0], c, o, 1.69, 110, 37);
+    const out: Record<string, [string, V]> = { C: ["C", c], O: ["O", o], Cl: ["Cl", cl] };
+    torsions.forEach((t, i) => (out[`H${i}`] = ["H", place(cl, o, c, 1.09, 109.5, t)]));
+    return out;
+  };
+  const bonds: [string, string, number][] = [
+    ["C", "O", 1],
+    ["O", "Cl", 1],
+    ["C", "H0", 1],
+    ["C", "H1", 1],
+    ["C", "H2", 1],
+  ];
+  const reactant = molecule(at([-124, 120, -2]), bonds);
+  const productOrder = ["H1", "Cl", "C", "H0", "O", "H2"];
+  const product = molecule(at([-120, 125, 3]), bonds, productOrder);
+  return { reactant, product, productOrder };
+}
+
+/**
  * A structure with `n` waters beside it, each turned and placed its own way
  * (`seed` shifts them, so that the two sides' waters stand differently): one
  * structure, the waters unbonded to it or to one another.

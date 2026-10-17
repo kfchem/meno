@@ -748,6 +748,12 @@ export type Chain = Pair[];
  *   allows, for the least total RMSD (`refinedSpectators`) - which is the
  *   permutation ACCeL's ordering (total_rmsd, modeler.py 1564) puts first
  *   where it tries them all.
+ * - `signedTorsion`: three or more like atoms on an atom, placed by a
+ *   torsion - the first on the one side taken as ACCeL takes it (the torsion
+ *   furthest from 0), and paired with the one on the other side whose
+ *   torsion, sign and all, is nearest its own - rather than with the one
+ *   furthest from 0 there too, whichever way round (modeler.py 1077-1094,
+ *   965-987): a methyl turned 5 degrees is not taken as turned 120.
  */
 export type Departures = {
   firstOfGroupByGeometry: boolean;
@@ -757,6 +763,7 @@ export type Departures = {
   skipUnflaggedFacePair: boolean;
   spectatorsByRmsd: boolean;
   spectatorsRefined: boolean;
+  signedTorsion: boolean;
 };
 export const ACCEL_EXACT: Departures = {
   firstOfGroupByGeometry: false,
@@ -766,6 +773,7 @@ export const ACCEL_EXACT: Departures = {
   skipUnflaggedFacePair: false,
   spectatorsByRmsd: false,
   spectatorsRefined: false,
+  signedTorsion: false,
 };
 export const MENO_DEPARTURES: Departures = {
   firstOfGroupByGeometry: true,
@@ -775,6 +783,7 @@ export const MENO_DEPARTURES: Departures = {
   skipUnflaggedFacePair: true,
   spectatorsByRmsd: true,
   spectatorsRefined: true,
+  signedTorsion: true,
 };
 
 /** What a trace hook is shown of each _get_maps call as it returns: its locals by their Python names. */
@@ -873,6 +882,36 @@ export function _get_most_dihedral(a_list: readonly Atom[], b: Atom, c: Atom, d:
     }
   }
   return [max_dihedral_a, max_dihedral_angle];
+}
+
+/** The a-b-c-d torsion with its sign, in degrees, as _get_most_dihedral reads it before taking its size. */
+function signedTorsion(a: Atom, b: Atom, c: Atom, d: Atom, clamp: boolean): number {
+  const vcb = sub(c.xyz, b.xyz);
+  const pvac = cross(sub(a.xyz, b.xyz), vcb);
+  const pvbd = cross(sub(d.xyz, c.xyz), vcb);
+  let angle = acosOf(dot(pvac, pvbd) / (norm(pvac) * norm(pvbd)), clamp);
+  if (dot(pvac, cross(pvbd, vcb)) < 0) angle = -angle;
+  return rad2deg(angle);
+}
+
+/**
+ * [Meno departure: signedTorsion] Of `bs`, the one whose b-c-d torsion is
+ * nearest `torsion` (degrees, either way round the circle); the first on a tie.
+ */
+function nearestTorsion(bs: readonly Atom[], b: Atom, c: Atom, d: Atom, torsion: number, clamp: boolean): [Atom, number] {
+  let best = bs[0];
+  let bestTurn = Infinity;
+  let bestTorsion = 0;
+  for (const x of bs) {
+    const t = signedTorsion(x, b, c, d, clamp);
+    const turn = Math.abs(((((t - torsion) % 360) + 540) % 360) - 180);
+    if (turn < bestTurn) {
+      best = x;
+      bestTurn = turn;
+      bestTorsion = t;
+    }
+  }
+  return [best, Math.abs(bestTorsion)];
 }
 
 /**
@@ -1754,7 +1793,17 @@ function getMapsCall(
           for (const known_2idx of known_2idxs) {
             any_torsion = true;
             const [pre_a, dihedral_a] = _get_most_dihedral(large_as, root_pair[0], assigned_as[known_1idx], assigned_as[known_2idx], dep.clampTorsionCosine);
-            const [pre_b, dihedral_b] = _get_most_dihedral(large_bs, root_pair[1], assigned_bs[known_1idx], assigned_bs[known_2idx], dep.clampTorsionCosine);
+            // [Meno departure: signedTorsion] the other side's nearest pre_a's torsion, sign and all
+            const [pre_b, dihedral_b] = dep.signedTorsion
+              ? nearestTorsion(
+                  large_bs,
+                  root_pair[1],
+                  assigned_bs[known_1idx],
+                  assigned_bs[known_2idx],
+                  signedTorsion(pre_a, root_pair[0], assigned_as[known_1idx], assigned_as[known_2idx], dep.clampTorsionCosine),
+                  dep.clampTorsionCosine,
+                )
+              : _get_most_dihedral(large_bs, root_pair[1], assigned_bs[known_1idx], assigned_bs[known_2idx], dep.clampTorsionCosine);
             reached.push([pyMax(dihedral_a, dihedral_b), pre_a, pre_b]);
             if (pyMax(dihedral_a, dihedral_b) >= max_dihedral) {
               max_dihedral = pyMax(dihedral_a, dihedral_b);

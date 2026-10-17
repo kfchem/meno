@@ -149,7 +149,7 @@ equivalent atoms - may come in the other order. The rounded scores
 
 ### Where Meno departs from ACCeL
 
-Meno departs from the original in seven places. The port keeps them as
+Meno departs from the original in eight places. The port keeps them as
 ACCeL has them (`ACCEL_EXACT`, which the checks below run); Meno maps with
 the departures (`MENO_DEPARTURES`), each marked `[Meno departure: ...]`
 where it is in `accelMapper.ts` and tested beside what ACCeL does with the
@@ -184,6 +184,17 @@ maps as ACCeL does.
   `_order_maps` computes `bool ^ None`, which Python refuses: ACCeL fails
   on an oxa-6π electrocyclisation (a dienal closing to a 2H-pyran), for
   one. Meno leaves that pair out of the pericyclic score.
+
+- **A group turned, read by its sign** (`signedTorsion`). Three or more
+  like atoms on an atom (a methyl's hydrogens) are placed by a torsion
+  about the bond to a paired neighbour: `_get_most_dihedral` takes, on each
+  side, the atom whose torsion is furthest from 0 and pairs the two. It
+  compares sizes only, so with one hydrogen near 0 degrees and the others
+  near -120 and +120, a methyl turned a few degrees can have -124 on one
+  side and +125 on the other as the two furthest, and comes out turned 120
+  degrees. Meno keeps ACCeL's choice on the first side and pairs it with
+  the atom on the other side whose torsion, sign and all, is nearest its
+  own; the rest of the group follow as in ACCeL.
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
   `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
