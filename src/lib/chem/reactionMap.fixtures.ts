@@ -244,3 +244,66 @@ export function dielsAlder(): { reactants: Molecule[]; product: Molecule; produc
 export function trueMap(reactantNames: string[], productOrder: string[]): number[] {
   return productOrder.map((k) => reactantNames.indexOf(k));
 }
+
+/** A dienal closing to a 2H-pyran (an oxa-6π electrocyclisation): its ends, O and CH2, bond. */
+export function oxaElectrocyclisation(): { reactant: Molecule; product: Molecule; productOrder: string[] } {
+  const ring = ["O1", "C2", "C3", "C4", "C5", "C6"];
+  const at = (i: number, r: number, z = 0): V => {
+    const t = ((90 + 60 * i) * Math.PI) / 180;
+    return [r * Math.cos(t), r * Math.sin(t), z];
+  };
+  const radial = (i: number): V => at(i, 1);
+  const plus = (p: V, d: V, k: number): V => [p[0] + d[0] * k, p[1] + d[1] * k, p[2] + d[2] * k];
+  // the product: a flat six-membered ring, the CH2's hydrogens above and below it
+  const p: Record<string, [string, V]> = {};
+  ring.forEach((k, i) => (p[k] = [k[0], at(i, 1.42)]));
+  [1, 2, 3, 4].forEach((i) => (p[`H${i + 1}`] = ["H", plus(at(i, 1.42), radial(i), 1.08)]));
+  const c6 = at(5, 1.42);
+  const r6 = radial(5);
+  p.H6a = ["H", plus(plus(c6, r6, 0.64), [0, 0, 1], 0.88)];
+  p.H6b = ["H", plus(plus(c6, r6, 0.64), [0, 0, -1], 0.88)];
+  // the reactant: the same chain opened, its ends turned apart and a little out of the plane
+  const r: Record<string, [string, V]> = { ...p };
+  r.O1 = ["O", plus(at(0, 1.42, 0.35), radial(0), 0.75)];
+  r.C6 = ["C", plus(at(5, 1.42, -0.35), radial(5), 0.75)];
+  const c6r = r.C6[1];
+  const side: V = [Math.cos((-30 * Math.PI) / 180), Math.sin((-30 * Math.PI) / 180), 0];
+  r.H6a = ["H", plus(c6r, r6, 1.08)];
+  r.H6b = ["H", plus(c6r, side, 1.08)];
+  const hs: [string, string, number][] = [
+    ["C2", "H2", 1],
+    ["C3", "H3", 1],
+    ["C4", "H4", 1],
+    ["C5", "H5", 1],
+    ["C6", "H6a", 1],
+    ["C6", "H6b", 1],
+  ];
+  const names = [...ring, "H2", "H3", "H4", "H5", "H6a", "H6b"];
+  const reactant = molecule(
+    r,
+    [
+      ["O1", "C2", 2],
+      ["C2", "C3", 1],
+      ["C3", "C4", 2],
+      ["C4", "C5", 1],
+      ["C5", "C6", 2],
+      ...hs,
+    ],
+    names,
+  );
+  const productOrder = ["C4", "H6b", "O1", "C2", "H3", "C6", "H5", "C3", "H2", "C5", "H6a", "H4"];
+  const product = molecule(
+    p,
+    [
+      ["O1", "C2", 1],
+      ["C2", "C3", 2],
+      ["C3", "C4", 1],
+      ["C4", "C5", 2],
+      ["C5", "C6", 1],
+      ["C6", "O1", 1],
+      ...hs,
+    ],
+    productOrder,
+  );
+  return { reactant, product, productOrder };
+}

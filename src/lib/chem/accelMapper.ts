@@ -468,6 +468,12 @@ const norm = (a: readonly number[]): number => Math.sqrt(a[0] * a[0] + a[1] * a[
 /** np.rad2deg / np.degrees */
 const DEG = 180 / Math.PI;
 const rad2deg = (x: number): number => x * DEG;
+/**
+ * np.arccos; with `clamp` (Meno's departures), a cosine that rounding has
+ * pushed just past -1 or 1 taken as -1 or 1 - not a number otherwise. A
+ * cosine that is not a number (a zero vector's) stays one either way.
+ */
+export const acosOf = (x: number, clamp: boolean): number => Math.acos(clamp ? Math.min(1, Math.max(-1, x)) : x);
 
 /** numpy's pairwise sum of a contiguous array (pairwise_sum in loops_utils.h). */
 function pairwiseSum(xs: readonly number[], lo = 0, n = xs.length): number {
@@ -687,6 +693,50 @@ export function getSplitted(atoms: Atoms): number[][] {
 export type Pair = [Atom, Atom];
 export type Chain = Pair[];
 
+/**
+ * Meno's departures from ACCeL - each off in `ACCEL_EXACT`, which the port
+ * runs as the original does, and on in `MENO_DEPARTURES`, which Meno maps
+ * with (docs/ATOM-MAPPING.md, *Where Meno departs from ACCeL*):
+ *
+ * - `firstOfGroupByGeometry`: three or more like atoms on an atom with no
+ *   torsion to place the first of them by (no paired neighbour with a
+ *   paired neighbour of its own - the methyl of an SN2 at a methyl) - the
+ *   first is paired with the one nearest it, the two structures laid over
+ *   one another by the pairs so far, rather than with the first by atom
+ *   order (modeler.py 1069-1071, 1098).
+ * - `clampTorsionCosine`: a torsion's cosine kept within [-1, 1], so that an
+ *   atom exactly anti is not lost to rounding (modeler.py 980).
+ * - `clampEzCosine`: likewise in _det_ez, so that an exactly anti torsion
+ *   reads as E (modeler.py 951).
+ * - `clampFaceCosine`: likewise in _order_maps' face tests, so that a face
+ *   exactly opposite reads as the other face, not as under 90 degrees
+ *   (modeler.py 1404, 1425, 1441).
+ * - `skipUnflaggedFacePair`: a pair of faces, the same forwards and
+ *   backwards, with no face flag, left out of the pericyclic score rather
+ *   than failing (modeler.py 1720).
+ */
+export type Departures = {
+  firstOfGroupByGeometry: boolean;
+  clampTorsionCosine: boolean;
+  clampEzCosine: boolean;
+  clampFaceCosine: boolean;
+  skipUnflaggedFacePair: boolean;
+};
+export const ACCEL_EXACT: Departures = {
+  firstOfGroupByGeometry: false,
+  clampTorsionCosine: false,
+  clampEzCosine: false,
+  clampFaceCosine: false,
+  skipUnflaggedFacePair: false,
+};
+export const MENO_DEPARTURES: Departures = {
+  firstOfGroupByGeometry: true,
+  clampTorsionCosine: true,
+  clampEzCosine: true,
+  clampFaceCosine: true,
+  skipUnflaggedFacePair: true,
+};
+
 /** What a trace hook is shown of each _get_maps call as it returns: its locals by their Python names. */
 export type GetMapsSnapshot = {
   _recursion_counter: number;
@@ -718,13 +768,14 @@ function chainKey(chain: readonly Pair[]): string {
 const symbolIndex = (s: string): number => SYMBOLS.indexOf(s);
 
 /** _det_ez (945-957): whether a-b-c-d is a dihedral over 90 degrees either way (E). */
-export function _det_ez(a: Atom, b: Atom, c: Atom, d: Atom): boolean {
+export function _det_ez(a: Atom, b: Atom, c: Atom, d: Atom, clamp = false): boolean {
   const vab = sub(a.xyz, b.xyz);
   const vcb = sub(c.xyz, b.xyz);
   const vdc = sub(d.xyz, c.xyz);
   const pvac = cross(vab, vcb);
   const pvbd = cross(vdc, vcb);
-  let angle = Math.acos(dot(pvac, pvbd) / (norm(pvac) * norm(pvbd)));
+  // [Meno departure: clampEzCosine] a cosine rounded past -1 or 1 is taken as -1 or 1
+  let angle = acosOf(dot(pvac, pvbd) / (norm(pvac) * norm(pvbd)), clamp);
   if (dot(pvac, cross(pvbd, vcb)) < 0) angle = -angle;
   angle = rad2deg(angle);
   if (angle > 90 || angle < -90) return true;
@@ -739,7 +790,7 @@ export function _det_chirality(a: Atom, b: Atom, c: Atom, d: Atom): boolean {
 }
 
 /** _get_most_dihedral (965-987): of `a_list`, the one whose a-b-c-d dihedral is furthest from 0, the last on a tie. */
-export function _get_most_dihedral(a_list: readonly Atom[], b: Atom, c: Atom, d: Atom): [Atom, number] {
+export function _get_most_dihedral(a_list: readonly Atom[], b: Atom, c: Atom, d: Atom, clamp = false): [Atom, number] {
   let max_dihedral_a = a_list[0];
   let max_dihedral_angle = 0;
   const vb = b.xyz;
@@ -754,7 +805,9 @@ export function _get_most_dihedral(a_list: readonly Atom[], b: Atom, c: Atom, d:
     const pvbd = cross(vdc, vcb);
     const dac = norm(pvac);
     const dbd = norm(pvbd);
-    let angle = Math.acos(dot(pvac, pvbd) / (dac * dbd));
+    const cos = dot(pvac, pvbd) / (dac * dbd);
+    // [Meno departure: clampTorsionCosine] a cosine rounded past -1 or 1 is taken as -1 or 1
+    let angle = acosOf(cos, clamp);
     if (dot(pvac, cross(pvbd, vcb)) < 0) angle = -angle;
     angle = Math.abs(rad2deg(angle));
     if (max_dihedral_angle <= angle) {
@@ -832,6 +885,77 @@ export function _isproper_bonding(atom_a: Atom, atom_b: Atom, side_pairs: readon
 }
 
 /**
+ * [Meno departure: firstOfGroupByGeometry] Of `bs`, the one nearest `a` once
+ * b's structure is laid over a's: by the pairs so far within the two root
+ * atoms' own molecules, where at least three of them span a plane (the best
+ * rotation, as _kabsch finds it), else by the root pair's atoms set on one
+ * another. The first of equals.
+ */
+export function nearestOver(a: Atom, bs: readonly Atom[], assigned_as: readonly Atom[], assigned_bs: readonly Atom[], root_pair: Pair): Atom {
+  // (only pairs in the root's own molecule on each side: molecules apart stand where they were set, not where they react)
+  const inA = moleculeOf(root_pair[0]);
+  const inB = moleculeOf(root_pair[1]);
+  const kept = assigned_as.map((_, i) => i).filter((i) => inA.has(assigned_as[i]) && inB.has(assigned_bs[i]));
+  const fit = kabschFit(
+    kept.map((i) => assigned_as[i].xyz),
+    kept.map((i) => assigned_bs[i].xyz),
+  );
+  const place = (p: readonly number[]): V3 => {
+    if (fit) {
+      const q = sub(p, fit.tarMean);
+      return [0, 1, 2].map((j) => q[0] * fit.r[0][j] + q[1] * fit.r[1][j] + q[2] * fit.r[2][j] + fit.refMean[j]) as V3;
+    }
+    const shift = sub(root_pair[0].xyz, root_pair[1].xyz);
+    return [p[0] + shift[0], p[1] + shift[1], p[2] + shift[2]];
+  };
+  let best = bs[0];
+  let bestD = Infinity;
+  for (const b of bs) {
+    const d = norm(sub(place(b.xyz), a.xyz));
+    if (d < bestD) {
+      best = b;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/** The atoms bonded, directly or not, to `atom`, itself among them. */
+function moleculeOf(atom: Atom): Set<Atom> {
+  const seen = new Set<Atom>([atom]);
+  const todo = [atom];
+  while (todo.length) {
+    for (const n of todo.pop()!.bonds) {
+      if (seen.has(n)) continue;
+      seen.add(n);
+      todo.push(n);
+    }
+  }
+  return seen;
+}
+
+/** The rotation _kabsch finds, with the two centroids - none where the points do not span a plane. */
+function kabschFit(refXyzs: readonly (readonly number[])[], tarXyzs: readonly (readonly number[])[]): { r: number[][]; refMean: V3; tarMean: V3 } | null {
+  const n = refXyzs.length;
+  if (n < 3) return null;
+  const mean = (xs: readonly (readonly number[])[]): V3 => {
+    const m: V3 = [0, 0, 0];
+    for (const x of xs) for (let k = 0; k < 3; k++) m[k] += x[k];
+    return [m[0] / n, m[1] / n, m[2] / n];
+  };
+  const refMean = mean(refXyzs);
+  const tarMean = mean(tarXyzs);
+  const ref = refXyzs.map((p) => sub(p, refMean));
+  const tar = tarXyzs.map((p) => sub(p, tarMean));
+  const h = [0, 1, 2].map((i) => [0, 1, 2].map((j) => tar.reduce((acc, t, k) => acc + t[i] * ref[k][j], 0)));
+  const { u, s, vt } = svd3(h);
+  if (s[1] <= s[0] * 1e-6) return null;
+  if (det3(u) * det3(vt) < 0.0) for (let i = 0; i < 3; i++) u[i][2] = -u[i][2];
+  const r = [0, 1, 2].map((i) => [0, 1, 2].map((j) => u[i][0] * vt[0][j] + u[i][1] * vt[1][j] + u[i][2] * vt[2][j]));
+  return { r, refMean, tarMean };
+}
+
+/**
  * _get_maps (748-1254): the maps of atoms_a onto atoms_b - each a list of
  * (a, b) pairs. `known_pairs` are atom numbers at the top call, pairs of
  * atoms in the recursion (as in the original, which reads both through
@@ -844,6 +968,7 @@ export function _get_maps(
   terminal_first: boolean | null = null,
   _recursion_counter = 0,
   trace?: MapperTrace,
+  dep: Departures = ACCEL_EXACT,
 ): Chain[] {
   // 755-768
   const initial_pairs: Pair[] = [];
@@ -1060,12 +1185,14 @@ export function _get_maps(
         const known_b1_idxs = root_pair[1].bonds.filter((b) => assigned_bs.includes(b)).map((b) => assigned_bs.indexOf(b));
         const known_1idxs = pyIntSetAnd(known_a1_idxs, known_b1_idxs);
         if (known_1idxs.length === 0) {
-          _new_assign([large_as[0], large_bs[0]], root_pair);
+          // [Meno departure: firstOfGroupByGeometry] the nearest, not the first by atom order
+          _new_assign([large_as[0], dep.firstOfGroupByGeometry ? nearestOver(large_as[0], large_bs, assigned_as, assigned_bs, root_pair) : large_bs[0]], root_pair);
           continue;
         }
         let pre_large_a = large_as[0];
         let pre_large_b = large_bs[0];
         let max_dihedral = 0.0;
+        let any_torsion = false;
         for (const known_1idx of known_1idxs) {
           const known_a2_idxs = assigned_as[known_1idx].bonds
             .filter((a) => assigned_as.includes(a) && a !== root_pair[0])
@@ -1075,8 +1202,9 @@ export function _get_maps(
             .map((b) => assigned_bs.indexOf(b));
           const known_2idxs = pyIntSetAnd(known_a2_idxs, known_b2_idxs);
           for (const known_2idx of known_2idxs) {
-            const [pre_a, dihedral_a] = _get_most_dihedral(large_as, root_pair[0], assigned_as[known_1idx], assigned_as[known_2idx]);
-            const [pre_b, dihedral_b] = _get_most_dihedral(large_bs, root_pair[1], assigned_bs[known_1idx], assigned_bs[known_2idx]);
+            any_torsion = true;
+            const [pre_a, dihedral_a] = _get_most_dihedral(large_as, root_pair[0], assigned_as[known_1idx], assigned_as[known_2idx], dep.clampTorsionCosine);
+            const [pre_b, dihedral_b] = _get_most_dihedral(large_bs, root_pair[1], assigned_bs[known_1idx], assigned_bs[known_2idx], dep.clampTorsionCosine);
             if (pyMax(dihedral_a, dihedral_b) >= max_dihedral) {
               max_dihedral = pyMax(dihedral_a, dihedral_b);
               pre_large_a = pre_a;
@@ -1084,6 +1212,8 @@ export function _get_maps(
             }
           }
         }
+        // [Meno departure: firstOfGroupByGeometry] no torsion to go by: the nearest, not the first by atom order
+        if (!any_torsion && dep.firstOfGroupByGeometry) pre_large_b = nearestOver(large_as[0], large_bs, assigned_as, assigned_bs, root_pair);
         _new_assign([pre_large_a, pre_large_b], root_pair);
         continue;
       }
@@ -1123,8 +1253,8 @@ export function _get_maps(
             }
           }
           if (two_bond_pair === null) continue;
-          const flag_a = _det_ez(two_bond_pair[0], known_as[0], root_pair[0], large_as[0]);
-          const flag_b = _det_ez(two_bond_pair[1], corre_bs[0], root_pair[1], large_bs[0]);
+          const flag_a = _det_ez(two_bond_pair[0], known_as[0], root_pair[0], large_as[0], dep.clampEzCosine);
+          const flag_b = _det_ez(two_bond_pair[1], corre_bs[0], root_pair[1], large_bs[0], dep.clampEzCosine);
           if (flag_a === flag_b) _new_assign([large_as[0], large_bs[0]], root_pair);
           else _new_assign([large_as[0], large_bs[1]], root_pair);
           continue;
@@ -1243,7 +1373,7 @@ export function _get_maps(
   const recursive_extended_chains: Chain[] = [];
   for (const chain of extracted_canonical_extended_chains) {
     if (chain.length < Math.min(atoms_a.length, atoms_b.length)) {
-      const new_maps = _get_maps(atoms_a, atoms_b, chain, false, _recursion_counter + 1, trace);
+      const new_maps = _get_maps(atoms_a, atoms_b, chain, false, _recursion_counter + 1, trace, dep);
       if (new_maps.length === 0) recursive_extended_chains.push(chain);
       else for (const new_map of new_maps) recursive_extended_chains.push([...chain, ...new_map]);
     } else {
@@ -1491,7 +1621,14 @@ class PythonError extends Error {}
  * next to those broken; faces and suprafaciality as pericyclic reactions
  * go; local and total RMSD last - each a stable sort, the last key first.
  */
-export function _order_maps(atoms_a: Atoms, atoms_b: Atoms, atom_maps: Chain[], options: Partial<Record<string, number>> = {}, trace?: MapperTrace): Chain[] {
+export function _order_maps(
+  atoms_a: Atoms,
+  atoms_b: Atoms,
+  atom_maps: Chain[],
+  options: Partial<Record<string, number>> = {},
+  trace?: MapperTrace,
+  dep: Departures = ACCEL_EXACT,
+): Chain[] {
   // 1386-1395
   const get_normal_vector = (a: Atom, b: Atom, c: Atom): V3 => {
     let ord_atoms: Atom[];
@@ -1520,7 +1657,8 @@ export function _order_maps(atoms_a: Atoms, atoms_b: Atoms, atom_maps: Chain[], 
     if (non_rea_atoms.length !== 3) return null;
     const nvec = get_normal_vector(non_rea_atoms[0], non_rea_atoms[1], non_rea_atoms[2]);
     const st = norm(center_to_reactive_vec) * norm(nvec);
-    const theta = Math.acos(dot(center_to_reactive_vec, nvec) / st);
+    // [Meno departure: clampFaceCosine] a cosine rounded past -1 or 1 is taken as -1 or 1
+    const theta = acosOf(dot(center_to_reactive_vec, nvec) / st, dep.clampFaceCosine);
     if (rad2deg(theta) >= 90) return false;
     return true;
   };
@@ -1544,7 +1682,8 @@ export function _order_maps(atoms_a: Atoms, atoms_b: Atoms, atom_maps: Chain[], 
       return null;
     }
     const st = norm(xvec) * norm(yvec);
-    const theta = Math.acos(dot(xvec, yvec) / st);
+    // [Meno departure: clampFaceCosine]
+    const theta = acosOf(dot(xvec, yvec) / st, dep.clampFaceCosine);
     if (rad2deg(theta) >= 90) return false;
     return true;
   };
@@ -1566,7 +1705,8 @@ export function _order_maps(atoms_a: Atoms, atoms_b: Atoms, atom_maps: Chain[], 
       return null;
     }
     const st = norm(xvec) * norm(yvec);
-    const theta = Math.acos(dot(xvec, yvec) / st);
+    // [Meno departure: clampFaceCosine]
+    const theta = acosOf(dot(xvec, yvec) / st, dep.clampFaceCosine);
     if (rad2deg(theta) >= 90) return false;
     return true;
   };
@@ -1815,7 +1955,11 @@ export function _order_maps(atoms_a: Atoms, atoms_b: Atoms, atom_maps: Chain[], 
       if (!eqList(fs[0], [...fs[1]].reverse())) continue;
       if (fs[0].length % 2 !== 0) continue;
       const v = faceGet(p, fs[0])!.value;
-      if (v === null) throw new PythonError("unsupported operand type(s) for ^: 'bool' and 'NoneType'");
+      if (v === null) {
+        // [Meno departure: skipUnflaggedFacePair] left out, where Python raises
+        if (dep.skipUnflaggedFacePair) continue;
+        throw new PythonError("unsupported operand type(s) for ^: 'bool' and 'NoneType'");
+      }
       if ((fs[0].length % 4 === 0) !== v) evaluated_dic.pericyclic_face -= 1;
       else evaluated_dic.pericyclic_face += 1;
     }
@@ -1978,13 +2122,15 @@ export type MapOptions = {
   terminalFirst?: boolean | null;
   options?: Partial<Record<string, number>>;
   trace?: MapperTrace;
+  /** Meno's departures from ACCeL; none unless given. */
+  departures?: Departures;
 };
 
 /** The ordered maps of target onto self, as (target atom, self atom) pairs. */
 export function orderedMaps(self: Atoms, target: Atoms, o: MapOptions = {}): Chain[] {
-  let atoms_map = _get_maps(target, self, o.knownPairs ?? [], o.terminalFirst ?? null, 0, o.trace);
+  let atoms_map = _get_maps(target, self, o.knownPairs ?? [], o.terminalFirst ?? null, 0, o.trace, o.departures);
   atoms_map = _correct_maps(target, self, atoms_map);
-  atoms_map = _order_maps(target, self, atoms_map, o.options ?? {}, o.trace);
+  atoms_map = _order_maps(target, self, atoms_map, o.options ?? {}, o.trace, o.departures);
   return atoms_map;
 }
 
