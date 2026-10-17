@@ -18,7 +18,8 @@ import { snapBond, type Pt } from "./extendSnap";
 import { followChain, startChain, type Chain } from "./chain";
 import { cellOf, nearestCell, neighboursOf } from "./honeycomb";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { etaRingAt } from "../chem/eta";
+import { etaBondAt, etaRingAt } from "../chem/eta";
+import { ATOM_PICK_RADIUS_RATIO } from "../constants";
 
 /**
  * An atom a stroke has reached: a new one where it goes, an atom already
@@ -116,6 +117,8 @@ function atomNear(model: StrokeModel, index: StrokeIndex, p: Pt, reach: number, 
 
 /** How near an atom the end of a bond has to come to close onto it. */
 export const JOIN_REACH = 0.4;
+/** How far off a double bond's line, against a bond's length, a bond from a metal ending on its middle binds it (eta2). */
+export const ETA2_ACROSS = 0.2;
 
 /**
  * A stroke from the atom `baseId`, or - a chain - from `start` on empty
@@ -326,6 +329,13 @@ export function strokeTarget(
     trigonalTo = b.trigonalTo;
   }
   // closing onto an atom within reach: one already there...
+  // from a metal, on the middle of a double or triple bond, on no atom:
+  // that bond, bound through both its atoms by one bond to its middle
+  // (eta2, chem/eta)
+  if (s.kind === "bond" && t.tipAtom != null && s.nodes.length === 0) {
+    const eta2 = etaBondAt(model as unknown as Parameters<typeof etaBondAt>[0], t.tipAtom, pointer, ETA2_ACROSS * length, ATOM_PICK_RADIUS_RATIO * length);
+    if (eta2) return { tip: t.tip, end: eta2.centre, ring: eta2.ring };
+  }
   const reach = JOIN_REACH * length;
   let bestFar = reach;
   let join: { atomId?: number; pathIndex?: number; at: Pt } | null = null;

@@ -166,3 +166,44 @@ export function etaRingAt(model: Graph, metal: number, p: { x: number; y: number
   );
   return bound ? null : { ring, centre: middleOf(ring, at)! };
 }
+
+/**
+ * The double or triple bond a bond drawn from metal `metal` binds through
+ * both its atoms when it ends at `p` on that bond's middle, on no atom
+ * (eta2: an alkene, an alkyne): a bond between two atoms other than metals,
+ * the metal neither of them, whose middle half the point lies on - within
+ * `across` of its line, the nearest - and not already bound to the metal
+ * so; its two atoms, and its middle, where the bond goes. `onAtom` is how
+ * near an atom the point is that atom's instead.
+ */
+export function etaBondAt(
+  model: Graph,
+  metal: number,
+  p: { x: number; y: number },
+  across: number,
+  onAtom: number,
+): { ring: number[]; centre: { x: number; y: number } } | null {
+  const m = model.atoms.find((a) => a.id === metal);
+  if (!m || !isMetal(m.el)) return null;
+  if (model.atoms.some((a) => Math.hypot(a.x - p.x, a.y - p.y) <= onAtom)) return null;
+  const at = new Map(model.atoms.map((a) => [a.id, a]));
+  let best: { ring: number[]; d: number } | null = null;
+  for (const b of model.bonds) {
+    if (b.order < 2 || b.endpoints?.length || b.a === metal || b.b === metal) continue;
+    const u = at.get(b.a);
+    const v = at.get(b.b);
+    if (!u || !v || isMetal(u.el) || isMetal(v.el) || u.el === "*" || v.el === "*") continue;
+    const dx = v.x - u.x;
+    const dy = v.y - u.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) continue;
+    const t = ((p.x - u.x) * dx + (p.y - u.y) * dy) / len2;
+    if (t < 0.25 || t > 0.75) continue;
+    const d = Math.abs((p.x - u.x) * dy - (p.y - u.y) * dx) / Math.sqrt(len2);
+    if (d <= across && (!best || d < best.d)) best = { ring: [b.a, b.b], d };
+  }
+  if (!best) return null;
+  const [a, z] = best.ring;
+  const bound = model.bonds.some((b) => (b.a === metal || b.b === metal) && b.endpoints?.length === 2 && b.endpoints.includes(a) && b.endpoints.includes(z));
+  return bound ? null : { ring: best.ring, centre: middleOf(best.ring, at)! };
+}

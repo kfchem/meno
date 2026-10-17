@@ -250,3 +250,100 @@ describe("a ligand bound so, in a file", () => {
     expect(etaOf(laid).map((b) => b.endpoints!.length)).toEqual([5, 5]);
   });
 });
+
+/** Zeise's anion drawn without its ethylene bound: Pt, three Cl, a C=C above the platinum. */
+function zeise() {
+  const d = drawing();
+  const pt = d.atom("Pt", 0, 0);
+  for (const [x, y] of [[-1, 0], [1, 0], [0, -1]]) d.bond(pt, d.atom("Cl", x, y));
+  const c1 = d.atom("C", -0.5, 1.2);
+  const c2 = d.atom("C", 0.5, 1.2);
+  d.bond(c1, c2, 2);
+  return { d, pt, c1, c2 };
+}
+
+describe("an alkene bound through both its carbons (eta2), drawn either way and kept as drawn", () => {
+  it("is what a bond drawn from a metal ends on at a double bond's middle, with no atom under the pointer", () => {
+    const { d, pt, c1, c2 } = zeise();
+    const m = d.model();
+    const t = strokeTarget(m, startStroke("bond", pt), { x: 0.02 * L, y: 1.25 * L }, L);
+    expect(t?.ring).toEqual([c1, c2]);
+    expect(t!.end.x).toBeCloseTo(0, 9);
+    expect(t!.end.y).toBeCloseTo(1.2 * L, 9);
+    // on a carbon: that carbon, as any bond
+    expect(strokeTarget(m, startStroke("bond", pt), { x: -0.5 * L, y: 1.2 * L }, L)?.ring).toBeUndefined();
+    // from a carbon, or off the bond's middle: no eta2
+    expect(strokeTarget(m, startStroke("bond", c1), { x: 0, y: 1.25 * L }, L)?.ring).toBeUndefined();
+    expect(strokeTarget(m, startStroke("bond", pt), { x: 0, y: 1.8 * L }, L)?.ring).toBeUndefined();
+  });
+
+  it("is one bond to a star at the bond's middle, one undo step, and goes with either carbon", () => {
+    const { d, pt, c1, c2 } = zeise();
+    const doc = createWorkspaceDocument();
+    doc.reset({ ...doc.getState(), model: d.model(), nextId: 200 });
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    st().startExtend(pt, "bond");
+    st().updateExtend(0, 1.22 * L);
+    st().commitExtend();
+    const [b] = etaOf(doc.getState().model);
+    expect(b.endpoints).toEqual([c1, c2]);
+    const star = doc.getState().model.atoms.find((a) => a.id === b.b)!;
+    expect(star.el).toBe("*");
+    expect(star.y).toBeCloseTo(1.2 * L, 9);
+    st().deleteAtom(c2);
+    expect(etaOf(doc.getState().model)).toEqual([]);
+    expect(doc.getState().model.atoms.some((a) => a.el === "*")).toBe(false);
+    doc.undo();
+    expect(etaOf(doc.getState().model)).toHaveLength(1);
+    doc.undo();
+    expect(etaOf(doc.getState().model)).toEqual([]);
+  });
+
+  it("is drawn as one line from the metal to the bond's middle", () => {
+    const { d, pt, c1, c2 } = zeise();
+    const doc = bindRing({ ...emptyWorkspaceDocument(), model: d.model(), nextId: 100 }, pt, [c1, c2]);
+    const m = doc.model;
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE), { minLinePx: 0 });
+    const lay = layoutMolecule(m.atoms.map((a) => ({ id: a.id, x: a.x, y: a.y, el: a.el })), layoutBonds(m.bonds, new Map(m.atoms.map((a, i) => [a.id, i]))), opts, 40);
+    expect(lay.lines.some((l) => Math.abs(l.x2) < 1e-6 && Math.abs(l.y2 - 1.2 * L) < 1e-6 && Math.abs(l.x1) < 1e-6)).toBe(true);
+    expect(lay.texts.map((t) => t.text).sort()).toEqual(["Cl", "Cl", "Cl", "Pt"]);
+  });
+
+  it("keeps both forms through Clean-up: one bond to the middle stays one, two bonds to the carbons stay two", async () => {
+    const { d, pt, c1, c2 } = zeise();
+    const eta2 = bindRing({ ...emptyWorkspaceDocument(), model: d.model(), nextId: 100 }, pt, [c1, c2]).model;
+    const laid = await laidOut(eta2, styleOf(DEFAULT_STYLE_CHOICE));
+    const [b] = etaOf(laid);
+    expect(etaOf(laid)).toHaveLength(1);
+    expect([...b.endpoints!].sort()).toEqual([c1, c2].sort());
+    const at = new Map(laid.atoms.map((a) => [a.id, a]));
+    expect(at.get(b.b)!.x).toBeCloseTo((at.get(c1)!.x + at.get(c2)!.x) / 2, 6);
+    expect(laid.bonds.some((x) => !x.endpoints && [x.a, x.b].includes(pt) && [x.a, x.b].some((e) => e === c1 || e === c2))).toBe(false);
+    // drawn as a metallacyclopropane, kept so
+    d.bond(pt, c1);
+    d.bond(pt, c2);
+    const two = await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE));
+    expect(etaOf(two)).toEqual([]);
+    expect(two.bonds.filter((x) => [x.a, x.b].includes(pt) && [x.a, x.b].some((e) => e === c1 || e === c2))).toHaveLength(2);
+  });
+
+  it("is written as a multi-centre bond with the two carbons (V3000 ENDPTS) and read back to the same drawing", () => {
+    const { d, pt, c1, c2 } = zeise();
+    const m = bindRing({ ...emptyWorkspaceDocument(), model: d.model(), nextId: 100 }, pt, [c1, c2]).model;
+    const text = structureFileText(drawnOf({ ...emptyWorkspaceDocument(), model: m } as never), "zeise.mol");
+    expect(text).toMatch(/ENDPTS=\(2 \d+ \d+\) ATTACH=ALL/);
+    const back = editorModelOf(moleculesToEditorModel(readMoleculesFromText(text, "mol")).model);
+    expect(back.atoms.map((a) => a.el)).toEqual(m.atoms.map((a) => a.el));
+    const [b] = etaOf(back);
+    const place = new Map(back.atoms.map((a, i) => [a.id, i]));
+    expect(b.endpoints!.map((e) => place.get(e))).toEqual([c1, c2].map((id) => m.atoms.findIndex((a) => a.id === id)));
+    // and drawn with two bonds, written and read as two
+    d.bond(pt, c1);
+    d.bond(pt, c2);
+    const two = structureFileText(drawnOf({ ...emptyWorkspaceDocument(), model: d.model() } as never), "zeise.mol");
+    expect(two).not.toMatch(/ENDPTS/);
+    expect(editorModelOf(moleculesToEditorModel(readMoleculesFromText(two, "mol")).model).bonds).toHaveLength(d.model().bonds.length);
+  });
+});

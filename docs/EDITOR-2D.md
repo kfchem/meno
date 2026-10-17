@@ -68,6 +68,15 @@ and in particular:
     is to the system as a whole (IUPAC GR-1.7); it is not stopped short at
     the ring's edge or its circle. A label on a metal - Cp, allyl - stays a
     label, and written out it is this bond.
+  - **An alkene bound through both its carbons** (eta2; 2026-10-17) may be
+    drawn either way, and each stays as drawn: two bonds from the metal,
+    one to each carbon - as a metallacyclopropane is drawn too, and never
+    merged into one by Clean-up - or one line from the metal to the middle
+    of the C=C, the same multi-centre bond with the two carbons as its
+    endpoints and its star at the bond's middle. A bond drawn from a metal
+    that ends on the middle half of a double or triple bond, on no atom,
+    binds it so (`etaBondAt`); it is hovered, selected, deleted and undone
+    as one bond, and goes when either carbon goes.
   - **Chains** (agreed 2026-10-03): Quick Add's *Chain* from empty space
     draws a chain, and so does *Chain from here* on an atom's right-click
     menu (shown where the atom can take another bond) - led by a drag, or,
