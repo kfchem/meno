@@ -1,4 +1,4 @@
-import { knownOf, type WrittenAtom, type WrittenMolecule } from "../../../../lib/io/writers";
+import { knownOf, speciesOf, type WrittenAtom, type WrittenMolecule } from "../../../../lib/io/writers";
 import type { Known } from "../../../../lib/options";
 import type { Carried3D } from "../store/types";
 import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
@@ -89,11 +89,8 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = STYL
  * (an output's atoms carry no charges of their own) - and its name.
  */
 export function knownOfMolecules(molecules: readonly Carried3D[], style?: Style3D): Record<Known, string | number> {
-  const known = knownOf(writtenOf(molecules, style));
-  const calc = molecules.length === 1 ? molecules[0].calc : undefined;
-  return {
-    ...known,
-    ...(Number.isInteger(calc?.charge) ? { charge: calc!.charge! } : {}),
-    ...(Number.isInteger(calc?.multiplicity) && calc!.multiplicity! > 0 ? { multiplicity: calc!.multiplicity! } : {}),
-  };
+  const written = writtenOf(molecules, style);
+  // (one molecule read from a calculation: the state it was in there - Meno's one rule)
+  const { charge, multiplicity } = speciesOf(written, molecules.length === 1 ? molecules[0].calc : undefined);
+  return { ...knownOf(written), charge, multiplicity };
 }

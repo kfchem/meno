@@ -64,6 +64,10 @@ export const BondType = {
   contact: 9,
 } as const;
 
+/** An atom's bonded atoms by kind (atoms.py 96-119), and how many of `bonds` are hydrogens. */
+type Near = { bonds: Atom[]; single: Atom[]; double: Atom[]; triple: Atom[]; aromatic: Atom[]; hs: number };
+const NO_NEAR: Near = { bonds: [], single: [], double: [], triple: [], aromatic: [], hs: 0 };
+
 /** The types `Atom.bonds` counts (atoms.py 96-99). */
 const BONDS_TYPES: readonly number[] = [
   BondType.undefined,
@@ -112,32 +116,59 @@ export class Atom {
     this.parent = parent;
   }
 
-  /** atoms.py 73-78: index in the parent's list + 1. */
+  /** Where it was last found in its parent's list (a hint: `number` checks it). */
+  _at = -1;
+  /** Its bonded atoms of each kind, as last read from its parent's bond matrix, and the matrix's version then. */
+  private _near: Near | null = null;
+  private _nearOf = -1;
+
+  /** atoms.py 73-78: index in the parent's list + 1 (where it was last found, if it is still there). */
   get number(): number {
-    return this.parent ? this.parent.list.indexOf(this) + 1 : (null as unknown as number);
-  }
-
-  /** atoms.py 80-94 */
-  private bonding(types: readonly number[]): Atom[] {
     const p = this.parent;
-    if (!p || !p.bonds) return [];
-    return p.neighbours(this.number - 1, types);
+    if (!p) return null as unknown as number;
+    if (p.list[this._at] !== this) this._at = p.list.indexOf(this);
+    return this._at + 1;
   }
 
-  get bonds(): Atom[] {
-    return this.bonding(BONDS_TYPES);
+  /** atoms.py 80-94: the atoms in its row of the bond matrix, by kind, in index order - read once while the bonds stay as they are. */
+  near(): Near {
+    const p = this.parent;
+    if (!p || !p.bonds) return NO_NEAR;
+    if (this._near && this._nearOf === p.version) return this._near;
+    const row = p.bonds[this.number - 1];
+    const near: Near = { bonds: [], single: [], double: [], triple: [], aromatic: [], hs: 0 };
+    for (let j = 0; j < row.length; j++) {
+      const t = row[j];
+      const b = p.list[j];
+      if (BONDS_TYPES.includes(t)) {
+        near.bonds.push(b);
+        if (b.symbol === "H") near.hs++;
+      }
+      if (t === BondType.single) near.single.push(b);
+      else if (t === BondType.double) near.double.push(b);
+      else if (t === BondType.triple) near.triple.push(b);
+      else if (t === BondType.aromatic) near.aromatic.push(b);
+    }
+    this._near = near;
+    this._nearOf = p.version;
+    return near;
   }
-  get single(): Atom[] {
-    return this.bonding([BondType.single]);
+
+  // (each read as it is: callers take them as they are and never change them)
+  get bonds(): readonly Atom[] {
+    return this.near().bonds;
   }
-  get double(): Atom[] {
-    return this.bonding([BondType.double]);
+  get single(): readonly Atom[] {
+    return this.near().single;
   }
-  get triple(): Atom[] {
-    return this.bonding([BondType.triple]);
+  get double(): readonly Atom[] {
+    return this.near().double;
   }
-  get aromatic(): Atom[] {
-    return this.bonding([BondType.aromatic]);
+  get triple(): readonly Atom[] {
+    return this.near().triple;
+  }
+  get aromatic(): readonly Atom[] {
+    return this.near().aromatic;
   }
 
   get xyz(): [number, number, number] {
@@ -168,7 +199,8 @@ export class Atoms {
   list: Atom[] = [];
   /** Bonds._matrix, or null where the atoms have no bonds (atoms.py 286-290). */
   bonds: number[][] | null = null;
-  private memo = new Map<string, Atom[]>();
+  /** Counted up whenever its atoms or bonds change: what an atom read of its neighbours is good for. */
+  version = 0;
 
   [Symbol.iterator](): Iterator<Atom> {
     return this.list[Symbol.iterator]();
@@ -193,7 +225,8 @@ export class Atoms {
   getNewAtom(value: Atom | [string, number, number, number]): Atom {
     const a = this.newAtomInstance(value);
     this.list.push(a);
-    this.memo.clear();
+    a._at = this.list.length - 1;
+    this.version++;
     return a;
   }
 
@@ -212,11 +245,12 @@ export class Atoms {
   append(value: Atom): Atom {
     const a = this.newAtomInstance(value);
     this.list.push(a);
+    a._at = this.list.length - 1;
     if (this.bonds !== null) {
       for (const row of this.bonds) row.push(0);
       this.bonds.push(new Array(this.list.length).fill(0));
     }
-    this.memo.clear();
+    this.version++;
     return a;
   }
 
@@ -224,7 +258,7 @@ export class Atoms {
   initBonds(): this {
     const n = this.list.length;
     this.bonds = Array.from({ length: n }, () => new Array(n).fill(0));
-    this.memo.clear();
+    this.version++;
     return this;
   }
 
@@ -233,7 +267,7 @@ export class Atoms {
     if (!this.bonds) this.initBonds();
     this.bonds![numberA - 1][numberB - 1] = value;
     this.bonds![numberB - 1][numberA - 1] = value;
-    this.memo.clear();
+    this.version++;
   }
 
   /** atoms.py 408-419 */
@@ -264,18 +298,6 @@ export class Atoms {
     return out;
   }
 
-  /** The atoms in row `i` of the bond matrix whose type is one of `types`, in index order (atoms.py 88-93). */
-  neighbours(i: number, types: readonly number[]): Atom[] {
-    const key = `${i}:${types.join(",")}`;
-    let got = this.memo.get(key);
-    if (!got) {
-      const row = this.bonds![i];
-      got = [];
-      for (let j = 0; j < row.length; j++) if (types.includes(row[j])) got.push(this.list[j]);
-      this.memo.set(key, got);
-    }
-    return got.slice();
-  }
 
   /** atoms.py 395-401 */
   duplicate(): Atoms {
@@ -714,6 +736,18 @@ export type Chain = Pair[];
  * - `skipUnflaggedFacePair`: a pair of faces, the same forwards and
  *   backwards, with no face flag, left out of the pericyclic score rather
  *   than failing (modeler.py 1720).
+ * - `spectatorsByRmsd`: like molecules standing apart - SPECTATORS_AT_LEAST
+ *   or more of one kind on each side, the same number, bonded to nothing
+ *   else (a solvent's) - left out of the initial pairs until everything
+ *   else is placed, then given ACCeL's own placement by RMSD
+ *   (modeler.py 1161-1228), one kind after another: the placement ACCeL
+ *   reaches once the rest is placed, reached directly, rather than every
+ *   permutation of them tried on the way (modeler.py 792-843, 1230-1242).
+ * - `spectatorsRefined` (with `spectatorsByRmsd`): each map's like molecules
+ *   then given to one another again, whole, turned as their symmetry
+ *   allows, for the least total RMSD (`refinedSpectators`) - which is the
+ *   permutation ACCeL's ordering (total_rmsd, modeler.py 1564) puts first
+ *   where it tries them all.
  */
 export type Departures = {
   firstOfGroupByGeometry: boolean;
@@ -721,6 +755,8 @@ export type Departures = {
   clampEzCosine: boolean;
   clampFaceCosine: boolean;
   skipUnflaggedFacePair: boolean;
+  spectatorsByRmsd: boolean;
+  spectatorsRefined: boolean;
 };
 export const ACCEL_EXACT: Departures = {
   firstOfGroupByGeometry: false,
@@ -728,6 +764,8 @@ export const ACCEL_EXACT: Departures = {
   clampEzCosine: false,
   clampFaceCosine: false,
   skipUnflaggedFacePair: false,
+  spectatorsByRmsd: false,
+  spectatorsRefined: false,
 };
 export const MENO_DEPARTURES: Departures = {
   firstOfGroupByGeometry: true,
@@ -735,6 +773,8 @@ export const MENO_DEPARTURES: Departures = {
   clampEzCosine: true,
   clampFaceCosine: true,
   skipUnflaggedFacePair: true,
+  spectatorsByRmsd: true,
+  spectatorsRefined: true,
 };
 
 /** What a trace hook is shown of each _get_maps call as it returns: its locals by their Python names. */
@@ -753,16 +793,33 @@ export type GetMapsSnapshot = {
 };
 
 export type MapperTrace = {
+  /**
+   * false: every recursive _get_maps call made, none answered from an earlier
+   * one of the same known pairs (`ReuseContext`) - for following the original
+   * call by call. The maps are the same either way.
+   */
+  reuse?: boolean;
   getMaps?: (s: GetMapsSnapshot) => void;
   orderMaps?: (evaluated: Evaluated[]) => void;
 };
 
 /** The key the original files a chain under: its (a, b) number pairs, sorted (stably) by a's number. */
 function chainKey(chain: readonly Pair[]): string {
-  const prs = chain.map((pr) => [pr[0].number, pr[1].number]);
-  return pySorted(prs, (t) => t[0])
-    .map((t) => `${t[0]}:${t[1]}`)
-    .join(",");
+  // (sorted stably by a's number: equal numbers keep their order)
+  const prs = chain.map((pr, i) => [pr[0].number, pr[1].number, i]);
+  prs.sort((p, q) => p[0] - q[0] || p[2] - q[2]);
+  let key = "";
+  for (const t of prs) key += `${t[0]}:${t[1]},`;
+  return key;
+}
+
+/** Each atom's first place in `atoms`, as list.index finds it. */
+function firstPlaces(atoms: readonly Atom[]): Map<Atom, number> {
+  const pos = new Map<Atom, number>();
+  atoms.forEach((a, i) => {
+    if (!pos.has(a)) pos.set(a, i);
+  });
+  return pos;
 }
 
 const symbolIndex = (s: string): number => SYMBOLS.indexOf(s);
@@ -891,15 +948,25 @@ export function _isproper_bonding(atom_a: Atom, atom_b: Atom, side_pairs: readon
  * rotation, as _kabsch finds it), else by the root pair's atoms set on one
  * another. The first of equals.
  */
-export function nearestOver(a: Atom, bs: readonly Atom[], assigned_as: readonly Atom[], assigned_bs: readonly Atom[], root_pair: Pair): Atom {
+export function nearestOver(
+  a: Atom,
+  bs: readonly Atom[],
+  assigned_as: readonly Atom[],
+  assigned_bs: readonly Atom[],
+  root_pair: Pair,
+  onTie: () => void = () => {},
+): Atom {
   // (only pairs in the root's own molecule on each side: molecules apart stand where they were set, not where they react)
   const inA = moleculeOf(root_pair[0]);
   const inB = moleculeOf(root_pair[1]);
   const kept = assigned_as.map((_, i) => i).filter((i) => inA.has(assigned_as[i]) && inB.has(assigned_bs[i]));
-  const fit = kabschFit(
+  const fitted = kabschFit(
     kept.map((i) => assigned_as[i].xyz),
     kept.map((i) => assigned_bs[i].xyz),
   );
+  const fit = fitted?.r ? { r: fitted.r, refMean: fitted.refMean, tarMean: fitted.tarMean } : null;
+  // (whether the pairs span a plane, and which is nearest, are where the pairs' order - rounding with it - could tip them)
+  if (fitted?.borderline) onTie();
   const place = (p: readonly number[]): V3 => {
     if (fit) {
       const q = sub(p, fit.tarMean);
@@ -910,13 +977,16 @@ export function nearestOver(a: Atom, bs: readonly Atom[], assigned_as: readonly 
   };
   let best = bs[0];
   let bestD = Infinity;
+  const ds: number[] = [];
   for (const b of bs) {
     const d = norm(sub(place(b.xyz), a.xyz));
+    ds.push(d);
     if (d < bestD) {
       best = b;
       bestD = d;
     }
   }
+  if (fit && ds.filter((d) => near(d, bestD)).length > 1) onTie();
   return best;
 }
 
@@ -935,7 +1005,10 @@ function moleculeOf(atom: Atom): Set<Atom> {
 }
 
 /** The rotation _kabsch finds, with the two centroids - none where the points do not span a plane. */
-function kabschFit(refXyzs: readonly (readonly number[])[], tarXyzs: readonly (readonly number[])[]): { r: number[][]; refMean: V3; tarMean: V3 } | null {
+function kabschFit(
+  refXyzs: readonly (readonly number[])[],
+  tarXyzs: readonly (readonly number[])[],
+): { r: number[][] | null; refMean: V3; tarMean: V3; borderline: boolean } | null {
   const n = refXyzs.length;
   if (n < 3) return null;
   const mean = (xs: readonly (readonly number[])[]): V3 => {
@@ -949,10 +1022,11 @@ function kabschFit(refXyzs: readonly (readonly number[])[], tarXyzs: readonly (r
   const tar = tarXyzs.map((p) => sub(p, tarMean));
   const h = [0, 1, 2].map((i) => [0, 1, 2].map((j) => tar.reduce((acc, t, k) => acc + t[i] * ref[k][j], 0)));
   const { u, s, vt } = svd3(h);
-  if (s[1] <= s[0] * 1e-6) return null;
+  const borderline = near(s[1], s[0] * 1e-6);
+  if (s[1] <= s[0] * 1e-6) return { r: null, refMean, tarMean, borderline };
   if (det3(u) * det3(vt) < 0.0) for (let i = 0; i < 3; i++) u[i][2] = -u[i][2];
   const r = [0, 1, 2].map((i) => [0, 1, 2].map((j) => u[i][0] * vt[0][j] + u[i][1] * vt[1][j] + u[i][2] * vt[2][j]));
-  return { r, refMean, tarMean };
+  return { r, refMean, tarMean, borderline };
 }
 
 /**
@@ -969,7 +1043,461 @@ export function _get_maps(
   _recursion_counter = 0,
   trace?: MapperTrace,
   dep: Departures = ACCEL_EXACT,
+  ctx?: ReuseContext,
 ): Chain[] {
+  const c: ReuseContext = ctx ?? { memo: new Map(), frames: [] };
+  // (a recursive call's maps, its known pairs stripped, are those of the same pairs in any order - unless a
+  // choice on the way was a tie that the pairs' order, or rounding with it, could tip: then made afresh)
+  const reuse = trace?.reuse !== false && _recursion_counter !== 0;
+  const key = reuse ? pairSetKey(known_pairs as readonly Pair[]) : "";
+  if (reuse) {
+    const hit = c.memo.get(key);
+    if (hit) return hit;
+  }
+  c.frames.push(false);
+  let fragile = false;
+  try {
+    let ret = getMapsCall(atoms_a, atoms_b, known_pairs, terminal_first, _recursion_counter, trace, dep, c);
+    // [Meno departure: spectatorsRefined] the top call's maps, their like molecules given the least total RMSD
+    if (_recursion_counter === 0 && dep.spectatorsByRmsd && dep.spectatorsRefined && c.spectators?.length) {
+      const refined = new Map<string, Chain>();
+      // (maps alike but for the like molecules end alike: the first of them refined, the rest given its pairing)
+      const held = new Set(c.spectators.flatMap((k) => [...k]));
+      const byRest = new Map<string, Map<Atom, Atom>>();
+      for (const chain of ret) {
+        const rest = chainKey(chain.filter((pr) => !held.has(pr[0])));
+        const done = byRest.get(rest);
+        let r: Chain;
+        if (done && chain.every((pr) => !held.has(pr[0]) || done.has(pr[0]))) r = chain.map((pr) => (held.has(pr[0]) ? [pr[0], done.get(pr[0])!] : pr));
+        else {
+          r = refinedSpectators(chain, c.spectators);
+          byRest.set(rest, new Map(r.filter((pr) => held.has(pr[0])).map((pr) => [pr[0], pr[1]])));
+        }
+        const k = chainKey(r);
+        if (!refined.has(k)) refined.set(k, r);
+      }
+      ret = [...refined.values()];
+    }
+    fragile = c.frames[c.frames.length - 1];
+    if (reuse && !fragile) c.memo.set(key, ret);
+    return ret;
+  } finally {
+    c.frames.pop();
+    if (fragile && c.frames.length) c.frames[c.frames.length - 1] = true;
+  }
+}
+
+/**
+ * Reusing recursive _get_maps calls (Meno's, for speed - the maps are the
+ * same): each call's maps by the set of its known pairs, kept where nothing
+ * on the way was a tie the pairs' order could tip; and, for the calls under
+ * way, whether one was.
+ */
+export type ReuseContext = { memo: Map<string, Chain[]>; frames: boolean[]; spectators?: Set<Atom>[] };
+
+/** A set of pairs as a key: their atoms' numbers, sorted. */
+function pairSetKey(pairs: readonly Pair[]): string {
+  return pairs
+    .map((p) => `${p[0].number}:${p[1].number}`)
+    .sort()
+    .join(",");
+}
+
+/** Whether two values that decide a choice are so near that rounding, as the known pairs' order changes it, could swap them. */
+const near = (x: number, y: number) => Math.abs(x - y) <= 1e-9 * Math.max(1, Math.abs(x), Math.abs(y));
+
+/** The most ways - permutations of a kind's molecules times their turns - that `refinedSpectators` tries every one of. */
+export const SPECTATOR_WAYS_TRIED = 50_000;
+
+/**
+ * [Meno departure: spectatorsRefined] A map with its like molecules
+ * (`kinds`) given to one another again, whole, for the least total RMSD
+ * (_kabsch over every pair of the map, as total_rmsd is, modeler.py 1564):
+ * - a kind with few enough molecules (SPECTATOR_WAYS_TRIED ways or fewer:
+ *   five waters are 3 840) has every permutation of them tried, each
+ *   molecule turned every way it can be, and the least kept - none of the
+ *   permutations ACCeL tries one by one can be lower;
+ * - then, for every kind, the two sides laid over one another by the map,
+ *   each kind's molecules given those of the other at least cost (the
+ *   Hungarian method), and laid over again, while that lowers the total.
+ * A molecule turns only as a rigid body can (`properIsomorphisms`). Nothing
+ * is taken that is not lower, so the map ends no worse than it began. The
+ * pairs keep their places in the map: only the like molecules' atoms on
+ * the product side change.
+ */
+export function refinedSpectators(chain: Chain, kinds: readonly Set<Atom>[]): Chain {
+  let map: Chain = chain.slice();
+  const at = new Map<Atom, number>();
+  map.forEach((p, i) => at.set(p[0], i));
+  const total = (m: Chain) =>
+    kabsch(
+      m.map((p) => p[0].xyz),
+      m.map((p) => p[1].xyz),
+    );
+  type Setup = { ua: Atom[][]; ub: Atom[][]; ways: Atom[][][][] };
+  const setups: Setup[] = [];
+  for (const kind of kinds) {
+    const ua = moleculesIn(kind, (a) => at.has(a));
+    const onB = new Set(map.map((p) => p[1]));
+    const ub = moleculesIn(kind, (b) => onB.has(b));
+    if (ua.length !== ub.length || ua.length < 2) continue;
+    // (only where the kind's molecules are paired among themselves: every partner of theirs one of the other side's)
+    const partners = new Set(ua.flat().map((x) => map[at.get(x)!][1]));
+    if (partners.size !== ub.flat().length || !ub.flat().every((b) => partners.has(b))) continue;
+    // (each molecule turned only as it can be turned: of the ways its graph allows, those that fit it as a rigid
+    // body as well as the best does - not a mirror image of a methyl, which no turn makes)
+    setups.push({ ua, ub, ways: ua.map((u) => ub.map((v) => properIsomorphisms(u, v))) });
+  }
+  const assigned = (m: Chain, k: Setup, turns: readonly Atom[][]): Chain => {
+    const next = m.slice();
+    k.ua.forEach((u, i) => u.forEach((a, j) => (next[at.get(a)!] = [a, turns[i][j]])));
+    return next;
+  };
+  let best = total(map);
+  // every permutation and turn, where there are few enough - scored cheaply: the like molecules only change
+  // which product atom stands for which, so neither side's centroid moves, and the best rotation's fit is the
+  // sum of the singular values of the covariance (its smallest taken off where they would mirror), which is
+  // the solute's covariance plus each molecule pair's own; the best by that is checked by _kabsch itself
+  for (const k of setups) {
+    const n = k.ua.length;
+    let ways = 1;
+    for (let i = 1; i <= n && ways <= SPECTATOR_WAYS_TRIED; i++) ways *= i * Math.max(...k.ways[i - 1].map((w) => w.length));
+    if (ways > SPECTATOR_WAYS_TRIED) continue;
+    const ca = centroidOf(map.map((p) => p[0]));
+    const cb = centroidOf(map.map((p) => p[1]));
+    const inKind = new Set(k.ua.flat());
+    const covOf = (pairs: [Atom, Atom][]) => {
+      const h = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      for (const [a, b] of pairs) {
+        const ra = [a.x - ca[0], a.y - ca[1], a.z - ca[2]];
+        const rb = [b.x - cb[0], b.y - cb[1], b.z - cb[2]];
+        for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) h[3 * i + j] += rb[i] * ra[j];
+      }
+      return h;
+    };
+    const fixed = covOf(map.filter((p) => !inKind.has(p[0])) as [Atom, Atom][]);
+    const part = k.ua.map((u, i) => k.ub.map((_, j) => k.ways[i][j].map((iso) => covOf(u.map((a, q) => [a, iso[q]] as [Atom, Atom])))));
+    // (the largest eigenvalue of the quaternion matrix - Horn's, as Theobald's QCP finds it by Newton's method
+    // from above: no larger than half the two sides' summed squares)
+    let start = 0;
+    for (const p of map) {
+      start += (p[0].x - ca[0]) ** 2 + (p[0].y - ca[1]) ** 2 + (p[0].z - ca[2]) ** 2;
+      start += (p[1].x - cb[0]) ** 2 + (p[1].y - cb[1]) ** 2 + (p[1].z - cb[2]) ** 2;
+    }
+    start /= 2;
+    const fitOf = (h: number[]) => largestFit(h, start);
+    const used = new Array(n).fill(false);
+    const turns: Atom[][] = [];
+    let bestFit = -Infinity;
+    let bestTurns: Atom[][] | null = null;
+    // (one covariance a depth, filled in place)
+    const stack = Array.from({ length: n + 1 }, () => new Array<number>(9).fill(0));
+    const go = (i: number, h: number[]) => {
+      if (i === n) {
+        const f = fitOf(h);
+        if (f > bestFit + 1e-12) {
+          bestFit = f;
+          bestTurns = turns.slice();
+        }
+        return;
+      }
+      for (let j = 0; j < n; j++) {
+        if (used[j]) continue;
+        used[j] = true;
+        k.ways[i][j].forEach((iso, o) => {
+          const add = part[i][j][o];
+          const into = stack[i + 1];
+          for (let q = 0; q < 9; q++) into[q] = h[q] + add[q];
+          turns.push(iso);
+          go(i + 1, into);
+          turns.pop();
+        });
+        used[j] = false;
+      }
+    };
+    go(0, fixed);
+    if (bestTurns) {
+      // (the map's own pairing is where it starts: one no lower is not taken)
+      const next = assigned(map, k, bestTurns);
+      const t = total(next);
+      if (t < best - 1e-12) {
+        best = t;
+        map = next;
+      }
+    }
+  }
+  // then laid over and paired again, while that lowers the total
+  for (let round = 0; round < 100 && setups.length; round++) {
+    const fit = kabschFit(
+      map.map((p) => p[0].xyz),
+      map.map((p) => p[1].xyz),
+    );
+    if (!fit?.r) break;
+    const r = fit.r;
+    const placed = (b: Atom): V3 => {
+      const q = sub(b.xyz, fit.tarMean);
+      return [0, 1, 2].map((j) => q[0] * r[0][j] + q[1] * r[1][j] + q[2] * r[2][j] + fit.refMean[j]) as V3;
+    };
+    const apart = (u: readonly Atom[], iso: readonly Atom[]) => {
+      let d = 0;
+      u.forEach((a, k) => {
+        const pb = placed(iso[k]);
+        d += (a.x - pb[0]) ** 2 + (a.y - pb[1]) ** 2 + (a.z - pb[2]) ** 2;
+      });
+      return d;
+    };
+    let next = map;
+    for (const k of setups) {
+      const nearest = k.ua.map((u, i) => k.ub.map((_, j) => k.ways[i][j].reduce((b, iso) => (apart(u, iso) < apart(u, b) ? iso : b), k.ways[i][j][0])));
+      const cost = k.ua.map((u, i) => k.ub.map((_, j) => apart(u, nearest[i][j])));
+      const assign = hungarian(cost);
+      next = assigned(
+        next,
+        k,
+        k.ua.map((_, i) => nearest[i][assign[i]]),
+      );
+    }
+    const t = total(next);
+    if (!(t < best - 1e-12)) break;
+    best = t;
+    map = next;
+  }
+  return map;
+}
+
+/**
+ * The largest eigenvalue of Horn's quaternion matrix for a covariance `h`
+ * (row-major, h[3i+j] = sum of b_i a_j): the sum of its singular values,
+ * the smallest taken off where they would mirror - what the best rotation
+ * makes of the covariance. Found by Newton's method on the characteristic
+ * polynomial from `above`, which no eigenvalue exceeds (Theobald, Acta
+ * Cryst. A 61, 478 (2005)).
+ */
+function largestFit(h: readonly number[], above: number): number {
+  const [xx, xy, xz, yx, yy, yz, zx, zy, zz] = h;
+  const k = [
+    [xx + yy + zz, yz - zy, zx - xz, xy - yx],
+    [yz - zy, xx - yy - zz, xy + yx, zx + xz],
+    [zx - xz, xy + yx, -xx + yy - zz, yz + zy],
+    [xy - yx, zx + xz, yz + zy, -xx - yy + zz],
+  ];
+  let c2 = 0;
+  for (const x of h) c2 -= 2 * x * x;
+  const c1 = -8 * (xx * (yy * zz - yz * zy) - xy * (yx * zz - yz * zx) + xz * (yx * zy - yy * zx));
+  const det4 = (m: number[][]) => {
+    const d3 = (a: number[][]) => a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1]) - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0]) + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]);
+    let d = 0;
+    for (let c = 0; c < 4; c++) {
+      const minor = [1, 2, 3].map((r) => m[r].filter((_, j) => j !== c));
+      d += (c % 2 ? -1 : 1) * m[0][c] * d3(minor);
+    }
+    return d;
+  };
+  const c0 = det4(k);
+  let l = above;
+  for (let i = 0; i < 50; i++) {
+    const l2 = l * l;
+    const p = l2 * l2 + c2 * l2 + c1 * l + c0;
+    const dp = 4 * l2 * l + 2 * c2 * l + c1;
+    if (dp === 0) break;
+    const step = p / dp;
+    l -= step;
+    if (Math.abs(step) <= 1e-12 * Math.max(1, Math.abs(l))) break;
+  }
+  return l;
+}
+
+/** The mean place of atoms. */
+function centroidOf(atoms: readonly Atom[]): V3 {
+  const c: V3 = [0, 0, 0];
+  for (const a of atoms) {
+    c[0] += a.x;
+    c[1] += a.y;
+    c[2] += a.z;
+  }
+  return [c[0] / atoms.length, c[1] / atoms.length, c[2] / atoms.length];
+}
+
+/** The molecules of `kind` whose atoms `take` keeps, each as its atoms in index order. */
+function moleculesIn(kind: Set<Atom>, take: (a: Atom) => boolean): Atom[][] {
+  const seen = new Set<Atom>();
+  const out: Atom[][] = [];
+  for (const a of [...kind].sort((p, q) => p.number - q.number)) {
+    if (seen.has(a) || !take(a)) continue;
+    const mol = [...moleculeOf(a)].sort((p, q) => p.number - q.number);
+    for (const x of mol) seen.add(x);
+    out.push(mol);
+  }
+  return out.filter((m) => m.every(take));
+}
+
+/** Of the ways `u`'s atoms can stand for `v`'s, those whose rigid fit (Kabsch RMSD of the molecule alone) is within 0.1 Å of the best one's. */
+function properIsomorphisms(u: readonly Atom[], v: readonly Atom[]): Atom[][] {
+  const all = isomorphisms(u, v);
+  if (all.length <= 1 || u.length < 3) return all;
+  const fits = all.map((iso) =>
+    kabsch(
+      u.map((a) => a.xyz),
+      iso.map((b) => b.xyz),
+    ),
+  );
+  const best = Math.min(...fits);
+  return all.filter((_, i) => fits[i] <= best + 0.1);
+}
+
+/** Every way the atoms of molecule `u` can stand for those of `v`, element for element and bond for bond (at most 720). */
+function isomorphisms(u: readonly Atom[], v: readonly Atom[]): Atom[][] {
+  const out: Atom[][] = [];
+  if (u.length !== v.length) return out;
+  const bondsIn = (m: readonly Atom[]) => m.map((a) => new Set(a.bonds));
+  const ub = bondsIn(u);
+  const vb = bondsIn(v);
+  const pick: Atom[] = [];
+  const used = new Set<Atom>();
+  const go = (k: number) => {
+    if (out.length >= 720) return;
+    if (k === u.length) {
+      out.push(pick.slice());
+      return;
+    }
+    for (let j = 0; j < v.length; j++) {
+      const c = v[j];
+      if (used.has(c) || c.symbol !== u[k].symbol || ub[k].size !== vb[j].size) continue;
+      let ok = true;
+      for (let i = 0; i < k && ok; i++) ok = ub[k].has(u[i]) === vb[j].has(pick[i]);
+      if (!ok) continue;
+      pick.push(c);
+      used.add(c);
+      go(k + 1);
+      pick.pop();
+      used.delete(c);
+    }
+  };
+  go(0);
+  return out;
+}
+
+/** The least-cost assignment of rows to columns of a square matrix (the Hungarian method): each row's column. */
+export function hungarian(cost: readonly (readonly number[])[]): number[] {
+  const n = cost.length;
+  const u = new Array(n + 1).fill(0);
+  const v = new Array(n + 1).fill(0);
+  const p = new Array(n + 1).fill(0);
+  const way = new Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(n + 1).fill(Infinity);
+    const used = new Array(n + 1).fill(false);
+    do {
+      used[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity;
+      let j1 = 0;
+      for (let j = 1; j <= n; j++) {
+        if (used[j]) continue;
+        const cur = cost[i0 - 1][j - 1] - u[i0] - v[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          way[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= n; j++) {
+        if (used[j]) {
+          u[p[j]] += delta;
+          v[j] -= delta;
+        } else minv[j] -= delta;
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = way[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0);
+  }
+  const rowTo = new Array(n).fill(0);
+  for (let j = 1; j <= n; j++) if (p[j]) rowTo[p[j] - 1] = j - 1;
+  return rowTo;
+}
+
+/** How many like molecules standing apart, of one kind, on each side, make a solvent placed by RMSD (`spectatorsByRmsd`): as many as ACCeL's own placement asks before it places any (modeler.py 1162). */
+export const SPECTATORS_AT_LEAST = 4;
+
+/**
+ * [Meno departure: spectatorsByRmsd] The kinds of like molecules standing
+ * apart, as many of each on either side, SPECTATORS_AT_LEAST or more: each
+ * kind's atoms on both sides, the kinds in the order their first atoms
+ * stand among atoms_a's. A molecule's kind is its graph: its atoms'
+ * elements, and what each is bonded to, refined until nothing more tells
+ * them apart.
+ */
+export function spectatorKinds(atoms_a: Atoms, atoms_b: Atoms): Set<Atom>[] {
+  const molecules = (atoms: Atoms) => {
+    const seen = new Set<Atom>();
+    const out: { atoms: Atom[]; kind: string }[] = [];
+    for (const a of atoms) {
+      if (seen.has(a)) continue;
+      const mol = [...moleculeOf(a)];
+      for (const x of mol) seen.add(x);
+      out.push({ atoms: mol, kind: graphKind(mol) });
+    }
+    return out;
+  };
+  const ma = molecules(atoms_a);
+  const mb = molecules(atoms_b);
+  const count = (ms: { kind: string }[], kind: string) => ms.filter((m) => m.kind === kind).length;
+  const kinds: Set<Atom>[] = [];
+  const done = new Set<string>();
+  for (const m of ma) {
+    if (done.has(m.kind)) continue;
+    done.add(m.kind);
+    const n = count(ma, m.kind);
+    if (n < SPECTATORS_AT_LEAST || n !== count(mb, m.kind)) continue;
+    kinds.push(new Set([...ma, ...mb].filter((x) => x.kind === m.kind).flatMap((x) => x.atoms)));
+  }
+  return kinds;
+}
+
+/** A molecule's graph as a string: the same for like molecules, whatever their atoms' order (colour refinement over elements and bonds). */
+function graphKind(mol: readonly Atom[]): string {
+  let label = new Map(mol.map((a) => [a, a.symbol]));
+  let classes = new Set(label.values()).size;
+  for (let round = 0; round < mol.length; round++) {
+    const sig = new Map(mol.map((a) => [a, `${label.get(a)}(${a.bonds.map((b) => label.get(b)).sort().join(",")})`]));
+    // (each signature renamed by its place among the molecule's sorted signatures, to keep them short)
+    const names = [...new Set(sig.values())].sort();
+    label = new Map(mol.map((a) => [a, `${names.indexOf(sig.get(a)!)}`]));
+    const now = names.length;
+    if (now === classes) {
+      label = sig;
+      break;
+    }
+    classes = now;
+    label = new Map(mol.map((a) => [a, `${a.symbol}${names.indexOf(sig.get(a)!)}`]));
+  }
+  return [...label.values()].sort().join(";");
+}
+
+/** One _get_maps call, as modeler.py 748-1254 has it (`_get_maps` above answers it from an earlier one where it can). */
+function getMapsCall(
+  atoms_a: Atoms,
+  atoms_b: Atoms,
+  known_pairs: readonly (readonly [number | Atom, number | Atom])[],
+  terminal_first: boolean | null,
+  _recursion_counter: number,
+  trace: MapperTrace | undefined,
+  dep: Departures,
+  ctx: ReuseContext,
+): Chain[] {
+  /** A choice on the way was a tie the known pairs' order could tip: this call's maps are not reused. */
+  const tie = () => {
+    ctx.frames[ctx.frames.length - 1] = true;
+  };
   // 755-768
   const initial_pairs: Pair[] = [];
   if (terminal_first === null && atoms_a.length > 256) terminal_first = true;
@@ -978,6 +1506,9 @@ export function _get_maps(
   if (given_known_as_.includes(null) || given_known_bs_.includes(null)) return [];
   const given_known_as = given_known_as_ as Atom[];
   const given_known_bs = given_known_bs_ as Atom[];
+  // (`in` and `.index()` on the known atoms, as maps: the first place of each, as list.index gives)
+  const knownPosA = firstPlaces(given_known_as);
+  const knownPosB = firstPlaces(given_known_bs);
 
   // 770-790: the stages of initial-pair criteria, in order
   const ip_settings: boolean[][] = [
@@ -998,7 +1529,16 @@ export function _get_maps(
   }
   if (!terminal_first) ip_settings.splice(0, 1);
 
+  // [Meno departure: spectatorsByRmsd] like molecules standing apart held back: every kind at first, then
+  // all but the first, and so on - the first stage that gives any initial pair is the one taken
+  const kinds = dep.spectatorsByRmsd ? (ctx.spectators ??= spectatorKinds(atoms_a, atoms_b)) : [];
+  for (let stage = 0; stage <= kinds.length && initial_pairs.length === 0; stage++) {
+    const held = new Set<Atom>();
+    for (const kind of kinds.slice(stage)) for (const a of kind) held.add(a);
+    pairsWithout(held);
+  }
   // 792-843
+  function pairsWithout(held: Set<Atom>) {
   for (const ip_setting of ip_settings) {
     if (initial_pairs.length !== 0) break;
     const ip_terminal_first_check = ip_setting[0];
@@ -1011,30 +1551,32 @@ export function _get_maps(
     let appended_known_idxs: number[] | null = null;
     let known_a_idxs: number[] = [];
     for (const atom_a of atoms_a) {
-      if (given_known_as.includes(atom_a)) continue;
+      if (knownPosA.has(atom_a)) continue;
+      if (held.has(atom_a)) continue;
       if (ip_exclude_h && atom_a.symbol === "H") continue;
       const atom_a_bonds = atom_a.bonds;
       if (ip_known_bond_check) {
-        known_a_idxs = atom_a_bonds.filter((_a) => given_known_as.includes(_a)).map((_a) => given_known_as.indexOf(_a)).sort((p, q) => p - q);
+        known_a_idxs = atom_a_bonds.filter((_a) => knownPosA.has(_a)).map((_a) => knownPosA.get(_a)!).sort((p, q) => p - q);
         if (known_a_idxs.length === 0) continue;
       }
       for (const atom_b of atoms_b) {
-        if (given_known_bs.includes(atom_b)) continue;
+        if (knownPosB.has(atom_b)) continue;
+        if (held.has(atom_b)) continue;
         if (ip_exclude_h && atom_b.symbol === "H") continue;
         if (ip_check_symbol && atom_a.symbol !== atom_b.symbol) continue;
         const atom_b_bonds = atom_b.bonds;
         if (
           ip_terminal_first_check &&
           terminal_first &&
-          atom_a_bonds.filter((_a) => _a.symbol !== "H").length > 1 &&
-          atom_b_bonds.filter((_b) => _b.symbol !== "H").length > 1
+          atom_a_bonds.length - atom_a.near().hs > 1 &&
+          atom_b_bonds.length - atom_b.near().hs > 1
         )
           continue;
-        if (ip_check_hs && atom_a_bonds.filter((_a) => _a.symbol === "H").length !== atom_b_bonds.filter((_b) => _b.symbol === "H").length)
+        if (ip_check_hs && atom_a.near().hs !== atom_b.near().hs)
           continue;
         if (ip_isolated_check && !(atom_a_bonds.length === 0 && atom_b_bonds.length === 0)) continue;
         if (ip_known_bond_check) {
-          const known_b_idxs = atom_b_bonds.filter((_b) => given_known_bs.includes(_b)).map((_b) => given_known_bs.indexOf(_b)).sort((p, q) => p - q);
+          const known_b_idxs = atom_b_bonds.filter((_b) => knownPosB.has(_b)).map((_b) => knownPosB.get(_b)!).sort((p, q) => p - q);
           if (known_b_idxs.length === 0) continue;
           if (!eqList(known_a_idxs, known_b_idxs)) continue;
           if (!(appended_known_idxs === null || eqList(appended_known_idxs, known_a_idxs))) continue;
@@ -1043,6 +1585,7 @@ export function _get_maps(
         initial_pairs.push([atom_a, atom_b]);
       }
     }
+  }
   }
 
   // 870-898: from each initial pair, every longest chain of bonded heavy-atom pairs, depth first
@@ -1057,11 +1600,11 @@ export function _get_maps(
       const b_list = side_pairs.map((pr) => pr[1]);
       for (const next_a of last(side_pairs)[0].bonds) {
         if (next_a.symbol === "H" || a_list.includes(next_a)) continue;
-        if (given_known_as.includes(next_a)) continue;
+        if (knownPosA.has(next_a)) continue;
         for (const next_b of last(side_pairs)[1].bonds) {
           if (next_b.symbol === "H" || b_list.includes(next_b)) continue;
           if (next_a.symbol !== next_b.symbol) continue;
-          if (given_known_bs.includes(next_b)) continue;
+          if (knownPosB.has(next_b)) continue;
           if (!_isproper_bonding(next_a, next_b, side_pairs)) continue;
           stack.push([...side_pairs, [next_a, next_b]]);
         }
@@ -1138,11 +1681,16 @@ export function _get_maps(
     }
     const assigned_as: Atom[] = [...given_known_as, ...chain.map((pr) => pr[0])];
     const assigned_bs: Atom[] = [...given_known_bs, ...chain.map((pr) => pr[1])];
+    // (`in` and `.index()` on them, as maps kept with them)
+    const posA = firstPlaces(assigned_as);
+    const posB = firstPlaces(assigned_bs);
 
     // 998-1002
     const _new_assign = (new_pair: Pair, root_pair: Pair) => {
       assigned_as.push(new_pair[0]);
       assigned_bs.push(new_pair[1]);
+      if (!posA.has(new_pair[0])) posA.set(new_pair[0], assigned_as.length - 1);
+      if (!posB.has(new_pair[1])) posB.set(new_pair[1], assigned_bs.length - 1);
       stack.push([new_pair[0], new_pair[1]]);
       stack.unshift(root_pair);
     };
@@ -1150,8 +1698,8 @@ export function _get_maps(
     while (stack.length) {
       // 1039-1046
       const root_pair = stack.shift()!;
-      const next_as = root_pair[0].bonds.filter((_a) => !assigned_as.includes(_a));
-      const next_bs = root_pair[1].bonds.filter((_b) => !assigned_bs.includes(_b));
+      const next_as = root_pair[0].bonds.filter((_a) => !posA.has(_a));
+      const next_bs = root_pair[1].bonds.filter((_b) => !posB.has(_b));
       if (next_as.length === 0 || next_bs.length === 0) continue;
       const a_sbls = next_as.map((_a) => _a.symbol);
       const b_sbls = next_bs.map((_b) => _b.symbol);
@@ -1181,30 +1729,33 @@ export function _get_maps(
             continue;
           }
         }
-        const known_a1_idxs = root_pair[0].bonds.filter((a) => assigned_as.includes(a)).map((a) => assigned_as.indexOf(a));
-        const known_b1_idxs = root_pair[1].bonds.filter((b) => assigned_bs.includes(b)).map((b) => assigned_bs.indexOf(b));
+        const known_a1_idxs = root_pair[0].bonds.filter((a) => posA.has(a)).map((a) => posA.get(a)!);
+        const known_b1_idxs = root_pair[1].bonds.filter((b) => posB.has(b)).map((b) => posB.get(b)!);
         const known_1idxs = pyIntSetAnd(known_a1_idxs, known_b1_idxs);
         if (known_1idxs.length === 0) {
           // [Meno departure: firstOfGroupByGeometry] the nearest, not the first by atom order
-          _new_assign([large_as[0], dep.firstOfGroupByGeometry ? nearestOver(large_as[0], large_bs, assigned_as, assigned_bs, root_pair) : large_bs[0]], root_pair);
+          _new_assign([large_as[0], dep.firstOfGroupByGeometry ? nearestOver(large_as[0], large_bs, assigned_as, assigned_bs, root_pair, tie) : large_bs[0]], root_pair);
           continue;
         }
         let pre_large_a = large_as[0];
         let pre_large_b = large_bs[0];
         let max_dihedral = 0.0;
         let any_torsion = false;
+        // (which pairs reached which most: the known pairs' order decides only between those at the very most)
+        const reached: [number, Atom, Atom][] = [];
         for (const known_1idx of known_1idxs) {
           const known_a2_idxs = assigned_as[known_1idx].bonds
-            .filter((a) => assigned_as.includes(a) && a !== root_pair[0])
-            .map((a) => assigned_as.indexOf(a));
+            .filter((a) => posA.has(a) && a !== root_pair[0])
+            .map((a) => posA.get(a)!);
           const known_b2_idxs = assigned_bs[known_1idx].bonds
-            .filter((b) => assigned_bs.includes(b) && b !== root_pair[1])
-            .map((b) => assigned_bs.indexOf(b));
+            .filter((b) => posB.has(b) && b !== root_pair[1])
+            .map((b) => posB.get(b)!);
           const known_2idxs = pyIntSetAnd(known_a2_idxs, known_b2_idxs);
           for (const known_2idx of known_2idxs) {
             any_torsion = true;
             const [pre_a, dihedral_a] = _get_most_dihedral(large_as, root_pair[0], assigned_as[known_1idx], assigned_as[known_2idx], dep.clampTorsionCosine);
             const [pre_b, dihedral_b] = _get_most_dihedral(large_bs, root_pair[1], assigned_bs[known_1idx], assigned_bs[known_2idx], dep.clampTorsionCosine);
+            reached.push([pyMax(dihedral_a, dihedral_b), pre_a, pre_b]);
             if (pyMax(dihedral_a, dihedral_b) >= max_dihedral) {
               max_dihedral = pyMax(dihedral_a, dihedral_b);
               pre_large_a = pre_a;
@@ -1213,7 +1764,11 @@ export function _get_maps(
           }
         }
         // [Meno departure: firstOfGroupByGeometry] no torsion to go by: the nearest, not the first by atom order
-        if (!any_torsion && dep.firstOfGroupByGeometry) pre_large_b = nearestOver(large_as[0], large_bs, assigned_as, assigned_bs, root_pair);
+        if (!any_torsion && dep.firstOfGroupByGeometry) pre_large_b = nearestOver(large_as[0], large_bs, assigned_as, assigned_bs, root_pair, tie);
+        {
+          const top = reached.filter((r) => r[0] === max_dihedral);
+          if (top.some((r) => r[1] !== top[0][1] || r[2] !== top[0][2])) tie();
+        }
         _new_assign([pre_large_a, pre_large_b], root_pair);
         continue;
       }
@@ -1232,9 +1787,9 @@ export function _get_maps(
           // I'm not sure if this block is needed. (original comment)
           continue;
         }
-        const known_as = root_pair[0].bonds.filter((_a) => assigned_as.includes(_a));
-        const corre_bs = known_as.map((_a) => assigned_bs[assigned_as.indexOf(_a)]);
-        const known_bs = root_pair[1].bonds.filter((_b) => assigned_bs.includes(_b));
+        const known_as = root_pair[0].bonds.filter((_a) => posA.has(_a));
+        const corre_bs = known_as.map((_a) => assigned_bs[posA.get(_a)!]);
+        const known_bs = root_pair[1].bonds.filter((_b) => posB.has(_b));
         if (known_as.length === 2 && known_bs.length === 2) {
           const flag_a = _det_chirality(known_as[0], known_as[1], large_as[0], large_as[1]);
           const flag_b = _det_chirality(corre_bs[0], corre_bs[1], large_bs[0], large_bs[1]);
@@ -1244,9 +1799,9 @@ export function _get_maps(
         }
         if (known_as.length === 1 && known_bs.length === 1) {
           let two_bond_pair: Pair | null = null;
-          for (const _a of known_as[0].bonds.filter((x) => assigned_as.includes(x) && x !== root_pair[0])) {
-            for (const _b of corre_bs[0].bonds.filter((x) => assigned_bs.includes(x) && x !== root_pair[1])) {
-              if (assigned_as.indexOf(_a) === assigned_bs.indexOf(_b)) {
+          for (const _a of known_as[0].bonds.filter((x) => posA.has(x) && x !== root_pair[0])) {
+            for (const _b of corre_bs[0].bonds.filter((x) => posB.has(x) && x !== root_pair[1])) {
+              if (posA.get(_a)! === posB.get(_b)!) {
                 two_bond_pair = [_a, _b];
                 break;
               }
@@ -1322,6 +1877,7 @@ export function _get_maps(
       }
       let minIdx = 0;
       for (let i = 1; i < ecec_rmsds.length; i++) if (ecec_rmsds[i] < ecec_rmsds[minIdx]) minIdx = i;
+      if (ecec_rmsds.some((r, i) => i !== minIdx && near(r, ecec_rmsds[minIdx]))) tie();
       const added_app_ecec = appended_ecec.splice(minIdx, 1)[0].slice();
       // 1192-1215: a water placed by its O alone - its two H by RMSD
       while (added_app_ecec.length === 1) {
@@ -1351,6 +1907,7 @@ export function _get_maps(
             ),
           );
         }
+        if (near(h2o_rmsds[0], h2o_rmsds[1])) tie();
         added_app_ecec.push(...potential_h2os[h2o_rmsds[1] < h2o_rmsds[0] ? 1 : 0]);
         break;
       }
@@ -1373,7 +1930,7 @@ export function _get_maps(
   const recursive_extended_chains: Chain[] = [];
   for (const chain of extracted_canonical_extended_chains) {
     if (chain.length < Math.min(atoms_a.length, atoms_b.length)) {
-      const new_maps = _get_maps(atoms_a, atoms_b, chain, false, _recursion_counter + 1, trace, dep);
+      const new_maps = _get_maps(atoms_a, atoms_b, chain, false, _recursion_counter + 1, trace, dep, ctx);
       if (new_maps.length === 0) recursive_extended_chains.push(chain);
       else for (const new_map of new_maps) recursive_extended_chains.push([...chain, ...new_map]);
     } else {
@@ -1433,9 +1990,10 @@ export function _correct_maps(atoms_a: Atoms, atoms_b: Atoms, atom_maps: Chain[]
       let potential_swaps: Atom[][] = [];
       // 1276-1282: the bonds of a that the map does not carry onto b, or carries from b that a has not
       const a_diff_bonds_raw: [Atom, Atom][] = [];
+      // (bs_in_map, the same for each pair - made once - and its .index() as a map)
+      const bs_in_map = firstPlaces(atom_map.map((p) => p[1]));
       for (const ab_map of atom_map) {
-        const bs_in_map = atom_map.map((p) => p[1]);
-        const a_diff_bd_from_b = ab_map[1].bonds.filter((b) => bs_in_map.includes(b)).map((b) => atom_map[bs_in_map.indexOf(b)][0]);
+        const a_diff_bd_from_b = ab_map[1].bonds.filter((b) => bs_in_map.has(b)).map((b) => atom_map[bs_in_map.get(b)!][0]);
         const own = ab_map[0].bonds;
         // set(own) ^ set(a_diff_bd_from_b) - a set of atoms; taken here own first, then the other, each in order
         const symdiff: Atom[] = [];
@@ -1744,8 +2302,10 @@ export function _order_maps(
     const bonding_pairs: Pair[] = [];
     const normal_pairs: Pair[] = [];
     const ic_map: Atom[] = [...atom_map.map((p) => p[0]), ...atom_map.map((p) => p[1])];
+    // (ic_map.index(atom) as a map: each atom's first place)
+    const ic_pos = firstPlaces(ic_map);
     const ic = (atom: Atom | null): Atom | null => {
-      const idx = atom === null ? -1 : ic_map.indexOf(atom);
+      const idx = atom === null ? -1 : (ic_pos.get(atom) ?? -1);
       if (idx < 0) return null;
       return ic_map[(idx + atom_map.length) % ic_map.length];
     };
@@ -1794,19 +2354,21 @@ export function _order_maps(
     );
 
     // 1566-1578
+    // (the bonding pairs' atoms on each side, for `in`)
+    const bondingSides = [new Set(bonding_pairs.map((p) => p[0])), new Set(bonding_pairs.map((p) => p[1]))];
     for (const pr of bonding_pairs) {
       for (const [i0, i1] of [
         [0, 1],
         [1, 0],
       ]) {
         for (const a_bonding of pr[i0].bonds) {
-          if (bonding_pairs.map((p) => p[i0]).includes(a_bonding)) {
+          if (bondingSides[i0].has(a_bonding)) {
             if (ic(a_bonding) === null) continue;
             if (pr[i1].bonds.includes(ic(a_bonding)!)) continue;
             for (const b_bonding of ic(a_bonding)!.bonds) {
               const conv = ic(b_bonding);
               if (conv !== null && a_bonding.bonds.includes(conv)) continue;
-              if (bonding_pairs.map((p) => p[i1]).includes(b_bonding)) evaluated_dic.num_of_long_rearranged_atoms += 1;
+              if (bondingSides[i1].has(b_bonding)) evaluated_dic.num_of_long_rearranged_atoms += 1;
             }
           }
         }

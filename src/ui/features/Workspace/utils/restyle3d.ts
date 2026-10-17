@@ -1,6 +1,6 @@
 import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
-import { heightOf, lookOf, solidOf } from "./molecule3d";
+import { heightOf, lookOf, reachOf, solidOf } from "./molecule3d";
 
 /** A molecule in 3D as a document holds it or a copy carries it (with its turn and frame, which a restyle leaves as they are). */
 type Placed3D = Omit<Molecule3D, "id">;
@@ -29,7 +29,7 @@ export function restyled3d<M extends Placed3D>(molecules: readonly M[], k: numbe
   const spheres: Sphere[] = molecules.map((m) => {
     const solid = solidOf(m as unknown as Molecule3D, style);
     const look = lookOf(m);
-    return { x: m.at.x, y: m.at.y, z: heightOf(m, solid, look), r: solid.reach[look] };
+    return { x: m.at.x, y: m.at.y, z: heightOf(m, solid, look), r: reachOf(m, solid, look) };
   });
   const body = bodiesOf(spheres);
   const boxes = new Map<number, { x0: number; x1: number; y0: number; y1: number }>();

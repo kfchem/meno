@@ -40,6 +40,8 @@ $ErrorActionPreference = "Stop"
 # scenario, is written against those and nothing platform-shaped.
 $onMac = $PSVersionTable.PSEdition -eq "Core" -and $IsMacOS
 Import-Module (Join-Path $PSScriptRoot $(if ($onMac) { "MenoGui.macOS.psm1" } else { "MenoGui.psm1" })) -Force
+# (which running copies of Meno are the app, not a job, the PDF reader or the like: MenoModes.psm1)
+Import-Module (Join-Path $PSScriptRoot "MenoModes.psm1") -Force
 if (-not $Exe) { $Exe = Get-MenoBuild }
 
 $scenarioPath = Join-Path $PSScriptRoot "scenarios/$Scenario.ps1"
@@ -78,14 +80,13 @@ function Save-Step {
 function Get-MenoApp {
     <#
       .SYNOPSIS
-      The copies of Meno running as the app - not those running a job
-      (`Meno --job <folder>`, src-tauri/src/jobs.rs), which outlive the
-      app and are left to finish.
+      The copies of Meno running as the app - not Meno's executable in its
+      other modes (MenoModes.psm1): a job's runner (`Meno --job <folder>`),
+      which outlives the app and is left to finish, or the PDF reader
+      (`Meno --pdf <cache>`), which another copy of Meno may be using. Only
+      these are closed, at the start of a run and at its end.
     #>
-    Get-Process -Name Meno -ErrorAction SilentlyContinue | Where-Object {
-        $line = if ($IsWindows) { $_.CommandLine } else { (& /bin/ps -o command= -p $_.Id) -join " " }
-        -not ($line -match "\s--job\s")
-    }
+    Get-Process -Name Meno -ErrorAction SilentlyContinue | Where-Object { -not (Test-MenoWorker $_) }
 }
 
 # The guides a fresh install shows, by the id of the plugin each is part of

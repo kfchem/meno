@@ -15,6 +15,7 @@ import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { layoutJob, nextFree, relayoutFrom, type LayoutJob } from "./engineLayout";
 import { layOut } from "./layOut";
+import { atTrueSize } from "../../../../lib/chem/magnified2d";
 
 /**
  * An atom and every atom bonded to it, however far along - a haptic bond
@@ -166,7 +167,9 @@ export async function cleanUp(
   store: EditorStore,
   around: number | Iterable<number> | null = null,
 ): Promise<void> {
-  const model = store.getState().model;
+  // (each structure shown magnified laid out at its true size, and shown as large again: store relayout, utils/trueSize)
+  const held = store.getState().model;
+  const model = atTrueSize(held);
   const expanded = store.getState().justExpanded();
   const parts = (
     around == null
@@ -177,7 +180,7 @@ export async function cleanUp(
     .filter((part) => part.bonds.length > 0);
   if (!parts.length) return; // nothing to lay out
   const cleaned = await Promise.all(parts.map((part) => laidOutWithLabels(part, expanded)));
-  if (store.getState().model !== model) {
+  if (store.getState().model !== held) {
     throw new Error(
       "The structure changed while it was being cleaned up, so nothing was moved.",
     );

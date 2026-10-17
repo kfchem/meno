@@ -6,6 +6,7 @@ import { ALPHA, COLORS } from "../../../theme/colors";
 import { useEditor } from "../store";
 import { strokeTarget } from "../utils/stroke";
 import { useDrawnLayout } from "./drawnLayoutContext";
+import { bondLengthFrom } from "../utils/magnified";
 
 /** The arc's radius, against a bond's length. */
 const RADIUS = 0.3;
@@ -41,7 +42,7 @@ export default function SnapArc2D() {
     const ptr = extend.pointer;
     const target =
       extend.active && extend.stroke && ptr
-        ? strokeTarget(model, extend.stroke, ptr, NOMINAL_BOND_LENGTH)
+        ? strokeTarget(model, extend.stroke, ptr, bondLengthFrom(model.atoms, extend.stroke.baseId))
         : null;
     const on =
       target != null &&

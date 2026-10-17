@@ -137,7 +137,7 @@ export default function ChainGuide2D() {
 
   useFrame((_, dt) => {
     const step = Math.min(dt, 1 / 30);
-    const L0 = NOMINAL_BOND_LENGTH;
+    const L0 = chain?.honeycomb.length ?? NOMINAL_BOND_LENGTH;
     let movingHead = false;
     let s = shown.current;
     if (chain) {
@@ -163,7 +163,8 @@ export default function ChainGuide2D() {
       return;
     }
     const { honeycomb, head, open } = shown.current;
-    const L = NOMINAL_BOND_LENGTH;
+    // (its bonds as long as the honeycomb's: a structure's shown magnified, as large)
+    const L = honeycomb.length;
     // it opens out from where the chain started, and folds back into it
     const centre = chain ? head : honeycomb.origin;
     const reach = REACH * L * easeOut(open);

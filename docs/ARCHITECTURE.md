@@ -41,6 +41,9 @@ src/
   lib/input/              wheel.ts: a mouse wheel told from two fingers on a trackpad
   lib/pyEnv.ts            creates/validates the uv venv for a Python profile
   lib/options.ts          options in a general form: drawn by Meno, declared by Meno or a plugin
+  lib/units.ts            Meno's units table (CODATA 2018): energies, temperatures, lengths, converted within a dimension only
+  lib/boltzmann.ts        Meno's one Boltzmann distribution: the 3D view's shares and the Populations step
+  lib/entry.ts            the entry record a workflow's molecule is (docs/WORKFLOWS-FOUNDATION.md, PR 1)
   lib/chem/identity.ts    a structure's identity (its canonical text, Kekulé-free) and symmetry: orbits from the
                           automorphisms Clean-up's canonical search finds, and the group they generate, capped
   lib/doc/                documents and undo; savers.ts; menoFile.ts: the workspace file, a zip
