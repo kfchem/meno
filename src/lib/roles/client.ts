@@ -133,6 +133,9 @@ export type ChemTransport = {
 /** An answer that is an error: the plugin could not do what was asked. */
 export class ChemError extends Error {}
 
+/** No answer in the time a request was given: the worker held on it is started afresh (lib/plugins/queue). */
+export class ChemTimeout extends ChemError {}
+
 type Pending = {
   resolve: (value: unknown) => void;
   reject: (e: Error) => void;
@@ -220,7 +223,7 @@ export class ChemClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new ChemError(`${this.name} did not answer ${op} in time`));
+        reject(new ChemTimeout(`${this.name} did not answer ${op} in time`));
         this.watch?.overdue(id);
       }, timeoutMs);
       this.pending.set(id, {

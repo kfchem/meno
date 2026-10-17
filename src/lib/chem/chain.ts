@@ -11,7 +11,8 @@
  * halogen hangs on the atom before it; an oxygen or a sulfur is either a
  * double-bonded oxygen on the atom before it (the C=O of COMe, the S=O of
  * SO2Me) or the next atom of the chain (the O of CH2OH) - whichever makes
- * every atom's valence one it has, an =O tried first; any other element is
+ * every atom's valence one it has, an =O tried first, but never an O an H
+ * is written right after, whose H it is (the OH of SO2H); any other element is
  * the chain's next atom; what parentheses hold, with its count, hangs on
  * the atom before it (CH(CH3)2) - an O or an S alone in them an =O, as
  * one unbracketed may be (C(O)NMe2, C(O)OMe), a group alone in them as
@@ -131,8 +132,11 @@ function readOn(items: Item[], k: number, r: Read): Read | null {
     n.bonds.push({ a: n.at, b: n.atoms.length - 1, order: 1 });
     return readOn(items, k + 1, n);
   }
-  // an =O on the atom before - tried first - while it can take one
-  if (OXO.has(el) && cur.used + 2 <= Math.max(...VALENCES[cur.el])) {
+  // an =O on the atom before - tried first - while it can take one; never one an H is written right after, which is
+  // that O's own (the OH of SO2H, as of CO2H)
+  const next = items[k + 1];
+  const hAfter = next?.kind === "element" && next.el === "H";
+  if (OXO.has(el) && !hAfter && cur.used + 2 <= Math.max(...VALENCES[cur.el])) {
     const n = copy(r);
     n.atoms[n.at].used += 2;
     n.atoms.push({ el, hs: 0, used: 2 });

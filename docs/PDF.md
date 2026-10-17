@@ -270,6 +270,48 @@ stops being part of the work.
 - **Tied to where it came from**: a picture keeps which PDF, which page
   and which box, and its right-click menu has *Show in the PDF*.
 
+## A new PDF from pages
+
+Asked for by the maintainer on 2026-10-18: simple editing of the PDFs a
+workspace holds, as a chemist needs it for a paper's supporting information.
+**The PDF it is made from is never changed**: what is made is a new PDF of
+its own, put on the page beside it - an icon, as one opened is, clear of the
+PDFs there - one step, which an undo takes back. It is held as any other
+(its bytes in Meno's cache by their SHA-256, and in the workspace's file).
+
+- **Where.** On a PDF's right-click menu, in a group of their own: *Page
+  numbers…*, *Pages…*, *Combine into one PDF* (two or more PDFs selected,
+  right-clicked on one of them or on the selection) and *Save as PDF…*,
+  which writes a PDF's bytes, as they are, to a file picked.
+- **Page numbers…** A card shows the first page with its number where it will
+  be, as it is chosen: 1, 2, 3 or S1, S2, S3 (supporting information's); the
+  first page's number; at the foot's left, middle or right. *Make numbered
+  copy* makes "paper (numbered).pdf": each page's number in Helvetica, 9 pt,
+  its foot 28 pt from the page's foot (a corner's 28 pt from the side), upright
+  on the page as it is shown, however the page is turned.
+- **Pages…** A card of the PDF's pages, drawn small as they come into view: a
+  page dragged goes where it is let go, the others making room, eased; a
+  click selects one, Shift and a click a run, and pages typed ("3-5", "1, 4,
+  7-9") select those. *Turn left* and *Turn right* turn those selected a
+  quarter; *Take out* leaves them out. *Make new PDF* makes one of the pages
+  as they are now ("paper (arranged).pdf"); *Extract selected* one of those
+  selected alone ("paper (pages 3-5).pdf" for a run, "paper (page 2).pdf"
+  for one).
+- **Combine into one PDF** makes "Combined.pdf" of the PDFs selected, in the
+  order they are read on the page - rows top to bottom, each left to right -
+  each one's pages in order. Put in another order after, with *Pages…*.
+- **How it is made** (src-tauri/src/pdfmake.rs): in the PDF reader's own
+  process (*Where it runs*), as its `make`, with PDFium alone: a new
+  document, each page copied into it in the order given
+  (`FPDF_ImportPages`), its turn added to the one it had (`/Rotate`), and a
+  page's number a text object in the standard Helvetica, which needs no font
+  embedded. Pages are copied whole - their words stay words, as they were
+  drawn; a link to another page of the PDF it came from may lead nowhere in
+  a copy without that page.
+- **What a copy does not hold**: writing by hand on a PDF in Meno (*Write on
+  it*) is the workspace's, over its pages, not the PDF's - it stays with the
+  PDF it was written on.
+
 ## A picture
 
 - **From anywhere**: a figure taken out of a PDF, an image file (PNG,
@@ -1103,7 +1145,9 @@ workspace holds.
     ring's second line is drawn inside it (but where the two end together at one end and the longer runs on alone past
     the other, to nothing, while the shorter ends there by other lines, that end is the shorter's), else the middle line's;
   - a filled wedge is a bond in front, narrow at its stereocentre - its
-    narrow end a point, rounded, or cut flat a line's width across, and
+    narrow end a point, rounded, cut flat a line's width across, or
+    capped with a short point its sides are cut in to (its width there
+    measured nearer its end, where the point narrows it), and
     its wide end cut slanting along the bond it meets however far; one
     under three tenths of a bond long only where its wide end points
     into a label (a stereocentre's H set close, the wedge cut back at it),
@@ -1436,7 +1480,10 @@ Each about 1.5 GB to download, about 2.2 GB kept; for macOS and Windows
   nearer - a wedge narrow at one end is a hash narrow at the other - so
   the worker looks at the picture for which end its ink draws narrow;
   where it cannot tell, Meno draws it narrow at the end that can be a
-  stereocentre;
+  stereocentre. An end with no other bond (a methyl, an H, a group's
+  label) is never a stereocentre, so a wedge seen narrow there, its other
+  end bonded on, is taken as one whose narrow end could not be told: a
+  label, or a wide end drawn short of it, misleads what is measured;
 - **atoms**: an element as the model reads it, with its charge (its
   notation's hydrogens and stereo marks are not a label); a group's name
   read as a typed label is; an isotope, seldom drawn, is unsure;
@@ -1463,7 +1510,11 @@ that this does not count against a worker's start).
 **What the workers do besides**: each reads one picture at a time, in its
 one process; what a model prints as it reads goes to stderr, stdout being
 Meno's answers; and a package reading never loads, pyonmttok, is left out
-of MolNexTR's lock.
+of MolNexTR's lock. Each takes the atoms and bonds its model predicts and
+leaves the model's own step of writing them as SMILES and a molfile
+undone (`graphs_unwritten`): Meno does not use what it writes, and
+writing a graph predicted from a picture that is no structure can run
+without end or crash the worker's process.
 
 Not yet: a picture with several structures, or a scheme, read as more
 than one structure; Linux.

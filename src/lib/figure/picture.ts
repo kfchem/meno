@@ -29,7 +29,7 @@ export function pictureFigure(r: PictureRead): FigureRead | null {
     const charge = el && Number.isInteger(a.charge) && Math.abs(a.charge!) <= 8 && a.charge ? { charge: a.charge } : {};
     atoms.push({ x: a.x, y: a.y, ...(el ? { el, ...charge } : label ? { label } : {}), ...(a.unsure ? { unsure: [UNCLEAR] } : {}) });
   });
-  const bonds: ReadBond[] = [];
+  const kept: { b: PictureRead["bonds"][number]; a: number; c: number }[] = [];
   const seen = new Set<string>();
   for (const b of Array.isArray(r?.bonds) ? r.bonds : []) {
     const a = index.get(b?.a);
@@ -38,18 +38,27 @@ export function pictureFigure(r: PictureRead): FigureRead | null {
     const key = a < c ? `${a}-${c}` : `${c}-${a}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    kept.push({ b, a, c });
+  }
+  const degree = new Map<number, number>();
+  for (const { a, c } of kept) for (const i of [a, c]) degree.set(i, (degree.get(i) ?? 0) + 1);
+  const bonds: ReadBond[] = kept.map(({ b, a, c }) => {
     const stereo = b.stereo === "up" || b.stereo === "down" ? b.stereo : null;
-    // (a wedge narrow where the picture draws it so, `a` its narrow end - seen from the other end, nearer is farther; else narrow where it can be a stereocentre, in the end)
-    const turned = stereo && b.narrow === "b";
-    bonds.push({
+    // (a wedge narrow where the picture draws it so, `a` its narrow end - seen from the other end, nearer is farther; else narrow where it can be a stereocentre, in the end.
+    // An end with no other bond is never a stereocentre: a wedge seen narrow there, the other end bonded on, is taken as one whose narrow end is not seen - a label or a
+    // short wide end near it misleading what is measured in the picture)
+    const end = b.narrow === "a" ? a : b.narrow === "b" ? c : null;
+    const narrow = end != null && !(degree.get(end) === 1 && (degree.get(end === a ? c : a) ?? 0) > 1) ? b.narrow : null;
+    const turned = stereo && narrow === "b";
+    return {
       a: turned ? c : a,
       b: turned ? a : c,
       order: b.order,
       ...(b.aromatic ? { aromatic: true as const } : {}),
-      ...(stereo ? { stereo: turned ? (stereo === "up" ? "down" : "up") : stereo, ...(b.narrow === "a" || b.narrow === "b" ? {} : { facing: true as const }) } : {}),
+      ...(stereo ? { stereo: turned ? (stereo === "up" ? "down" : "up") : stereo, ...(narrow ? {} : { facing: true as const }) } : {}),
       ...(b.unsure ? { unsure: [UNCLEAR] } : {}),
-    });
-  }
+    };
+  });
   if (!bonds.length) return null;
   // (as long as most of its bonds are drawn: the middle length)
   const lengths = bonds.map((b) => Math.hypot(atoms[b.a].x - atoms[b.b].x, atoms[b.a].y - atoms[b.b].y)).sort((p, q) => p - q);

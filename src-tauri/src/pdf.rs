@@ -31,7 +31,7 @@ const MOST: u64 = 1024 * 1024 * 1024;
 /// Where PDFium's library is: inside the app on a Mac, among Meno's
 /// resources beside the program on Windows and Linux - or, built for
 /// development, where the build fetched it (scripts/fetch-pdfium.mjs).
-fn library_dir() -> PathBuf {
+pub(crate) fn library_dir() -> PathBuf {
     let exe = std::env::current_exe().unwrap_or_default();
     let beside = exe.parent().map(|p| p.to_path_buf()).unwrap_or_default();
     let system = if cfg!(target_os = "macos") { "macos" } else if cfg!(windows) { "windows" } else { "linux" };
@@ -394,6 +394,23 @@ fn answer(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdf
     }
 }
 
+/// A new PDF made from pages of those held (pdfmake.rs): each opened first, as any asked about.
+fn make(docs: &mut HashMap<String, PdfDocument<'static>>, pdfium: &'static Pdfium, cache: &Path, ask: &Value) -> Result<(Value, Vec<u8>), String> {
+    let t = Instant::now();
+    let plan: crate::pdfmake::Plan = serde_json::from_value(ask["plan"].clone()).map_err(|e| format!("not a plan for a PDF: {e}"))?;
+    for take in &plan.pages {
+        if !is_sha(&take.sha) {
+            return Err("no such PDF".into());
+        }
+        if !docs.contains_key(&take.sha) {
+            let doc = pdfium.load_pdf_from_file(&cache.join(format!("{}.pdf", take.sha)), None).map_err(unreadable)?;
+            docs.insert(take.sha.clone(), doc);
+        }
+    }
+    let bytes = crate::pdfmake::make(pdfium, docs, &plan)?;
+    Ok((json!({"ms": ms(t)}), bytes))
+}
+
 /// How many PDFs a reader keeps open: the ones last asked about - each open
 /// one holds its pages, and every reader opens what it is asked to draw.
 const OPEN_MOST: usize = 6;
@@ -431,9 +448,15 @@ fn run_reader(cache: &Path) -> i32 {
         let Ok(line) = line else { break };
         let Ok(ask) = serde_json::from_str::<Value>(&line) else { continue };
         let id = ask["id"].as_u64().unwrap_or(0);
-        let answered = answer(&mut docs, pdfium, cache, &ask);
+        let answered = if ask["op"] == "make" { make(&mut docs, pdfium, cache, &ask) } else { answer(&mut docs, pdfium, cache, &ask) };
         if let Some(sha) = ask["sha"].as_str().filter(|s| docs.contains_key(*s)) {
             keep_open(&mut docs, &mut used, sha, OPEN_MOST);
+        }
+        // (those a new PDF was made from: kept open as any other asked about)
+        for take in ask["plan"]["pages"].as_array().into_iter().flatten() {
+            if let Some(sha) = take["sha"].as_str().filter(|s| docs.contains_key(*s)) {
+                keep_open(&mut docs, &mut used, sha, OPEN_MOST);
+            }
         }
         let (head, bytes) = match answered {
             Ok((mut head, bytes)) => {
@@ -677,6 +700,15 @@ async fn hold(app: &tauri::AppHandle, bytes: &[u8]) -> Result<Held, String> {
     };
     let pages: Vec<[f32; 2]> = serde_json::from_value(head["pages"].clone()).unwrap_or_default();
     Ok(Held { sha256: sha, size: bytes.len() as u64, pages })
+}
+
+/// A new PDF made from pages of PDFs held (pdfmake.rs `Plan`: which pages,
+/// in order, how far each is turned, and how they are numbered), held as
+/// one opened is - the PDFs it is made from as they were.
+#[tauri::command]
+pub async fn pdf_make(app: tauri::AppHandle, plan: Value) -> Result<Held, String> {
+    let (_, bytes) = ask(&app, json!({"op": "make", "plan": plan})).await?;
+    hold(&app, &bytes).await
 }
 
 /// A PDF on the disk, held.

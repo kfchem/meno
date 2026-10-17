@@ -108,16 +108,27 @@ describe("the right-click menu", () => {
   });
 
   it("keeps a PDF's page icons in their places, the way on that is not there shown but not to be pressed", () => {
-    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNext: none };
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNext: none, onNumbers: none, onPages: none, onSave: none };
     const { html } = menu(target({ kind: "pdf", id: 1 }), { pdf });
     expect(html).toMatch(/aria-label="Previous page"[^>]*disabled=""/);
     expect(html).not.toMatch(/aria-label="Next page"[^>]*disabled=""/);
   });
 
   it("offers a PDF's pages spread, some in places of their own, put back in their rows", () => {
-    const spread = { spread: true, icon: false, onSpread: none, onIcon: none, onRead: none };
+    const spread = { spread: true, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: spread }).listed).not.toContain("Put pages in rows");
     expect(menu(target({ kind: "pdf", id: 1 }), { pdf: { ...spread, onRows: none } }).listed).toEqual(expect.arrayContaining(["Gather pages", "Put pages in rows"]));
+  });
+
+  it("offers a new PDF from a PDF - its pages numbered, or arranged - and it written to a file; several selected, made one", () => {
+    const pdf = { spread: false, icon: false, onSpread: none, onIcon: none, onRead: none, onNumbers: none, onPages: none, onSave: none };
+    const one = menu(target({ kind: "pdf", id: 1 }), { pdf });
+    expect(one.listed).toEqual(expect.arrayContaining(["Page numbers…", "Pages…", "Save as PDF…"]));
+    expect(one.listed).not.toContain("Combine into one PDF");
+    // (a rule above the group: it begins one)
+    expect(one.html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Page numbers…/);
+    const two = menu(target({ kind: "pdf", id: 1 }), { pdf, onCombinePdfs: none });
+    expect(two.listed.slice(two.listed.indexOf("Page numbers…"))).toEqual(["Page numbers…", "Pages…", "Combine into one PDF", "Save as PDF…"]);
   });
 
   it("offers words' size, bold, italic and a list among their icons - ticked as they are - and how their lines lie listed", () => {
