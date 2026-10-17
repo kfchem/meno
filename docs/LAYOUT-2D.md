@@ -785,7 +785,11 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn
    aryl rings crowded round an atom as a propeller (section 7), where
-   they were not grown so.
+   they were not grown so. Drawings that read as well as each other
+   until then - phorbol's skeleton turned end for end - are each set
+   right to the end and measured with their stereochemistry drawn as it
+   will be (section 6): an H drawn on a centre may find a clear place in
+   one and none in the other, its wedge going onto a ring bond instead.
 6. Set the pieces of a salt or a mixture side by side, the largest first,
    with a bond and a half of paper between one's ink and the next's: a
    label's symbol, its H beside it and its charge count as ink (an OH

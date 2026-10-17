@@ -520,7 +520,25 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const settled = settleFans(mol, piece, done.pos, scoreFan(done.pos), scoreFan, fixed).pos;
       return { pos: settled, score: scoreH(settled), m: done.m, mirrored: done.mirrored };
     };
-    best = finish(set[0]);
+    // Drawings that read as well as each other here - phorbol's skeleton
+    // turned end for end - can still read otherwise once their wedges are
+    // put on: an H drawn on a centre may have a clear place in one and
+    // none in the other, and the wedge go on a ring bond instead. Of
+    // those, the one that reads best with its stereochemistry drawn as it
+    // will be; still alike, the first.
+    const tied = set.filter((c) => c.score <= set[0].score + 1e-9);
+    const centres = piece.filter((a) => mol.tetra.has(a) && !solid[a]);
+    if (tied.length > 1 && centres.length) {
+      const finished = tied.map(finish);
+      const drawn = finished.map((c) => {
+        // (as it will be set on the page: squared up)
+        const pos = new Map(c.pos);
+        if (!fixed(piece) && !c.m.lift) squareUp(mol, piece, pos);
+        return stereoScore(mol, piece, pos, c.m.lift, depth, measured, centres);
+      });
+      const k = drawn.reduce((b, v, i) => (v < drawn[b] - 1e-9 ? i : b), 0);
+      best = finished[k];
+    } else best = finish(set[0]);
     const { lift } = best.m;
     // (the blades it was drawn with turned: their depth, and so drawn)
     if (lift) {
@@ -1665,6 +1683,69 @@ function turnBlades(mol: Molecule, hub: { x: number; rings: number[] }, phi: num
       lift.set(v, across * Math.sin(phi));
     }
   }
+}
+
+/**
+ * How a piece reads with its stereochemistry drawn as `placeStereo` puts
+ * it - the H's it draws as atoms, its wedges - by the benchmark's measure,
+ * room made for H's (as `scorer`'s with `hydrogenRoom` 1). For choosing
+ * between drawings alike without it.
+ */
+function stereoScore(
+  mol: Molecule,
+  piece: number[],
+  pos: Grown,
+  lift: Map<number, number> | null,
+  depth: readonly (number | null)[],
+  solid: readonly boolean[],
+  centres: readonly number[],
+): number {
+  const index = new Map(piece.map((a, i) => [a, i]));
+  const stereo = placeStereo(mol, new Map(piece.map((a) => [a, pos.get(a)!])), new Map(centres.map((c) => [c, mol.tetra.get(c)!])));
+  const x = piece.map((a) => pos.get(a)!.x);
+  const y = piece.map((a) => pos.get(a)!.y);
+  const edges: [number, number][] = [];
+  const orders: number[] = [];
+  for (const [k, i] of mol.bondIndex) {
+    const [a, b] = k.split(",").map(Number);
+    if (!index.has(a)) continue;
+    edges.push([index.get(a)!, index.get(b)!]);
+    orders.push(mol.bonds[i].order);
+  }
+  const elements = piece.map((a) => mol.el[a]);
+  const hydrogens = piece.map((a) => mol.hs[a]);
+  const labelled = piece.map((a) => (mol.el[a] !== "C" && mol.el[a] !== "*") || mol.charge[a] !== 0);
+  const perspective = piece.map((a) => solid[a] || lift?.has(a) || false);
+  const depths = piece.map((a) => lift?.get(a) ?? depth[a] ?? null);
+  const drawnH = new Map<number, number>();
+  for (const h of stereo.hydrogens) {
+    const on = index.get(h.on)!;
+    x.push(h.at.x);
+    y.push(h.at.y);
+    elements.push("H");
+    hydrogens.push(0);
+    labelled.push(true);
+    perspective.push(false);
+    depths.push(null);
+    edges.push([on, x.length - 1]);
+    orders.push(1);
+    hydrogens[on] = Math.max(0, hydrogens[on] - 1);
+    drawnH.set(on, x.length - 1);
+  }
+  const wedged = stereo.wedges.flatMap((w) => {
+    const from = index.get(w.from)!;
+    const to = w.to === -1 ? drawnH.get(from) : index.get(w.to);
+    const e = edges.findIndex(([a, b]) => (a === from && b === to) || (b === from && a === to));
+    return e >= 0 ? [e] : [];
+  });
+  const tetra = [
+    ...piece.map((a) => {
+      const t = mol.tetra.get(a);
+      return t && { neighbours: t.neighbours.map((b) => (b < 0 ? -1 : index.get(b)!)), volume: t.volume };
+    }),
+    ...stereo.hydrogens.map(() => undefined),
+  ];
+  return layoutMetrics({ x, y, edges, orders, wedged, elements, hydrogens, labelled, perspective, depth: depths, tetra, hydrogenRoom: 1 }).score;
 }
 
 /** The measures a piece is drawn by, as it has its depth: blades turned as a propeller's (`lift`) or none. */
