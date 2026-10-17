@@ -179,9 +179,12 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
     const t = target({ kind: "molecule3d", id: 1 });
     const { listed, html } = menu(t, { molecule3d: molecule3d({ chosen: 0, onOrdersFromDictionary: none, onOrdersFromSmiles: none, onEstimateOrders: none, onAddHydrogens: none }) });
     expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens"]);
-    // (one line, above the first of them)
-    expect(html).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
-    expect(html).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
+    // (first in the list, under the icons' row and its line: no rule of its own)
+    expect(html).not.toContain('role="separator"');
+    // (after another item: one line, above the first of them)
+    const after = menu(t, { molecule3d: molecule3d({ chosen: 0, onTurnLikeDrawing: none, onOrdersFromDictionary: none, onOrdersFromSmiles: none }) }).html;
+    expect(after).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
+    expect(after).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
     expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Add hydrogens"]);
   });
   it("offers its magnification, and back to its true size where it is not at it", () => {
@@ -201,5 +204,33 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
 describe("the menu of writing by hand", () => {
   it("offers its colour and Delete, as icons", () => {
     expect(menu(target({ kind: "ink", id: 1 }), { onColour: none }).icons).toEqual(["Colour…", "Delete writing"]);
+  });
+});
+
+describe("a menu's rules", () => {
+  it("are drawn only between items shown: never first, never two together, never last - a group left empty draws none", async () => {
+    const { withRules } = await import("./menuRules");
+    const rules = (items: { name: string; divider?: boolean }[]) => withRules(items).map((i) => (i.divider ? `| ${i.name}` : i.name));
+    expect(rules([{ name: "a", divider: true }, { name: "b" }, { name: "c", divider: true }])).toEqual(["a", "b", "| c"]);
+    expect(rules([])).toEqual([]);
+    // (a group whose items are all left out: nothing of it, not its rule)
+    expect(rules([{ name: "a" }, ...[].map((name: string) => ({ name, divider: true })), { name: "b", divider: true }])).toEqual(["a", "| b"]);
+  });
+
+  it("puts no rule under the row of icons, nor at the top of a menu with none, whatever a menu's first listed item says", () => {
+    // (on empty space, a workspace in a document's object: the first command listed begins a group)
+    const m = menu(target({}), { canvas: [{ name: "Fit to content", keys: "", run: none, divider: true }, { name: "Styles…", keys: "", run: none, divider: true }] });
+    expect(m.listed).toEqual(["Fit to content", "Styles…"]);
+    const rest = m.html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "");
+    expect(rest.indexOf('role="separator"')).toBeGreaterThan(rest.indexOf("Fit to content"));
+    expect(rest.match(/role="separator"/g)).toHaveLength(1);
+    // (a molecule in 3D whose first listed item begins a group: its rule not drawn under the icons)
+    const m3 = menu(target({ kind: "molecule3d", id: 1 }), {
+      molecule3d: { otherLook: { name: "Ball and stick", atoms: "balls", run: none }, onResetTurn: none, onTurnOnce: none, onRemake: none, onCut: none, onCopy: none } as never,
+    });
+    const listed3 = m3.html.replace(/<div role="group" aria-label="Frequent".*?<\/div>/, "");
+    const first = listed3.indexOf('role="menuitem"');
+    expect(first).toBeGreaterThan(-1);
+    expect(listed3.slice(0, first)).not.toContain('role="separator"');
   });
 });
