@@ -273,6 +273,9 @@ function bestFitting(t: { own: readonly number[][]; alike: readonly number[][] }
   return kept;
 }
 
+/** How near a bond, in bond lengths, a label may lie before it is on it (a clash): a bare vertex, 0.3. */
+export const LABEL_ON_BOND = 0.4;
+
 /** How far a ring is from a regular polygon of its size, in bond lengths. */
 export function ringIrregularity(
   xs: readonly number[],
@@ -1882,16 +1885,19 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     }
   }
 
+  // (a label - an atom's letters, a wedge's H - on a bond a little further
+  // off than a bare vertex: its letter is ink half a bond high)
   let clashes = 0;
-  const near = 0.3 * L;
+  const reach = (g.labelled ? LABEL_ON_BOND : 0.3) * L;
   for (let p = 0; p < n; p++) {
     const px = x[p];
     const py = y[p];
+    const near = (g.labelled?.[p] ? LABEL_ON_BOND : 0.3) * L;
     // (the first bond whose box can reach the atom, with a bond's length to spare)
     let lo = 0;
     for (let hi = sweep ? E : 0; lo < hi; ) {
       const mid = (lo + hi) >> 1;
-      if (lox[bondsByX[mid]] < px - near - widest - L) lo = mid + 1;
+      if (lox[bondsByX[mid]] < px - reach - widest - L) lo = mid + 1;
       else hi = mid;
     }
     for (let s = lo; s < E; s++) {

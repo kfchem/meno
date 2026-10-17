@@ -913,12 +913,10 @@ describe("a ring system drawn as a solid", () => {
     };
   };
 
-  it("shows the centres of a ring bridged across another by its shape, with no wedge: gelsemine's", () => {
+  it("shows the centres of a ring bridged across another by its shape, with no wedge: gelsemine's, ibogaine's", () => {
     // (all but one at most, each read for sure by its bonds as drawn; with
-    // wedges wherever no chair or boat showed them, gelsemine had seven.
-    // Ibogaine was another, until its isoquinuclidine was laid flat from
-    // the smallest set it lies flat from: ringSets.test.ts)
-    for (const smiles of ["CN1C[C@]2([C@@H]3C[C@@H]4[C@]5([C@H]2[C@H]1[C@H]3CO4)C6=CC=CC=C6NC5=O)C=C"]) {
+    // wedges wherever no chair or boat showed them, gelsemine had seven)
+    for (const smiles of ["CN1C[C@]2([C@@H]3C[C@@H]4[C@]5([C@H]2[C@H]1[C@H]3CO4)C6=CC=CC=C6NC5=O)C=C", "CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC"]) {
       const g = input(smiles);
       const out = layout2D(g);
       const mol = perceive(g);
