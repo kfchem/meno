@@ -1147,7 +1147,9 @@ workspace holds.
   - a filled wedge is a bond in front, narrow at its stereocentre - its
     narrow end a point, rounded, cut flat a line's width across, or
     capped with a short point its sides are cut in to (its width there
-    measured nearer its end, where the point narrows it), and
+    measured nearer its end, where the point narrows it; and, its sides
+    running in only to near half its wide end, filling up to three
+    quarters of its narrowest box - a bar, more, is a line), and
     its wide end cut slanting along the bond it meets however far; one
     under three tenths of a bond long only where its wide end points
     into a label (a stereocentre's H set close, the wedge cut back at it),
