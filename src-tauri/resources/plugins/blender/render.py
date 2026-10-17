@@ -585,6 +585,8 @@ def assemble(frames, s, folder):
 # it cycles.
 NOMINAL = {"reveal": 7.0, "pulse": 6.0, "assemble": 8.0, "scan": 7.0, "dissolve": 7.0}
 LOOPS = {"pulse", "scan"}
+# (a cycle plays a motion only until it has settled - not its Once's long last hold - so that it turns back without a pause)
+CYCLE = {"reveal": 5.4, "assemble": 6.0, "dissolve": 5.6}
 
 
 def motion_film(s, meno, folder):
@@ -600,7 +602,7 @@ def motion_film(s, meno, folder):
     n = total // 2 + 1 if cycle else total
     cfg = {
         "molecules": meno.get("molecules") or [],
-        "seconds": n / s["fps"], "nominal": None if (loop and native) else NOMINAL[motion],
+        "seconds": n / s["fps"], "nominal": None if (loop and native) else (CYCLE.get(motion, NOMINAL[motion]) if cycle else NOMINAL[motion]),
         "frames": n, "fps": s["fps"], "mode": "loop" if (loop and native) else "once",
         "width": s["width"], "height": s["height"], "percent": 100,
         "samples": s["samples"], "noise": 0.01, "bg": "white" if white else "dark",
