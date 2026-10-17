@@ -200,7 +200,7 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
   const fill = Math.abs(area(pts)) / (long * short);
   const at = (t: number): Point => ({ x: mid.x + u.x * t, y: mid.y + u.y * t });
   // (all but convex: a letter of straight lines alone - an F, wide at one end - is not, a wedge of however many corners is)
-  if (!curved && (corners.length <= 6 || Math.abs(area(pts)) >= 0.85 * Math.abs(area(hull(corners)))) && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < 0.7) {
+  if (!curved && (corners.length <= 6 || Math.abs(area(pts)) >= 0.85 * Math.abs(area(hull(corners)))) && Math.max(w0, w1) > 0 && Math.min(w0, w1) < 0.4 * Math.max(w0, w1) && fill > 0.35 && fill < WEDGE_FILL) {
     // (its tip the middle of its narrow end's points; its base the middle of its wide end's outermost two, of
     // all its points that far along - so the middle of a wide end cut slanting)
     const toWide = w0 < w1 ? 1 : -1;
@@ -217,6 +217,12 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
   const cut = curved ? null : flatTipped(pts);
   return cut ? { wedge: cut } : null;
 }
+
+/**
+ * How much of its narrowest box a wedge fills at most: a triangle half; one whose sides run in to near half its wide end before
+ * they are cut in to a point, a bond long, most of three quarters - a bar, over three quarters, is a line.
+ */
+const WEDGE_FILL = 0.75;
 
 /** A wedge drawn as four corners - its narrow end a short edge, its wide end the opposite one, far apart - or none. */
 function flatTipped(given: Point[]): Wedge | null {
