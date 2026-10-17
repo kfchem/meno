@@ -223,6 +223,16 @@ describe("what a file is written with", () => {
     expect(text).toContain("M  SMT   1 OTBS");
   });
 
+  it("an Ar drawn with a bond as the aryl group's symbol, a label - argon alone as the element", () => {
+    const text = writeMolfile({ atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: L, y: 0, el: "Ar" }, { id: 3, x: 3 * L, y: 0, el: "Ar" }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    const lines = text.split("\n");
+    // (the bonded one a star with its label; the lone one argon)
+    expect(lines[5].slice(31, 34).trim()).toBe("*");
+    expect(text).toContain("A    2\nAr\n");
+    expect(lines[6].slice(31, 34).trim()).toBe("Ar");
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "Ar", "Ar"]);
+  });
+
   // (not Ar, which is argon's symbol as well as aryl's: IUPAC GR-9.2)
   it("any other label as a star atom with an alias; Rgroups, lists, valence and hydrogen counts in their fields", () => {
     const text = writeMolfile({
