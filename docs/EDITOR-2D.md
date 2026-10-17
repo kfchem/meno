@@ -87,7 +87,14 @@ and in particular:
       the pointer went enclosing room, not straight back - it closes the
       ring that way makes: round one hexagon, a six-membered ring; round
       two, a ten-membered one; round three, fourteen (`utils/chain`). Led
-      on from there, the ring stays; led back past it, it goes. Onto an
+      on from there, the ring stays; led back past it, it goes. Led back
+      over a bond of a ring it has closed, it goes along that bond again
+      and the ring stays, so fused rings - naphthalene, phenanthrene - are
+      traced in one stroke, ring after ring, over the bonds they share;
+      led straight back round the whole of a ring it has just closed, the
+      ring goes. A loop that goes round one ring and on round the next is
+      taken as going round the next where it winds round that ring's
+      middle, though the loop as a whole is not round. Onto an
       atom already there, it joins it where the ring that closes lies
       along the honeycomb, or where it closes none; elsewhere the point is
       an atom of the chain's own (`utils/stroke`).
