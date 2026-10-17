@@ -82,6 +82,9 @@ import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
 import { movingAtoms, movingFor } from "./utils/edit3d";
 import { abbreviationOf } from "../../../lib/chem/abbreviations";
+import { numbersItemsFor } from "./utils/atomNumbersShown";
+// TEMPORARY - to be removed before merge (utils/numbersLook)
+import { numbersLook, setNumbersLook } from "./utils/numbersLook";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 
 /** No atoms or bonds: the same array each time, so that nothing redraws for it. */
@@ -2098,6 +2101,20 @@ function WorkspaceContent({
             const st = store.getState();
             const item = stereoItemFor(st, menu);
             return item ? { name: item.name, run: () => showStereo(item) } : undefined;
+          })()}
+          numbers={(() => {
+            const st = store.getState();
+            const got = numbersItemsFor(st, menu);
+            if (!got) return undefined;
+            // TEMPORARY - to be removed before merge: the two ways of drawing atom numbers, for the maintainer to compare (utils/numbersLook)
+            const anyShown = got.items[0].of.some((g) => !!st.molecules3d.find((m) => m.id === g.id)?.atomNumbers);
+            const looks = anyShown
+              ? [0, 1].map((l) => ({ name: l ? "Numbers printed on the ball (trial)" : "Numbers flat over the ball (trial)", checked: numbersLook() === l, run: () => setNumbersLook(l) }))
+              : [];
+            return {
+              items: got.items.map((it) => ({ name: it.name, run: () => st.setAtomNumbers(it.of, it.show) })),
+              kinds: [...got.kinds.map((k) => ({ name: k.name, checked: k.checked, run: () => st.setAtomNumberKind(k.molecules, k.kind) })), ...looks],
+            };
           })()}
           onTurnOver={(axis) => store.getState().turnSelectionOver(axis)}
           onCharge={(step) => {

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ballNumberUniforms, DIGIT_CELL, digitAtlas, NUMBER_DIGITS_MOST, NUMBER_HEIGHT, NUMBER_WIDTH_MOST, type BallNumberUniforms } from "./atomNumbers";
 import { menoShader } from "./menoShader";
 import { withStickBend } from "./stickBend";
 import { FADE_MOST } from "../../../../lib/chem/style3d";
@@ -7,7 +8,7 @@ import { FADE_MOST } from "../../../../lib/chem/style3d";
 export const OCCLUSION_DIRECT = 0.3;
 
 /** What a material taught by `occludedMaterial` is set by: its uniforms. */
-export type Occluded = { strength: { value: number }; direct: { value: number }; fade: FadeUniforms; byAtom: { value: number }; lines: BallLineUniforms };
+export type Occluded = { strength: { value: number }; direct: { value: number }; fade: FadeUniforms; byAtom: { value: number }; lines: BallLineUniforms; numbers: BallNumberUniforms };
 
 /**
  * A lit material taught to shade by a molecule's ambient occlusion
@@ -50,6 +51,7 @@ export function occludedMaterial(
   const fade = o.like?.fade ?? fadeUniforms();
   const byAtom = o.like?.byAtom ?? { value: 0 };
   const lines: BallLineUniforms = o.like?.lines ?? { amount: { value: new THREE.Vector3() }, width: { value: 0 }, least: { value: 0.5 }, colour: { value: new THREE.Color() } };
+  const numbers: BallNumberUniforms = o.like?.numbers ?? ballNumberUniforms();
   const bend = kind === "bonds" && !!o.bend;
   menoShader(material, bend ? "occluded-bent-bonds" : `occluded-${kind}`, (shader) => {
     shader.uniforms.occlusionStrength = strength;
@@ -60,6 +62,14 @@ export function occludedMaterial(
       shader.uniforms.ballLineWidth = lines.width;
       shader.uniforms.ballLineLeast = lines.least;
       shader.uniforms.ballLineColour = lines.colour;
+      numbers.atlas.value ??= digitAtlas();
+      shader.uniforms.numbersShown = numbers.shown;
+      shader.uniforms.numbersLook = numbers.look;
+      shader.uniforms.numbersAtlas = numbers.atlas;
+      shader.uniforms.numbersPxPer = numbers.pxPer;
+      shader.uniforms.numbersLeast = numbers.least;
+      shader.uniforms.numbersMost = numbers.most;
+      withBallNumbers(shader);
       shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nattribute float ballLined;\nvarying vec3 vBallN;\nvarying float vBallLined;")
         .replace("#include <begin_vertex>", "#include <begin_vertex>\nvBallN = normal;\n// (lined or not, and how large: its radius where it is, none where not)\n#ifdef USE_INSTANCING\nvBallLined = ballLined > 0.5 ? max( length( instanceMatrix[ 0 ].xyz ), 1e-6 ) : 0.0;\n#else\nvBallLined = ballLined;\n#endif");
@@ -124,8 +134,104 @@ export function occludedMaterial(
       );
   });
   material.needsUpdate = true;
-  return { strength, direct, fade, byAtom, lines };
+  return { strength, direct, fade, byAtom, lines, numbers };
 }
+
+/**
+ * A ball's number drawn on it (./atomNumbers): its digits facing the
+ * viewer, upright - by the ball's normal in the camera's space, so that
+ * they never turn with the ball nor shake as it turns - where its instance
+ * puts them (`ballNumberPlace`: x and y from its middle as seen, in its
+ * radius's units, how large, a share of their full size, and how far
+ * shown, 0 to 1), in the part of it not behind another ball. Drawn flat over it (look 0), the ball's
+ * shading under them; or as if printed on its surface (look 1), bent round
+ * it as it curves away and lit as it is. Their ink dark on a light ball,
+ * white on a dark one; faded out where a digit would be under
+ * `numbersLeast` pixels high or squeezed to under half its size, and by
+ * `numbersShown`. As high as `NUMBER_HEIGHT` of the ball's radius, never
+ * over `numbersMost` in the balls' own units, and all of them no wider than
+ * `NUMBER_WIDTH_MOST`.
+ */
+function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void {
+  shader.vertexShader = shader.vertexShader
+    .replace(
+      "#include <common>",
+      "#include <common>\nattribute float ballNumber;\nattribute vec4 ballNumberPlace;\nuniform float numbersPxPer;\nuniform float numbersMost;\nvarying float vNumber;\nvarying vec4 vNumberPlace;\nvarying float vNumberPx;\nvarying float vNumberH;",
+    )
+    .replace(
+      "#include <project_vertex>",
+      `#include <project_vertex>
+      vNumber = ballNumber;
+      vNumberPlace = ballNumberPlace;
+      {
+        // (the ball's radius in its own units, and on the screen, in pixels)
+        #ifdef USE_INSTANCING
+        float r = length( instanceMatrix[ 0 ].xyz );
+        vNumberPx = length( ( modelViewMatrix * instanceMatrix * vec4( 1.0, 0.0, 0.0, 0.0 ) ).xyz ) * numbersPxPer;
+        #else
+        float r = 1.0;
+        vNumberPx = length( ( modelViewMatrix * vec4( 1.0, 0.0, 0.0, 0.0 ) ).xyz ) * numbersPxPer;
+        #endif
+        vNumberH = min( ${NUMBER_HEIGHT.toFixed(3)}, numbersMost / max( r, 1e-6 ) );
+      }`,
+    );
+  shader.fragmentShader = shader.fragmentShader
+    .replace(
+      "#include <common>",
+      `#include <common>
+      uniform float numbersShown;
+      uniform float numbersLook;
+      uniform sampler2D numbersAtlas;
+      uniform float numbersLeast;
+      varying float vNumber;
+      varying vec4 vNumberPlace;
+      varying float vNumberPx;
+      varying float vNumberH;
+      // (how much of a point on a ball, at p in its radius's units from where its number stands, the number covers)
+      float ballNumberCover( vec2 p, vec2 dx, vec2 dy ) {
+        float num = floor( vNumber + 0.5 );
+        float digits = num < 10.0 ? 1.0 : num < 100.0 ? 2.0 : num < 1000.0 ? 3.0 : num < 10000.0 ? 4.0 : 0.0;
+        if ( digits < 1.0 ) return 0.0;
+        float h = min( vNumberH, ${NUMBER_WIDTH_MOST.toFixed(3)} / ( digits * ${DIGIT_CELL.toFixed(3)} ) ) * vNumberPlace.z;
+        float shown = numbersShown * vNumberPlace.w * smoothstep( 0.4, 0.6, vNumberPlace.z ) * smoothstep( numbersLeast * 0.75, numbersLeast * 1.25, h * 0.7 * vNumberPx );
+        if ( shown <= 0.0 ) return 0.0;
+        float x = p.x / ( h * ${DIGIT_CELL.toFixed(3)} ) + digits * 0.5;
+        // (the digits' picture is the right way up: its rows from the bottom)
+        float y = 0.5 + p.y / h;
+        if ( x < 0.0 || x >= digits || y < 0.0 || y > 1.0 ) return 0.0;
+        float d = floor( x );
+        // (its place's power of ten, multiplied out: exact, as pow is not)
+        float place = 1.0;
+        for ( int k = 0; k < ${NUMBER_DIGITS_MOST - 1}; k++ ) if ( float( k ) < digits - 1.0 - d ) place *= 10.0;
+        float value = mod( floor( num / place + 1e-4 ), 10.0 );
+        vec2 uv = vec2( ( value + fract( x ) ) / 10.0, y );
+        vec2 per = vec2( 1.0 / ( 10.0 * h * ${DIGIT_CELL.toFixed(3)} ), 1.0 / h );
+        return textureGrad( numbersAtlas, uv, dx * per, dy * per ).a * shown;
+      }`,
+    )
+    .replace(
+      "#include <color_fragment>",
+      `#include <color_fragment>
+      float ballNumberAt = 0.0;
+      bool ballNumberWhite = false;
+      if ( vNumber > 0.5 && numbersShown > 0.0 && vNumberPlace.z > 0.0 && vNumberPlace.w > 0.0 ) {
+        vec3 nv = normalize( vNormal );
+        // (flat: where the point is seen; printed: how far round the ball it is)
+        vec2 p = numbersLook < 0.5 ? nv.xy - vNumberPlace.xy : asin( clamp( nv.xy, -1.0, 1.0 ) ) - asin( clamp( vNumberPlace.xy, -1.0, 1.0 ) );
+        ballNumberAt = ballNumberCover( p, dFdx( p ), dFdy( p ) );
+        ballNumberWhite = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) < ${INK_TURN.toFixed(3)};
+        if ( numbersLook >= 0.5 ) diffuseColor.rgb = mix( diffuseColor.rgb, ballNumberWhite ? vec3( 0.9 ) : vec3( 0.012 ), ballNumberAt );
+      }`,
+    )
+    .replace(
+      "#include <dithering_fragment>",
+      `#include <dithering_fragment>
+      if ( numbersLook < 0.5 && ballNumberAt > 0.0 ) gl_FragColor.rgb = mix( gl_FragColor.rgb, ballNumberWhite ? vec3( 0.97 ) : vec3( 0.1 ), ballNumberAt );`,
+    );
+}
+
+/** Below this lightness of a ball's own colour (linear), its number is in white ink; above, dark. */
+const INK_TURN = 0.4;
 
 /** What draws the lines on a molecule's balls (`occludedMaterial`): each axis's circle's share (x, y, z), their width in the balls' own units, the least they are drawn on the screen in pixels, their colour (sRGB). */
 export type BallLineUniforms = { amount: { value: THREE.Vector3 }; width: { value: number }; least: { value: number }; colour: { value: THREE.Color } };
