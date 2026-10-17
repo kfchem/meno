@@ -485,8 +485,9 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     const starts = [...new Set(tried.map((c) => c.start))];
     const ofEach = <T extends { start: number }>(list: T[], n: number) => starts.flatMap((start) => list.filter((c) => c.start === start).slice(0, n));
     // every frame tried the other way where it helps, for a small piece;
-    // the most promising few for a large one
-    const worth = piece.length <= 80 ? framesFor(mol, piece).length : 4;
+    // the most promising few for a large one - shared among the starts
+    // (as many in all as there are frames, the best few of each)
+    const worth = piece.length <= 80 ? Math.max(FINALISTS, Math.ceil(framesFor(mol, piece).length / starts.length)) : 4;
     const improved = ofEach(tried, worth)
       .map((cand) => ({
         ...improve(mol, cand.pos, cand.score, flipsHere, sides, cand.m.score, false, swapsHere),
@@ -510,12 +511,13 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     // to drawings that are not. (The best alone, for a piece of more than
     // eighty atoms, as above: setting right is most of the time a large
     // piece takes - Stryker's reagent's 126 atoms, its three best drawings
-    // one drawing turned)
+    // one drawing turned; and of each start its best alone, where the
+    // blades are tried turned too)
     const finalists = starts.flatMap((start) => {
       const grown = tried.find((c) => c.start === start)!;
       const own = deeper.filter((c) => c.start === start);
       const pool = own.some((d) => d.score <= grown.score + 1e-9) ? own : [grown, ...own];
-      return pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? FINALISTS : 1);
+      return pool.sort(bestFirst(mol, piece)).slice(0, piece.length <= 80 ? Math.max(1, Math.floor(FINALISTS / starts.length)) : 1);
     });
     const set = finalists
       .map((cand) => {
