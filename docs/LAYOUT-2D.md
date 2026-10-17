@@ -629,6 +629,15 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   it). Aslant into a ring, or into lovastatin's ring with its double bond,
   it reads as pointing into the ring; it goes outside where there is room.
   An H with three rings or more round its atom keeps to the most room.
+- Centres with fewest bonds out of the rings are shown first, so they get
+  theirs. Of centres alike in that, the one that costs the others near it
+  least, shown before them, goes first - each way weighed as it stands: a
+  wedge that reads only as the bonds fall, a wedge on a ring bond, an H
+  left little room or laid off upright at a fusion. Where two fusion Hs
+  want one spot, the one that takes it upright can leave the other its
+  ring bond, where the other way round both would lean 30 degrees. The
+  canonical rank decides only between centres that cost the same either
+  way.
 - A ring atom's two groups - erythromycin's OH and methyl on one carbon -
   each show which face they are on: the one in front on a wedge, the other
   behind on hashes.
