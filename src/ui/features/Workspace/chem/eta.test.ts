@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { layoutMolecule } from "../../../../lib/chem/layout2d";
+import { createSVG, layoutMolecule } from "../../../../lib/chem/layout2d";
 import { styleOf, DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { createWorkspaceDocument, emptyWorkspaceDocument, bindRing } from "../document";
@@ -400,6 +400,10 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
     // (the arc: pieces end to end from one end carbon to the other)
     const arc = allylArc(at.get(a)!, at.get(c)!, at.get(model.atoms.find((x) => x.id === b.endpoints![1])!.id)!, at.get(pd)!).points;
     for (let k = 1; k < arc.length; k++) expect(lay.lines.some((l) => near({ x: l.x1, y: l.y1 }, arc[k - 1]) && near({ x: l.x2, y: l.y2 }, arc[k]))).toBe(true);
+    // (and in a picture of it - SVG, and PNG and EMF from the same lines - the arc's pieces as drawn)
+    const svg = createSVG(lay, opts);
+    const piece = lay.lines.find((l) => near({ x: l.x1, y: l.y1 }, arc[0]) && near({ x: l.x2, y: l.y2 }, arc[1]))!;
+    expect(svg).toContain(`<line x1="${piece.x1}" y1="${-piece.y1}" x2="${piece.x2}" y2="${-piece.y2}"`);
     // (its chain drawn as two single bonds, its C=C as drawn kept in the drawing: the arc says it is delocalised)
     const singles = { ...model, bonds: model.bonds.map((x) => (x.order === 2 ? { ...x, order: 1 as const } : x)) };
     const ls = layoutMolecule(singles.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(singles.bonds, new Map(singles.atoms.map((x, i) => [x.id, i]))), opts, 40);
@@ -452,8 +456,8 @@ describe("an η3-allyl, drawn as its chain with an arc on the metal's side (the 
       // (posed by Clean-up: the line between its end carbons across the metal's line, the arc's middle a bond from the metal)
       const across = ((e2.x - e1.x) * (star.x - pd.x) + (e2.y - e1.y) * (star.y - pd.y)) / (Math.hypot(e2.x - e1.x, e2.y - e1.y) * Math.hypot(star.x - pd.x, star.y - pd.y));
       expect(Math.abs(across)).toBeLessThan(1e-6);
-      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeGreaterThan(0.8);
-      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeLessThan(1.3);
+      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeGreaterThan(1.1);
+      expect(Math.hypot(star.x - pd.x, star.y - pd.y) / L).toBeLessThan(1.4);
     }
   });
 

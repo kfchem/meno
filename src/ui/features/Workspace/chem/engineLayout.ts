@@ -318,7 +318,9 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
  * ligand it is part of - what is bonded to it, but for its metal - turned
  * whole about the middle of its end carbons so that its middle carbon
  * points away from its metal and its arc (lib/chem/allylArc) faces it, and
- * moved so that the arc's middle stands a bond (`bond`) from the metal. A
+ * moved so that the arc's middle stands a bond and a quarter (`bond`
+ * the drawing's) from the metal - room for the line past the metal's
+ * label. A
  * ligand bonded to another metal too, or to its own by another way, is left
  * as it is laid out. `atoms` and `added` (hydrogens new to the drawing) are
  * moved in place.
@@ -371,8 +373,8 @@ function poseAllyls(
     const theta = Math.atan2(u.y, u.x) - Math.atan2(m.y - c.y, m.x - c.x);
     const cos = Math.cos(theta);
     const sin = Math.sin(theta);
-    // (the arc's middle a bond from the metal: the end carbons' middle that and the arc's depth further)
-    const to = { x: metal.x + u.x * (bond + ARC_DEPTH * chord), y: metal.y + u.y * (bond + ARC_DEPTH * chord) };
+    // (the arc's middle a bond and a quarter from the metal: the end carbons' middle that and the arc's depth further)
+    const to = { x: metal.x + u.x * (1.25 * bond + ARC_DEPTH * chord), y: metal.y + u.y * (1.25 * bond + ARC_DEPTH * chord) };
     const move = (q: { x: number; y: number }) => {
       const x = q.x - c.x;
       const y = q.y - c.y;
