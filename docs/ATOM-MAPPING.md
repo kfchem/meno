@@ -239,8 +239,50 @@ hand-made reactions (`reactionMap.fixtures.ts`: ethane moved rigidly, an
 SN2 at a methyl, an enolisation, a Diels-Alder reaction) with the maps
 ACCeL gives for them, and the Python behaviours above.
 
-## Still to come
+## On a drawn scheme
 
-A drawn reaction scheme using the map - a command on the reaction, map
-numbers shown or hidden, RXN files written with them - is proposed
-separately and waits for the maintainer.
+A reaction drawn on the page is mapped from its arrow's right-click menu,
+*Atom map* (`ui/features/Workspace/chem/atomMap.ts`, `useAtomMaps.ts`):
+
+- **Which structures.** The reactants are the structure nearest the arrow's
+  tail and those standing on from it, each within four bonds of the last
+  (room for a "+"); the products, likewise from its point. Reagents written
+  over or under the arrow are not of the reaction. The menu offers the map
+  only where something stands on either side.
+- **In 3D, every hydrogen an atom.** Each structure is taken as a molecule
+  in 3D made from it, where one is still its drawing's (the conformer
+  shown); else one conformer is made, as *3D structure* makes it. A lone
+  ion is an atom alone. The drawn structures are never mapped as drawn.
+- **Off the drawing's thread.** The mapping runs in a worker of its own; a
+  status at the canvas's foot says what is being done and for how long, and
+  *Stop* ends it. ACCeL's search is used as it is, solvent and all - no
+  pieces are picked out by hand, and nothing is set to make it faster.
+- **Kept on the arrow** (`ArrowAtomMap`): both sides in 3D as mapped, which
+  drawn atom each 3D atom is, every complete map best first (up to 100),
+  the one in use - the best, unless *Other map* stepped on - and whether it
+  is shown. What it shows is put on the drawing in the same undo step:
+  - each heavy atom's map number, the reactants' numbered one after
+    another, a product atom given its reactant atom's;
+  - each bond the map makes or breaks marked as a reacting centre (CTfile
+    code 4), and each whose order it changes (8).
+  Hydrogens are in the map, not numbered on the drawing.
+- **Show / Hide atom map** puts the numbers and centres on the drawing or
+  takes them off; the map is kept either way.
+- **Other map** takes the next of the complete maps, round again after the
+  last; the best stays first. The menu stays open on it and says which of
+  how many is in use ("2 of 32"): most maps differ only in where the
+  hydrogens go, which the drawing does not show.
+- **Export reaction in 3D...** writes an SD file of two records: the
+  reactants in 3D, and the products with every atom - hydrogens too - in the
+  reactants' numbering, as a nudged elastic band, QST2 or an IRC's ends
+  need. (Two XYZ files may follow, written by a plugin, as Meno writes no
+  XYZ of its own.)
+- **An RXN file** (Export, copy) carries the map's numbers and centres
+  whether or not they are shown.
+- **Incomplete.** Where not every atom finds its counterpart, the arrow
+  keeps the reaction as incomplete, with no map: the menu says *Atom map
+  incomplete* (and offers *Atom map* again), nothing is numbered, and
+  nothing is written.
+- **Changed since.** A map of a drawing changed since (an atom, a bond, a
+  charge) shows nothing new: the menu offers *Atom map* again, and *Hide
+  atom map* where its numbers are still on the drawing.
