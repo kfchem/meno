@@ -846,37 +846,6 @@ export function drawnAsChairOrBoat(pts: readonly Point[]): boolean {
   return false;
 }
 
-/**
- * The stereocentres among `atoms`, drawn as a solid at `pos`, that the
- * drawing shows by its shape: each in a six-membered ring of them drawn as
- * a chair or a boat (`drawnAsChairOrBoat`).
- */
-export function shownByShape(mol: Molecule, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
-  const out = new Set<number>();
-  for (const cycle of sixCycles(mol, atoms)) {
-    if (!cycle.some((a) => mol.tetra.has(a))) continue;
-    if (!drawnAsChairOrBoat(cycle.map(pos))) continue;
-    for (const a of cycle) if (mol.tetra.has(a)) out.add(a);
-  }
-  return out;
-}
-
-/**
- * The stereocentres among `atoms` - those of `sys` drawn as a solid, at
- * `pos` - that the drawing shows by its shape: each in a six-membered ring
- * drawn as a chair or a boat (`shownByShape`), or in a ring of the system
- * bridged across another (sharing three atoms or more with it), whose
- * atoms the cage drawn in perspective fixes - the way each bond goes from
- * them says which way round they are. Bridged so in every smallest set of
- * the system's rings (`smallestSets`), not only the one it was given.
- */
-export function shownBySolid(mol: Molecule, sys: RingSystem, atoms: readonly number[], pos: (a: number) => Point): Set<number> {
-  const out = shownByShape(mol, atoms, pos);
-  const bridged = smallestSets(mol, sys).map((rings) => rings.filter((r) => rings.some((q) => q !== r && shares3(q, r))));
-  for (const a of atoms) if (mol.tetra.has(a) && bridged.every((set) => set.some((r) => r.includes(a)))) out.add(a);
-  return out;
-}
-
 /** Every six-membered cycle through the given atoms, each in order round it. */
 function sixCycles(mol: Molecule, atoms: readonly number[]): number[][] {
   const inside = new Set(atoms);

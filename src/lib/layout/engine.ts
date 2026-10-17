@@ -28,7 +28,7 @@ import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./nam
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
-import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, shownBySolid, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
+import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
 import { ringShape } from "./conformation";
 import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from "./drawn";
 import { axisWedge, placeStereo, type Stereo, type Tetrahedral } from "./stereo";
@@ -640,11 +640,13 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     }
   }
   for (const d of mol.dienes) d.ring.forEach((a, i) => perspective(a, d.ring[(i + 1) % d.ring.length]));
-  // a stereocentre in a cage drawn in perspective shows itself there - one
-  // in a six-membered ring drawn as a chair or a boat, or in a ring bridged
-  // across another (ibogaine's isoquinuclidine): the way its bonds go, as
-  // drawn, says which way round it is. Any other centre of a solid shows
-  // nothing by its shape, and carries a wedge.
+  // a stereocentre of a solid drawn in perspective shows itself there,
+  // with no wedge, wherever the drawing read with its depth, as Meno reads
+  // one (drawn.ts), says it as given: the way its bonds go says which way
+  // round it is. A wedge there, read flat, can say otherwise - tetrodotoxin's
+  // C4, the nearest atom, its OH and its H both toward the viewer (the
+  // maintainer, 2026-10-17, as R/S is read from the perspective). Any other
+  // centre of a solid carries a wedge.
   // (and only where it reads so for sure: its bonds out of the solid each
   // turned 15 degrees either way, it still reads as given - a bond drawn
   // between the two corners the solid leaves free says nothing)
@@ -652,9 +654,8 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
   mol.systems.forEach((sys) => {
     const own = sys.atoms.filter((a) => solid[a]);
     if (!own.some((a) => input.atoms[a].tetra)) return;
-    const shown = shownBySolid(mol, sys, own, (a) => ({ x: x[a], y: y[a] }));
-    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => shown.has(a) && input.atoms[a].tetra), groupDepth);
-    for (const a of own) if (input.atoms[a].tetra && (!shown.has(a) || unsure.has(a))) solid[a] = false;
+    const unsure = byAHair(input, mol, x, y, depth, own.filter((a) => input.atoms[a].tetra), groupDepth);
+    for (const a of own) if (input.atoms[a].tetra && unsure.has(a)) solid[a] = false;
   });
   input.atoms.forEach((a, i) => a.tetra && !solid[i] && tetra.set(i, a.tetra));
   const final = new Map(x.map((v, i) => [i, { x: v, y: y[i] }]));

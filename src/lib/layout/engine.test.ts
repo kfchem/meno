@@ -6,7 +6,8 @@ import { hydrogenSpot, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
 import { dist } from "./geometry";
 import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
-import { shownBySolid, solidOf } from "./cage";
+import { solidOf } from "./cage";
+import { readStereo, sameConfiguration } from "./drawn";
 import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
@@ -235,9 +236,10 @@ describe("layout2D", () => {
       };
     };
     // (tetrodotoxin's flat drawing crosses bonds; its solid, once its C4a is
-    // turned the way it is given, has none. Its centres in a chair or a boat,
-    // or in a ring bridged across another, show themselves by its shape; the
-    // rest are wedged)
+    // turned the way it is given, has none. Every centre of the cage shows
+    // itself by the drawing, read with its depth and for sure - C4 too, in
+    // the ring with the C=N, where a wedge read flat said its H went back,
+    // and it comes forward: none is wedged)
     const smiles = "C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O";
     const given = input(smiles);
     const ttx = layout2D(given);
@@ -253,11 +255,22 @@ describe("layout2D", () => {
       expect(ttx.depth[i]).toBeCloseTo(from.reduce((t, c) => t + ttx.depth[c]!, 0) / from.length, 9);
     }
     const centres = sys.atoms.filter((a) => given.atoms[a].tetra);
-    const shown = shownBySolid(mol, sys, centres.concat(given.atoms.flatMap((_, i) => (ttx.solid[i] ? [i] : []))), (a) => ({ x: ttx.x[a], y: ttx.y[a] }));
-    for (const c of centres) {
-      if (ttx.solid[c]) expect(shown.has(c), `C${c} shown by the solid's shape`).toBe(true);
-      else expect(ttx.wedges.some((w) => w.from === c), `C${c} wedged`).toBe(true);
-    }
+    for (const c of centres) expect(ttx.solid[c], `C${c} shown by the drawing`).toBe(true);
+    expect(ttx.wedges).toEqual([]);
+    expect(ttx.hydrogens).toEqual([]);
+    // (and the drawing, read so, says each of them as given)
+    const read = readStereo(
+      given.atoms.map((a, i) => ({
+        x: ttx.x[i],
+        y: ttx.y[i],
+        el: a.el,
+        hs: a.hs ?? 0,
+        ...(ttx.depth[i] != null ? { z: ttx.depth[i]! } : {}),
+        ...(ttx.solid[i] && a.tetra ? { centre: true } : {}),
+      })),
+      given.bonds.map(({ a, b, order }) => ({ a, b, order })),
+    ).tetra;
+    for (const c of centres) expect(sameConfiguration(given.atoms[c].tetra!, read.get(c)!), `C${c} read`).toBe(true);
     // (morphine's solid reads as given now too, but its flat drawing has no
     // fault - its bonds a little uneven, its bridge passing behind a ring -
     // and it is drawn so, as everywhere)

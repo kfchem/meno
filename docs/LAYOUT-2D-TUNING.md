@@ -233,12 +233,13 @@ a test with a small molecule built by hand, and a line to `LAYOUT-2D.md`.
   another isomer's - fitted to the page, its atoms 0.37 of a bond (root
   mean square) from where they are drawn, against 0.14 for the solid the
   engine drew - with C4's two free corners drawn
-  on one side of it: C4 read as given only by a hair. The solid
+  on one side of it: C4 read as given only by a hair, and kept its wedge
+  when the maintainer ruled it should have none (2026-10-17). The solid
   is now found again with the centres the cage fixes itself held - each
   with three bonds into the cage, read from those bonds as drawn - and
   taken where the drawing is the nearer picture of it. C4 reads for sure,
-  and no drawing on the benchmark, held-out and organometallic lists
-  changes.
+  and nothing else on the benchmark, held-out and organometallic lists is
+  drawn differently.
 - **A double bond is stereo too.** The read-back guards read the
   stereocentres only, and huperzine A's bridge drew a ring's C=C trans
   unnoticed. They read every drawn double bond now (2026-10-13): one the
@@ -306,6 +307,9 @@ now kept by a rule in `LAYOUT-2D.md`:
     (lovastatin's, yohimbine's), but a steroid's straight up or down
     stays as it is;
   - both of a ring atom's two groups marked.
+  - (2026-10-17) no wedge at a centre of a solid that the perspective,
+    read with its depth, shows for sure (tetrodotoxin's C4), as R/S is
+    read from the perspective; a file is given a wedge for it.
 - **A tert-butyl** fanned, its methyls 60 degrees apart, not a cross; and
   so a trimethylsilyl, a trimethylammonium, a CF3 and a CCl3. A molecule
   grown from one (tert-butanol) has its other bond level, the fan to one

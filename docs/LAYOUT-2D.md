@@ -361,21 +361,27 @@ they hang from.
   wedges right for a reader that reads them flat, the perspective showing
   the epoxide on the other face. The cage seen from its other side, for a
   mirrored frame, is kept only so too.
-- **What a solid shows by its shape.** A stereocentre in a six-membered
-  ring drawn as a chair or a boat (the template, any way round) shows its
-  configuration by the drawing: each bond out of it upright or along a
-  ring bond, up or down for a reader to see. So does one in a ring bridged
-  across another, which the cage drawn in perspective fixes: ibogaine's
-  isoquinuclidine, gelsemine's cage. Either only where it reads so for
-  sure - each of its bonds out of the solid turned 15 degrees either way,
-  it still reads as given; one drawn between the two corners the solid
-  leaves free says nothing. Any other centre of a solid - in a ring fused
-  round a middle and neither chair nor boat, tetrodotoxin's in its
-  guanidine ring - shows it only by a depth the page does not show, and
+- **What a solid shows by its shape.** A stereocentre of a solid drawn in
+  perspective shows its configuration by the drawing, and carries no
+  wedge, wherever the drawing read with its depth, as Meno reads one
+  (`drawn.ts`), says it as given: each bond out of it going the way it
+  goes, up or down for a reader to see - in a six-membered ring drawn as a
+  chair or a boat, in a ring bridged across another (ibogaine's
+  isoquinuclidine, gelsemine's cage), or anywhere else the solid's depth
+  says it. Only where it reads so for sure - each of its bonds out of the
+  solid turned 15 degrees either way, it still reads as given; one drawn
+  between the two corners the solid leaves free says nothing. A wedge at
+  such a centre, read flat, can say otherwise than the drawing:
+  tetrodotoxin's C4, in the ring with the C=N, is the drawing's nearest
+  atom, its OH and its H both toward the viewer, and a wedge on the OH
+  said the H went back (the maintainer, 2026-10-17, as R/S is read from
+  the perspective; before, from 2026-10-12, every centre neither in a
+  chair or boat nor bridged carried a wedge). Any other centre of a solid
   carries a wedge or hashes on a bond out of it, or an H drawn upright, as
-  a flat ring's centre does (the maintainer, 2026-10-12, of two ways
-  offered). Meno reads a drawing so too (`drawn.ts`): depth at a centre
-  the solid shows, wedges at the rest.
+  a flat ring's centre does. A file holds no depth: a MOL or SD file, or
+  anything else that reads only wedges, is given a wedge for each centre
+  the drawing shows by its depth, the drawing left as it is
+  (`wedgesForFlat`; tetrodotoxin's C4 written with a wedge on its OH).
 - **When a flat drawing gives way.** A flat drawing whose only faults are
   bonds a little uneven and a bond or two passing behind another where a
   bridge crosses a ring is no drawing with a fault: morphine and

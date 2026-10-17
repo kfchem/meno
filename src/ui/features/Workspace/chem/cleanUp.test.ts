@@ -6,6 +6,7 @@ import { layoutMetrics } from "../../../../lib/layout/metrics";
 import cages from "../../../../lib/layout/testdata/cages.json";
 import { kekuleOrders } from "../../../../lib/chem/kekulize";
 import { readSmiles } from "../../../../lib/chem/smiles";
+import { fromSmiles } from "../../../../lib/layout/testdata/fromSmiles";
 import { createWorkspaceDocument, emptyWorkspaceDocument, expandAbbreviation } from "../document";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import type { Bond, Model } from "../store/types";
@@ -14,7 +15,7 @@ import { degrees, drawingOf, forFlatReaders, orientFor } from "./drawing";
 import { labelBox, labelSetOf } from "../../../../lib/chem/layout2d";
 import { MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
-import { drawingLayout, drawnOf } from "../fileActions";
+import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
 
@@ -222,6 +223,45 @@ describe("cleanUp", () => {
     // (every cage cleaned up in turn: under a second on a quiet machine, past
     // the 5 s default on a slow CI runner - 5.2 to 5.4 s seen there, with
     // the layout tests all as much slower)
+  }, 30_000);
+
+  it("writes tetrodotoxin's C4, shown by the drawing with no wedge, to a MOL or SD file with a wedge that says it", async () => {
+    // (C4, in the ring with the C=N, is the drawing's nearest atom, its OH
+    // and its H both toward the viewer: a wedge on the OH, read flat, says
+    // the H goes back. The drawing shows it by its depth alone; a file,
+    // which holds no depth, is given a wedge for it)
+    const given = fromSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
+    const c4 = 4;
+    expect(given.atoms[c4].tetra).toBeDefined();
+    const { store } = canvas(flatDrawing(given));
+    await cleanUp(store);
+    const s = store.getState();
+    const id = (i: number) => i + 1;
+    const drawnC4 = s.model.atoms.find((a) => a.id === id(c4))!;
+    expect(drawnC4.stereoCentre).toBe(true);
+    expect(s.model.bonds.some((b) => (b.a === id(c4) || b.b === id(c4)) && (b.stereo === "up" || b.stereo === "down"))).toBe(false);
+    expect(s.model.bonds.some((b) => b.stereo === "up" || b.stereo === "down")).toBe(false);
+    for (const path of ["tetrodotoxin.mol", "tetrodotoxin.sdf"]) {
+      const text = structureFileText(drawnOf(s), path);
+      const read = moleculesToEditorModel(readMoleculesFromText(text, path.endsWith(".sdf") ? "sdf" : "mol")).model;
+      const back = editorModelOf(read);
+      // (the file's atoms in the drawing's order, any H it adds after them)
+      expect(back.atoms.slice(0, given.atoms.length).map((a) => a.el)).toEqual(given.atoms.map((a) => a.el));
+      const ids = back.atoms.map((a) => a.id);
+      const atC4 = back.bonds.filter((b) => (b.a === ids[c4] || b.b === ids[c4]) && (b.stereo === "up" || b.stereo === "down"));
+      expect(atC4.length, `${path}: a wedge at C4`).toBeGreaterThan(0);
+      expect(back.atoms.some((a) => a.z != null || a.stereoCentre), path).toBe(false);
+      // read back by its wedges alone, every centre as given
+      const seen = stereo(back);
+      const index = new Map(ids.map((x, i) => [x, i]));
+      given.atoms.forEach((a, i) => {
+        if (!a.tetra) return;
+        const t = seen.get(ids[i]);
+        expect(t, `${path}: centre ${i} read`).toBeDefined();
+        const as = { neighbours: t!.neighbours.map((n) => (n === -1 ? -1 : index.get(n)!)), volume: t!.volume };
+        expect(sameConfiguration(a.tetra, as), `${path}: centre ${i} as given`).toBe(true);
+      });
+    }
   }, 30_000);
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {
