@@ -18,6 +18,7 @@ import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
 import { boxPicture } from "../../../../lib/pdf/reader";
 import { chemWorker } from "../../../../lib/roles/worker";
+import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -127,14 +128,29 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
 
 /** How finely a figure that is a picture is drawn to be read: enough for its letters, more than a picture's reader looks at. */
 const READ_DPI = 200;
-/** How long a picture's reading may take: the first loads the plugin's model - a minute or more, the first time a computer loads it. */
-const READ_MS = 300_000;
+/** How long the first picture a worker reads may take: it loads the plugin's model first - a minute or more, the first time a computer loads it. */
+export const FIRST_READ_MS = 300_000;
+/**
+ * How long a picture may take once the worker has read one, its model
+ * loaded: a picture is read in seconds, the slowest in half a minute; one
+ * taking longer is not going to end, and its worker is started afresh for
+ * the next (lib/plugins/queue).
+ */
+export const READ_MS = 90_000;
+/** The workers that have read a picture: their model loaded. One started afresh is another, and loads its model again. */
+const loaded = new WeakSet<ChemClient>();
 
 /** A picture read by the plugin that reads structures from pictures: what it read, in the picture's pixels; or why nothing came of it. */
 async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
   const worker = await chemWorker("pictures");
-  const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, READ_MS);
-  return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+  try {
+    const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, loaded.has(worker) ? READ_MS : FIRST_READ_MS);
+    loaded.add(worker);
+    return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+  } catch (e) {
+    if (e instanceof ChemTimeout) return { none: "Reading the picture took too long, so nothing was read from it." };
+    throw e;
+  }
 }
 
 /** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page. */
