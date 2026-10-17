@@ -2604,7 +2604,10 @@ export function labelTrims(
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
   const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
-    if (!showsLabel(at, opts)) return 0;
+    // (a pi system's centre, where a haptic bond ends, has no label to stop
+    // short of: the line reaches the centre, as the bond is to the system
+    // as a whole - IUPAC GR-1.7)
+    if (!showsLabel(at, opts) || (bond.endpoints?.length && at.el === "*")) return 0;
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
