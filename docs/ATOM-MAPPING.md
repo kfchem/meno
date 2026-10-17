@@ -68,10 +68,9 @@ What it will not do:
   same way. Aromatic bonds count apart from single and double ones, as in
   ACCeL, so a Kekulé structure and an aromatic one can map differently.
 
-The maps for a reaction with several identical spectator molecules can take
-long: ACCeL tries their pairings recursively (an SN2 with four waters beside
-it calls its search 177 492 times; about 10 s here). Anything that runs it
-from the interface should run it in a worker.
+Mapping runs in a worker when the interface asks for it (*On a drawn
+scheme*). How long it takes, and why like molecules standing apart once
+made it long, is in *Speed* below.
 
 ## The port
 
@@ -150,12 +149,12 @@ equivalent atoms - may come in the other order. The rounded scores
 
 ### Where Meno departs from ACCeL
 
-Five things the original does were found while checking the port. The
-port keeps them as ACCeL has them (`ACCEL_EXACT`, which the checks below
-run); Meno maps with departures instead (`MENO_DEPARTURES`), each
-marked `[Meno departure: ...]` where it is in `accelMapper.ts`, and each
-tested beside what ACCeL does with the same input
-(`accelMapper.departures.test.ts`). `mapReaction({ ..., accelExact: true })`
+Meno departs from the original in seven places. The port keeps them as
+ACCeL has them (`ACCEL_EXACT`, which the checks below run); Meno maps with
+the departures (`MENO_DEPARTURES`), each marked `[Meno departure: ...]`
+where it is in `accelMapper.ts` and tested beside what ACCeL does with the
+same input (`accelMapper.departures.test.ts`; the last two, under *Like
+molecules standing apart*, in `accelMapper.spectators.test.ts`). `mapReaction({ ..., accelExact: true })`
 maps as ACCeL does.
 
 - **The first of a group, with nothing to measure it from**
@@ -191,6 +190,74 @@ maps as ACCeL does.
   number; `_order_maps`' face tests read such an angle as under 90°. Meno
   keeps those cosines within [-1, 1] too. A cosine that is not a number to
   begin with (a zero vector's) stays one, in both.
+
+### Like molecules standing apart
+
+ACCeL's search pairs every water of a solvent with every other, and tries
+the reaction's pieces and the waters in every order: an SN2 beside n waters
+gives 2, 2, 8, 96 and 768 maps for n = 0 to 4 (ACCeL 0.3.0 itself, and the
+port, alike: n!·2ⁿ pairings of the waters), calling its search 177 492
+times for n = 4. Its own placement of isolated molecules by RMSD
+(modeler.py 1161-1228) would settle them at once, but it waits until the
+chains left are all alike - after every other piece is placed, by which
+time the shallower levels have tried every order.
+
+Meno departs here, on the maintainer's ruling (2026-10-17):
+
+- **`spectatorsByRmsd`.** Like molecules standing apart - four or more of
+  one kind (the same graph) on each side, as many on each, bonded to
+  nothing else: the count ACCeL's own placement asks for - are held out of
+  the initial pairs until everything else is placed. Then ACCeL's own
+  placement places them, one kind after another: the placement ACCeL
+  reaches once the rest is placed, reached directly.
+- **`spectatorsRefined`.** That placement is greedy, one molecule at a time.
+  Each map's like molecules are then given to one another again, whole,
+  for the least total RMSD - the key ACCeL's ordering decides them by
+  where it has tried them all. Where there are few enough ways (50 000:
+  six waters) every permutation is tried, each molecule turned every way
+  it can be turned as a rigid body (not a mirror image of a methyl); then,
+  for all, a Kabsch fit and an optimal assignment (the Hungarian method)
+  alternate while the total falls. Nothing that is not lower is taken.
+
+Wherever the port without these departures finishes (the corpus, an SN2
+beside up to five waters, Diels-Alder, Claisen, tautomer and SN2 reactions
+beside four or five waters, methanols or acetonitriles):
+
+- the set of distinct maps of the rest - every map with the like
+  molecules' atoms left out - is unchanged: only permutations of the like
+  molecules are gone from *Other map*;
+- the first map pairs the rest the same way, and ranks the same on all of
+  ACCeL's keys but the last;
+- its total RMSD is never higher: the same in 22 of the 32 runs that have
+  like molecules, lower in 10 - ACCeL's ordering, given the maps it never
+  tried, would have put them first.
+
+Where the port cannot finish (six waters and more), the refined map is
+never worse than ACCeL's own placement.
+
+## Speed
+
+The port runs the original's search as it is; what it saves is work that
+cannot change a map (checked against the port without it on the whole
+corpus, exactly and with the departures, every map in its order):
+
+- an atom's number, and its bonded atoms by kind, kept rather than looked
+  up in its parent's list and bond matrix again and again;
+- lists that are only asked `in` or `.index()` kept as maps;
+- a recursive _get_maps call answered from an earlier one of the same set
+  of known pairs, in another order: its maps, the known pairs stripped, are
+  the same - unless a choice on the way was a tie the pairs' order (or
+  rounding with it) could tip: a torsion as large as another's, two RMSDs
+  within 1e-9 of one another, Meno's geometric fit near its threshold. Such
+  a call is made afresh.
+
+| | ACCeL 0.3.0 | port, as first written | now |
+|---|---|---|---|
+| SN2 beside four waters | 37 s | 10.5 s | 0.6 s (exactly) · 2 ms (like molecules placed) |
+| the corpus (225 inputs), exactly | 91 s | 23 s | 2.9 s |
+| SN2 beside 6 / 10 / 20 waters | over 5 min each | - | 0.4 s / 35 ms / 0.1 s |
+
+(One machine, the minimum of three runs, while other work shared it.)
 
 ## How the port was checked
 
