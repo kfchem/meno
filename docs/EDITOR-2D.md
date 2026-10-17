@@ -51,6 +51,23 @@ and in particular:
   - A bond led within reach of an atom closes onto it, and so does one led
     onto an atom however far away - a long bond closes a ring too; the
     preview shows it closed before the button comes up.
+  - **A ligand bound through a ring or chain of its atoms** (eta: Cp,
+    benzene, allyl; the maintainer, 2026-10-17) is one bond: a line from
+    the metal to the centre of the ring. A bond drawn from a metal that
+    ends inside a ring, with no atom under the pointer, binds the ring
+    that way - the preview goes to the ring's centre (`chem/eta`
+    `etaRingAt`). From any other atom it draws a bond to a new atom there,
+    as before (a bridge drawn across a ring). The bond is held as the
+    CTfile holds it - to a star at the ring's centre, its endpoints the
+    ring's atoms - and the star is no atom to the user: it is not hovered,
+    picked or labelled, it stands at its ring's centre wherever the ring
+    is moved, a box or lasso takes it with its whole ring and never alone,
+    and it goes with its bond: the bond deleted, its metal deleted, an atom
+    of its ring deleted or merged onto another (`etaHeld`). The line
+    reaches the centre itself, where the CTfile's star stands, as the bond
+    is to the system as a whole (IUPAC GR-1.7); it is not stopped short at
+    the ring's edge or its circle. A label on a metal - Cp, allyl - stays a
+    label, and written out it is this bond.
   - **Chains** (agreed 2026-10-03): Quick Add's *Chain* from empty space
     draws a chain, and so does *Chain from here* on an atom's right-click
     menu (shown where the atom can take another bond) - led by a drag, or,
