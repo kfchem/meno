@@ -16,7 +16,7 @@ import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, typ
 import { tubeAlong, unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
-import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
+import { withCentres, bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import type { Carried3D, Molecule3D } from "../store/types";
 
@@ -200,7 +200,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     const turned = m.turn ? new THREE.Quaternion(...m.turn) : new THREE.Quaternion();
     // its bonds: those any frame has, where they come and go frame by frame (each frame's say which), less those to an atom left out
     const fb = frameBondsOf(molecule);
-    const all = fb ? fb.bonds : bondsAt(molecule, shownFrame);
+    // (and its sticks to ring centres, after them: withCentres)
+    const all = withCentres(molecule, fb ? fb.bonds : bondsAt(molecule, shownFrame));
     const keep = all.map((b) => !left[b.a1] && !left[b.a2]);
     const bonds = all.filter((_, i) => keep[i]);
     const presenceAt = (f: number) => (fb ? Float32Array.from(fb.present[f].filter((_, i) => keep[i])) : null);
@@ -282,7 +283,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
             const first = pieces[0];
             if (pieces.length === 1) {
               if (ball(b.a1) > 0) first.a.add(stoppedAt(first.a, centre(b.a1), ball(b.a1), first.r, first.b));
-              if (ball(b.a2) > 0) first.b.add(stoppedAt(first.b, centre(b.a2), ball(b.a2), first.r, first.a));
+              if (ball(b.a2) > 0 && !l.centre) first.b.add(stoppedAt(first.b, centre(b.a2), ball(b.a2), first.r, first.a));
             } else {
               // (the straight end is the atom's: a bend's `atB` says which)
               const atom = l.bend?.atB ? b.a1 : b.a2;
@@ -308,7 +309,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         const mat = meshes[stick].material;
         perLine.forEach((pcs, li) => {
           if (pcs.length < 2) return;
-          const there = samples[0].presence ? samples[0].presence![lineOf[li]] : 1;
+          const there = samples[0].presence ? (samples[0].presence![lineOf[li]] ?? 1) : 1;
           const r = pcs[0].r * there;
           if (r <= 0) return;
           const tube = tubeAlong([pcs[0].a, ...pcs.map((q) => q.b)], r, 24);
@@ -326,7 +327,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         if (pieceOfBent[l]) continue;
         const at = (s: number) => {
           const x = each[s][l];
-          const there = samples[s].presence ? samples[s].presence![lineBond[l]] : 1;
+          const there = samples[s].presence ? (samples[s].presence![lineBond[l]] ?? 1) : 1;
           return { ...x, r: x.r * there };
         };
         const first = at(0);

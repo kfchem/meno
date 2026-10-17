@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, LINE_LEAST_PX, lineWidth, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
-import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { withCentres, bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { outlineMaterial } from "./utils/outlineMaterial";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
@@ -193,7 +193,8 @@ export function rendered3d(
       // its atoms, one ball each (none, for one its look leaves out), and
       // its bonds - those the frame shown has, where they go frame by frame -
       // their hollows shaded as the canvas shades them
-      const bonds = drawn.atoms !== "space" ? bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]) : [];
+      // (and its sticks to ring centres: withCentres)
+      const bonds = drawn.atoms !== "space" ? withCentres(molecule, bondsAt(molecule, frameOf(solid, m.frame))).filter((b) => !left[b.a1] && !left[b.a2]) : [];
       const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one");
       const occlusion = drawn.occlusion > 0 ? occlusionNow(places, radii, packLines(lines)) : null;
       const finish = { roughness: drawn.roughness, metalness: drawn.metalness };

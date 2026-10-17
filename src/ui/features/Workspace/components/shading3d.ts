@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 import { bondRadiusOf, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
-import { bondLines, WORLD_PER_ANGSTROM, type Solid } from "../utils/molecule3d";
+import { bondLines, withCentres, WORLD_PER_ANGSTROM, type Solid } from "../utils/molecule3d";
 import { OCCLUSION_TERMS, type Occlusion } from "../utils/occlusion3d";
 import { OCCLUSION_DIRECT as DIRECT, occludedMaterial } from "../utils/occlusionMaterial";
 import { askOcclusion, occlusionKnown, packLines } from "../utils/occlusions";
@@ -86,7 +86,9 @@ export function useShading3d(o: {
   const places = solid.frames[frame];
   // each look's bond lines, as the frame has them: what their shade is worked out for
   const lines = useMemo(() => {
-    const of = (look: Role3D) => packLines(bondLines(m, places, Math.max(bondRadiusOf(style[look]), LEAST_BOND) * WORLD_PER_ANGSTROM));
+    // (with its sticks to ring centres, as the molecule draws them: withCentres)
+    const drawn = m.centres?.length ? { ...m, bonds: withCentres(m, m.bonds) } : m;
+    const of = (look: Role3D) => packLines(bondLines(drawn, places, Math.max(bondRadiusOf(style[look]), LEAST_BOND) * WORLD_PER_ANGSTROM));
     return { primary: of("primary"), secondary: of("secondary") };
   }, [m, places, style]);
   // what is worked out for each look - none yet, where it is being worked out

@@ -410,6 +410,35 @@ export function frameBondsOf(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | 
   return v;
 }
 
+/** A bond as drawn in 3D: one of a molecule's, or a stick to a centre (`withCentres`), its atoms its `endpoints`. */
+export type DrawnBond = ParsedBond & { endpoints?: number[] };
+
+const centreBonds = new WeakMap<readonly ParsedBond[], { centres: Molecule3D["centres"]; bonds: DrawnBond[] }>();
+
+/**
+ * The bonds drawn for `bonds` of molecule `m`: those, and after them one
+ * for each of its bonds to a centre (`Molecule3D.centres`) - from the metal
+ * (`a1`) to the first of its atoms (`a2`, whose colour its far end takes),
+ * its atoms its `endpoints`, which `bondLines` draws as one stick to their
+ * centre. The bonds themselves where it has none: a molecule without one
+ * is drawn as it was.
+ */
+export function withCentres(m: Pick<Molecule3D, "atoms" | "centres">, bonds: ParsedBond[]): DrawnBond[] {
+  if (!m.centres?.length) return bonds;
+  const known = centreBonds.get(bonds);
+  if (known && known.centres === m.centres) return known.bonds;
+  const n = m.atoms.length;
+  const atom = (i: number) => Number.isInteger(i) && i >= 0 && i < n;
+  const extra = m.centres.flatMap((c): DrawnBond[] =>
+    atom(c.metal) && c.atoms.length >= 2 && c.atoms.every(atom) && !c.atoms.includes(c.metal)
+      ? [{ a1: c.metal, a2: c.atoms[0], order: 1, endpoints: [...c.atoms] }]
+      : [],
+  );
+  const out = extra.length ? [...bonds, ...extra] : bonds;
+  centreBonds.set(bonds, { centres: m.centres, bonds: out });
+  return out;
+}
+
 /** A molecule's bonds in one of its frames: those that frame has, where they go frame by frame; else its bonds. */
 export function bondsAt(m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">, frame = 0): ParsedBond[] {
   const fb = frameBondsOf(m);
@@ -583,6 +612,8 @@ export type BondLine = {
   r: number;
   /** A line turning round at a lone atom (utils/stickBend): by how much it comes in there - from where it stands to the bond's axis - and whether that is its `b` end. */
   bend?: { by: THREE.Vector3; atB: boolean };
+  /** A stick from a metal to a ring's centre (`withCentres`): its `b` end at no atom. */
+  centre?: true;
 };
 
 /**
@@ -593,14 +624,22 @@ export type BondLine = {
  */
 export function bondLines(m: Molecule3D, places: Float32Array, r: number, ends?: readonly (BondEnds | null)[] | null, one = false): BondLine[] {
   const near: number[][] = m.atoms.map(() => []);
-  for (const b of m.bonds) {
+  for (const b of m.bonds as DrawnBond[]) {
+    if (b.endpoints?.length) continue;
     near[b.a1].push(b.a2);
     near[b.a2].push(b.a1);
   }
   const at = (i: number) => new THREE.Vector3(places[3 * i], places[3 * i + 1], places[3 * i + 2]);
   const lines: BondLine[] = [];
-  for (const bond of m.bonds) {
+  for (const bond of m.bonds as DrawnBond[]) {
     const a = at(bond.a1);
+    // (a bond to a centre - withCentres - one stick, to its atoms' centre)
+    if (bond.endpoints?.length) {
+      const c = new THREE.Vector3();
+      for (const e of bond.endpoints) c.add(at(e));
+      lines.push({ a, b: c.divideScalar(bond.endpoints.length), r, centre: true });
+      continue;
+    }
     const b = at(bond.a2);
     const n = linesOf(bond.order);
     if (n === 1) {
@@ -807,6 +846,15 @@ export function onMolecule(
     const r = bondRadius * WORLD_PER_ANGSTROM * ((a1.k + a2.k) / 2);
     d = Math.min(d, toSegment(x, y, a1, a2) - r);
   }
+  // (and its sticks to ring centres: withCentres)
+  for (const b of withCentres(m, [])) {
+    const a1 = seen[b.a1];
+    const ends = b.endpoints!.map((i) => seen[i]);
+    if (!(pose.radii[b.a1] > 0)) continue;
+    const mean = (f: (e: Seen) => number) => ends.reduce((t, e) => t + f(e), 0) / ends.length;
+    const c: Seen = { x: mean((e) => e.x), y: mean((e) => e.y), z: mean((e) => e.z), k: mean((e) => e.k), r: 0 };
+    d = Math.min(d, toSegment(x, y, a1, c) - bondRadius * WORLD_PER_ANGSTROM * a1.k);
+  }
   if (d > 0 && ringsOf(m).some((ring) => inPolygon(x, y, ring.map((i) => seen[i])))) d = 0;
   return d <= reach;
 }
@@ -1008,7 +1056,7 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
   if (drawn.atoms !== "space") {
     const turned = new Float32Array(places.length);
     for (let i = 0; i < radii.length; i++) at(i).toArray(turned, 3 * i);
-    const bonds = bondsAt(m, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]);
+    const bonds = withCentres(m, bondsAt(m, frameOf(solid, m.frame))).filter((b) => !left[b.a1] && !left[b.a2]);
     for (const line of bondLines({ ...(m as Molecule3D), id: 0, bonds }, turned, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one").flatMap((l) => (l.r > 0 ? bentPieces(l) : []))) {
       const a = seen(line.a);
       const b = seen(line.b);
@@ -1016,7 +1064,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
       const end = (p: { x: number; y: number }) =>
         shown.reduce((best, ball) => (Math.hypot(ball.c.x - p.x, ball.c.y - p.y) < Math.hypot(best.c.x - p.x, best.c.y - p.y) ? ball : best));
       const ra = end(a).r;
-      const rb = end(b).r;
+      // (a stick to a ring's centre ends there, at no atom: not cut back)
+      const rb = line.centre ? 0 : end(b).r;
       const len = Math.hypot(b.x - a.x, b.y - a.y);
       if (len <= (ra + rb) * 0.9) continue;
       const ux = (b.x - a.x) / len, uy = (b.y - a.y) / len;

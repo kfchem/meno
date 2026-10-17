@@ -10,7 +10,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -246,7 +246,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // bond any frame has, each drawn as far as the frame shown has it, growing
   // and shrinking as frames go (utils/molecule3d `frameBondsOf`)
   const fb = useMemo(() => frameBondsOf(m), [m]);
-  const drawn = useMemo(() => (fb ? { ...m, bonds: fb.bonds } : m), [m, fb]);
+  // (and a stick from a metal to each ring's or double bond's centre it is bound to, after them: withCentres)
+  const drawn = useMemo(() => (fb || m.centres?.length ? { ...m, bonds: withCentres(m, fb ? fb.bonds : m.bonds) } : m), [m, fb]);
   const lineCount = useMemo(() => drawn.bonds.reduce((k, b) => k + linesOf(b.order), 0), [drawn.bonds]);
   const placed = useRef<THREE.Group>(null!);
   /** What it is drawn through while it rises: seen in perspective (utils/rise `dollyMatrix`). */
@@ -1031,7 +1032,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       };
       const same = solid.ends.primary === solid.ends.secondary && oneLevel.current.primary === oneLevel.current.secondary;
       const all = same || f <= 0 ? linesOf3d("primary") : f >= 1 ? linesOf3d("secondary") : linesBetween(linesOf3d("primary"), linesOf3d("secondary"), f);
-      if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]]));
+      if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]] ?? 1));
       if (leaves) all.forEach((l, k) => (l.r *= keptOf(drawn.bonds[lineBond[k]])));
       return all;
     };
@@ -1475,7 +1476,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               pairResults.length
                 ? (e) => {
                     const b = e.instanceId != null ? lineBond[e.instanceId] : undefined;
-                    if (b != null && b !== hoverBond) setHoverBond(b);
+                    // (a stick to a centre is no bond of two atoms a calculation says anything of)
+                    if (b != null && b !== hoverBond && !(drawn.bonds[b] as DrawnBond | undefined)?.endpoints) setHoverBond(b);
                   }
                 : undefined
             }
@@ -1505,7 +1507,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 pairResults.length
                   ? (e) => {
                       const b = e.instanceId != null ? lineBond[bent[e.instanceId]] : undefined;
-                      if (b != null && b !== hoverBond) setHoverBond(b);
+                      if (b != null && b !== hoverBond && !(drawn.bonds[b] as DrawnBond | undefined)?.endpoints) setHoverBond(b);
                     }
                   : undefined
               }

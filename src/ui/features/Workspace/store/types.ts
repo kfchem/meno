@@ -448,6 +448,14 @@ export type Molecule3D = {
   drawnFrom?: (number | null)[];
   /** What its drawing was when it was made from it (chem/make3d `signatureOf`). */
   drawnAs?: string;
+  /**
+   * Its bonds from a metal to the centre of a ring, a chain or a double
+   * bond of its atoms (eta: Cp, benzene, allyl, an alkene), by atom index:
+   * each drawn as one stick from the metal to its atoms' centre, as its
+   * drawing has one line (utils/molecule3d `withCentres`). Its atoms keep
+   * their own bonds; the star at the centre is no atom of it.
+   */
+  centres?: { metal: number; atoms: number[] }[];
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
   /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
