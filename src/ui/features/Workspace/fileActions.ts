@@ -35,6 +35,7 @@ import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
 import { writtenAtoms, writtenOf } from "./utils/written";
 import { writePdb } from "../../../lib/chem/pdb";
+import { writeXyz, xyzComment } from "../../../lib/chem/xyzWriter";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
 import { greatest, least } from "../../../lib/chem/lists";
 import { layoutByStructure, structureLayouts } from "../../../lib/chem/layoutStructures";
@@ -80,7 +81,7 @@ export const holdsOfDrawn = (part: Drawn): Holds => ({
  */
 export function exportKinds(what: Holds): WriterId[] {
   if (!what.drawn && !what.solid) return ["svg"];
-  const pdb: WriterId[] = what.solid ? ["pdb"] : [];
+  const pdb: WriterId[] = what.solid ? ["pdb", "xyz"] : [];
   if (what.reaction && what.drawn) return ["rxn", "mol", "sdf", ...pdb, "svg"];
   if (what.solid && !what.drawn) return ["sdf", ...pdb, "svg"];
   return ["mol", "sdf", ...pdb, "svg"];
@@ -147,6 +148,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // (of a stack of drawings, the record it shows - but in an SD file, every record: utils/stacks)
   if (/\.rxn$/i.test(path)) return reactionFileText(seenDrawing(drawn), title, version);
   if (/\.pdb$/i.test(path)) return pdbFileText(drawn.molecules3d ?? [], options, style3d);
+  if (/\.xyz$/i.test(path)) return xyzFileText(drawn.molecules3d ?? [], title, options);
   if (!/\.sdf$/i.test(path)) return writeMolfile(forFlatReaders(seenDrawing(drawn)), { title, version });
   // an SD file: the drawing, each record of a stack of drawings a record of
   // its own, titled as its file titled it, and each molecule in 3D a record of its own,
@@ -173,6 +175,29 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     stacked.map((r) => writeSdf(forFlatReaders(r.model), { title: r.title ?? title, version })).join("") +
     records.join("")
   );
+}
+
+/**
+ * Molecules in 3D as an XYZ file holds them (lib/chem/xyzWriter): the atoms of
+ * each in the order it has them, in the frame it shows or - every frame - in
+ * each frame it has, a block for each, the energy of each frame on its
+ * comment line where it is known. Several molecules one after another, each
+ * as SDF export writes them: their blocks in turn, not placed as one system.
+ * Throws where there are none.
+ */
+export function xyzFileText(molecules: readonly Carried3D[], title: string, options: OptionValues = {}): string {
+  if (!molecules.length) throw new Error("There are no molecules in 3D to write: an XYZ file holds no drawing.");
+  const frames = molecules.flatMap((m) => {
+    const name = m.name ? stem(m.name) : title;
+    const have = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
+    const shown = options.frames !== "all";
+    const which = shown ? [Math.min(Math.max(0, m.frame ?? 0), have - 1)] : Array.from({ length: have }, (_, i) => i);
+    return which.map((i) => ({
+      atoms: frameAtoms(m, i),
+      comment: xyzComment(name, shown ? undefined : { i, of: have }, m.energies?.[i]),
+    }));
+  });
+  return writeXyz(frames);
 }
 
 /**
