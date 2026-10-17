@@ -503,11 +503,22 @@ Taken on 2026-10-13:
   five or a chain of three drawn neutral as the cyclopentadienide or allyl
   anion it is bound as (not a CH2, nor radical carbons), and gives no
   energies; the star is no atom of the molecule in 3D.
-- **A haptic bond binds its ring whole** (2026-10-13): where an atom of
-  the ring it binds is deleted or merged onto another, or it is pasted or
-  taken as part of a structure without its ring, it binds none - a plain
-  bond to its star - rather than name atoms gone, or the ring it was
-  copied from (`endpointsHeld`, on every edit).
+- **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
+  made in 3D from a drawing with a multi-centre bond - a Cp, an arene, an
+  allyl, an alkene bound through both carbons - shows one stick from the
+  metal to the centre of the atoms it binds, and no stick from the metal to
+  each of them; the atoms keep their own bonds, and the star at the centre
+  is no atom of it (`Molecule3D.centres`, utils/molecule3d `withCentres`).
+  Every way the molecule is drawn - the canvas, its shading, a render and
+  a picture of it - draws that stick; a press on it is a press on the
+  molecule, and a calculation's pair results are not said of it.
+- **A haptic bond binds its ring whole** (2026-10-13; 2026-10-17): where
+  an atom of the ring it binds is deleted or merged onto another, or it is
+  pasted or taken as part of a structure without its ring, it goes, and its
+  star with it - rather than name atoms gone, bind the ring it was copied
+  from, or leave its star on the drawing as an atom of its own (chem/eta
+  `etaHeld`, on every edit; a part Clean-up lays out keeps the bond to its
+  star, `endpointsHeld`).
 - **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
   for a molecule: an element with the H it carries - C is methane, O water,
   N ammonia - or a label Meno knows, written out as the molecule it stands

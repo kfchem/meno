@@ -12,6 +12,7 @@ import type { Bond, MarkAt, Model, Sel } from "../store/types";
 import type { MarksAt } from "../document";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import { middleOfPoints } from "../../../../lib/chem/lists";
+import { withTheirStars } from "../chem/eta";
 
 type Pt = { x: number; y: number };
 
@@ -24,7 +25,8 @@ export function bondsAmong(model: Pick<Model, "bonds">, atoms: ReadonlySet<numbe
 export function inBox(model: Model, p: Pt, q: Pt): Sel {
   const [x0, x1] = [Math.min(p.x, q.x), Math.max(p.x, q.x)];
   const [y0, y1] = [Math.min(p.y, q.y), Math.max(p.y, q.y)];
-  const atoms = new Set(model.atoms.filter((a) => a.x >= x0 && a.x <= x1 && a.y >= y0 && a.y <= y1).map((a) => a.id));
+  // (a haptic bond's star with its ring, never alone: chem/eta)
+  const atoms = withTheirStars(model, new Set(model.atoms.filter((a) => a.x >= x0 && a.x <= x1 && a.y >= y0 && a.y <= y1).map((a) => a.id)));
   return { atoms, bonds: bondsAmong(model, atoms) };
 }
 
@@ -42,7 +44,7 @@ export function insidePolygon(p: Pt, ring: readonly Pt[]): boolean {
 /** The atoms inside a lasso - the path the pointer drew, closed - and the bonds among them. */
 export function inLasso(model: Model, path: readonly Pt[]): Sel {
   if (path.length < 3) return { atoms: new Set(), bonds: new Set() };
-  const atoms = new Set(model.atoms.filter((a) => insidePolygon(a, path)).map((a) => a.id));
+  const atoms = withTheirStars(model, new Set(model.atoms.filter((a) => insidePolygon(a, path)).map((a) => a.id)));
   return { atoms, bonds: bondsAmong(model, atoms) };
 }
 

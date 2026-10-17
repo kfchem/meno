@@ -278,4 +278,22 @@ describe("a ring bound to a metal atom by atom, as drawn by hand", () => {
     const chelate = { atoms: [{ el: "Ru" }, { el: "N" }, { el: "C" }, { el: "C" }, { el: "N" }], bonds: [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 2, b: 3, order: 1 }, { a: 3, b: 4, order: 1 }, { a: 4, b: 0, order: 1 }] };
     expect(ringsBondedAtomByAtom(chelate)).toEqual([]);
   });
+
+  it("is found with the chains of three or more atoms so bonded - an allyl - but not two (a metallacyclopropane is drawn so too)", async () => {
+    const { etaBondedAtomByAtom, ringsBondedAtomByAtom } = await import("./perceive");
+    // Pd 0, allyl 1-2-3 each bonded to it, Cl 4
+    const allyl = {
+      atoms: [{ el: "Pd" }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "Cl" }],
+      bonds: [{ a: 1, b: 2, order: 2 }, { a: 2, b: 3, order: 1 }, { a: 0, b: 1, order: 1 }, { a: 0, b: 2, order: 1 }, { a: 0, b: 3, order: 1 }, { a: 0, b: 4, order: 1 }],
+    };
+    expect(etaBondedAtomByAtom(allyl)).toEqual([{ metal: 0, ring: [1, 2, 3], bonds: [2, 3, 4] }]);
+    // an alkene's two: as drawn
+    const alkene = { atoms: [{ el: "Pt" }, { el: "C" }, { el: "C" }], bonds: [{ a: 1, b: 2, order: 2 }, { a: 0, b: 1, order: 1 }, { a: 0, b: 2, order: 1 }] };
+    expect(etaBondedAtomByAtom(alkene)).toEqual([]);
+    // ferrocene's rings, as before, and no chain besides
+    expect(etaBondedAtomByAtom(ferrocene)).toEqual(ringsBondedAtomByAtom(ferrocene));
+    // a chelate's donors, not bonded to each other, are no chain
+    const chelate = { atoms: [{ el: "Ru" }, { el: "N" }, { el: "C" }, { el: "C" }, { el: "N" }], bonds: [{ a: 0, b: 1, order: 1 }, { a: 1, b: 2, order: 1 }, { a: 2, b: 3, order: 1 }, { a: 3, b: 4, order: 1 }, { a: 4, b: 0, order: 1 }] };
+    expect(etaBondedAtomByAtom(chelate)).toEqual([]);
+  });
 });
