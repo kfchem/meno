@@ -1124,15 +1124,20 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
   const other = seen.other && ((perspChairs && ontoChairs(seen.other)) || onto(seen.other));
   // (and each other view as good by the system's own measure, to choose
   // among by what hangs from it: adamantane alike from its sides, a ring
-  // fused on it leaves the gem-dimethyl room from some of them only)
+  // fused on it leaves the gem-dimethyl room from some of them only; and
+  // each within CAGE_VIEW_MARGIN of it, taken only where what hangs from
+  // it reads better by that much, as a cage's next textbook views are -
+  // the system's own measure sees none of the H's and labels round it:
+  // ibogaine's isoquinuclidine from its best side by that measure put the
+  // H at its junction against the indole's NH)
   const otherOf = (t: (typeof tried)[number]) => {
     const o = t.v.other && ((t.chairs && ontoChairs(t.v.other)) || onto(t.v.other));
     return o && shows(o) ? { other: o } : {};
   };
-  const ties = tried.filter((t) => t.v !== seen && Math.abs(t.by - rankedBy) < 1e-6);
+  const ties = tried.filter((t) => t.v !== seen && t.by < rankedBy + CAGE_VIEW_MARGIN);
   const views: CageView[] = [
     { ...persp, ...(other && shows(other) ? { other } : {}) },
-    ...ties.map((t) => ({ ...t.p, ...otherOf(t), tied: true as const })),
+    ...ties.map((t) => ({ ...t.p, ...otherOf(t), ...(Math.abs(t.by - rankedBy) < 1e-6 ? { tied: true as const } : {}) })),
   ];
   return { pos: persp.pos, depth: persp.depth, hints: persp.hints, solidAtoms, ...(other && shows(other) ? { other } : {}), ...(ties.length ? { views } : {}), wholeToo };
 }
