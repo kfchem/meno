@@ -22,6 +22,16 @@ describe("a condensed formula read as a group (./chain)", () => {
     expect(smiles("NO")).toBe("*[N]=[O]");
   });
 
+  it("puts an H written right after an O on that O, never an =O: SO2H a sulfinic acid, as CO2H is an acid", () => {
+    const smiles = (l: string) => abbreviationOf(l)?.smiles;
+    expect(smiles("SO2H")).toBe("*[S](=[O])[OH]");
+    expect(smiles("CH2SO2H")).toBe("*[CH2][S](=[O])[OH]");
+    // (the rest as before: an O no H follows still an =O first)
+    expect(smiles("SO2Me")).toBe("*[S](C)(=[O])=[O]");
+    expect(smiles("SO2OH")).toBe("*[S](=[O])(=[O])[OH]");
+    expect(smiles("CH2OH")).toBe("*[CH2][OH]");
+  });
+
   it("reads none where no H before it makes a whole molecule, nor an element as anything else", () => {
     // (HCO, HCH2, HNH are no closed-shell molecules; a charge is none of this)
     for (const no of ["CO", "CH2", "NH", "CH2+", "OO"]) expect(abbreviationOf(no), no).toBeUndefined();

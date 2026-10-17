@@ -209,7 +209,9 @@ What is put together from them is read by rule, not listed:
   group or a halogen hangs on the atom before it; an O or an S is either
   =O on the atom before it or the chain's next atom - =O tried first,
   whichever leaves every atom at a valence it has (C 4, N 3, O 2; S 2, 4
-  or 6; P 3 or 5); what parentheses hold, with its count, hangs on the
+  or 6; P 3 or 5), but never an O that an H is written right after: the H
+  is that O's, as in CO2H, so SO2H is a sulfinic acid, S(=O)OH, not
+  S(=O)2H; what parentheses hold, with its count, hangs on the
   atom before them - an O or an S alone in them an =O, as one unbracketed
   may be (C(O)NMe2, C(O)OMe, C(O)NiPr2), a group alone in them as it is
   unbracketed (N(iPr)2). CO and CH2 are none, nor anything with a charge; Cp is
