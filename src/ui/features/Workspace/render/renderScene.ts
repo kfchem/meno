@@ -18,6 +18,7 @@ import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
 import { bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
+import { MENO_MOTIONS } from "../../../../lib/plugins/manifest";
 import type { Carried3D, Molecule3D } from "../store/types";
 
 /**
@@ -191,6 +192,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
   const v = new THREE.Vector3();
 
   const made: { atoms: { el: string; p: Vec3 }[]; bonds: { a: number; b: number; order: number }[] }[] = [];
+  const ownMotion = film && !!motion && !(MENO_MOTIONS as readonly string[]).includes(motion);
   for (const { m, surfaces, move } of shown) {
     const molecule = { ...m, id: 0 } as Molecule3D;
     const solid = solidOf(molecule, style);
@@ -246,8 +248,9 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     const samples = Array.from({ length: count }, (_, s) => sampleAt(s));
     const animated = moving || swinging;
     // (what it is made of, for a renderer that makes a motion of its own: each atom drawn, its element and where it stands in the
-    // scene, in ångströms, and its bonds between them - Meno's own data, written whatever the renderer)
-    {
+    // scene, in ångströms, and its bonds between them - Meno's own data, written only for such a motion: a large entry's every
+    // atom would only weigh down any other scene)
+    if (ownMotion) {
       const at = new Map<number, number>();
       const atoms: { el: string; p: Vec3 }[] = [];
       const mag0 = magnifiedOf(molecule);
@@ -435,7 +438,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     lights: [{ name: "Key light", type: "directional", colour: [1, 1, 1], intensity: style.keyLight }],
     animations,
     // (what glTF has no word for: the scene's even light, and what the film is)
-    extras: { meno: { ambientLight: style.ambientLight, keyLight: style.keyLight, width, height, frames: count, fps, film, molecules: made } },
+    extras: { meno: { ambientLight: style.ambientLight, keyLight: style.keyLight, width, height, frames: count, fps, film, ...(ownMotion ? { molecules: made } : {}) } },
   };
   return {
     gltf: writeGltf(scene),

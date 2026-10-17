@@ -136,7 +136,7 @@ describe("molecules in 3D written as a scene to render", () => {
   });
 
   it("writes each molecule's atoms and bonds in its extras, where it stands in the scene, for a renderer that makes a motion of its own", () => {
-    const g = parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf);
+    const g = parse(renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "a-renderers-own", seconds: 1, fps: 10 }).gltf);
     const [mol] = g.scenes[0].extras.meno.molecules;
     expect(mol.atoms.map((a: Json) => a.el)).toEqual(["C", "C", "H", "H", "H", "H"]);
     // (in ångströms, where it stands on the page: its middle at (10, 20) on it)
@@ -153,6 +153,12 @@ describe("molecules in 3D written as a scene to render", () => {
     const g = parse(r.gltf);
     expect(g.animations ?? []).toHaveLength(0);
     expect(g.scenes[0].extras.meno.molecules).toHaveLength(1);
+  });
+
+  it("writes no atoms and bonds besides for a picture, or a film of Meno's own motion", () => {
+    expect(parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf).scenes[0].extras.meno.molecules).toBeUndefined();
+    const turned = renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "turn", seconds: 1, fps: 10 });
+    expect(parse(turned.gltf).scenes[0].extras.meno.molecules).toBeUndefined();
   });
 
   it("says there is nothing to render where nothing is drawn", () => {

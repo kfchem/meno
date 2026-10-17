@@ -112,8 +112,9 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   (`meno.molecules`): each molecule's atoms drawn - its element, and where
   it stands in the scene, in ångströms, as the first frame shows it - and
   its bonds between them, by index, with their orders. Meno's own data,
-  written whatever the renderer; a renderer that makes a motion of its own
-  builds it from them.
+  written only for a film of a motion the renderer makes, which it builds
+  from them: a large entry's every atom would only weigh down any other
+  scene.
 
 Khronos's glTF-Validator finds nothing wrong in what Meno writes (checked
 while it was built; not part of Meno or its tests).
