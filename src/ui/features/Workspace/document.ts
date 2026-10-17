@@ -16,6 +16,7 @@ import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/worksp
 import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reactionArrow";
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
+import { etaHeld } from "./chem/eta";
 import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
@@ -189,18 +190,18 @@ export function stepCost(state: WorkspaceDocument, before: WorkspaceDocument | u
 /** `doc` with its stacks of drawings kept whole as an edit leaves them (utils/stacks `settledRecords`). */
 export function withRecordsSettled(doc: WorkspaceDocument, before?: WorkspaceDocument): WorkspaceDocument {
   if (before && doc.model === before.model) return doc;
-  const model = endpointsHeld(settledRecords(doc.model, before?.model));
+  // (a haptic bond held to its ring, its star at the ring's centre: chem/eta)
+  const model = etaHeld(settledRecords(doc.model, before?.model), before?.model);
   return model === doc.model ? doc : { ...doc, model };
 }
 
 /**
- * A model's haptic bonds kept to the ring they bind: where an atom of that
- * ring has gone - deleted, merged onto another - or a bond's endpoints are
- * not all atoms of the drawing, the bond binds no ring and keeps none (a
- * plain bond to its star). Left as they were, endpoints named atoms gone,
- * drawn from nowhere, and a set round the complex took a frame of NaN,
- * which a save then dropped with the set (the command centre's document
- * fuzzer, 2026-10-13).
+ * A part's haptic bonds kept to the ring they bind: where a bond's
+ * endpoints are not all atoms of the part, the bond binds no ring and keeps
+ * none (a plain bond to its star). Left as they were, endpoints named atoms
+ * gone, drawn from nowhere, and a set round the complex took a frame of
+ * NaN (the command centre's document fuzzer, 2026-10-13). An edit to the
+ * drawing takes such a bond away with its star instead (chem/eta `etaHeld`).
  */
 export function endpointsHeld(model: Model): Model {
   if (!model.bonds.some((b) => b.endpoints?.length)) return model;
@@ -886,19 +887,30 @@ export function appendModel(
       : {}),
   }));
   const bondMap = new Map<number, number>();
-  const bonds = next.bonds.map((b) => {
-    const id = cursor++;
-    bondMap.set(b.id, id);
-    // (a haptic bond pasted without its ring binds none: its endpoints named the ring copied from)
+  // (a haptic bond pasted without its whole ring goes, with its star: it
+  // would bind the ring copied from, and a star alone is no atom - chem/eta)
+  const starless = new Set<number>();
+  for (const b of next.bonds) {
+    if (!b.endpoints?.length || b.endpoints.every((e) => idMap.has(e))) continue;
+    for (const e of [b.a, b.b]) if (next.atoms.some((a) => a.id === e && a.el === "*")) starless.add(idMap.get(e)!);
+  }
+  const bonds = next.bonds.flatMap((b) => {
     const { endpoints, attach, ...rest } = b;
     const whole = !!endpoints?.length && endpoints.every((e) => idMap.has(e));
-    return {
-      ...rest,
-      id,
-      a: idMap.get(b.a) ?? b.a,
-      b: idMap.get(b.b) ?? b.b,
-      ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
-    };
+    const a = idMap.get(b.a) ?? b.a;
+    const z = idMap.get(b.b) ?? b.b;
+    if (starless.has(a) || starless.has(z)) return [];
+    const id = cursor++;
+    bondMap.set(b.id, id);
+    return [
+      {
+        ...rest,
+        id,
+        a,
+        b: z,
+        ...(whole ? { endpoints: endpoints!.map((e) => idMap.get(e)!), ...(attach ? { attach } : {}) } : {}),
+      },
+    ];
   });
   // (its electron-pushing arrows with it, on its atoms' and bonds' new ids)
   const moved = (e: PushEnd): PushEnd | null => {
@@ -921,7 +933,7 @@ export function appendModel(
     ...doc,
     nextId: cursor,
     model: {
-      atoms: [...doc.model.atoms, ...atoms],
+      atoms: [...doc.model.atoms, ...(starless.size ? atoms.filter((a) => !starless.has(a.id)) : atoms)],
       bonds: [...doc.model.bonds, ...bonds],
     },
     ...(pushes.length ? { pushes: [...(doc.pushes ?? []), ...pushes], nextPushId: pushId } : {}),

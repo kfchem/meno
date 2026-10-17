@@ -16,6 +16,7 @@ import { commitInstanceMatrices } from "./instances";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { labelReach } from "../workflow/selectionSet";
 import { setLabelReach } from "../utils/labelHits";
+import { hapticStars } from "../chem/eta";
 
 /** A click edits a label this long after it, unless a second click follows. */
 const EDIT_DELAY_MS = DOUBLE_CLICK_MS;
@@ -328,8 +329,16 @@ export function Atoms2D() {
     const rWorld = ATOM_PICK_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
     if (placed.current.mesh !== inst.current) placed.current = { mesh: inst.current, atoms: [] };
     const was = placed.current.atoms;
+    // (a haptic bond's star is no atom to pick: no hit area - chem/eta)
+    const stars = hapticStars({ atoms, bonds: model.bonds });
     for (let i = 0; i < atoms.length; i++) {
       const a = atoms[i];
+      if (stars.has(a.id)) {
+        was[i] = null;
+        tmpM.makeScale(0, 0, 0).setPosition(a.x, a.y, 1e-3);
+        inst.current.setMatrixAt(i, tmpM);
+        continue;
+      }
       if (was[i] === a) continue;
       was[i] = a;
       // Nudge z slightly forward (z=+1e-3) to prioritize atom raycasting over bond hit areas

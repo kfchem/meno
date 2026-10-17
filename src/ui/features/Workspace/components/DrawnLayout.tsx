@@ -21,6 +21,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { DURATION, easeOut } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
 import { nearZoom, SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
+import { starsAtTheirAtoms } from "../chem/eta";
 
 /**
  * How far an atom may move in one change, while a button is held, and still
@@ -282,7 +283,8 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
         })
       : atoms;
     shown.current = out;
-    return out;
+    // (a haptic bond's star at its ring's centre as the ring is drawn - dragged, on its way - chem/eta)
+    return starsAtTheirAtoms(out, model);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- step: a frame of the way there; model: its structures, and fullModel, where what comes into sight stood, read as the way is planned
   }, [atoms, draggedId, step]);
   // A chain's bonds on their way out (or back): drawn again every frame until they are.

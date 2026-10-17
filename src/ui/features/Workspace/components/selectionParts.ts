@@ -1,3 +1,4 @@
+import { hapticStars } from "../chem/eta";
 import type { Model } from "../store/types";
 
 type Point = { x: number; y: number };
@@ -20,9 +21,11 @@ export function roomFor(n: number): number {
 export function selectedParts(shown: Model, atoms: ReadonlySet<number>, bonds: ReadonlySet<number>): Map<string, ShadedPart> {
   const at = new Map(shown.atoms.map((a) => [a.id, a]));
   const parts = new Map<string, ShadedPart>();
+  // (a haptic bond's star no disc of its own: its bond is shaded to it - chem/eta)
+  const stars = hapticStars(shown);
   for (const id of atoms) {
     const a = at.get(id);
-    if (a) parts.set(`a${id}`, { atom: { x: a.x, y: a.y } });
+    if (a && !stars.has(id)) parts.set(`a${id}`, { atom: { x: a.x, y: a.y } });
   }
   for (const b of shown.bonds) {
     if (!bonds.has(b.id)) continue;

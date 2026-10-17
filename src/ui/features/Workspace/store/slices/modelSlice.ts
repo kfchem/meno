@@ -24,6 +24,7 @@ import { nextIdAfter } from "../../workflow/saved";
 import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { style3dOf } from "../../style3d";
+import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -140,8 +141,10 @@ export const createModelSlice = (
     excludeId: number | null = null,
   ): number | null => {
     let best: { id: number; d: number } | null = null;
+    // (a haptic bond's star is no atom to land on: chem/eta)
+    const stars = hapticStars(get().model);
     for (const a of get().model.atoms) {
-      if (excludeId != null && a.id === excludeId) continue;
+      if ((excludeId != null && a.id === excludeId) || stars.has(a.id)) continue;
       const d = Math.hypot(x - a.x, y - a.y);
       if (d <= tol && (!best || d < best.d)) best = { id: a.id, d };
     }
