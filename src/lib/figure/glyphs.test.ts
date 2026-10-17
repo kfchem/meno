@@ -96,6 +96,39 @@ describe("letters drawn as their outlines", () => {
     expect(s.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "Cl"]);
   });
 
+  it("reads no solid round dot as a letter: a mark set at a chain's end", () => {
+    // (a filled disc, its round outline given as the points along its curve, at the chain's free end - as a scheme marks where a
+    // group goes)
+    const disc = (cx: number, cy: number, r: number): FigurePath => ({
+      fill: "#073f80ff",
+      stroke: null,
+      width: 0,
+      d: [...ring(cx, cy, r, r, 32).map(([x, y], i): PathStep => [i ? "C" : "M", x, y]), ["Z"]],
+    });
+    const f: FigureDrawn = {
+      paths: [disc(60, 112, 2.6), stroke([60, 112], [80, 100]), stroke([80, 100], [100, 112]), stroke([100, 112], [114, 104]), ...outlined("OH", 115, 104)],
+      letters: [],
+      pictures: [],
+    };
+    // (the typeface's own e, heavy - nearly all ink but for its small eye - as like a dot as any letter is)
+    const e = glyphShape("e", [pts(ring(0.3, -0.27, 0.27, 0.27)), pts(ring(0.3, -0.3, 0.03, 0.02).reverse())], 0.72);
+    expect(shapeLetters(shapesOf(f), 14.4, [e, ...KNOWN]).map((l) => l.c).sort()).toEqual(["H", "O"]);
+    const s = structureOf(readFigure(f, (l) => readDrawnLabel(l, reads).read, [e, ...KNOWN]), reads);
+    expect(s.atoms.map((a) => a.el).sort()).toEqual(["C", "C", "C", "O"]);
+  });
+
+  it("tells a round letter set alone by the figure's capitals: an O at a bond's end, as tall as the NH elsewhere", () => {
+    // (a small o drawn as the capital is, only smaller - matched as well as the O, and taken first)
+    const o = glyphShape("o", FACE.O.parts.map((p) => pts(p)), 0.72);
+    const f: FigureDrawn = {
+      paths: [stroke([60, 112], [80, 100]), stroke([80, 100], [100, 112]), stroke([100, 112], [114, 104]), ...outlined("O", 115, 104), stroke([40, 106], [60, 112]), ...outlined("NH", 20, 112)],
+      letters: [],
+      pictures: [],
+    };
+    const read = shapeLetters(shapesOf(f), 14.4, [o, ...KNOWN]);
+    expect([...read].sort((p, q) => p.box[0] - q.box[0]).map((l) => l.c).join("")).toBe("NHO");
+  });
+
   it("reads nothing as letters without the letters' shapes to match", () => {
     const f: FigureDrawn = { paths: outlined("OH", 100, 100), letters: [], pictures: [] };
     expect(shapeLetters(shapesOf(f), 14.4, [])).toEqual([]);
