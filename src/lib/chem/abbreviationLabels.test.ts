@@ -211,6 +211,39 @@ describe("what a file is written with", () => {
     expect(text).toContain("M  SMT   1 OTBS");
   });
 
+  it("a Y with one bond as a variable, a label - alone, or with several bonds, yttrium", () => {
+    const text = writeMolfile({
+      atoms: [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: L, y: 0, el: "Y" },
+        { id: 3, x: 4 * L, y: 0, el: "Y" },
+        { id: 4, x: 6 * L, y: 0, el: "Y" },
+        { id: 5, x: 6 * L, y: L, el: "Cl" },
+        { id: 6, x: 6 * L, y: -L, el: "Cl" },
+      ],
+      bonds: [
+        { a: 1, b: 2, order: 1 },
+        { a: 4, b: 5, order: 1 },
+        { a: 4, b: 6, order: 1 },
+      ],
+    });
+    const lines = text.split("\n");
+    // (the one-bond Y a star with its label; the lone one and the one of two bonds yttrium)
+    expect(lines[5].slice(31, 34).trim()).toBe("*");
+    expect(text).toContain("A    2\nY\n");
+    expect(lines[6].slice(31, 34).trim()).toBe("Y");
+    expect(lines[7].slice(31, 34).trim()).toBe("Y");
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "Y", "Y", "Y", "Cl", "Cl"]);
+  });
+
+  it("a CD3 written out with its deuterium: hydrogens of mass 2, as CTfile writes an isotope", () => {
+    const text = writeMolfile({ atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: L, y: 0, el: "CD3" }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    const iso = text.split("\n").filter((l) => l.startsWith("M  ISO"));
+    expect(iso.join(" ").match(/ 2(?= |$)/g)?.length).toBe(3);
+    // (and read back as the label it was)
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "CD3"]);
+  });
+
   // (not Ar, which is argon's symbol as well as aryl's: IUPAC GR-9.2)
   it("any other label as a star atom with an alias; Rgroups, lists, valence and hydrogen counts in their fields", () => {
     const text = writeMolfile({

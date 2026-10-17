@@ -122,6 +122,12 @@ const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 const RADICAL_CODE = { singlet: 1, doublet: 2, triplet: 3 } as const;
 
 const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
+/**
+ * The elements whose symbol is a variable's too (the maintainer, 2026-10-17): Y with one bond, in a substituent's place, stands
+ * for a group as X and Z do; alone, or with several bonds, it is yttrium.
+ */
+const VARIABLES = new Set(["Y"]);
+
 /** The atom types "CTfile Formats" reserves: written as they are. */
 const RESERVED = new Set(["A", "Q", "X", "M", "R", "*", "LP", "R#", "L"]);
 
@@ -144,9 +150,11 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   let nextId = Math.max(0, greatest(model.atoms.map((a) => a.id))) + 1;
   const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const a of model.atoms) {
-    // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds)
-    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev) || RESERVED.has(a.el) || a.list) continue;
     const touching = bonds.filter((b) => b.a === a.id || b.b === a.id);
+    // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds; a variable named as an element is - Y with
+    // one bond, a substituent's place, as X and Z are - is no element: its label, as any other)
+    const variable = VARIABLES.has(a.el) && touching.length === 1;
+    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
     const structure: AbbreviationStructure | null =
       a.abbrev ??
