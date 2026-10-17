@@ -27,7 +27,7 @@ import { dibOf } from "../../../lib/binary/dib";
 import { textOf, withDpi, withText } from "../../../lib/binary/png";
 import { emfComments, layoutEmf, type SolidsPicture } from "../../../lib/chem/emf";
 import { createSVG } from "../../../lib/chem/layout2d";
-import { currentStyle3D } from "./style3d";
+import { style3dOf } from "./style3d";
 import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
 import { drawingLayout } from "./fileActions";
@@ -64,7 +64,8 @@ export function pictureDpiFor(width: number, height: number, dpi: number): numbe
 
 const utf8 = new TextEncoder();
 
-type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings">;
+/** The page a picture is made of: its aromatic circles, and its styles in 3D (none, a page no workspace's: Meno's own). */
+type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>;
 
 /**
  * Meno's record of `part` and the EMF of it that carries the record - what a
@@ -83,7 +84,7 @@ export async function structurePicture(part: Drawn, aromatic: Aromatic, style: D
   // (the layout then draws them so too, for the PNG)
   let solids: SolidsPicture | null = null;
   try {
-    solids = withSolidsImage(seen.molecules3d ?? [], layout, currentStyle3D(), dpi);
+    solids = withSolidsImage(seen.molecules3d ?? [], layout, style3dOf(aromatic), dpi);
   } catch {
     solids = null;
   }

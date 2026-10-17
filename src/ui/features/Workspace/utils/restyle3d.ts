@@ -1,6 +1,5 @@
-import type { Style3D } from "../../../../lib/chem/style3d";
+import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
-import { currentStyle3D } from "../style3d";
 import { heightOf, lookOf, solidOf } from "./molecule3d";
 
 /** A molecule in 3D as a document holds it or a copy carries it (with its turn and frame, which a restyle leaves as they are). */
@@ -23,7 +22,7 @@ type Sphere = { x: number; y: number; z: number; r: number };
  * body's middle is the middle of its spheres' box on the page: a lone
  * molecule's, where it stands. Where `k` is 1, the very molecules given.
  */
-export function restyled3d<M extends Placed3D>(molecules: readonly M[], k: number, about: { x: number; y: number } = { x: 0, y: 0 }, style: Style3D = currentStyle3D()): M[] {
+export function restyled3d<M extends Placed3D>(molecules: readonly M[], k: number, about: { x: number; y: number } = { x: 0, y: 0 }, style: Style3D = STYLE_3D): M[] {
   // (the same array: nothing to convert, nothing made anew)
   if (k === 1 || molecules.length === 0) return molecules as M[];
   // (each one's sphere holds it in every frame and turned any way: which touch is the same however they are turned and shown)

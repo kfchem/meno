@@ -543,7 +543,7 @@ Both go together, because both touch every layer.
 - **Scope.** An application default; a document's own style over it; and
   per-bond and per-atom overrides over that (a coloured atom, a bold bond).
 - **Where it is set.** Settings holds the application's style, and
-  *Drawing style…* (a right-click on empty space) gives a
+  *Styles…* (a right-click on empty space) gives a
   document one of its own. Either is
   a preset - ACS 1996, RSC, Wiley or Nature - and what was changed from it;
   every setting has its name, description, unit and range in
@@ -822,6 +822,12 @@ All hover-based, as above.
     nothing, Escape or a right press lets it go. Being drawn, it is in the
     highlight's colour until it has an end. No key draws one (drawing by
     extension, 2026-09-27).
+  - A zoom costs as much with arrows on the page as without (the
+    maintainer, 2026-10-16: with them, a zoom stuttered): they are laid
+    out again only as what they are laid by changes - the atoms, the
+    labels, the bonds' lines - not as the drawing is laid out again the
+    same at each frame of a zoom; and what takes the pointer round each,
+    unseen until the pointer is on it, is not drawn until it is lit.
   - Anchored: it is kept by the atoms and bonds it leaves and reaches, not
     by where it was drawn, so it goes with them as they are moved, turned,
     turned over (bent to its other side, as a mirror shows it) and cleaned

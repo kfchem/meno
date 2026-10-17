@@ -26,7 +26,7 @@ import { finishEntry } from "./renderOptions";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
 import { holdFilm } from "../../../../lib/picture/held";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pictureToAdd } from "../utils/pictures";
@@ -181,7 +181,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   if (!plugin) return;
   const shown = await shownOf(store, ids);
   if (closing.aborted) return;
-  const rendered = renderScene(shown, currentStyle3D(), ask);
+  const rendered = renderScene(shown, style3dOf(store.getState()), ask);
   // (beside them, on the right: as large as they are drawn)
   const { page } = rendered;
   const w = page.maxX - page.minX;

@@ -2,7 +2,6 @@ import type { EditorModel } from "../../../../utils/importers";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { bondChem, chemistry } from "../../../../lib/chem/molecule";
 import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
-import { currentStyle3D } from "../style3d";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
@@ -12,6 +11,7 @@ import { readOutput, readStructureFile } from "../../../../lib/calc/read";
 import type { StructureRead } from "../../../../lib/io/structures";
 import { stackedRecords } from "./stacks";
 import { useNotices } from "../../../notices";
+import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 
 export { xyzComments } from "../../../../lib/io/structures";
 
@@ -163,7 +163,7 @@ export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
 }
 
 /** What a file read holds as the editor draws it: the structures, and a reaction's arrow and "+" signs. */
-export function drawnOf(result: ProcessedFileResult): Drawn {
+export function drawnOf(result: ProcessedFileResult, style3d: Style3D = STYLE_3D): Drawn {
   const a = result.arrow;
   return {
     ...editorModelOf(result.model),
@@ -181,14 +181,13 @@ export function drawnOf(result: ProcessedFileResult): Drawn {
         }
       : {}),
     ...(result.pluses?.length ? { pluses: result.pluses.map((p, i) => ({ id: i + 1, ...p })) } : {}),
-    ...(result.molecules3d?.length ? { molecules3d: inRow(result.molecules3d) } : {}),
+    ...(result.molecules3d?.length ? { molecules3d: inRow(result.molecules3d, style3d) } : {}),
   };
 }
 
 /** A file's molecules in 3D, standing in a row about the origin, each clear of the next. */
-function inRow(ms: Omit<Molecule3D, "id" | "at">[]): Carried3D[] {
+function inRow(ms: Omit<Molecule3D, "id" | "at">[], style: Style3D): Carried3D[] {
   const placed = ms.map((m) => ({ ...m, id: 0, at: { x: 0, y: 0 } }));
-  const style = currentStyle3D();
   const at = rowAbout({ x: 0, y: 0 }, placed.map((m) => solidOf(m, style).reach[lookOf(m)]));
   return ms.map((m, i) => ({ ...m, at: at[i] }));
 }

@@ -56,6 +56,7 @@ src/
   lib/jobs.ts             jobs: programs run for a workflow's steps, apart from Meno (src-tauri/src/jobs.rs)
   lib/log.ts              the page's errors and warnings into Meno's log (see *Meno's log*)
   lib/chem/elements.ts    the one element table: symbol, number, name, colour, van der Waals and covalent radii, each column's source cited
+  lib/chem/reactionMap.ts a reaction's full atom map in 3D, hydrogens included (accelMapper.ts: ACCeL's mapper, ported; docs/ATOM-MAPPING.md)
   lib/scene/              gltf.ts: a scene written as glTF 2.0, for a renderer; shapes.ts: the ball and stick it is made of (docs/RENDER.md)
   utils/structureParsers  parseSDF (V2000/V3000), parseXYZ (multi-frame, distance-based bonds)
   utils/importers         readMoleculesFromText, RXN grouping/layout, EditorModel conversion
@@ -997,7 +998,10 @@ undo step.
 A drawn structure made in 3D (`Workspace/chem/make3d.ts`, stage 2 of
 docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
-(ETKDG, then MMFF94 or UFF, on every core; the same shape twice kept once;
+(ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
+their covalent lengths and the metal typed for UFF, or, where UFF has no
+type for it, a lighter metal of its group standing in and no energies
+given; the same shape twice kept once;
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
@@ -1036,9 +1040,15 @@ environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
 download. On Windows that is `%LOCALAPPDATA%\com.kfchem.meno`, not the roaming
 `%APPDATA%` one, which a domain may copy to a server and back at each sign-in
 and keep within a quota; the settings and the network log stay in the roaming
-one. On a Mac and on Linux the two are one folder. A Meno before this kept all
-of it in the roaming folder on Windows; nothing is moved - plugins are set up
-again as they are next used, and the old folders can be deleted.
+one. On a Mac and on Linux the two are one folder. A Meno before 0.1.13 kept
+all of it in the roaming folder on Windows; nothing is moved - plugins are set
+up again as they are next used - and what was left there is taken away
+(`roaming.rs`), by name only: `uv`, `pixi` and `tools` at each start while
+they are there, and a plugin's environment there as the plugin is removed;
+`jobs` only where it holds no job. While a job there still waits or runs,
+everything there is left, as its program may be using its environment; jobs
+kept there are left with their files. What is left, and why, goes in Meno's
+log.
 
 ### PDFs
 
