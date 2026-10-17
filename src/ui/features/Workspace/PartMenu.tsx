@@ -185,6 +185,7 @@ export default function PartMenu({
   shape,
   cycle,
   onBoxAround,
+  onCombinePdfs,
   canvas = [],
   clipboard,
   molecule3d,
@@ -266,7 +267,14 @@ export default function PartMenu({
     onStructures?: () => void;
     /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
     onWrite?: () => void;
+    /** A new PDF made from it (docs/PDF.md, *A new PDF from pages*): its pages numbered, or put in order, turned, some left out - each from a card. */
+    onNumbers: () => void;
+    onPages: () => void;
+    /** Its bytes written to a file. */
+    onSave: () => void;
   };
+  /** The PDFs selected made one new PDF, in the order they are read on the page. */
+  onCombinePdfs?: () => void;
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
   /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
@@ -665,6 +673,15 @@ export default function PartMenu({
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
           ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
+          // (a new PDF from it, and it written to a file)
+          ...(pdf
+            ? [
+                { name: "Page numbers…", keys: "", run: pdf.onNumbers, divider: true },
+                { name: "Pages…", keys: "", run: pdf.onPages },
+                ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs }] : []),
+                { name: "Save as PDF…", keys: "", run: pdf.onSave },
+              ]
+            : []),
         ]
       : target.kind === "text"
       ? [
@@ -777,6 +794,7 @@ export default function PartMenu({
           ...stackItem,
           ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
           ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
+          ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs, divider: true }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]

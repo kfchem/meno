@@ -73,6 +73,8 @@ import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
+import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
+import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
 import { WordsEditor } from "./utils/wordsEditor";
 import { ringAt, ringsAmong, ringsOf } from "./utils/rings";
@@ -630,6 +632,8 @@ function WorkspaceContent({
   );
   const [menu, setMenu] = useState<MenuTarget | null>(null);
   // a colour card opened from a menu, where the menu was (ColourCard)
+  // (a card for a new PDF made from one held: its pages numbered, or put in order - docs/PDF.md, *A new PDF from pages*)
+  const [pdfCard, setPdfCard] = useState<{ kind: "numbers" | "pages"; id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
   const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
@@ -1796,6 +1800,23 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {pdfCard &&
+          (() => {
+            const p = store.getState().pdfs.find((x) => x.id === pdfCard.id);
+            if (!p) return null;
+            const Card = pdfCard.kind === "numbers" ? PdfNumbersCard : PdfPagesCard;
+            return (
+              <Card
+                key={`${pdfCard.kind}:${pdfCard.x},${pdfCard.y}`}
+                pdf={p}
+                at={pdfCard}
+                onMade={(held, name) => putBeside(store.getState(), held, name, p)}
+                onClose={() => setPdfCard(null)}
+              />
+            );
+          })()}
+      </AnimatePresence>
+      <AnimatePresence>
         {colourCard && (
           <ColourCard key={`${colourCard.x},${colourCard.y}`} target={colourCard.target} x={colourCard.x} y={colourCard.y} within={colourCard.within} onClose={() => setColourCard(null)} />
         )}
@@ -2017,6 +2038,16 @@ function WorkspaceContent({
               onBack: () => st.orderShapes([sh.id], false),
             };
           })()}
+          onCombinePdfs={(() => {
+            // (two or more PDFs selected - right-clicked on one of them, or on the selection)
+            const st = store.getState();
+            const chosen = st.pdfs.filter((p) => st.selPdfs.has(p.id));
+            if (chosen.length < 2 || (menu.kind === "pdf" ? !st.selPdfs.has(menu.id ?? -1) : menu.selection !== "here")) return undefined;
+            return () =>
+              void combined(chosen)
+                .then(({ held, name, first }) => putBeside(store.getState(), held, name, first))
+                .catch((e: unknown) => setChemError(`Combine failed: ${e instanceof Error ? e.message : String(e)}`));
+          })()}
           onBoxAround={
             menu.selection === "here"
               ? () => {
@@ -2069,6 +2100,9 @@ function WorkspaceContent({
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),
               ...(!p.spread && !p.icon && p.page > 0 ? { onPrevious: () => st.turnPdf(p.id, p.page - 1) } : {}),
               onRead: () => st.readPdf(p.id),
+              onNumbers: () => setPdfCard({ kind: "numbers", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
+              onPages: () => setPdfCard({ kind: "pages", id: p.id, x: menu.x, y: menu.y, within: menu.within }),
+              onSave: () => void savePdfFile(p).catch((e: unknown) => setChemError(`Save failed: ${e instanceof Error ? e.message : String(e)}`)),
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id ? { onCopy: () => void copyWords() } : {}),
               // (the coordinates in the words selected, or in the box drawn: the structures they hold, shown before they are placed)
               ...(selects(st.pdfSel) && st.pdfSel.id === p.id
