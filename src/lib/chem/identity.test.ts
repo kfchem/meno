@@ -38,6 +38,86 @@ describe("a structure's identity", () => {
   });
 });
 
+describe("the aromatic form, Kekulé-free", () => {
+  /** The bonds the form gives one order (4), as atom pairs. */
+  const aromaticBonds = (smiles: string) =>
+    aromaticForm(fromSmiles(smiles))
+      .bonds.filter((b) => b.order === 4)
+      .map((b) => `${Math.min(b.a, b.b)}-${Math.max(b.a, b.b)}`)
+      .sort();
+
+  it("comes to one form from every Kekulé structure: naphthalene's three, azulene's two", () => {
+    // (naphthalene: its middle bond double, or either ring's bonds so)
+    const naphthalene = ["C1=CC=C2C=CC=CC2=C1", "C1C=CC2=CC=CC=C2C=1", "C1=CC2=CC=CC=C2C=C1"].map((s) => identityKey(fromSmiles(s)));
+    expect(new Set(naphthalene).size).toBe(1);
+    // (azulene: C1=C2, C3=C3a ... or C1=C8a, C2=C3 ...; its middle bond single in both)
+    const a = "C1=CC=C2C=CC=CC=C21";
+    const b = "C1C=CC2=CC=CC=CC2=1";
+    expect(identityKey(fromSmiles(a))).toBe(identityKey(fromSmiles(b)));
+    expect(aromaticBonds(a)).not.toContain("3-9");
+    expect(aromaticBonds(b)).not.toContain("3-9");
+    expect(aromaticBonds(a)).toHaveLength(10);
+  });
+
+  it("comes to the same form from every Kekulé structure there is, each enumerated", () => {
+    // (every way to pair off the atoms that carry a double bond by bonds between them, each drawn and formed)
+    const kekules = (g: LayoutInput): LayoutInput[] => {
+      const carriers = new Set(g.bonds.filter((b) => b.order === 2).flatMap((b) => [b.a, b.b]));
+      const candidates = g.bonds.map((b, i) => ({ b, i })).filter(({ b }) => b.order <= 2 && carriers.has(b.a) && carriers.has(b.b));
+      const out: LayoutInput[] = [];
+      const chosen = new Set<number>();
+      const used = new Set<number>();
+      const atoms = [...carriers].sort((p, q) => p - q);
+      const walk = (k: number) => {
+        while (k < atoms.length && used.has(atoms[k])) k++;
+        if (k === atoms.length) {
+          out.push({ ...g, bonds: g.bonds.map((b, i) => (candidates.some((c) => c.i === i) ? { ...b, order: chosen.has(i) ? 2 : 1 } : b)) });
+          return;
+        }
+        const a = atoms[k];
+        for (const { b, i } of candidates) {
+          const other = b.a === a ? b.b : b.b === a ? b.a : -1;
+          if (other < 0 || used.has(other)) continue;
+          used.add(a).add(other);
+          chosen.add(i);
+          walk(k + 1);
+          chosen.delete(i);
+          used.delete(a);
+          used.delete(other);
+        }
+      };
+      walk(0);
+      return out;
+    };
+    const orders = (g: LayoutInput) => aromaticForm(g).bonds.map((b) => b.order).join("");
+    for (const [name, smiles, count] of [
+      ["benzene", "c1ccccc1", 2],
+      ["naphthalene", "c1ccc2ccccc2c1", 3],
+      ["anthracene", "c1ccc2cc3ccccc3cc2c1", 4],
+      ["phenanthrene", "c1ccc2c(c1)ccc1ccccc12", 5],
+      ["pyrene", "c1cc2ccc3cccc4ccc(c1)c2c34", 6],
+      ["azulene", "c1cc2cccccc2c1", 2],
+      ["acenaphthylene", "C1=Cc2cccc3cccc1c23", 3],
+      ["biphenylene", "c1ccc2c(c1)-c1ccccc1-2", 5],
+      ["heptalene", "C1=CC=C2C=CC=CC=CC2=CC=C1", 3],
+      ["quinoline", "c1ccc2ncccc2c1", 3],
+      ["cyclooctatetraene", "C1=CC=CC=CC=C1", 2],
+    ] as const) {
+      const all = kekules(fromSmiles(smiles));
+      expect(all.length, name).toBe(count);
+      expect(new Set(all.map(orders)).size, name).toBe(1);
+      expect(new Set(all.map(identityKey)).size, name).toBe(1);
+    }
+  });
+
+  it("leaves a structure with one Kekulé structure as drawn: pyrrole, furan, thiophene, imidazole, a quinone", () => {
+    for (const smiles of ["C1=CNC=C1", "C1=COC=C1", "C1=CSC=C1", "C1=CN=CN1", "O=C1C=CC(=O)C=C1", "CC=CC=CC"]) {
+      const g = fromSmiles(smiles);
+      expect(aromaticForm(g), smiles).toBe(g);
+    }
+  });
+});
+
 describe("a structure's orbits and automorphisms", () => {
   it("gives toluene's ring its symmetry, whichever Kekulé structure was drawn: ipso, two ortho, two meta, para, the methyl", () => {
     const g = fromSmiles("Cc1ccccc1");
