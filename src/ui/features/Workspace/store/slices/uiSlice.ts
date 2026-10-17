@@ -6,6 +6,10 @@ import type { WorkspaceDocument } from "../../document";
 import { EditorState } from "../types";
 import { StoreApi } from "zustand";
 import type { StyleChoice } from "../../../../../lib/chem/style";
+import { style3dIn, type Workspace3D } from "../../../../../lib/chem/workspaceStyle3d";
+import { useAppSettings } from "../../../../../lib/settings/appSettings";
+import { fitResultSets } from "../../workflow/run";
+import { reachOverFrames } from "../../utils/molecule3d";
 import { isElementSymbol } from "../../../../../lib/roles/molblock";
 import { labelTextOf, readLabel } from "../../utils/labelTyping";
 import { abbreviationOf } from "../../../../../lib/chem/abbreviations";
@@ -144,6 +148,18 @@ export function createUiSlice(
       const start = drag.start;
       doc.edit("drawing style", () => restyledDocument(start, style), { coalesceKey });
       drag.last = doc.getState();
+    },
+
+    setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => {
+      // (its molecules go over to it, eased, as they are drawn: Workspace/style3d `useEasedStyle3D` - and a result
+      // set they no longer fit in it laid out again, its frame widened: the same step to undo)
+      const style = style3dIn(style3d, useAppSettings.getState().style3d);
+      const { turns3d } = get();
+      doc.edit(
+        "3D style",
+        (d) => fitResultSets(ops.setDocumentStyle3d(d, style3d), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id]),
+        coalesceKey ? { coalesceKey } : undefined,
+      );
     },
 
     easeDocumentStyle: (style: StyleChoice) => {

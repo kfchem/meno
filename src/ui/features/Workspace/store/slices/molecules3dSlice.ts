@@ -6,7 +6,7 @@ import type { EditorState, Look3D, Model, Molecule3D, Rising3D, Turn3D } from ".
 import { chosenPath, lookOf, reachOf, solidOf, bondsAt, reachOverFrames, withLooks } from "../../utils/molecule3d";
 import { editedCopy, isResult, movingAtoms, placesOf, stereoAfter, withValue } from "../../utils/edit3d";
 import { kindOf } from "../../utils/measure3d";
-import { currentStyle3D } from "../../style3d";
+import { style3dOf } from "../../style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { noteTurns } from "../turnJournal";
 import { signatureOf } from "../../utils/drawnLink";
@@ -154,7 +154,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     spreadStack: (stack: number) => {
       const members = stackMembers(get().molecules3d, stack);
       if (members.length < 2 || members[0].stack?.spread) return;
-      const style = currentStyle3D();
+      const style = style3dOf(get());
       const places = gridPlaces(members[0].at, members.map((m) => reachOf(m, solidOf(m, style), lookOf(m))));
       doc.edit("lay out as a grid", (d) => ops.spreadStack(d, stack, new Map(members.map((m, i) => [m.id, places[i]]))));
     },
@@ -241,14 +241,14 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     },
     setLook3d: (ids: number[], look: Look3D) => {
       // (a result set they no longer fit in that look laid out again, its frame widened: the same step to undo)
-      const style = currentStyle3D();
+      const style = style3dOf(get());
       const { turns3d } = get();
       doc.edit(look === "secondary" ? "secondary style" : "primary style", (d) =>
         fitResultSets(ops.setLook3d(d, ids, look), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id], new Set(ids)),
       );
     },
     setMagnified: (atoms: number[], molecules: number[], k: number, gesture?: string) => {
-      const style = currentStyle3D();
+      const style = style3dOf(get());
       const { turns3d } = get();
       doc.edit(
         "magnification",
@@ -261,7 +261,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
     },
     setMagnified3d: (ids: number[], k: number, gesture?: string) => {
       // (a result set they no longer fit as large laid out again, its frame widened: the same step to undo)
-      const style = currentStyle3D();
+      const style = style3dOf(get());
       const { turns3d } = get();
       doc.edit(
         "magnification",
@@ -331,7 +331,7 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
       // a result is never edited: the edit is a copy of it, beside it -
       // out of any set it would fall in - turned as it is
       const copy = editedCopy(m, frame, after, stereo, { x: 0, y: 0 });
-      const style = currentStyle3D();
+      const style = style3dOf(get());
       const reach = (k: Molecule3D) => reachOf(k, solidOf(k, style), lookOf(k));
       const own = reach({ ...copy, id: 0 });
       const y = m.at.y;

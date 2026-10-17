@@ -10,7 +10,7 @@ import {
 import { editorLayoutOptions, layoutBonds, maxFitZoom } from "../layoutOptions";
 import { useDrawingStyle } from "../useDrawingStyle";
 import { chemistry } from "../../../../lib/chem/molecule";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
@@ -164,7 +164,7 @@ export default function FitToContent2D({
     // put the camera
     const eyeHeight = eyeOf(camera)?.z;
     const { turns3d, frames3d } = store.getState();
-    const style3d = currentStyle3D();
+    const style3d = style3dOf(store.getState());
     const poses = molecules3d.map((m) =>
       poseOf(m, solidOf(m, style3d), lookOf(m), turns3d[m.id], frames3d[m.id]),
     );

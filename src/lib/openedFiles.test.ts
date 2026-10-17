@@ -44,7 +44,7 @@ describe("Meno as the app for its workspace files", () => {
     expect(windows.resources).toContain("icons/document/meno-document.ico");
     // (macOS: the type exported, with its extension and media type; opened as its owner; its icon in the app's Resources)
     const plist = read("src-tauri/Info.plist");
-    for (const s of ["<string>com.kfchem.meno.workspace</string>", "<string>meno</string>", `<string>${MENO_MEDIA_TYPE}</string>`, "<string>Owner</string>", "<string>meno-document.icns</string>"]) expect(plist).toContain(s);
+    for (const s of ["<string>dev.kfchem.meno.workspace</string>", "<string>meno</string>", `<string>${MENO_MEDIA_TYPE}</string>`, "<string>Owner</string>", "<string>meno-document.icns</string>"]) expect(plist).toContain(s);
     expect(plist).not.toContain("<string>public.zip-archive</string>");
     expect(JSON.parse(read("src-tauri/tauri.macos.conf.json")).bundle.macOS.files).toEqual({ "Resources/meno-document.icns": "icons/document/meno-document.icns" });
     // (no other kind of file is claimed anywhere)

@@ -14,6 +14,7 @@ import { carriedDrawing, hiddenInStacks } from "./stacks";
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
 import { fillsAmong } from "./rings";
 import type { StyleChoice } from "../../../../lib/chem/style";
+import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
 import type { Carried3D, Drawn, EditorState, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
 import { pdfBytes } from "../../../../lib/pdf/reader";
 import { readPdfs } from "./pdfItems";
@@ -33,6 +34,8 @@ export type Workspace = {
   drawn: Drawn;
   /** The workspace's drawing style; a file saved without one (a procedure's) opens in Settings'. */
   style?: StyleChoice;
+  /** Its styles in 3D (lib/chem/workspaceStyle3d); a file saved without them opens in Settings'. */
+  style3d?: Workspace3D;
   aromaticEnabled: boolean;
   aromaticRings: Record<string, boolean>;
   /** A workflow on the page: its sets, steps and wires (docs/WORKFLOWS.md). */
@@ -55,7 +58,7 @@ type Saved = Pick<
   "model" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "lists3d" | "aromaticEnabled" | "aromaticRings"
 > &
   // (a procedure's file holds no style: opened, it is in Settings')
-  Partial<Pick<EditorState, "docStyle">> &
+  Partial<Pick<EditorState, "docStyle" | "docStyle3d">> &
   Partial<Pick<EditorState, "pushes">> &
   Partial<Pick<EditorState, "ringFills">> &
   Partial<Pick<EditorState, "sets" | "steps" | "wires" | "texts" | "textShown" | "textsOpen" | "pdfs" | "pdfShown" | "pictures" | "slides" | "shapes" | "inks" | "cycles" | "stacksShown" | "fullModel" | "recordsShown">>;
@@ -125,6 +128,8 @@ export function workspaceText(state: Saved, kept: ReadonlySet<string> = new Set(
       molecules3d,
       ...(state.sets?.length || state.steps?.length ? { sets: state.sets ?? [], steps: state.steps ?? [], wires: state.wires ?? [] } : {}),
       ...(state.docStyle ? { style: state.docStyle } : {}),
+      // (its styles in 3D, each whole: it opens the same on any computer)
+      ...(state.docStyle3d ? { style3d: state.docStyle3d } : {}),
       ...(state.aromaticEnabled ? { aromaticEnabled: true } : {}),
       ...(Object.keys(aromatic).length ? { aromaticRings: aromatic } : {}),
       ...(state.texts?.length
@@ -219,6 +224,7 @@ export function readWorkspace(text: string): Workspace | null {
     format?: unknown;
     version?: unknown;
     style?: unknown;
+    style3d?: unknown;
     aromaticEnabled?: unknown;
     aromaticRings?: unknown;
     texts?: unknown;
@@ -247,6 +253,7 @@ export function readWorkspace(text: string): Workspace | null {
     drawn,
     ...(workflow ? { workflow } : {}),
     ...(r.style != null ? { style: acceptStyleChoice(r.style) } : {}),
+    ...(acceptWorkspace3d(r.style3d) ? { style3d: acceptWorkspace3d(r.style3d)! } : {}),
     aromaticEnabled: r.aromaticEnabled === true,
     aromaticRings: rings,
     texts,

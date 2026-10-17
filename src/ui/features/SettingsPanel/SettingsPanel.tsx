@@ -10,6 +10,7 @@ import AbbreviationSettings from "./AbbreviationSettings";
 import ChemistrySettings from "./ChemistrySettings";
 import FileSettings from "./FileSettings";
 import PointerSettings from "./PointerSettings";
+import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
 import LogSettings from "./LogSettings";
 import LabelSettings from "./LabelSettings";
@@ -94,6 +95,7 @@ export default function SettingsPanel() {
             <h2 className="text-base font-semibold text-gh-black">General</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">How Meno works as a whole. Changes are saved as you make them.</p>
             <PointerSettings />
+            <CanvasSettings />
             <LabelSettings />
             <ColourSettings />
             <LogSettings />
@@ -107,7 +109,7 @@ export default function SettingsPanel() {
               The style new workspaces are drawn in, on the canvas and in
               exported pictures. Start from a journal's style and change what
               you like. A workspace keeps the style it was made in; change it
-              from its canvas, with Drawing style in its menu. Changes are saved
+              from its canvas, with Styles in its menu. Changes are saved
               as you make them.
             </p>
             <StyleEditor
@@ -121,9 +123,11 @@ export default function SettingsPanel() {
               Molecules in 3D
             </h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
-              How molecules in 3D look, on the canvas and in exported pictures,
-              and how they turn under the pointer. A molecule is drawn in the
-              primary style; a double-click takes it to the secondary and back.
+              How molecules in 3D look in new workspaces, on the canvas and in
+              exported pictures, and how they turn under the pointer. A molecule
+              is drawn in the primary style; a double-click takes it to the
+              secondary and back. A workspace keeps the styles and the light it
+              was made in; change them from its canvas, with Styles in its menu.
               Changes are saved as you make them.
             </p>
             <Style3DEditor

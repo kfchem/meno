@@ -474,6 +474,16 @@ Taken on 2026-10-13:
   onto the page as a molecule in 3D, its frames the conformers, lowest
   first. Of two enantiomers, one is made as the other's mirror image, so
   the two have the same conformers and shares.
+- **A metal's bonds hold** (2026-10-17). A bond drawn to a d- or f-block
+  metal is embedded at its covalent length (Pyykkö's radii, as Meno's own)
+  with the metal's ligands kept apart, and the metal is given UFF's own
+  geometry for it: square planar for Ni, Pd, Pt and Au (their angles held
+  at 90 and 180 degrees), tetrahedral or octahedral for the rest. Where UFF
+  has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
+  metal of its group stands in for its shape while its bonds are held at
+  their own lengths, and no energies are given: the chip says so, and the
+  conformers are not ranked or weighted. Before, UFF without terms for a
+  metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A haptic bond binds its ring whole** (2026-10-13): where an atom of
   the ring it binds is deleted or merged onto another, or it is pasted or
   taken as part of a structure without its ring, it binds none - a plain
@@ -821,7 +831,8 @@ Orbitals and densities drawn as surfaces. Agreed with the maintainer on
   user's own of that id as it is now - changed or renamed since - it is a
   card of its own too, the one chosen, and picking or renaming the user's
   acts on theirs alone. Style files opened together are asked about in
-  turn.
+  turn. Styles in 3D follow the same rules (*Styles in 3D*, *A workspace's
+  styles in 3D*).
 
 Planned on 2026-10-14 from the maintainer's decision, to be built in one
 pull request (`agent/style-one-per-workspace`): L8 the change of style and
@@ -1028,6 +1039,37 @@ boxes, export). Tests at each: the transform and its inverse, editing
 through it at the workspace's bond length, a style change keeping k, true
 size in structure files, the shown size in pictures, undo.
 
+## Drawing resolution
+
+How finely the canvas is drawn: Settings, General, *Drawing resolution*
+(the maintainer, 2026-10-17, from a comparison of the choices on 100 % and
+150 % screens).
+- **2×** (the default, as before there was a choice): twice as many pixels
+  each way as the canvas's size on the page, whatever the screen. The
+  sharpest; on a screen that shows things once (100 %) the graphics card
+  draws four times the screen's pixels.
+- **Matching the screen**: as finely as the screen itself shows things -
+  once at 100 %, 1.25 at 125 %, 1.5 at 150 %, twice on a Retina screen -
+  never finer than twice. Nothing is scaled between the canvas and the
+  screen, so thin lines do not shimmer as the view moves; followed as the
+  window goes to another screen.
+- **1×**: once, whatever the screen: the lightest.
+
+The comparison (2026-10-17), drawn and then shown on a screen as a
+compositor shows it, against a drawing four times as fine: 1.25 times was
+the least faithful on either screen; on a 100 % screen, 1.5 times was no
+sharper than once and shimmered nearly twice as much as the view moved, a
+3:2 scaling; on a 150 % screen, 1.5 times - its own - was sharp and still.
+Hence the screen's own as the middle choice rather than a number.
+
+The choice applies at once. Everything on the canvas that depends on its
+pixels reads them as it is drawn: PDF pages' tiles, a text's or a
+Markdown sheet's letters, molecules in 3D (how round their balls are drawn,
+their shade and their key light). A line's least width, picking and the
+pointer's reach are in the screen's own units and do not change. Pictures
+made of the drawing - exported, copied, rendered, a talk's - are drawn at
+their own sizes, whichever is chosen.
+
 ## Styles in 3D
 
 Built in lane L5 on 2026-10-10. The maintainer's ruling: a molecule in 3D
@@ -1138,10 +1180,25 @@ space-filling side by side is better science than either alone.
   and *Greys*, each element a grey as light as its Jmol colour (its
   relative luminance), for figures printed in black and white - and
   *Pastel*, each element's Jmol colour taken two fifths of the way to
-  white. Over the
-  set, any element can be given a colour of its own, marked, and set back
-  to the set's one at a time. A style's sticks coloured by their atoms
-  take each half's colour from its atom.
+  white. Every set gives each of the 118 elements a colour; darmstadtium
+  to oganesson (110 to 118) are a light grey (#cccccc, Pastel's paler) in
+  every set. A style's sticks coloured by their atoms take each half's
+  colour from its atom.
+- **Atom colours** (the maintainer, 2026-10-16: every element, not a fixed
+  few). Over its colour set, a style can give any element a colour of its
+  own, under *Atom colours* in Settings: the periodic table of all 118, as
+  the IUPAC's table lays it out (18 groups; group 3 of periods 6 and 7
+  holding the lanthanoids' and the actinoids' places, the two series in
+  rows of 15 below), each cell filled with the element's colour as the
+  style draws it, its symbol in black or white, whichever reads more
+  (lib/chem/periodicTable, `inkOn`); and the elements most drawn - H, C,
+  N, O, F, P, S, Cl, Br, I, B, Si - in a row above it. A click on a cell
+  opens the colour picker. A changed cell is ringed in the accent; it is
+  set back to the colour set's from its right-click menu, or from the line
+  under the table, which names the element last chosen (*Ruthenium (Ru,
+  44)*, its colour) - and all at once from *Back to Jmol's colours (n)*
+  beside the heading. Where the column is narrow, the table scrolls inside
+  its own box; the page does not.
 - **Multiple bonds** (the maintainer, 2026-10-15). A style draws a double
   or triple bond as two or three thinner lines side by side, or as one
   stick, as thick as a single bond - Outlined's, as its reference draws
@@ -1159,6 +1216,35 @@ space-filling side by side is better science than either alone.
   primary, Use as secondary, Duplicate, Export style… - and, for the user's
   own, Rename and Delete. A built-in style's changes are kept apart,
   marked, and taken back by Reset; the user's own is set as a whole.
+- **A workspace's styles in 3D** (the maintainer, 2026-10-16: as a
+  workspace carries its drawing style). A workspace is drawn in its own
+  primary and secondary, fixed as it is made - Settings' then, each whole:
+  a built-in style with what was changed of it, or one of the user's own -
+  and from then on changed only from it: Settings' are for new workspaces
+  (lib/chem/workspaceStyle3d). Its file carries them whole (FILE-IO.md,
+  *The workspace file*), so it opens the same on any computer. A
+  right-click on empty space, *Styles…*, opens the workspace's styles: its
+  drawing style, and under *Molecules in 3D* the same slots and cards as
+  Settings' page - its two in the slots, Settings' styles below, and one
+  it carries that this computer's Settings has none like (made on another
+  computer, or changed in Settings since) on a card of its own, *In this
+  workspace*. A style dragged onto a slot, or given a role from its menu,
+  becomes the workspace's as it is now, whole - one step to undo, a result
+  set its molecules no longer fit laid out again in the same step - and
+  the molecules go over to it: each number and colour of the looks eased
+  from what it was (ball size, bond thickness, lines, atoms' colours), the
+  rest at once, as a change of drawing style eases its bond (at once past
+  20 000 atoms). Duplicate copies a style - a carried one too - into the
+  user's own; Rename acts on the user's style alone; nothing is deleted
+  from here. **What travels with it** (the lane's call, 2026-10-16): what
+  changes the picture - the light from all round and from above right,
+  the shadows, an orbital's colours and how ribbons are coloured, set
+  under the cards, one step each; how a drag turns a molecule and how it
+  coasts, and how a very large drawing is drawn lighter, are the
+  viewer's, and stay in Settings. Talks, pictures and files exported, and
+  a render asked for *as the canvas draws it* follow the workspace's
+  styles. A workspace saved before they were carried opens in Settings'
+  as they are then, and keeps them.
 - **Two roles.** One style is the primary - every molecule's look to
   begin with - and one the secondary. Each style's card in Settings says
   which it is; giving a style the other's role swaps the two, so the

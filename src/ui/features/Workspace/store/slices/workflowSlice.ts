@@ -4,7 +4,7 @@ import type { DocumentStore } from "../../../../../lib/doc";
 import { valuesOf } from "../../../../../lib/options";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import type { WorkspaceDocument } from "../../document";
-import { currentStyle3D } from "../../style3d";
+import { style3dOf } from "../../style3d";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
 import { styleOf } from "../../../../../lib/chem/style";
@@ -32,14 +32,14 @@ export const stepRole = (kind: StepKind, by: string) => `step:${by}:${kind}`;
  */
 export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState) {
   const coalesce = (what: string, id: number, gesture?: string) => (gesture ? gestureStep(`${what}:${id}:${gesture}`) : {});
-  const { forgetJobs, ...runs } = createStepRuns(doc, set, get, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, currentStyle3D(), turn) });
+  const { forgetJobs, ...runs } = createStepRuns(doc, set, get, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, style3dOf(get()), turn) });
   return {
     ...runs,
     forgetStepJobs: forgetJobs,
     setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => set(patch),
     fitResultSets: () => {
       // (each molecule's reach worked out once, however many of the history's states hold it)
-      const style = currentStyle3D();
+      const style = style3dOf(get());
       const { turns3d } = get();
       const reach = new WeakMap<object, Frame>();
       const extentOf: RunWith["extentOf"] = (m, turn) => {
@@ -51,7 +51,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) =>
       // (in free space nearest where it was asked for, as a file opened goes: utils/freePlace)
       doc.edit("place structures", (d) =>
-        placeAsSet(d, ms, at, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, currentStyle3D(), turn) }, (width, height) =>
+        placeAsSet(d, ms, at, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, style3dOf(get()), turn) }, (width, height) =>
           freePlace(pageBoxes(get(), styleOf(get().docStyle)), { x0: -width / 2, x1: width / 2, y0: -height / 2, y1: height / 2 }, at, NOMINAL_BOND_LENGTH),
           name,
         ),

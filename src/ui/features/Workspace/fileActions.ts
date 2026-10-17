@@ -23,7 +23,7 @@ import { carriedOf, isWorkspaceFile, workspaceFile } from "./utils/workspace";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE } from "./chem/marks";
-import { currentStyle3D } from "./style3d";
+import { style3dOf } from "./style3d";
 import { withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
@@ -37,6 +37,7 @@ import { writePdb } from "../../../lib/chem/pdb";
 import { firstFreeBeside, takenBeside } from "../../../lib/io/beside";
 import { greatest, least } from "../../../lib/chem/lists";
 import { layoutByStructure, structureLayouts } from "../../../lib/chem/layoutStructures";
+import { STYLE_3D, type Style3D } from "../../../lib/chem/style3d";
 
 /** A file's name without its folder. */
 export function fileNameOf(path: string): string {
@@ -139,12 +140,12 @@ export function suggestedExportPath(
  * shows, or in every frame. A cage drawn in perspective is given the wedges
  * that say its stereochemistry, which the file has no other way to hold.
  */
-export function structureFileText(drawn: Drawn, path: string, options: OptionValues = {}): string {
+export function structureFileText(drawn: Drawn, path: string, options: OptionValues = {}, style3d: Style3D = STYLE_3D): string {
   const title = stem(path);
   const version = options.version === "V3000" ? "V3000" : "auto";
   // (of a stack of drawings, the record it shows - but in an SD file, every record: utils/stacks)
   if (/\.rxn$/i.test(path)) return reactionFileText(seenDrawing(drawn), title, version);
-  if (/\.pdb$/i.test(path)) return pdbFileText(drawn.molecules3d ?? [], options);
+  if (/\.pdb$/i.test(path)) return pdbFileText(drawn.molecules3d ?? [], options, style3d);
   if (!/\.sdf$/i.test(path)) return writeMolfile(forFlatReaders(seenDrawing(drawn)), { title, version });
   // an SD file: the drawing, each record of a stack of drawings a record of
   // its own, titled as its file titled it, and each molecule in 3D a record of its own,
@@ -183,7 +184,7 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
  * (utils/written `writtenAtoms`). The file's CONECT records serve every
  * model: the first model's bonds. Throws where there are none.
  */
-export function pdbFileText(molecules: readonly Carried3D[], options: OptionValues = {}): string {
+export function pdbFileText(molecules: readonly Carried3D[], options: OptionValues = {}, style3d: Style3D = STYLE_3D): string {
   if (!molecules.length) throw new Error("There are no molecules in 3D to write: a PDB file holds no drawing.");
   const framesOf = (m: Carried3D) => 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
   const count = options.frames === "all" ? greatest(molecules.map(framesOf)) : 1;
@@ -191,7 +192,7 @@ export function pdbFileText(molecules: readonly Carried3D[], options: OptionValu
   const models = Array.from({ length: count }, (_, i) =>
     molecules.map((m) => {
       const frame = options.frames === "all" && i < framesOf(m) ? i : m.frame;
-      return { atoms: writtenAtoms(m, frame, placed), bonds: bondsAt(m, frame) };
+      return { atoms: writtenAtoms(m, frame, placed, style3d), bonds: bondsAt(m, frame) };
     }),
   );
   return writePdb(models);
@@ -231,7 +232,7 @@ export function exportPxPerWorld(style: DrawingStyle): number {
  */
 export function drawingLayout(
   model: Drawn,
-  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings">,
+  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>,
   style: DrawingStyle,
 ): { layout: Layout; opts: LayoutOptions } {
   const atoms = model.atoms.map((a) => ({
@@ -362,7 +363,7 @@ export function drawingLayout(
     );
   }
   // and molecules in 3D, as they are seen, over it
-  const solids = (model.molecules3d ?? []).flatMap((m) => pictureMarks(m, currentStyle3D()));
+  const solids = (model.molecules3d ?? []).flatMap((m) => pictureMarks(m, style3dOf(aromatic)));
   if (solids.length) {
     layout.solids = solids;
     const xs: number[] = [];
@@ -378,7 +379,7 @@ export function drawingLayout(
     }
     // (and as far as the surface each shows reaches - a lobe past its atoms)
     for (const m of model.molecules3d ?? []) {
-      const b = pictureSurface(m, currentStyle3D())?.bounds;
+      const b = pictureSurface(m, style3dOf(aromatic))?.bounds;
       if (b) {
         xs.push(b.min.x, b.max.x);
         ys.push(b.min.y, b.max.y);
@@ -390,9 +391,9 @@ export function drawingLayout(
   // drawing's R and S, and clear of the atoms
   const markSize = (opts.units === "px" ? opts.fontPx / layout.zoom : opts.fontPx) * MARK_SCALE;
   const family = labelSetOf(opts).fontFamily;
-  const measures = (model.molecules3d ?? []).flatMap((m) => measurePictureMarks(m, currentStyle3D(), markSize, undefined, family));
+  const measures = (model.molecules3d ?? []).flatMap((m) => measurePictureMarks(m, style3dOf(aromatic), markSize, undefined, family));
   // and over each, what it says of itself: its hydrogens hidden or not in its file, its bond orders not known
-  for (const m of model.molecules3d ?? []) measures.push(...notePictureMarks(m, currentStyle3D(), markSize));
+  for (const m of model.molecules3d ?? []) measures.push(...notePictureMarks(m, style3dOf(aromatic), markSize));
   if (measures.length) {
     layout.measures = measures;
     const xs: number[] = [];
@@ -418,7 +419,7 @@ export function drawingLayout(
  */
 export function drawingSvg(
   model: Drawn,
-  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings">,
+  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>,
   style: DrawingStyle,
   seen = false,
 ): string {
@@ -428,7 +429,7 @@ export function drawingSvg(
   if (seen) {
     try {
       // (at the resolution copied pictures are made at)
-      withSolidsImage(seenOnly(model.molecules3d ?? []), layout, currentStyle3D(), useAppSettings.getState().pictures.dpi);
+      withSolidsImage(seenOnly(model.molecules3d ?? []), layout, style3dOf(aromatic), useAppSettings.getState().pictures.dpi);
     } catch {
       // (the marks, then)
     }
@@ -524,7 +525,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
           if (!plugin) throw new Error(`${writer.name} is written by a plugin Meno does not know of.`);
           const chosen = carriedOf(state).filter((_, i) => molecules.includes(state.molecules3d[i].id));
           if (!chosen.length) throw new Error(`There is no molecule in 3D to write as ${writer.name}.`);
-          const text = await (await readerClient(plugin)).write(writer.id, fileNameOf(path), [writtenOf(chosen)], options);
+          const text = await (await readerClient(plugin)).write(writer.id, fileNameOf(path), [writtenOf(chosen, style3dOf(state))], options);
           await writeTextFile(path, text);
           return;
         }
@@ -535,7 +536,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
           // The style the canvas is drawn in: the document's own, or the app's.
           const style = styleOf(state.docStyle);
           await writeTextFile(path, drawingSvg(drawn, state, style, true));
-        } else await writeTextFile(path, structureFileText(drawn, path, options));
+        } else await writeTextFile(path, structureFileText(drawn, path, options, style3dOf(state)));
       }),
     [attempt, store],
   );

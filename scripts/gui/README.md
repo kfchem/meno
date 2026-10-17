@@ -48,8 +48,8 @@ leaves the rest of the file as it is. `-Guide` skips that, to see the
 guide itself. Back up `settings.json` before a run and put that copy back
 after it, as before: the copy is the one without the change, so the guide
 is still to come in the real settings. The file is
-`~/Library/Application Support/com.kfchem.meno/settings.json` on a Mac and
-`%APPDATA%\com.kfchem.meno\settings.json` on Windows.
+`~/Library/Application Support/Meno/settings.json` on a Mac and
+`%APPDATA%\Meno\settings.json` on Windows.
 
 ## What it needs
 

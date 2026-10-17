@@ -31,6 +31,8 @@ fontdb = "0.24"
 ttf-parser = "0.25.1"
 tokio = { version = "1", features = ["net", "io-util", "time", "sync", "rt", "macros"] }
 tauri-plugin-updater = "2"
+# Meno's folders found before Tauri is built, as Tauri finds them (src/folders.rs)
+dirs = "7"
 # Fetching the tools that make Python environments (src/tools.rs): the
 # crates the updater already brings, with its TLS
 reqwest = { version = "0.13", default-features = false, features = ["rustls-no-provider"] }

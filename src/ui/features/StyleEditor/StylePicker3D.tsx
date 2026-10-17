@@ -32,6 +32,11 @@ import { keptPicture3d, useStylePicture3d } from "./stylePicture3d";
  * the two change places - each card going where it goes, not jumping. A
  * press on a card, or Enter on it, sets that style below; a right-click, or
  * the menu key, offers what can be done with it.
+ *
+ * A workspace's (`carried`, Workspace/Styles3DPart): its own two in the
+ * slots, Settings' styles below, and - where it carries a style Settings
+ * has none like - that one, on a card of its own, *In this workspace*;
+ * nothing deleted from here.
  */
 export default function StylePicker3D({
   choice,
@@ -39,6 +44,7 @@ export default function StylePicker3D({
   editing,
   onEdit,
   onChange,
+  carried,
 }: {
   choice: Style3DChoice;
   /** The 3D style the choice comes to: what the slots' molecules are drawn in. */
@@ -46,6 +52,8 @@ export default function StylePicker3D({
   editing: string;
   onEdit: (id: string) => void;
   onChange: (next: Style3DChoice) => void;
+  /** A workspace's styles: the cards of the styles it carries that Settings has none like. */
+  carried?: ReadonlySet<string>;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const slots = useRef<Record<Role3D, HTMLElement | null>>({ primary: null, secondary: null });
@@ -132,7 +140,8 @@ export default function StylePicker3D({
   });
 
   const roleOf = (id: string): Role3D | null => (choice.primary === id ? "primary" : choice.secondary === id ? "secondary" : null);
-  const own = (id: string) => choice.own.some((o) => o.id === id);
+  // (the user's own: a workspace's carried ones are not, and are neither renamed nor deleted)
+  const own = (id: string) => choice.own.some((o) => o.id === id) && !carried?.has(id);
   const changed = (id: string) => Object.keys(choice.looks[id] ?? {}).length > 0;
   const name = (id: string) => (
     <Name
@@ -182,6 +191,7 @@ export default function StylePicker3D({
                   <span className="min-w-0 flex-1 text-sm font-medium text-gh-black truncate">{name(id)}</span>
                   {changed(id) && <span className="text-accel-base" title="Changed">•</span>}
                 </div>
+                {carried?.has(id) && <div className="px-3 text-[11px] leading-snug text-gh-gray">In this workspace</div>}
                 {/* (the molecule live in it: turned by a drag on it, as on the canvas - the card moved by its name) */}
                 <div className="h-44" onPointerDown={(e) => e.stopPropagation()}>
                   <Preview3D style={style} look={role} />
@@ -192,8 +202,9 @@ export default function StylePicker3D({
         })}
       </div>
       <p className="mt-1.5 text-[11px] text-gh-gray">
-        Drag a style onto Primary or Secondary to use it there, or one onto the other to swap them. Right-click a style to duplicate it, and
-        to rename or delete one of your own.
+        {carried
+          ? "Drag a style onto Primary or Secondary to use it in this workspace, or one onto the other to swap them. Right-click a style to duplicate it into your own."
+          : "Drag a style onto Primary or Secondary to use it there, or one onto the other to swap them. Right-click a style to duplicate it, and to rename or delete one of your own."}
       </p>
       <div className="mt-3 grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-2" role="list" aria-label="Styles">
         {listed.map((s) => (
@@ -218,7 +229,7 @@ export default function StylePicker3D({
                 {changed(s.id) && <span className="text-accel-base" title="Changed">•</span>}
               </div>
               {/* (as the colour sets in General say it) */}
-              <div className="text-[11px] leading-snug text-gh-gray">{s.own ? "Your own" : "Built in"}</div>
+              <div className="text-[11px] leading-snug text-gh-gray">{carried?.has(s.id) ? "In this workspace" : s.own ? "Your own" : "Built in"}</div>
             </div>
           </div>
         ))}
@@ -261,6 +272,7 @@ export default function StylePicker3D({
           menu={menu}
           role={roleOf(menu.id)}
           own={own(menu.id)}
+          deletable={!carried}
           onClose={() => {
             const at = root.current?.querySelector<HTMLElement>(`[data-flip="${CSS.escape(menu.id)}"]`);
             setMenu(null);
@@ -356,6 +368,7 @@ function StyleMenu({
   menu,
   role,
   own,
+  deletable,
   onClose,
   onUse,
   onDuplicate,
@@ -366,6 +379,7 @@ function StyleMenu({
   menu: Menu;
   role: Role3D | null;
   own: boolean;
+  deletable: boolean;
   onClose: () => void;
   onUse: (role: Role3D) => void;
   onDuplicate: () => void;
@@ -373,7 +387,7 @@ function StyleMenu({
   onRename: () => void;
   onDelete: () => void;
 }) {
-  return <CardMenu at={menu} label="Style" onClose={onClose} items={styleMenuItems3d(role, own, { onUse, onDuplicate, onExport, onRename, onDelete })} />;
+  return <CardMenu at={menu} label="Style" onClose={onClose} items={styleMenuItems3d(role, own, { onUse, onDuplicate, onExport, onRename, ...(deletable ? { onDelete } : {}) })} />;
 }
 
 

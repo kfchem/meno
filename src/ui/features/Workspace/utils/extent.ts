@@ -23,7 +23,7 @@ function arrowBox(a: Parameters<typeof arrowPoints>[0]): { x0: number; y0: numbe
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { editorLayoutOptions, layoutBonds } from "../layoutOptions";
-import { currentStyle3D } from "../style3d";
+import { style3dOf } from "../style3d";
 import type { EditorState } from "../store/types";
 import { lookOf, poseOf, seenBounds, solidOf } from "./molecule3d";
 import { cornersOf } from "./selection";
@@ -38,7 +38,7 @@ type Selected = Pick<
   EditorState,
   "model" | "sel" | "sel3d" | "selCaptions" | "selArrows" | "selPluses" | "selPictures" | "selPdfs" | "selTexts" | "selSlides" | "selShapes" | "selInks" | "arrows" | "pluses" | "captions" | "molecules3d" | "turns3d" | "frames3d" | "pictures" | "pdfs" | "texts" | "slides" | "shapes" | "inks"
 > &
-  Partial<Pick<EditorState, "selCycles" | "cycles">>;
+  Partial<Pick<EditorState, "selCycles" | "cycles" | "docStyle3d">>;
 
 /** The box round what is selected, as it is drawn - or null with nothing selected. `zoom`: the view's (labels' sizes do not depend on it). */
 export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeight?: number, frames = false): Box | null {
@@ -78,7 +78,7 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
     take(c.x - set.halfW, c.y - set.halfH, c.x + set.halfW, c.y + set.halfH);
   }
   // the molecules in 3D, as each is turned and shown now
-  const style3d = currentStyle3D();
+  const style3d = style3dOf(st);
   for (const m of st.molecules3d) {
     if (!st.sel3d.has(m.id)) continue;
     const pose = poseOf(m, solidOf(m, style3d), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]);
@@ -156,7 +156,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
     const set = wordsSet(c, opts, labelSetOf(opts));
     out.push({ x0: c.x - set.halfW, y0: c.y - set.halfH, x1: c.x + set.halfW, y1: c.y + set.halfH });
   }
-  const style3d = currentStyle3D();
+  const style3d = style3dOf(st);
   for (const m of st.molecules3d) {
     if (st.sel3d.has(m.id)) continue;
     const pose = poseOf(m, solidOf(m, style3d), lookOf(m), st.turns3d[m.id], st.frames3d[m.id]);

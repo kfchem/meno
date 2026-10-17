@@ -92,11 +92,12 @@ installed yourself are used where they are; Meno never downloads them.
 - **Mac**: drag Meno from Applications to the Bin.
 
 Meno keeps its settings, its plugins' Python environments and downloads, and
-calculation jobs in its own folder: `~/Library/Application Support/com.kfchem.meno`
-on a Mac. On Windows the settings are in `%APPDATA%\com.kfchem.meno`, and the
-rest, which is large and of this computer alone, in
-`%LOCALAPPDATA%\com.kfchem.meno`. Delete those folders to remove them too. Your
-own files are wherever you saved them.
+calculation jobs in its own folder: `~/Library/Application Support/Meno` on a
+Mac, with what it keeps of PDFs and downloaded ligand data in
+`~/Library/Caches/Meno`. On Windows the settings are in `%APPDATA%\Meno`, and the
+rest, which is large and of this computer alone, in `%LOCALAPPDATA%\Meno\data`.
+Delete those folders to remove them too. Your own files are wherever you saved
+them.
 
 ## What Meno does
 
@@ -210,6 +211,8 @@ The outlines Meno places Arial labels by before the system's own Arial has been 
 The wordmark's letters (`site/assets/wordmark*.svg`) are drawn from Orbitron, © The Orbitron Project Authors, licensed under the SIL Open Font License 1.1; see [`site/assets/fonts/Orbitron-OFL.txt`](./site/assets/fonts/Orbitron-OFL.txt). The website carries IBM Plex as the app does.
 
 Meno reads and draws PDFs with PDFium, © The PDFium Authors, licensed under the BSD 3-Clause License (some files under the Apache License 2.0), as built by [`bblanchon/pdfium-binaries`](https://github.com/bblanchon/pdfium-binaries) (MIT). The app carries PDFium's library unchanged, and its licences and those of what it is built with - FreeType, HarfBuzz, ICU, libjpeg-turbo, OpenJPEG, libpng, zlib, Little CMS, Abseil, Anti-Grain Geometry, dragonbox, fast_float, simdutf and LLVM's libc - as `src-tauri/resources/licenses/PDFium-*`. Meno reaches it through the Rust crate pdfium-render, by Alastair Carey, licensed under the MIT License or the Apache License 2.0 and taken under the MIT License ([`src-tauri/resources/licenses/pdfium-render-MIT.txt`](./src-tauri/resources/licenses/pdfium-render-MIT.txt)). This software is based in part on the work of the Independent JPEG Group. Portions of this software are copyright © The FreeType Project (www.freetype.org). All rights reserved.
+
+Meno's reaction atom mapper (`src/lib/chem/accelMapper.ts`) is ported from ACCeL, © 2021 Keisuke Fukaya, licensed under the MIT License, with its author's permission; see [`src-tauri/resources/licenses/ACCeL-MIT.txt`](./src-tauri/resources/licenses/ACCeL-MIT.txt), which the app carries with it.
 
 The Blender plugin (`src-tauri/resources/plugins/blender/`), which renders pictures and films of molecules with Blender, is licensed under the **GNU General Public License, version 3 or later**, as a script using Blender's Python API must be; see [`src-tauri/resources/plugins/blender/LICENSE`](./src-tauri/resources/plugins/blender/LICENSE). It stands apart from the rest of Meno, which takes nothing from it and speaks to it only through files and arguments. Blender itself, under its own licence (GPL-3.0-or-later), is never shipped with Meno: its official build is fetched by Meno as the plugin is set up, for Meno's own use, as [`docs/PLUGINS.md`](./docs/PLUGINS.md) (*A program Meno fetches*) sets out.
 

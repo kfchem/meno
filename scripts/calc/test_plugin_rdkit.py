@@ -315,3 +315,88 @@ class EquivalentAtoms(unittest.TestCase):
         self.assertEqual(text.count("settle_equivalents(mol, kept)"), 1)
         for other in ("cclib", "pyscf", "xtb", "crest", "orca", "gaussian"):
             self.assertNotIn("settle_equivalents", (ROOT / "src-tauri/resources/plugins" / other / "worker.py").read_text(encoding="utf-8"))
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class Metals(unittest.TestCase):
+    """A metal's bonds come out at their lengths, and its shape as UFF has it - or, where UFF has no type for it, as
+    a lighter metal of its group shapes it, with no energies; never pushed off, as UFF with no terms for it did."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles, count=10):
+        return self.worker.conformers(Chem.MolFromSmiles(smiles), count=count)
+
+    def lengths_and_angles(self, entry, frame, symbol):
+        import math
+        import numpy as np
+        P = np.array(entry["frames"][frame]).reshape(-1, 3)
+        m = next(i for i, a in enumerate(entry["atoms"]) if a["el"] == symbol)
+        near = {b["a2"] if b["a1"] == m else b["a1"]: b for b in entry["bonds"] if m in (b["a1"], b["a2"])}
+        lengths = {j: float(np.linalg.norm(P[j] - P[m])) for j in near}
+        ids = sorted(near)
+        angles = sorted(
+            math.degrees(math.acos(max(-1.0, min(1.0, float(np.dot(P[i] - P[m], P[j] - P[m]) / lengths[i] / lengths[j])))))
+            for x, i in enumerate(ids) for j in ids[x + 1:]
+        )
+        return {entry["atoms"][j]["el"]: round(d, 2) for j, d in lengths.items()}, angles, lengths
+
+    def test_closes_a_palladacycle_through_the_metal(self):
+        # (the maintainer's: a ring of fifteen closed through Pd - UFF without a type for Pd put it 8 to 25 A away)
+        entry = self.made("C1CCCCCCCCCCCC(C)C[Pd]1")
+        for f in range(len(entry["frames"])):
+            _, angles, lengths = self.lengths_and_angles(entry, f, "Pd")
+            for d in lengths.values():
+                self.assertAlmostEqual(d, 2.08, delta=0.1)
+        self.assertEqual(entry["field"], "UFF")
+        self.assertTrue(entry["energies"])
+
+    def test_makes_a_square_planar_palladium(self):
+        entry = self.made("Cl[Pd](Cl)(P(C)(C)C)P(C)(C)C")
+        lengths, angles, _ = self.lengths_and_angles(entry, 0, "Pd")
+        self.assertAlmostEqual(lengths["Cl"], 2.32, delta=0.06)
+        self.assertAlmostEqual(lengths["P"], 2.41, delta=0.06)
+        self.assertGreater(angles[-1], 165)
+        self.assertGreater(angles[-2], 165)
+        self.assertTrue(all(80 < a < 100 for a in angles[:4]), angles)
+
+    def test_makes_an_octahedral_iron(self):
+        entry = self.made("Cl[Fe-3](Cl)(Cl)(Cl)(Cl)Cl", count=3)
+        _, angles, _ = self.lengths_and_angles(entry, 0, "Fe")
+        self.assertTrue(all(85 < a < 95 for a in angles[:12]), angles)
+        self.assertTrue(all(a > 170 for a in angles[12:]), angles)
+
+    def test_shapes_a_ruthenium_carbene_with_iron_standing_in_and_gives_no_energies(self):
+        # (a Grubbs-type catalyst: UFF has no type RDKit can give Ru - it stopped on a missing parameter)
+        entry = self.made("Cl[Ru](Cl)(=Cc1ccccc1)(P(C)(C)C)P(C)(C)C", count=5)
+        self.assertNotIn("energies", entry)
+        lengths, angles, _ = self.lengths_and_angles(entry, 0, "Ru")
+        self.assertAlmostEqual(lengths["Cl"], 2.24, delta=0.08)
+        self.assertAlmostEqual(lengths["P"], 2.36, delta=0.1)
+        self.assertGreater(angles[-1], 160)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertIn("Fe standing in for Ru", rows["Optimised"])
+        self.assertIn("no parameters for Ru", rows["Energies"])
+
+    def test_says_where_nothing_could_be_optimised(self):
+        # (osmium with eight bonds: no geometry of UFF's fits it, so none stands in)
+        mol = Chem.MolFromSmiles("Cl[Os](Cl)(Cl)(Cl)(Cl)(Cl)(Cl)Cl")
+        if mol is None:
+            self.skipTest("RDKit read no eight-bonded osmium here")
+        entry = self.worker.conformers(mol, count=2)
+        self.assertNotIn("energies", entry)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertTrue(rows["Optimised"].startswith("not: no force field here has parameters for Os"), rows)
+
+    def test_holds_the_same_radii_as_the_app(self):
+        import re
+        text = (ROOT / "src/lib/chem/elements.ts").read_text(encoding="utf-8")
+        app = {
+            sym: tuple(None if v.strip() == "null" else int(v) for v in r.split(","))
+            for sym, r in re.findall(r'symbol: "(\w+)",[^\n]*?radii: \[([^\]]*)\]', text)
+        }
+        self.assertEqual(self.worker.RADII, app)

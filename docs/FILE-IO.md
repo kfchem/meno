@@ -571,6 +571,15 @@ work.meno (zip)
   column of texts (*Show <name>*); where it is held nowhere, it is read
   again where it was, or else the system's dialog asks for it
   (*Find <name>*).
+- **A workspace's styles are kept in it**: its drawing style (`style`,
+  docs/WORKSPACE.md, *Drawing style*) and its styles in 3D (`style3d`,
+  *Styles in 3D*) - `primary` and `secondary`, each `{ id, name, look }`
+  with the whole of its look (a built-in style's id, or one of the user's
+  own, `own-` and a UUID), and `scene`, the light it is seen in
+  (`ambientLight`, `keyLight`, `shadows`, `surfacePlus`, `surfaceMinus`,
+  `ribbonColours`). So it opens the same on any computer. A file saved
+  without `style3d` - before workspaces carried them, or a procedure's -
+  opens in Settings' styles in 3D as they are then, and keeps them.
 - **A workspace's texts are kept in it too** (the maintainer, 2026-10-07:
   held in the workspace, editable, written back by Export). Each is a file
   kept, `text/plain`, by its SHA-256 - one that is an output's words kept
@@ -679,7 +688,7 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
   `tauri icon`, the `.icns` put together by `iconutil`, the `.ico` written
   with its images as PNGs.
 - **macOS** (`src-tauri/Info.plist`, merged by Tauri into the app's own):
-  Meno exports the type `com.kfchem.meno.workspace` - extension `meno`,
+  Meno exports the type `dev.kfchem.meno.workspace` - extension `meno`,
   media type `application/vnd.kfchem.meno+zip`, described as "Meno
   workspace" - and opens it as its owner (`LSHandlerRank` Owner, role
   Editor), the document's icon in the app's `Resources`

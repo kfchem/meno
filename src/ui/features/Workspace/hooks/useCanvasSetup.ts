@@ -23,7 +23,7 @@ export function useCanvasSetup(
       camRef.current = state.camera as THREE.OrthographicCamera | THREE.PerspectiveCamera;
       domRef.current = canvas;
 
-      // The canvas `dpr` prop owns the pixel ratio (CANVAS_DPR); overriding it
+      // The canvas `dpr` prop owns the pixel ratio (canvasRatio); overriding it
       // here made the renderer disagree with it.
     },
     [camRef, domRef],
