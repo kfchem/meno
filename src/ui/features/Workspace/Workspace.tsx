@@ -1829,6 +1829,11 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          keepInFile={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.made ? { kept: set.keep !== false, set: (keep: boolean) => store.getState().keepSet(set.id, keep) } : undefined;
+          })()}
           onUseAsInput={menu.selection === "here" && selectionAsSet() ? () => {
             const frame = selectionAsSet();
             if (!frame) return;

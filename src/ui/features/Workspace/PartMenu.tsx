@@ -169,6 +169,7 @@ export default function PartMenu({
   onReadStructure,
   text,
   onSaveProcedure,
+  keepInFile,
   onUseAsInput,
   onSaveAbbreviation,
   onExport,
@@ -273,6 +274,8 @@ export default function PartMenu({
   text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
+  /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
+  keepInFile?: { kept: boolean; set: (keep: boolean) => void };
   /** The selection made a set, a workflow's input; unset, where it holds no whole structure or molecule in 3D. */
   onUseAsInput?: () => void;
   /** The selection saved as an abbreviation of the user's own. */
@@ -641,7 +644,11 @@ export default function PartMenu({
           del("Delete cycle"),
         ]
       : target.kind === "set"
-      ? [del("Delete set"), ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : [])]
+      ? [
+          del("Delete set"),
+          ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : []),
+          ...(keepInFile ? [{ name: "Don't keep in the file", keys: "", run: () => keepInFile.set(!keepInFile.kept), checked: !keepInFile.kept, divider: true }] : []),
+        ]
       : target.kind === "step"
       ? [
           ...(step?.onStop
