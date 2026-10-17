@@ -197,7 +197,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
   const ts = wordsOf(lines);
   const bohrAll = lines.some(saysBohr) && !SAYS_ANGSTROM.test(text);
   // every atom written, in turn - but a crystal's, its place a fraction of its cell's edges: on a line with a value's
-  // uncertainty in brackets ("0.29323 (15)") or a displacement marked as a hydrogen's ("0.021*"), as a crystal structure's
+  // uncertainty in brackets ("0.41270 (14)") or a displacement marked as a hydrogen's ("0.037*"), as a crystal structure's
   // tables print them
   const recs: Rec[] = [];
   for (let i = 0; i < ts.length; ) {

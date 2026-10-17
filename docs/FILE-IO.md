@@ -104,8 +104,8 @@ text*).
   foot); from a PDF, besides, a line near a page's top or foot set there on
   another page too, its numbers aside. And what only looks like atoms:
   a crystal structure's table - fractions of its cell, on lines with a
-  value's uncertainty in brackets (`0.29323 (15)`) or a hydrogen's
-  displacement starred (`0.021*`); a table of positions numbered 1, 2, 3
+  value's uncertainty in brackets (`0.41270 (14)`) or a hydrogen's
+  displacement starred (`0.037*`); a table of positions numbered 1, 2, 3
   with values beside them (an NMR table's shifts), atoms written by
   atomic numbers that count up one by one as no molecule's do; and a lone
   atom met among a text's words or another table's numbers (an elemental

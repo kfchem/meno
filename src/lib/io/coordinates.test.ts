@@ -182,7 +182,7 @@ describe("coordinates in a text", () => {
 
   it("reads no lone atom met among a text's words or another table's numbers - but one said to be a structure", () => {
     // (an elemental analysis, a peak list with the page's number set in it)
-    expect(read(lines("Elemental analysis calculated (%):", "C 61.250 H 5.140 N 8.930", "found C 61.180 H 5.200 N 8.870."))).toEqual([]);
+    expect(read(lines("Combustion analysis, calculated (%):", "C 61.250 H 5.140 N 8.930", "found C 61.180 H 5.200 N 8.870."))).toEqual([]);
     expect(read(lines("1H NMR peaks", "7.2512 7.2488 7.2401 S9 4.1123 4.1019 4.0915 1.2534 1.2411"))).toEqual([]);
     const [ion] = read(lines("Chloride", "E = -460.123456 Hartree", "-1 1", "Cl 0.000000 0.000000 0.000000"));
     expect([ion.name, ion.atoms.length, ion.charge]).toEqual(["Chloride", 1, -1]);
@@ -192,11 +192,11 @@ describe("coordinates in a text", () => {
     const table = [
       "Fractional atomic coordinates and isotropic displacement parameters",
       "x y z Uiso*/Ueq",
-      "C1 0.51234 (12) 0.43210 (9) 0.21098 (8) 0.0201 (3)",
-      "C2 0.60123 (12) 0.38765 (9) 0.27654 (8) 0.0195 (3)",
-      "H2A 0.6512 0.4401 0.3012 0.023*",
-      "H2B 0.6623 0.3502 0.2401 0.023*",
-      "O3 0.55432 (10) 0.29876 (7) 0.33210 (6) 0.0221 (2)",
+      "C1 0.51234 (12) 0.43210 (9) 0.21098 (8) 0.02137 (3)",
+      "C2 0.60123 (12) 0.38765 (9) 0.27654 (8) 0.02083 (3)",
+      "H2A 0.65713 0.4401 0.3043 0.0467*",
+      "H2B 0.6623 0.3502 0.2401 0.0467*",
+      "O3 0.55432 (10) 0.29876 (7) 0.33176 (6) 0.02311 (2)",
     ];
     expect(read(lines(table))).toEqual([]);
   });
