@@ -12,8 +12,6 @@ import type { Carried3D, Molecule3D } from "./store/types";
 import { backToFront } from "./utils/backToFront";
 import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersShownOn } from "./utils/atomNumbers";
-// TEMPORARY - to be removed before merge (utils/numbersLook)
-import { numbersLook } from "./utils/numbersLook";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
 import { watchShaderErrors } from "./utils/menoShader";
@@ -244,8 +242,6 @@ export function rendered3d(
         ball.setAttribute("ballNumber", new THREE.InstancedBufferAttribute(nums, 1));
         ball.setAttribute("ballNumberPlace", new THREE.InstancedBufferAttribute(Float32Array.from({ length: 4 * m.atoms.length }, (_, k) => (k % 4 === 3 ? on[k >> 2] : at[3 * (k >> 2) + (k % 4)])), 4));
         ao.numbers.shown.value = 1;
-        // TEMPORARY - to be removed before merge: the way chosen by hand (utils/numbersLook)
-        ao.numbers.look.value = numbersLook();
         ao.numbers.pxPer.value = pxPerWorld;
         ao.numbers.least.value = NUMBER_LEAST_PX * cssPx;
         ao.numbers.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;

@@ -28,8 +28,6 @@ import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
 import { ballLinesOf, ballNumbersOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
-// TEMPORARY - to be removed before merge: the two ways of drawing atom numbers, switched by hand (utils/numbersLook)
-import { numbersLook, onNumbersLook } from "../utils/numbersLook";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
@@ -653,8 +651,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   }, [cardShown, card, invalidate]);
 
   useEffect(() => invalidate(), [lit, selected, look, frame, turn, props.atomNumbers, invalidate]);
-  // TEMPORARY - to be removed before merge: drawn again as the way of drawing atom numbers is switched (utils/numbersLook)
-  useEffect(() => onNumbersLook(invalidate), [invalidate]);
 
   // (before the labels' Html places them, so that they are placed where the
   // atoms are drawn this frame, not the one before: FRAME_ORDER)
@@ -1119,7 +1115,6 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       let any = false;
       for (let i = 0; i < n && !any; i++) any = want[i] === 1 || sc.now[4 * i + 3] > 0;
       bn.shown.value = any ? 1 : 0;
-      bn.look.value = numbersLook();
       bn.pxPer.value = 1 / px;
       bn.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
       if (any) {

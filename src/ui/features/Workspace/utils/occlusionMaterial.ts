@@ -64,7 +64,6 @@ export function occludedMaterial(
       shader.uniforms.ballLineColour = lines.colour;
       numbers.atlas.value ??= digitAtlas();
       shader.uniforms.numbersShown = numbers.shown;
-      shader.uniforms.numbersLook = numbers.look;
       shader.uniforms.numbersAtlas = numbers.atlas;
       shader.uniforms.numbersPxPer = numbers.pxPer;
       shader.uniforms.numbersLeast = numbers.least;
@@ -143,10 +142,10 @@ export function occludedMaterial(
  * they never turn with the ball nor shake as it turns - where its instance
  * puts them (`ballNumberPlace`: x and y from its middle as seen, in its
  * radius's units, how large, a share of their full size, and how far
- * shown, 0 to 1), in the part of it not behind another ball. Drawn flat over it (look 0), the ball's
- * shading under them; or as if printed on its surface (look 1), bent round
- * it as it curves away and lit as it is. Their ink dark on a light ball,
- * white on a dark one; faded out where a digit would be under
+ * shown, 0 to 1), in the part of it not behind another ball or a stick.
+ * Drawn flat over it, last of all - the ball's shading under them, never
+ * on them, so that they read as well in its shade as in its light. Their
+ * ink dark on a light ball, white on a dark one; faded out where a digit would be under
  * `numbersLeast` pixels high or squeezed to under half its size, and by
  * `numbersShown`. As high as `NUMBER_HEIGHT` of the ball's radius, never
  * over `numbersMost` in the balls' own units, and all of them no wider than
@@ -180,7 +179,6 @@ function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void
       "#include <common>",
       `#include <common>
       uniform float numbersShown;
-      uniform float numbersLook;
       uniform sampler2D numbersAtlas;
       uniform float numbersLeast;
       varying float vNumber;
@@ -216,17 +214,16 @@ function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void
       bool ballNumberWhite = false;
       if ( vNumber > 0.5 && numbersShown > 0.0 && vNumberPlace.z > 0.0 && vNumberPlace.w > 0.0 ) {
         vec3 nv = normalize( vNormal );
-        // (flat: where the point is seen; printed: how far round the ball it is)
-        vec2 p = numbersLook < 0.5 ? nv.xy - vNumberPlace.xy : asin( clamp( nv.xy, -1.0, 1.0 ) ) - asin( clamp( vNumberPlace.xy, -1.0, 1.0 ) );
+        // (where the point is seen, from where its number stands)
+        vec2 p = nv.xy - vNumberPlace.xy;
         ballNumberAt = ballNumberCover( p, dFdx( p ), dFdy( p ) );
         ballNumberWhite = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) < ${INK_TURN.toFixed(3)};
-        if ( numbersLook >= 0.5 ) diffuseColor.rgb = mix( diffuseColor.rgb, ballNumberWhite ? vec3( 0.9 ) : vec3( 0.012 ), ballNumberAt );
       }`,
     )
     .replace(
       "#include <dithering_fragment>",
       `#include <dithering_fragment>
-      if ( numbersLook < 0.5 && ballNumberAt > 0.0 ) gl_FragColor.rgb = mix( gl_FragColor.rgb, ballNumberWhite ? vec3( 0.97 ) : vec3( 0.1 ), ballNumberAt );`,
+      if ( ballNumberAt > 0.0 ) gl_FragColor.rgb = mix( gl_FragColor.rgb, ballNumberWhite ? vec3( 0.97 ) : vec3( 0.1 ), ballNumberAt );`,
     );
 }
 

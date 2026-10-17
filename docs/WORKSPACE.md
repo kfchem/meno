@@ -1397,11 +1397,11 @@ as R and S are, cannot be told from its neighbours'.
   never turn with it nor shake. Each is sized to its ball - 0.78 of its
   radius high, at most 0.95 Å, and narrower when it has more digits - in
   dark ink on a light ball and white on a dark one, whatever the style's
-  colours. Two ways of drawing them are on trial, for the maintainer to
-  choose between: flat over the ball, its shading under the digits; or
-  printed on its surface, bent round it and lit as it is. Until then the
-  menu switches between them (marked in the code to be removed before
-  merge).
+  colours. They are drawn flat over the ball, its shading under them and
+  never on them, so that they read as well in its shade as in its light
+  (the maintainer's choice, 2026-10-17, of two tried by hand: the other
+  printed them on the sphere, bent round it and lit with it, and its white
+  ink went grey on a dark ball's shaded side).
 - **Where on the ball.** In the largest part of the ball not hidden behind
   another ball or a stick, as it is seen now - its middle, where the whole
   ball is seen (`numberPlaces`). Where that part is too small, the number
