@@ -476,8 +476,34 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
       seen.push(Math.hypot(line.x2 - line.x1, line.y2 - line.y1) / bond);
     }
     expect(seen).toHaveLength(2);
-    for (const s of seen) expect(s).toBeCloseTo(0.7, 1);
-    expect(Math.abs(seen[0] - seen[1])).toBeLessThan(0.05);
+    for (const s of seen) expect(s).toBeCloseTo(0.7, 3);
+  });
+
+  it("in (allyl)PdCl(PMe3) drawn at a longer bond, the metal's line seen as long, in the drawing's own bond", async () => {
+    const d = drawing();
+    const pd = d.atom("Pd", 0, 0);
+    d.bond(pd, d.atom("Cl", -1.2, -0.9));
+    const p = d.atom("P", 1.5, 0);
+    d.bond(pd, p);
+    for (const [x, y] of [[3, 0], [1.5, 1.5], [1.5, -1.5]]) d.bond(p, d.atom("C", x, y));
+    const x = d.atom("C", -1.3, 1.3);
+    const y = d.atom("C", 0, 2.05);
+    const z = d.atom("C", 1.3, 1.3);
+    d.bond(x, y, 2);
+    d.bond(y, z);
+    for (const e of [x, y, z]) d.bond(pd, e);
+    const laid = etaHeld(await laidOut(d.model(), styleOf(DEFAULT_STYLE_CHOICE)));
+    const at = where(laid);
+    const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE), { minLinePx: 0 });
+    const margin = opts.labelMarginPx ?? opts.fontPx * 0.16;
+    const lay = layoutMolecule(laid.atoms.map((q) => ({ id: q.id, x: q.x, y: q.y, el: q.el })), layoutBonds(laid.bonds, new Map(laid.atoms.map((q, i) => [q.id, i]))), opts, 40);
+    const [b] = etaOf(laid);
+    const [e1, mid, e2] = allylChain(b, laid.bonds)!.map((id) => at.get(id)!);
+    const bond = Math.hypot(mid.x - e1.x, mid.y - e1.y);
+    expect(bond / L).toBeGreaterThan(1.3);
+    const middle = allylCurve(e1, mid, e2, opts.doubleOffsetPx).middle;
+    const line = lay.lines.find((l) => Math.abs(Math.hypot(l.x2 - middle.x, l.y2 - middle.y) - margin) < 1e-6)!;
+    expect(Math.hypot(line.x2 - line.x1, line.y2 - line.y1) / bond).toBeCloseTo(0.7, 2);
   });
 
   it("is told from a three-membered ring bound so (cyclopropenyl), which keeps its line to the centre", () => {

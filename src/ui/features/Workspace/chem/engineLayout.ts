@@ -287,7 +287,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
       return [{ metal: star === b.b ? b.a : b.b, atoms: b.endpoints, star }];
     }),
   ];
-  poseAllyls(atoms, added, part, systems, style);
+  const posed = poseAllyls(atoms, added, part, systems, style);
   // each ring or chain bound to its metal atom by atom: one bond to its
   // centre - an allyl's, its arc's middle - for the bonds to its atoms (chem/eta)
   const eta: NonNullable<Relayout["eta"]> = [];
@@ -306,6 +306,7 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
   const dropped = new Set(eta.flatMap((e) => e.bonds));
   const change: Relayout = { atoms, bonds: dropped.size ? bonds.filter((b) => !dropped.has(b.id)) : bonds, added, removed, ...(eta.length ? { eta } : {}) };
   if (style) roomForLabels(part, change, style);
+  if (style && posed.length) allylLinesSeen(part, change, style, posed);
   if (!saysTheSame(part, change)) {
     throw new Error("the structure could not be laid out keeping its stereochemistry, so nothing was moved");
   }
@@ -319,14 +320,14 @@ export function relayoutFrom(model: Model, part: Model, job: LayoutJob, laid: La
  * whole about the middle of its end carbons so that its middle carbon
  * points away from its metal - its delocalisation curve (lib/chem/allylArc)
  * inside it, on the metal's side - and moved so that the metal's line is
- * seen `LINE_SEEN` of the drawing's bond long, from past the metal's label
+ * seen `LINE_SEEN` of the allyl's own bond long, from past the metal's label
  * (as the style draws it, whichever way it reaches) to short of the
  * curve. A
  * ligand bonded to another metal too, or to its own by another way, is left
  * as it is laid out. `atoms` and `added` (hydrogens new to the drawing) are
  * moved in place.
  */
-/** How long the metal's line to an η3-allyl's curve is seen after Clean-up, as a share of the drawing's bond. */
+/** How long the metal's line to an η3-allyl's curve is seen after Clean-up, as a share of the allyl's bond. */
 const LINE_SEEN = 0.7;
 
 function poseAllyls(
@@ -335,8 +336,9 @@ function poseAllyls(
   part: Model,
   systems: readonly { metal: number; atoms: readonly number[]; star?: number }[],
   style?: DrawingStyle,
-): void {
-  if (!systems.length) return;
+): Posed[] {
+  const posed: Posed[] = [];
+  if (!systems.length) return posed;
   // (where the metal's line starts, past its label, and where it stops, short of the curve: as the drawing will have them)
   const opts = style ? editorLayoutOptions(style, { minLinePx: 0 }) : null;
   const zoom = style ? (style.bondLengthPt * 96) / 72 / NOMINAL_BOND_LENGTH : 1;
@@ -347,13 +349,6 @@ function poseAllyls(
   const margin = opts ? (opts.labelMarginPx ?? opts.fontPx * 0.16) : 0;
   const el = new Map(part.atoms.map((a) => [a.id, a.el]));
   const at = new Map(atoms.map((a, i) => [a.id, i]));
-  // (the drawing's bond, as laid out: the middle length of its bonds between atoms that are no metal and no star)
-  const plain = (id: number) => !isMetal(el.get(id) ?? "") && el.get(id) !== "*";
-  const lengths = part.bonds
-    .filter((b) => !b.endpoints?.length && plain(b.a) && plain(b.b) && at.has(b.a) && at.has(b.b))
-    .map((b) => Math.hypot(atoms[at.get(b.a)!].x - atoms[at.get(b.b)!].x, atoms[at.get(b.a)!].y - atoms[at.get(b.b)!].y))
-    .sort((p, q) => p - q);
-  const bond = lengths[lengths.length >> 1] || NOMINAL_BOND_LENGTH;
   for (const sys of systems) {
     const chain = allylChain({ endpoints: [...sys.atoms] }, part.bonds);
     const mi = at.get(sys.metal);
@@ -382,6 +377,8 @@ function poseAllyls(
     const metal = atoms[mi];
     const chord = Math.hypot(e2.x - e1.x, e2.y - e1.y);
     if (chord < 1e-9) continue;
+    // (its own bond, as laid out)
+    const bond = (Math.hypot(m.x - e1.x, m.y - e1.y) + Math.hypot(m.x - e2.x, m.y - e2.y)) / 2;
     const c = { x: (e1.x + e2.x) / 2, y: (e1.y + e2.y) / 2 };
     // (towards the ligand from its metal, and the way its middle carbon points now)
     const cx = (e1.x + m.x + e2.x) / 3 - metal.x;
@@ -401,7 +398,8 @@ function poseAllyls(
       return { x: c.x + x * cos - y * sin, y: c.y + x * sin + y * cos };
     };
     const [t1, tm, t2] = [e1, m, e2].map(turn);
-    const middle = allylCurve(t1, tm, t2).middle;
+    // (the curve as the drawing will have it: a double bond's spacing in the style from the chain)
+    const middle = allylCurve(t1, tm, t2, opts?.doubleOffsetPx).middle;
     const start = past(el.get(sys.metal) ?? "", u);
     const far = start == null ? 1.5 * bond : start + LINE_SEEN * bond + margin;
     const shift = { x: metal.x + u.x * far - middle.x, y: metal.y + u.y * far - middle.y };
@@ -414,10 +412,47 @@ function poseAllyls(
       if (i != null) atoms[i] = { ...atoms[i], ...move(atoms[i]) };
     }
     for (const h of added) if (ligand.has(h.on)) Object.assign(h, move(h));
+    posed.push({ metal: sys.metal, chain, ligand: [...ligand], u });
     if (sys.star != null && at.has(sys.star)) {
       const [f1, fm, f2] = chain.map(p);
       atoms[at.get(sys.star)!] = { ...atoms[at.get(sys.star)!], ...allylCurve(f1, fm, f2).middle };
     }
+  }
+  return posed;
+}
+
+/** An η3-allyl `poseAllyls` posed: its metal, its chain, the ligand it is part of, and the way from the metal to it. */
+type Posed = { metal: number; chain: number[]; ligand: number[]; u: { x: number; y: number } };
+
+/**
+ * Each allyl `poseAllyls` posed moved along its metal's line until that line
+ * is seen `LINE_SEEN` of the allyl's bond long as `style` draws it: laid
+ * out as the canvas draws it, the line measured from past the metal's label
+ * - wherever the label's rules put it - to short of the curve.
+ */
+function allylLinesSeen(part: Model, change: Relayout, style: DrawingStyle, posed: readonly Posed[]): void {
+  const after = relayout({ ...emptyWorkspaceDocument(), model: part, nextId: nextFree(part) }, change).model;
+  const lay = drawnAs(after, style);
+  const opts = editorLayoutOptions(style, { minLinePx: 0 });
+  const margin = opts.labelMarginPx ?? opts.fontPx * 0.16;
+  const at = new Map(after.atoms.map((a) => [a.id, a]));
+  const placed = new Map(change.atoms.map((a, i) => [a.id, i]));
+  for (const { metal, chain, ligand, u } of posed) {
+    const [e1, m, e2] = chain.map((id) => at.get(id));
+    if (!e1 || !m || !e2 || !at.has(metal)) continue;
+    const middle = allylCurve(e1, m, e2, opts.doubleOffsetPx).middle;
+    const line = lay.lines.find((l) => Math.abs(Math.hypot(l.x2 - middle.x, l.y2 - middle.y) - margin) < 1e-6);
+    if (!line) continue;
+    const bond = (Math.hypot(m.x - e1.x, m.y - e1.y) + Math.hypot(m.x - e2.x, m.y - e2.y)) / 2;
+    const by = LINE_SEEN * bond - Math.hypot(line.x2 - line.x1, line.y2 - line.y1);
+    const shift = (q: { x: number; y: number }) => ({ x: q.x + u.x * by, y: q.y + u.y * by });
+    const own = new Set(ligand);
+    for (const id of ligand) {
+      const i = placed.get(id);
+      if (i != null) change.atoms[i] = { ...change.atoms[i], ...shift(change.atoms[i]) };
+    }
+    for (const h of change.added ?? []) if (own.has(h.on)) Object.assign(h, shift(h));
+    for (const e of change.eta ?? []) if (e.metal === metal && e.atoms.every((id) => own.has(id))) Object.assign(e, shift(e));
   }
 }
 
