@@ -135,6 +135,26 @@ describe("molecules in 3D written as a scene to render", () => {
     expect(parse(r.gltf).animations[0].channels.length).toBeGreaterThan(0);
   });
 
+  it("writes each molecule's atoms and bonds in its extras, where it stands in the scene, for a renderer that makes a motion of its own", () => {
+    const g = parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf);
+    const [mol] = g.scenes[0].extras.meno.molecules;
+    expect(mol.atoms.map((a: Json) => a.el)).toEqual(["C", "C", "H", "H", "H", "H"]);
+    // (in ångströms, where it stands on the page: its middle at (10, 20) on it)
+    const mid = mol.atoms.slice(0, 2).reduce((s: number[], a: Json) => [s[0] + a.p[0] / 2, s[1] + a.p[1] / 2], [0, 0]);
+    expect(mid[0]).toBeCloseTo(10 / k, 3);
+    expect(mid[1]).toBeCloseTo(20 / k, 3);
+    expect(mol.bonds).toContainEqual({ a: 0, b: 1, order: 2 });
+    expect(mol.bonds).toHaveLength(5);
+  });
+
+  it("writes a film of a renderer's own motion still: no keyed animation, its frames for its length", () => {
+    const r = renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "a-renderers-own", seconds: 2, fps: 30 });
+    expect(r.frames).toBe(60);
+    const g = parse(r.gltf);
+    expect(g.animations ?? []).toHaveLength(0);
+    expect(g.scenes[0].extras.meno.molecules).toHaveLength(1);
+  });
+
   it("says there is nothing to render where nothing is drawn", () => {
     expect(() => renderScene([], STYLE_3D, PICTURE)).toThrow(/nothing to render/);
   });

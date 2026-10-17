@@ -9,7 +9,7 @@
  * under it and are the chemist's to change for the one render.
  */
 import type { Option, OptionValues } from "../../../../lib/options";
-import type { LookDecl } from "../../../../lib/plugins/manifest";
+import { MENO_MOTIONS, type LookDecl, type MotionDecl } from "../../../../lib/plugins/manifest";
 import type { Finish, Motion, MoleculeMaterial, Outlines, RenderAsk, Shading, Shape, Sticks, SurfaceMaterial } from "./renderScene";
 
 /** What a render is: a picture, or a film. */
@@ -24,7 +24,8 @@ const SHAPES: { value: Shape; label: string }[] = [
   { value: "4:3", label: "4:3" },
   { value: "1:1", label: "Square" },
 ];
-const MOTIONS: Record<Motion, string> = { turn: "Turning once round", frames: "Through its frames", vibration: "In the vibration shown" };
+/** Meno's own motions, what the card calls them; those a renderer makes are its manifest's (`motions`), with their own labels. */
+const MOTIONS: Record<string, string> = { turn: "Turning once round", frames: "Through its frames", vibration: "In the vibration shown" };
 const MOLECULES: { value: MoleculeMaterial; label: string }[] = [
   { value: "meno", label: "As the 3D style draws them" },
   { value: "glossy", label: "Glossy" },
@@ -104,16 +105,16 @@ function lookChoices(looks: readonly LookDecl[]) {
  * Render's own choices, Meno's whoever renders: a picture's or a film's size and shape, a film's motion, length and rate, its look
  * - and, folded under it, the parts the look is made of. `looks`: those the renderer can make; none given, all.
  */
-export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: boolean, declared?: readonly LookDecl[]): Option[] {
+export function renderOptions(kind: Kind, motions: readonly Motion[], surfaces: boolean, declared?: readonly LookDecl[], declaredMotions?: readonly MotionDecl[]): Option[] {
   const film = kind === "film";
+  // (Meno's own motions the molecules can make, then those the renderer declares, in its order: Meno keeps no list of them)
+  const moving = [...motions.map((m) => ({ value: m, label: MOTIONS[m] ?? m })), ...(declaredMotions ?? []).filter((d) => !motions.includes(d.id)).map((d) => ({ value: d.id, label: d.label }))];
   const offered = looksOffered(declared);
   const choices = lookChoices(offered);
   const seeThrough = offered.filter((l) => l.seeThrough).map((l) => l.id);
   const adjust = "Adjust this look";
   return [
-    ...(film && motions.length
-      ? [{ id: "motion", label: "Moving", type: "choice" as const, choices: motions.map((m) => ({ value: m, label: MOTIONS[m] })), default: motions[0] }]
-      : []),
+    ...(film && moving.length ? [{ id: "motion", label: "Moving", type: "choice" as const, choices: moving, default: moving[0].value }] : []),
     ...(film
       ? [
           { id: "seconds", label: "Length", type: "number" as const, default: 8, min: 1, max: 60, step: 1, unit: "s" },
@@ -151,6 +152,11 @@ export function finishOf(v: OptionValues): Finish {
 export function finishEntry(f: Finish | undefined) {
   const g = f ?? finishOf({});
   return { look: g.look, shading: g.shading, outlines: g.outlines, outline: g.outline, outline_colour: g.outlineColour, band: g.band };
+}
+
+/** A film's motion as an entry says it to the renderer: a motion it declares, by id, which it makes itself; none for Meno's own, keyed into the scene. */
+export function motionEntry(ask: Pick<RenderAsk, "kind" | "motion">): { motion?: string } {
+  return ask.kind === "film" && ask.motion && !(MENO_MOTIONS as readonly string[]).includes(ask.motion) ? { motion: ask.motion } : {};
 }
 
 /** What a render is asked to make, from Render's own choices. */
