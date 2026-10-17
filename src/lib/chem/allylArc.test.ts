@@ -17,9 +17,9 @@ describe("an η3-allyl's delocalisation curve", () => {
     // (inside the angle, below the middle carbon, above the line between the end carbons)
     expect(middle.y).toBeLessThan(mid.y);
     expect(middle.y).toBeGreaterThan(0);
-    // (as far from both bonds as a double bond's spacing, about)
-    expect(off(middle, mid, a)).toBeCloseTo(CURVE_GAP, 4);
-    expect(off(middle, mid, b)).toBeCloseTo(CURVE_GAP, 4);
+    // (its middle on the bisector, at least the gap from both bonds)
+    expect(off(middle, mid, a)).toBeCloseTo(off(middle, mid, b), 9);
+    expect(off(middle, mid, a)).toBeGreaterThanOrEqual(CURVE_GAP - 1e-4);
     // (its ends as far inside their bonds, short of the end carbons)
     expect(off(points[0], mid, a)).toBeCloseTo(CURVE_GAP, 4);
     expect(off(points[points.length - 1], mid, b)).toBeCloseTo(CURVE_GAP, 4);
@@ -27,6 +27,17 @@ describe("an η3-allyl's delocalisation curve", () => {
     // (convex away from the line between the ends - a "∩" under the "^" - its middle its highest point)
     for (const p of points) expect(p.y).toBeLessThanOrEqual(middle.y + 1e-9);
     for (const p of points.slice(1, -1)) expect(p.y).toBeGreaterThan(Math.min(points[0].y, points[points.length - 1].y) - 1e-9);
+  });
+
+  it("keeps the gap it is given from the chain's bonds where it comes nearest, and reaches as far along them as asked", () => {
+    for (const gap of [0.1, 0.18, 0.25]) {
+      const { points } = allylCurve(a, mid, b, gap, 0.68);
+      const nearest = Math.min(...points.map((p) => Math.min(off(p, mid, a), off(p, mid, b))));
+      expect(nearest).toBeCloseTo(gap, 6);
+      // (its ends 0.68 of the way along their bonds from the middle carbon)
+      const along = ((points[0].x - mid.x) * (a.x - mid.x) + (points[0].y - mid.y) * (a.y - mid.y)) / Math.hypot(a.x - mid.x, a.y - mid.y);
+      expect(along).toBeCloseTo(0.68, 4);
+    }
   });
 
   it("is the same curve however the allyl is turned on the page, and either way round", () => {

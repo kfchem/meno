@@ -73,11 +73,13 @@ and in particular:
     bonds, its middle carbon away from the metal - with its delocalisation
     curve (curves show delocalisation, GR-6.3) just inside it on the
     metal's side: parallel to the chain and
-    convex the same way, as far from each bond as about a double bond's
-    spacing (0.18 of the bond's length, within GR-6.1's band), reaching most
-    of the way to the end carbons, solid and as wide as a single bond
-    (GR-6.2). The metal's one plain line meets the curve's middle, so its
-    star stands there (`chem/eta` `starPlace`, `lib/chem/allylArc`
+    convex the same way, nowhere nearer its bonds than a double bond's
+    spacing in the style - measured where it comes nearest, by the apex
+    (within GR-6.1's band) - shorter than the chain as a double bond's inner
+    line is (0.68 of the way along each bond), solid and as wide as a single
+    bond (GR-6.2). The metal's one plain line points at the curve's middle
+    and stops short of it, as a bond stops short of a label (the label
+    margin); its star stands at the curve's middle (`chem/eta` `starPlace`, `lib/chem/allylArc`
     `allylCurve`). The chain's two bonds are drawn single whatever their
     orders - the curve is the delocalised system, the single bonds its frame
     (GR-6.4); the drawing keeps its bonds as drawn. The curve is the bond's

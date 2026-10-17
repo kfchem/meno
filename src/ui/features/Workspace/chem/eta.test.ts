@@ -385,19 +385,28 @@ describe("an η3-allyl, drawn as its chain with a delocalisation curve just insi
   });
 
   it("is drawn as its chain, its curve just inside it and one line from the metal to the curve's middle - the file keeps its multi-centre bond", () => {
-    const { model, a, m, c } = allylPd();
+    const { model, pd, a, m, c } = allylPd();
     const at = where(model);
     const [b] = etaOf(model);
     expect(b.endpoints).toHaveLength(3);
     expect(b.attach).toBe("all");
     const opts = editorLayoutOptions(styleOf(DEFAULT_STYLE_CHOICE), { minLinePx: 0 });
     const lay = layoutMolecule(model.atoms.map((x) => ({ id: x.id, x: x.x, y: x.y, el: x.el })), layoutBonds(model.bonds, new Map(model.atoms.map((x, i) => [x.id, i]))), opts, 40);
-    const star = at.get(b.b)!;
     const near = (p: { x: number; y: number }, q: { x: number; y: number }) => Math.hypot(p.x - q.x, p.y - q.y) < 1e-6;
-    // (the line to the star, ending there)
-    expect(lay.lines.some((l) => near({ x: l.x2, y: l.y2 }, star) || near({ x: l.x1, y: l.y1 }, star))).toBe(true);
-    // (the curve: pieces end to end, just inside the chain)
-    const arc = allylCurve(at.get(a)!, at.get(m)!, at.get(c)!).points;
+    // (the curve: pieces end to end, just inside the chain, a double bond's spacing in the style from its bonds where it comes nearest)
+    const curve = allylCurve(at.get(a)!, at.get(m)!, at.get(c)!, opts.doubleOffsetPx);
+    const arc = curve.points;
+    const fromBond = (p: { x: number; y: number }, u: { x: number; y: number }, v: { x: number; y: number }) => Math.abs((v.x - u.x) * (p.y - u.y) - (v.y - u.y) * (p.x - u.x)) / Math.hypot(v.x - u.x, v.y - u.y);
+    const nearest = Math.min(...arc.map((p) => Math.min(fromBond(p, at.get(m)!, at.get(a)!), fromBond(p, at.get(m)!, at.get(c)!))));
+    expect(nearest).toBeCloseTo(opts.doubleOffsetPx, 6);
+    // (the metal's line: pointing at the curve's middle, stopping short of it by a label's margin)
+    const metal = at.get(pd)!;
+    const margin = opts.labelMarginPx ?? opts.fontPx * 0.16;
+    const line = lay.lines.find((l) => Math.abs(Math.hypot(l.x2 - curve.middle.x, l.y2 - curve.middle.y) - margin) < 1e-6)!;
+    expect(line).toBeDefined();
+    const along = ((line.x2 - line.x1) * (curve.middle.x - metal.x) + (line.y2 - line.y1) * (curve.middle.y - metal.y)) / (Math.hypot(line.x2 - line.x1, line.y2 - line.y1) * Math.hypot(curve.middle.x - metal.x, curve.middle.y - metal.y));
+    expect(along).toBeCloseTo(1, 9);
+    expect(lay.lines.some((l) => arc.some((p) => near({ x: l.x2, y: l.y2 }, p)) && l === line)).toBe(false);
     for (let k = 1; k < arc.length; k++) expect(lay.lines.some((l) => near({ x: l.x1, y: l.y1 }, arc[k - 1]) && near({ x: l.x2, y: l.y2 }, arc[k]))).toBe(true);
     // (and in a picture of it - SVG, and PNG and EMF from the same lines - the arc's pieces as drawn)
     const svg = createSVG(lay, opts);

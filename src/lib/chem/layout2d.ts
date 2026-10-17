@@ -3455,11 +3455,18 @@ function allylsSingle(atoms: Atom[], bonds: Bond[]): Bond[] {
  * wide as the bond's line (IUPAC GR-6.2), the corners between them finished
  * as a wave's are; none otherwise.
  */
-function allylCurvePrimitives(atoms: Atom[], bonds: readonly Bond[], b: Bond, widthPx: number | undefined): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[] } | null {
-  if (widthPx == null) return null;
+function allylCurvePrimitives(
+  atoms: Atom[],
+  bonds: readonly Bond[],
+  b: Bond,
+  widthPx: number,
+  opts: LayoutOptions,
+  zoom: number,
+): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[]; middle: Vec2 } | null {
   const chain = allylChainOf(atoms, bonds, b);
   if (!chain) return null;
-  const { points } = allylCurve(atoms[chain[0]], atoms[chain[1]], atoms[chain[2]]);
+  // (kept from the chain's bonds by a double bond's spacing in the style, measured where it comes nearest: GR-6.1)
+  const { points, middle } = allylCurve(atoms[chain[0]], atoms[chain[1]], atoms[chain[2]], toWorld(opts.doubleOffsetPx, zoom, opts.units ?? "px"));
   const lines: LineSeg[] = [];
   for (let i = 1; i < points.length; i++) lines.push({ x1: points[i - 1].x, y1: points[i - 1].y, x2: points[i].x, y2: points[i].y, widthPx });
   const bends: Bend[] = [];
@@ -3468,7 +3475,7 @@ function allylCurvePrimitives(atoms: Atom[], bonds: readonly Bond[], b: Bond, wi
     const next = lines[i];
     bends.push({ at: { x: next.x1, y: next.y1 }, dirs: [vnorm({ x: prev.x1 - prev.x2, y: prev.y1 - prev.y2 }), vnorm({ x: next.x2 - next.x1, y: next.y2 - next.y1 })] });
   }
-  return { lines, bends, ends: [points[0], points[points.length - 1]] };
+  return { lines, bends, ends: [points[0], points[points.length - 1]], middle };
 }
 
 export function buildAllPrimitives(
@@ -3686,12 +3693,28 @@ export function buildAllPrimitives(
         crowded.push({ atoms: [atoms[b.a1].id, atoms[b.a2].id], need: ((t.a + t.b) / t.room) * L });
       }
     }
-    // (an η3-allyl's bond: besides its line to the curve's middle, the curve itself, as the bond's own ink)
-    const arc = allylCurvePrimitives(atoms, bonds, b, r.lines[0]?.widthPx);
+    // (an η3-allyl's bond: its curve, as the bond's own ink, and its line from the metal pointing at the curve's
+    // middle, stopping short of it as a bond stops short of a label - the maintainer, 2026-10-18)
+    const arc = r.lines.length ? allylCurvePrimitives(atoms, bonds, beff, r.lines[0].widthPx, opts, zoom) : null;
     if (arc) {
-      r.lines.push(...arc.lines);
+      const metal = atoms[b.a1].el === "*" ? atoms[b.a2] : atoms[b.a1];
+      const main = r.lines[0];
+      const near = Math.hypot(main.x1 - metal.x, main.y1 - metal.y) <= Math.hypot(main.x2 - metal.x, main.y2 - metal.y) ? { x: main.x1, y: main.y1 } : { x: main.x2, y: main.y2 };
+      const trim = Math.hypot(near.x - metal.x, near.y - metal.y);
+      const L = Math.hypot(arc.middle.x - metal.x, arc.middle.y - metal.y);
+      const units = opts.units ?? "px";
+      const margin = opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : toWorld(opts.fontPx, zoom, units) * 0.16;
+      if (L > trim + margin) {
+        const dir = { x: (arc.middle.x - metal.x) / L, y: (arc.middle.y - metal.y) / L };
+        const start = { x: metal.x + dir.x * trim, y: metal.y + dir.y * trim };
+        const end = { x: metal.x + dir.x * (L - margin), y: metal.y + dir.y * (L - margin) };
+        r.lines = [{ ...main, x1: start.x, y1: start.y, x2: end.x, y2: end.y }, ...arc.lines];
+        r.ends = [start, end, ...arc.ends];
+      } else {
+        r.lines = [...arc.lines];
+        r.ends = [...arc.ends];
+      }
       r.bends = [...(r.bends ?? []), ...arc.bends];
-      r.ends = [...(r.ends ?? []), ...arc.ends];
     }
     const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);
