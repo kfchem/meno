@@ -22,11 +22,13 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
 
 - **Picture** or **Film**.
 - Meno's own choices, whoever renders:
-  - a film's motion: **turning** once round, about the page's up, each
-    molecule in place; **through its frames**, where one has several, each
-    blended into the next (a conformer set's shown one after another,
-    none being a step on the way to the next); or **in the vibration**
-    shown, from its calculation's list - only those that can be;
+  - a film's motion: Meno's own - **turning** once round, about the
+    page's up, each molecule in place; **through its frames**, where one
+    has several, each blended into the next (a conformer set's shown one
+    after another, none being a step on the way to the next); or **in the
+    vibration** shown, from its calculation's list - only those that can
+    be - and then the motions the renderer declares (*Motions a renderer
+    makes*, below), in its order;
   - a film's length in seconds - a vibration's made whole periods of 1.2 s,
     so that it loops - and its frames a second (24, 30 or 60);
   - the width in pixels, and the shape: fitted to the molecules, 16:9, 4:3
@@ -104,10 +106,30 @@ down -Z (3.4). Built by `render/renderScene.ts`:
 - **A film's motion** as one animation (3.11): a key for each of its
   frames, every one worked out by Meno - the turn of each molecule, or the
   place of each atom and stick - so that the film is what Meno meant, not
-  what a renderer would make between keys.
+  what a renderer would make between keys. A motion the renderer makes
+  itself is not keyed: the scene is written still, for it to move.
+- **What the molecules are made of**, in the scene's `extras`
+  (`meno.molecules`): each molecule's atoms drawn - its element, and where
+  it stands in the scene, in ångströms, as the first frame shows it - and
+  its bonds between them, by index, with their orders. Meno's own data,
+  written whatever the renderer; a renderer that makes a motion of its own
+  builds it from them.
 
 Khronos's glTF-Validator finds nothing wrong in what Meno writes (checked
 while it was built; not part of Meno or its tests).
+
+## Motions a renderer makes
+
+Meno's canvas has one motion of its own, *Turn once* (2026-10-16): every
+other motion of a film is the renderer's (the maintainer, 2026-10-16:
+professional motion design, flashy where it serves a talk). A render
+plugin declares the motions it makes in its role's `motions`, each an id,
+a label and a description (docs/PLUGINS.md, *Motions*); Meno keeps no list
+of them. The card's *Moving* offers Meno's own motions the molecules can
+make, then the declared ones; chosen, the entry says the motion's id
+(`motion`), and Meno writes the scene still, with the molecules' atoms and
+bonds in its extras. The options that adjust a motion are the role's,
+each `when` it is chosen - Once or Loop among them.
 
 ## Render as a step
 
@@ -231,7 +253,7 @@ uv, no package), and the script Blender runs, `render.py`.
   standard), the key light and the light all round against the canvas's,
   the shadows' softness, and a film's quality. The renderer and noise
   removal are not offered under toon shading, which Cycles draws.
-- **Its looks** (2026-10-15): all of Meno's. The materials are in the
+- **Its looks** (2026-10-15): all of Meno's. Their names say what each is as a whole, apart from the names of the materials a look is made of (2026-10-17, the maintainer: Lacquered, Flat, Crystal, Anodised and Terracotta, where they were Glossy, Matte, Glass, Metal and Clay, the materials' own names). The materials are in the
   scene's file. Toon shading is each material a Toon BSDF in the colour it
   had, lit in one band whose size is chosen, drawn by Cycles - which draws
   the band as a band - without noise removal, which would soften its edge.
@@ -243,7 +265,7 @@ uv, no package), and the script Blender runs, `render.py`.
   and size.
 - **Looks with materials and light of their own** (`looks.py`, beside
   `render.py` in the job's folder). Gold, silver, copper, a soap bubble,
-  wood, marble, clay, porcelain, slime, ice (melting: its surface in lumps by displacement, with wet highlights), neon,
+  wood, marble, terracotta (the look `clay`), porcelain, slime, ice (melting: its surface in lumps by displacement, with wet highlights), neon,
   X-ray and fur are not a colour and a gloss: each is a
   material of Blender's own shader nodes, put on the molecules by their
   shapes' names (`ball #909090`, `stick #000000`: the element's colour is
@@ -261,7 +283,7 @@ uv, no package), and the script Blender runs, `render.py`.
   adaptive sampling; the key light and the light all round are the look's,
   not the canvas's. Their choices appear only under their look: silver's
   finish (mirror or satin), copper's (brushed or tarnished), the wood's
-  species (oak, walnut, cherry, maple, ebony, or each element its own), clay's
+  species (oak, walnut, cherry, maple, ebony, or each element its own), terracotta's
   colour (one colour, terracotta, or the element colours), porcelain's
   finish (porcelain, or pearl: a cream white with a soft pink and green
   orient), fur's pile (long, or short and dense as velvet - a hair's length is a
@@ -275,6 +297,33 @@ uv, no package), and the script Blender runs, `render.py`.
   copper is deepened by the scene - panels of a warm tone, fewer of them
   - not by its F0. A surface drawn from an orbital keeps the colours Meno
   gave it.
+- **Its motions** (2026-10-17, for 0.1.14): Reveal, Pulse, Assemble, Scan
+  and Dissolve - the motions the maintainer approved from the previews of
+  2026-10-16 and 10-17 - each a script (`motion_<id>.py`) made in one
+  studio they share (`studio.py`), both copied into the job's folder with
+  render.py. The studio builds the molecules the scene's extras hold, at
+  4 cm an ångström - a product on a table - as the canvas shows them, in
+  the motions' own finish (each element's colour under a clear coat;
+  carbon near black): a perspective camera with an 85 mm lens and depth of
+  field, motion blur, a finishing compositor. The Look and its parts are
+  not used for them: a motion has its own. The Background choice picks
+  the studio: **White** (or Transparent, a film having none) the white
+  studio - a paper sweep the camera sees, lit only by a soft source above
+  it, so that the molecule's contact shadow is its own, the molecule's
+  lights lighting it alone, its colours by Khronos PBR Neutral, effects
+  carried by colour and shadow rather than glow - **Black** or **Grey**
+  the dark studio: a pool of light on a dark cyclorama, coloured rims,
+  bloom. Each motion has its own tuning on each. *Once or Loop* (the
+  option `mode`): Once eases in and holds a composed last frame; Loop
+  repeats seamlessly - Pulse and Scan, and Reveal in the dark studio, loop
+  of themselves (three waves a period; a sheet up and down as the molecule
+  turns once; the rims circling); the others loop as a cycle, played
+  forward and then back from frames rendered once, both ends held still,
+  so the seam does not show. Each motion is timed in a length of its own
+  (Reveal 7 s, Pulse 6, Assemble 8, Scan 7, Dissolve 7) and a film of
+  another length plays it all, faster or slower; a loop is timed in the
+  film's length. A motion renders on the graphics processor wherever
+  Blender has one, unless the processor is asked for.
 - **Where it renders** (2026-10-16, the maintainer): a three-way choice,
   *Render on*: **Automatic (the faster one)**, the default; **Graphics
   processor**; **Processor**. Automatic times the two once on this
