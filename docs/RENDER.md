@@ -167,9 +167,12 @@ options: [...]}]`; docs/PLUGINS.md, *The manifest*).
 
 ## On the page
 
-While it renders, a dashed frame stands where what it makes will lie -
-beside the molecules, on the right, as large as they are drawn - saying
-how far it is and what its job said last, with a button that stops it.
+While it renders, a dashed frame stands where what it makes will lie,
+as large as it will be - beside the molecules, on the right, as large as
+they are drawn; or, where something lies there, in the free space nearest
+it, clear of all on the page and of other renders' frames - saying how
+far it is and what its job said last, with a button that stops it. What
+it makes lands just there, in the frame's place.
 Where it fails, the frame says why; the button puts it away. The view
 eases to the frame and the molecules once, as the render is begun, where
 they are not all in view; what it makes lands as the view then is, never
