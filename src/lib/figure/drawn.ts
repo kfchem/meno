@@ -341,7 +341,8 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
     const u = { x: (w.base.x - w.tip.x) / l, y: (w.base.y - w.tip.y) / l };
     const on = (p.x - w.tip.x) * u.x + (p.y - w.tip.y) * u.y;
     const off = Math.abs((p.x - w.tip.x) * u.y - (p.y - w.tip.y) * u.x);
-    return on >= -d && on <= l + d && off <= (w.w / 2) * Math.max(0, Math.min(1, on / l)) + d;
+    // (reaching a little past its tip too: the middle of a narrow end's points, short of where a line drawn down it ends at a point)
+    return on >= -Math.max(d, 0.1 * l) && on <= l + d && off <= (w.w / 2) * Math.max(0, Math.min(1, on / l)) + d;
   };
   out.strokes = out.strokes.filter(
     (s) => !out.wedges.some((w) => dist(w.tip, w.base) > 0 && dist(s.a, s.b) > 0.5 * dist(w.tip, w.base) && inWedge(s.a, w, Math.max(0.5, 2 * s.w)) && inWedge(s.b, w, Math.max(0.5, 2 * s.w))),

@@ -1052,8 +1052,10 @@ workspace holds.
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
   its corners to another is no bond. So is a line drawn down a wedge,
-  within it, at least half as long - its middle line, under the fill or
-  over it, as some programs draw one: else it is read as a second bond
+  within it - or reaching up to a tenth of its length past where its tip
+  is taken to be, to the point a narrow end may come to - at least half
+  as long: its middle line, under the fill or
+  over it, as some programs draw one; else it is read as a second bond
   beside the wedge, to an atom of its own at the wide end.
 - **How long its bonds are drawn**: the length most of its lines that
   meet another share; a ring's inner lines and a hash's strokes, which

@@ -162,6 +162,10 @@ describe("a figure's shapes", () => {
     const s = read(figure(paths, word("H", h)));
     expect(s.atoms).toHaveLength(5);
     expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-H up"]);
+    // (and one reaching a little past where the wedge's tip is taken to be - the middle of its narrow end's points - to the atom, as a
+    // line drawn down a wedge capped with a point does)
+    const past = [stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, -90)), wedge(along(c, h, 0.05), along(c, h, 0.75)), { ...stroke(along(c, h, 0.75), c), width: 0.12 }];
+    expect(bondsOf(read(figure(past, word("H", h))))).toEqual(["C-C", "C-C", "C-C", "C-H up"]);
     // (and the line alone, no wedge over it, still a bond)
     expect(read(figure([stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, 90))])).atoms).toHaveLength(4);
   });
