@@ -162,6 +162,49 @@ describe("coordinates in a text", () => {
     ]);
   });
 
+  it("reads lengths in ångströms where only the energies are given in atomic units", () => {
+    const [s] = read(lines("TS1", "SCF energy (a.u.) = -154.987654", "ZPE (a.u.) = 0.081234", ETHANOL));
+    expect(s.bohr).toBe(false);
+    expect(s.atoms[0]).toEqual({ el: "C", x: -1.17, y: -0.4, z: 0 });
+    expect(s.warnings).toEqual([]);
+    // (said of the coordinates, atomic units are bohr still)
+    expect(read(lines("TS1", "Cartesian coordinates (a.u.)", ETHANOL))[0].bohr).toBe(true);
+  });
+
+  it("takes a compound's number set alone over its atoms for its name, not their count - unless it counts them", () => {
+    const [s] = read(lines("Coordinates", "1", "SCF energy (a.u.) = -154.987654", ETHANOL));
+    expect(s.name).toBe("1");
+    expect(s.stated).toBeUndefined();
+    expect(s.warnings).toEqual([]);
+    const [xyz] = read(lines("9", "Ethanol", ETHANOL));
+    expect([xyz.name, xyz.stated]).toEqual(["Ethanol", 9]);
+  });
+
+  it("reads no lone atom met among a text's words or another table's numbers - but one said to be a structure", () => {
+    // (an elemental analysis, a peak list with the page's number set in it)
+    expect(read(lines("Combustion analysis, calculated (%):", "C 61.250 H 5.140 N 8.930", "found C 61.180 H 5.200 N 8.870."))).toEqual([]);
+    expect(read(lines("1H NMR peaks", "7.2512 7.2488 7.2401 S9 4.1123 4.1019 4.0915 1.2534 1.2411"))).toEqual([]);
+    const [ion] = read(lines("Chloride", "E = -460.123456 Hartree", "-1 1", "Cl 0.000000 0.000000 0.000000"));
+    expect([ion.name, ion.atoms.length, ion.charge]).toEqual(["Chloride", 1, -1]);
+  });
+
+  it("reads no crystal structure's table: fractions of its cell, with their uncertainties", () => {
+    const table = [
+      "Fractional atomic coordinates and isotropic displacement parameters",
+      "x y z Uiso*/Ueq",
+      "C1 0.51234 (12) 0.43210 (9) 0.21098 (8) 0.02137 (3)",
+      "C2 0.60123 (12) 0.38765 (9) 0.27654 (8) 0.02083 (3)",
+      "H2A 0.65713 0.4401 0.3043 0.0467*",
+      "H2B 0.6623 0.3502 0.2401 0.0467*",
+      "O3 0.55432 (10) 0.29876 (7) 0.33176 (6) 0.02311 (2)",
+    ];
+    expect(read(lines(table))).toEqual([]);
+  });
+
+  it("reads no table of positions numbered 1, 2, 3 with their values beside them", () => {
+    expect(read(lines("13C NMR shifts", "position δ(a) δ(b) Δδ", "1 171.4 171.3 0.1", "2 128.9 129.1 -0.2", "3 55.2 55.2 0.0", "4 21.7 21.6 0.1"))).toEqual([]);
+  });
+
   it("reads nothing from a text with no atoms in it", () => {
     expect(read("Table S1. Energies (kcal/mol)\nTS1 12.3 14.5 16.7\nTS2 10.1 11.2 12.3")).toEqual([]);
   });
@@ -203,6 +246,25 @@ describe("coordinates selected in a PDF, each word where it lies", () => {
       ["Compound 1", "C2H6O", []],
       ["Water", "H2O", []],
     ]);
+  });
+
+  it("reads a page of atoms in one column beside notes in the other, a heading across both, minus signs printed true", () => {
+    // (each structure's energies in the left column, its atoms in the right, line by line; its name over both)
+    const notes = ["SCF energy (a.u.) = -154.987654", "ZPE (a.u.) = 0.081234", "Gibbs energy (a.u.) = -155.012345"];
+    const atoms = ETHANOL.map((l) => l.replace(/-/g, "\u2212"));
+    const words = [
+      ...set(["Coordinates of each structure, with its energies beside it"], 60, 60),
+      ...set(["Compound 1"], 60, 80),
+      ...set(notes, 60, 91),
+      ...set(atoms, 330, 91),
+    ];
+    // (its heads and feet those of every page, the next one's the water's, set out alike)
+    const next = [...set(["Water"], 60, 80), ...set(notes, 60, 91), ...set(WATER, 330, 91)];
+    const [s, w, ...more] = readCoordinates(textOfPages([page(head(14), words), page(head(15), next)]));
+    expect(more).toHaveLength(0);
+    expect([s.name, formulaOf(s.atoms), s.warnings, !!s.mixed]).toEqual(["Compound 1", "C2H6O", [], false]);
+    expect([w.name, formulaOf(w.atoms), w.notes]).toEqual(["Water", "H2O", notes]);
+    expect(s.atoms[0]).toEqual({ el: "C", x: -1.17, y: -0.4, z: 0 });
   });
 
   it("reads a table of one column, its x, y and z set far apart, as one", () => {
