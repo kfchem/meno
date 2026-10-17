@@ -755,7 +755,13 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule).
+  P, is the rest of the molecule). The structure is grown with its blades
+  so turned from the start, at each angle, as well as flat, and every
+  start is set right and measured alike: grown flat, four PPh₃ round a
+  metal lie phenyl on phenyl in pairs, every frame the same drawing
+  turned, and setting that right went by hairs. Blades of two hubs are
+  two things: one drawn on the other is a fault, as anywhere else - only
+  the atoms of one solid may lie over each other's ink.
 - **Clean-up draws a complex as writing out its label does**: the same
   engine, given the same structure - a haptic bond's star with its pi
   system - and each star put afterwards at the centre of its system's
@@ -778,7 +784,8 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn
-   aryl rings crowded round an atom as a propeller (section 7).
+   aryl rings crowded round an atom as a propeller (section 7), where
+   they were not grown so.
 6. Set the pieces of a salt or a mixture side by side, the largest first,
    with a bond and a half of paper between one's ink and the next's: a
    label's symbol, its H beside it and its charge count as ink (an OH
