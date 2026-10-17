@@ -40,7 +40,7 @@ describe("words on the page typed as they are meant", () => {
   });
 
   it("set no space after a comma that is part of a name: between locants, and between numbers", () => {
-    for (const w of ["1,2-DCE", "2,6-lutidine", "1,4-dioxane", "1',2'-dideoxy", "2,2,6,6-tetramethylpiperidine", "4a,8a-dihydro", "N,N-DMF", "N,O-bis(trimethylsilyl)acetamide", "(R,R)-DIPAMP", "(S,S)-Ph-BPE", "(E,Z)-diene", "(1R,2S)-ephedrine", "1,000 g"])
+    for (const w of ["1,2-DCE", "2,6-lutidine", "1,4-dioxane", "1',2'-dideoxy", "2,2,6,6-tetramethylheptane", "4a,8a-dihydro", "N,N-DMF", "N,O-bis(trimethylsilyl)acetamide", "(R,R)-DIPAMP", "(S,S)-Ph-BPE", "(E,Z)-diene", "(1R,2S)-ephedrine", "1,000 g"])
       expect(typing(w)).toBe(w);
     // (and with words around them, as conditions are written)
     expect(typing("2,6-lutidine,TBSOTf")).toBe("2,6-lutidine, TBSOTf");
