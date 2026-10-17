@@ -191,7 +191,10 @@ function filledShape(pts: Point[], curved: boolean): { stroke: Stroke } | { wedg
   // (the wider end measured where it is widest in its half: one cut slanting far along - a tip rounded, its wide end cut
   // along the bond it meets for a sixth of its length - is narrower a tenth in)
   const widest = (sign: number) => Math.max(...[0.1, 0.2, 0.3, 0.4].map((f) => widthAt(sign * f * long)));
-  const [n0, n1] = [widthAt(-0.4 * long), widthAt(0.4 * long)];
+  // (the narrower end measured a tenth in, and nearer its end too: a narrow end capped with a short point - its sides cut in to it from
+  // a little way back, as some programs draw a wedge's - is narrower there)
+  const narrowAt = (sign: number) => Math.min(widthAt(sign * 0.4 * long), ...[0.45, 0.48].map((f) => widthAt(sign * f * long) || Infinity));
+  const [n0, n1] = [narrowAt(-1), narrowAt(1)];
   const [m0, m1] = [widest(-1), widest(1)];
   const [w0, w1] = m1 >= m0 ? [n0, m1] : [m0, n1];
   const fill = Math.abs(area(pts)) / (long * short);

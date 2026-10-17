@@ -154,6 +154,18 @@ describe("a figure's shapes", () => {
     expect(r.atoms).toHaveLength(4);
   });
 
+  it("reads a wedge whose narrow end is capped with a short point as a wedge narrow at that point", () => {
+    // (2 wide at its wide end, its sides 0.9 apart where they are cut in to the point, 0.6 short of it)
+    const s = shapesOf(figure([filled([10, 0], [12, 0], [11.45, 5.6], [11, 6.2], [10.55, 5.6])]));
+    expect(s.wedges).toHaveLength(1);
+    expect(s.wedges[0].tip.y).toBeGreaterThan(5.5);
+    expect(s.wedges[0].base.y).toBeCloseTo(0, 1);
+    // (and one slanting, its point shorter: 0.3 from where its sides are cut in)
+    const slant = shapesOf(figure([filled([20, 7], [18.3, 6.1], [22, 0.25], [22.5, 0], [22.85, 0.35])]));
+    expect(slant.wedges).toHaveLength(1);
+    expect(slant.wedges[0].tip.y).toBeLessThan(0.5);
+  });
+
   it("leaves out what is drawn in paper's colour", () => {
     const white = { ...filled([0, 0], [10, 0], [10, 10], [0, 10]), fill: "#ffffffff" };
     expect(shapesOf(figure([white])).blobs).toHaveLength(0);
