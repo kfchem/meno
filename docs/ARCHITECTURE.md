@@ -253,8 +253,8 @@ other are not kept. Tauri's window API only; no crate of its own.
 
 A release started from the Finder or Explorer has no terminal, so what
 Meno says of itself is written to a file as well, `<app data>/logs/meno.log`
-(on a Mac in `~/Library/Application Support/com.kfchem.meno/logs/`, on
-Windows in `%APPDATA%\com.kfchem.meno\logs\`). Everything still goes where it
+(on a Mac in `~/Library/Application Support/Meno/logs/`, on
+Windows in `%APPDATA%\Meno\logs\`). Everything still goes where it
 went before, to stderr and the page's console.
 
 - **What goes in**: a line saying which Meno started (its version, the
@@ -281,10 +281,10 @@ went before, to stderr and the page's console.
   write to it too. The page sends at most 100 lines a minute; those past
   that are counted, and the next line says how many were left out. A line
   from the page is cut at 4000 bytes.
-- The log is begun before Tauri is built, in the data folder as the system
-  says it (its folder for apps' data, and Meno's identifier), so that a
-  panic as Meno starts is in it; where Tauri has the folder elsewhere it
-  carries on there. Lines from before either, in the first moments, are
+- The log is begun before Tauri is built, in Meno's data folder as
+  `folders.rs` finds it - the one Tauri has too (*Where Meno keeps what*) -
+  so that a panic as Meno starts is in it; where Tauri has the folder
+  elsewhere it carries on there. Lines from before either, in the first moments, are
   kept, up to 200, and written once it is begun.
 - **Settings > General, *Open log folder*** shows the log in the Finder or
   Explorer (`log_spot`: the log itself, or its folder, made first where
@@ -1031,21 +1031,70 @@ when the lock or Python version changes. uv runs with its Python downloads
 uv-managed Pythons, and no user uv configuration (`uv_command` in `lib.rs`):
 nothing of Meno's environments lands in the user's own directories.
 
+### Where Meno keeps what
+
+Meno's folders are named `Meno` in the system's folders for applications'
+data, local data and caches (`folders.rs`; tauri.conf.json's
+`appDirectoriesOverride`, so that Tauri's `app_*_dir`, the webview's
+`BaseDirectory`, the file scopes and the job runner all find the same ones):
+
+| | Mac | Windows | Linux |
+| --- | --- | --- | --- |
+| data: settings, the log, the window's place | `~/Library/Application Support/Meno` | `%APPDATA%\Meno` | `$XDG_DATA_HOME/Meno` |
+| local data: environments, tools, jobs, plugins' downloads | the data folder | `%LOCALAPPDATA%\Meno\data` | the data folder |
+| caches: PDFs' pages, ligand data | `~/Library/Caches/Meno` | the local data folder | `$XDG_CACHE_HOME/Meno` |
+
 The local app data dir (`local_data_dir` in `lib.rs`, `BaseDirectory.AppLocalData`
 in the webview) holds what is large and of this computer alone: uv's and pixi's
 environments, caches and Pythons, the tools (`tools.rs`), jobs and what plugins
-download. On Windows that is `%LOCALAPPDATA%\com.kfchem.meno`, not the roaming
-`%APPDATA%` one, which a domain may copy to a server and back at each sign-in
-and keep within a quota; the settings and the network log stay in the roaming
-one. On a Mac and on Linux the two are one folder. A Meno before 0.1.13 kept
-all of it in the roaming folder on Windows; nothing is moved - plugins are set
-up again as they are next used - and what was left there is taken away
-(`roaming.rs`), by name only: `uv`, `pixi` and `tools` at each start while
-they are there, and a plugin's environment there as the plugin is removed;
-`jobs` only where it holds no job. While a job there still waits or runs,
-everything there is left, as its program may be using its environment; jobs
-kept there are left with their files. What is left, and why, goes in Meno's
-log.
+download. On Windows it is in the local application data folder, not the
+roaming `%APPDATA%` one, which a domain may copy to a server and back at each
+sign-in and keep within a quota; the settings and the network log stay in the
+roaming one. It is a folder of its own in `%LOCALAPPDATA%\Meno`, where Meno is
+installed for one user: the page may write in its local data folder (the file
+scopes in `capabilities/main.json`), and never over Meno itself, its PDF
+library or the plugins' scripts it runs. The installer writes only its own
+files there, so an update leaves the folder as it is; the uninstaller takes
+it away only when asked to delete Meno's data as well. On a Mac and on Linux
+the data and local data folders are one.
+
+**From before 0.1.14.** A Meno before 0.1.14 named its folders by its
+identifier then, `com.kfchem.meno`. At a start, before anything uses them,
+what is in those is moved into Meno's folders (`folders::move_old`), entry by
+entry: renamed (the same volume), or copied and then taken away where it
+cannot be renamed; never over a file already in Meno's folder - each entry is
+renamed whole, so one there was moved already, and what is in the old folder
+after the first move was written by an earlier Meno started since, whose
+fresh settings must not replace the real ones (the old copy is dropped, and
+the log says so; folders merge entry by entry, so an earlier Meno's new jobs
+still come across); links moved as links. Cut short, it is done again from
+where it stopped at the next start, and the old folder goes once it is
+empty. What the move does goes in Meno's log. Not moved:
+
+- the webview's data (`EBWebView`, Windows): caches, made again;
+- the Python environments made (`uv/<name>/venv`, and pixi's `.pixi` and
+  `activation.json`), which name the folder they were made in, and links in
+  `uv/python` left pointing nowhere: each environment is set up again at its
+  first use, from uv's and pixi's caches and Pythons, which move, so that
+  little or nothing is downloaded - and nothing asked, as the settings with
+  what was allowed move, and each plugin's record of being set up (its
+  stamp) and its downloaded files stay;
+- while a job of the old folder waits or runs: the environments, tools and
+  jobs, as its program may be using them; they move at a start after it has
+  ended (where meanwhile uv's or pixi's was made again in the new folder,
+  that one is kept and the old one taken away);
+- on a Mac and on Linux, of the old caches folder only Meno's own (`pdf`,
+  `ccd`): the rest is the system's.
+
+A Meno before 0.1.13 kept all of it in the roaming folder on Windows; nothing
+of that is moved - plugins are set up again as they are next used - and what
+was left there is taken away (`roaming.rs`), by name only: `uv`, `pixi` and
+`tools` at each start while they are there, and a plugin's environment there
+as the plugin is removed; `jobs` only where it holds no job. While a job there
+still waits or runs, everything there is left, as its program may be using its
+environment; jobs kept there are left with their files. The rest of that
+folder - the settings, the log, the window's place - moves as above, and the
+folder goes once it is empty. What is left, and why, goes in Meno's log.
 
 ### PDFs
 

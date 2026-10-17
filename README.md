@@ -92,11 +92,12 @@ installed yourself are used where they are; Meno never downloads them.
 - **Mac**: drag Meno from Applications to the Bin.
 
 Meno keeps its settings, its plugins' Python environments and downloads, and
-calculation jobs in its own folder: `~/Library/Application Support/com.kfchem.meno`
-on a Mac. On Windows the settings are in `%APPDATA%\com.kfchem.meno`, and the
-rest, which is large and of this computer alone, in
-`%LOCALAPPDATA%\com.kfchem.meno`. Delete those folders to remove them too. Your
-own files are wherever you saved them.
+calculation jobs in its own folder: `~/Library/Application Support/Meno` on a
+Mac, with what it keeps of PDFs and downloaded ligand data in
+`~/Library/Caches/Meno`. On Windows the settings are in `%APPDATA%\Meno`, and the
+rest, which is large and of this computer alone, in `%LOCALAPPDATA%\Meno\data`.
+Delete those folders to remove them too. Your own files are wherever you saved
+them.
 
 ## What Meno does
 

@@ -704,8 +704,14 @@ Section Uninstall
     DeleteRegKey /ifempty HKCU "${MANUKEY}"
 
     SetShellVarContext current
-    RmDir /r "$APPDATA\${BUNDLEID}"
-    RmDir /r "$LOCALAPPDATA\${BUNDLEID}"
+    ; Meno's folders (src-tauri/src/folders.rs): its roaming one, and its local
+    ; data in the folder of its own beside Meno - then that folder, emptied - and
+    ; those a Meno before 0.1.14 kept, named by its identifier then
+    RmDir /r "$APPDATA\${PRODUCTNAME}"
+    RmDir /r "$LOCALAPPDATA\${PRODUCTNAME}\data"
+    RmDir "$LOCALAPPDATA\${PRODUCTNAME}"
+    RmDir /r "$APPDATA\com.kfchem.meno"
+    RmDir /r "$LOCALAPPDATA\com.kfchem.meno"
   ${EndIf}
 
   !ifmacrodef NSIS_HOOK_POSTUNINSTALL

@@ -49,23 +49,6 @@ fn state() -> MutexGuard<'static, State> {
     STATE.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Meno's data folder as the system says it before Tauri is built - its
-/// folder for apps' data, and Meno's identifier in it, where Tauri puts it
-/// too (`app_data_dir`) - so that the log is begun before anything else
-/// is; none where the system does not say.
-pub fn data_dir_before(identifier: &str) -> Option<PathBuf> {
-    #[cfg(target_os = "macos")]
-    let base = std::env::var_os("HOME").map(|home| PathBuf::from(home).join("Library/Application Support"));
-    #[cfg(windows)]
-    let base = std::env::var_os("APPDATA").map(PathBuf::from);
-    #[cfg(all(unix, not(target_os = "macos")))]
-    let base = std::env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .filter(|p| p.is_absolute())
-        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")));
-    base.filter(|b| b.is_absolute()).map(|b| b.join(identifier))
-}
-
 /// The log begun - or carried on - in `dir`, a line saying which Meno this
 /// is first, then the lines kept from before; nothing where it is kept
 /// there already.
@@ -260,13 +243,6 @@ mod tests {
         assert_eq!(cut("abcdef", 4), "abcd");
         // ("é" is two bytes: not cut through)
         assert_eq!(cut("aé", 2), "a");
-    }
-
-    #[test]
-    fn the_data_folder_before_tauri_is_meno_s_own() {
-        let dir = data_dir_before("com.kfchem.meno").unwrap();
-        assert!(dir.is_absolute());
-        assert!(dir.ends_with("com.kfchem.meno"));
     }
 
     #[test]

@@ -23,7 +23,7 @@
       <string>Owner</string>
       <key>LSItemContentTypes</key>
       <array>
-        <string>com.kfchem.meno.workspace</string>
+        <string>dev.kfchem.meno.workspace</string>
       </array>
       <key>CFBundleTypeIconFile</key>
       <string>meno-document.icns</string>
@@ -33,7 +33,7 @@
   <array>
     <dict>
       <key>UTTypeIdentifier</key>
-      <string>com.kfchem.meno.workspace</string>
+      <string>dev.kfchem.meno.workspace</string>
       <key>UTTypeDescription</key>
       <string>Meno workspace</string>
       <key>UTTypeConformsTo</key>
