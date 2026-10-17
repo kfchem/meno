@@ -49,6 +49,8 @@ The settings (all checked by the worker that wrote them):
     softness    how soft the shadows are: the key light's width, in degrees
     quality     a film's: "high", "medium" or "lossless"
     look        the look's name; those with materials and light of their own (looks.py) are made by it
+    motion      a film's motion, where it is one of this plugin's (studio.py, motion_<id>.py): made of the molecules
+                the scene's extras hold, in the motion's own studio and finish; `mode`, "once" or "loop"
     silver_finish, copper_finish, wood, marble, pile, clay_colour, porcelain_finish   the choices that adjust them
     shading     "lit", as a renderer lights it, or "toon": each material a Toon BSDF in the colour it had,
                 lit in one band - `band` its size - which Cycles draws as a band, without noise removal
@@ -577,6 +579,57 @@ def assemble(frames, s, folder):
         bpy.ops.render.render(write_still=True, scene=made.name)
 
 
+# The motions this plugin makes (manifest `motions`), each timed in a length of its own: a film of another length plays it
+# faster or slower. Those that loop of themselves; the others loop as a cycle - played forward, then back - whose ends are
+# held still, so that the seam does not show. Reveal loops of itself only in the dark studio (its rims circling); on white
+# it cycles.
+NOMINAL = {"reveal": 7.0, "pulse": 6.0, "assemble": 8.0, "scan": 7.0, "dissolve": 7.0}
+LOOPS = {"pulse", "scan"}
+
+
+def motion_film(s, meno, folder):
+    """A film of one of this plugin's motions: studio.py builds the studio and the molecule Meno wrote into the scene's
+    extras, the motion's own script (motion_<id>.py) keys it and renders each frame. The frames, in the order the film
+    plays them."""
+    motion = s["motion"]
+    white = s["background"] in ("white", "transparent")
+    loop = s["mode"] == "loop"
+    native = motion in LOOPS or (motion == "reveal" and not white)
+    cycle = loop and not native
+    total = s["frames"]
+    n = total // 2 + 1 if cycle else total
+    cfg = {
+        "molecules": meno.get("molecules") or [],
+        "seconds": n / s["fps"], "nominal": None if (loop and native) else NOMINAL[motion],
+        "frames": n, "fps": s["fps"], "mode": "loop" if (loop and native) else "once",
+        "width": s["width"], "height": s["height"], "percent": 100,
+        "samples": s["samples"], "noise": 0.01, "bg": "white" if white else "dark",
+        "pulses": max(1, int(round(n / s["fps"] / 3.0))),
+        "out": os.path.join(folder, "frames"),
+    }
+    space = {"CFG": cfg, "__name__": "motion"}
+    with open(os.path.join(folder, "studio.py"), encoding="utf-8") as f:
+        exec(compile(f.read(), "studio.py", "exec"), space)
+    scene = bpy.context.scene
+    # (where it renders, now that the studio has reset Blender: the graphics processor, unless asked for the processor or none)
+    gpu = s["device"] != "cpu" and gpu_ready()
+    scene.cycles.device = "GPU" if gpu else "CPU"
+    say("Rendering on the graphics processor" if gpu else ("Rendering on the processor" if s["device"] == "cpu" else FELL_BACK))
+    progress = Progress(n)
+    bpy.app.handlers.render_pre.append(progress.begin_frame)
+    bpy.app.handlers.render_stats.append(progress.stats)
+    bpy.app.handlers.render_post.append(lambda *_: progress.frame_done())
+    say("progress 0/100")
+    with open(os.path.join(folder, f"motion_{motion}.py"), encoding="utf-8") as f:
+        exec(compile(f.read(), f"motion_{motion}.py", "exec"), space)
+    progress.end()
+    made = sorted(glob.glob(os.path.join(cfg["out"], "f_*.png")))
+    if len(made) != n:
+        raise SystemExit(f"render.py: Blender rendered {len(made)} of {n} frames")
+    # (a cycle: forward, then back, its turning frames once each)
+    return made + made[-2:0:-1] if cycle else made
+
+
 def main():
     s = settings_of()
     folder = os.getcwd()
@@ -584,6 +637,10 @@ def main():
     with open(scene_path, encoding="utf-8") as f:
         gltf = json.load(f)
     meno = (gltf.get("scenes") or [{}])[0].get("extras", {}).get("meno", {})
+    if s.get("motion"):
+        assemble(motion_film(s, meno, folder), s, folder)
+        say(f"Rendered {s['out']}")
+        return
     scene = empty_scene()
     take_in(scene, scene_path, s["fps"])
     scene = bpy.context.scene
