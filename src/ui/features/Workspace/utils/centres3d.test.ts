@@ -4,6 +4,7 @@ import { STYLE_3D } from "../../../../lib/chem/style3d";
 import type { Molecule3D } from "../store/types";
 import { bondLines, pictureMarks, solidOf, withCentres } from "./molecule3d";
 import { blocksOf, centresIn, moleculeOf } from "../chem/make3d";
+import { linkOf } from "./drawnLink";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
 import { shadedLines } from "../components/shading3d";
@@ -118,6 +119,13 @@ describe("a bond from a metal to a ring's or double bond's centre, in 3D (eta)",
     // the star left out, the rest numbered on: Fe 0, ring 1-5, Cl 6
     expect(m.centres).toEqual([{ metal: 0, atoms: [1, 2, 3, 4, 5] }]);
     expect(m.bonds.some((b) => b.a1 === 0 && b.a2 >= 1 && b.a2 <= 5)).toBe(false);
+    // its drawing, left alone, is still its drawing: its star no atom of the molecule, but of the structure
+    expect(linkOf(m, model)).toBe("live");
+    // a ring atom made another element, or the bond to the ring taken away with its star: drawn otherwise
+    expect(linkOf(m, { ...model, atoms: model.atoms.map((a) => (a.id === 3 ? { ...a, el: "N" } : a)) })).toBe("changed");
+    expect(linkOf(m, { atoms: model.atoms.filter((a) => a.id !== 7), bonds: model.bonds.filter((b) => b.id !== 20) })).toBe("changed");
+    // the metal made another
+    expect(linkOf(m, { ...model, atoms: model.atoms.map((a) => (a.id === 1 ? { ...a, el: "Ru" } : a)) })).toBe("changed");
   });
 
   it("is shaded once: a shade for each stick drawn, the molecule given as drawn or as it is", () => {
@@ -168,5 +176,41 @@ describe("a bond from a metal to a ring's or double bond's centre, in 3D (eta)",
     const blocks = blocksOf(zr, [1]);
     expect(blocks).toHaveLength(1);
     expect(blocks[0].centres?.map((x) => x.atoms.length)).toEqual([5, 5]);
+  });
+
+  it("stays its drawing's, made from an alkene bound through both carbons (eta2) or a ring bound bond by bond", () => {
+    for (const eta2 of [true, false]) {
+      const model: Model = {
+        atoms: [
+          { id: 1, x: 0, y: 0, r: 0.9, el: "Pt" },
+          { id: 2, x: -0.5, y: 1.2, r: 0.9, el: "C" },
+          { id: 3, x: 0.5, y: 1.2, r: 0.9, el: "C" },
+          { id: 4, x: 0, y: -1.5, r: 0.9, el: "Cl" },
+          ...(eta2 ? [{ id: 5, x: 0, y: 1.2, r: 0.9, el: "*" }] : []),
+        ],
+        bonds: [
+          { id: 10, a: 2, b: 3, order: 2 as const },
+          { id: 11, a: 1, b: 4, order: 1 as const },
+          ...(eta2
+            ? [{ id: 12, a: 1, b: 5, order: 1 as const, coordination: true, endpoints: [2, 3], attach: "all" as const }]
+            : [{ id: 12, a: 1, b: 2, order: 1 as const }, { id: 13, a: 1, b: 3, order: 1 as const }]),
+        ],
+      };
+      const [block] = blocksOf(model, [1]);
+      const n = model.atoms.length;
+      const answer: Conformers = {
+        atoms: [...model.atoms.map((a) => ({ el: a.el, charge: 0 }))],
+        bonds: [],
+        frames: [Array.from({ length: 3 * n }, (_, i) => i)],
+        ...(eta2 ? { stars: [4] } : {}),
+        field: "none",
+        cip: { atoms: {}, bonds: {} },
+        chosen: { atoms: {}, bonds: {} },
+        smiles: "",
+      };
+      const m = moleculeOf(answer, block);
+      expect(linkOf(m, model), eta2 ? "eta2" : "two bonds").toBe("live");
+      expect(linkOf(m, { ...model, atoms: model.atoms.map((a) => (a.id === 2 ? { ...a, el: "N" } : a)) })).toBe("changed");
+    }
   });
 });
