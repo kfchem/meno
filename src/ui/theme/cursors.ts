@@ -7,7 +7,8 @@
  * them up.
  *
  * Asked for by `data-cursor` on an element (`setCursor`, or the attribute
- * itself); the rules are written once, as Meno starts (`installCursors`). Each is an SVG, at the
+ * itself); held for a whole drag, over whatever the pointer goes, by
+ * `holdCursor`; the rules are written once, as Meno starts (`installCursors`). Each is an SVG, at the
  * screen's own scale where the webview takes `image-set` (WebKit and
  * Chromium both do), else at 1x; and the system's of the same meaning
  * behind it, where neither is to be had.
@@ -103,16 +104,22 @@ const url = (svg: string) => `url("data:image/svg+xml,${encodeURIComponent(svg)}
 /**
  * The CSS that gives each pointer to the elements that ask for it: at 1x
  * first, then - where the webview reads it - at the screen's scale, the
- * system's pointer behind each.
+ * system's pointer behind each. And each held over the whole page
+ * (`holdCursor`): over every element, before any pointer one asks for -
+ * words over which a drag passes ask for the text cursor.
  */
 export function cursorCss(): string {
   const spot = `${SIZE / 2} ${SIZE / 2}`;
   return (Object.keys(CURSORS) as CursorName[])
-    .map((name) => {
+    .flatMap((name) => {
       const { fallback } = CURSORS[name];
       const one = url(cursorSvg(name, 1));
       const set = `-webkit-image-set(${one} 1x, ${url(cursorSvg(name, 2))} 2x, ${url(cursorSvg(name, 3))} 3x)`;
-      return `[data-cursor="${name}"] { cursor: ${one} ${spot}, ${fallback}; cursor: ${set} ${spot}, ${fallback}; }`;
+      const held = `[data-cursor-held="${name}"]`;
+      return [
+        `[data-cursor="${name}"] { cursor: ${one} ${spot}, ${fallback}; cursor: ${set} ${spot}, ${fallback}; }`,
+        `${held}, ${held} * { cursor: ${one} ${spot}, ${fallback} !important; cursor: ${set} ${spot}, ${fallback} !important; }`,
+      ];
     })
     .join("\n");
 }
@@ -130,4 +137,17 @@ export function installCursors(doc: Document = document): void {
 export function setCursor(el: HTMLElement, name: CursorName | null): void {
   if (name) el.dataset.cursor = name;
   else delete el.dataset.cursor;
+}
+
+/**
+ * One of Meno's pointers held over the whole page until let go - the
+ * function returned - whatever the pointer goes over: for a drag, whose
+ * pointer stays what the drag does, run ahead of what it drags or not.
+ */
+export function holdCursor(name: CursorName, doc: Document = document): () => void {
+  const root = doc.documentElement;
+  root.dataset.cursorHeld = name;
+  return () => {
+    if (root.dataset.cursorHeld === name) delete root.dataset.cursorHeld;
+  };
 }

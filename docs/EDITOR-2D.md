@@ -1255,7 +1255,7 @@ All hover-based, as above.
     Backspace under the pointer or from their menu, too.
   - Made wider or narrower by their edges, shown as they are lit (the
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
-    it, the other edge staying where it is, their words are broken at
+    it - kept through the drag, over the words too - the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
     each as fit, each line still centred, a number or a range never parted
     from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two
