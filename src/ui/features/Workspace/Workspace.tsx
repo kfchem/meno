@@ -74,6 +74,7 @@ import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
+import SettingsStyleAsk from "./SettingsStyleAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -1668,6 +1669,8 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
+      {ownTab && <SettingsStyleAsk active={active} />}
       <AnimatePresence>
         {givingOrders && (
           <OrdersCard
