@@ -1060,6 +1060,8 @@ export type EditorState = {
   hoveredPicture: number | null;
   /** Pictures put where they were made for - renders' - that come onto the page as the view is: it eased to them as they were begun, and moves no more. */
   picturesLaid: ReadonlySet<number>;
+  /** Where renders under way will put what they make, in the page's units (render/renders): kept clear by what is put on the page meanwhile. */
+  renderFrames: readonly { x0: number; y0: number; x1: number; y1: number }[];
   setHoveredPicture: (id: number | null) => void;
   /** The pictures selected, by id: besides `sel`, which is the drawing's. */
   selPictures: Set<number>;
@@ -1069,7 +1071,7 @@ export type EditorState = {
   togglePictureSel: (id: number) => void;
   /** Pictures held put on the page, as one step: the first's middle where `at` is, the others beside it in a row - clear of what lies there, unless `just` there - selected; their ids. */
   addPictures: (pictures: PictureToAdd[], at: { x: number; y: number }, just?: boolean) => number[];
-  /** A picture made for a place on the page - a render's - put there, clear of the pictures there, as one step: its id; none where nothing changed. */
+  /** A picture made for a place on the page - a render's - put just there, as one step: its id; none where nothing changed. */
   putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
