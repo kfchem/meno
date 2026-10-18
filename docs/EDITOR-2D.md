@@ -717,7 +717,11 @@ All hover-based, as above.
   - Nothing jumps (the maintainer, 2026-10-18). Begun by a letter, the
     letter grows out of the atom, from 0.4 of its size, as it comes into
     view, while the atom's bonds draw back to make room for it - both in
-    120 ms (`WRITE_MS`, DURATION.quick, eased). Each letter after, the
+    120 ms (`WRITE_MS`, DURATION.quick), eased in and out as what moves the
+    drawing in place is (theme/motion `easeInOut`), and counted by the
+    frames drawn (`frameClock`): the canvas is busy for a moment as a label
+    begins, and a clock of its own would have had the motion mostly done
+    by the first frame. Each letter after, the
     bonds go on to make room in as long, from where they had come. Let
     go, the letters draw back into the atom as the bonds come back and the
     label it had fades back in (`labelEnd`, Labels2D `arriving`). Kept, it

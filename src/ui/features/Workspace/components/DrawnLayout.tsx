@@ -20,7 +20,7 @@ import { NEW_ATOM, type StrokeNode } from "../utils/stroke";
 import { ChainGrow } from "../utils/chainGrow";
 import { CHAIN_EASE } from "../constants";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { DURATION, easeOut } from "../../../theme/motion";
+import { DURATION, easeOut, frameClock } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
 import { nearZoom, SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
 import { starsAtTheirAtoms } from "../chem/eta";
@@ -397,14 +397,15 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   // and back to its label as drawn (lib/chem/layout2d `Writing`): the
   // writing (LabelTyping2D) draws the letters, the drawing none for it.
   const labelEdit = useEditor((s) => s.labelEdit);
-  const labelEnd = useEditor((s) => s.labelEnd);
   const writes = useRef(new Map<number, { n: number; step: WriteStep }>());
   const lastLaid = useRef<{ atoms: LAtom[]; layout: Layout } | null>(null);
   const writtenOut = useRef(new Map<number, { from: LAtom; n: number; out: LAtom }>());
   const [writeTick, setWriteTick] = useState(0);
   const writeOn = useRef(false);
+  // (counted by the frames drawn: the canvas busy as a label begins takes the bonds no further than a frame would)
+  const [writeClock] = useState(() => frameClock());
   const written: LAtom[] = useMemo(() => {
-    const now = performance.now();
+    const now = writeClock.now();
     const map = writes.current;
     const set = labelSetOf(opts);
     const letters = (text: string) => writtenLetters(text, opts.fontPx, set).items;
@@ -432,8 +433,7 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       if (id === editing) continue;
       // (kept or let go: back to its label as drawn, from what was written)
       if (entry.step.text != null) {
-        const since = labelEnd?.n === entry.n ? labelEnd.at : now;
-        map.set(id, { n: entry.n, step: { n: nextWriteStep(), since, was: entry.step, hidden: false } });
+        map.set(id, { n: entry.n, step: { n: nextWriteStep(), since: now, was: entry.step, hidden: false } });
       } else if (!writeMoving(entry.step, now)) map.delete(id);
     }
     writeOn.current = [...map.values()].some((e) => writeMoving(e.step, now));
@@ -455,9 +455,10 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
       return out;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- writeTick: a frame of the way
-  }, [drawnAtoms, labelEdit, labelEnd, writeTick, opts]);
-  useFrame(() => {
+  }, [drawnAtoms, labelEdit, writeTick, opts]);
+  useFrame((_, dt) => {
     if (!writeOn.current) return;
+    writeClock.tick(dt);
     setWriteTick((n) => n + 1);
     invalidate();
   });

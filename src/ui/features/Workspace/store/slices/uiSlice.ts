@@ -112,7 +112,7 @@ export function createUiSlice(
       set((prev: EditorState) => ({
         ...prev,
         labelEdit: { active: false, atomId: null, value: "" },
-        labelEnd: labelEdit.n != null ? { n: labelEdit.n, atomId: id, how: changed ? "kept" : "same", at: performance.now() } : prev.labelEnd,
+        labelEnd: labelEdit.n != null ? { n: labelEdit.n, atomId: id, how: changed ? "kept" : "same" } : prev.labelEnd,
         // (written anew: drawn as written until the drawing's own label is)
         labelLeft: changed && labelEdit.n != null ? { atomId: id, n: labelEdit.n, text: value } : prev.labelLeft,
         // (kept by Enter: an Enter straight after draws it out - the drawing and its selection as they are now, to tell nothing came between)
@@ -147,7 +147,7 @@ export function createUiSlice(
         labelEdit: { active: false, atomId: null, value: "" },
         labelEnd:
           prev.labelEdit.active && prev.labelEdit.n != null && prev.labelEdit.atomId != null
-            ? { n: prev.labelEdit.n, atomId: prev.labelEdit.atomId, how: "cancelled", at: performance.now() }
+            ? { n: prev.labelEdit.n, atomId: prev.labelEdit.atomId, how: "cancelled" }
             : prev.labelEnd,
       })),
 

@@ -5,6 +5,7 @@ import { acsWorldOptions, NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { labelSetOf } from "../../../../lib/chem/layout2d";
 import { clickSpread, DRAW_BACK_MS, SPREAD_MS } from "../components/selectionShade";
 import { WRITE_MS, writeMoving, writingAt, writtenLetters } from "../utils/writtenLetters";
+import { frameClock } from "../../../theme/motion";
 
 /** Two carbons bonded, as the canvas has them. */
 function editor() {
@@ -110,7 +111,9 @@ describe("a label's letters as they are written over its atom", () => {
     const first = { n: 1, text: "O", items: [], since: 0, hidden: true };
     const next = { n: 2, text: "OM", items: [], since: 60, was: first, hidden: true };
     expect(writingAt(first, 0).k).toBe(0);
-    expect(writingAt(first, 60).k).toBeGreaterThan(0.5);
+    // (eased in and out: gentle off the start, half way at half the time)
+    expect(writingAt(first, 10).k).toBeLessThan(0.01);
+    expect(writingAt(first, 60).k).toBeCloseTo(0.5, 9);
     const at = writingAt(next, 90);
     expect(at.k).toBeGreaterThan(0);
     expect(at.was?.k).toBeGreaterThan(writingAt(first, 60).k);
@@ -118,5 +121,19 @@ describe("a label's letters as they are written over its atom", () => {
     expect(writingAt(next, 60 + WRITE_MS)).toEqual({ items: [], k: 1, hidden: true });
     expect(writeMoving(next, 100)).toBe(true);
     expect(writeMoving(next, 60 + WRITE_MS)).toBe(false);
+  });
+});
+
+describe("a short motion's clock, counted by the frames drawn", () => {
+  it("takes a frame slow to come no further than one on time - a busy canvas skips none of the motion", () => {
+    const c = frameClock();
+    c.tick(1 / 60);
+    expect(c.now()).toBeCloseTo(1000 / 60, 9);
+    // (a tenth of a second late: a 60th of one)
+    c.tick(0.1);
+    expect(c.now()).toBeCloseTo(2000 / 60, 9);
+    // (a 120 Hz display's frames as they come)
+    c.tick(1 / 120);
+    expect(c.now()).toBeCloseTo(2000 / 60 + 1000 / 120, 9);
   });
 });

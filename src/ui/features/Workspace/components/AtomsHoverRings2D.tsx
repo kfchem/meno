@@ -57,7 +57,9 @@ export default function AtomsHoverRings2D() {
     let moving = false;
     for (const [k, r] of rings.current) {
       const inward = k === id;
-      const u = Math.min(1, Math.max(0, r.u + (inward ? dt / DUR_IN : -dt / DUR_OUT)));
+      // (a frame slow to come - the canvas busy, a label begun - taking it no further than a 30th of a second would)
+      const d = Math.min(dt, 1 / 30);
+      const u = Math.min(1, Math.max(0, r.u + (inward ? d / DUR_IN : -d / DUR_OUT)));
       if (u !== r.u) {
         r.u = u;
         moving = true;

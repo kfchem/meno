@@ -1397,11 +1397,11 @@ export type EditorState = {
     selectAll?: boolean;
   };
   /**
-   * How the last label edit ended, and when: kept and changed (`kept`),
+   * How the last label edit ended: kept and changed (`kept`),
    * kept as it was (`same`), or let go (`cancelled`) - what the writing and
    * the label it had do as it goes (LabelTyping2D, Labels2D).
    */
-  labelEnd: { n: number; atomId: number; how: "kept" | "same" | "cancelled"; at: number } | null;
+  labelEnd: { n: number; atomId: number; how: "kept" | "same" | "cancelled" } | null;
   /**
    * A label just written, drawn as it was written until the drawing's own is
    * drawn in its place (LabelTyping2D), so that it never goes from the page

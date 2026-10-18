@@ -24,7 +24,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { CAPTION_LINE, captionPlaces } from "../../../../lib/chem/captions";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { easeOut } from "../../../theme/motion";
+import { easeInOut, easeOut } from "../../../theme/motion";
 import type { TypingField } from "../../TextEditor/typingField";
 import { useEditor, useEditorStore } from "../store";
 import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
@@ -52,11 +52,11 @@ const GO_MS = 160;
 const GROWN_FROM = 0.4;
 
 /**
- * A label being written (`typing`, since it began), kept and waiting for
+ * A label being written (`typing`), kept and waiting for
  * the drawing's own (`left`), or going (`gone`, since when, and how it
  * ended); `grow`, begun by a letter typed over the atom.
  */
-type Session = { n: number; atomId: number; phase: "typing" | "left" | "gone"; begun: number; grow: boolean; since?: number; how?: "kept" | "same" | "cancelled" };
+type Session = { n: number; atomId: number; phase: "typing" | "left" | "gone"; grow: boolean; since?: number; how?: "kept" | "same" | "cancelled" };
 
 /** Where the pointer was last in the window: where a label begun by a key finds it. */
 const pointer: { x: number | null; y: number | null } = { x: null, y: null };
@@ -120,8 +120,8 @@ export default function LabelTyping2D() {
   const live = new Map<number, Session>();
   const now = performance.now();
   const known = (n: number) => sessions.current.get(n);
-  if (left) live.set(left.n, { n: left.n, atomId: left.atomId, phase: "left", begun: known(left.n)?.begun ?? now, grow: known(left.n)?.grow ?? false });
-  if (edit.active && edit.n != null && edit.atomId != null) live.set(edit.n, { n: edit.n, atomId: edit.atomId, phase: "typing", begun: edit.opened?.at ?? now, grow: !!edit.grow });
+  if (left) live.set(left.n, { n: left.n, atomId: left.atomId, phase: "left", grow: known(left.n)?.grow ?? false });
+  if (edit.active && edit.n != null && edit.atomId != null) live.set(edit.n, { n: edit.n, atomId: edit.atomId, phase: "typing", grow: !!edit.grow });
   for (const [n, s] of sessions.current) {
     if (live.has(n) || s.phase === "gone") continue;
     // (kept and drawn: gone as the drawing's own label is there; else as the edit ended)
@@ -214,10 +214,10 @@ function Typing({ session }: { session: Session }) {
   const nowDrawn: WritingDrawn = { items: laid.items, places, shown, sel: ed.sel, c, halfW: laid.halfW, halfH: laid.halfH };
   latest.current = nowDrawn;
   if (drawnNow.current && sameTexts(drawnNow.current.items, nowDrawn.items)) drawnNow.current = nowDrawn;
-  // (when its letters were first drawn: what grows out of the atom grows from then, not while they are being set)
-  const shownSince = useRef<number | null>(null);
+  // (whether its letters have been drawn: what grows out of the atom grows from then, not while they are being set)
+  const shown0 = useRef(false);
   const onDrawn = (items: readonly TextItem[]) => {
-    shownSince.current ??= performance.now();
+    shown0.current = true;
     const l = latest.current;
     if (l && sameTexts(items, l.items)) drawnNow.current = l;
     setTick((t) => t + 1);
@@ -313,18 +313,24 @@ function Typing({ session }: { session: Session }) {
   const opacity = useRef(0);
   // (gone from the page: the frame drawn again without it - the canvas draws only as asked)
   useEffect(() => () => invalidate(), [invalidate]);
-  useFrame(() => {
+  // (each way counted by the frames drawn, each at most a 60th of a second: a busy canvas skips none of it - theme/motion `frameClock`)
+  const inMs = useRef(0);
+  const outMs = useRef(0);
+  const waited = useRef(0);
+  useFrame((_, dt) => {
     const s = sessionNow.current;
-    const t = performance.now();
-    // (nothing drawn a while on - nothing to draw: from when it began)
-    const from = shownSince.current ?? (t - s.begun > 300 ? s.begun : null);
-    const grown = from == null ? 0 : easeOut(Math.min(1, (t - Math.max(s.begun, from)) / WRITE_MS));
+    const step = Math.min(Math.max(dt, 0), 1 / 60) * 1000;
+    // (nothing drawn a while on - nothing to draw: on from then)
+    if (!shown0.current && (waited.current += dt * 1000) > 300) shown0.current = true;
+    if (shown0.current) inMs.current += step;
+    const grown = easeInOut(inMs.current / WRITE_MS);
     let seen = grown;
     let size = s.grow ? GROWN_FROM + (1 - GROWN_FROM) * grown : 1;
-    let moving = from == null || grown < 1;
+    let moving = grown < 1;
     if (s.phase === "gone") {
+      outMs.current += step;
       const ms = s.how === "kept" ? GO_MS : WRITE_MS;
-      const gone = easeOut(Math.min(1, (t - (s.since ?? t)) / ms));
+      const gone = s.how === "kept" ? easeOut(outMs.current / ms) : easeInOut(outMs.current / ms);
       seen = Math.min(seen, 1 - gone);
       if (s.how === "cancelled" && s.grow) size = Math.min(size, GROWN_FROM + (1 - GROWN_FROM) * (1 - gone));
       moving = gone < 1;

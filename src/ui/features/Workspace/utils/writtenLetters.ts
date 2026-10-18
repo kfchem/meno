@@ -8,7 +8,7 @@
  */
 import { captionRuns, captionSet } from "../../../../lib/chem/captions";
 import { runsWidth, type LabelSet, type TextItem, type Writing } from "../../../../lib/chem/layout2d";
-import { DURATION, easeOut } from "../../../theme/motion";
+import { DURATION, easeInOut } from "../../../theme/motion";
 
 /**
  * `text` set about its atom, in letters `fs` high: the set as captionSet
@@ -39,8 +39,8 @@ export const WRITE_MS = DURATION.quick * 1000;
  */
 export type WriteStep = { n: number; text?: string; items?: readonly TextItem[]; since: number; was?: WriteStep; hidden: boolean };
 
-/** How far a step has come at `now`: eased, 0 to 1. */
-export const writeK = (s: WriteStep, now: number) => easeOut(Math.min(1, Math.max(0, (now - s.since) / WRITE_MS)));
+/** How far a step has come at `now` (ms, as `since`: a frameClock's): eased in and out, 0 to 1. */
+export const writeK = (s: WriteStep, now: number) => easeInOut(Math.min(1, Math.max(0, (now - s.since) / WRITE_MS)));
 
 /** A step as the layout takes it (lib/chem/layout2d `Writing`), at `now` - those it has come all the way from left out. */
 export function writingAt(s: WriteStep, now: number): Writing {
