@@ -1223,7 +1223,15 @@ All hover-based, as above.
     once every letter of it is drawn, the caret and what is selected with
     it; the words being written take the place of their own only once they
     are drawn, and give it back, kept or let go, only once those are
-    (`Labels2D` `WholeTexts2D`).
+    (`Labels2D` `WholeTexts2D`). Changes coming faster than they are set -
+    a long text made wider by its edge, broken into lines again at each
+    move - the one being set is shown as soon as it is, then the latest:
+    the words keep up with the box, a few frames behind, where each change
+    given up for the next one left them standing still until the pointer
+    did (`textSets`). And none is shown before it is drawn whole: the type
+    packed a batch of letters only as it was first shown, after that
+    frame, and words shown in place of others were a blank for two or
+    three frames (`textBatch`, the maintainer's rule against jumps).
   - Set as a label is set, word by word: a formula's counts low (K₂CO₃,
     Pd₂(dba)₃, Pd(PPh₃)₄), a prefix's t- in italics at a word's start
     (*t*-BuOK, not the o of co-solvent), a sign at a formula's end its
