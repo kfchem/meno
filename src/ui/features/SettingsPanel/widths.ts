@@ -9,5 +9,7 @@
 
 /** Every section's width: room for a style editor's settings beside its preview (StyleEditor/sideBySide). */
 export const SECTION_WIDTH = "max-w-5xl";
+/** The column the tabs and the section share: the section's width (64rem) and the padding (`px-6`, 1.5rem) either side of it. */
+export const COLUMN_WIDTH = "max-w-[67rem]";
 /** The one measure of Settings' explanatory words: a section's account of itself, a setting's, a note under a card. */
 export const PROSE_WIDTH = "max-w-2xl";
