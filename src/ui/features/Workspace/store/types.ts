@@ -461,6 +461,14 @@ export type Molecule3D = {
   drawnFrom?: (number | null)[];
   /** What its drawing was when it was made from it (chem/make3d `signatureOf`). */
   drawnAs?: string;
+  /**
+   * Its bonds from a metal to the centre of a ring, a chain or a double
+   * bond of its atoms (eta: Cp, benzene, allyl, an alkene), by atom index:
+   * each drawn as one stick from the metal to its atoms' centre, as its
+   * drawing has one line (utils/molecule3d `withCentres`). Its atoms keep
+   * their own bonds; the star at the centre is no atom of it.
+   */
+  centres?: { metal: number; atoms: number[] }[];
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
   /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
@@ -1547,6 +1555,11 @@ export type EditorState = {
    * given none): one undo step (document `setStereoShown`).
    */
   setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
+  /**
+   * Metal `metal` bound to a ring through all its atoms - one bond to a star
+   * at its centre, its endpoints the ring's atoms (chem/eta) - as one edit.
+   */
+  bindRing: (metal: number, ring: readonly number[]) => void;
   /** A chain drawn from a new atom on empty space, as one edit. */
   drawStrokeAt: (start: { x: number; y: number }, nodes: readonly StrokeNode[]) => void;
   suppressDoubleClick: (ms?: number) => void;
