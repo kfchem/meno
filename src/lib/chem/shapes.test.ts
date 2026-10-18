@@ -15,9 +15,12 @@ import {
   shapeHit,
   strokePieces,
   strokeTriangles,
+  asBonds,
+  bondLinePtOf,
+  cornerRadius,
+  roundedPt,
   tintOf,
   turned,
-  wordsRoom,
   type ShapeGeometry,
 } from "./shapes";
 
@@ -27,27 +30,13 @@ const box = (kind: ShapeGeometry["kind"], more: Partial<ShapeGeometry> = {}): Sh
 describe("what a shape draws", () => {
   it("goes round a box, its corners square or rounded, and an ellipse smoothly", () => {
     expect(outlineOf(box("rect"), PT)).toEqual({ points: [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 10 }, { x: 0, y: 10 }], closed: true });
-    const rounded = outlineOf(box("rounded"), PT).points;
-    // (no corner itself: rounded off, the radius 9 points at most)
+    const rounded = outlineOf(box("rect", { radius: 9 }), PT).points;
+    // (no corner itself: rounded off, 9 points round)
     expect(rounded.some((p) => p.x === 0 && p.y === 0)).toBe(false);
     expect(Math.min(...rounded.map((p) => p.x))).toBeCloseTo(0);
     expect(Math.max(...rounded.map((p) => p.y))).toBeCloseTo(10);
     const ellipse = outlineOf(box("ellipse"), PT).points;
     for (const p of ellipse) expect(((p.x - 10) / 10) ** 2 + ((p.y - 5) / 5) ** 2).toBeCloseTo(1);
-  });
-
-  it("gives a callout a tail from the side its tip lies beyond, clear of the corners, and none with its tip inside", () => {
-    const below = outlineOf(box("callout", { tail: { x: 4, y: -6 } }), PT).points;
-    expect(below).toContainEqual({ x: 4, y: -6 });
-    // (its base on the bottom side, either side of it)
-    const at = below.findIndex((p) => p.x === 4 && p.y === -6);
-    expect(below[at - 1].y).toBeCloseTo(0);
-    expect(below[at + 1].y).toBeCloseTo(0);
-    expect(below[at - 1].x).toBeLessThan(below[at + 1].x);
-    const right = outlineOf(box("callout", { tail: { x: 30, y: 5 } }), PT).points;
-    const r = right.findIndex((p) => p.x === 30);
-    expect(right[r - 1].x).toBeCloseTo(20);
-    expect(outlineOf(box("callout", { tail: { x: 5, y: 5 } }), PT).points).not.toContainEqual({ x: 5, y: 5 });
   });
 
   it("gives a picture an ellipse's edge, and a rounded box's, as the curve it is - closed, smooth where it begins - and a rectangle's none", () => {
@@ -69,11 +58,9 @@ describe("what a shape draws", () => {
       }
     // (where it begins and ends, the same way: no seam)
     expect((e[1].y - e[0].y) * (e[12].x - e[11].x) - (e[1].x - e[0].x) * (e[12].y - e[11].y)).toBeCloseTo(0, 9);
-    const rounded = outlineCurve(box("rounded"), PT)!;
+    const rounded = outlineCurve(box("rect", { radius: 9 }), PT)!;
     expect(rounded[rounded.length - 1].x).toBeCloseTo(rounded[0].x, 9);
     expect(rounded.some((p) => Math.abs(p.x - 20) < 1e-9 && Math.abs(p.y - 5) < 3)).toBe(true);
-    // (a callout's tail, its tip one of the curve's points)
-    expect(outlineCurve(box("callout", { tail: { x: 4, y: -6 } }), PT)).toContainEqual({ x: 4, y: -6 });
     expect(outlineCurve(box("rect"), PT)).toBeNull();
     expect(outlineCurve({ kind: "line", x0: 0, y0: 0, x1: 1, y1: 1 }, PT)).toBeNull();
     // (flattened for a fill: fine steps along it)
@@ -104,9 +91,15 @@ describe("what a shape draws", () => {
     expect(strokePieces(box("rect"), PT)).toHaveLength(1);
   });
 
-  it("makes a line as wide as its weight says, as triangles either side of it, its corners mitred", () => {
-    expect(lineWidthOf({}, PT)).toBeCloseTo(0.1);
-    expect(lineWidthOf({ weight: "thick" }, PT)).toBeCloseTo(0.2);
+  it("makes a line as wide as the drawing's bonds - following its style - or its own width, as triangles either side of it, its corners mitred", () => {
+    // (as the bonds: a style's bond line, 0.45 points in RSC's)
+    expect(asBonds(box("rect"), 0.45).width).toBe(0.45);
+    expect(lineWidthOf(asBonds(box("rect"), 0.45), PT)).toBeCloseTo(0.045);
+    // (its own, whatever the style)
+    expect(asBonds(box("rect", { width: 2 }), 0.45).width).toBe(2);
+    expect(lineWidthOf({ width: 2 }, PT)).toBeCloseTo(0.2);
+    // (the bonds' width read from a layout's options: its line over its point)
+    expect(bondLinePtOf({ lineWidthPx: 0.075, pointPx: 0.125 })).toBeCloseTo(0.6);
     const t = strokeTriangles(
       [
         { x: 0, y: 0 },
@@ -136,21 +129,26 @@ describe("where a shape is", () => {
     expect(shapeHit(s, { x: 10, y: 5 }, 0.1, PT, false)).toBeNull();
     expect(shapeHit(s, { x: 10, y: 5 }, 0.1, PT, true)).toBe("inside");
     expect(shapeHit(s, { x: 30, y: 5 }, 0.1, PT, true)).toBeNull();
-    // (a line's end is its line's)
-    expect(shapeHit({ kind: "line", x0: 0, y0: 0, x1: 20, y1: 0 }, { x: 19.95, y: 0.04 }, 0, PT, false)).toBe("line");
+    // (a line's end is its line's: a 1 pt line, half a point either side of it)
+    expect(shapeHit({ kind: "line", x0: 0, y0: 0, x1: 20, y1: 0, width: 1 }, { x: 19.95, y: 0.04 }, 0, PT, false)).toBe("line");
     expect(insidePolygon({ x: 0.5, y: 0.5 }, [{ x: 0, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 2 }])).toBe(true);
   });
 
-  it("reaches as far as its line and its tail", () => {
-    const b = shapeBounds(box("callout", { tail: { x: 4, y: -6 } }), PT);
-    expect(b.y0).toBeCloseTo(-6 - 0.05);
+  it("reaches as far as its line", () => {
+    const b = shapeBounds(box("rect", { width: 1 }), PT);
+    expect(b.y0).toBeCloseTo(-0.05);
     expect(b.x1).toBeCloseTo(20.05);
   });
 
-  it("holds its words about its middle, as wide as it is inside - an ellipse's within it - and a line none", () => {
-    expect(wordsRoom(box("rect"), 1)).toEqual({ x: 10, y: 5, width: 18 });
-    expect(wordsRoom(box("ellipse"), 1)!.width).toBeCloseTo(20 * Math.SQRT1_2 - 2);
-    expect(wordsRoom({ kind: "line", x0: 0, y0: 0, x1: 1, y1: 0 }, 1)).toBeNull();
+  it("rounds a rectangle's corners as far as asked, never past half its shorter side - an ellipse's and a line's none", () => {
+    expect(cornerRadius(box("rect"), PT)).toBe(0);
+    expect(cornerRadius(box("rect", { radius: 9 }), PT)).toBeCloseTo(0.9);
+    // (10 units tall: at most 5 round, its ends whole half circles)
+    expect(cornerRadius(box("rect", { radius: 500 }), PT)).toBe(5);
+    expect(cornerRadius(box("ellipse", { radius: 9 }), PT)).toBe(0);
+    // (as *Box around these* rounds them: 9 points, less in a small box)
+    expect(roundedPt(20, 10, PT)).toBeCloseTo(9);
+    expect(roundedPt(2, 1, PT)).toBeCloseTo((1 * 0.18) / PT);
   });
 });
 
@@ -161,10 +159,6 @@ describe("a shape drawn and changed", () => {
     const l = drawnShape("line", { x: 0, y: 0 }, { x: 10, y: 1 }, true);
     expect(l.y1).toBeCloseTo(0);
     expect(l.x1).toBeCloseTo(Math.hypot(10, 1));
-    // (a callout's tail below it, to the left)
-    const c = drawnShape("callout", { x: 0, y: 0 }, { x: 20, y: 10 });
-    expect(c.tail!.y).toBeLessThan(0);
-    expect(c.tail!.x).toBeLessThan(10);
   });
 
   it("is made larger or smaller by a corner or a side, the other staying - its proportions kept with Shift - and a line by its ends", () => {
@@ -173,13 +167,12 @@ describe("a shape drawn and changed", () => {
     expect(reshaped(s, "x1y1", { x: 40, y: 12 }, 1, true)).toMatchObject({ x1: 40, y1: 20 });
     expect(reshaped(s, "x0", { x: 25, y: 99 }, 1)).toMatchObject({ x0: 19, x1: 20, y0: 0, y1: 10 });
     expect(reshaped({ kind: "line", x0: 0, y0: 0, x1: 5, y1: 0 }, "start", { x: -3, y: 4 }, 1)).toMatchObject({ x0: -3, y0: 4, x1: 5, y1: 0 });
-    expect(reshaped(box("callout", { tail: { x: 0, y: -5 } }), "tail", { x: 30, y: 5 }, 1).tail).toEqual({ x: 30, y: 5 });
-    expect(handlesOf(box("callout", { tail: { x: 0, y: -5 } })).map((h) => h.handle)).toContain("tail");
+    expect(handlesOf(box("rect"))).toHaveLength(8);
     expect(handlesOf({ kind: "line", x0: 0, y0: 0, x1: 1, y1: 1 })).toHaveLength(2);
   });
 
-  it("moves whole, its tail with it; turned, a line's ends go round and a box stays upright", () => {
-    expect(moved(box("callout", { tail: { x: 1, y: -1 } }), { x: 2, y: 3 })).toMatchObject({ x0: 2, y0: 3, x1: 22, y1: 13, tail: { x: 3, y: 2 } });
+  it("moves whole, its corners as round; turned, a line's ends go round and a box stays upright", () => {
+    expect(moved(box("rect", { radius: 4 }), { x: 2, y: 3 })).toEqual({ kind: "rect", x0: 2, y0: 3, x1: 22, y1: 13, radius: 4 });
     const t = turned(box("rect"), { x: 0, y: 0 }, Math.PI / 2);
     expect(t.x1 - t.x0).toBeCloseTo(20);
     expect((t.x0 + t.x1) / 2).toBeCloseTo(-5);

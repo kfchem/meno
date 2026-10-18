@@ -25,7 +25,7 @@ describe("Quick Add", () => {
     expect(shapes).not.toContain("Arrow");
   });
 
-  it("offers as shapes the boxes, the line and the callout", () => {
-    expect(rows().shapes).toEqual(["Rectangle", "Rounded rectangle", "Ellipse", "Line", "Callout"]);
+  it("offers as shapes a rectangle - its corners rounded from its menu - an ellipse and a line", () => {
+    expect(rows().shapes).toEqual(["Rectangle", "Ellipse", "Line"]);
   });
 });

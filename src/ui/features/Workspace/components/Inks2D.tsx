@@ -29,6 +29,7 @@ import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
+import { bondLinePtOf } from "../../../../lib/chem/shapes";
 import { boxRaycast, NO_RAYCAST, PartFramesProvider, pixelNow, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 /** Where writing lies: a pen's over the drawing, words and shapes (under the slides' frames, 0.6); a marker's over the shapes and under the drawing's fills (-0.05). */
@@ -50,7 +51,8 @@ type Pt = { x: number; y: number };
 
 /** Strokes as they are drawn, in a piece's look. */
 function StrokesLook({ look, strokes, pointPx, ink, extra = 0, color, opacity }: { look: InkLook; strokes: readonly InkStroke[]; pointPx: number; ink: string; extra?: number; color?: string; opacity?: number }) {
-  const width = inkWidth(look, pointPx) + extra;
+  // (a pen as wide as the drawing's bonds, where it writes so)
+  const width = inkWidth(look, pointPx, bondLinePtOf(useDrawnLayout().opts)) + extra;
   const marker = look.pen === "marker";
   // (a marker's own colour: the first of the set in use)
   const own = markerColour(setInUse(useAppSettings((s) => s.colours)));
@@ -121,7 +123,7 @@ const InkItem = memo(function InkItem({ k, z, pointPx, ink, selected, hovered, t
   // (the canvas's state taken a part at a time: the whole of it would draw every piece again as any of it changed)
   const camera = useThree((st) => st.camera);
   const invalidate = useThree((st) => st.invalidate);
-  const width = inkWidth(k, pointPx);
+  const width = inkWidth(k, pointPx, bondLinePtOf(useDrawnLayout().opts));
   // the light round its strokes, under the pointer or selected - there only as long as it is
   const [glowing, setGlowing] = useState(false);
   if ((hovered || selected) && !glowing) setGlowing(true);
@@ -242,7 +244,7 @@ function LightRound({ k, pointPx, to, gone }: { k: Ink; pointPx: number; to: num
   useEffect(() => () => material.dispose(), [material]);
   // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
   const px = 1 / useDrawnZoom();
-  const width = inkWidth(k, pointPx) + 2 * LIT_PX * px;
+  const width = inkWidth(k, pointPx, bondLinePtOf(useDrawnLayout().opts)) + 2 * LIT_PX * px;
   const marker = k.pen === "marker";
   const geometry = useMemo(() => strokesGeometry(k.strokes, width, !marker), [k.strokes, width, marker]);
   useEffect(() => () => geometry.dispose(), [geometry]);

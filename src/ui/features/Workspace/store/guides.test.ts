@@ -65,7 +65,7 @@ describe("guides as what is selected is moved", () => {
   it("make a shape as wide as another near it by the side its handle moves, and as tall by its top or bottom", () => {
     const { store, state } = editor();
     const a = state().addShape({ kind: "rect", x0: 0, y0: 0, x1: 4, y1: 2 })!;
-    state().addShape({ kind: "rounded", x0: 6, y0: 0, x1: 11, y1: 3 });
+    state().addShape({ kind: "rect", x0: 6, y0: 0, x1: 11, y1: 3, radius: 3 });
     state().selectShapes([a]);
     const g = guideSides(store, toWorld, { x: 0, y: 0 });
     // (its right side dragged to 4.98 wide: 5, as the other is; its top to 2.97 tall: 3)

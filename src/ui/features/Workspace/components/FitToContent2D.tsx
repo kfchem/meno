@@ -20,7 +20,7 @@ import { pdfRoom } from "../../../../lib/pdf/layout";
 import { cornersOf } from "../utils/selection";
 import { sheetRoom } from "../utils/textSheets";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { shapeBounds } from "../../../../lib/chem/shapes";
+import { asBonds, bondLinePtOf, shapeBounds } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { schemeExtent } from "../utils/schemeExtent";
 import { partsBounds } from "../workflow/parts";
@@ -127,7 +127,7 @@ export default function FitToContent2D({
     }
     // and the shapes, all they draw (docs/PRESENTING.md, *Shapes*)
     for (const sh of shapes) {
-      const b = shapeBounds(sh, opts.pointPx ?? 0);
+      const b = shapeBounds(asBonds(sh, bondLinePtOf(opts)), opts.pointPx ?? 0);
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
     }
@@ -139,7 +139,7 @@ export default function FitToContent2D({
     }
     // and writing by hand (docs/PRESENTING.md, *Handwriting*)
     for (const k of inks) {
-      const b = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+      const b = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0, bondLinePtOf(opts)) / 2);
       if (!b) continue;
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };

@@ -293,7 +293,7 @@ rest is listed under them, a row each as before (`PartMenu`, `menuIcons`).
 | A PDF | read, previous page, next page (its pages stacked), an icon or full size; Delete | copy (words chosen on it), put on the page, copy picture, read as structure (a box drawn on it), spread or gather pages, put pages in rows (spread, some in places of their own), write on it |
 | A text's sheet | read, an icon or full size; Delete | |
 | A picture | copy picture (not a film); Delete | show in the PDF (one cut out of a PDF), read as structure (not a film), play or pause (a film), save picture or save film |
-| A shape | edit text (a box), colour; Delete | thin, regular or thick line, dashed line, bring to front, send to back |
+| A shape | colour; Delete | corners (a rectangle), line as bonds, 1 pt or 2 pt line, dashed line, bring to front, send to back |
 | Writing by hand | colour; Delete | |
 | A slide's edge or number | present from here, earlier, later, show the page around it; Delete | 16:9 or 4:3, select what is on it |
 | A step | run and run from here (or stop, while it runs), options; Delete | show log, show files, save as procedure |
@@ -370,8 +370,8 @@ arrow (from the first atom or bond pressed, *Electron-pushing arrows*
 below), a slide of what is seen (docs/PRESENTING.md), *Pen* - its card
 opened, to write by hand with the mouse or the trackpad
 (docs/PRESENTING.md, *Handwriting*; a pen writes anywhere, always) - and
-*Shapes*, which opens a row below it of a rectangle, a rounded one, an
-ellipse, a line and a callout - each drawn from where the double-click
+*Shapes*, which opens a row below it of a rectangle, an ellipse and a
+line - each drawn from where the double-click
 was by a drag from its icon, or traced with the button up until a click
 (docs/PRESENTING.md, *Shapes*). A choice puts it down where the
 double-click was; Escape, a press elsewhere or a turn of the wheel closes

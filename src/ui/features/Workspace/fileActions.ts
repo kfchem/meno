@@ -6,7 +6,7 @@ import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
 import { mapStanding, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
+import { asBonds, bondLinePtOf, fillOutline, flattenedCurve, lineWidthOf, outlineCurve, shapeBounds, strokePieces } from "../../../lib/chem/shapes";
 import { inkColour, inkWidth, markerColour, MARKER_OPACITY, strokeOutline, strokesBounds } from "../../../lib/chem/ink";
 import { setInUse } from "../../../lib/chem/palette";
 import { createSVG, labelBox, labelSetOf, measureLabelBox, type Layout, type LayoutOptions } from "../../../lib/chem/layout2d";
@@ -332,7 +332,8 @@ export function drawingLayout(
     );
   }
   // and the shapes, under all of it, as the canvas draws them (docs/PRESENTING.md, *Shapes*)
-  const shapes = model.shapes ?? [];
+  // (each line as wide as the bonds', where it has no width of its own)
+  const shapes = (model.shapes ?? []).map((s) => asBonds(s, bondLinePtOf(opts)));
   if (shapes.length) {
     const pointPx = opts.pointPx ?? 0;
     const ink = opts.bondColor ?? "#000000";
@@ -364,13 +365,13 @@ export function drawingLayout(
     const marker = markerColour(setInUse(useAppSettings.getState().colours));
     layout.inks = inks.flatMap((k) =>
       k.strokes.map((s) => ({
-        points: strokeOutline(s, inkWidth(k, pointPx), k.pen !== "marker"),
+        points: strokeOutline(s, inkWidth(k, pointPx, bondLinePtOf(opts)), k.pen !== "marker"),
         color: inkColour(k, ink, marker),
         ...(k.pen === "marker" ? { opacity: MARKER_OPACITY } : {}),
         over: k.pen !== "marker",
       })),
     );
-    const boxes = inks.flatMap((k) => strokesBounds(k.strokes, inkWidth(k, pointPx) / 2) ?? []);
+    const boxes = inks.flatMap((k) => strokesBounds(k.strokes, inkWidth(k, pointPx, bondLinePtOf(opts)) / 2) ?? []);
     if (boxes.length)
       take(
         boxes.flatMap((b) => [b.x0, b.x1]),

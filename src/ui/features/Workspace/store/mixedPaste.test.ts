@@ -23,11 +23,8 @@ describe("a copy of slides, shapes with words, a structure and words, pasted tog
       ],
       bonds: [{ id: 3, a: 1, b: 2, order: 1 as const }],
       slides: [{ id: 4, x: 0, y: 0, w: 32, h: 18 }],
-      shapes: [{ id: 9, kind: "rounded" as const, x0: -5, y0: 5, x1: 5, y1: 9 }],
-      captions: [
-        { id: 2, x: 0, y: 7, text: "in the box", width: 9, shape: 9 },
-        { id: 3, x: 0, y: -6, text: "below" },
-      ],
+      shapes: [{ id: 9, kind: "rect" as const, x0: -5, y0: 5, x1: 5, y1: 9, radius: 3 }],
+      captions: [{ id: 3, x: 0, y: -6, text: "below" }],
     };
     const depth = doc.history().undoDepth;
     // (as Meno's own record of a copy carries them)
@@ -37,10 +34,8 @@ describe("a copy of slides, shapes with words, a structure and words, pasted tog
     expect(state().slides).toHaveLength(1);
     expect(state().shapes).toHaveLength(2);
     const box = state().shapes[1];
-    const inBox = state().captions.find((c) => c.text === "in the box")!;
-    expect(inBox.shape).toBe(box.id);
-    // (about the box's middle, where it now is)
-    expect(inBox.x).toBeCloseTo((box.x0 + box.x1) / 2);
+    expect(box).toMatchObject({ kind: "rect", radius: 3 });
+    expect(state().captions.map((c) => c.text)).toEqual(["there", "below"]);
     expect([...state().selShapes]).toEqual([box.id]);
     expect(state().selSlides.size).toBe(1);
     expect(state().sel.atoms.size).toBe(2);

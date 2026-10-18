@@ -116,31 +116,3 @@ describe("a selection turned over with the things selected with it", () => {
   });
 });
 
-describe("words in a shape not selected, among atoms that are", () => {
-  function scene() {
-    const e = editor();
-    const { st } = e;
-    const a = st().addAtom(0, 0, "C");
-    const b = st().addAtom(40, 0, "N");
-    const shape = st().addShape({ kind: "rect", x0: 5, y0: -5, x1: 15, y1: 5 })!;
-    const words = st().addCaption("in", 10, 0, undefined, undefined, 10, undefined, { shape });
-    st().setSel({ atoms: new Set([a, b]), bonds: new Set() });
-    return { ...e, shape, words };
-  }
-
-  it("stay in their shape as the atoms are turned over - the shape's, not the atoms'", () => {
-    const { st, shape, words } = scene();
-    st().turnSelectionOver("vertical");
-    const s = st().shapes.find((x) => x.id === shape)!;
-    const c = st().captions.find((x) => x.id === words)!;
-    expect(c.shape).toBe(shape);
-    expect(c.x).toBeCloseTo((s.x0 + s.x1) / 2, 9);
-  });
-
-  it("stay in their shape as the atoms are deleted", () => {
-    const { st, shape } = scene();
-    st().deleteSelection();
-    expect(st().shapes.some((x) => x.id === shape)).toBe(true);
-    expect(st().captions).toHaveLength(1);
-  });
-});

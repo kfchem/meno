@@ -19,8 +19,18 @@ export type InkPen = "pen" | "marker";
 /** A stroke: its points (x, y and the pressure at each), and whether the pressure was the pen's own. */
 export type InkStroke = { points: number[]; pressure?: true };
 
-/** The widths each pen writes in, in points: thin, regular and thick. */
-export const INK_WIDTHS_PT: Record<InkPen, readonly [number, number, number]> = { pen: [0.75, 1.5, 3], marker: [6, 10, 16] };
+/**
+ * The widths each pen writes in, in points: a pen first as wide as the
+ * drawing's bonds - null, as one writes to begin with, following the
+ * drawing's style - then 1.5 and 3, kept whatever the style; a marker
+ * 6, 10 or 16.
+ */
+export const INK_WIDTHS_PT: Record<InkPen, readonly [number | null, number, number]> = { pen: [null, 1.5, 3], marker: [6, 10, 16] };
+
+/** A width as each pen writes it, in points, in a drawing whose bonds' lines are `bondLinePt` wide. */
+export function inkWidthPt(k: { pen: InkPen; width: 0 | 1 | 2 }, bondLinePt: number): number {
+  return INK_WIDTHS_PT[k.pen][k.width] ?? bondLinePt;
+}
 /** How see-through a marker is. */
 export const MARKER_OPACITY = 0.38;
 
@@ -244,9 +254,9 @@ export function strokeTurned(s: InkStroke, about: Vec2, angle: number): InkStrok
   return { ...s, points };
 }
 
-/** How wide a piece of writing is, in the page's units. */
-export function inkWidth(k: { pen: InkPen; width: 0 | 1 | 2 }, pointPx: number): number {
-  return INK_WIDTHS_PT[k.pen][k.width] * pointPx;
+/** How wide a piece of writing is, in the page's units, in a drawing whose bonds' lines are `bondLinePt` points wide. */
+export function inkWidth(k: { pen: InkPen; width: 0 | 1 | 2 }, pointPx: number, bondLinePt: number): number {
+  return inkWidthPt(k, bondLinePt) * pointPx;
 }
 
 /** The colour a piece is written in: its own, or its pen's - a pen's the drawing's `ink`, a marker's `marker` (`markerColour`). */

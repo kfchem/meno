@@ -67,11 +67,9 @@ export function useClipboardActions(
     // (and the PDFs and texts' sheets selected: carried whole, by what they are)
     const pdfs = only != null ? [] : state.pdfs.filter((p) => state.selPdfs.has(p.id));
     const sheets = only != null ? [] : state.texts.filter((t) => t.at && state.selTexts.has(t.id));
-    // (and the slides selected, in the talk's order; and the shapes selected, from the back, with the words in them)
+    // (and the slides selected, in the talk's order; and the shapes selected, from the back)
     const slides = only != null ? [] : state.slides.filter((s) => state.selSlides.has(s.id));
     const shapes = only != null ? [] : state.shapes.filter((s) => state.selShapes.has(s.id));
-    const inShapes = state.captions.filter((c) => c.shape != null && shapes.some((s) => s.id === c.shape) && !words.some((w) => w.id === c.id));
-    words.push(...inShapes);
     // (and the arrows and "+" signs selected for themselves - one pointing at something - with the words over those arrows)
     const lone = only != null ? [] : state.arrows.filter((a) => state.selArrows.has(a.id));
     const lonePluses = only != null ? [] : state.pluses.filter((p) => state.selPluses.has(p.id));

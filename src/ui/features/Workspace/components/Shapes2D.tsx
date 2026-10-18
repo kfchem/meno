@@ -8,12 +8,16 @@
  * to what is under it. A drag moves the view; held still a moment, it is
  * taken hold of - lit from the pointer out - and selected, and the drag
  * then moves it. A click selects it alone; Ctrl (⌘ on a Mac) and a click
- * adds it to the selection or takes it out; a second click writes in it -
- * a box - as its words are written anywhere. Selected, it is lit along its
- * line, with a handle at each corner and side of a box, each end of a
- * line, and a callout's tail: dragged, it takes that corner, side, end or
- * tail along, one step - Shift keeping a box's proportions, a line to steps
- * of 15 degrees. What is drawn over it - atoms, bonds, words, arrows - is
+ * adds it to the selection or takes it out. A shape is a shape: no words
+ * are written in it. Selected, it is lit along its line, with a handle at
+ * each corner and side of a box and each end of a line: dragged, it takes
+ * that corner, side or end along, one step - Shift keeping a box's
+ * proportions, a line to steps of 15 degrees. A rectangle selected alone
+ * has one more, inside its top left corner, where its corners' curve
+ * begins: dragged along its top, it rounds them, from square to round
+ * ends. Its corners rounded otherwise - from its menu, by an undo - go
+ * round or square eased; its line is as wide as the drawing's bonds unless
+ * it has a width of its own. What is drawn over it - atoms, bonds, words, arrows - is
  * pressed, not it. Lit along its line while the pointer is on it.
  */
 import * as THREE from "three";
@@ -27,6 +31,9 @@ import { setCursor, type CursorName } from "../../../theme/cursors";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import {
+  asBonds,
+  bondLinePtOf,
+  cornerRadius,
   drawnShape,
   fillOutline,
   handlesOf,
@@ -35,18 +42,17 @@ import {
   middleOf,
   outlineOf,
   reshaped,
+  roundestOf,
   shapeBounds,
   shapeHit,
   strokePieces,
   strokeTriangles,
-  wordsRoom,
   type ShapeGeometry,
   type ShapeHandle,
 } from "../../../../lib/chem/shapes";
 import { pageAt } from "../utils/page";
 import { guideScale, guideSides } from "../utils/guiding";
 import { dragSelection } from "../utils/dragSelection";
-import { SHAPE_PAD } from "../document";
 import { DOUBLE_CLICK_MS, LONG_PRESS_MS } from "../constants";
 import { HeldGlow } from "./HeldLight";
 import { type Held } from "./held";
@@ -67,6 +73,10 @@ const CHOSEN = 0.38;
 const HANDLE_PX = 5;
 const HANDLE_HIT = 2;
 const LEAST_PX = 8;
+/** How far in from a rectangle's top left corner its corners' handle stands at least, on the screen, in pixels: clear of the corner's own. */
+const ROUND_IN_PX = 14;
+/** The rectangles whose corners are being rounded by their handle: drawn as the handle goes, not eased. */
+const roundedByHand = new Set<number>();
 /** How far a press may move and still be a click, and before it moves the view (PanZoom2D's), in pixels. */
 const CLICK_PX = 4;
 const PAN_PX = 3;
@@ -75,7 +85,7 @@ const POINT_FALLBACK = NOMINAL_BOND_LENGTH / 14.4;
 
 /**
  * What every selected shape's handles draw with, made once and shared: what
- * a press takes, never drawn; the white, a callout's tail lit instead; the
+ * a press takes, never drawn; the white; the
  * ring. (A handle each, each its own three parts, was some twenty-four a box:
  * thousands selected took seconds to come and to go.)
  */
@@ -85,7 +95,7 @@ const HANDLE_RING = new THREE.RingGeometry(0.68, 1, 20);
 const HANDLE_FILL = new THREE.MeshBasicMaterial({ color: "#ffffff", depthTest: false, toneMapped: false });
 const HANDLE_LINE = new THREE.MeshBasicMaterial({ color: COLORS.highlight, depthTest: false, toneMapped: false });
 const WHITE = new THREE.Color("#ffffff");
-const TAIL = new THREE.Color(COLORS.highlight);
+const ROUND = new THREE.Color(COLORS.highlight);
 
 type Pt = { x: number; y: number };
 
@@ -173,6 +183,16 @@ export default function Shapes2D() {
   const { opts } = useDrawnLayout();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const ink = opts.bondColor ?? "#000000";
+  // (each drawn with its line as wide as the bonds', where it has no width of its own - the same one for a shape that has not changed: drawn again only as it does)
+  const bondLinePt = bondLinePtOf(opts);
+  const asDrawn = useMemo(() => {
+    const kept = new WeakMap<Shape, Shape>();
+    return (s: Shape) => {
+      let d = kept.get(s);
+      if (!d) kept.set(s, (d = asBonds(s, bondLinePt)));
+      return d;
+    };
+  }, [bondLinePt]);
   const camera = useThree((st) => st.camera);
   const gl = useThree((st) => st.gl);
   // (each shape's work at each frame done from this one callback: partFrames)
@@ -185,37 +205,24 @@ export default function Shapes2D() {
     },
     [gl, camera],
   );
-  // (the last click on each, on its line or a handle, for a second: its words written)
-  const clicks = useMemo(() => new Map<number, number>(), []);
   // (the selected ones, their handles drawn all together)
-  const chosen = useMemo(() => shapes.flatMap((s, i) => (selShapes.has(s.id) ? [{ s, z: Z + i * Z_STEP }] : [])), [shapes, selShapes]);
-  const drafted = draft ? { kind: draft.kind, ...drawnShape(draft.kind, draft.from, draft.to, draft.even) } : null;
+  const chosen = useMemo(() => shapes.flatMap((s, i) => (selShapes.has(s.id) ? [{ s: asDrawn(s), z: Z + i * Z_STEP }] : [])), [shapes, selShapes, asDrawn]);
+  const drafted = draft ? asBonds({ kind: draft.kind, ...drawnShape(draft.kind, draft.from, draft.to, draft.even) }, bondLinePt) : null;
   return (
     <PartFramesProvider value={parts}>
       <group>
         {shapes.map((s, i) => (
-          <ShapeItem key={s.id} s={s} z={Z + i * Z_STEP} pointPx={pointPx} ink={ink} selected={selShapes.has(s.id)} hovered={hovered === s.id} toWorld={toWorld} clicks={clicks} />
+          <ShapeItem key={s.id} s={asDrawn(s)} z={Z + i * Z_STEP} pointPx={pointPx} ink={ink} selected={selShapes.has(s.id)} hovered={hovered === s.id} toWorld={toWorld} />
         ))}
         {drafted && (
           <group position={[0, 0, Z + shapes.length * Z_STEP]}>
             <ShapeLook s={drafted} pointPx={pointPx} ink={ink} opacity={0.75} />
           </group>
         )}
-        {chosen.length > 0 && <Handles chosen={chosen} toWorld={toWorld} clicks={clicks} />}
+        {chosen.length > 0 && <Handles chosen={chosen} toWorld={toWorld} pointPx={pointPx} />}
       </group>
     </PartFramesProvider>
   );
-}
-
-/** Its words written: those it has, the caret at their end - or new ones, about its middle. */
-function writeIn(store: ReturnType<typeof useEditorStore>, s: Shape) {
-  const st = store.getState();
-  const words = st.captions.find((c) => c.shape === s.id);
-  if (words) st.setCaptionEdit({ id: words.id, at: { x: words.x, y: words.y } });
-  else {
-    const room = wordsRoom(s, SHAPE_PAD);
-    if (room) st.setCaptionEdit({ id: null, at: { x: room.x, y: room.y }, shape: s.id });
-  }
 }
 
 // (drawn again only as it changes: a pointer coming onto one shape leaves the other thousands as they were)
@@ -227,7 +234,6 @@ const ShapeItem = memo(function ShapeItem({
   selected,
   hovered,
   toWorld,
-  clicks,
 }: {
   s: Shape;
   z: number;
@@ -236,8 +242,6 @@ const ShapeItem = memo(function ShapeItem({
   selected: boolean;
   hovered: boolean;
   toWorld: (cx: number, cy: number) => Pt;
-  /** The last click on each shape - on its line or a handle - for a second. */
-  clicks: Map<number, number>;
 }) {
   const store = useEditorStore();
   // (the canvas's state taken a part at a time: the whole of it would draw every shape again as any of it changed)
@@ -249,6 +253,13 @@ const ShapeItem = memo(function ShapeItem({
   // taken hold of by a press held on it: where, lit from there
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
   useEffect(() => invalidate(), [held, invalidate]);
+
+  // its corners as round as they now are, eased there - as the handle goes, at once
+  const toRound = s.radius ?? 0;
+  const [shownRound, setShownRound] = useState(toRound);
+  if (shownRound !== toRound && roundedByHand.has(s.id)) setShownRound(toRound);
+  const easing = shownRound !== toRound;
+  const look = easing ? { ...s, radius: shownRound } : s;
 
   const b = useMemo(() => shapeBounds(s, pointPx), [s, pointPx]);
   const m = middleOf(b);
@@ -296,23 +307,9 @@ const ShapeItem = memo(function ShapeItem({
         setHeld((h) => (h && h.let == null ? { ...h, let: performance.now() } : h));
       });
     };
-    // a second click on it: its words written
-    const twice = isBox(s.kind) && ev.timeStamp - (clicks.get(s.id) ?? 0) < DOUBLE_CLICK_MS;
-    // selected: a drag moves the selection - a click alone, the second, writes in it
-    if (st.selShapes.has(s.id) && !twice) {
+    // selected: a drag moves the selection
+    if (st.selShapes.has(s.id)) {
       move();
-      clicks.set(s.id, ev.timeStamp);
-      return;
-    }
-    if (twice) {
-      clicks.delete(s.id);
-      st.suppressDoubleClick(DOUBLE_CLICK_MS);
-      // (on the button coming up, as the caret is put)
-      const up = () => {
-        window.removeEventListener("pointerup", up, true);
-        writeIn(store, s);
-      };
-      window.addEventListener("pointerup", up, true);
       return;
     }
     // else a drag moves the view; held still, it is taken hold of; a click selects it
@@ -343,7 +340,6 @@ const ShapeItem = memo(function ShapeItem({
       s2.clearSel();
       s2.selectShapes([s.id]);
       s2.suppressDoubleClick(DOUBLE_CLICK_MS);
-      clicks.set(s.id, u.timeStamp);
     };
     const stop = () => {
       window.removeEventListener("pointermove", onMoveDrag);
@@ -355,8 +351,9 @@ const ShapeItem = memo(function ShapeItem({
 
   return (
     <group position={[0, 0, z]}>
-      {glowing && <LightAlong s={s} pointPx={pointPx} to={selected ? CHOSEN : hovered ? LIT : 0} gone={() => setGlowing(false)} />}
-      <ShapeLook s={s} pointPx={pointPx} ink={ink} />
+      {glowing && <LightAlong s={look} pointPx={pointPx} to={selected ? CHOSEN : hovered ? LIT : 0} gone={() => setGlowing(false)} />}
+      <ShapeLook s={look} pointPx={pointPx} ink={ink} />
+      {easing && <RoundEase from={shownRound} to={toRound} onStep={setShownRound} />}
       <mesh args={[SQUARE, UNSEEN]} position={[0, 0, Z_STEP / 2]} raycast={raycast} onPointerMove={onMove} onPointerOut={out} onPointerDown={onDown} />
       {held && (
         <group position={[m.x, m.y, 0]}>
@@ -366,6 +363,19 @@ const ShapeItem = memo(function ShapeItem({
     </group>
   );
 });
+
+/** A rectangle's corners going round or square, eased from `from` to `to` (TAU.quick): there only as long as they go - `onStep` told each frame's radius, the last `to`. */
+function RoundEase({ from, to, onStep }: { from: number; to: number; onStep: (r: number) => void }) {
+  const invalidate = useThree((st) => st.invalidate);
+  const now = useRef(from);
+  useEffect(() => invalidate(), [to, invalidate]);
+  usePartFrame((_, dt) => {
+    now.current = Math.abs(now.current - to) < 0.01 ? to : follow(now.current, to, Math.min(dt, 1 / 20), TAU.quick);
+    onStep(now.current);
+    invalidate();
+  });
+  return null;
+}
 
 /**
  * The light along a shape's line, under it: coming as it is lit (`to`) and
@@ -398,32 +408,51 @@ function LightAlong({ s, pointPx, to, gone }: { s: Shape; pointPx: number; to: n
   return <mesh geometry={band} material={material} position={[0, 0, -Z_STEP / 4]} frustumCulled={false} raycast={NO_RAYCAST} />;
 }
 
-/** The pointer each handle shows: a corner's, as it points on the screen; a side's, across or up and down; an end's or a tail's, the move. */
-function cursorOf(h: ShapeHandle): CursorName {
-  if (h === "x0" || h === "x1") return "sideways";
+/** The pointer each handle shows: a corner's, as it points on the screen; a side's - and the one that rounds the corners - across or up and down; an end's, the move. */
+function cursorOf(h: ShapeHandle | "round"): CursorName {
+  if (h === "x0" || h === "x1" || h === "round") return "sideways";
   if (h === "y0" || h === "y1") return "updown";
   if (h === "x0y0" || h === "x1y1") return "corner-up";
   if (h === "x1y0" || h === "x0y1") return "corner-down";
   return "move";
 }
 
-/** A handle of a selected shape, among all of theirs: the shape, how far over the others it is, which handle and where. */
-type HandleOf = { s: Shape; z: number; handle: ShapeHandle; at: Pt };
+/** A handle of a selected shape, among all of theirs: the shape, how far over the others it is, which handle and where - the one that rounds a rectangle's corners standing where its curve begins, on the screen. */
+type HandleOf = { s: Shape; z: number; handle: ShapeHandle | "round"; at: Pt };
+
+/** How far in a rectangle's corners' handle stands from where their curve begins, along its top and down from it, `px` page units to the pixel: `ROUND_IN_PX`, less in a small one. */
+function roundInOf(s: Shape, px: number): number {
+  return Math.min(ROUND_IN_PX * px, (s.y1 - s.y0) / 2, (s.x1 - s.x0) / 4);
+}
+
+/** Where a rectangle's corners' handle stands: in from where their curve begins along its top - from its corner, square - and as far down from it; a drag takes it along with the pointer, the curve beginning as far in as it goes. */
+function roundHandleAt(s: Shape, pointPx: number, px: number): Pt {
+  const inset = roundInOf(s, px);
+  return { x: s.x0 + cornerRadius(s, pointPx) + inset, y: s.y1 - inset };
+}
 
 /**
  * The selected shapes' handles, drawn all together, the same size on the
  * screen at any zoom: a box's at its corners and sides, a line's at its
- * ends, a callout's at its tail. Dragged, each takes what it is at along, as
- * one step; clicked twice, a box's writes in it, as its line does.
+ * ends, and - a rectangle selected alone - the one that rounds its corners,
+ * in the highlight's colour. Dragged, each takes what it is at along, as
+ * one step.
  */
-function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[]; toWorld: (cx: number, cy: number) => Pt; clicks: Map<number, number> }) {
+function Handles({ chosen, toWorld, pointPx }: { chosen: { s: Shape; z: number }[]; toWorld: (cx: number, cy: number) => Pt; pointPx: number }) {
   const store = useEditorStore();
   const gl = useThree((st) => st.gl);
   const camera = useThree((st) => st.camera);
   const invalidate = useThree((st) => st.invalidate);
   // (the view's zoom as the drawing takes it up: laid again as it changes - drawnLayoutContext `useDrawnZoom`)
   const px = 1 / useDrawnZoom();
-  const all = useMemo<HandleOf[]>(() => chosen.flatMap(({ s, z }) => handlesOf(s).map(({ handle, at }) => ({ s, z, handle, at }))), [chosen]);
+  const all = useMemo<HandleOf[]>(
+    () => [
+      ...chosen.flatMap(({ s, z }) => handlesOf(s).map(({ handle, at }) => ({ s, z, handle, at }))),
+      // (placed as the zoom is taken up: `lay`)
+      ...(chosen.length === 1 && chosen[0].s.kind === "rect" ? [{ ...chosen[0], handle: "round" as const, at: { x: 0, y: 0 } }] : []),
+    ],
+    [chosen],
+  );
   // each handle an instance - what a press takes, never drawn; its white; its ring - room kept for more as more are selected
   const room = 2 ** Math.ceil(Math.log2(Math.max(8, all.length)));
   const hit = useRef<THREE.InstancedMesh>(null);
@@ -433,10 +462,11 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
     (px: number) => {
       const meshes = [hit.current, fill.current, ring.current];
       const m = new THREE.Matrix4();
-      all.forEach(({ z, handle, at }, i) => {
-        m.makeScale(HANDLE_PX * px, HANDLE_PX * px, 1).setPosition(at.x, at.y, z + 0.003);
+      all.forEach((h, i) => {
+        const at = h.handle === "round" ? (h.at = roundHandleAt(h.s, pointPx, px)) : h.at;
+        m.makeScale(HANDLE_PX * px, HANDLE_PX * px, 1).setPosition(at.x, at.y, h.z + 0.003);
         for (const mesh of meshes) mesh?.setMatrixAt(i, m);
-        fill.current?.setColorAt(i, handle === "tail" ? TAIL : WHITE);
+        fill.current?.setColorAt(i, h.handle === "round" ? ROUND : WHITE);
       });
       for (const mesh of meshes) {
         if (!mesh) continue;
@@ -447,29 +477,24 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
       }
       invalidate();
     },
-    [all, invalidate],
+    [all, invalidate, pointPx],
   );
   // (laid before they are first drawn, and again as the zoom is taken up)
   useLayoutEffect(() => lay(px), [lay, room, px]);
-  const start = ({ s, handle: h }: HandleOf, ev: PointerEvent) => {
+  const start = ({ s, handle }: HandleOf, ev: PointerEvent) => {
     const px = pixelNow(camera);
-    if (isBox(s.kind) && ev.timeStamp - (clicks.get(s.id) ?? 0) < DOUBLE_CLICK_MS) {
-      clicks.delete(s.id);
-      store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
-      const up = () => {
-        window.removeEventListener("pointerup", up, true);
-        writeIn(store, s);
-      };
-      window.addEventListener("pointerup", up, true);
-      return;
-    }
     const from = { x: ev.clientX, y: ev.clientY };
     const gesture = `reshape-${performance.now()}`;
     const st = store.getState();
     st.beginPanHold(ev.pointerId);
+    if (handle === "round") {
+      roundCorners(s, ev, gesture);
+      return;
+    }
+    const h = handle;
     const was = s;
     // (a box's corner or side: as wide or as tall as something near, where it comes near - its proportions, with Shift; docs/PRESENTING.md, *Guides*)
-    const sides = isBox(was.kind) && h !== "tail" ? { x: h.includes("x0") ? ("x0" as const) : h.includes("x1") ? ("x1" as const) : undefined, y: h.includes("y0") ? ("y0" as const) : h.includes("y1") ? ("y1" as const) : undefined } : null;
+    const sides = isBox(was.kind) ? { x: h.includes("x0") ? ("x0" as const) : h.includes("x1") ? ("x1" as const) : undefined, y: h.includes("y0") ? ("y0" as const) : h.includes("y1") ? ("y1" as const) : undefined } : null;
     const guide = sides ? guideSides(store, toWorld, from) : null;
     const scale = sides?.x && sides.y ? guideScale(store, toWorld, from, was) : null;
     const onMove = (m: PointerEvent) => {
@@ -487,7 +512,7 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
         const f = scale.step((next.x1 - next.x0) / (was.x1 - was.x0), m, keep);
         next = { ...next, ...keep(Math.max(f, (LEAST_PX * px) / Math.min(was.x1 - was.x0, was.y1 - was.y0))) };
       } else if (sides && guide) next = { ...next, ...guide.step(next, sides, m) };
-      store.getState().updateShape(s.id, { x0: next.x0, y0: next.y0, x1: next.x1, y1: next.y1, ...(next.tail ? { tail: next.tail } : {}) }, gesture);
+      store.getState().updateShape(s.id, { x0: next.x0, y0: next.y0, x1: next.x1, y1: next.y1 }, gesture);
     };
     // Escape - or undo, which sends it - lets it go, as large as it was
     const onKey = (k: KeyboardEvent) => {
@@ -506,7 +531,41 @@ function Handles({ chosen, toWorld, clicks }: { chosen: { s: Shape; z: number }[
       window.removeEventListener("keydown", onKey, true);
       guide?.end();
       scale?.end();
-      if (Math.hypot(u.clientX - from.x, u.clientY - from.y) < CLICK_PX) clicks.set(s.id, u.timeStamp);
+      const st2 = store.getState();
+      st2.endPanHold(u.pointerId);
+      st2.suppressDoubleClick(DOUBLE_CLICK_MS);
+      setCursor(gl.domElement, null);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("keydown", onKey, true);
+  };
+  /** Its corners rounded as the handle goes along its top - as far in as the pointer, square at its corner, round ends at half its shorter side - one step; Escape lets them go as they were. */
+  const roundCorners = (s: Shape, ev: PointerEvent, gesture: string) => {
+    roundedByHand.add(s.id);
+    const most = roundestOf(s.x1 - s.x0, s.y1 - s.y0);
+    // (from where the pointer is on the handle, not the handle's middle: no jump as it is pressed - the handle staying under the pointer)
+    const off = toWorld(ev.clientX, ev.clientY).x - roundHandleAt(s, pointPx, pixelNow(camera)).x;
+    const inset = roundInOf(s, pixelNow(camera));
+    const onMove = (m: PointerEvent) => {
+      const r = Math.min(Math.max(toWorld(m.clientX, m.clientY).x - off - inset - s.x0, 0), most);
+      store.getState().updateShape(s.id, { radius: r / pointPx }, gesture);
+    };
+    const end = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("keydown", onKey, true);
+      roundedByHand.delete(s.id);
+    };
+    const onKey = (k: KeyboardEvent) => {
+      if (k.key !== "Escape") return;
+      k.preventDefault();
+      k.stopPropagation();
+      end();
+      store.getState().dropShapeChange(s.id, gesture);
+    };
+    const onUp = (u: PointerEvent) => {
+      end();
       const st2 = store.getState();
       st2.endPanHold(u.pointerId);
       st2.suppressDoubleClick(DOUBLE_CLICK_MS);
