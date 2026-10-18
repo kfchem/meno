@@ -111,6 +111,7 @@ function selectionExtent(
  */
 export default function Selection2D() {
   const { model, sel, boxSelect } = useEditor();
+  const click = useEditor((s) => s.clickShade);
   const sel3d = useEditor((s) => s.sel3d);
   const selPictures = useEditor((s) => s.selPictures);
   const pictures = useEditor((s) => s.pictures);
@@ -608,7 +609,7 @@ export default function Selection2D() {
   const handlePlace = handleSeen.current.at;
   return (
     <group>
-      <SelectionShade2D shown={shownModel} atoms={sel.atoms} bonds={sel.bonds} />
+      <SelectionShade2D shown={shownModel} atoms={sel.atoms} bonds={sel.bonds} click={click} />
       {lastBox && <primitive object={lastBox.fill} />}
       {lastBox && <primitive object={lastBox.line} />}
       {handlePlace && (handleAt || handleSeen.current.level > 0) && (

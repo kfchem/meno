@@ -4,7 +4,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { ATOM_HOVER_RING_RADIUS_RATIO } from "../constants";
 import { TAU, follow } from "../../../theme/motion";
-import { SELECTION_SHADE } from "./selectionShade";
+import { clickSpread, DRAW_BACK_MS, SELECTION_SHADE, SPREAD_MS } from "./selectionShade";
 import type { Model } from "../store/types";
 import { roomFor, selectedParts, type ShadedPart } from "./selectionParts";
 
@@ -42,7 +42,28 @@ function shadings(geometry: THREE.BufferGeometry, room: number): THREE.Instanced
  * instances of them, coloured as they come and go without drawing the
  * canvas's components again.
  */
-export default function SelectionShade2D({ shown, atoms, bonds }: { shown: Model; atoms: ReadonlySet<number>; bonds: ReadonlySet<number> }) {
+export default function SelectionShade2D({
+  shown,
+  atoms,
+  bonds,
+  click,
+}: {
+  shown: Model;
+  atoms: ReadonlySet<number>;
+  bonds: ReadonlySet<number>;
+  /** The atom a click selected last (the store's `clickShade`): its shade spreading, or drawing back. */
+  click?: { atomId: number; at: number; fresh: boolean; back: boolean } | null;
+}) {
+  const clicked = useRef(click);
+  clicked.current = click;
+  /** The key of the atom whose shade spreads or draws back now, and how far: none once it is there. */
+  const spreading = (): { key: string; f: number; back: boolean } | null => {
+    const c = clicked.current;
+    if (!c || !c.fresh) return null;
+    const t = performance.now() - c.at;
+    if (t >= (c.back ? DRAW_BACK_MS : SPREAD_MS)) return null;
+    return { key: `a${c.atomId}`, f: clickSpread(t, c.back), back: c.back };
+  };
   const invalidate = useThree((s) => s.invalidate);
   const parts = useRef(new Map<string, Part>());
   const chosen = useRef(new Set<string>());
@@ -80,10 +101,13 @@ export default function SelectionShade2D({ shown, atoms, bonds }: { shown: Model
     }
     let i = 0;
     let j = 0;
-    for (const e of parts.current.values()) {
-      tint.copy(white).lerp(shade, e.level);
+    const s = spreading();
+    for (const [k, e] of parts.current) {
+      // (a clicked atom's: whole in colour, spreading from it, or drawing back into it)
+      const f = s && s.key === k ? s.f : null;
+      tint.copy(white).lerp(shade, f != null ? 1 : e.level);
       if (e.atom) {
-        m.discs.setMatrixAt(i, place.makeTranslation(e.atom.x, e.atom.y, -0.04));
+        m.discs.setMatrixAt(i, f != null ? place.makeScale(f, f, 1).setPosition(e.atom.x, e.atom.y, -0.04) : place.makeTranslation(e.atom.x, e.atom.y, -0.04));
         m.discs.setColorAt(i++, tint);
       } else if (e.bond) {
         const { p, q } = e.bond;
@@ -120,8 +144,14 @@ export default function SelectionShade2D({ shown, atoms, bonds }: { shown: Model
 
   useFrame((_, dt) => {
     const d = Math.min(dt, 1 / 20);
-    let moving = false;
+    const s = spreading();
+    let moving = !!s;
     for (const [k, e] of parts.current) {
+      // (spread, or drawn back: there at once)
+      if (s?.key === k) {
+        e.level = s.back ? 0 : 1;
+        continue;
+      }
       const to = chosen.current.has(k) ? 1 : 0;
       if (e.level !== to) {
         const n = follow(e.level, to, d, TAU.quick);

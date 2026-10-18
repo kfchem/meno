@@ -159,6 +159,7 @@ export default function PartMenu({
   onExpand,
   onChain,
   asTyped,
+  onEditLabel,
   onArrowStyle,
   onEditText,
   onShowSource,
@@ -218,6 +219,8 @@ export default function PartMenu({
   onChain?: () => void;
   /** Its label as it was typed (obz, read as OBz), and the label made that again; unset, where it was read as typed. */
   asTyped?: { typed: string; run: () => void };
+  /** The atom's label opened to be written in place, holding what it says (docs/EDITOR-2D.md, *Labels typed in place*). */
+  onEditLabel?: () => void;
   /** A reaction arrow's own line and head, in a panel beside the canvas. */
   onArrowStyle: () => void;
   /** The words right-clicked, written anew. */
@@ -858,6 +861,7 @@ export default function PartMenu({
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
+                ...(onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
                 ...(onChain ? [{ name: "Chain from here", keys: "", run: onChain }] : []),
                 { name: radical ? "No unpaired electron" : "Unpaired electron", keys: "", run: onRadical },
                 ...(onExpand ? [{ name: "Expand abbreviation", keys: "", run: onExpand }] : []),

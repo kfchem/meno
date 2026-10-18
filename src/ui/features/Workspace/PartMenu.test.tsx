@@ -71,6 +71,11 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "bond", id: 2 }), { onChain: none }).listed).not.toContain("Chain from here");
   });
 
+  it("lists Edit label first among an atom's entries", () => {
+    expect(menu(target({ kind: "atom", id: 1 }), { onEditLabel: none, onChain: none }).listed).toEqual(["Edit label", "Chain from here", "Unpaired electron", "Select this structure"]);
+    expect(menu(target({ kind: "bond", id: 2 }), { onEditLabel: none }).listed).not.toContain("Edit label");
+  });
+
   it("puts what is done most to an atom first, as icons, Delete at the end, and lists the rest", () => {
     expect(menu(target({ kind: "atom", id: 1 }))).toMatchObject({
       icons: ["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Delete atom"],
