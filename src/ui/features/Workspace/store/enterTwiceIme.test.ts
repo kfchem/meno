@@ -55,3 +55,23 @@ describe("Enter as an input method gives it (Windows)", () => {
     expect(st().model.atoms.length).toBe(3);
   });
 });
+
+describe("Enter twice over a label kept as it was", () => {
+  it("draws out a label typed over an atom that already said it - as a structure read from a figure has its groups", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const c = st().addAtom(0, 0, "C");
+    const x = st().addAtom(NOMINAL_BOND_LENGTH, 0, "OMe");
+    st().addBond(c, x, 1);
+    st().beginLabelEdit(x, "O");
+    st().setLabelEditValue(keptLabel("OMe", labelReading));
+    st().commitLabelEdit("OMe", true);
+    expect(st().labelEnd?.how).toBe("same");
+    expect(st().labelKept).not.toBeNull();
+    expect(st().keyAfterLabel(true)).toBe(true);
+    expect(st().model.atoms.find((a) => a.id === x)?.el).toBe("O");
+    expect(st().model.atoms.length).toBe(3);
+  });
+});
