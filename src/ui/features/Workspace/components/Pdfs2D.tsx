@@ -22,6 +22,7 @@
  * the viewer and goes under; spread or gathered, the pages lift off one
  * after another and settle in their places.
  */
+import { shownUnbroken } from "../../../../lib/pdf/make";
 import * as THREE from "three";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -763,7 +764,7 @@ function PdfStack(props: {
         maxWidth={nameWidth}
         textAlign={iconness > 0.5 ? "center" : "left"}
       >
-        {labelFont(props.type.family).shown(p.name)}
+        {labelFont(props.type.family).shown(shownUnbroken(p.name))}
       </Text>
     </group>
   );
