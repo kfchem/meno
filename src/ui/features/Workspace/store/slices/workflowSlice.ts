@@ -5,6 +5,7 @@ import { valuesOf } from "../../../../../lib/options";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import type { WorkspaceDocument } from "../../document";
 import { style3dOf } from "../../style3d";
+import { ONE_INPUT } from "../../workflow/kinds";
 import { reachOverFrames } from "../../utils/molecule3d";
 import { freePlace, pageBoxes } from "../../utils/freePlace";
 import { styleOf } from "../../../../../lib/chem/style";
@@ -156,13 +157,14 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       if (doc.edit("delete wire", (d) => wf.removeWire(d, id)))
         set((prev: EditorState) => ({ ...prev, hoveredWire: prev.hoveredWire === id ? null : prev.hoveredWire }));
     },
-    rewire: (id: number, to: number) => {
+    rewire: (id: number, to: number, port?: string) => {
       doc.edit("wire", (d) => {
         const w = d.wires?.find((x) => x.id === id);
-        if (!w || w.to === to) return d;
-        const moved = wf.connect(wf.removeWire(d, id), w.from, to);
+        const at = port ?? w?.to.port ?? ONE_INPUT;
+        if (!w || (w.to.step === to && w.to.port === at)) return d;
+        const moved = wf.connect(wf.removeWire(d, id), w.from, to, at);
         // (where it may not go there, it stays where it was)
-        return moved.wires?.some((x) => x.to === to && JSON.stringify(x.from) === JSON.stringify(w.from)) ? moved : d;
+        return moved.wires?.some((x) => x.to.step === to && x.to.port === at && JSON.stringify(x.from) === JSON.stringify(w.from)) ? moved : d;
       });
     },
   };

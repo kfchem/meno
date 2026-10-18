@@ -585,12 +585,10 @@ export type WorkflowSet = {
   y0: number;
   x1: number;
   y1: number;
-  made?: { step: number; holds: SetHolds };
+  /** The step and exit that made it, and what it holds: every exit has a set of its own, made with the step and empty until it runs. */
+  made?: { step: number; exit: string; holds: SetHolds };
   name?: string;
-  aside?: AsideEntry[];
 };
-/** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
-export type AsideEntry = { compound: number; number: number; energy?: number };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -604,7 +602,7 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  * then - its kind and options as they were - and what it gave, as its
  * result set held it, so that it can be shown again.
  */
-export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: { molecules: Omit<Molecule3D, "id" | "at">[]; aside: AsideEntry[]; holds: SetKind } };
+export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind } };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its
@@ -632,10 +630,12 @@ export type WorkflowStep = {
   runs?: StepRunKept[];
   running?: StepRunning;
 };
-/** Where a wire starts: a set, or a step - what it gave. */
-export type WireEnd = { set: number } | { step: number };
-/** A wire, from what gives to the step that takes it. */
-export type Wire = { id: number; from: WireEnd; to: number };
+/** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
+export type WireEnd = { set: number };
+/** Where a wire ends: a step, and which of its inputs. */
+export type WireTo = { step: number; port: string };
+/** A wire, from the set that gives to the input that takes it. */
+export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
 export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "workflowMenu" | "askDeleteStep";
 /**

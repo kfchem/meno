@@ -19,7 +19,7 @@ import type { WorkspaceDocument } from "../../document";
 import { blocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
-import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
+import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
@@ -98,7 +98,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** The step before a step, where one gives what comes into it. */
   const before = (d: WorkspaceDocument, id: number) => {
     const from = wireInto(d, id)?.from;
-    const prior = from ? ("step" in from ? from.step : findSet(d, from.set)?.made?.step) : undefined;
+    const prior = from ? findSet(d, from.set)?.made?.step : undefined;
     return prior != null ? stepOf(d, prior) : undefined;
   };
 
@@ -256,14 +256,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const queue = [id];
     while (queue.length) {
       const at = queue.shift()!;
-      const made = resultOf(d, at)?.id;
+      // (every exit's set: what any of them gives comes down to the steps wired from it)
+      const made = new Set((d.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
       for (const wire of d.wires ?? []) {
-        const from = wire.from;
-        const fromIt = "step" in from ? from.step === at : made != null && from.set === made;
-        if (fromIt && !seen.has(wire.to)) {
-          seen.add(wire.to);
-          out.push(wire.to);
-          queue.push(wire.to);
+        if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
+          seen.add(wire.to.step);
+          out.push(wire.to.step);
+          queue.push(wire.to.step);
         }
       }
     }
