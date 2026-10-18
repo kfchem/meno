@@ -1065,7 +1065,12 @@ structures they hold before any is placed in 3D (docs/FILE-IO.md,
 *Read as structure* is in the PDF's menu when a box is drawn on it (a click
 in a figure in the column, or a long press in one on the stack, draws the
 figure's box), and in a picture's menu when it was cut out of a PDF this
-workspace holds.
+workspace holds. What it reads is put on the page beside the PDF or the
+picture, to the right, clear of all there is on the page - structures,
+words, arrows and signs, pictures, PDFs, sheets, shapes, molecules in 3D,
+a workflow's sets and cards - as what Open puts down is (`pageBoxes`), its
+own labels and words measured as far as they are set; the view eases to
+it where it lies out of view.
 
 **What is read** (`pdf_figure`; `lib/figure`):
 - **What the figure is drawn with**: within the box, each path's steps -

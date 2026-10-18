@@ -6,9 +6,9 @@
  * their names, and the slides. What a slide is made round
  * (docs/PRESENTING.md).
  */
-import { labelSetOf, type Atom as LAtom, type Bond as LBond } from "../../../../lib/chem/layout2d";
+import { labelSetOf, type Atom as LAtom, type Bond as LBond, type LayoutOptions } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
-import { wordsSet } from "../../../../lib/chem/captions";
+import { wordsSet, type Words } from "../../../../lib/chem/captions";
 import { shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
@@ -74,8 +74,8 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
   for (const p of among.pluses) take(p.x - opts.fontPx / 2, p.y - opts.fontPx / 2, p.x + opts.fontPx / 2, p.y + opts.fontPx / 2);
   for (const c of among.captions) {
     // (at their own size, their letters as they are marked)
-    const set = wordsSet(c, opts, labelSetOf(opts));
-    take(c.x - set.halfW, c.y - set.halfH, c.x + set.halfW, c.y + set.halfH);
+    const b = captionBox(c, opts);
+    take(b.x0, b.y0, b.x1, b.y1);
   }
   // the molecules in 3D, as each is turned and shown now
   const style3d = style3dOf(st);
@@ -110,6 +110,12 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
   // (a catalytic cycle: its circle)
   for (const c of st.cycles ?? []) if (st.selCycles?.has(c.id)) take(c.x - c.r, c.y - c.r, c.x + c.r, c.y + c.r);
   return Number.isFinite(b.x0) && Number.isFinite(b.y0) ? b : null;
+}
+
+/** The room words take on the page: at their own size, their letters as they are marked - as the page measures what lies on it. */
+export function captionBox(c: Words, opts: LayoutOptions): Box {
+  const set = wordsSet(c, opts, labelSetOf(opts));
+  return { x0: c.x - set.halfW, y0: c.y - set.halfH, x1: c.x + set.halfW, y1: c.y + set.halfH };
 }
 
 /**
@@ -153,8 +159,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   for (const p of st.pluses) if (!taken(among.pluses, p.id)) out.push({ x0: p.x - opts.fontPx / 2, y0: p.y - opts.fontPx / 2, x1: p.x + opts.fontPx / 2, y1: p.y + opts.fontPx / 2 });
   for (const c of st.captions) {
     if (taken(among.captions, c.id) || c.id === leave?.caption) continue;
-    const set = wordsSet(c, opts, labelSetOf(opts));
-    out.push({ x0: c.x - set.halfW, y0: c.y - set.halfH, x1: c.x + set.halfW, y1: c.y + set.halfH });
+    out.push(captionBox(c, opts));
   }
   const style3d = style3dOf(st);
   for (const m of st.molecules3d) {

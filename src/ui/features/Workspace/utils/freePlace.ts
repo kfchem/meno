@@ -1,4 +1,4 @@
-import { besidesBoxes, type Box } from "./extent";
+import { besidesBoxes, captionBox, type Box } from "./extent";
 import type { EditorState, Model } from "../store/types";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { buildTextLabels, labelHulls, labelSetOf } from "../../../../lib/chem/layout2d";
@@ -113,8 +113,8 @@ export function labelledPart(model: Model): Model {
 /**
  * The room what a file brings takes, about the middle of its atoms (its
  * centroid): its atoms, its labels as far as they reach - a reagent written
- * over the arrow - its molecules in 3D, its arrow and its "+" signs, as
- * `scheme` places them about that middle.
+ * over the arrow - its molecules in 3D, its arrow, its "+" signs and its
+ * words, as `scheme` places them about that middle.
  */
 export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, drawingStyle: DrawingStyle, style: Style3D): Box {
   const pad = NOMINAL_BOND_LENGTH / 2;
@@ -137,6 +137,11 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
     const r = solidOf({ ...m, id: 0, at }, style).reach[lookOf(m)];
     take(at.x - r, at.y - r, at.x + r, at.y + r);
   });
+  // (its words, as far as they are set: ./extent)
+  for (const c of scheme.captions ?? []) {
+    const b = captionBox(c, editorLayoutOptions(drawingStyle));
+    take(b.x0, b.y0, b.x1, b.y1);
+  }
   for (const a of scheme.arrows ?? []) {
     const hx = (a.length / 2) * Math.abs(Math.cos(a.angle));
     const hy = (a.length / 2) * Math.abs(Math.sin(a.angle));
