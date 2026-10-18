@@ -56,12 +56,14 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   pluginClient: async () => worker,
 }));
 
-import { progressOf, rendersOf, startRender, stopRenders } from "./renders";
+import { boxOf, progressOf, rendersOf, startRender, stopRenders } from "./renders";
 import { askOf, renderOptions } from "./renderOptions";
 import type { RenderAsk } from "./renderScene";
 import { valuesOf } from "../../../../lib/options";
+import { freePlace, pageBoxes } from "../utils/freePlace";
+import { styleOf } from "../../../../lib/chem/style";
 import { useReaders } from "../../../../lib/calc/workers";
-import { addMolecule3d, createWorkspaceDocument } from "../document";
+import { addMolecule3d, addPicture, createWorkspaceDocument } from "../document";
 import { connectStoreToDocument, madeStoreOf, storeOf } from "../store";
 
 /** The look as the canvas draws it: lit, and not outlined. */
@@ -198,5 +200,52 @@ describe("a workspace closing", () => {
     await startRender(one.store, [one.id], FILM, {});
     expect(asked.started).toHaveLength(1);
     expect(rendersOf(one.store).getState().list).toEqual([]);
+  });
+});
+
+describe("where a render lands", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    jobs.clear();
+    madeFiles.clear();
+    nextJob = 1;
+    beginning = null;
+    Object.assign(asked, { started: [], stopped: [], removed: [], looked: [] });
+    useReaders.setState({ state: { blender: "added" }, problem: {} });
+  });
+  afterEach(() => vi.useRealTimers());
+
+  const overlap = (a: { x0: number; x1: number; y0: number; y1: number }, b: { x0: number; x1: number; y0: number; y1: number }) =>
+    a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+
+  it("is shown where something lies beside the molecules in the free space nearest it, and what it makes is put just there", async () => {
+    const one = workspace();
+    // (a picture just where the render would lie beside the water, on its right)
+    one.doc.edit("picture", (d) => addPicture(d, { name: "figure.png", sha256: "a".repeat(64), media: "image/png", px: [100, 100], x: 6, y: 0, w: 8, h: 8 }));
+    const ran = startRender(one.store, [one.id], FILM, {});
+    const second = startRender(one.store, [one.id], FILM, {});
+    await vi.advanceTimersByTimeAsync(0);
+    const [r, r2] = rendersOf(one.store).getState().list;
+    const figure = { x0: 2, x1: 10, y0: -4, y1: 4 };
+    // (clear of the picture there, of the water, and of the other render's place)
+    expect(overlap(boxOf(r.at), figure)).toBe(false);
+    expect(overlap(boxOf(r.at), r.around)).toBe(false);
+    expect(overlap(boxOf(r.at), boxOf(r2.at))).toBe(false);
+    // (kept clear meanwhile by what is put on the page: a file opened there goes elsewhere)
+    expect(one.st().renderFrames).toEqual([boxOf(r.at), boxOf(r2.at)]);
+    const boxes = pageBoxes(one.st(), styleOf(one.st().docStyle));
+    expect(freePlace(boxes, { x0: -1, x1: 1, y0: -1, y1: 1 }, { x: r.at.x, y: r.at.y }, 1.5)).not.toEqual({ x: r.at.x, y: r.at.y });
+    // what it makes, put just where it was shown
+    for (const job of [r.job!, r2.job!]) Object.assign(jobs.get(job)!, { state: "done", ended: Date.now() });
+    madeFiles.set(`/jobs/${r.job}/film.mp4`, mp4(3));
+    madeFiles.set(`/jobs/${r2.job}/film.mp4`, mp4(4));
+    await vi.advanceTimersByTimeAsync(5 * LOOK_MS);
+    await ran;
+    await second;
+    const films = one.st().pictures.filter((p) => p.media === "video/mp4");
+    expect(films).toHaveLength(2);
+    expect(films.map(({ x, y, w, h }) => ({ x, y, w, h }))).toEqual(expect.arrayContaining([r.at, r2.at]));
+    // (landed: their frames kept clear no more)
+    expect(one.st().renderFrames).toEqual([]);
   });
 });

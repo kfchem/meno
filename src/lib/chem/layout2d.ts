@@ -1,4 +1,5 @@
 import "./fonts";
+import { allylCurve } from "./allylArc";
 import { ARIAL } from "./arial";
 import { labelFont, type LabelFont } from "./labelFonts";
 import { ringSidesOf } from "./aromaticSides";
@@ -2608,7 +2609,10 @@ export function labelTrims(
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
   const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
-    if (!showsLabel(at, opts)) return 0;
+    // (a pi system's centre, where a haptic bond ends, has no label to stop
+    // short of: the line reaches the centre, as the bond is to the system
+    // as a whole - IUPAC GR-1.7)
+    if (!showsLabel(at, opts) || (bond.endpoints?.length && at.el === "*")) return 0;
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
@@ -3411,6 +3415,71 @@ export function ringCircles(
   return { circles, edges: aromaticEdges };
 }
 
+/**
+ * Of a haptic bond `b`, its atoms as an η3-allyl - three, bonded in a chain,
+ * its ends not bonded to each other - by index, an end, the middle, the
+ * other end; null for a ring or anything else.
+ */
+function allylChainOf(atoms: Atom[], bonds: readonly Bond[], b: Bond): [number, number, number] | null {
+  if (b.endpoints?.length !== 3 || b.attach === "any") return null;
+  const indexOf = new Map(atoms.map((a, i) => [a.id, i]));
+  const e = b.endpoints.map((id) => indexOf.get(id));
+  if (e.some((i) => i == null)) return null;
+  const bonded = (u: number, v: number) => bonds.some((x) => !x.endpoints?.length && ((x.a1 === u && x.a2 === v) || (x.a1 === v && x.a2 === u)));
+  for (const k of [0, 1, 2]) {
+    const [p, q] = e.filter((_, i) => i !== k) as number[];
+    if (bonded(p, e[k]!) && bonded(q, e[k]!) && !bonded(p, q)) return [p, e[k]!, q];
+  }
+  return null;
+}
+
+/**
+ * The bonds as drawn, an η3-allyl's two bonds single whatever their orders
+ * (the maintainer, 2026-10-18; IUPAC GR-6.4: the curve is the delocalised
+ * system, the single bonds its frame), as a ring's circle does. The drawing's own bonds keep their orders.
+ */
+function allylsSingle(atoms: Atom[], bonds: Bond[]): Bond[] {
+  if (!bonds.some((b) => b.endpoints?.length === 3)) return bonds;
+  const single = new Set<string>();
+  for (const b of bonds) {
+    const chain = allylChainOf(atoms, bonds, b);
+    if (!chain) continue;
+    for (const [u, v] of [[chain[0], chain[1]], [chain[1], chain[2]]]) single.add(u < v ? `${u}-${v}` : `${v}-${u}`);
+  }
+  if (!single.size) return bonds;
+  return bonds.map((b) => (!b.endpoints?.length && b.order !== 1 && single.has(b.a1 < b.a2 ? `${b.a1}-${b.a2}` : `${b.a2}-${b.a1}`) ? { ...b, order: 1 } : b));
+}
+
+/**
+ * An η3-allyl's delocalisation curve (lib/chem/allylArc), where `b` is the
+ * haptic bond of one - three atoms bonded in a chain, its ends not bonded
+ * to each other: short straight pieces just inside the chain, solid and as
+ * wide as the bond's line (IUPAC GR-6.2), the corners between them finished
+ * as a wave's are; none otherwise.
+ */
+function allylCurvePrimitives(
+  atoms: Atom[],
+  bonds: readonly Bond[],
+  b: Bond,
+  widthPx: number,
+  opts: LayoutOptions,
+  zoom: number,
+): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[]; middle: Vec2 } | null {
+  const chain = allylChainOf(atoms, bonds, b);
+  if (!chain) return null;
+  // (kept from the chain's bonds by a double bond's spacing in the style, measured where it comes nearest: GR-6.1)
+  const { points, middle } = allylCurve(atoms[chain[0]], atoms[chain[1]], atoms[chain[2]], toWorld(opts.doubleOffsetPx, zoom, opts.units ?? "px"));
+  const lines: LineSeg[] = [];
+  for (let i = 1; i < points.length; i++) lines.push({ x1: points[i - 1].x, y1: points[i - 1].y, x2: points[i].x, y2: points[i].y, widthPx });
+  const bends: Bend[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const prev = lines[i - 1];
+    const next = lines[i];
+    bends.push({ at: { x: next.x1, y: next.y1 }, dirs: [vnorm({ x: prev.x1 - prev.x2, y: prev.y1 - prev.y2 }), vnorm({ x: next.x2 - next.x1, y: next.y2 - next.y1 })] });
+  }
+  return { lines, bends, ends: [points[0], points[points.length - 1]], middle };
+}
+
 export function buildAllPrimitives(
   atoms: Atom[],
   bonds: Bond[],
@@ -3426,6 +3495,7 @@ export function buildAllPrimitives(
   reach: BondReach[];
   crowded: Crowded[];
 } {
+  bonds = allylsSingle(atoms, bonds);
   const lines: LineSeg[] = [];
   const polys: Poly[] = [];
   const circles: Circle[] = [];
@@ -3624,6 +3694,29 @@ export function buildAllPrimitives(
         const L = Math.hypot(atoms[b.a2].x - atoms[b.a1].x, atoms[b.a2].y - atoms[b.a1].y);
         crowded.push({ atoms: [atoms[b.a1].id, atoms[b.a2].id], need: ((t.a + t.b) / t.room) * L });
       }
+    }
+    // (an η3-allyl's bond: its curve, as the bond's own ink, and its line from the metal pointing at the curve's
+    // middle, stopping short of it as a bond stops short of a label - the maintainer, 2026-10-18)
+    const arc = r.lines.length ? allylCurvePrimitives(atoms, bonds, beff, r.lines[0].widthPx, opts, zoom) : null;
+    if (arc) {
+      const metal = atoms[b.a1].el === "*" ? atoms[b.a2] : atoms[b.a1];
+      const main = r.lines[0];
+      const near = Math.hypot(main.x1 - metal.x, main.y1 - metal.y) <= Math.hypot(main.x2 - metal.x, main.y2 - metal.y) ? { x: main.x1, y: main.y1 } : { x: main.x2, y: main.y2 };
+      const trim = Math.hypot(near.x - metal.x, near.y - metal.y);
+      const L = Math.hypot(arc.middle.x - metal.x, arc.middle.y - metal.y);
+      const units = opts.units ?? "px";
+      const margin = opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : toWorld(opts.fontPx, zoom, units) * 0.16;
+      if (L > trim + margin) {
+        const dir = { x: (arc.middle.x - metal.x) / L, y: (arc.middle.y - metal.y) / L };
+        const start = { x: metal.x + dir.x * trim, y: metal.y + dir.y * trim };
+        const end = { x: metal.x + dir.x * (L - margin), y: metal.y + dir.y * (L - margin) };
+        r.lines = [{ ...main, x1: start.x, y1: start.y, x2: end.x, y2: end.y }, ...arc.lines];
+        r.ends = [start, end, ...arc.ends];
+      } else {
+        r.lines = [...arc.lines];
+        r.ends = [...arc.ends];
+      }
+      r.bends = [...(r.bends ?? []), ...arc.bends];
     }
     const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);

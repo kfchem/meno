@@ -66,6 +66,8 @@ export function useStructureEvents(
   // where no plugin added reads the file, with the plugins a catalogue
   // suggests, each to add - and the file read again once one is.
   const [importError, setImportError] = useState<ImportError | null>(null);
+  // (a drop being read: where it was dropped, in the window's pixels - marked there until what it brings is placed, or fails)
+  const [dropping, setDropping] = useState<{ x: number; y: number; key: number } | null>(null);
   const reportImportError = (what: string, err: unknown, again?: () => void) => {
     console.warn(`${what} import failed`, err);
     const text = err instanceof Error ? err.message : String(err);
@@ -451,6 +453,19 @@ export function useStructureEvents(
     }
     const reading = dropReading.current;
     dropReading.current = null;
+    const key = performance.now();
+    setDropping({ x, y, key });
+    // (the mark painted before what is dropped is read: a large file's reading may hold the page a while)
+    await new Promise<void>((done) => requestAnimationFrame(() => setTimeout(done, 0)));
+    try {
+      await readDrop(drop, files, reading);
+    } finally {
+      setDropping((d) => (d?.key === key ? null : d));
+    }
+  };
+
+  const readDrop = async (drop: Dropped, files: File[], reading: Promise<Drawn | null> | null) => {
+    const { x, y } = drop;
     const dropped = files[0];
     const at = clientToWorld(x, y) || { x: 0, y: 0 };
     // What a file dropped is, from its start (lib/io/kinds): nothing need be
@@ -622,6 +637,7 @@ export function useStructureEvents(
     handleWrapperMouseLeave,
     handleWrapperClick,
     dropZone,
+    dropping,
     openFilesAt,
     importError,
     dismissImportError,

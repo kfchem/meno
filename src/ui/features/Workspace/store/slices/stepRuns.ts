@@ -25,7 +25,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { energiesBy, keepRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoInTurns } from "../../workflow/meno";
 import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, finishEntry } from "../../render/renderOptions";
@@ -405,7 +405,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             bonds: m.bonds,
             xyz: frameXyz(m, f),
             ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
-            ...(f === 0 ? { calc, keep: { drawnFrom: m.drawnFrom, drawnAs: m.drawnAs, ...(m.stereo ? { stereo: m.stereo } : {}), ...(m.made ? { made: m.made } : {}) } } : {}),
+            ...(f === 0 ? { calc, keep: keptOf(m) } : {}),
           });
         }
         compounds++;

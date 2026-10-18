@@ -54,9 +54,10 @@ const NONE = new Set<number>();
  * Boxes round all there is on the page, selected or not, each as it is
  * drawn (./extent) - its structures' labels as far as the layout sets their
  * letters (`labelBoxes`, as they are drawn: an NHBoc or a PO3H2 reaches well
- * past its atom) - and a workflow's sets and its steps' cards: a structure
- * put down in a set's frame would be taken as what the set holds
- * (workflow/entries), and one on a step's card would hide it.
+ * past its atom) - a workflow's sets and its steps' cards: a structure put
+ * down in a set's frame would be taken as what the set holds
+ * (workflow/entries), and one on a step's card would hide it - and the
+ * frames of renders under way, where what they make will land.
  */
 export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   const out = besidesBoxes(
@@ -64,6 +65,8 @@ export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
     style,
   );
   out.push(...labelBoxes(labelledPart(st.model), style));
+  // (and where renders under way will put what they make: render/renders)
+  out.push(...(st.renderFrames ?? []));
   for (const b of st.sets ?? []) out.push({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
   // (each as far as its card closed reaches, as workflow/parts measures them)
   for (const s of st.steps ?? []) out.push({ x0: s.x, y0: s.y - CARD_H, x1: s.x + CARD_W, y1: s.y });

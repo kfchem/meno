@@ -698,8 +698,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
   the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
   haptic bond - too: Clean-up gives the engine a star at its centre for
-  those bonds, and they stay drawn from the metal to each atom; the
-  maintainer, 2026-10-13, `ringsBondedAtomByAtom`): the metal on its axis, a bond
+  those bonds, and lays them out as one bond from the metal to that star,
+  as the CTfile's multi-centre bond is, the ring's atoms its endpoints -
+  ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
+  2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
+  each bonded to the metal, an allyl, but not two, a three-membered ring
+  with the metal being how a metallacyclopropane is drawn as well; an
+  η3-allyl, once laid out, posed with its middle carbon away from the
+  metal and its delocalisation curve inside it, EDITOR-2D.md *An η3-allyl*): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the

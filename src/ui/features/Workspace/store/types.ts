@@ -461,6 +461,14 @@ export type Molecule3D = {
   drawnFrom?: (number | null)[];
   /** What its drawing was when it was made from it (chem/make3d `signatureOf`). */
   drawnAs?: string;
+  /**
+   * Its bonds from a metal to the centre of a ring, a chain or a double
+   * bond of its atoms (eta: Cp, benzene, allyl, an alkene), by atom index:
+   * each drawn as one stick from the metal to its atoms' centre, as its
+   * drawing has one line (utils/molecule3d `withCentres`). Its atoms keep
+   * their own bonds; the star at the centre is no atom of it.
+   */
+  centres?: { metal: number; atoms: number[] }[];
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
   /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
@@ -1052,6 +1060,8 @@ export type EditorState = {
   hoveredPicture: number | null;
   /** Pictures put where they were made for - renders' - that come onto the page as the view is: it eased to them as they were begun, and moves no more. */
   picturesLaid: ReadonlySet<number>;
+  /** Where renders under way will put what they make, in the page's units (render/renders): kept clear by what is put on the page meanwhile. */
+  renderFrames: readonly { x0: number; y0: number; x1: number; y1: number }[];
   setHoveredPicture: (id: number | null) => void;
   /** The pictures selected, by id: besides `sel`, which is the drawing's. */
   selPictures: Set<number>;
@@ -1061,7 +1071,7 @@ export type EditorState = {
   togglePictureSel: (id: number) => void;
   /** Pictures held put on the page, as one step: the first's middle where `at` is, the others beside it in a row - clear of what lies there, unless `just` there - selected; their ids. */
   addPictures: (pictures: PictureToAdd[], at: { x: number; y: number }, just?: boolean) => number[];
-  /** A picture made for a place on the page - a render's - put there, clear of the pictures there, as one step: its id; none where nothing changed. */
+  /** A picture made for a place on the page - a render's - put just there, as one step: its id; none where nothing changed. */
   putPicture: (picture: Omit<PictureItem, "id">) => number | null;
   /** A picture moved, made larger or smaller, or turned: one step for a drag (`gesture`). */
   updatePicture: (id: number, patch: Partial<Pick<PictureItem, "x" | "y" | "w" | "h" | "turn">>, gesture?: string) => void;
@@ -1547,6 +1557,11 @@ export type EditorState = {
    * given none): one undo step (document `setStereoShown`).
    */
   setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
+  /**
+   * Metal `metal` bound to a ring through all its atoms - one bond to a star
+   * at its centre, its endpoints the ring's atoms (chem/eta) - as one edit.
+   */
+  bindRing: (metal: number, ring: readonly number[]) => void;
   /** A chain drawn from a new atom on empty space, as one edit. */
   drawStrokeAt: (start: { x: number; y: number }, nodes: readonly StrokeNode[]) => void;
   suppressDoubleClick: (ms?: number) => void;

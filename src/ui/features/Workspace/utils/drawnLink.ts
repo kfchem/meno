@@ -2,12 +2,25 @@ import type { Model, Molecule3D } from "../store/types";
 
 /**
  * What a drawn structure is, as its molecules in 3D were made from it: its
- * atoms (by id: element, charge, mass), its bonds (order and wedge), and
- * those that leave it - not where anything is drawn. A molecule in 3D whose
+ * atoms (by id: element, charge, mass), its bonds (order and wedge, and
+ * what a haptic bond binds), and those that leave it - not where anything
+ * is drawn. A molecule in 3D whose
  * drawing no longer says the same is its drawing's no longer.
  */
 export function signatureOf(model: Model, ids: Iterable<number>): string {
   const of = new Set(ids);
+  // (a haptic bond's star with the metal it is bound to: no atom of a
+  // molecule in 3D, so not among its drawing's atoms, but of the structure
+  // as its bond is - else every complex so bound read as drawn otherwise)
+  for (const b of model.bonds) {
+    if (!b.endpoints?.length) continue;
+    for (const [star, other] of [
+      [b.b, b.a],
+      [b.a, b.b],
+    ]) {
+      if (of.has(other) && model.atoms.some((a) => a.id === star && a.el === "*")) of.add(star);
+    }
+  }
   const atoms = model.atoms
     .filter((a) => of.has(a.id))
     .map((a) => `${a.id}:${a.el}:${a.charge ?? 0}:${a.isotope ?? ""}`)
@@ -16,7 +29,9 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
     .filter((b) => of.has(b.a) || of.has(b.b))
     .map((b) => {
       const ends = of.has(b.a) && of.has(b.b) ? `${b.a}-${b.b}` : of.has(b.a) ? `${b.a}-out` : `${b.b}-out`;
-      return `${ends}:${b.order}:${b.stereo ?? "none"}`;
+      // (and what a haptic bond binds)
+      const binds = b.endpoints?.length ? `:${[...b.endpoints].sort((p, q) => p - q).join(" ")}` : "";
+      return `${ends}:${b.order}:${b.stereo ?? "none"}${binds}`;
     })
     .sort();
   return [...atoms, "|", ...bonds].join(",");
