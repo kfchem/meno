@@ -45,7 +45,7 @@
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
 import { abbreviationOf, byRule, customAbbreviations, GENERIC_SYMBOLS, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
-import { ELEMENTS } from "./elements";
+import { ELEMENTS, NOT_METALS } from "./elements";
 
 /**
  * What a label reads as: part of a structure - an element with its H and
@@ -70,8 +70,6 @@ const HEAVY = new Set(ELEMENTS.filter((e) => e.number >= AFTER_URANIUM).map((e) 
  */
 type Token = { text: string; letter?: true; metal?: true };
 
-/** The elements that are no metals, as rule 6 reads a metal's formula: the nonmetals and the metalloids. */
-const NOT_METALS = new Set("H He B C N O F Ne Si P S Cl Ar Ge As Se Br Kr Sb Te I Xe At Rn".split(" "));
 
 type Vocabulary = { words: Token[]; names: Set<string>; units: Set<string>; byLetter: Map<string, string[]>; metals: Set<string>; letters: Set<string> };
 let tokens: (Vocabulary & { from: readonly string[] }) | null = null;

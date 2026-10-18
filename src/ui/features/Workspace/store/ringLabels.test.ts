@@ -73,6 +73,14 @@ describe("an atom written with its H and the groups it carries (the maintainer, 
 
   it("is no reading of a metal's formula or an anion's: nicl2 is NiCl2, BPh4 an anion", () => {
     expect(keptLabel("nicl2", labelReading)).toBe("NiCl2");
-    expect(abbreviationOf("BPh")).toBeUndefined();
+    // (an atom carrying a group is no part of a formula)
+    expect(abbreviationOf("[Rh(cod)2]BPh4")?.kind).toBe("complex");
+  });
+
+  it("carries exactly as many as its valence leaves but two bonds - what carries more reads as it did, whole", () => {
+    for (const label of ["BH2Ph", "BH2Me", "CH2CO2Me", "SiH2OMe", "SiH2Ph"]) expect(abbreviationOf(label)?.carrying, label).not.toBe(true);
+    // (named for what it is)
+    expect(abbreviationOf("SiHCOOH")?.name).toBe("carboxy and H on silicon");
+    expect(abbreviationOf("NCO2Me")?.name).toBe("methoxycarbonyl on nitrogen");
   });
 });

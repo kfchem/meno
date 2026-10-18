@@ -194,12 +194,13 @@ What is put together from them is read by rule, not listed:
   (or SiH(COOH)) an Si with an H and a carboxy group, SiMeOMe an Si with a
   methyl and a methoxy, CHCO2Me a CH with a methoxycarbonyl, NCO2Me an N
   with one (the maintainer, 2026-10-18: a ring's SiHCOOH was read as
-  nothing, its letters then as S and I). By rule: an atom of B, C, N, P,
-  As, Si, Ge or Sn, with as many - its H and its groups together - as fill
-  its valence but two bonds, or fewer: an Si's or a C's two, an N's or a
-  P's one; B only with its H (BPh4 is an anion's formula). It is read the
-  same on a chain's atom, and comes after every other reading: what reads
-  otherwise is read so;
+  nothing, its letters then as S and I). By rule: an atom that is no
+  metal and takes three bonds or more (its valence as formulas read it),
+  carrying exactly as many - its H and its groups together - as fill its
+  valence but two bonds: an Si's or a C's two, an N's or a P's one; BH2Ph
+  and CH2CO2Me are read as they were, whole. It is read the same on a
+  chain's atom, comes after every other reading - what reads otherwise is
+  read so - and is no part of a formula: BPh4 is still an anion;
 - an O or an S with an alkali metal on it - ONa, OK, SLi - an ion pair, as
   NaOMe's sodium is bound;
 - a substituted aryl group (`src/lib/chem/substitutedAryl.ts`): positions,

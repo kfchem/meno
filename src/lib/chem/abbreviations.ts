@@ -24,7 +24,8 @@ import { complexStructure, forgetComplexReadings, LIGAND_UNITS, ligandStructure,
 import { precatalystPicture, precatalystStructure, REAGENT_UNITS, reagentOf, reagentStructure } from "./reagents";
 import { kekuleOrders } from "./kekulize";
 import type { TextRun } from "./layout2d";
-import { ELEMENTS as TABLE } from "./elements";
+import { ELEMENTS as TABLE, NOT_METALS } from "./elements";
+import { VALENCE } from "./formula";
 
 export type Abbreviation = {
   /** How it is written when its bond comes in from the left: OTBS, CO2Me. */
@@ -519,22 +520,18 @@ function prefixedGroupOf(label: string): Abbreviation | undefined {
 }
 
 /**
- * The atoms that may carry groups, their other bonds the drawing's - an
- * atom of a ring, with its two ring bonds, say - and each one's name as a
- * diyl (`atomCarryingGroups`).
+ * How many an atom carries - its H and its groups together - where it is
+ * written with the groups it carries, its other two bonds the drawing's
+ * (`atomCarryingGroups`): its valence (./formula `VALENCE`) but those two -
+ * an Si's or a C's two, an N's or a P's one. Only an atom that is no metal
+ * and takes three bonds or more; none for any other.
  */
-const CARRIERS_OF_GROUPS: Record<string, { word: string; carries: number }> = {
-  // (each with how many it carries - its H and its groups together - its valence but the drawing's two bonds; B only with its H,
-  // BPh4 and its like being anions' formulas)
-  B: { word: "boranediyl", carries: 1 },
-  C: { word: "methanediyl", carries: 2 },
-  N: { word: "azanediyl", carries: 1 },
-  P: { word: "phosphanediyl", carries: 1 },
-  As: { word: "arsanediyl", carries: 1 },
-  Si: { word: "silanediyl", carries: 2 },
-  Ge: { word: "germanediyl", carries: 2 },
-  Sn: { word: "stannanediyl", carries: 2 },
-};
+function carriesOf(el: string): number | null {
+  const v = VALENCE[el];
+  const e = TABLE.find((x) => x.symbol === el);
+  if (v == null || v < 3 || !e || !NOT_METALS.has(el)) return null;
+  return v - 2;
+}
 
 /**
  * An atom written with its H, if it has any, and then the groups it
@@ -543,15 +540,17 @@ const CARRIERS_OF_GROUPS: Record<string, { word: string; carries: number }> = {
  * group, CHCO2Me a CH with a methoxycarbonyl, NCO2Me an N with one,
  * SiMeOMe an Si with a methyl and a methoxy (the maintainer, 2026-10-18: a
  * ring's Si labelled SiHCOOH was read as nothing, and its letters then as
- * S and I). By rule, not by a list: any atom of `CARRIERS_OF_GROUPS`, any
- * of the groups, as many as with its H fill its valence but two bonds -
- * an Si's or a C's two, an N's or a P's one (B only with its H: BPh4 is an
- * anion's formula). None for any other label - one that reads otherwise is
- * read so first.
+ * S and I). By rule, not by a list: any atom that is no metal and takes
+ * three bonds or more, carrying exactly as many - its H and its groups
+ * together - as its valence leaves but two bonds (`carriesOf`): an Si's or
+ * a C's two, an N's or a P's one; BH2Ph and CH2CO2Me read as they did,
+ * whole. None for any other label - one that reads otherwise is read so
+ * first - and no part of a formula (`groupStructure`: BPh4 is an anion).
  */
 function atomCarryingGroups(label: string): Abbreviation | undefined {
   const m = /^([A-Z][a-z]?)(?:H(\d*))?([A-Z(].*)$/.exec(label);
-  if (!m || !CARRIERS_OF_GROUPS[m[1]]) return undefined;
+  const carries = m ? carriesOf(m[1]) : null;
+  if (!m || carries == null) return undefined;
   const hs = m[2] == null ? 0 : m[2] === "" ? 1 : Number(m[2]);
   const groupAt = (text: string): Abbreviation | undefined => {
     // (a group named - Meno's, the user's own, one behind O, S or NH: not one put together of bare elements, ICl2 - so that nicl2 is still NiCl2)
@@ -580,13 +579,14 @@ function atomCarryingGroups(label: string): Abbreviation | undefined {
   };
   const groups = split(m[3], 3);
   if (!groups?.length) return undefined;
-  const carrier = CARRIERS_OF_GROUPS[m[1]];
-  // (as many as fill its valence with two bonds of the drawing's - a ring's - or fewer, with its H; B only with its H)
-  if (hs + groups.length < carrier.carries || (m[1] === "B" && !hs)) return undefined;
+  // (exactly as many as fill its valence with two bonds of the drawing's - a ring's: BH2Ph, CH2CO2Me read as they were, whole)
+  if (hs + groups.length !== carries) return undefined;
   const atom = hs ? `[${m[1]}H${hs > 1 ? hs : ""}]` : m[1].length > 1 || !"BCNP".includes(m[1]) ? `[${m[1]}]` : m[1];
   const smiles = `*${atom}` + groups.map((g) => `(${g.smiles.slice(1)})`).join("");
-  const names = groups.map((g) => g.name.replace(/ \(.*\)$/, ""));
-  return { label, smiles, name: `(${names.join(")(")})${carrier.word}`, carrying: true };
+  // (named for what it is: the groups, and the H, on the atom - SiHCOOH, carboxy and H on silicon)
+  const names = [...groups.map((g) => g.name.replace(/ \(.*\)$/, "")), ...(hs ? [hs > 1 ? `${hs} H` : "H"] : [])];
+  const element = TABLE.find((x) => x.symbol === m[1])!.name;
+  return { label, smiles, name: `${names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0]} on ${element}`, carrying: true };
 }
 
 const COMPOSED_SEEN = new Map<string, Abbreviation | undefined>();
@@ -729,7 +729,8 @@ function groupLabels(): string[] {
 /** A group bound by one bond (OAc, OTf, Me) - inside a complex's formula - or null. */
 function groupStructure(label: string): GroupStructure | null {
   const a = BY_LABEL.get(label) ?? custom.get(label) ?? composedGroupOf(label);
-  return a ? smilesGroup(a.smiles) : null;
+  // (an atom carrying groups, its other bonds the drawing's, is no part of a formula: BPh4 is an anion, no BPh four times)
+  return a && !a.carrying ? smilesGroup(a.smiles) : null;
 }
 
 /** A group's SMILES, "*" first, as its structure. */
