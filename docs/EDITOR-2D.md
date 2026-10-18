@@ -768,7 +768,13 @@ All hover-based, as above.
      molecule - a reagent, a complex - as a label on a structure stands
      for part of one (co2me is CO2Me, not a complex of cobalt; hf is Hf,
      HF typed so); then the fewest letters made capitals (co is Co, ph Ph,
-     ipr iPr - not the NHC IPr).
+     ipr iPr - not the NHC IPr). But two capitals that are an element's
+     symbol are that element (the maintainer, 2026-10-18): SI is Si, not S
+     and I; CL Cl, FE Fe, a charge after them kept (FE+ is Fe+). Not where
+     the two letters as typed are a name Meno reads whole (CO, carbon
+     monoxide, as a ligand), a whole molecule (HF), or are turned round as
+     drawn on a bond's left (HO is OH, HS SH, SN NS: rule 3), nor an
+     element after uranium (rule 2: CN, NO and NH as they are).
   2. No element after uranium is read from letters typed small: nh is NH,
      cn CN, no NO; ts is tosyl, fm Fm. Nor is deuterium: D is deuterium
      only as typed (CDCl3, CD3), so pdcl2 is PdCl2.

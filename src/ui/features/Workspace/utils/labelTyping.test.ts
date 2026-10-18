@@ -328,6 +328,47 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
   });
 });
 
+describe("an element's symbol typed in any case (the maintainer, 2026-10-18)", () => {
+  const kept = (t: string) => keptLabel(t, labelReading);
+  const live = (t: string) => liveLabel(t, labelReading);
+  const two = ELEMENTS.filter((e) => e.symbol.length === 2);
+
+  it("keeps every two-letter symbol typed in its own case whole - and small, as ever, or as rule 3 turns it round", () => {
+    for (const e of two) {
+      expect(kept(e.symbol), e.symbol).toBe(e.symbol);
+      expect(readLabel(kept(e.symbol), (x) => ELEMENTS.some((y) => y.symbol === x)).kind, e.symbol).not.toBe("text");
+    }
+    expect(kept("si")).toBe("Si");
+    expect(kept("cl")).toBe("Cl");
+    expect(kept("ho")).toBe("OH");
+    expect(kept("co")).toBe("Co");
+  });
+
+  it("reads one typed in capitals as the element - not one element and another: SI is Si", () => {
+    expect(live("SI")).toBe("Si");
+    expect(kept("SI")).toBe("Si");
+    // (a small letter first: as the rules read it, oH as OH)
+    expect(kept("oH")).toBe("OH");
+    for (const t of ["CL", "BR", "NA", "SE", "FE", "ZN", "PD", "PT", "MG", "AL"]) expect(kept(t), t).toBe(t[0] + t[1].toLowerCase());
+    // (a charge after it stays after it)
+    expect(kept("FE+")).toBe("Fe+");
+  });
+
+  it("leaves those the letters as typed read otherwise: a ligand's name, a whole molecule, rule 3, none after uranium", () => {
+    // (carbon monoxide; hydrogen fluoride; as drawn on a bond's left)
+    expect(kept("CO")).toBe("CO");
+    expect(kept("HF")).toBe("HF");
+    expect(kept("HO")).toBe("OH");
+    expect(kept("HS")).toBe("SH");
+    expect(kept("SN")).toBe("NS");
+    // (cyano, nitroso, an NH - no copernicium, nobelium or nihonium)
+    expect(kept("CN")).toBe("CN");
+    expect(kept("NO")).toBe("NO");
+    expect(kept("NH")).toBe("NH");
+    expect(kept("FM")).toBe("FM");
+  });
+});
+
 describe("readLabel", () => {
   const isElement = (s: string) => ["C", "N", "O", "Fe", "Na", "Cl", "S"].includes(s);
   it("reads an element with its charge, H and mass number", () => {
