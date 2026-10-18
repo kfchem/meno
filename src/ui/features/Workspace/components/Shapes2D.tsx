@@ -77,6 +77,9 @@ const LEAST_PX = 8;
 const ROUND_IN_PX = 14;
 /** The rectangles whose corners are being rounded by their handle: drawn as the handle goes, not eased. */
 const roundedByHand = new Set<number>();
+/** Each rectangle's corners as they are drawn now, eased (`ShapeItem`), in points - and those to tell as they change: its handle goes with them (`Handles`). */
+const shownRounds = new Map<number, number>();
+const roundsMoved = new Set<() => void>();
 /** How far a press may move and still be a click, and before it moves the view (PanZoom2D's), in pixels. */
 const CLICK_PX = 4;
 const PAN_PX = 3;
@@ -260,6 +263,12 @@ const ShapeItem = memo(function ShapeItem({
   if (shownRound !== toRound && roundedByHand.has(s.id)) setShownRound(toRound);
   const easing = shownRound !== toRound;
   const look = easing ? { ...s, radius: shownRound } : s;
+  // (its handle drawn where its corners are drawn, not where they are going: the two go together)
+  useLayoutEffect(() => {
+    shownRounds.set(s.id, shownRound);
+    for (const told of roundsMoved) told();
+  }, [s.id, shownRound]);
+  useEffect(() => () => void shownRounds.delete(s.id), [s.id]);
 
   const b = useMemo(() => shapeBounds(s, pointPx), [s, pointPx]);
   const m = middleOf(b);
@@ -428,7 +437,9 @@ function roundInOf(s: Shape, px: number): number {
 /** Where a rectangle's corners' handle stands: in from where their curve begins along its top - from its corner, square - and as far down from it; a drag takes it along with the pointer, the curve beginning as far in as it goes. */
 function roundHandleAt(s: Shape, pointPx: number, px: number): Pt {
   const inset = roundInOf(s, px);
-  return { x: s.x0 + cornerRadius(s, pointPx) + inset, y: s.y1 - inset };
+  // (where its corners are drawn now - eased, after an undo - not where they are going)
+  const shown = shownRounds.get(s.id);
+  return { x: s.x0 + cornerRadius(shown != null ? { ...s, radius: shown } : s, pointPx) + inset, y: s.y1 - inset };
 }
 
 /**
@@ -479,8 +490,14 @@ function Handles({ chosen, toWorld, pointPx }: { chosen: { s: Shape; z: number }
     },
     [all, invalidate, pointPx],
   );
-  // (laid before they are first drawn, and again as the zoom is taken up)
+  // (laid before they are first drawn, and again as the zoom is taken up - and as a rectangle's corners go, its handle with them)
   useLayoutEffect(() => lay(px), [lay, room, px]);
+  useEffect(() => {
+    if (!all.some((h) => h.handle === "round")) return;
+    const told = () => lay(px);
+    roundsMoved.add(told);
+    return () => void roundsMoved.delete(told);
+  }, [all, lay, px]);
   const start = ({ s, handle }: HandleOf, ev: PointerEvent) => {
     const px = pixelNow(camera);
     const from = { x: ev.clientX, y: ev.clientY };
