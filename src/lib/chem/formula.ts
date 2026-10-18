@@ -36,6 +36,9 @@ const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
 
 export type Part = { kind: "element"; el: string } | { kind: "group"; label: string; s: GroupStructure };
 
+/** Deuterium as a part of a formula: one atom, hydrogen of mass 2, bound by its one bond. */
+const DEUTERIUM: GroupStructure = { atoms: [{ el: "H", isotope: 2, hs: 0 }], bonds: [], attach: [0] };
+
 /** The label of the group a formula names at `i`, or undefined. */
 export type GroupAt = (text: string, i: number) => string | undefined;
 
@@ -65,7 +68,11 @@ export function partsOf(text: string, groupAt: GroupAt, groupOf: (label: string)
     } else {
       const group = groupAt(text, i);
       const el = [text.slice(i, i + 2), text[i]].find((e) => e in VALENCE && text.startsWith(e, i));
-      if (group && group.length >= (el?.length ?? 0)) {
+      // (deuterium, D - not the start of Dy, Db or Ds - wherever an H could stand: an atom of its own, written [2H] (CDCl3, D2O))
+      if (text[i] === "D" && !/[a-z]/.test(text[i + 1] ?? "") && !group) {
+        found = [{ kind: "group", label: "D", s: DEUTERIUM }];
+        i += 1;
+      } else if (group && group.length >= (el?.length ?? 0)) {
         const s = groupOf(group);
         if (!s || s.attach.length !== 1) return null;
         found = [{ kind: "group", label: group, s }];

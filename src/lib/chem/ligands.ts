@@ -400,11 +400,12 @@ export function structureFormula(s: GroupStructure): string {
   const add = (el: string, n: number) => n && count.set(el, (count.get(el) ?? 0) + n);
   s.atoms.forEach((a, i) => {
     if (a.el === "*") return;
-    add(a.el, 1);
+    // (deuterium as D, after H: CDCl3)
+    add(a.el === "H" && a.isotope === 2 ? "D" : a.el, 1);
     add("H", a.hs ?? implicitHydrogens(a.el, sums[i], a.charge ?? 0));
   });
-  const others = [...count.keys()].filter((e) => e !== "C" && e !== "H").sort();
-  const order = count.has("C") ? ["C", "H", ...others] : [...count.keys()].sort();
+  const others = [...count.keys()].filter((e) => e !== "C" && e !== "H" && e !== "D").sort();
+  const order = count.has("C") ? ["C", "H", "D", ...others] : [...count.keys()].sort();
   return order.filter((e) => count.has(e)).map((e) => `${e}${count.get(e)! > 1 ? count.get(e) : ""}`).join("");
 }
 

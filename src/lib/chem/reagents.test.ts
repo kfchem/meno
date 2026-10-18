@@ -195,6 +195,18 @@ describe("simple formulas, read by rule", () => {
     expect(abbreviationOf("TMSCl")?.name).toBe("C3H9ClSi");
   });
 
+  it("read D as deuterium wherever an H could stand: an atom of hydrogen of mass 2, named D", () => {
+    const cases: Record<string, string> = { CDCl3: "CDCl3", CD2Cl2: "CD2Cl2", D2O: "D2O", DCl: "ClD", NaBD4: "BD4Na" };
+    for (const [label, f] of Object.entries(cases)) {
+      expect(abbreviationOf(label)?.kind, label).toBe("reagent");
+      expect(abbreviationOf(label)?.name, label).toBe(f);
+      const d = of(label).atoms.filter((a) => a.el === "H" && a.isotope === 2);
+      expect(d.length, label).toBe(Number(/D(\d*)/.exec(f)![1] || 1));
+    }
+    // (and the symbols D begins - dysprosium's - as they were)
+    expect(abbreviationOf("DyCl3")?.name).toBe("dysprosium, 3 Cl");
+  });
+
   it("bind sodium and potassium as ions, and lithium so but to carbon", () => {
     const ions = (label: string) => of(label).atoms.filter((a) => a.charge).map((a) => `${a.el}${a.charge! > 0 ? "+" : "-"}`).sort();
     expect(ions("NaOMe")).toEqual(["Na+", "O-"]);

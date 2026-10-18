@@ -51,6 +51,14 @@ describe("a label read as it is meant (lib/chem/smartLabel)", () => {
     for (const el of ["Cs", "Sn", "Os", "Pb"]) expect(kept(el.toLowerCase())).toBe(el);
   });
 
+  it("reads deuterium only as typed: a D, never a d typed small", () => {
+    expect(kept("CDCl3")).toBe("CDCl3");
+    expect(kept("CD3")).toBe("CD3");
+    expect(kept("pdcl2")).toBe("PdCl2");
+    // (a group's name a D is part of, typed small, as ever)
+    expect(kept("otbdps")).toBe("OTBDPS");
+  });
+
   it("reads no element after uranium from letters typed small", () => {
     expect(kept("nh")).toBe("NH");
     expect(kept("cn")).toBe("CN");

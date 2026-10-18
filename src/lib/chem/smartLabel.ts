@@ -10,7 +10,8 @@
  *    stays one; of the readings, the one that changes the fewest letters
  *    (co is Co, ph Ph, ipr iPr - not the NHC IPr).
  * 2. No element after uranium (Np on) is read from letters typed small:
- *    nh is NH, not nihonium; ts tosyl, not tennessine.
+ *    nh is NH, not nihonium; ts tosyl, not tennessine. Nor is deuterium:
+ *    D is deuterium only as typed (CDCl3), pdcl2 PdCl2.
  * 3. A label typed as it is drawn on a bond's left - AcO, BocHN, HO2C, H2N,
  *    or HN before a group - is kept as it reads from the bond: OAc, NHBoc,
  *    CO2H, NH2, NHFmoc. So what is kept is the same however it was typed -
@@ -43,7 +44,7 @@
  * letters, where they were typed, so that the caret stays where it is;
  * rules 3 and 4 are applied as it is kept (`keptLabel`).
  */
-import { customAbbreviations, GENERIC_SYMBOLS, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
+import { abbreviationOf, byRule, customAbbreviations, GENERIC_SYMBOLS, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
 import { ELEMENTS } from "./elements";
 
 /**
@@ -289,9 +290,21 @@ function inWords(text: string, reads: Reads): boolean {
   });
 }
 
-/** Whether a reading of what was typed may stand: no element after uranium read from letters typed small. */
+/**
+ * Whether a reading of what was typed may stand: no element after uranium read from letters typed small, nor deuterium - a D
+ * from a d typed small, read as hydrogen of mass 2 (pdcl2 is PdCl2, not PDCl2): D is deuterium only as typed (CDCl3).
+ */
 function allowed(typed: string, text: string, r: Reading): boolean {
-  return !(r?.element && HEAVY.has(r.element) && text !== typed);
+  if (r?.element && HEAVY.has(r.element) && text !== typed) return false;
+  return !([...text].some((c, i) => c === "D" && typed[i] === "d") && deuterated(text));
+}
+
+/** Whether a label reads with deuterium in it: a group (CD3) or a whole molecule (CDCl3) with hydrogen of mass 2. */
+function deuterated(label: string): boolean {
+  const a = abbreviationOf(label);
+  if (!a) return false;
+  if (a.smiles.includes("[2H]")) return true;
+  return !!a.kind && !!byRule(label)?.atoms.some((x) => x.el === "H" && x.isotope === 2);
 }
 
 /**

@@ -124,6 +124,11 @@ const RADICAL_CODE = { singlet: 1, doublet: 2, triplet: 3 } as const;
 const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
 /** The elements that form no bonds: one drawn with a bond stands for something else - Ar for an aryl group. */
 const NO_BONDS = new Set(["He", "Ne", "Ar"]);
+/**
+ * The elements whose symbol is a variable's too (the maintainer, 2026-10-17): Y with one bond, in a substituent's place, stands
+ * for a group as X and Z do; alone, or with several bonds, it is yttrium.
+ */
+const VARIABLES = new Set(["Y"]);
 
 /** The atom types "CTfile Formats" reserves: written as they are. */
 const RESERVED = new Set(["A", "Q", "X", "M", "R", "*", "LP", "R#", "L"]);
@@ -149,9 +154,11 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   for (const a of model.atoms) {
     const touching = bonds.filter((b) => b.a === a.id || b.b === a.id);
     // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds; an element that forms no bonds drawn
-    // with one - Ar, an aryl group's symbol as well as argon's (IUPAC GR-9.2) - is no element: its label, as any other)
+    // with one - Ar, an aryl group's symbol as well as argon's (IUPAC GR-9.2) - is no element: its label, as any other; nor is a
+    // variable named as an element is - Y with one bond, a substituent's place, as X and Z are)
     const bondless = NO_BONDS.has(a.el) && touching.length > 0;
-    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless) || RESERVED.has(a.el) || a.list) continue;
+    const variable = VARIABLES.has(a.el) && touching.length === 1;
+    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
     const structure: AbbreviationStructure | null =
       a.abbrev ??
