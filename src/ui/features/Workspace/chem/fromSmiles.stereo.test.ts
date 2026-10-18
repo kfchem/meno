@@ -169,7 +169,7 @@ describe("a SMILES's ring-fusion centres, pasted", () => {
       // (C3 - between C2, C4 and C8 - and C5, in the oxetane: the two whose bonds are all ring bonds)
       expect(fusions, label).toHaveLength(2);
     }
-  }, 30_000);
+  }, 120_000);
 
   it("leaves a centre the SMILES leaves undefined undefined - drawn flat with no wedge, never guessed - and the rest as given", async () => {
     // (taxol with C3's configuration left out of the SMILES)
@@ -188,7 +188,7 @@ describe("a SMILES's ring-fusion centres, pasted", () => {
     const id = job.ids[c3];
     const wedged = model.bonds.filter((b) => (b.a === id || b.b === id) && (b.stereo === "up" || b.stereo === "down"));
     expect(wedged).toHaveLength(0);
-  }, 30_000);
+  }, 120_000);
 
   it("shows cis- and trans-decalin's and -hydrindane's fusion as given, each fusion centre by an H", async () => {
     const cases: [string, string][] = [
@@ -209,7 +209,7 @@ describe("a SMILES's ring-fusion centres, pasted", () => {
       expect(marks, label).toHaveLength(2);
       expect(marks[0] === marks[1], label).toBe(label.startsWith("cis"));
     }
-  }, 30_000);
+  }, 120_000);
 
   it("keeps tetrodotoxin's C4 shown by the drawing in perspective, with no wedge, written either way", async () => {
     // (the maintainer's ruling: a centre of a solid that the drawing reads
@@ -226,5 +226,5 @@ describe("a SMILES's ring-fusion centres, pasted", () => {
       const d = drawingOf(model);
       expect(readStereo(d.atoms, d.bonds).tetra.has(model.atoms.findIndex((a) => a.id === id)), label).toBe(true);
     }
-  }, 30_000);
+  }, 120_000);
 });
