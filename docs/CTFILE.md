@@ -466,6 +466,15 @@ centres go in their fields. Enhanced stereo is written as V3000 collections
 An abbreviation is written out - the atoms a file gave it, or the
 dictionary's, laid out by Meno's own engine on from its bond - with an
 abbreviation Sgroup labelling them, so that it reads back contracted. A
+label on a metal that names a ligand bound in a complex - Cp, Cp*, allyl,
+cod, CO - is written out as bound (lib/chem/boundLigand): a pi system
+through all its atoms, by a multi-centre bond (ENDPTS, ATTACH=ALL) to a
+star at its centre, one for each of its pi systems (cod's two C=C); a
+neutral donor by a coordination bond. Read back, its Sgroup contracts to
+the label again, on its metal by one bond as it was drawn, the pi systems
+kept with it (the bonds out to its stars, `haptic`), so that it is written
+and made in 3D as before: a ferrocene drawn with Cp labels, saved and
+opened, is still a sandwich. A
 label the dictionary does not know is a star atom with an alias (V2000), or
 an abbreviation Sgroup of its one star atom (V3000, which has no alias). An
 Rgroup, an atom list, a valence and a query hydrogen count go in their
