@@ -277,34 +277,39 @@ function Typing({ session }: { session: Session }) {
   const caretRef = useWriting(ed, field, () => setTick((t) => t + 1));
   usePressAmong({ ed, field, among, world, off: !typing });
 
-  // the pointer leaving it keeps it: where it is is followed by how far it moves, not by the view moving under it
+  // the pointer leaving it keeps it: the pointer where it is on the screen, against the label where it is drawn now - each frame, so that the view
+  // moving under it is taken in (utils/labelLeave)
   const area = useRef({ at, room });
   area.current = { at, room };
+  const watching = useRef<{ frame: () => void } | null>(null);
   useEffect(() => {
     if (!typing) return;
     const L = NOMINAL_BOND_LENGTH;
-    const past = (p: Pt) => pastLabel(p, area.current.at, area.current.room, L);
-    let last = pointer.x != null && pointer.y != null ? { x: pointer.x, y: pointer.y } : null;
-    let q = last ? world.current(last.x, last.y) : null;
+    const past = (c: { x: number; y: number }) => pastLabel(world.current(c.x, c.y), area.current.at, area.current.room, L);
+    let cur = pointer.x != null && pointer.y != null ? { x: pointer.x, y: pointer.y } : null;
     // (from a key over the atom, there already; from its menu, once it comes to it)
-    const watch = leaveWatch({ keep: () => finishing.current(true), L, armed: !!q && past(q) === 0 });
+    const watch = leaveWatch({ keep: () => finishing.current(true), L, armed: !!cur && past(cur) === 0 });
     const onMove = (e: PointerEvent) => {
-      const z = (camera as THREE.OrthographicCamera).zoom || 1;
-      if (q && last) q = { x: q.x + (e.clientX - last.x) / z, y: q.y - (e.clientY - last.y) / z };
-      else q = world.current(e.clientX, e.clientY);
-      last = { x: e.clientX, y: e.clientY };
-      watch.point(past(q), e.buttons !== 0);
+      // (how far past it the pointer was, where the label is drawn now - and is: further, it moved away)
+      const before = cur ? past(cur) : null;
+      cur = { x: e.clientX, y: e.clientY };
+      const now = past(cur);
+      watch.point(now, e.buttons !== 0, before == null || now > before);
     };
     const onOut = (e: PointerEvent) => watch.out(e.buttons !== 0);
+    // (the view moved under a still pointer: the label brought to it is at it - carried off from it, not left)
+    watching.current = { frame: () => cur && watch.point(past(cur), false, false) };
     const canvas = gl.domElement;
     window.addEventListener("pointermove", onMove, true);
     canvas.addEventListener("pointerleave", onOut);
     return () => {
+      watching.current = null;
       watch.stop();
       window.removeEventListener("pointermove", onMove, true);
       canvas.removeEventListener("pointerleave", onOut);
     };
-  }, [typing, camera, gl]);
+  }, [typing, gl]);
+  useFrame(() => watching.current?.frame());
 
   // seen as it begins - begun by a letter, growing out of the atom - until it goes: kept, in a moment; let go, drawing back into the atom
   const group = useRef<THREE.Group>(null);

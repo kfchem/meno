@@ -6,6 +6,10 @@
  * together, the label is kept - at once, past `GONE` of a bond: a hand's
  * tremor keeps nothing, a move away keeps it. Only once the pointer has
  * been at the label: one opened from the atom's menu waits for it to come.
+ * Only the pointer moving away leaves it: the view panned or zoomed under a
+ * still pointer - the label carried off from under it - keeps nothing, and
+ * where the label is is taken as it is drawn now, so that after a zoom a
+ * move away is seen as one.
  */
 import { ATOM_PICK_RADIUS_RATIO } from "../constants";
 
@@ -26,9 +30,11 @@ export function pastLabel(q: Pt, at: Pt, box: Box, L: number): number {
 
 /**
  * The pointer watched as it moves over a label being written: `point`, told
- * how far past it the pointer is (pastLabel) and whether a button is held -
- * a drag among its letters, selecting, leaves nothing; `out`, the pointer
- * gone from the canvas. `keep` is called once, as it leaves.
+ * how far past it the pointer is (pastLabel), whether a button is held - a
+ * drag among its letters, selecting, leaves nothing - and whether the
+ * pointer itself moved further from it (`away`: not so, the view moving
+ * under it, which can bring the label to it but never leave it); `out`,
+ * the pointer gone from the canvas. `keep` is called once, as it leaves.
  */
 export function leaveWatch(o: { keep: () => void; L: number; armed: boolean }) {
   let armed = o.armed;
@@ -45,14 +51,14 @@ export function leaveWatch(o: { keep: () => void; L: number; armed: boolean }) {
     o.keep();
   };
   return {
-    point(past: number, held: boolean) {
+    point(past: number, held: boolean, away = true) {
       if (done || held) return;
       if (past === 0) {
         armed = true;
         stop();
         return;
       }
-      if (!armed) return;
+      if (!armed || !away) return;
       if (past > GONE * o.L) keep();
       else if (timer == null) timer = setTimeout(keep, LEAVE_MS);
     },

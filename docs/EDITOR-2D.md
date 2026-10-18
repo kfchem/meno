@@ -721,7 +721,11 @@ All hover-based, as above.
     drawing in place is (theme/motion `easeInOut`), and counted by the
     frames drawn (`frameClock`): the canvas is busy for a moment as a label
     begins, and a clock of its own would have had the motion mostly done
-    by the first frame. Each letter after, the
+    by the first frame. A double bond to the atom has its second line go
+    over to where the label leaves it in the same time - drawn both ways,
+    as the atom was and as labelled, and taken the share of the way the
+    writing has come (lib/chem/layout2d `writingShare`) - and back, let
+    go. Each letter after, the
     bonds go on to make room in as long, from where they had come. Let
     go, the letters draw back into the atom as the bonds come back and the
     label it had fades back in (`labelEnd`, Labels2D `arriving`). Kept, it
@@ -735,8 +739,11 @@ All hover-based, as above.
     picked - and the letters' box by more than 0.15 of a bond for 150 ms
     together, or by more than half a bond at once, or off the canvas. A
     hand's tremor keeps nothing; a drag among its letters, selecting, is
-    not leaving them; the view moving under a still pointer is not either
-    (the pointer is followed by how far it moves). Opened from the menu,
+    not leaving them. Only the pointer moving away leaves them: where it is
+    on the screen is set against the label as it is drawn now, each frame,
+    so a pan or a zoom carrying the label off from under a still pointer
+    keeps nothing, one bringing it to the pointer finds it there, and a
+    move away after a zoom is seen as one. Opened from the menu,
     it waits for the pointer to come to the atom first. A press elsewhere
     keeps it, Escape lets it go; a click in it puts the caret, a drag
     selects.

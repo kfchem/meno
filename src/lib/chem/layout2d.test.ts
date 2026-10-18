@@ -2545,3 +2545,46 @@ describe("a label being written over an atom", () => {
     expect(kept.texts.some((t) => t.atom === 1)).toBe(true);
   });
 });
+
+describe("a double bond at an atom a label is being written over", () => {
+  const o = opts();
+  const two: Bond[] = [
+    { a1: 0, a2: 1, order: 1, stereo: "none" },
+    { a1: 1, a2: 2, order: 2, stereo: "none" },
+  ];
+  const letters = (text: string) => [{ x: 0, y: 0, text, fontPx: o.fontPx, runs: [{ text }] }];
+  const second = (el: string, writing?: Atom["writing"]) =>
+    layoutMolecule(
+      [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: 1.3, y: 0.75, el: "C" },
+        { id: 3, x: 2.6, y: 0, el, writing },
+      ],
+      two,
+      o,
+      40,
+    ).lines[2];
+  const close = (p: LineSeg, q: LineSeg) => [p.x1 - q.x1, p.y1 - q.y1, p.x2 - q.x2, p.y2 - q.y2].every((d) => Math.abs(d) < 1e-6);
+
+  it("has its second line go over to where the label leaves it, a share of the way - no jump as it begins", () => {
+    const plain = second("C");
+    // (begun: as it was)
+    expect(close(second("C", { items: letters("O"), k: 0, hidden: true }), plain)).toBe(true);
+    const there = second("C", { items: letters("O"), k: 1, hidden: true });
+    const half = second("C", { items: letters("O"), k: 0.5, hidden: true });
+    expect(half.x2).toBeCloseTo((plain.x2 + there.x2) / 2, 6);
+    expect(half.y2).toBeCloseTo((plain.y2 + there.y2) / 2, 6);
+    // (and no jump as it is kept: the label drawn where the letters were)
+    expect(close(second("O"), there)).toBe(true);
+    expect(close(second("O", { k: 0.3, was: { items: letters("O"), k: 1 } }), there)).toBe(true);
+  });
+
+  it("goes back the same way, let go over a carbon", () => {
+    const plain = second("C");
+    const there = second("C", { items: letters("O"), k: 1, hidden: true });
+    const back = (k: number) => second("C", { k, was: { items: letters("O"), k: 1 } });
+    expect(close(back(0), there)).toBe(true);
+    expect(back(0.5).x2).toBeCloseTo((plain.x2 + there.x2) / 2, 6);
+    expect(close(back(1), plain)).toBe(true);
+  });
+});
