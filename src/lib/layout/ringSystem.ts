@@ -98,7 +98,7 @@ export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
   // (a metal two chelates or more close at: each way of setting them round it)
   if (big < MACROCYCLE) return metalHub(mol, rings)?.orders.length ?? 1;
   if (hubOf(mol, rings)) return 1;
-  return Math.max(...rings.filter((r) => r.length === big).map((r) => shapesFor(mol, r).length));
+  return Math.max(...rings.filter((r) => r.length === big).map((r) => macrocycleVariants(mol, r, rings).length));
 }
 
 /**
@@ -114,6 +114,25 @@ function shapesFor(mol: Molecule, ring: number[]): Point[][] {
   if (!fixed.length || offered.some((shape) => keepsDoubles(shape, fixed))) return offered;
   const keeping = macrocycleKeeping(ring.length, fixed, offered.length);
   return keeping.length ? keeping : offered;
+}
+
+/**
+ * The ways a macrocycle is tried: each of its shapes, its atoms set round
+ * it as the groups on them want (`macrocycleFit`) - weighed by the group,
+ * a methyl as much as a short chain and a little more for each atom on;
+ * and, where that sets them otherwise, weighed by the atom, a chain by its
+ * length: an allyl run across the ring's inside crowds it more than a
+ * C=O and a methyl there (tacrolimus's). Each grown, the drawing that
+ * reads best kept.
+ */
+export function macrocycleVariants(mol: Molecule, ring: number[], rings: number[][]): { shape: Point[]; at: (i: number) => number }[] {
+  return shapesFor(mol, ring).flatMap((shape) => {
+    const byGroup = macrocycleFit(mol, ring, shape, rings, 0.5);
+    const byAtom = macrocycleFit(mol, ring, shape, rings, 1);
+    const fits = byGroup.shift === byAtom.shift && byGroup.way === byAtom.way ? [byGroup] : [byGroup, byAtom];
+    const n = ring.length;
+    return fits.map(({ shift, way }) => ({ shape, at: (i: number) => (((shift + way * i) % n) + n) % n }));
+  });
 }
 
 /**
@@ -226,7 +245,7 @@ export function placeRingSystem(
       .filter((r) => r !== first && r.filter((a) => first.includes(a)).length >= 3)
       .flatMap((r) => r.filter((a) => first.includes(a))),
   );
-  const shapes = first.length >= MACROCYCLE ? shapesFor(mol, first) : [];
+  const shapes = first.length >= MACROCYCLE ? macrocycleVariants(mol, first, rings) : [];
   if (first.length >= MACROCYCLE && through.size >= 0.4 * first.length && shortLinks(first, through)) {
     // (run along the side of each ring that carries the fewest groups,
     // where two sides are as long: the groups on that side face into the
@@ -235,8 +254,7 @@ export function placeRingSystem(
     rings[firstAt] = barer;
     ringOfBlocks(mol, barer, rings, pos).forEach((i) => placedRing.add(i));
   } else if (first.length >= MACROCYCLE) {
-    const shape = shapes[variant % shapes.length];
-    const at = macrocycleFit(mol, first, shape, rings);
+    const { shape, at } = shapes[variant % shapes.length];
     first.forEach((a, i) => pos.set(a, shape[at(i)]));
   } else {
     const r = radius(first.length);
@@ -689,14 +707,17 @@ function dentForTrans(mol: Molecule, ring: readonly number[], pos: Map<number, P
  * in, with room for nothing. So the atoms that carry something - a branch, a
  * ring fused on - take the corners that point out, the bare CH2s the ones
  * that point in: of every way round the shape, and either direction, the
- * one that leaves the least on corners pointing in.
+ * one that leaves the least on corners pointing in. A group weighs one,
+ * a C=O one and a half, and `perAtom` more for each atom on it, a few
+ * deep (`macrocycleVariants`).
  */
 function macrocycleFit(
   mol: Molecule,
   ring: number[],
   shape: Point[],
   rings: number[][],
-): (i: number) => number {
+  perAtom: number,
+): { shift: number; way: number } {
   const n = ring.length;
   let area = 0;
   for (let i = 0; i < n; i++) area += cross(shape[i], shape[(i + 1) % n]);
@@ -726,7 +747,7 @@ function macrocycleFit(
       // (a double-bonded O as much as a methyl and a half: a C=O inside
       // the ring crowds it more than a methyl does)
       const double = mol.bonds[mol.bondIndex.get(a < b ? `${a},${b}` : `${b},${a}`)!].order === 2;
-      weight += (double ? 1.5 : 1) + 0.5 * (seen.size - 2);
+      weight += (double ? 1.5 : 1) + perAtom * (seen.size - 2);
     }
     return weight;
   });
@@ -784,7 +805,7 @@ function macrocycleFit(
       }
     }
   }
-  return (i) => (((best.shift + best.way * i) % n) + n) % n;
+  return best;
 }
 
 /**

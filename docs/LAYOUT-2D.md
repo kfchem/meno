@@ -157,7 +157,13 @@ they hang from.
   corner points out, inside it where the corner points in, which is why a
   macrolide is drawn with groups inside its ring. The atoms carrying the
   larger groups take the corners pointing out, and the shape is chosen,
-  among the few that lie well, for the room it leaves inside. A ring fused
+  among the few that lie well, for the room it leaves inside. How large a
+  group is can be weighed two ways - by the group, a methyl as much as a
+  short chain and a little more for each atom on, or by the atom, a chain
+  by its length - and where the two set the ring's atoms on a shape
+  otherwise, each is grown and the drawing that reads best kept:
+  tacrolimus's allyl, weighed by the group, went in for its C=O and a
+  methyl, and ran across the ring's inside by its methyl's hashes. A ring fused
   on its side sits where the shape turns (both ends of that side corners
   pointing out), a ring it runs through at three atoms stands outside a
   corner pointing in, and every double bond in it keeps its cis or trans:
