@@ -104,7 +104,9 @@ describe("an abbreviation from a file", () => {
       ],
       bonds: [{ a: 1, b: 2, order: 1 }],
     });
-    expect(text).toContain("A    2\nCO\n");
+    // (written out as the ligand it is on a metal - C bound to Fe, O on it - its label kept on the group: lib/chem/boundLigand)
+    expect(text).toMatch(/SUP|M {2}STY/);
+    expect(text).toMatch(/LABEL=CO|M {2}SMT {3}1 CO/);
     expect(read(text).atoms.map((a) => a.el)).toEqual(["Fe", "CO"]);
   });
 });
