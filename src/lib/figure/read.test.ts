@@ -210,6 +210,12 @@ describe("a figure's shapes", () => {
     const slant = shapesOf(figure([filled([20, 7], [18.3, 6.1], [22, 0.25], [22.5, 0], [22.85, 0.35])]));
     expect(slant.wedges).toHaveLength(1);
     expect(slant.wedges[0].tip.y).toBeLessThan(0.5);
+    // (and one a bond long, its sides run in to near half its wide end: filling most of three quarters of its box)
+    const long = shapesOf(figure([filled([0, 0], [2.2, 0], [1.6, 13.8], [1.1, 14.4], [0.6, 13.8])]));
+    expect(long.wedges).toHaveLength(1);
+    expect(long.wedges[0].tip.y).toBeGreaterThan(13.5);
+    // (a bar still a line)
+    expect(shapesOf(figure([filled([0, 0], [1.2, 0], [1.2, 14.4], [0, 14.4])])).strokes).toHaveLength(1);
   });
 
   it("leaves out what is drawn in paper's colour", () => {
