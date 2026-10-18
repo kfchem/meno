@@ -214,7 +214,10 @@ function Typing({ session }: { session: Session }) {
   const nowDrawn: WritingDrawn = { items: laid.items, places, shown, sel: ed.sel, c, halfW: laid.halfW, halfH: laid.halfH };
   latest.current = nowDrawn;
   if (drawnNow.current && sameTexts(drawnNow.current.items, nowDrawn.items)) drawnNow.current = nowDrawn;
+  // (when its letters were first drawn: what grows out of the atom grows from then, not while they are being set)
+  const shownSince = useRef<number | null>(null);
   const onDrawn = (items: readonly TextItem[]) => {
+    shownSince.current ??= performance.now();
     const l = latest.current;
     if (l && sameTexts(items, l.items)) drawnNow.current = l;
     setTick((t) => t + 1);
@@ -307,13 +310,18 @@ function Typing({ session }: { session: Session }) {
   // seen as it begins - begun by a letter, growing out of the atom - until it goes: kept, in a moment; let go, drawing back into the atom
   const group = useRef<THREE.Group>(null);
   const scaled = useRef<THREE.Group>(null);
+  const opacity = useRef(0);
+  // (gone from the page: the frame drawn again without it - the canvas draws only as asked)
+  useEffect(() => () => invalidate(), [invalidate]);
   useFrame(() => {
     const s = sessionNow.current;
     const t = performance.now();
-    const grown = easeOut(Math.min(1, (t - s.begun) / WRITE_MS));
+    // (nothing drawn a while on - nothing to draw: from when it began)
+    const from = shownSince.current ?? (t - s.begun > 300 ? s.begun : null);
+    const grown = from == null ? 0 : easeOut(Math.min(1, (t - Math.max(s.begun, from)) / WRITE_MS));
     let seen = grown;
     let size = s.grow ? GROWN_FROM + (1 - GROWN_FROM) * grown : 1;
-    let moving = grown < 1;
+    let moving = from == null || grown < 1;
     if (s.phase === "gone") {
       const ms = s.how === "kept" ? GO_MS : WRITE_MS;
       const gone = easeOut(Math.min(1, (t - (s.since ?? t)) / ms));
@@ -322,6 +330,7 @@ function Typing({ session }: { session: Session }) {
       moving = gone < 1;
     }
     scaled.current?.scale.setScalar(size);
+    opacity.current = seen;
     group.current?.traverse((o) => {
       if ("fillOpacity" in o) (o as unknown as { fillOpacity: number }).fillOpacity = seen;
     });
@@ -336,7 +345,7 @@ function Typing({ session }: { session: Session }) {
       <group ref={scaled}>
         <group position={[-at.x, -at.y, 0]}>
           <group position={[mid.x, mid.y, 0.07]}>
-            <WholeTexts2D texts={laid.items} onDrawn={onDrawn} renderOrder={TEXT_ORDER} />
+            <WholeTexts2D texts={laid.items} onDrawn={onDrawn} renderOrder={TEXT_ORDER} opacity={opacity} />
           </group>
           {marks}
         </group>

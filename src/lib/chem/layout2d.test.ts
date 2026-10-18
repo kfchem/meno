@@ -2517,11 +2517,15 @@ describe("a label being written over an atom", () => {
       40,
     );
   const asDrawn = laid(undefined, "O").lines[0].x2;
+  const ends = new Map([[0, 1], [1, 1]]);
 
   it("stops its bonds short of what is written, as of the label, and draws no label for it", () => {
     const l = laid({ items: letters("O"), k: 1, hidden: true });
     expect(l.lines[0].x2).toBeCloseTo(asDrawn, 6);
     expect(l.texts.filter((t) => t.atom === 1)).toEqual([]);
+    // (nor a carbon's round end at the atom, under the letters)
+    expect(joinsAtAtoms([{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: 1.5, y: 0, el: "C", writing: { items: letters("O"), k: 1, hidden: true } }], one, o, ends).caps.has(1)).toBe(false);
+    expect(joinsAtAtoms([{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: 1.5, y: 0, el: "C" }], one, o, ends).caps.has(1)).toBe(true);
   });
 
   it("brings them back from the atom a share of the way - from where they stopped before, where it had a label", () => {

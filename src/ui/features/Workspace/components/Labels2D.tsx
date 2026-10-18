@@ -86,6 +86,8 @@ type TextsProps = {
   leaving?: ReadonlySet<string>;
   /** The texts, by `keyOf`, faded in as they are drawn rather than seen at once: a label back as what was written over it goes (Labels2D). */
   arriving?: ReadonlySet<string>;
+  /** How opaque all of them are, read at each frame: a label being written as it comes and goes (LabelTyping2D). */
+  opacity?: { readonly current: number };
 };
 
 export function Texts2D(props: TextsProps) {
@@ -243,7 +245,7 @@ function EachText2D({
  * while it is the same item, faded in as the font comes, told when drawn -
  * as `EachText2D` draws them one by one.
  */
-function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving }: TextsProps) {
+function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving, opacity }: TextsProps) {
   const { opts } = useDrawnLayout();
   const family = opts.fontFamily ?? "Arial";
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
@@ -283,7 +285,8 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
       const runs: BatchRun[] = placeLabel(t, fontWorld, set)
         .filter((run) => !run.mark)
         .map((run) => ({ text: glyphs.shown(run.text), x: run.x, y: run.y, size: run.size, color: run.color ?? t.color ?? labelColor, italic: !!run.italic, bold: !!run.bold }));
-      b.set(key, t, runs, fading != null ? Math.min(seen.current.level, fadedOpacity(fading)) : seen.current.level);
+      const level = Math.min(seen.current.level, opacity?.current ?? 1);
+      b.set(key, t, runs, fading != null ? Math.min(level, fadedOpacity(fading)) : level);
     });
     b.keepOnly(keep);
     invalidate();
@@ -313,6 +316,17 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
     const n = follow(s.level, 1, Math.min(dt, 1 / 20), TAU.quick);
     s.level = n > 0.99 ? 1 : n;
     for (const t of b.members()) fadeLetters(t, s.level);
+    invalidate();
+  });
+  // (as opaque as they are told, frame by frame: a batch's members are not in the scene's tree, for a traverse to reach)
+  const told = useRef(1);
+  useFrame(() => {
+    const b = batch;
+    if (!b || !opacity) return;
+    const l = Math.min(seen.current.level, opacity.current);
+    if (l === told.current) return;
+    told.current = l;
+    for (const t of b.members()) fadeLetters(t, l);
     invalidate();
   });
   // the labels gone, faded out - each to naught in DURATION.quick, then let go by what holds them; one back
@@ -357,7 +371,20 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
  * is in view. Moved, they are moved by what holds them: a set placed
  * elsewhere is another set.
  */
-export function WholeTexts2D({ texts, fadeIn = false, onDrawn, renderOrder }: { texts: readonly TextItem[]; fadeIn?: boolean; onDrawn?: (texts: readonly TextItem[]) => void; renderOrder?: number }) {
+export function WholeTexts2D({
+  texts,
+  fadeIn = false,
+  onDrawn,
+  renderOrder,
+  opacity,
+}: {
+  texts: readonly TextItem[];
+  fadeIn?: boolean;
+  onDrawn?: (texts: readonly TextItem[]) => void;
+  renderOrder?: number;
+  /** How opaque they are, read at each frame (Texts2D `opacity`). */
+  opacity?: { readonly current: number };
+}) {
   // (two sets, one shown and one being set - each set made anew, so that it waits in its own Suspense)
   const sets = useRef<{ at: [readonly TextItem[] | null, readonly TextItem[] | null]; front: 0 | 1; told: readonly TextItem[] | null }>({ at: [null, null], front: 0, told: null });
   const [, setShown] = useState(0);
@@ -389,7 +416,7 @@ export function WholeTexts2D({ texts, fadeIn = false, onDrawn, renderOrder }: { 
         return (
           <Suspense key={i} fallback={null}>
             <group visible={i === s.front}>
-              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} />
+              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} opacity={opacity} />
             </group>
           </Suspense>
         );

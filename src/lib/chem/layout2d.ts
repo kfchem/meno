@@ -2687,7 +2687,8 @@ export function buildBondPrimitives(
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
   const minPx = Math.max(0.5, opts.minLinePx ?? 1);
   if (!(lwPx >= minPx)) lwPx = minPx;
-  const hasLabel = (at: Atom) => showsLabel(at, opts);
+  // (a label being written over it takes the bond's end as a label does)
+  const hasLabel = (at: Atom) => showsLabel(at, opts) || !!at.writing;
   const lineHalf = pxToWorld(lwPx * 0.5, zoom);
   // how wide a bold bond is, and a wedge at its broad end, either side of its line
   const boldHalf =
@@ -3246,9 +3247,10 @@ export function joinsAtAtoms(
   const mitres = new Map<number, Vec2[]>();
   for (let i = 0; i < atoms.length; i++) {
     const d = deg.get(i) || 0;
-    const showLabel = showsLabel(atoms[i], opts);
-    // A label takes the bond's end with it, and a wedge's wide end covers its
-    // own join, so neither wants anything here.
+    const showLabel = showsLabel(atoms[i], opts) || !!atoms[i].writing;
+    // A label takes the bond's end with it - one being written over the
+    // atom too - and a wedge's wide end covers its own join, so neither
+    // wants anything here.
     if (showLabel || wedgeEnds.has(i)) continue;
     // A free end of a plain bond, or any atom bonds meet at - including one
     // where only wedges meet, whose thin ends are each a bond wide and do
