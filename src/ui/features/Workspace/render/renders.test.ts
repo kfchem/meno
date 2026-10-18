@@ -56,7 +56,8 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   pluginClient: async () => worker,
 }));
 
-import { boxOf, progressOf, rendersOf, startRender, stopRenders } from "./renders";
+import { PX } from "../workflow/look";
+import { boxOf, progressOf, rendersOf, startRender, stopRenders, withWords } from "./renders";
 import { askOf, renderOptions } from "./renderOptions";
 import type { RenderAsk } from "./renderScene";
 import { valuesOf } from "../../../../lib/options";
@@ -203,6 +204,20 @@ describe("a workspace closing", () => {
   });
 });
 
+describe("a render's frame with its words", () => {
+  it("is the frame alone where its words are inside it, and reaches below it, and either side, where they stand below", () => {
+    const large = { x: 0, y: 0, w: 640 * PX, h: 360 * PX };
+    expect(withWords(large)).toEqual(boxOf(large));
+    const small = { x: 0, y: 0, w: 110 * PX, h: 68 * PX };
+    const b = boxOf(small);
+    const ww = withWords(small);
+    expect(ww.y1).toBe(b.y1);
+    expect(ww.y0).toBeLessThan(b.y0);
+    expect(ww.x0).toBeLessThan(b.x0);
+    expect(ww.x1).toBeGreaterThan(b.x1);
+  });
+});
+
 describe("where a render lands", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -227,12 +242,15 @@ describe("where a render lands", () => {
     await vi.advanceTimersByTimeAsync(0);
     const [r, r2] = rendersOf(one.store).getState().list;
     const figure = { x0: 2, x1: 10, y0: -4, y1: 4 };
-    // (clear of the picture there, of the water, and of the other render's place)
-    expect(overlap(boxOf(r.at), figure)).toBe(false);
-    expect(overlap(boxOf(r.at), r.around)).toBe(false);
-    expect(overlap(boxOf(r.at), boxOf(r2.at))).toBe(false);
-    // (kept clear meanwhile by what is put on the page: a file opened there goes elsewhere)
-    expect(one.st().renderFrames).toEqual([boxOf(r.at), boxOf(r2.at)]);
+    // (clear of the picture there, of the water, and of the other render's place - each with its words, where they
+    // stand below its frame)
+    for (const box of [boxOf(r.at), withWords(r.at)]) {
+      expect(overlap(box, figure)).toBe(false);
+      expect(overlap(box, r.around)).toBe(false);
+      expect(overlap(box, withWords(r2.at))).toBe(false);
+    }
+    // (kept clear meanwhile by what is put on the page, words and all: a file opened there goes elsewhere)
+    expect(one.st().renderFrames).toEqual([withWords(r.at), withWords(r2.at)]);
     const boxes = pageBoxes(one.st(), styleOf(one.st().docStyle));
     expect(freePlace(boxes, { x0: -1, x1: 1, y0: -1, y1: 1 }, { x: r.at.x, y: r.at.y }, 1.5)).not.toEqual({ x: r.at.x, y: r.at.y });
     // what it makes, put just where it was shown

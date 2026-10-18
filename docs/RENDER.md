@@ -202,8 +202,10 @@ its button just below it, in a box as wide as two lines of them need or
 as the frame, keeping only its bar. The frame and its words zoom with the
 page alike, so where they go is the same at every zoom, and it is set as
 the render begins, by all it may say as it runs; why one failed goes
-inside where it holds, below where it is long. Where the view eases to a
-render, it takes in its words below the frame too. What
+inside where it holds, below where it is long. Words below a frame are
+part of it on the page: its place is found clear of all with them, they
+are kept clear as it is, and where the view eases to a render, it takes
+them in too. What
 it makes lands just there, in the frame's place; meanwhile the frame is
 kept clear, as all on the page is, by what is put there - a file opened,
 a set placed - so that nothing comes under where it lands.

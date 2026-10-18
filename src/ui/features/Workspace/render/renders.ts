@@ -31,6 +31,8 @@ import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { pictureToAdd } from "../utils/pictures";
 import { freePlace, pageBoxes } from "../utils/freePlace";
+import { PX } from "../workflow/look";
+import { frameWords, wordsReach } from "./frameWords";
 import { styleOf } from "../../../../lib/chem/style";
 import { surfaceOf } from "../utils/surfaces";
 import { carriedOf } from "../utils/workspace";
@@ -64,6 +66,13 @@ type Renders = { list: Rendering[] };
 /** A render's place as a box, in the page's units. */
 export const boxOf = (at: Rendering["at"]) => ({ x0: at.x - at.w / 2, x1: at.x + at.w / 2, y0: at.y - at.h / 2, y1: at.y + at.h / 2 });
 
+/** A render's frame with its words where they stand below it (frameWords), in the page's units: what is kept clear for it, and what the view eases to. */
+export function withWords(at: Rendering["at"]) {
+  const b = boxOf(at);
+  const reach = wordsReach(at.w / PX, frameWords(at.w / PX, at.h / PX));
+  return { x0: b.x0 - reach.side * PX, x1: b.x1 + reach.side * PX, y0: b.y0 - reach.below * PX, y1: b.y1 };
+}
+
 const stores = new WeakMap<EditorStore, UseBoundStore<StoreApi<Renders>>>();
 
 /** The renders of a workspace, by its store. */
@@ -74,7 +83,7 @@ export function rendersOf(store: EditorStore): UseBoundStore<StoreApi<Renders>> 
     // (their frames kept clear by what is put on the page meanwhile - a file opened, a set placed: utils/freePlace `pageBoxes`)
     r.subscribe((s, was) => {
       if (s.list.length === was.list.length && s.list.every((x, i) => x.at === was.list[i].at)) return;
-      store.setState({ renderFrames: s.list.map((x) => boxOf(x.at)) });
+      store.setState({ renderFrames: s.list.map((x) => withWords(x.at)) });
     });
   }
   return r;
@@ -205,7 +214,9 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const h = page.maxY - page.minY;
   const st = store.getState();
   const there = pageBoxes(st, styleOf(st.docStyle));
-  const place = freePlace(there, { x0: -w / 2, x1: w / 2, y0: -h / 2, y1: h / 2 }, { x: page.maxX + NOMINAL_BOND_LENGTH + w / 2, y: (page.minY + page.maxY) / 2 }, NOMINAL_BOND_LENGTH);
+  // (with its words, where they stand below it: clear of all as the frame is)
+  const reach = withWords({ x: 0, y: 0, w, h });
+  const place = freePlace(there, reach, { x: page.maxX + NOMINAL_BOND_LENGTH + reach.x1, y: (page.minY + page.maxY) / 2 }, NOMINAL_BOND_LENGTH);
   const at = { x: place.x, y: place.y, w, h };
   const around = { x0: page.minX, x1: page.maxX, y0: page.minY, y1: page.maxY };
   renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, around, state: "preparing", started: Date.now() }] }));

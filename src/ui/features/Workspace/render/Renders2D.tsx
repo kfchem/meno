@@ -7,8 +7,8 @@ import PageHtml from "../components/PageHtml";
 import { setViewGoal } from "../components/viewGoal";
 import { pageAt } from "../utils/page";
 import { HTML_DISTANCE, PX } from "../workflow/look";
-import { frameWords, wordsReach } from "./frameWords";
-import { boxOf, rendersOf, stopRender, type Rendering } from "./renders";
+import { frameWords } from "./frameWords";
+import { rendersOf, stopRender, withWords, type Rendering } from "./renders";
 
 /**
  * Renders under way on the page (docs/RENDER.md): each where what it makes
@@ -28,11 +28,7 @@ export default function Renders2D() {
     if (!added.length) return;
     seen.current = Math.max(...added.map((r) => r.key));
     // (where what it makes will lie, with its words where they are below it, and what it renders)
-    const boxes = added.flatMap((r) => {
-      const b = boxOf(r.at);
-      const reach = wordsReach(r.at.w / PX, frameWords(r.at.w / PX, r.at.h / PX));
-      return [{ x0: b.x0 - reach.side * PX, x1: b.x1 + reach.side * PX, y0: b.y0 - reach.below * PX, y1: b.y1 }, r.around];
-    });
+    const boxes = added.flatMap((r) => [withWords(r.at), r.around]);
     const x0 = Math.min(...boxes.map((b) => b.x0));
     const x1 = Math.max(...boxes.map((b) => b.x1));
     const y0 = Math.min(...boxes.map((b) => b.y0));
