@@ -139,15 +139,29 @@ export function setCursor(el: HTMLElement, name: CursorName | null): void {
   else delete el.dataset.cursor;
 }
 
+/** The latest hold (`holdCursor`): only it lets the page's pointer go. */
+let holds = 0;
+
 /**
  * One of Meno's pointers held over the whole page until let go - the
  * function returned - whatever the pointer goes over: for a drag, whose
- * pointer stays what the drag does, run ahead of what it drags or not.
+ * pointer stays what the drag does, run ahead of what it drags or not. A
+ * drag lost - the window left (`blur`), the pointer taken from it
+ * (`pointercancel`), no release ever to come - lets it go too. Held
+ * again meanwhile, the later hold is the page's, let go by its own
+ * release, not the earlier one's.
  */
 export function holdCursor(name: CursorName, doc: Document = document): () => void {
   const root = doc.documentElement;
+  const win = doc.defaultView;
+  const hold = ++holds;
   root.dataset.cursorHeld = name;
-  return () => {
-    if (root.dataset.cursorHeld === name) delete root.dataset.cursorHeld;
+  const release = () => {
+    win?.removeEventListener("blur", release);
+    win?.removeEventListener("pointercancel", release, true);
+    if (hold === holds) delete root.dataset.cursorHeld;
   };
+  win?.addEventListener("blur", release);
+  win?.addEventListener("pointercancel", release, true);
+  return release;
 }

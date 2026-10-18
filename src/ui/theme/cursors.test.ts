@@ -59,15 +59,34 @@ describe("Meno's pointers", () => {
       expect(rule.match(/!important/g)).toHaveLength(2);
       expect(rule).toContain(`12 12, ${CURSORS[name].fallback} !important`);
     }
-    const page = { documentElement: { dataset: {} as DOMStringMap } } as unknown as Document;
+    const win = new EventTarget();
+    const page = { documentElement: { dataset: {} as DOMStringMap }, defaultView: win } as unknown as Document;
     const letGo = holdCursor("sideways", page);
     expect(page.documentElement.dataset.cursorHeld).toBe("sideways");
     letGo();
     expect("cursorHeld" in page.documentElement.dataset).toBe(false);
-    // (one let go late leaves one held since alone)
+    // (held again before the first is let go, of the same name or another: the later hold's, until its own release)
     const first = holdCursor("sideways", page);
-    holdCursor("corner-up", page);
+    const second = holdCursor("sideways", page);
     first();
-    expect(page.documentElement.dataset.cursorHeld).toBe("corner-up");
+    expect(page.documentElement.dataset.cursorHeld).toBe("sideways");
+    second();
+    expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+  });
+
+  it("let go where the drag is lost: the window left, or the pointer taken from it", () => {
+    for (const lost of ["blur", "pointercancel"]) {
+      const win = new EventTarget();
+      const page = { documentElement: { dataset: {} as DOMStringMap }, defaultView: win } as unknown as Document;
+      const letGo = holdCursor("sideways", page);
+      win.dispatchEvent(new Event(lost));
+      expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+      // (the drag's own release later, as its gesture ends: nothing more to let go, and a later hold kept)
+      holdCursor("corner-up", page);
+      letGo();
+      expect(page.documentElement.dataset.cursorHeld).toBe("corner-up");
+      win.dispatchEvent(new Event(lost));
+      expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+    }
   });
 });
