@@ -29,6 +29,10 @@ import { systemGlyphs } from "./glyphShapes";
 import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
 import { picturePng } from "./pictures";
+import { labelBoxes, labelledPart } from "./freePlace";
+import { captionBox } from "./extent";
+import { editorLayoutOptions } from "../layoutOptions";
+import type { DrawingStyle } from "../../../../lib/chem/style";
 
 /** A label as drawn read as one typed is: an element with its charge and its mass number (13C), or a group's name - or nothing. */
 /**
@@ -291,16 +295,15 @@ function pointsOf(read: FigureResult): { x: number; y: number }[] {
  * A figure read moved to lie beside what it was read from - its left edge
  * two bonds past the region's right, its top level with the region's -
  * and on to the right until it is clear of what is `taken`: its structure
- * and its scheme together, as they stand to each other.
+ * and its scheme together, as they stand to each other, measured as
+ * `regionOf` measures it.
  */
-export function placedBeside(read: FigureResult, region: Region, taken: readonly Region[]): FigureResult {
-  const pts = pointsOf(read);
-  if (!pts.length) return read;
-  const xs = pts.map((a) => a.x);
-  const ys = pts.map((a) => a.y);
+export function placedBeside(read: FigureResult, region: Region, taken: readonly Region[], style?: DrawingStyle): FigureResult {
+  const room = regionOf(read, style);
+  if (!room) return read;
   const pad = 0.5 * NOMINAL_BOND_LENGTH;
-  const w = Math.max(...xs) - Math.min(...xs);
-  const h = Math.max(...ys) - Math.min(...ys);
+  const w = room.x1 - room.x0;
+  const h = room.y1 - room.y0;
   const gap = 2 * NOMINAL_BOND_LENGTH;
   let x0 = region.x1 + gap;
   const top = region.y1;
@@ -310,8 +313,8 @@ export function placedBeside(read: FigureResult, region: Region, taken: readonly
     if (!hit.length) break;
     x0 = Math.max(...hit.map((t) => t.x1)) + gap;
   }
-  const dx = x0 - Math.min(...xs);
-  const dy = top - Math.max(...ys);
+  const dx = x0 - room.x0;
+  const dy = top - room.y1;
   const by = <T extends { x: number; y: number }>(p: T): T => ({ ...p, x: p.x + dx, y: p.y + dy });
   const scheme = read.scheme && {
     ...read.scheme,
@@ -322,12 +325,20 @@ export function placedBeside(read: FigureResult, region: Region, taken: readonly
   return { model: { ...read.model, atoms: read.model.atoms.map(by) }, ...(scheme ? { scheme } : {}) };
 }
 
-/** Where on the page a figure read stands: the box round all of it, half a bond wider all round. */
-export function regionOf(read: FigureResult): Region | null {
+/**
+ * Where on the page a figure read stands: the box round all of it, half a
+ * bond wider all round - and, given the drawing's style, its labels as far
+ * as the layout sets them and its words as far as they are set, as the page
+ * measures what lies on it (./freePlace `labelBoxes`, ./extent `captionBox`).
+ */
+export function regionOf(read: FigureResult, style?: DrawingStyle): Region | null {
   const pts = pointsOf(read);
   if (!pts.length) return null;
-  const xs = pts.map((a) => a.x);
-  const ys = pts.map((a) => a.y);
+  const boxes = style
+    ? [...labelBoxes(labelledPart(read.model), style), ...(read.scheme?.captions ?? []).map((c) => captionBox(c, editorLayoutOptions(style)))]
+    : [];
+  const xs = [...pts.map((a) => a.x), ...boxes.flatMap((b) => [b.x0, b.x1])];
+  const ys = [...pts.map((a) => a.y), ...boxes.flatMap((b) => [b.y0, b.y1])];
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
 }
 
