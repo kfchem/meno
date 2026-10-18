@@ -50,7 +50,8 @@ export type ReadBond = {
 };
 
 /** A figure read: its atoms and bonds, how long its bonds are drawn, in points, and the letters in it not read as labels. */
-export type FigureRead = { atoms: ReadAtom[]; bonds: ReadBond[]; bond: number; left: { letters: FigureLetter[] } };
+/** A figure read: its atoms and bonds, how long its bonds are drawn, the letters no atom took - and the cells of a table drawn in it (`tableLines`), where one is. */
+export type FigureRead = { atoms: ReadAtom[]; bonds: ReadBond[]; bond: number; left: { letters: FigureLetter[] }; table?: Box[] };
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
 const len = (s: { a: Point; b: Point }) => dist(s.a, s.b);
@@ -538,18 +539,19 @@ export function figureBond(shapes: Shapes, letters: readonly FigureLetter[]): nu
  * two level lines, each over the other's stretch, and two upright between
  * them reaching from one to the other - where two cells or more share a
  * side, as a table's rows and columns do; and short level or upright
- * lines set within such a cell, its dashes. Cells are looked for between a
- * level line and the next below it, so that a table of many rows is read
- * in time.
+ * lines set within such a cell, its dashes - and its cells, whose words
+ * are the table's. Cells are looked for between a level line and the next
+ * below it, so that a table of many rows is read in time.
  */
-function tableLines(strokes: readonly Stroke[], bond: number): Set<Stroke> {
+function tableLines(strokes: readonly Stroke[], bond: number): { lines: Set<Stroke>; cells: Box[] } {
   const out = new Set<Stroke>();
+  const none = { lines: out, cells: [] };
   const tol = 0.12 * bond;
   const level = (s: Stroke) => len(s) > 0.3 * bond && Math.abs(s.a.y - s.b.y) <= 0.03 * len(s);
   const upright = (s: Stroke) => len(s) > 0.3 * bond && Math.abs(s.a.x - s.b.x) <= 0.03 * len(s);
   const hs = strokes.filter(level).map((s) => ({ s, y: (s.a.y + s.b.y) / 2, x0: Math.min(s.a.x, s.b.x), x1: Math.max(s.a.x, s.b.x) }));
   const vs = strokes.filter(upright).map((s) => ({ s, x: (s.a.x + s.b.x) / 2, y0: Math.min(s.a.y, s.b.y), y1: Math.max(s.a.y, s.b.y) }));
-  if (hs.length < 2 || vs.length < 3) return out;
+  if (hs.length < 2 || vs.length < 3) return none;
   hs.sort((p, q) => p.y - q.y);
   vs.sort((p, q) => p.x - q.x);
   type Cell = { box: [number, number, number, number]; sides: Stroke[] };
@@ -583,7 +585,7 @@ function tableLines(strokes: readonly Stroke[], bond: number): Set<Stroke> {
   const count = new Map<Stroke, number>();
   for (const c of cells) for (const s of c.sides) count.set(s, (count.get(s) ?? 0) + 1);
   const ofTable = cells.filter((c) => c.sides.some((s) => (count.get(s) ?? 0) > 1));
-  if (ofTable.length < 2) return out;
+  if (ofTable.length < 2) return none;
   for (const c of ofTable) for (const s of c.sides) out.add(s);
   // (and a short line, level or upright, within one of its cells, alone - no other line ending at either of its ends, as a bond's
   // do: a dash in it)
@@ -594,7 +596,7 @@ function tableLines(strokes: readonly Stroke[], bond: number): Set<Stroke> {
     const m = mid(s.a, s.b);
     if (ofTable.some((c) => m.x > c.box[0] && m.x < c.box[2] && m.y > c.box[1] && m.y < c.box[3])) out.add(s);
   }
-  return out;
+  return { lines: out, cells: ofTable.map((c) => c.box) };
 }
 
 /** Whether two lines meet square at their ends `p` (of `s`) and `q` (of `t`): between 75 and 105 degrees, as a frame's sides and a graph's axes do. */
@@ -738,7 +740,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     len(s) > 2.5 * bond && [s.a, s.b].every((p) => meetings.every(({ t, q }) => t === s || dist(p, q) >= 0.12 * bond || (t !== null && square(s, p, t, q))));
   // (and a table's lines - two cells or more side by side, their sides level and upright, and dashes set within them - are none: a
   // ring is never drawn so; a cyclobutane alone, one square, is no table)
-  const table = tableLines(shapes.strokes, bond);
+  const { lines: table, cells: tableCells } = tableLines(shapes.strokes, bond);
   // (and a short line alongside a longer, within its stretch - a double bond's second line, the bond drawn short)
   const inner = (s: Stroke) =>
     len(s) > 0.15 * bond &&
@@ -1120,7 +1122,7 @@ export function readFigure(drawn: FigureDrawn, reads: (label: string) => boolean
     for (let i = 0; i < atoms.length; i++) if (from(atoms[i], at) < 0.6 * bond && (best < 0 || from(atoms[i], at) < from(atoms[best], at))) best = i;
     if (best >= 0) atoms[best] = { ...atoms[best], dots: (atoms[best].dots ?? 0) + 1 };
   }
-  return { atoms, bonds, bond, left: { letters: left } };
+  return { atoms, bonds, bond, left: { letters: left }, ...(tableCells.length ? { table: tableCells } : {}) };
 }
 
 /**

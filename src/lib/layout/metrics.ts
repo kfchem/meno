@@ -69,6 +69,20 @@ export type Geometry = {
    */
   hydrogenInk?: boolean;
   /**
+   * What a label on a bare vertex it is not bonded to counts for, in
+   * crowdings (`labelsOnVertices`): half of one unless given. A layout sets
+   * its parts first, not counting it, and makes room for such a label
+   * last, with its H's, by moving bonds a little.
+   */
+  labelRoom?: number;
+  /**
+   * What two labels whose ink comes near each other count for, in
+   * crowdings (`labelsCrowding`): half of one unless given - over and above
+   * a pair under 0.8 of a bond apart, which counts one. A layout counts it
+   * as `labelRoom`.
+   */
+  inkRoom?: number;
+  /**
    * What a name's letters running into something count for (OTBS over an
    * atom), in crowdings: one unless given. A layout sets its parts first,
    * counting them lightly, and makes room for them last, with its H's.
@@ -229,6 +243,50 @@ export function scoreParts(m: Omit<LayoutMetrics, "score">): Record<keyof typeof
   return parts;
 }
 
+/**
+ * How near, in bond lengths, a labelled atom may lie to a bare vertex it is
+ * not bonded to before its letter crowds the bonds meeting there; half a
+ * bond is an overlap.
+ */
+export const LABEL_VERTEX = 0.6;
+
+/** What a label on a bare vertex, or two labels' ink near each other, counts for on the measure, in crowdings, unless given. */
+export const LABEL_ROOM = 0.5;
+
+/**
+ * Each label lying on a bare vertex: nearer than `LABEL_VERTEX`, its letter
+ * running into the bonds that meet there - vancomycin's acid C=O with its
+ * O on the corner of the benzene ring beside it, forskolin's 9-OH on its
+ * ketone's carbon. By label, the vertex nearest it and how far in, 0 to 1
+ * (1 at half a bond, an overlap). `apart` passes over a pair (bonded, or
+ * drawn over each other as a solid is seen).
+ */
+export function labelsOnVertices(
+  x: readonly number[],
+  y: readonly number[],
+  L: number,
+  labelled: readonly boolean[],
+  apart: (a: number, b: number) => boolean,
+): Map<number, { vertex: number; by: number }> {
+  const room = LABEL_VERTEX * L;
+  const into = (LABEL_VERTEX - 0.5) * L;
+  const out = new Map<number, { vertex: number; by: number }>();
+  for (let a = 0; a < x.length; a++) {
+    if (!labelled[a]) continue;
+    for (let b = 0; b < x.length; b++) {
+      if (labelled[b] || a === b) continue;
+      const dx = x[a] - x[b];
+      const dy = y[a] - y[b];
+      if (Math.abs(dx) >= room || Math.abs(dy) >= room) continue;
+      const d = Math.hypot(dx, dy);
+      if (d >= room || apart(a, b)) continue;
+      const by = Math.min(1, (room - d) / into);
+      if (by > (out.get(a)?.by ?? 0)) out.set(a, { vertex: b, by });
+    }
+  }
+  return out;
+}
+
 const TAU = Math.PI * 2;
 const deg = (r: number) => (r * 180) / Math.PI;
 
@@ -312,15 +370,14 @@ export function ringIrregularity(
 
 
 /**
- * How far a label's ink reaches along `d` from its atom, in bond lengths, of
- * what lies in the path of a bond leaving that way: its symbol's first letter
- * centred on the atom, half a bond high, the rest after it, and its H where
- * the drawing sets it (hydrogenSpot), as inkReach reckons them. A charged
- * carbon, a bare vertex, reaches nowhere.
+ * A label's ink, from its atom in bond lengths (y up), as the drawing sets
+ * it: its symbol's first letter centred on the atom, half a bond high, the
+ * rest after it, and its H where the drawing puts it (hydrogenSpot), with
+ * its count. A charged carbon, a bare vertex, has none here.
  */
-function labelInk(el: string, hs: number, ways: readonly { x: number; y: number }[], d: { x: number; y: number }): number {
+function inkBoxes(el: string, hs: number, ways: readonly { x: number; y: number }[]): { x0: number; x1: number; y0: number; y1: number }[] {
   const symbol = el === "C" ? 0 : el.length;
-  if (!symbol) return 0;
+  if (!symbol) return [];
   const boxes = [{ x0: -0.25, x1: 0.25 + 0.4 * (symbol - 1), y0: -0.25, y1: 0.25 }];
   if (hs > 0) {
     const h = ways.length ? hydrogenSpot(ways) : { x: 0.5, y: 0 };
@@ -331,6 +388,79 @@ function labelInk(el: string, hs: number, ways: readonly { x: number; y: number 
         : { x0: h.x - 0.2, x1: h.x + 0.2 + count, y0: h.y - 0.25, y1: h.y + 0.25 },
     );
   }
+  return boxes;
+}
+
+/**
+ * How much paper, in bond lengths, two labels' ink wants between it before
+ * they read as crowded - one over the other (cortisol's two HO's a bond
+ * apart, one straight over the other), or side by side; and how little
+ * before they count as fully crowded.
+ */
+export const INK_GAP = 0.5;
+export const INK_TIGHT = 0.2;
+
+/**
+ * Each pair of labels, not bonded, whose ink - symbol on symbol, or H on
+ * H, where the drawing puts them (`inkBoxes`) - comes nearer than
+ * `INK_GAP`: by pair,
+ * how far in, 0 to 1 (1 at `INK_TIGHT`). Names (OTBS) are passed over:
+ * their letters are given room by themselves. `apart` passes over a pair
+ * (bonded, or drawn over each other as a solid is seen).
+ */
+export function labelsCrowding(
+  x: readonly number[],
+  y: readonly number[],
+  L: number,
+  elements: readonly string[],
+  hydrogens: readonly number[],
+  labelled: readonly boolean[],
+  neighbours: readonly (readonly number[])[],
+  apart: (a: number, b: number) => boolean,
+): { a: number; b: number; by: number }[] {
+  const reach = (1 + INK_GAP) * L;
+  const inks: ({ x0: number; x1: number; y0: number; y1: number }[] | null)[] = x.map((_, a) => {
+    if (!labelled[a] || isName(elements[a])) return null;
+    const ways = neighbours[a].map((b) => {
+      const d = Math.hypot(x[b] - x[a], y[b] - y[a]) || 1;
+      return { x: (x[b] - x[a]) / d, y: (y[b] - y[a]) / d };
+    });
+    const boxes = inkBoxes(elements[a], hydrogens[a] ?? 0, ways);
+    return boxes.length ? boxes.map((b) => ({ x0: x[a] + b.x0 * L, x1: x[a] + b.x1 * L, y0: y[a] + b.y0 * L, y1: y[a] + b.y1 * L })) : null;
+  });
+  const out: { a: number; b: number; by: number }[] = [];
+  for (let a = 0; a < x.length; a++) {
+    const ia = inks[a];
+    if (!ia) continue;
+    for (let b = a + 1; b < x.length; b++) {
+      const ib = inks[b];
+      if (!ib || Math.abs(x[a] - x[b]) > reach + L || Math.abs(y[a] - y[b]) > reach || apart(a, b)) continue;
+      // (symbol on symbol, H on H: an H on another's symbol is the H's own
+      // rule's, which leaves a sliver of paper enough one over the other)
+      let gap = Infinity;
+      for (const [i, p] of ia.entries()) {
+        for (const [j, q] of ib.entries()) {
+          if ((i === 0) !== (j === 0)) continue;
+          gap = Math.min(gap, Math.max(p.x0 - q.x1, q.x0 - p.x1, p.y0 - q.y1, q.y0 - p.y1));
+        }
+      }
+      if (gap >= INK_GAP * L) continue;
+      out.push({ a, b, by: Math.min(1, (INK_GAP * L - gap) / ((INK_GAP - INK_TIGHT) * L)) });
+    }
+  }
+  return out;
+}
+
+/**
+ * How far a label's ink reaches along `d` from its atom, in bond lengths, of
+ * what lies in the path of a bond leaving that way: its symbol's first letter
+ * centred on the atom, half a bond high, the rest after it, and its H where
+ * the drawing sets it (hydrogenSpot), as inkReach reckons them. A charged
+ * carbon, a bare vertex, reaches nowhere.
+ */
+function labelInk(el: string, hs: number, ways: readonly { x: number; y: number }[], d: { x: number; y: number }): number {
+  const boxes = inkBoxes(el, hs, ways);
+  if (!boxes.length) return 0;
   // (the band a line and a little paper either side of it take)
   const band = 0.1;
   const n = { x: -d.y, y: d.x };
@@ -898,6 +1028,21 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         if (Math.hypot(x[a] - x[b], y[a] - y[b]) < 0.8 * L) crowdedLabels++;
       }
     }
+  }
+  // and a label on a bare vertex (`labelsOnVertices`)
+  const labelRoom = g.labelRoom ?? LABEL_ROOM;
+  if (labelRoom > 0 && g.labelled) {
+    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null));
+    for (const { by } of near.values()) crowdedLabels += labelRoom * by;
+  }
+  // and two labels whose ink, H's and all, comes near (`labelsCrowding`),
+  // not already a crowding by their atoms
+  const inkRoom = g.inkRoom ?? LABEL_ROOM;
+  if (inkRoom > 0 && g.labelled && g.elements) {
+    const near = labelsCrowding(x, y, L, g.elements, g.hydrogens ?? [], g.labelled, neighbours, (a, b) =>
+      bonded.has(pair(a, b)) || solid(a, b) || Math.hypot(x[a] - x[b], y[a] - y[b]) < 0.8 * L,
+    );
+    for (const { by } of near) crowdedLabels += inkRoom * by;
   }
   // and a label's H, where the drawing sets it, clear of every other
   // label, atom and bond: an OH's H is ink as much as its O. A quarter of

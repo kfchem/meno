@@ -1093,7 +1093,12 @@ workspace holds.
   from its wide end, the same way and wider, is its wide half. A wedge
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
-  its corners to another is no bond.
+  its corners to another is no bond. So is a line drawn down a wedge,
+  within it - or reaching up to a tenth of its length past where its tip
+  is taken to be, to the point a narrow end may come to - at least half
+  as long: its middle line, under the fill or
+  over it, as some programs draw one; else it is read as a second bond
+  beside the wedge, to an atom of its own at the wide end.
 - **Traces, and too much drawn**: a chart's or a spectrum's trace is no
   structure's and is left out before anything is read - an open line of
   more than a hundred corners; a path of more than 150 lines, most of them
@@ -1126,7 +1131,12 @@ workspace holds.
   share a side, as a table's rows and columns do, and short level or
   upright lines set within those cells, its dashes; a structure beside it
   is read as ever. A ring is never drawn so; a Fischer projection's
-  crossing lines make no cells.
+  crossing lines make no cells. Its words - those in a cell that holds no
+  part of a structure nor of an arrow, a data table's cell - are the
+  table's, not the scheme's, and are not put on the page with the
+  structure. Words outside its cells (its caption, a footnote) and an
+  arrow's words come through as ever, and a cell holding a structure or an
+  arrow is a panel framing part of the scheme, whose words are kept.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.
@@ -1147,7 +1157,9 @@ workspace holds.
   - a filled wedge is a bond in front, narrow at its stereocentre - its
     narrow end a point, rounded, cut flat a line's width across, or
     capped with a short point its sides are cut in to (its width there
-    measured nearer its end, where the point narrows it), and
+    measured nearer its end, where the point narrows it; and, its sides
+    running in only to near half its wide end, filling up to three
+    quarters of its narrowest box - a bar, more, is a line), and
     its wide end cut slanting along the bond it meets however far; one
     under three tenths of a bond long only where its wide end points
     into a label (a stereocentre's H set close, the wedge cut back at it),

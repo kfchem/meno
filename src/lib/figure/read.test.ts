@@ -184,6 +184,22 @@ describe("a figure's shapes", () => {
     expect(r.atoms).toHaveLength(4);
   });
 
+  it("takes a line drawn down a wedge, within it, for the wedge's own: no bond beside it", () => {
+    // (a ring carbon's three bonds, and a wedge up to its H - a line drawn down the wedge's middle as well, under its fill)
+    const c: P = [50, 50];
+    const h = step(c, 90, 0.8);
+    const paths = [stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, -90)), wedge(c, along(c, h, 0.75)), stroke(along(c, h, 0.75), c)];
+    const s = read(figure(paths, word("H", h)));
+    expect(s.atoms).toHaveLength(5);
+    expect(bondsOf(s)).toEqual(["C-C", "C-C", "C-C", "C-H up"]);
+    // (and one reaching a little past where the wedge's tip is taken to be - the middle of its narrow end's points - to the atom, as a
+    // line drawn down a wedge capped with a point does)
+    const past = [stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, -90)), wedge(along(c, h, 0.05), along(c, h, 0.75)), { ...stroke(along(c, h, 0.75), c), width: 0.12 }];
+    expect(bondsOf(read(figure(past, word("H", h))))).toEqual(["C-C", "C-C", "C-C", "C-H up"]);
+    // (and the line alone, no wedge over it, still a bond)
+    expect(read(figure([stroke(step(c, 210), c), stroke(c, step(c, -30)), stroke(c, step(c, 90))])).atoms).toHaveLength(4);
+  });
+
   it("reads a wedge whose narrow end is capped with a short point as a wedge narrow at that point", () => {
     // (2 wide at its wide end, its sides 0.9 apart where they are cut in to the point, 0.6 short of it)
     const s = shapesOf(figure([filled([10, 0], [12, 0], [11.45, 5.6], [11, 6.2], [10.55, 5.6])]));
@@ -194,6 +210,12 @@ describe("a figure's shapes", () => {
     const slant = shapesOf(figure([filled([20, 7], [18.3, 6.1], [22, 0.25], [22.5, 0], [22.85, 0.35])]));
     expect(slant.wedges).toHaveLength(1);
     expect(slant.wedges[0].tip.y).toBeLessThan(0.5);
+    // (and one a bond long, its sides run in to near half its wide end: filling most of three quarters of its box)
+    const long = shapesOf(figure([filled([0, 0], [2.2, 0], [1.6, 13.8], [1.1, 14.4], [0.6, 13.8])]));
+    expect(long.wedges).toHaveLength(1);
+    expect(long.wedges[0].tip.y).toBeGreaterThan(13.5);
+    // (a bar still a line)
+    expect(shapesOf(figure([filled([0, 0], [1.2, 0], [1.2, 14.4], [0, 14.4])])).strokes).toHaveLength(1);
   });
 
   it("leaves out what is drawn in paper's colour", () => {

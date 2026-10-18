@@ -671,7 +671,8 @@ All hover-based, as above.
      HF typed so); then the fewest letters made capitals (co is Co, ph Ph,
      ipr iPr - not the NHC IPr).
   2. No element after uranium is read from letters typed small: nh is NH,
-     cn CN, no NO; ts is tosyl, fm Fm.
+     cn CN, no NO; ts is tosyl, fm Fm. Nor is deuterium: D is deuterium
+     only as typed (CDCl3, CD3), so pdcl2 is PdCl2.
   3. Typed as it is drawn on a bond's left - AcO, aco, meo, bochn, ho2c,
      h2n, or HN before a group, hnfmoc - it is kept as it reads from the
      bond: OAc, OMe, NHBoc, CO2H, NH2, NHFmoc (and drawn the other way
