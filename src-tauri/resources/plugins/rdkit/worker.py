@@ -881,6 +881,18 @@ ETA_EXTRA = 0.15
 #: How near an atom of an eta system and another ligand's donor of the same
 #: metal may come (A).
 ETA_CLEAR = 2.6
+#: How near two atoms of two eta systems of one metal may come (A): the rings
+#: of a bent metallocene (Cp2ZrCl2) as near as they come, and no nearer - left
+#: free, nothing kept them apart, the force field not counting what lies
+#: between fragments, and they were let fold onto each other.
+ETA_APART = 2.9
+#: A sandwich - a metal bound by two rings and nothing else (ferrocene,
+#: bis(benzene)chromium) - has its rings parallel, the metal between their
+#: centres: their atoms held at least twice the rings' height over the metal
+#: apart, less this (A), which an eclipsed sandwich's nearest pair is.
+SANDWICH_SLACK = 0.0
+#: A ring's C-C bond, for its radius as it lies over its metal (A).
+RING_BOND = 1.42
 
 
 def eta_systems(mol):
@@ -937,6 +949,59 @@ def as_ligand_anions(mol, eta):
         if problem != Chem.SanitizeFlags.SANITIZE_NONE:
             raise ValueError(f"cannot make sense of the structure ({problem})")
     return changed
+
+
+#: A sandwich's angle between its rings' centres at its metal while UFF
+#: optimises (degrees): straight, the rings parallel either side of it.
+SANDWICH_ANGLE = (179.0, 180.0)
+
+
+def sandwiches(mol, eta):
+    """Each metal bound by two rings and nothing else - ferrocene,
+    bis(benzene)chromium - and its two rings: [(metal, (star, atoms),
+    (star, atoms))], each ring's heavy atoms."""
+    by_metal = {}
+    for metal, star, atoms in eta:
+        by_metal.setdefault(metal, []).append((star, [c for c in atoms if mol.GetAtomWithIdx(c).GetAtomicNum() > 1]))
+    out = []
+    for metal, systems in by_metal.items():
+        stars = {star for star, _ in systems}
+        alone = all(n.GetIdx() in stars for n in mol.GetAtomWithIdx(metal).GetNeighbors())
+        if alone and len(systems) == 2 and all(len(atoms) >= 5 for _, atoms in systems):
+            out.append((metal, systems[0], systems[1]))
+    return out
+
+
+def eta_apart(mol, eta):
+    """How near atoms of two eta systems of one metal may come, pair by pair:
+    [(i, j, low)]. A sandwich's rings (a metal bound by two rings and
+    nothing else) are held at twice their height over the metal, which keeps
+    them parallel, the metal between their centres; any others ETA_APART."""
+    by_metal = {}
+    for metal, star, atoms in eta:
+        by_metal.setdefault(metal, []).append((star, atoms))
+    sandwiched = {metal for metal, _, _ in sandwiches(mol, eta)}
+    out = []
+    for metal, systems in by_metal.items():
+        if len(systems) < 2:
+            continue
+        heavy = [[c for c in atoms if mol.GetAtomWithIdx(c).GetAtomicNum() > 1] for _, atoms in systems]
+
+        def height(atoms):
+            """A ring's centre's height over its metal (A), or None for a chain."""
+            if len(atoms) < 5:
+                return None
+            d = eta_length(mol, metal, atoms[0])
+            r = RING_BOND / (2 * math.sin(math.pi / len(atoms)))
+            return math.sqrt(d * d - r * r) if d is not None and d > r else None
+
+        heights = [height(atoms) for atoms in heavy]
+        sandwich = metal in sandwiched and all(h is not None for h in heights)
+        for x, a in enumerate(heavy):
+            for y in range(x + 1, len(heavy)):
+                low = heights[x] + heights[y] - SANDWICH_SLACK if sandwich else ETA_APART
+                out += [(i, j, low) for i in a for j in heavy[y]]
+    return out
 
 
 def eta_length(mol, metal, atom):
@@ -1020,6 +1085,11 @@ def metal_bounds(mol, eta=()):
                 lo, hi = min(k, c), max(k, c)
                 bm[hi][lo] = max(bm[hi][lo], ETA_CLEAR)
                 bm[lo][hi] = max(bm[lo][hi], ETA_CLEAR)
+    # (two eta systems of one metal kept apart: a sandwich's rings parallel - eta_apart)
+    for i, j, low in eta_apart(mol, eta):
+        lo, hi = min(i, j), max(i, j)
+        bm[hi][lo] = max(bm[hi][lo], low)
+        bm[lo][hi] = max(bm[lo][hi], low)
     if not DistanceGeometry.DoTriangleSmoothing(bm):
         return None
     return bm
@@ -1131,7 +1201,7 @@ def bridge_angles(mol, cid, bridged):
     return held
 
 
-def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=False):
+def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=False, held_angles=()):
     """UFF's optimisation of each conformer of a molecule with metals: its
     metals' ligands kept apart, its square-planar metals' angles held
     (planar_angles), `bonds` held at their lengths and `apart` [(i, j, low,
@@ -1170,7 +1240,7 @@ def uff_with_metals(mol, ids, iters, ff_mol=None, bonds=(), apart=(), interfrag=
             ff.UFFAddDistanceConstraint(j, k, False, low, high, HOLD_APART)
         return ff
 
-    angles = {cid: planar_angles(ff_mol, cid) + bridge_angles(ff_mol, cid, bridged) for cid in ids}
+    angles = {cid: planar_angles(ff_mol, cid) + bridge_angles(ff_mol, cid, bridged) + list(held_angles) for cid in ids}
     more = {}
     if not any(angles.values()):
         # (the same terms for every conformer: optimised at once, on every core)
@@ -1232,7 +1302,25 @@ def uff_stood_in(mol, ids, iters, eta=()):
             for k in (x.GetIdx() for x in mol.GetAtomWithIdx(metal).GetNeighbors()):
                 if k not in stars:
                     apart.append((c, k, ETA_CLEAR, 100.0))
-    uff_with_metals(mol, ids, iters, ff_mol=ff_mol, bonds=bonds, apart=apart, interfrag=bool(eta))
+    # (and its systems kept apart as they were embedded: the force field counts nothing between them)
+    apart += [(i, j, low, 100.0) for i, j, low in eta_apart(mol, eta)]
+    # (a sandwich straight: each ring's star - a lone atom to the force field - held at its ring's centre, as far from each of
+    # its atoms as embedding left them from their centre, and the angle between the two at the metal held straight)
+    held_angles = []
+    for metal, (star_a, ring_a), (star_b, ring_b) in sandwiches(mol, eta):
+        for star, ring in ((star_a, ring_a), (star_b, ring_b)):
+            radii = []
+            for cid in ids:
+                # (set at its ring's centre in each conformer first, in the molecule and the one the force field is made from)
+                pts = [mol.GetConformer(cid).GetAtomPosition(c) for c in ring]
+                centre = Point3D(sum(q.x for q in pts) / len(pts), sum(q.y for q in pts) / len(pts), sum(q.z for q in pts) / len(pts))
+                for m in (mol, ff_mol):
+                    m.GetConformer(cid).SetAtomPosition(star, centre)
+                radii.append(sum((q - centre).Length() for q in pts) / len(pts))
+            r = sum(radii) / len(radii)
+            bonds += [(star, c, r) for c in ring]
+        held_angles.append((star_a, metal, star_b, SANDWICH_ANGLE))
+    uff_with_metals(mol, ids, iters, ff_mol=ff_mol, bonds=bonds, apart=apart, interfrag=bool(eta), held_angles=held_angles)
     return True
 
 

@@ -504,7 +504,15 @@ Taken on 2026-10-13:
   atoms at the covalent length plus 0.15 Å from the metal, counts a ring of
   five or a chain of three drawn neutral as the cyclopentadienide or allyl
   anion it is bound as (not a CH2, nor radical carbons), and gives no
-  energies; the star is no atom of the molecule in 3D.
+  energies; the star is no atom of the molecule in 3D. A sandwich - a metal
+  bound by two rings and nothing else, ferrocene, bis(benzene)chromium - is
+  made straight, its rings parallel either side of the metal (the angle
+  between their centres held at 179 to 180 degrees, each ring's atoms at
+  least twice its height over the metal from the other's); two rings of
+  one metal with other ligands besides - Cp2ZrCl2 - are kept at least
+  2.9 Å apart, atom from atom, and left bent as embedding and the other
+  ligands make them (RDKit plugin 0.1.4; before, nothing held either, the
+  force field not counting what lies between fragments).
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
   made in 3D from a drawing with a multi-centre bond - a Cp, an arene, an
   allyl, an alkene bound through both carbons - shows one stick from the
