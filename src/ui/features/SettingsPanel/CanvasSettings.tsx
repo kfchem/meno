@@ -16,7 +16,7 @@ export default function CanvasSettings() {
       <div className="px-3 py-2.5 flex gap-3 items-start">
         <div className="min-w-0 flex-1">
           <div className="text-sm text-gh-black">Drawing resolution</div>
-          <p className="text-xs leading-snug text-gh-gray mt-0.5">
+          <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">
             How finely the canvas is drawn. 2× is the sharpest; lower is lighter on the graphics card, and moves more smoothly on a slower computer. Exported pictures are the same whichever is chosen.
           </p>
         </div>

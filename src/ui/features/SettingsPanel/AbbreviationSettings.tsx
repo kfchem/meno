@@ -51,7 +51,7 @@ export default function AbbreviationSettings() {
         autoCorrect="off"
         autoCapitalize="off"
         spellCheck={false}
-        className="h-8 w-80 max-w-full rounded-md border border-gh-line bg-white px-2 text-sm"
+        className="h-8 w-full rounded-md border border-gh-line bg-white px-2 text-sm"
       />
 
       <section aria-labelledby="mine-heading">
@@ -72,7 +72,7 @@ export default function AbbreviationSettings() {
           A group on a canvas can be added too: select it, and choose <i>Save as abbreviation…</i> from its menu.
         </p>
         {editing === "new" && (
-          <div className="mt-3 rounded-lg border border-gh-line bg-white p-4 max-w-xl meno-fade-in">
+          <div className="mt-3 rounded-lg border border-gh-line bg-white p-4 meno-fade-in">
             <AbbreviationForm
               initial={{}}
               saveText="Add"
@@ -92,7 +92,7 @@ export default function AbbreviationSettings() {
         <div className="mt-3 grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(15rem,1fr))]">
           {mine.map((a) =>
             editing === a ? (
-              <div key={a.label} className="col-span-full rounded-lg border border-gh-line bg-white p-4 max-w-xl meno-fade-in">
+              <div key={a.label} className="col-span-full rounded-lg border border-gh-line bg-white p-4 meno-fade-in">
                 <AbbreviationForm
                   initial={a}
                   editing={a}

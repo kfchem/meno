@@ -44,7 +44,7 @@ export default function UpdateSettings() {
       <div className="flex items-start gap-4">
         <div className="flex-1">
           <div className="text-sm text-gh-black">Keep Meno up to date</div>
-          <p className="text-xs text-gh-gray mt-0.5">
+          <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
             Meno {u.current}. A newer version is looked for on GitHub and downloaded in the
             background, and goes in when you quit Meno. Each connection is shown as it is made;
             nothing goes out while Meno works offline.

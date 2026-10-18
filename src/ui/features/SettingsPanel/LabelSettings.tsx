@@ -30,7 +30,7 @@ function Smart({ title, about, on, turn }: { title: string; about: string; on: b
     <div className="mt-3 rounded-lg border border-gh-line bg-white px-3 py-2.5 flex gap-3 items-start">
       <div className="min-w-0 flex-1">
         <div className="text-sm text-gh-black">{title}</div>
-        <p className="text-xs leading-snug text-gh-gray mt-0.5">{about}</p>
+        <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">{about}</p>
       </div>
       <button
         role="switch"

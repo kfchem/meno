@@ -69,7 +69,7 @@ export default function ChemistrySettings() {
         >
           <div className="flex-1">
             <div className="text-sm text-gh-black">{s.name}</div>
-            <p className="text-xs text-gh-gray mt-0.5">{s.detail}</p>
+            <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">{s.detail}</p>
           </div>
           <button
             role="switch"
