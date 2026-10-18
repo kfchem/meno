@@ -52,16 +52,19 @@ const NONE = new Set<number>();
 
 /**
  * Boxes round all there is on the page, selected or not, each as it is
- * drawn (./extent) - a workflow's sets and its steps' cards: a
- * structure put down in a set's frame would be taken as what the set
- * holds (workflow/entries), and one on a step's card would hide it - and
- * the frames of renders under way, where what they make will land.
+ * drawn (./extent) - its structures' labels as far as the layout sets their
+ * letters (`labelBoxes`, as they are drawn: an NHBoc or a PO3H2 reaches well
+ * past its atom) - a workflow's sets and its steps' cards: a structure put
+ * down in a set's frame would be taken as what the set holds
+ * (workflow/entries), and one on a step's card would hide it - and the
+ * frames of renders under way, where what they make will land.
  */
 export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   const out = besidesBoxes(
     { ...st, sel: { atoms: NONE, bonds: NONE }, sel3d: NONE, selCaptions: NONE, selArrows: NONE, selPluses: NONE, selPictures: NONE, selPdfs: NONE, selTexts: NONE, selSlides: NONE, selShapes: NONE, selInks: NONE, selCycles: NONE },
     style,
   );
+  out.push(...labelBoxes(labelledPart(st.model), style));
   // (and where renders under way will put what they make: render/renders)
   out.push(...(st.renderFrames ?? []));
   for (const b of st.sets ?? []) out.push({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
