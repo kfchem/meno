@@ -7,7 +7,7 @@ import PageHtml from "../components/PageHtml";
 import { setViewGoal } from "../components/viewGoal";
 import { pageAt } from "../utils/page";
 import { HTML_DISTANCE, PX } from "../workflow/look";
-import { boxOf, rendersOf, stopRender, type Rendering } from "./renders";
+import { boxOf, rendersOf, stopRender, wordsPlace, type Rendering } from "./renders";
 
 /**
  * Renders under way on the page (docs/RENDER.md): each where what it makes
@@ -70,14 +70,29 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
   const h = r.at.h / PX;
   const failed = r.state === "failed";
   const share = r.total ? Math.min(1, (r.done ?? 0) / r.total) : null;
+  const inside = wordsPlace(w, h) === "inside";
+  const words = (
+    <span className={`text-[13px] leading-5 ${inside ? "max-w-full" : ""} ${failed ? "text-accel-accent" : "text-gh-black"}`} role={failed ? "alert" : "status"}>
+      {said(r)}
+    </span>
+  );
+  const stop = (
+    <button
+      onClick={onStop}
+      aria-label={failed ? "Put away" : "Stop rendering"}
+      title={failed ? "Put away" : "Stop rendering"}
+      className={`${inside ? "absolute right-1.5 top-1.5" : "shrink-0"} flex h-6 w-6 items-center justify-center rounded-md text-gh-gray transition-colors duration-150 ease-meno hover:bg-gh-base hover:text-gh-black`}
+      style={{ pointerEvents: "auto" }}
+    >
+      <XMarkIcon className="h-4 w-4" aria-hidden />
+    </button>
+  );
   return (
     <div
-      className={`meno-fade-in absolute flex flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-white/80 p-3 text-center transition-colors duration-200 ease-meno ${failed ? "border-accel-accent" : "border-gh-line"}`}
+      className={`meno-fade-in absolute flex flex-col items-center justify-center gap-2 rounded-md border border-dashed bg-white/80 text-center transition-colors duration-200 ease-meno ${inside ? "px-8 py-3" : "p-1"} ${failed ? "border-accel-accent" : "border-gh-line"}`}
       style={{ left: (r.at.x - r.at.w / 2) / PX, top: -(r.at.y + r.at.h / 2) / PX, width: w, height: h }}
     >
-      <span className={`max-w-full text-[13px] leading-5 ${failed ? "text-accel-accent" : "text-gh-black"}`} role={failed ? "alert" : "status"}>
-        {said(r)}
-      </span>
+      {inside && words}
       {!failed && (
         <span
           role="progressbar"
@@ -89,20 +104,19 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
           <span className="block h-full rounded-full bg-accel-base transition-[width] duration-300 ease-meno" style={{ width: `${(share ?? 0) * 100}%` }} />
         </span>
       )}
-      {!failed && r.line && (
+      {inside && !failed && r.line && (
         <span className="max-w-full truncate font-mono text-[10px] leading-4 text-gh-gray" title={r.line}>
           {r.line}
         </span>
       )}
-      <button
-        onClick={onStop}
-        aria-label={failed ? "Put away" : "Stop rendering"}
-        title={failed ? "Put away" : "Stop rendering"}
-        className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-md text-gh-gray transition-colors duration-150 ease-meno hover:bg-gh-base hover:text-gh-black"
-        style={{ pointerEvents: "auto" }}
-      >
-        <XMarkIcon className="h-4 w-4" aria-hidden />
-      </button>
+      {inside && stop}
+      {/* (a small frame's words, just below it, with its button: as wide as they need, up to a line's) */}
+      {!inside && (
+        <div className="absolute left-1/2 top-full mt-1.5 flex w-max max-w-[320px] -translate-x-1/2 items-center gap-1 rounded-md bg-white/80 pl-2 text-left" title={failed ? undefined : r.line}>
+          {words}
+          {stop}
+        </div>
+      )}
     </div>
   );
 }

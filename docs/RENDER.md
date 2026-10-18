@@ -171,7 +171,9 @@ While it renders, a dashed frame stands where what it makes will lie,
 as large as it will be - beside the molecules, on the right, as large as
 they are drawn; or, where something lies there, in the free space nearest
 it, clear of all on the page and of other renders' frames - saying how
-far it is and what its job said last, with a button that stops it. What
+far it is and what its job said last, with a button that stops it; a
+frame too small for that - a small picture's - has its words and its
+button just below it, keeping only its bar. What
 it makes lands just there, in the frame's place; meanwhile the frame is
 kept clear, as all on the page is, by what is put there - a file opened,
 a set placed - so that nothing comes under where it lands.
