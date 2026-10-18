@@ -59,7 +59,10 @@ day saw `axial.test.ts`'s slowest test take 67.8 s against its 60 s
 timeout.
 
 Every test whose timeout was under twenty times its measured time was
-raised:
+raised. A list whose timeout comes from its slowest molecule takes the
+rule's step whichever way that goes, so one came down: the cages list,
+from 120 s to 30 s, still 77 times its slowest molecule (0.39 s). Every
+other timeout outside this table is as it was:
 
 | Test file | Test | Measured | Timeout before | Timeout now |
 |---|---|---:|---:|---:|
