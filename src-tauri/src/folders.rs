@@ -145,6 +145,8 @@ fn move_folder(m: &Moved, said: &mut Vec<String>) {
     }
     clear_moving(&m.to);
     let mut makers_moved: Vec<&str> = Vec::new();
+    // (what went, by name: said in the log, from each old folder, whether or not the folder goes too)
+    let mut moved: Vec<String> = Vec::new();
     for entry in entries.flatten() {
         let name = entry.file_name();
         let Some(text) = name.to_str() else { continue };
@@ -166,15 +168,22 @@ fn move_folder(m: &Moved, said: &mut Vec<String>) {
             take_away(&from, said, "set up again since in the new folder");
             continue;
         }
-        if move_entry(&from, &to, said) && (text == "uv" || text == "pixi") {
-            makers_moved.push(if text == "uv" { "uv" } else { "pixi" });
+        if move_entry(&from, &to, said) {
+            moved.push(text.to_string());
+            if text == "uv" || text == "pixi" {
+                makers_moved.push(if text == "uv" { "uv" } else { "pixi" });
+            }
         }
+    }
+    if !moved.is_empty() {
+        moved.sort();
+        said.push(format!("moved from {} to {}: {}", m.from.display(), m.to.display(), moved.join(", ")));
     }
     for maker in makers_moved {
         unbind(&m.to.join(maker), maker, said);
     }
     match fs::remove_dir(&m.from) {
-        Ok(()) => said.push(format!("moved {} to {}", m.from.display(), m.to.display())),
+        Ok(()) => said.push(format!("removed {}, emptied", m.from.display())),
         Err(_) if fs::read_dir(&m.from).is_ok_and(|mut e| e.next().is_some()) => {}
         Err(e) => said.push(format!("could not remove {} ({e})", m.from.display())),
     }
@@ -507,7 +516,8 @@ mod tests {
         assert_eq!(fs::read_to_string(new.join("jobs/0b6f5c1e-0000-4000-8000-000000000001/work/out.txt")).unwrap(), "done");
         // (uv's Python kept, the link to where it was gone)
         assert_eq!(names(&new.join("uv/python")), ["cpython-3.12.11"]);
-        assert!(said.iter().any(|s| s.starts_with("moved ")));
+        assert!(said.iter().any(|s| s.starts_with("moved from ") && s.ends_with(": jobs, logs, pixi, settings.json, tools, uv, window.json")), "{said:?}");
+        assert!(said.iter().any(|s| s.starts_with("removed ") && s.ends_with(", emptied")), "{said:?}");
         // (and done again, nothing to do)
         assert!(move_old(&[Moved { from: old, to: new, leave: &[], only: None }]).is_empty());
         let _ = fs::remove_dir_all(base);
@@ -571,8 +581,10 @@ mod tests {
         // (the roaming folder, Windows: environments, tools and jobs left for roaming.rs)
         let old = old_folder(&base);
         let new = base.join(FOLDER);
-        move_old(&[Moved { from: old.clone(), to: new.clone(), leave: &["uv", "pixi", "tools", "jobs"], only: None }]);
+        let said = move_old(&[Moved { from: old.clone(), to: new.clone(), leave: &["uv", "pixi", "tools", "jobs"], only: None }]);
         assert_eq!(names(&old), ["jobs", "pixi", "tools", "uv"]);
+        // (said in the log, though the folder stays for what another takes away: the Windows pre-release check found no line for it)
+        assert_eq!(said, [format!("moved from {} to {}: logs, settings.json, window.json", old.display(), new.display())]);
         assert_eq!(names(&new), ["logs", "settings.json", "window.json"]);
         // (a cache folder: Meno's own caches moved, the system's left)
         let caches = base.join("Caches");
