@@ -179,7 +179,16 @@ export function namesLaid(g: NameGeometry, L: number): Map<number, { left: boole
     const one = next[a].length === 1 ? next[a][0] : -1;
     const d = one >= 0 ? { x: g.x[one] - g.x[a], y: g.y[one] - g.y[a] } : null;
     const len = d ? Math.hypot(d.x, d.y) || 1 : 1;
-    out.set(a, place(a, d != null && d.x > len * BAND));
+    // (read outward from its bonds where they come in from the right - all of them together, none leaving to the left: one
+    // bond, or a ring's atom on its left side)
+    const ways = next[a].map((b) => {
+      const w = { x: g.x[b] - g.x[a], y: g.y[b] - g.y[a] };
+      const l = Math.hypot(w.x, w.y) || 1;
+      return { x: w.x / l, y: w.y / l };
+    });
+    const sum = ways.reduce((t, w) => ({ x: t.x + w.x, y: t.y + w.y }), { x: 0, y: 0 });
+    const fromRight = ways.length > 0 && !ways.some((w) => w.x < -BAND) && sum.x > Math.hypot(sum.x, sum.y) * BAND;
+    out.set(a, place(a, fromRight));
     if (d && Math.abs(d.x) <= len * UPRIGHT) either.push(a);
   }
   // (each label's H, where the drawing sets it)

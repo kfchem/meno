@@ -56,7 +56,7 @@ export function TabStrip({
       values={tabOrder}
       onReorder={reorder}
       layoutScroll
-      className="flex h-full items-end space-x-1 flex-1 min-w-0 px-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
+      className="flex h-full items-end space-x-1 min-w-0 pl-1.5 pr-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
       data-tauri-drag-region
     >
       {/* A tab comes in rising, and closed goes the same way, the others

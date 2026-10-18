@@ -30,6 +30,7 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       }),
     setLitPdf: (id: number | null) => set({ litPdf: id }),
     setColumnWidth: (px: number) => set({ columnWidth: px }),
+    setColumnFilled: (on: boolean) => set({ columnFilled: on }),
     setPdfColumnWidth: (px: number) => set({ pdfColumnWidth: px }),
     readPdf: (id: number) => {
       const pdf = get().pdfs.find((p) => p.id === id);

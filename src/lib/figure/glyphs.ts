@@ -120,7 +120,18 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
   // (a word drawn as one shape - its letters each an outline of one path, as some typesetters set a label: Boc, MeO - as tall as a
   // letter however wide, its letters each sized on their own)
   const word = new Set<object>(shapes.blobs.filter((b) => !taken.has(b) && !sized(b.box) && tall(b.box) && b.parts.length > 1));
-  const outlines = shapes.blobs.filter((b) => !taken.has(b) && (sized(b.box) || word.has(b))).flatMap((b) => b.parts.filter((p) => p.length > 2).map((pts) => ({ pts, from: b })));
+  // (a round dot, solid - one outline, as wide as it is tall, filling its box as a disc does, nothing drawn within it - is no
+  // letter: a mark set at a bond's end, as a scheme marks where a group goes; o and e have their holes)
+  const disc = (b: (typeof shapes.blobs)[number]) => {
+    const [w, h] = [b.box[2] - b.box[0], b.box[3] - b.box[1]];
+    if (b.parts.length !== 1 || !b.curved || w < 0.8 * h || h < 0.8 * w) return false;
+    if (Math.abs(areaOf(b.parts[0])) < 0.72 * w * h) return false;
+    // (a hole drawn apart lies within it, well smaller; the same dot drawn again over it is no hole)
+    const within = (o: (typeof shapes.blobs)[number]) =>
+      o !== b && o.box[0] >= b.box[0] && o.box[2] <= b.box[2] && o.box[1] >= b.box[1] && o.box[3] <= b.box[3] && (o.box[2] - o.box[0]) * (o.box[3] - o.box[1]) < 0.7 * w * h;
+    return !shapes.blobs.some(within);
+  };
+  const outlines = shapes.blobs.filter((b) => !taken.has(b) && (sized(b.box) || word.has(b)) && !disc(b)).flatMap((b) => b.parts.filter((p) => p.length > 2).map((pts) => ({ pts, from: b })));
   const glyphs = lettersDrawn(outlines).filter((g) => !g.from.some((f) => word.has(f)) || sized(g.box));
   // (a stem with a dot over it, drawn as one shape - an i or a j, however it leans: the nearer of the two)
   for (const g of glyphs) {
@@ -211,17 +222,24 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
     });
   }
   // (a letter whose small form is its capital made smaller - c C, o O, s S, v V, w W, x X, z Z - is told by the capitals beside it on its
-  // line, of shapes of their own: as tall as they, a capital; well under, a small letter - the c of a Boc)
+  // line, of shapes of their own: as tall as they, a capital; well under, a small letter - the c of a Boc. One with no letter
+  // beside it at all - an O set alone at a bond's end - by the figure's other capitals of shapes of their own, as many of them
+  // as tall: the most common height among them, so that a heading's larger letters do not make it small)
   const alike2 = "cosvwxz";
+  const own = (m: ShapeLetter) => /[A-Z]/.test(m.c) && !alike2.includes(m.c.toLowerCase());
+  const capitals = out.filter(own).map((m) => m.box[3] - m.box[1]);
+  const usual = capitals.length ? usualHeight(capitals) : null;
   for (const l of out) {
     if (!alike2.includes(l.c.toLowerCase())) continue;
     const h = l.box[3] - l.box[1];
-    const beside = out.filter((m) => {
+    const near = (m: ShapeLetter) => {
       const mh = m.box[3] - m.box[1];
-      return m !== l && /[A-Z]/.test(m.c) && !alike2.includes(m.c.toLowerCase()) && Math.abs(m.box[3] - l.box[3]) < 0.2 * mh && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 1.5 * mh;
-    });
-    if (!beside.length) continue;
-    const small = h < 0.85 * Math.max(...beside.map((m) => m.box[3] - m.box[1]));
+      return m !== l && Math.abs(m.box[3] - l.box[3]) < 0.2 * mh && Math.min(Math.abs(m.box[0] - l.box[2]), Math.abs(l.box[0] - m.box[2])) < 1.5 * mh;
+    };
+    const beside = out.filter((m) => own(m) && near(m));
+    const alone = !out.some(near);
+    if (!beside.length && !(alone && usual != null)) continue;
+    const small = h < 0.85 * (beside.length ? Math.max(...beside.map((m) => m.box[3] - m.box[1])) : usual!);
     const c = small ? l.c.toLowerCase() : l.c.toUpperCase();
     if (c === l.c) continue;
     const k = known.find((g) => g.c === c);
@@ -230,6 +248,28 @@ export function shapeLetters(shapes: Shapes, bond: number, known: readonly Glyph
     if (k) l.size = Math.min(h / Math.max(k.height, 0.2), tallest * 1.2) / 0.72;
   }
   return out;
+}
+
+/** The area a closed outline bounds (signed: one way round, the other). */
+function areaOf(pts: readonly Point[]): number {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % pts.length];
+    a += p.x * q.y - q.x * p.y;
+  }
+  return a / 2;
+}
+
+/** The height most of `hs` share - within a tenth of one another - the middle of those. */
+function usualHeight(hs: readonly number[]): number {
+  const sorted = [...hs].sort((a, b) => a - b);
+  let best: number[] = [];
+  for (const h of sorted) {
+    const like = sorted.filter((x) => Math.abs(x - h) <= 0.1 * h);
+    if (like.length > best.length) best = like;
+  }
+  return best[Math.floor(best.length / 2)];
 }
 
 /** Whether a letter read from its shape is sure enough to say nothing of. */

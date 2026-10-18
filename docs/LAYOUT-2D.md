@@ -575,12 +575,34 @@ an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
 under the symbol to make room, and no move that crosses bonds is taken.
 Nothing else is moved for it: the drawing is set first, its H's last.
+A label lying on a bare vertex it is not bonded to - nearer than 0.6 of a
+bond, its letter running into the bonds that meet there - is given room
+the same way and at the same time (`labelsOnVertices`): vancomycin's acid
+C=O had its O on the corner of the benzene ring beside it, and forskolin's
+9-OH sat on its ketone's carbon. It is counted only then, not while the
+parts are set, nor in turning a sugar to its face (a macrolide's sugar
+turned over for it crowded an OH on an OH); on the sheet, as half a
+crowding. So are two labels whose ink comes near - symbol on symbol, or
+H on H, where the drawing puts each, with less than half a bond of paper
+between them (`labelsCrowding`): cortisol's two HO's, one straight over
+the other a bond apart, read as two lines of text. Besides the small
+moves, a branch hung from a chain atom with nothing else on it may be set
+on the chain's other side, the other way its zigzag goes: cortisol's
+CH2OH, its HO turned off the 17-OH. No move is taken that leaves a
+stereocentre of a solid, which the drawing showed for sure, unsure - the
+way a group's bond leaves it is what shows it (tetrodotoxin's, none
+wedged). And the turn that sets a piece square (`squareUp`) is read from
+the drawing before these moves: a label's bond turned to clear another
+does not turn the whole.
 
 A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take
 (`src/lib/layout/names.ts`). Its first unit sits on its atom and the rest
 follows, read outward from its bond: leftward from a bond coming in from
-the right (TBSO, IUPAC GR-2.3), rightward otherwise; a name of one unit
+the right (TBSO, IUPAC GR-2.3), rightward otherwise - and from its bonds
+where it has several, as a ring's atom has: leftward where they come in
+from the right all together, none leaving to the left (an NFmoc at a
+ring's lower left reads FmocN, away from the ring); a name of one unit
 (TMS, Ph) so is set before such a bond, its last letter on the atom. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
@@ -626,6 +648,15 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   it). Aslant into a ring, or into lovastatin's ring with its double bond,
   it reads as pointing into the ring; it goes outside where there is room.
   An H with three rings or more round its atom keeps to the most room.
+- Centres with fewest bonds out of the rings are shown first, so they get
+  theirs. Of centres alike in that, the one that costs the others near it
+  least, shown before them, goes first - each way weighed as it stands: a
+  wedge that reads only as the bonds fall, a wedge on a ring bond, an H
+  left little room or laid off upright at a fusion. Where two fusion Hs
+  want one spot, the one that takes it upright can leave the other its
+  ring bond, where the other way round both would lean 30 degrees. The
+  canonical rank decides only between centres that cost the same either
+  way.
 - A ring atom's two groups - erythromycin's OH and methyl on one carbon -
   each show which face they are on: the one in front on a wedge, the other
   behind on hashes.
@@ -667,8 +698,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
   the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
   haptic bond - too: Clean-up gives the engine a star at its centre for
-  those bonds, and they stay drawn from the metal to each atom; the
-  maintainer, 2026-10-13, `ringsBondedAtomByAtom`): the metal on its axis, a bond
+  those bonds, and lays them out as one bond from the metal to that star,
+  as the CTfile's multi-centre bond is, the ring's atoms its endpoints -
+  ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
+  2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
+  each bonded to the metal, an allyl, but not two, a three-membered ring
+  with the metal being how a metallacyclopropane is drawn as well; an
+  η3-allyl, once laid out, posed with its middle carbon away from the
+  metal and its delocalisation curve inside it, EDITOR-2D.md *An η3-allyl*): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the
@@ -755,7 +792,13 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule).
+  P, is the rest of the molecule). The structure is grown with its blades
+  so turned from the start, at each angle, as well as flat, and every
+  start is set right and measured alike: grown flat, four PPh₃ round a
+  metal lie phenyl on phenyl in pairs, every frame the same drawing
+  turned, and setting that right went by hairs. Blades of two hubs are
+  two things: one drawn on the other is a fault, as anywhere else - only
+  the atoms of one solid may lie over each other's ink.
 - **Clean-up draws a complex as writing out its label does**: the same
   engine, given the same structure - a haptic bond's star with its pi
   system - and each star put afterwards at the centre of its system's
@@ -778,7 +821,12 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn
-   aryl rings crowded round an atom as a propeller (section 7).
+   aryl rings crowded round an atom as a propeller (section 7), where
+   they were not grown so. Drawings that read as well as each other
+   until then - phorbol's skeleton turned end for end - are each set
+   right to the end and measured with their stereochemistry drawn as it
+   will be (section 6): an H drawn on a centre may find a clear place in
+   one and none in the other, its wedge going onto a ring bond instead.
 6. Set the pieces of a salt or a mixture side by side, the largest first,
    with a bond and a half of paper between one's ink and the next's: a
    label's symbol, its H beside it and its charge count as ink (an OH

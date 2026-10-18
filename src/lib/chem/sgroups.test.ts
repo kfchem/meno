@@ -145,6 +145,9 @@ describe("a haptic bond", () => {
     const bonds: Bond[] = model.bonds.map((b) => ({ a1: index.get(b.a)!, a2: index.get(b.b)!, order: b.order, ...(b.dative ? { dative: true } : {}), ...(b.endpoints ? { endpoints: b.endpoints } : {}) }));
     const layout = layoutMolecule(atoms, bonds, opts(), 40);
     expect(layout.texts.map((t) => t.text)).toEqual(["Fe"]);
+    // the line reaching the centre itself, not stopped short as at a label
+    const star = model.atoms[3];
+    expect(layout.lines.some((l) => Math.hypot(l.x2 - star.x, l.y2 - star.y) < 1e-6 || Math.hypot(l.x1 - star.x, l.y1 - star.y) < 1e-6)).toBe(true);
     // a plain line, though a coordination bond is otherwise a dative arrow
     expect(bondKind(bonds[3])).toBe("lines");
     expect(bondKind({ ...bonds[3], endpoints: undefined })).toBe("dative");

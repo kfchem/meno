@@ -28,7 +28,6 @@ What MolScribe is less sure of than `UNSURE_BELOW` is said to be unsure.
 
 import base64
 import contextlib
-import functools
 import io
 import json
 import os
@@ -48,6 +47,12 @@ FILES = sys.argv[1] if len(sys.argv) > 1 else None
 _model = {}
 
 
+def graphs_unwritten(coords, symbols, edges, images=None, num_workers=1):
+    """The model's graphs left unwritten as SMILES and molfiles: Meno takes its atoms and bonds as predicted, and writing
+    a graph as predicted - in RDKit - can run without end, or crash the process, on a picture that is no structure."""
+    return [""] * len(coords), [""] * len(coords), 0.0
+
+
 def model():
     """MolScribe, loaded once from its trained model, on the CPU: the same on every computer."""
     if "it" not in _model:
@@ -55,10 +60,9 @@ def model():
             raise RuntimeError("MolScribe's trained model is not here: add MolScribe again in Settings, Plugins.")
         import torch
         import molscribe.interface as mi
-        from molscribe.chemistry import convert_graph_to_smiles
 
-        # (one picture read at a time, in this one process)
-        mi.convert_graph_to_smiles = functools.partial(convert_graph_to_smiles, num_workers=1)
+        # (its atoms and bonds read; the graph not written as SMILES, which Meno does not take)
+        mi.convert_graph_to_smiles = graphs_unwritten
         with contextlib.redirect_stdout(sys.stderr):
             _model["it"] = mi.MolScribe(os.path.join(FILES, WEIGHTS), device=torch.device("cpu"))
     return _model["it"]

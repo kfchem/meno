@@ -96,6 +96,43 @@ class Answers(unittest.TestCase):
                     w.model()
                 self.assertIn("trained model is not here", str(e.exception))
 
+    def test_leaves_the_models_graphs_unwritten(self):
+        # (the model's atoms and bonds are what Meno takes; writing its graph as SMILES - which can run without end or
+        # crash the process - is left out, as the model is loaded)
+        import sys
+        import types
+
+        libraries = {"molscribe": ("molscribe.interface", "MolScribe"), "molnextr": ("MolNexTR.model", "molnextr")}
+        for name, w in WORKERS.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as files:
+                module, make = libraries[name]
+                lib = types.ModuleType(module)
+                lib.convert_graph_to_smiles = lambda *a, **k: self.fail("the graph was written")
+                setattr(lib, make, lambda *a, **k: "the model")
+                torch = types.ModuleType("torch")
+                torch.device = lambda d: d
+                package = types.ModuleType(module.split(".")[0])
+                setattr(package, module.split(".")[1], lib)
+                fakes = {"torch": torch, module.split(".")[0]: package, module: lib}
+                saved = {k: sys.modules.get(k) for k in fakes}
+                sys.modules.update(fakes)
+                try:
+                    (pathlib.Path(files) / w.WEIGHTS).write_bytes(b"")
+                    w.FILES = files
+                    w._model.clear()
+                    self.assertEqual(w.model(), "the model")
+                    self.assertIs(lib.convert_graph_to_smiles, w.graphs_unwritten)
+                finally:
+                    for k, v in saved.items():
+                        if v is None:
+                            sys.modules.pop(k, None)
+                        else:
+                            sys.modules[k] = v
+                    w._model.clear()
+                # (one empty SMILES and molfile a picture, as the model zips them with its predictions)
+                smiles, molfiles, _ = w.graphs_unwritten([[(0, 0)], [(1, 1)]], [["C"], ["N"]], [[[0]], [[0]]], images=[None, None])
+                self.assertEqual((smiles, molfiles), (["", ""], ["", ""]))
+
     @unittest.skipUnless(SCIENCE, "needs numpy and SciPy")
     def test_a_see_through_picture_is_read_on_white(self):
         from PIL import Image

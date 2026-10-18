@@ -639,6 +639,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
+    ...(centresOf(m.centres, n) ? { centres: centresOf(m.centres, n) } : {}),
     ...(biopolymer ? { biopolymer } : {}),
     ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" || m.bondOrders === "estimated" ? { bondOrders: m.bondOrders } : {}),
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
@@ -667,6 +668,18 @@ function readAtomNumbers(given: unknown, atoms: number): Carried3D["atomNumbers"
   if (s.atoms === undefined) return { kind };
   if (!Array.isArray(s.atoms) || !s.atoms.length || !s.atoms.every((i) => Number.isInteger(i) && i >= 0 && i < atoms)) return undefined;
   return { kind, atoms: [...new Set(s.atoms as number[])].sort((a, b) => a - b) };
+}
+
+/** A molecule's bonds to ring centres (`Molecule3D.centres`), where they read: each a metal and two atoms or more of its own, the metal not among them. */
+function centresOf(given: unknown, atoms: number): Carried3D["centres"] | undefined {
+  if (!Array.isArray(given)) return undefined;
+  const atom = (i: unknown): i is number => Number.isInteger(i) && (i as number) >= 0 && (i as number) < atoms;
+  const out = given.flatMap((c) => {
+    const x = c as { metal?: unknown; atoms?: unknown } | null;
+    if (!x || !atom(x.metal) || !Array.isArray(x.atoms) || x.atoms.length < 2 || !x.atoms.every(atom) || x.atoms.includes(x.metal)) return [];
+    return [{ metal: x.metal, atoms: [...(x.atoms as number[])] }];
+  });
+  return out.length ? out : undefined;
 }
 
 /**

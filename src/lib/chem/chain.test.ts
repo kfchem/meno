@@ -22,6 +22,37 @@ describe("a condensed formula read as a group (./chain)", () => {
     expect(smiles("NO")).toBe("*[N]=[O]");
   });
 
+  it("reads D as deuterium wherever an H could stand, an atom of its own: CD3, OD, ND2", () => {
+    const smiles = (l: string) => abbreviationOf(l)?.smiles;
+    expect(smiles("CD3")).toBe("*[C]([2H])([2H])[2H]");
+    expect(smiles("OD")).toBe("*[O][2H]");
+    expect(smiles("ND2")).toBe("*[N]([2H])[2H]");
+    expect(smiles("OCD3")).toBe("*[O][C]([2H])([2H])[2H]");
+    expect(smiles("CD2OD")).toBe("*[C]([2H])([2H])[O][2H]");
+  });
+
+  it("puts an acid's H written after its O's each on an O of its own, the rest =O: SO3H, PO3H2", () => {
+    const smiles = (l: string) => abbreviationOf(l)?.smiles;
+    expect(smiles("PO3H2")).toBe("*[P](=[O])([OH])[OH]");
+    expect(smiles("OPO3H2")).toBe("*[O][P](=[O])([OH])[OH]");
+    expect(smiles("SO2H")).toBe("*[S](=[O])[OH]");
+    expect(smiles("SO3D")).toBe("*[S](=[O])(=[O])[O][2H]");
+    // (as before)
+    expect(smiles("CH2OH")).toBe("*[CH2][OH]");
+    expect(smiles("SO2Me")).toBe("*[S](C)(=[O])=[O]");
+    expect(smiles("CO2CH3")).toBe("*[C](=[O])[O][CH3]");
+  });
+
+  it("puts an H written right after an O on that O, never an =O: SO2H a sulfinic acid, as CO2H is an acid", () => {
+    const smiles = (l: string) => abbreviationOf(l)?.smiles;
+    expect(smiles("SO2H")).toBe("*[S](=[O])[OH]");
+    expect(smiles("CH2SO2H")).toBe("*[CH2][S](=[O])[OH]");
+    // (the rest as before: an O no H follows still an =O first)
+    expect(smiles("SO2Me")).toBe("*[S](C)(=[O])=[O]");
+    expect(smiles("SO2OH")).toBe("*[S](=[O])(=[O])[OH]");
+    expect(smiles("CH2OH")).toBe("*[CH2][OH]");
+  });
+
   it("reads none where no H before it makes a whole molecule, nor an element as anything else", () => {
     // (HCO, HCH2, HNH are no closed-shell molecules; a charge is none of this)
     for (const no of ["CO", "CH2", "NH", "CH2+", "OO"]) expect(abbreviationOf(no), no).toBeUndefined();

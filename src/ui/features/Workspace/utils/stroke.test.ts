@@ -6,7 +6,9 @@ import {
   NEW_ATOM,
   startStroke,
   strokeTarget,
+  type StrokeNode,
 } from "./stroke";
+import type { Pt } from "./extendSnap";
 
 const L = 1;
 // one carbon, and a second to the left of it
@@ -125,6 +127,91 @@ describe("a chain stroke", () => {
     // and one bonded to nothing of the chain's: taken, closing no ring
     const apart = { atoms: [...methyl.atoms, { id: 3, x: -1, y: 2 * h }], bonds: methyl.bonds };
     expect(lead(apart, 3).nodes.some((n) => n.atomId === 3)).toBe(true);
+  });
+});
+
+describe("a chain stroke traced round fused rings", () => {
+  // (a drawing's bond length: the honeycomb's hexagons, their centres one bond above the start and on from there)
+  const B = 1.8;
+  const empty = { atoms: [], bonds: [] };
+  const r3 = Math.sqrt(3);
+  const a = { x: 0, y: B };
+  const b = { x: r3 * B, y: B };
+  // (phenanthrene's third ring, up and to the right of the second; anthracene's, straight on)
+  const angular = { x: 1.5 * r3 * B, y: 2.5 * B };
+  const linear = { x: 2 * r3 * B, y: B };
+
+  /** The atoms and bonds a stroke adds, the start among them. */
+  function drawn(nodes: StrokeNode[]) {
+    const bonds = new Set<string>();
+    let prev = -1;
+    nodes.forEach((n, i) => {
+      const from = n.from ?? prev;
+      const to = n.pathIndex ?? i;
+      bonds.add(`${Math.min(from, to)}:${Math.max(from, to)}`);
+      prev = to;
+    });
+    return { atoms: 1 + nodes.filter((n) => n.pathIndex == null && n.atomId == null).length, bonds: bonds.size };
+  }
+
+  /** The pointer led through points, a few moves between each. */
+  function trace(way: Pt[], start: Pt = { x: 0, y: 0 }) {
+    let s = startStroke("chain", NEW_ATOM, empty, start, B);
+    let at = start;
+    for (const p of way) {
+      for (let i = 1; i <= 3; i++) s = advanceStroke(empty, s, { x: at.x + ((p.x - at.x) * i) / 3, y: at.y + ((p.y - at.y) * i) / 3 }, B);
+      at = p;
+    }
+    return { s, end: at };
+  }
+
+  /** Once round a ring about `centre`, from the side toward `from`, with a hand that trembles a little. */
+  function roundRing(centre: Pt, from: Pt, way: 1 | -1, r = 0.85 * B): Pt[] {
+    const a0 = Math.atan2(from.y - centre.y, from.x - centre.x);
+    return Array.from({ length: 49 }, (_, i) => {
+      const t = a0 + (way * 2 * Math.PI * i) / 48;
+      const shake = 0.04 * B * Math.sin(7 * i);
+      return { x: centre.x + (r + shake) * Math.cos(t), y: centre.y + (r + shake) * Math.sin(t) };
+    });
+  }
+
+  /** Rings traced one after another, each from the side of the one before. */
+  function ringsTraced(centres: Pt[], ways: (1 | -1)[]) {
+    const way: Pt[] = [];
+    centres.forEach((c, i) => way.push(...roundRing(c, i ? centres[i - 1] : { x: 0, y: 0 }, ways[i])));
+    const { s, end } = trace(way);
+    return drawn(finishStroke(empty, s, end, B));
+  }
+
+  it("draws naphthalene round one ring and on round the next, either way round each", () => {
+    for (const first of [1, -1] as const)
+      for (const second of [1, -1] as const) expect(ringsTraced([a, b], [first, second])).toEqual({ atoms: 10, bonds: 11 });
+  });
+
+  it("draws phenanthrene and anthracene ring after ring, however each is gone round", () => {
+    for (const third of [angular, linear])
+      for (const ways of [
+        [1, 1, 1],
+        [-1, -1, -1],
+        [1, -1, 1],
+        [-1, 1, -1],
+      ] as (1 | -1)[][])
+        expect(ringsTraced([a, b, third], ways)).toEqual({ atoms: 14, bonds: 16 });
+  });
+
+  it("draws phenanthrene traced along its bonds, over the bonds the rings share", () => {
+    const at = (c: Pt, k: number): Pt => ({ x: c.x + B * Math.cos(((60 * k - 90) * Math.PI) / 180), y: c.y + B * Math.sin(((60 * k - 90) * Math.PI) / 180) });
+    const first = [1, 2, 3, 4, 5, 0, 1, 2].map((k) => at(a, k));
+    for (const way of [
+      // round the first ring and on over the bond it shares with the second;
+      // round the second; back over two of its bonds, and round the third
+      [...first, ...[3, 2, 1, 0, 5, 4, 3].map((k) => at(b, k)), ...[4, 3, 2, 1, 0].map((k) => at(angular, k))],
+      // round the second the same way; back over the bond that closed it and on to the third, and round that
+      [...first, ...[3, 2, 1, 0, 5, 0, 1, 2].map((k) => at(b, k)), ...[1, 2, 3, 4, 5].map((k) => at(angular, k))],
+    ]) {
+      const { s, end } = trace(way);
+      expect(drawn(finishStroke(empty, s, end, B))).toEqual({ atoms: 14, bonds: 16 });
+    }
   });
 });
 

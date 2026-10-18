@@ -19,7 +19,6 @@ import CalculationSettings from "./CalculationSettings";
 import JobSettings from "./JobSettings";
 import ProcedureSettings from "./ProcedureSettings";
 import PluginSettings from "./PluginSettings";
-import RoleChoices from "./RoleChoices";
 import { useSettingsSection, type SettingsSection } from "./section";
 
 const SECTIONS: { id: SettingsSection; name: string }[] = [
@@ -42,6 +41,14 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
  * of file and how sharp a copied picture is, the calculations of a workflow and how its jobs run, the plugins, what the labels Meno reads stand for, and what Meno
  * may do on the network.
  */
+/**
+ * Every section as wide as the others (the maintainer, 2026-10-17): as wide
+ * as a style editor needs for its settings beside its preview
+ * (StyleEditor/sideBySide), its words at their own measure within it - so
+ * that going from one section to the next, nothing changes width.
+ */
+const SECTION = "mt-6 max-w-5xl";
+
 export default function SettingsPanel() {
   const drawingStyle = useAppSettings((s) => s.drawingStyle);
   const setDrawingStyle = useAppSettings((s) => s.setDrawingStyle);
@@ -91,7 +98,7 @@ export default function SettingsPanel() {
         </AnimatePresence>
         <div key={section} className="meno-fade-in">
         {section === "general" ? (
-          <section className="mt-6 max-w-4xl">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">General</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">How Meno works as a whole. Changes are saved as you make them.</p>
             <PointerSettings />
@@ -101,7 +108,7 @@ export default function SettingsPanel() {
             <LogSettings />
           </section>
         ) : section === "style" ? (
-          <section className="mt-6">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">
               Drawing style
             </h2>
@@ -118,7 +125,7 @@ export default function SettingsPanel() {
             />
           </section>
         ) : section === "style3d" ? (
-          <section className="mt-6">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">
               Molecules in 3D
             </h2>
@@ -133,12 +140,10 @@ export default function SettingsPanel() {
             <Style3DEditor
               choice={style3d}
               onChange={(next) => setStyle3d(next)}
-            >
-              <RoleChoices where="molecules3d" heading="Made by" />
-            </Style3DEditor>
+            />
           </section>
         ) : section === "chemistry" ? (
-          <section className="mt-6 max-w-4xl">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Chemistry</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               What is pointed out on a structure as it is drawn, and who does
@@ -148,7 +153,7 @@ export default function SettingsPanel() {
             <ChemistrySettings />
           </section>
         ) : section === "files" ? (
-          <section className="mt-6 max-w-5xl">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Files</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               Who reads each kind of file Meno opens, and who writes it. Where more than one can read a kind, one
@@ -163,7 +168,7 @@ export default function SettingsPanel() {
             <PictureSettings />
           </section>
         ) : section === "calculations" ? (
-          <section className="mt-6 max-w-4xl">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Calculations</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               Default options for each calculation in a workflow, by what does it: each plugin added, and Meno. A
@@ -183,7 +188,7 @@ export default function SettingsPanel() {
             <ProcedureSettings />
           </section>
         ) : section === "plugins" ? (
-          <section className="mt-6 max-w-4xl">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Plugins</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               What Meno does beyond itself: read files, make sense of a structure, make it in 3D, run calculations - and its first steps.
@@ -192,7 +197,7 @@ export default function SettingsPanel() {
             <PluginSettings />
           </section>
         ) : section === "abbreviations" ? (
-          <section className="mt-6">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Dictionary</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               What each label stands for - Boc, DMP, XPhos, Grubbs II - drawn. Labels of your own are saved as you add them.
@@ -200,7 +205,7 @@ export default function SettingsPanel() {
             <AbbreviationSettings />
           </section>
         ) : (
-          <section className="mt-6 max-w-4xl">
+          <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Network</h2>
             <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
               Meno asks before anything first uses the network, shows each

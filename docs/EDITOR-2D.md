@@ -51,6 +51,57 @@ and in particular:
   - A bond led within reach of an atom closes onto it, and so does one led
     onto an atom however far away - a long bond closes a ring too; the
     preview shows it closed before the button comes up.
+  - **A ligand bound through a ring or chain of its atoms** (eta: Cp,
+    benzene, allyl; the maintainer, 2026-10-17) is one bond: a line from
+    the metal to the centre of the ring. A bond drawn from a metal that
+    ends inside a ring, with no atom under the pointer, binds the ring
+    that way - the preview goes to the ring's centre (`chem/eta`
+    `etaRingAt`). From any other atom it draws a bond to a new atom there,
+    as before (a bridge drawn across a ring). The bond is held as the
+    CTfile holds it - to a star at the ring's centre, its endpoints the
+    ring's atoms - and the star is no atom to the user: it is not hovered,
+    picked or labelled, it stands at its ring's centre wherever the ring
+    is moved, a box or lasso takes it with its whole ring and never alone,
+    and it goes with its bond: the bond deleted, its metal deleted, an atom
+    of its ring deleted or merged onto another (`etaHeld`). The line
+    reaches the centre itself, where the CTfile's star stands, as the bond
+    is to the system as a whole (IUPAC GR-1.7); it is not stopped short at
+    the ring's edge or its circle. A label on a metal - Cp, allyl - stays a
+    label, and written out it is this bond.
+  - **An η3-allyl** (the maintainer, 2026-10-18; IUPAC 2008 GR-1.7.2 and
+    GR-6) is drawn as its three carbons - a bent chain of two single
+    bonds, its middle carbon away from the metal - with its delocalisation
+    curve (curves show delocalisation, GR-6.3) just inside it on the
+    metal's side: parallel to the chain and
+    convex the same way, nowhere nearer its bonds than a double bond's
+    spacing in the style - measured where it comes nearest, by the apex
+    (within GR-6.1's band) - shorter than the chain as a double bond's inner
+    line is (0.8 of the way along each bond), solid and as wide as a single
+    bond (GR-6.2). The metal's one plain line points at the curve's middle
+    and stops short of it, as a bond stops short of a label (the label
+    margin); its star stands at the curve's middle (`chem/eta` `starPlace`, `lib/chem/allylArc`
+    `allylCurve`). The chain's two bonds are drawn single whatever their
+    orders - the curve is the delocalised system, the single bonds its frame
+    (GR-6.4); the drawing keeps its bonds as drawn. The curve is the bond's
+    own ink: in its colour and width, magnified with its structure, shaded
+    with it as it is selected and banded with it as it is under the
+    pointer, and drawn the same in SVG, PNG and EMF. Clean-up poses the
+    allyl so: its middle carbon away from the metal, the line between its
+    end carbons across the metal's, and as far out as gives the metal's line
+    0.7 of the allyl's bond seen between the metal's label and the curve,
+    measured as the style draws it, however the label is set (Pd's "d"
+    reaches further right than its "P" left). Only the drawing: the file keeps the multi-centre bond
+    (ENDPTS, ATTACH=ALL) as it is; a ring - Cp, an arene, a cyclopropenyl -
+    keeps its line to its centre; nothing changes in 3D.
+  - **An alkene bound through both its carbons** (eta2; 2026-10-17) may be
+    drawn either way, and each stays as drawn: two bonds from the metal,
+    one to each carbon - as a metallacyclopropane is drawn too, and never
+    merged into one by Clean-up - or one line from the metal to the middle
+    of the C=C, the same multi-centre bond with the two carbons as its
+    endpoints and its star at the bond's middle. A bond drawn from a metal
+    that ends on the middle half of a double or triple bond, on no atom,
+    binds it so (`etaBondAt`); it is hovered, selected, deleted and undone
+    as one bond, and goes when either carbon goes.
   - **Chains** (agreed 2026-10-03): Quick Add's *Chain* from empty space
     draws a chain, and so does *Chain from here* on an atom's right-click
     menu (shown where the atom can take another bond) - led by a drag, or,
@@ -87,7 +138,16 @@ and in particular:
       the pointer went enclosing room, not straight back - it closes the
       ring that way makes: round one hexagon, a six-membered ring; round
       two, a ten-membered one; round three, fourteen (`utils/chain`). Led
-      on from there, the ring stays; led back past it, it goes. Onto an
+      on from there, the ring stays; led back past it, it goes. Led back
+      over a bond of a ring it has closed, it goes along that bond again
+      and the ring stays, so fused rings - naphthalene, phenanthrene - are
+      traced in one stroke, ring after ring, over the bonds they share;
+      led straight back round the whole of a ring it has just closed, the
+      ring goes. Come round to a point it went through, the chain closes
+      the ring there, not taken back to that point, wherever the hand
+      winds round the ring's middle - though the way as a whole is not
+      round, as when it went round another ring first, or on past the
+      point and back. Onto an
       atom already there, it joins it where the ring that closes lies
       along the honeycomb, or where it closes none; elsewhere the point is
       an atom of the chain's own (`utils/stroke`).
@@ -662,7 +722,8 @@ All hover-based, as above.
      HF typed so); then the fewest letters made capitals (co is Co, ph Ph,
      ipr iPr - not the NHC IPr).
   2. No element after uranium is read from letters typed small: nh is NH,
-     cn CN, no NO; ts is tosyl, fm Fm.
+     cn CN, no NO; ts is tosyl, fm Fm. Nor is deuterium: D is deuterium
+     only as typed (CDCl3, CD3), so pdcl2 is PdCl2.
   3. Typed as it is drawn on a bond's left - AcO, aco, meo, bochn, ho2c,
      h2n, or HN before a group, hnfmoc - it is kept as it reads from the
      bond: OAc, OMe, NHBoc, CO2H, NH2, NHFmoc (and drawn the other way
@@ -1085,6 +1146,16 @@ All hover-based, as above.
     4. **Bullets.** A hyphen or a star alone at a line's start - after
        the tabs that take it a level in - is a bullet (•) as soon as a
        space is typed after it: "- " is "• ", a list's item (below).
+    5. **Commas.** A comma typed straight before a word gets one space
+       after it once that word has ended (the maintainer, 2026-10-17):
+       Pd(OAc)2,PPh3 is Pd(OAc)2, PPh3, rt,12 h rt, 12 h, and a
+       temperature after it is written as ever (DMF,80dc is DMF, 80 °C).
+       Not where the comma is part of a name, joining two locants - digits
+       maybe with a letter, or a capital letter alone, either maybe
+       primed: 1,2-DCE, 2,6-lutidine, 2,2,6,6-tetramethyl-, 1',2', 4a,8a,
+       N,N-DMF, N,O-bis(...), (R,R)-, (E,Z), (1R,2S)- - nor between two
+       numbers, 1,000, which stays as typed. A space already there is
+       never doubled.
 
     Each is a step of its own: one undo gives back the words as typed, and
     that part is then left as typed until it is written again. Settings ›

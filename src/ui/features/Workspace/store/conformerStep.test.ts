@@ -10,8 +10,18 @@ import { readMolfile } from "../../../../lib/chem/ctfile";
 
 /** What RDKit's worker was asked: each structure's molblock, and the options it was given. */
 const asked: { molblock: string; options: Record<string, unknown> }[] = [];
-/** How many times RDKit's worker was taken; and whether it makes none of methanol, saying nothing of why. */
-const worker = { taken: 0, noneOfMethanol: false };
+/** How many times RDKit's worker was taken; and whether it makes none of methanol, saying nothing of why; whether it holds each structure until stopped, and those it was stopped for. */
+const worker = { taken: 0, noneOfMethanol: false, holds: false, stopped: [] as string[] };
+/** What a held request is let go with: the worker stopped. */
+let letGo: ((e: Error) => void) | null = null;
+
+vi.mock("../../../../lib/plugins/process", async (actual) => ({
+  ...(await actual<typeof import("../../../../lib/plugins/process")>()),
+  stopWorker: async (plugin: string, reason: string) => {
+    worker.stopped.push(plugin);
+    letGo?.(new Error(reason));
+  },
+}));
 
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
@@ -24,6 +34,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
         if (gone) throw new Error("The worker was stopped");
         if (op !== "conformers") throw new Error(`no ${op} here`);
         asked.push(payload);
+        if (worker.holds) await new Promise((_, reject) => (letGo = reject));
         const mol = readMolfile(payload.molblock)!;
         // (one RDKit cannot make: it says so in its own words)
         if (mol.atoms.length === 2 && mol.atoms.every((a) => a.symbol === "C")) {
@@ -64,7 +75,7 @@ import { notMade } from "./slices/stepRuns";
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
 /** Three structures drawn side by side - water, ethane (which RDKit, here, cannot make) and methanol - and a conformer search by RDKit on them. */
-async function searched() {
+async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>) {
   const doc = createWorkspaceDocument();
   const parts: { el: string; at: [number, number] }[][] = [
     [{ el: "O", at: [0, 0] }],
@@ -97,18 +108,37 @@ async function searched() {
   const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
   const step = st().addStep("conformers", "rdkit", 0, 0);
   st().connect({ set }, step);
-  await st().runStep(step);
-  return st().steps.find((s) => s.id === step)!;
+  const run = st().runStep(step);
+  await meanwhile?.(st, step);
+  await run;
+  return { step: st().steps.find((s) => s.id === step)!, sets: st().sets.length };
 }
 
 describe("RDKit's conformer search as a step, on structures drawn", () => {
   beforeEach(() => {
     asked.length = 0;
-    Object.assign(worker, { taken: 0, noneOfMethanol: false });
+    Object.assign(worker, { taken: 0, noneOfMethanol: false, holds: false, stopped: [] });
+    letGo = null;
+  });
+
+  it("is stopped as Meno's steps are: said to be working, its worker stopped, nothing put in, and said to have stopped", async () => {
+    worker.holds = true;
+    const { step, sets } = await searched(async (st, id) => {
+      // (working on its first structure, as Meno's steps are said to be)
+      await vi.waitFor(() => expect(asked).toHaveLength(1));
+      expect(st().menoWorking[id]).toMatchObject({ done: 0, total: 3 });
+      st().stopStep(id);
+    });
+    expect(worker.stopped).toEqual(["rdkit"]);
+    expect(asked).toHaveLength(1);
+    expect(step.ran).toMatchObject({ ok: false, stopped: true });
+    expect(step.ran?.said).toMatch(/^Stopped after /);
+    // (no result set: only the set that came in)
+    expect(sets).toBe(1);
   });
 
   it("makes the others where one cannot be made, and says which by its place - never in the library's words", async () => {
-    const step = await searched();
+    const { step } = await searched();
     expect(asked).toHaveLength(3);
     // (the one after it asked of a worker taken again: the one asked before went with it)
     expect(worker.taken).toBe(2);
@@ -119,7 +149,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
 
   it("says one of which none was made as one not made", async () => {
     worker.noneOfMethanol = true;
-    const step = await searched();
+    const { step } = await searched();
     expect(step.ran?.said).toMatch(/ · 1 conformer · structures 2 and 3 of 3 could not be made in 3D$/);
   });
 

@@ -118,6 +118,18 @@ describe("a label written", () => {
     bonds: [{ a1: 0, a2: 1, order: 1 }],
   });
 
+  it("reads outward from a ring at each of its corners: away from the ring on its left side, on along it elsewhere", () => {
+    // (a hexagon, point up, its corners from the top clockwise; NFmoc at each in turn)
+    const ring = Array.from({ length: 6 }, (_, i) => ({ x: L * Math.cos(Math.PI / 2 - (i * Math.PI) / 3), y: L * Math.sin(Math.PI / 2 - (i * Math.PI) / 3) }));
+    const shown = ring.map((_, at) => {
+      const atoms: Atom[] = ring.map((p, i) => ({ id: i + 1, x: p.x, y: p.y, el: i === at ? "NFmoc" : "C" }));
+      const bonds: Bond[] = ring.map((_, i) => ({ a1: i, a2: (i + 1) % 6, order: 1 }));
+      return buildTextLabels(atoms, opts(), bonds)[0].text;
+    });
+    // (top and foot: bonds either side, read on as written; the right side: bonds to its left; the left side: from the right)
+    expect(shown).toEqual(["NFmoc", "NFmoc", "NFmoc", "NFmoc", "FmocN", "FmocN"]);
+  });
+
   it("reads outward from its bond: OTBS with its bond on the left, TBSO on the right", () => {
     const left = two("OTBS", "left");
     const [l] = buildTextLabels(left.atoms, opts(), left.bonds);
@@ -209,6 +221,49 @@ describe("what a file is written with", () => {
     const atomLines = text.split("\n").slice(4, 13);
     expect(atomLines.map((l) => l.slice(31, 34).trim())).toEqual(["C", "O", "Si", "C", "C", "C", "C", "C", "C"]);
     expect(text).toContain("M  SMT   1 OTBS");
+  });
+
+  it("a Y with one bond as a variable, a label - alone, or with several bonds, yttrium", () => {
+    const text = writeMolfile({
+      atoms: [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: L, y: 0, el: "Y" },
+        { id: 3, x: 4 * L, y: 0, el: "Y" },
+        { id: 4, x: 6 * L, y: 0, el: "Y" },
+        { id: 5, x: 6 * L, y: L, el: "Cl" },
+        { id: 6, x: 6 * L, y: -L, el: "Cl" },
+      ],
+      bonds: [
+        { a: 1, b: 2, order: 1 },
+        { a: 4, b: 5, order: 1 },
+        { a: 4, b: 6, order: 1 },
+      ],
+    });
+    const lines = text.split("\n");
+    // (the one-bond Y a star with its label; the lone one and the one of two bonds yttrium)
+    expect(lines[5].slice(31, 34).trim()).toBe("*");
+    expect(text).toContain("A    2\nY\n");
+    expect(lines[6].slice(31, 34).trim()).toBe("Y");
+    expect(lines[7].slice(31, 34).trim()).toBe("Y");
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "Y", "Y", "Y", "Cl", "Cl"]);
+  });
+
+  it("a CD3 written out with its deuterium: hydrogens of mass 2, as CTfile writes an isotope", () => {
+    const text = writeMolfile({ atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: L, y: 0, el: "CD3" }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    const iso = text.split("\n").filter((l) => l.startsWith("M  ISO"));
+    expect(iso.join(" ").match(/ 2(?= |$)/g)?.length).toBe(3);
+    // (and read back as the label it was)
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "CD3"]);
+  });
+
+  it("an Ar drawn with a bond as the aryl group's symbol, a label - argon alone as the element", () => {
+    const text = writeMolfile({ atoms: [{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: L, y: 0, el: "Ar" }, { id: 3, x: 3 * L, y: 0, el: "Ar" }], bonds: [{ a: 1, b: 2, order: 1 }] });
+    const lines = text.split("\n");
+    // (the bonded one a star with its label; the lone one argon)
+    expect(lines[5].slice(31, 34).trim()).toBe("*");
+    expect(text).toContain("A    2\nAr\n");
+    expect(lines[6].slice(31, 34).trim()).toBe("Ar");
+    expect(read(text).atoms.map((a) => a.el)).toEqual(["C", "Ar", "Ar"]);
   });
 
   // (not Ar, which is argon's symbol as well as aryl's: IUPAC GR-9.2)

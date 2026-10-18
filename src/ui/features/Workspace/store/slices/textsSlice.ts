@@ -91,6 +91,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
         return {
           ...prev,
           textsOpen: false,
+          columnFilled: false,
           ...(pdf ? { pdfFlight: { id: pdf.id, page: pdf.page, to: "page" as const, start: performance.now() } } : {}),
           ...(text ? { textFlight: { id: text.id, to: "page" as const, start: performance.now() } } : {}),
         };
