@@ -1093,7 +1093,12 @@ workspace holds.
   from its wide end, the same way and wider, is its wide half. A wedge
   filled and then stroked round - as RDKit draws one, its outline a path
   of its own in the PDF - has its edges as its own: a line from one of
-  its corners to another is no bond.
+  its corners to another is no bond. So is a line drawn down a wedge,
+  within it - or reaching up to a tenth of its length past where its tip
+  is taken to be, to the point a narrow end may come to - at least half
+  as long: its middle line, under the fill or
+  over it, as some programs draw one; else it is read as a second bond
+  beside the wedge, to an atom of its own at the wide end.
 - **Traces, and too much drawn**: a chart's or a spectrum's trace is no
   structure's and is left out before anything is read - an open line of
   more than a hundred corners; a path of more than 150 lines, most of them

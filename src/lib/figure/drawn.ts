@@ -342,6 +342,19 @@ export function shapesOf(drawn: FigureDrawn): Shapes {
   // (a wedge's edges stroked round it - filled, then outlined, as RDKit draws one - its own, no lines: each end at a corner of it)
   const atCorner = (p: Point, w: Wedge, d: number) => (w.outline ?? []).some((q) => dist(p, q) <= d);
   out.strokes = out.strokes.filter((s) => !out.wedges.some((w) => atCorner(s.a, w, Math.max(0.5, 2 * s.w)) && atCorner(s.b, w, Math.max(0.5, 2 * s.w))));
+  // (and a line drawn down a wedge, within it - its middle line, under the fill or over it, as some programs draw one - its own: else
+  // read as a bond beside it, to an atom of its own at the wide end)
+  const inWedge = (p: Point, w: Wedge, d: number) => {
+    const l = dist(w.tip, w.base);
+    const u = { x: (w.base.x - w.tip.x) / l, y: (w.base.y - w.tip.y) / l };
+    const on = (p.x - w.tip.x) * u.x + (p.y - w.tip.y) * u.y;
+    const off = Math.abs((p.x - w.tip.x) * u.y - (p.y - w.tip.y) * u.x);
+    // (reaching a little past its tip too: the middle of a narrow end's points, short of where a line drawn down it ends at a point)
+    return on >= -Math.max(d, 0.1 * l) && on <= l + d && off <= (w.w / 2) * Math.max(0, Math.min(1, on / l)) + d;
+  };
+  out.strokes = out.strokes.filter(
+    (s) => !out.wedges.some((w) => dist(w.tip, w.base) > 0 && dist(s.a, s.b) > 0.5 * dist(w.tip, w.base) && inWedge(s.a, w, Math.max(0.5, 2 * s.w)) && inWedge(s.b, w, Math.max(0.5, 2 * s.w))),
+  );
   // (a line drawn in two colours - a bond to an atom drawn in that atom's colour from its middle on, as RDKit draws one by
   // default - is one line: two lines of different colours, end to end along one way, nothing else ending where they meet)
   // (once: a line so joined is a bond whole - an sp carbon's single bond going straight on into its triple bond's middle line is
