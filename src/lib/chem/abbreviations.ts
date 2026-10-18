@@ -259,7 +259,9 @@ function composedOf(label: string): Abbreviation | undefined {
   if (complex) return { label, name: complex.name, smiles: "", kind: "complex" };
   const made = madeStructure(label);
   if (made) return { label, name: made.name, smiles: "", kind: "reagent" };
-  return undefined;
+  // (last of all, after every group and every formula read whole: an atom with its H and the groups it carries,
+  // its other bonds the drawing's - SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
+  return atomCarryingGroups(label);
 }
 
 /** A generation of Buchwald's precatalysts drawn with its phosphine as L (`precatalystPicture`), or null. */
@@ -500,8 +502,7 @@ function groupBy(label: string): Abbreviation | undefined {
     smiles: (l) => (BY_LABEL.get(l) ?? custom.get(l))?.smiles,
   });
   if (chain) return { label, smiles: chain, name: label };
-  // (and an atom with its H and the groups it carries, its other bonds the drawing's: SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
-  return atomCarryingGroups(label);
+  return undefined;
 }
 
 /** A group behind O, S, NH or in an ester (`COMPOSED`) - OMe, SPh, NHBoc, CO2Me - or none. */
