@@ -76,24 +76,28 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
       varying float vPx;
       varying vec3 vInk;
       // (how much the digits cover at a point, in their own units: x across all of them, 0 to the count, y up one)
-      float cover( vec2 q ) {
+      // (sampled by how fast q moves across the screen, as on a ball - not by the digit's own coordinates, which jump at each digit's edge)
+      float cover( vec2 q, vec2 dx, vec2 dy ) {
         if ( q.x < 0.0 || q.x >= vDigits || q.y < 0.0 || q.y > 1.0 ) return 0.0;
         float d = floor( q.x );
         float place = 1.0;
         for ( int k = 0; k < ${NUMBER_DIGITS_MOST - 1}; k++ ) if ( float( k ) < vDigits - 1.0 - d ) place *= 10.0;
         float value = mod( floor( vNumber / place + 1e-4 ), 10.0 );
-        return texture2D( atlas, vec2( ( value + fract( q.x ) ) / 10.0, q.y ) ).a;
+        vec2 per = vec2( 0.1, 1.0 );
+        return textureGrad( atlas, vec2( ( value + fract( q.x ) ) / 10.0, q.y ), dx * per, dy * per ).a;
       }
       void main() {
         float ring = ${RING.toFixed(3)};
         // (from the quad, with room for the ring round the digits)
         vec2 q = vec2( vUv.x * ( vDigits * ${DIGIT_CELL.toFixed(3)} + 2.0 * ring ) - ring, vUv.y * ( 1.0 + 2.0 * ring ) - ring );
         q.x /= ${DIGIT_CELL.toFixed(3)};
-        float ink = cover( q );
+        vec2 dx = dFdx( q );
+        vec2 dy = dFdy( q );
+        float ink = cover( q, dx, dy );
         float halo = ink;
         for ( int k = 0; k < 12; k++ ) {
           float t = float( k ) * 0.5236;
-          halo = max( halo, cover( q + vec2( cos( t ) * ring / ${DIGIT_CELL.toFixed(3)}, sin( t ) * ring ) ) );
+          halo = max( halo, cover( q + vec2( cos( t ) * ring / ${DIGIT_CELL.toFixed(3)}, sin( t ) * ring ), dx, dy ) );
         }
         float a = halo * vShown * shown * smoothstep( ${(NUMBER_LEAST_PX * 0.75).toFixed(2)}, ${(NUMBER_LEAST_PX * 1.25).toFixed(2)}, vPx * 0.7 );
         if ( a <= 0.003 ) discard;
