@@ -323,3 +323,99 @@ describe("a ring bound to a metal atom by atom, as drawn by hand", () => {
     expect(etaBondedAtomByAtom(chelate)).toEqual([]);
   });
 });
+
+describe("a metal that two chelates or more close at", () => {
+  it("has its donors a square angle apart, each chelate giving at the metal: a salen's two O apart, its Cl clear of both", () => {
+    const j = laid("(R,R)-Jacobsen's catalyst");
+    const [mn] = find(j, "Mn");
+    const [cl] = find(j, "Cl");
+    const [o1, o2] = find(j, "O");
+    const [n1, n2] = find(j, "N");
+    for (const [p, q] of [[o1, n1], [n1, n2], [n2, o2], [o2, o1]] as const) {
+      const a = angleAt(j, mn, p, q);
+      // (each donor's neighbour round the metal, whichever way the salen is listed)
+      if (a < 135) expect(a).toBeCloseTo(90, 0);
+    }
+    expect(angleAt(j, mn, o1, o2)).toBeCloseTo(90, 0);
+    expect(dist(j, o1, o2)).toBeGreaterThan(1.3);
+    // the Cl between the two O, off both their bonds
+    expect(Math.abs(angleAt(j, mn, cl, o1) - angleAt(j, mn, cl, o2))).toBeLessThan(1);
+    expect(angleAt(j, mn, cl, o1)).toBeGreaterThan(40);
+  }, 30_000);
+
+  it("tries each way of setting separate chelates round it, nothing of its own drawn inside a chelate's ring", () => {
+    const k = laid("(R)-Krische's catalyst");
+    const [ir] = find(k, "Ir");
+    const ps = find(k, "P");
+    // the bisphosphine's two P a square angle apart at the metal
+    expect(angleAt(k, ir, ps[0], ps[1])).toBeCloseTo(90, 0);
+    // (the allyl's star - the centre of its three atoms - is outside every ring through Ir)
+    const [star] = find(k, "*");
+    const ring = (ids: number[]) => ids.map((i) => at(k, i));
+    const inside = (p: { x: number; y: number }, poly: { x: number; y: number }[]) => {
+      let c = false;
+      for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+        const [a, b] = [poly[i], poly[j]];
+        if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) c = !c;
+      }
+      return c;
+    };
+    // the bisphosphine's seven: Ir, P, its biaryl's four carbons, P
+    const nb = (i: number) => k.bonds.flatMap((b) => (b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
+    const path = (from: number, to: number): number[] => {
+      const back = new Map<number, number>([[from, -1]]);
+      const queue = [from];
+      while (queue.length) {
+        const v = queue.shift()!;
+        for (const w of nb(v)) {
+          if (back.has(w) || w === ir || k.atoms[w].el === "*") continue;
+          back.set(w, v);
+          queue.push(w);
+        }
+      }
+      const out = [to];
+      while (out[out.length - 1] !== from) out.push(back.get(out[out.length - 1])!);
+      return out;
+    };
+    expect(inside(at(k, star), ring([ir, ...path(ps[0], ps[1])]))).toBe(false);
+  }, 60_000);
+});
+
+describe("a pi system bound to a metal that makes no ring", () => {
+  it("lies across the metal's bond, its centre where the star is: an allyl bent round, its middle away from the metal", () => {
+    const pd = laid("[Pd(allyl)Cl]2");
+    const metals = find(pd, "Pd");
+    for (const star of find(pd, "*")) {
+      const bond = pd.bonds.find((b) => b.endpoints && b.a2 === star)!;
+      const m = bond.a1;
+      expect(metals).toContain(m);
+      expect(dist(pd, m, star)).toBeCloseTo(1, 1);
+      const [a, b, c] = bond.endpoints!;
+      const middle = [a, b, c].find((v) => [a, b, c].every((w) => w === v || pd.bonds.some((x) => !x.endpoints && ((x.a1 === v && x.a2 === w) || (x.a2 === v && x.a1 === w)))))!;
+      const ends = [a, b, c].filter((v) => v !== middle);
+      for (const e of ends) expect(dist(pd, m, middle)).toBeGreaterThan(dist(pd, m, e) - 0.2);
+      expect(dist(pd, m, middle)).toBeGreaterThan(dist(pd, m, star));
+    }
+  });
+
+  it("draws an alkene's C=C square to the metal's bond, a bond from the metal (Pd2(dba)3's)", () => {
+    const pd = laid("Pd2(dba)3");
+    const close = pd.bonds.filter((b) => b.endpoints && b.endpoints.length === 2 && dist(pd, b.a1, b.a2) < 1.2);
+    expect(close.length).toBeGreaterThanOrEqual(2);
+    for (const b of close) expect(angleAt(pd, b.a2, b.a1, b.endpoints![0])).toBeCloseTo(90, 0);
+  }, 30_000);
+});
+
+describe("a metal in a chelate's ring", () => {
+  it("has its other ligands evenly over the room outside the ring, the one it was reached by among them", () => {
+    const hg = laid("HG-II");
+    const [ru] = find(hg, "Ru");
+    const cls = find(hg, "Cl");
+    // (the carbene: the carbon bonded to Ru and to two N)
+    const nb = (i: number) => hg.bonds.flatMap((b) => (b.endpoints ? [] : b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
+    const carbene = nb(ru).find((c) => hg.atoms[c].el === "C" && nb(c).filter((v) => hg.atoms[v].el === "N").length === 2)!;
+    const [a, b] = cls.map((cl) => angleAt(hg, ru, cl, carbene));
+    expect(a).toBeCloseTo(b, 0);
+    expect(Math.min(a, b)).toBeGreaterThan(55);
+  }, 30_000);
+});

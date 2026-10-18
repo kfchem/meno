@@ -23,14 +23,14 @@ const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9
 
 /**
  * How many times as long `run` takes on `large` as on `small`: the least
- * processor time of five runs of each, taken by turns - so that a machine
+ * processor time of nine runs of each, taken by turns - so that a machine
  * busy with other work, or a pause to collect garbage, slows neither alone.
  */
 function slower<T>(small: T, large: T, run: (x: T) => void): number {
   const least = [Infinity, Infinity];
   run(small);
   run(large);
-  for (let k = 0; k < 5; k++) {
+  for (let k = 0; k < 9; k++) {
     [small, large].forEach((x, i) => {
       const started = process.cpuUsage();
       run(x);
@@ -161,13 +161,17 @@ describe("fragmentOf and partOf", () => {
       }
       return { atoms, bonds };
     };
-    const found = (m: Model) => {
-      expect(fragmentsOf(m)).toHaveLength(m.atoms.length / 7);
-      const held = fragmentsHolding(m, m.atoms.map((a) => a.id));
+    // (what is timed is the finding alone: the checks, and the arrays they
+    // build, are made once, outside it)
+    const find = (m: Model) => ({ all: fragmentsOf(m), held: fragmentsHolding(m, m.atoms.map((a) => a.id)) });
+    const [small, large] = [page(250), page(2000)];
+    for (const m of [small, large]) {
+      const { all, held } = find(m);
+      expect(all).toHaveLength(m.atoms.length / 7);
       expect(held).toHaveLength(m.atoms.length / 7);
       expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
-    };
-    expect(slower(page(250), page(2000), found)).toBeLessThan(24);
+    }
+    expect(slower(small, large, find)).toBeLessThan(24);
   });
 });
 

@@ -794,7 +794,11 @@ function readStructure(g: Geometry): Structure {
       ringsAt[a].every((r) => r.length >= 5 && r.length <= 8),
   );
   const complex = (g.elements ?? []).some((e) => isMetal(e));
-  const insideRings = complex ? small.filter((q) => q.length <= 6).map((ring) => ({ ring, system: systemOf.get(ring[0]) })) : [];
+  // (and a chelate's ring, closed at a metal, of any size drawn flat: a
+  // ligand of its metal drawn inside it is hidden there - Krische's
+  // catalyst's allyl inside its bisphosphine's seven)
+  const chelate = (q: readonly number[]) => q.some((a) => isMetal(g.elements?.[a] ?? ""));
+  const insideRings = complex ? small.filter((q) => q.length <= 6 || chelate(q)).map((ring) => ({ ring, system: systemOf.get(ring[0]) })) : [];
   const passedInside = Array.from({ length: n }, (_, p) => isH(p) || (!!persp && (!!persp[p] || neighbours[p].some((q) => persp[q]))));
   const main = live.length ? live.reduce((b, s) => (s.size > b.size ? s : b)) : null;
   const fusedMain = main

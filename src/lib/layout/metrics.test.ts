@@ -422,6 +422,22 @@ describe("how a drawing sits", () => {
     expect(at(0, 0, "Si")).toBe(0);
   });
 
+  it("counts a ligand of a metal drawn inside its chelate's ring, of any size up to eight, as an overlap", () => {
+    // a seven-membered chelate (0-6, the palladium at 0) with a chlorine (7)
+    // on the palladium: outside, then inside the ring
+    const h = polygon(7, 0, 0, Math.PI);
+    const at = (cx: number, cy: number) =>
+      layoutMetrics({
+        x: [...h.x, cx],
+        y: [...h.y, cy],
+        edges: [...h.edges, [0, 7]] as [number, number][],
+        elements: ["Pd", "P", "C", "C", "C", "C", "P", "Cl"],
+        labelled: [true, true, false, false, false, false, true, true],
+      }).overlaps;
+    expect(at(h.x[0] - 1.4, h.y[0])).toBe(0);
+    expect(at(0, 0)).toBe(1);
+  });
+
   it("counts a name's letters running into an atom, read outward from a bond coming in from the right", () => {
     // OTBS (0) on a carbon (1), and a carbon (2) 1.2 bonds from it on the
     // side its letters run to, or the other side

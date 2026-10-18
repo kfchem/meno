@@ -29,7 +29,7 @@ import {
   type Point,
 } from "./geometry";
 import { keepsDoubles, macrocycleKeeping, macrocycleShapes, type RingDouble } from "./macrocycle";
-import type { Molecule, RingSystem } from "./perceive";
+import { isMetal, type Molecule, type RingSystem } from "./perceive";
 import { byStructure, ringKey, ringRank } from "./ranks";
 import { flatCost } from "./cage";
 
@@ -95,7 +95,9 @@ function blockHub(mol: Molecule, rings: number[][], macro: number[]): number[] |
 export function ringSystemVariants(mol: Molecule, sys: RingSystem): number {
   const rings = sys.rings.map((i) => mol.rings[i]);
   const big = Math.max(0, ...rings.map((r) => r.length));
-  if (big < MACROCYCLE || hubOf(mol, rings)) return 1;
+  // (a metal two chelates or more close at: each way of setting them round it)
+  if (big < MACROCYCLE) return metalHub(mol, rings)?.orders.length ?? 1;
+  if (hubOf(mol, rings)) return 1;
   return Math.max(...rings.filter((r) => r.length === big).map((r) => shapesFor(mol, r).length));
 }
 
@@ -200,9 +202,11 @@ export function placeRingSystem(
   const ordered = [...rings].sort((p, q) => byOrder(p, q) || byKey(p, q));
   // (or the ring asked for: a bridged system is tried from each)
   const hub = start != null ? null : hubOf(mol, rings);
+  // (or a metal that two chelates or more close at: from the metal, below)
+  const metal = start != null || hub ? null : metalHub(mol, rings);
   // rings alike in all that each tried first, the system that reads best
   // kept: which was listed first is no reason
-  if (start == null && !hub) {
+  if (start == null && !hub && !metal) {
     const tied = ordered.filter((r) => r.length < MACROCYCLE && byOrder(r, ordered[0]) === 0);
     if (tied.length > 1) {
       const layouts = tied
@@ -316,7 +320,97 @@ export function placeRingSystem(
     }
     return pos;
   };
+  if (metal) {
+    // the metal first, its donors round it as its own geometry has them,
+    // and each chelate's ring drawn between two of them - the ways of
+    // setting its chelates round it are the system's variants, each tried
+    // with what hangs from it (`ringSystemVariants`)
+    const order = metal.orders[variant % metal.orders.length];
+    const p = new Map<number, Point>([[metal.at, { x: 0, y: 0 }]]);
+    const n = order.length;
+    order.forEach((d, k) => p.set(d, dir(-Math.PI / 2 - ((n - 1) / 2) * metal.step + k * metal.step)));
+    return placeRest(p, new Set());
+  }
   return placeRest(pos, placedRing);
+}
+
+/**
+ * A metal that two chelate rings or more close at - a salen's Mn, its
+ * three rings through it; a bisphosphine's and a cyclometallated
+ * benzoate's on one Ir - is drawn as a metal is, not as an atom shared by
+ * rings each regular: its donors round it as its own geometry has them, a
+ * square angle apart (a square planar or an octahedral metal, seen as
+ * chemists draw one), or evenly round where five or more, or three in a
+ * ring of their own, close round it. Each chelate then gives at the
+ * metal, not the metal at its chelates (three rings regular round Mn left
+ * a salen's two O 35 degrees apart, Cl drawn over one).
+ *
+ * The metal (in the most rings, then by its structure), the step round it,
+ * and each order of its donors round it to try: the donors of one chelate
+ * next to each other, chelates sharing a donor in their chain, and every
+ * arrangement of separate chains round the metal (the first kept as it is:
+ * the rest are the same turned or mirrored). Null where no metal has two
+ * rings through it, or a ring through it is a macrocycle, or two rings
+ * close between the same two donors.
+ */
+export function metalHub(mol: Molecule, rings: number[][]): { at: number; step: number; orders: number[][] } | null {
+  const through = (a: number) => rings.filter((r) => r.includes(a));
+  const metals = [...new Set(rings.flat())]
+    .filter((a) => isMetal(mol.el[a]) && through(a).length >= 2)
+    .sort((p, q) => through(q).length - through(p).length || byStructure(mol)(p, q));
+  const at = metals[0];
+  if (at == null) return null;
+  const mine = through(at);
+  if (mine.some((r) => r.length >= MACROCYCLE)) return null;
+  // the two donors each chelate binds by
+  const links = new Map<number, number[]>();
+  const pairs = new Set<string>();
+  for (const r of mine) {
+    const i = r.indexOf(at);
+    const [p, q] = [r[(i + r.length - 1) % r.length], r[(i + 1) % r.length]];
+    const k = p < q ? `${p},${q}` : `${q},${p}`;
+    if (pairs.has(k)) return null;
+    pairs.add(k);
+    links.set(p, [...(links.get(p) ?? []), q]);
+    links.set(q, [...(links.get(q) ?? []), p]);
+  }
+  if ([...links.values()].some((l) => l.length > 2)) return null;
+  const by = byStructure(mol);
+  // each chain of donors, from its end first by structure (a closed one,
+  // from its donor first by structure)
+  const chains: number[][] = [];
+  const seen = new Set<number>();
+  const donors = [...links.keys()].sort(by);
+  let closed = false;
+  for (const end of [...donors.filter((d) => links.get(d)!.length === 1), ...donors]) {
+    if (seen.has(end)) continue;
+    const chain = [end];
+    seen.add(end);
+    for (;;) {
+      const last = chain[chain.length - 1];
+      const next = links.get(last)!.filter((v) => !seen.has(v)).sort(by)[0];
+      if (next == null) break;
+      chain.push(next);
+      seen.add(next);
+    }
+    if (links.get(end)!.length === 2) closed = true;
+    chains.push(chain);
+  }
+  const n = donors.length;
+  const step = closed && chains.length === 1 ? (2 * Math.PI) / n : n <= 4 ? Math.PI / 2 : (2 * Math.PI) / n;
+  // the first chain as it is; the others in every order, each either way round
+  const orders: number[][] = [];
+  const go = (left: number[][], acc: number[]) => {
+    if (!left.length) return void orders.push(acc);
+    left.forEach((c, i) => {
+      const rest = left.filter((_, j) => j !== i);
+      go(rest, [...acc, ...c]);
+      if (c.length > 1) go(rest, [...acc, ...[...c].reverse()]);
+    });
+  };
+  if (chains.length > 4) return null;
+  go(chains.slice(1), chains[0]);
+  return { at, step, orders };
 }
 
 /** How many layouts of a ring system are tried at most where rings alike could each go next (`placeRingSystem`). */
@@ -939,7 +1033,10 @@ function shapesOf(mol: Molecule, sys: RingSystem, pos: Map<number, Point>) {
       ),
     ),
   );
-  const shaped = rings.filter((r) => r.length < MACROCYCLE && !arcs.has(r));
+  // (and a chelate's ring at a metal two or more close at: its shape the
+  // metal's geometry gives it, a square angle there, not a regular polygon)
+  const metal = metalHub(mol, rings)?.at;
+  const shaped = rings.filter((r) => r.length < MACROCYCLE && !arcs.has(r) && (metal == null || !r.includes(metal)));
   const misfit = (r: number[]) =>
     regularFit(r.length, r.map((a, k) => [k, pos.get(a)!] as const)).error / r.length;
   return { shaped, misfit };
@@ -958,6 +1055,10 @@ function easeRings(
     const [a, b] = k.split(",").map(Number);
     if (pos.has(a) && pos.has(b) && sys.atoms.includes(a) && sys.atoms.includes(b)) bonds.push([a, b]);
   }
+  // (a metal two chelates or more close at, and its donors, held where its
+  // geometry put them: the chelates' rings give round them)
+  const hub = metalHub(mol, sys.rings.map((i) => mol.rings[i]));
+  const held = new Set(hub ? [hub.at, ...hub.orders[0]] : []);
   for (let it = 0; it < 300; it++) {
     const pull = new Map<number, { x: number; y: number; w: number }>();
     const add2 = (a: number, d: Point, w: number) => {
@@ -992,6 +1093,7 @@ function easeRings(
       }
     }
     for (const [a, m] of pull) {
+      if (held.has(a)) continue;
       const p = pos.get(a)!;
       pos.set(a, { x: p.x + (0.3 * m.x) / m.w, y: p.y + (0.3 * m.y) / m.w });
     }
