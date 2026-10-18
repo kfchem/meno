@@ -751,7 +751,11 @@ All hover-based, as above.
     press or selection between - draws the label out, as *Expand
     abbreviation* does, one step after the label's own; a label with
     nothing to draw out stays as it is. An Enter over a label not just
-    typed draws nothing out.
+    typed draws nothing out. An Enter is one however it comes - as an
+    input method on Windows gives every key, "Process" with the key
+    pressed in its code, nothing being composed (pageField `enterKey`;
+    the maintainer's report, 2026-10-18: Enter twice did nothing there) -
+    and one that confirms what an input method composes is not.
   - The drawing's labels are drawn each by its atom (`Labels2D` `keyOf`):
     a label added or taken away sets no other label's letters again. A
     label taken away - undone, redone away, deleted with its atom, its
