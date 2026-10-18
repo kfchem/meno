@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { shownOptions, valuesOf } from "../../../../lib/options";
 import type { LookDecl } from "../../../../lib/plugins/manifest";
-import { askOf, finishEntry, looksOffered, partsOf, renderOptions } from "./renderOptions";
+import { askOf, finishEntry, looksOffered, motionEntry, partsOf, renderOptions } from "./renderOptions";
 
 /** Looks as a render plugin's manifest declares them: Meno knows none of these names. */
 const DECLARED: LookDecl[] = [
@@ -70,5 +70,27 @@ describe("Render's look: one choice, a bundle of parts, declared by the renderer
     expect(askOf("picture", { width: 900, shape: "fit", look: "pane", ...partsOf(DECLARED[4]) }).finish?.sticks).toBe("shown");
     // (a renderer that declares none seen through: no such choice)
     expect(renderOptions("picture", [], false, [DECLARED[0]]).some((o) => o.id === "sticks")).toBe(false);
+  });
+});
+
+describe("a film's motion: Meno's own, then those the renderer declares", () => {
+  const declared = [
+    { id: "ripple", label: "Ripple: a made-up motion" },
+    { id: "turn", label: "Meno's own, declared again" },
+  ];
+
+  it("offers Meno's motions the molecules can make, then the renderer's, in its order, with its labels, each once", () => {
+    const moving = renderOptions("film", ["turn", "frames"], false, [], declared).find((o) => o.id === "motion") as unknown as { choices: { value: string; label: string }[]; default: string };
+    expect(moving.choices.map((c) => c.value)).toEqual(["turn", "frames", "ripple"]);
+    expect(moving.choices[2].label).toBe("Ripple: a made-up motion");
+    expect(moving.default).toBe("turn");
+    // (a picture moves not at all)
+    expect(renderOptions("picture", ["turn"], false, [], declared).some((o) => o.id === "motion")).toBe(false);
+  });
+
+  it("tells the renderer the motion only where it is the renderer's own: Meno's are keyed into the scene", () => {
+    expect(motionEntry({ kind: "film", motion: "ripple" })).toEqual({ motion: "ripple" });
+    expect(motionEntry({ kind: "film", motion: "turn" })).toEqual({});
+    expect(motionEntry({ kind: "picture", motion: "ripple" })).toEqual({});
   });
 });

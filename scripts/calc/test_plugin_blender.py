@@ -244,7 +244,42 @@ class Manifest(unittest.TestCase):
             self.assertTrue((FOLDER / f).read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), f)
         # (the options it declares: each id the worker reads)
         ids = {o["id"] for o in m["roles"][0]["options"]}
-        self.assertEqual(ids, {"engine", "samples", "denoise", "device", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish"})
+        self.assertEqual(ids, {"engine", "samples", "denoise", "device", "background", "colours", "key", "ambient", "softness", "quality", "silver-finish", "copper-finish", "wood", "marble", "pile", "clay-colour", "porcelain-finish", "mode"})
+
+    def test_its_motions_are_the_worker_s_each_with_its_script(self):
+        m = json.loads((FOLDER / "manifest.json").read_text(encoding="utf-8"))
+        declared = [x["id"] for x in m["roles"][0]["motions"]]
+        self.assertEqual(set(declared), worker.MOTIONS)
+        for mid in declared:
+            self.assertTrue((FOLDER / f"motion_{mid}.py").read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"), mid)
+        self.assertTrue((FOLDER / "studio.py").read_text(encoding="utf-8").startswith("# SPDX-License-Identifier: GPL-3.0-or-later"))
+        # (Once or Loop is shown for its motions, and only for them)
+        mode = next(o for o in m["roles"][0]["options"] if o["id"] == "mode")
+        self.assertEqual(mode["when"], {"id": "motion", "in": declared})
+
+
+class Motions(unittest.TestCase):
+    FILM = {**SCENE, "film": True, "frames": 60, "fps": 30, "motion": "pulse"}
+
+    def test_a_motion_s_film_carries_its_script_and_the_studio(self):
+        said = ask("prepare", step="render", entries=[self.FILM], options={"mode": "loop"})
+        self.assertTrue(said["ok"], said)
+        files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
+        self.assertEqual(files["studio.py"], (FOLDER / "studio.py").read_text(encoding="utf-8"))
+        self.assertEqual(files["motion_pulse.py"], (FOLDER / "motion_pulse.py").read_text(encoding="utf-8"))
+        self.assertNotIn("motion_scan.py", files)
+        settings = json.loads(files["render.json"])
+        self.assertEqual((settings["motion"], settings["mode"], settings["out"]), ("pulse", "loop", "film.mp4"))
+
+    def test_meno_s_own_motions_carry_none(self):
+        said = ask("prepare", step="render", entries=[{**SCENE, "film": True, "frames": 60, "fps": 30}], options={"mode": "loop"})
+        files = {f["name"]: f["text"] for f in said["result"]["jobs"][0]["files"]}
+        self.assertNotIn("studio.py", files)
+        self.assertNotIn("motion", json.loads(files["render.json"]))
+
+    def test_a_motion_it_does_not_make_or_a_mode_it_has_not_is_refused(self):
+        self.assertFalse(ask("prepare", step="render", entries=[{**self.FILM, "motion": "wobble"}], options={})["ok"])
+        self.assertFalse(ask("prepare", step="render", entries=[self.FILM], options={"mode": "forever"})["ok"])
 
 
 def blender():
@@ -301,6 +336,46 @@ def ball_mesh():
         "bufferViews": [{"buffer": 0, "byteOffset": 0, "byteLength": 4 * len(pos)}, {"buffer": 0, "byteOffset": 4 * len(pos), "byteLength": 2 * len(idx)}],
         "buffers": [{"byteLength": len(data), "uri": "data:application/octet-stream;base64," + base64.b64encode(data).decode()}],
     }
+
+
+# a small molecule for the motions: methylamine (C, N and five H), its atoms where Meno writes them, in angstroms
+METHYLAMINE = {"atoms": [{"el": "C", "p": [-0.7, 0.0, 0.0]}, {"el": "N", "p": [0.75, 0.0, 0.0]}, {"el": "H", "p": [-1.1, 1.0, 0.0]},
+                         {"el": "H", "p": [-1.1, -0.5, 0.87]}, {"el": "H", "p": [-1.1, -0.5, -0.87]}, {"el": "H", "p": [1.1, 0.95, 0.1]}, {"el": "H", "p": [1.1, -0.5, 0.8]}],
+               "bonds": [{"a": 0, "b": 1, "order": 1}, {"a": 0, "b": 2, "order": 1}, {"a": 0, "b": 3, "order": 1}, {"a": 0, "b": 4, "order": 1}, {"a": 1, "b": 5, "order": 1}, {"a": 1, "b": 6, "order": 1}]}
+
+
+@unittest.skipUnless(blender(), "Blender is not installed here")
+class MotionsRender(unittest.TestCase):
+    """Each motion built and rendered, tiny: 64x36, 4 samples, a few frames - on the dark studio and the white, Once; and a cycle's Loop."""
+
+    def film(self, motion, background, mode="once", frames=4):
+        with tempfile.TemporaryDirectory() as d:
+            scene = {**BALL, **ball_mesh(), "scenes": [{"nodes": [0, 1, 2], "extras": {"meno": {"ambientLight": 0.9, "molecules": [METHYLAMINE]}}}]}
+            (pathlib.Path(d) / "scene.gltf").write_text(json.dumps(scene), encoding="utf-8")
+            entry = {"scene": "scene.gltf", "film": True, "width": 64, "height": 36, "frames": frames, "fps": 30, "motion": motion}
+            said = ask("prepare", step="render", entries=[entry], options={"samples": 4, "background": background, "mode": mode, "device": "cpu"})
+            self.assertTrue(said["ok"], said)
+            job = said["result"]["jobs"][0]
+            for f in job["files"]:
+                (pathlib.Path(d) / f["name"]).write_text(f["text"], encoding="utf-8")
+            run = subprocess.run([blender(), *job["args"]], cwd=d, capture_output=True, text=True, timeout=900)
+            self.assertEqual(run.returncode, 0, run.stdout[-3000:] + run.stderr[-2000:])
+            self.assertIn("progress 100/100", run.stdout)
+            mp4 = (pathlib.Path(d) / "film.mp4").read_bytes()
+            self.assertEqual(mp4[4:8], b"ftyp")
+            return len(list((pathlib.Path(d) / "frames").glob("f_*.png")))
+
+    def test_every_motion_on_both_studios(self):
+        for motion in sorted(worker.MOTIONS):
+            for background in ("black", "white"):
+                with self.subTest(motion=motion, background=background):
+                    self.assertEqual(self.film(motion, background), 4)
+
+    def test_a_cycle_renders_half_and_plays_it_back(self):
+        # (assemble loops as a cycle: 6 frames played, 4 rendered - forward, then back)
+        self.assertEqual(self.film("assemble", "black", "loop", frames=6), 4)
+        # (pulse loops of itself: every frame rendered)
+        self.assertEqual(self.film("pulse", "white", "loop", frames=6), 6)
 
 
 @unittest.skipUnless(blender(), "Blender is not installed here")

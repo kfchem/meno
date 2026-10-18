@@ -20,6 +20,7 @@ mod drop;
 mod jobs;
 mod logfile;
 mod pdf;
+mod pdfmake;
 mod net;
 mod opened;
 mod pinch;
@@ -912,6 +913,8 @@ pub fn run() {
     // what a Meno before 0.1.14 kept, moved into Meno's folders before anything uses them (folders.rs) -
     // said in the log once it is begun
     let moved = folders::move_old(&folders::moves());
+    // (whether the roaming folder's settings were moved at this start: its jobs kept said then - roaming.rs)
+    let roaming_moved = folders::old_roaming().is_some_and(|r| folders::moved_from(&moved, &r));
     // Meno's log, in its data folder, begun before anything else is (logfile.rs)
     if let Some(data) = folders::data_dir() {
         logfile::start(&data.join("logs"), &version);
@@ -946,7 +949,7 @@ pub fn run() {
         .manage(windowstate::Kept::default())
         // (the main window's size and place kept as it moves, resizes and closes: windowstate.rs)
         .on_window_event(windowstate::on_event)
-        .setup(|app| {
+        .setup(move |app| {
             // the main window, made here rather than from tauri.conf.json (its "create" is
             // false): on Windows its pinch is let through before its page first loads (pinch.rs) -
             // made hidden, then put where it was left and shown (windowstate.rs), so that it is never
@@ -984,7 +987,7 @@ pub fn run() {
             #[cfg(windows)]
             update::tidy_after_updates(app.handle());
             // what Meno made in the roaming folder before 0.1.13 and no longer uses (Windows: roaming.rs)
-            roaming::tidy();
+            roaming::tidy(roaming_moved);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -993,6 +996,7 @@ pub fn run() {
             logfile::log_spot,
             pdf::pdf_hold_path,
             pdf::pdf_hold_bytes,
+            pdf::pdf_make,
             pdf::pdf_bytes,
             pdf::pdf_render,
             pdf::pdf_links,

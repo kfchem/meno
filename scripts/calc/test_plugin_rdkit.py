@@ -434,8 +434,50 @@ class EtaBound(unittest.TestCase):
                           "M  V30 BEGIN ATOM", *rows, "M  V30 END ATOM", "M  V30 BEGIN BOND", *lines, "M  V30 END BOND",
                           "M  V30 END CTAB", "M  END"])
 
+    @staticmethod
+    def zirconocene_dichloride():
+        """Cp2ZrCl2 as Meno writes it from Zr with two Cp labels and two Cl: Zr 1, two stars (2, 3), two Cl (4, 5),
+        each Cp's ring of five carbons (6-10, 11-15), drawn neutral with one carbon's electron unpaired."""
+        import math
+        rows = ["M  V30 1 Zr 0 0 0 0", "M  V30 2 * 0 2.47 0 0", "M  V30 3 * 0 -2.47 0 0", "M  V30 4 Cl 1.25 0.25 0 0", "M  V30 5 Cl 1.25 -0.25 0 0"]
+        bonds = []
+        for base, y in ((6, 2.5), (11, -2.5)):
+            for i in range(5):
+                rad = " RAD=2" if i == 0 else ""
+                rows.append(f"M  V30 {base + i} C {math.cos(2 * math.pi * i / 5):.4f} {y + 0.5 * math.sin(2 * math.pi * i / 5):.4f} 0 0{rad}")
+            for i in range(5):
+                bonds.append((2 if i in (1, 3) else 1, base + i, base + (i + 1) % 5))
+        lines = ["M  V30 1 9 1 2 ENDPTS=(5 6 7 8 9 10) ATTACH=ALL", "M  V30 2 9 1 3 ENDPTS=(5 11 12 13 14 15) ATTACH=ALL",
+                 "M  V30 3 1 1 4", "M  V30 4 1 1 5"]
+        lines += [f"M  V30 {n + 5} {t} {a} {b}" for n, (t, a, b) in enumerate(bonds)]
+        return "\n".join(["", "  Meno", "", "  0  0  0     0  0            999 V3000", "M  V30 BEGIN CTAB", "M  V30 COUNTS 15 14 0 0 0",
+                          "M  V30 BEGIN ATOM", *rows, "M  V30 END ATOM", "M  V30 BEGIN BOND", *lines, "M  V30 END BOND",
+                          "M  V30 END CTAB", "M  END"])
+
     def made(self, block):
         return self.worker.op_conformers({"molblock": block})["isomers"][0]
+
+    def test_says_how_it_was_made_and_what_was_held(self):
+        # (one line, with every structure: embedding, the force field, and what was held that is no term of it)
+        entry = self.made(self.ferrocene())
+        self.assertTrue(entry["method"].startswith("ETKDG v3 + UFF; restrained: "), entry["method"])
+        self.assertIn("\u03b7 rings: metal\u2013ring atom distances", entry["method"])
+        self.assertIn("rings \u2265 2.9 \u00c5 apart", entry["method"])
+        # (a molecule of no metal: nothing held)
+        plain = self.worker.op_conformers({"molblock": self.worker.op_from_smiles({"smiles": "CCO"})["molblock"]})["isomers"][0]
+        self.assertEqual(plain["method"], "ETKDG v3 + MMFF94")
+
+    def test_keeps_a_bent_metallocenes_rings_apart(self):
+        # (Cp2ZrCl2's rings were let fold onto each other, 41 degrees apart at the metal: nothing kept them apart)
+        import numpy as np
+        entry = self.made(self.zirconocene_dichloride())
+        self.assertEqual(entry["stars"], [1, 2])
+        for frame in entry["frames"]:
+            P = np.array(frame).reshape(-1, 3)
+            near = min(float(np.linalg.norm(P[i] - P[j])) for i in range(5, 10) for j in range(10, 15))
+            self.assertGreater(near, 2.8)
+            a, b = P[1] - P[0], P[2] - P[0]
+            self.assertGreater(float(np.degrees(np.arccos(a @ b / np.linalg.norm(a) / np.linalg.norm(b)))), 110.0)
 
     def test_holds_each_ring_over_its_metal_with_its_star_at_its_centre(self):
         import numpy as np

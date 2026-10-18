@@ -100,6 +100,8 @@ export type Conformers = {
   field: string;
   /** How they were made, as rows to show - what made them, the method, the force field - in the plugin's words. */
   how?: { label: string; text: string }[];
+  /** How they were made, in one line - embedding, force field, and what was held that is no term of it: shown with them, kept with them. */
+  method?: string;
   cip: { atoms: Record<string, string>; bonds: Record<string, string> };
   chosen: { atoms: Record<string, string>; bonds: Record<string, string> };
   smiles: string;
@@ -132,6 +134,9 @@ export type ChemTransport = {
 
 /** An answer that is an error: the plugin could not do what was asked. */
 export class ChemError extends Error {}
+
+/** No answer in the time a request was given: the worker held on it is started afresh (lib/plugins/queue). */
+export class ChemTimeout extends ChemError {}
 
 type Pending = {
   resolve: (value: unknown) => void;
@@ -220,7 +225,7 @@ export class ChemClient {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
-        reject(new ChemError(`${this.name} did not answer ${op} in time`));
+        reject(new ChemTimeout(`${this.name} did not answer ${op} in time`));
         this.watch?.overdue(id);
       }, timeoutMs);
       this.pending.set(id, {

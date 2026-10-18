@@ -57,18 +57,34 @@ another order. Where the rules below leave a tie, it is settled so:
   structure leaves alike - the drawings either way the same, or mirror
   images.
 
-The benchmark's measure reads a drawing the same way
-however its atoms are listed: in a bridged system it reads every ring as
-small as one of its smallest set, not the set alone - quinuclidine has
-three six-membered cycles, and which two make the set goes by the order
-of the atoms. So too does Clean-up read whether a ring system is a cage,
-and which part of it is its cage: from every smallest set of its rings,
-not the one it was given. It is a cage only where each set reads it as
-one (paeoniflorin's six-membered ring is one of three, and in one set
-all its rings are bridged, in the others not), and its cage is the atoms
-every set has in it (ibogaine's isoquinuclidine: its seven-membered ring
-shares three atoms with one of the cage's three six-membered cycles, and
-is fused on a side of the other two).
+The benchmark's measure reads a drawing the same way however its atoms
+are listed: in a bridged system it reads every ring as small as one of
+its smallest set, not the set alone - quinuclidine has three
+six-membered cycles, and which two make the set goes by the order of the
+atoms. Its rings' shapes too: in such a system drawn flat they are read
+as the smallest set that fits the drawing best (shortest first, then the
+most regular, each kept where no sum of those kept gives it), not as the
+set the atoms' order gives. So too does Clean-up read whether a ring
+system is a cage, and which part of it is its cage: from every smallest
+set of its rings, not the one it was given. It is a cage only where each
+set reads it as one (paeoniflorin's six-membered ring is one of three,
+and in one set all its rings are bridged, in the others not), and its
+cage is the atoms every set has in it (ibogaine's isoquinuclidine: its
+seven-membered ring shares three atoms with one of the cage's three
+six-membered cycles, and is fused on a side of the other two). And so it
+chooses which set a bridged system is drawn from: laid flat, which rings
+come out regular and which arc round a bridge goes by the set it is laid
+out from, so it is laid flat from each set in turn and drawn from the
+one whose drawing reads best - by a measure that reads every set's
+rings, not the one it came from - the canonical rank deciding only
+between drawings as good. Ibogaine's isoquinuclidine laid from one pair
+of its three six-membered cycles crowds its bonds out (18.98 by
+`flatCost`, with their room); from either other pair, 2.45 and 2.50 -
+still a bond crossing another by its N, so that its cage in perspective
+is drawn instead, as the whole drawing reads better. At most eight sets
+are tried, those whose rings are bridged across one another least where
+a system has more. A cage is not: it is drawn from its solid, which
+reads the same from every set.
 
 ## What a good drawing is
 
@@ -321,7 +337,12 @@ they hang from.
   them, seen from either hand - each of those is tried with what hangs from
   it too, none favoured: which came first went by the order of the atoms,
   and a gem-dimethyl on a ring fused to adamantane had room from some of
-  them only. Of these and the flat
+  them only. And each other side within 3 of the best by the system alone
+  is tried with what hangs from it as well, taken only where that reads
+  better by the 3, as a cage's next textbook views are: the system alone
+  sees none of the H's and labels round it, and ibogaine's isoquinuclidine
+  from its best side by itself put the H at its junction against the
+  indole's NH, where another side leaves both clear. Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
   better. Then the whole drawing decides, measured as it will be drawn -
@@ -575,12 +596,36 @@ an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
 under the symbol to make room, and no move that crosses bonds is taken.
 Nothing else is moved for it: the drawing is set first, its H's last.
+A label lying on a bare vertex it is not bonded to - nearer than 0.6 of a
+bond, its letter running into the bonds that meet there - is given room
+the same way and at the same time (`labelsOnVertices`): vancomycin's acid
+C=O had its O on the corner of the benzene ring beside it, and forskolin's
+9-OH sat on its ketone's carbon. A label already on one of the bonds
+that meet there is a clash, and is not counted on the vertex as well:
+one piece of ink, one fault. It is counted only then, not while the
+parts are set, nor in turning a sugar to its face (a macrolide's sugar
+turned over for it crowded an OH on an OH); on the sheet, as half a
+crowding. So are two labels whose ink comes near - symbol on symbol, or
+H on H, where the drawing puts each, with less than half a bond of paper
+between them (`labelsCrowding`): cortisol's two HO's, one straight over
+the other a bond apart, read as two lines of text. Besides the small
+moves, a branch hung from a chain atom with nothing else on it may be set
+on the chain's other side, the other way its zigzag goes: cortisol's
+CH2OH, its HO turned off the 17-OH. No move is taken that leaves a
+stereocentre of a solid, which the drawing showed for sure, unsure - the
+way a group's bond leaves it is what shows it (tetrodotoxin's, none
+wedged). And the turn that sets a piece square (`squareUp`) is read from
+the drawing before these moves: a label's bond turned to clear another
+does not turn the whole.
 
 A name - a label that is not an element's symbol: OTBS, NHBz, PPh3, as
 Clean-up writes groups by name - takes the room its letters take
 (`src/lib/layout/names.ts`). Its first unit sits on its atom and the rest
 follows, read outward from its bond: leftward from a bond coming in from
-the right (TBSO, IUPAC GR-2.3), rightward otherwise; a name of one unit
+the right (TBSO, IUPAC GR-2.3), rightward otherwise - and from its bonds
+where it has several, as a ring's atom has: leftward where they come in
+from the right all together, none leaving to the left (an NFmoc at a
+ring's lower left reads FmocN, away from the ring); a name of one unit
 (TMS, Ph) so is set before such a bond, its last letter on the atom. On a bond within 35
 degrees of upright it may be read either way, and is read the way with
 more room - a chemist writes taxol's C4 acetate OAc or AcO under the ring
@@ -626,6 +671,15 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   it). Aslant into a ring, or into lovastatin's ring with its double bond,
   it reads as pointing into the ring; it goes outside where there is room.
   An H with three rings or more round its atom keeps to the most room.
+- Centres with fewest bonds out of the rings are shown first, so they get
+  theirs. Of centres alike in that, the one that costs the others near it
+  least, shown before them, goes first - each way weighed as it stands: a
+  wedge that reads only as the bonds fall, a wedge on a ring bond, an H
+  left little room or laid off upright at a fusion. Where two fusion Hs
+  want one spot, the one that takes it upright can leave the other its
+  ring bond, where the other way round both would lean 30 degrees. The
+  canonical rank decides only between centres that cost the same either
+  way.
 - A ring atom's two groups - erythromycin's OH and methyl on one carbon -
   each show which face they are on: the one in front on a wedge, the other
   behind on hashes.
@@ -667,8 +721,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   η⁶-benzene, p-cymene - is seen as it is (drawn by hand, as a bond from
   the metal to each of its atoms - ferrocene, bis(benzene)chromium with no
   haptic bond - too: Clean-up gives the engine a star at its centre for
-  those bonds, and they stay drawn from the metal to each atom; the
-  maintainer, 2026-10-13, `ringsBondedAtomByAtom`): the metal on its axis, a bond
+  those bonds, and lays them out as one bond from the metal to that star,
+  as the CTfile's multi-centre bond is, the ring's atoms its endpoints -
+  ferrocene's ten Fe-C bonds two; the maintainer, 2026-10-13 and
+  2026-10-17, `etaBondedAtomByAtom`; so too a chain of three atoms or more
+  each bonded to the metal, an allyl, but not two, a three-membered ring
+  with the metal being how a metallacyclopropane is drawn as well; an
+  η3-allyl, once laid out, posed with its middle carbon away from the
+  metal and its delocalisation curve inside it, EDITOR-2D.md *An η3-allyl*): the metal on its axis, a bond
   from its centre, the ring seen from a little above its plane (about 24
   degrees), so that it is drawn as deep as 0.4 of its width - a flattened
   polygon. Its lower half on the page is nearer - whichever side of it the
@@ -707,7 +767,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   toward them wedges, as for a ring face-on; stood with its C=C upright,
   the metal beside them. A second such ring goes to the metal's other
   side; the metal's other ligands opposite a lone one. Both C=C are cis,
-  as they are; drawn as one ring with the metal, one came out trans.
+  as they are; drawn as one ring with the metal, one came out trans. A
+  metal that is in a ring of its own as well - a chelate's, Rh(cod)(acac),
+  [Rh(cod)(dppe)]+; or norbornadiene's, whose C=C are not a ring of their
+  own - has that ring system laid out flat, as it would be alone, and set
+  on the metal where its other ligands go: its atoms bonded to the metal
+  side by side, opposite a lone tub. The metal, its tubs and that ring
+  system are one system (left out of it, the tub's stars had no place, and
+  Clean-up threw).
 - **Two metals bridged by two atoms** - [Rh(cod)Cl]2's chlorides,
   [Rh(cod)OMe]2's methoxides; or a transition metal and a main-group one,
   the Tebbe reagent's Ti and Al, the transition metal first - are their
@@ -748,6 +815,36 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the
   ferrocene - has the metal at the apex over its two donors, its bonds
   alike and as long as a square angle there needs.
+- **A metal that two chelates or more close at** - a salen's Mn, three
+  rings through it; a bisphosphine's and a cyclometallated benzoate's on
+  Krische's catalyst's Ir - is drawn as a metal is, not as an atom shared
+  by rings each regular: its donors round it a square angle apart (four,
+  or fewer, as a square-planar or an octahedral metal is drawn), or
+  evenly round where five or more - or three that make a ring of their
+  own - close round it; each chelate's ring then drawn between its two
+  donors, giving at the metal where a regular ring would not (three rings
+  regular round Mn left the salen's two O 35 degrees apart, Cl drawn over
+  one: now they are a square angle apart, Cl between them). The donors of
+  one chelate are next to each other, chelates sharing a donor in their
+  chain; separate chains - Krische's two chelates - can go round the
+  metal more than one way (which P is beside the benzoate's C), and each
+  way is tried with what hangs from it, as a macrocycle's shapes are, its
+  phenyls turned as a propeller's blades as well as flat. A ligand of the
+  metal drawn inside one of its chelates' rings, of any size up to eight,
+  is hidden there, as an atom inside a small ring is.
+- **A metal in a chelate's ring** has its other ligands evenly over the
+  room outside the ring - two a third of it apart, not a gem-dimethyl's
+  pair - the ligand it was reached by among them: Hoveyda-Grubbs II's two
+  Cl either side of its carbene, not both on one side of it, by the
+  mesityl's methyl.
+- **A pi system bound to a metal that makes no ring** - an alkene's C=C,
+  dba's on Pd, an allyl's three atoms - lies across the metal's bond, its
+  centre a bond from the metal: a C=C square to the bond, as chemists
+  draw an alkene's complex; an allyl bent round, its middle atom away from
+  the metal and its ends toward it. What its atoms carry points away from
+  the metal (an E alkene's second group then toward it, as its
+  configuration needs). Hung from its star as a chain, it was drawn end on
+  to the metal, the metal's bond running to its far middle.
 - **Aryl rings crowded round one atom** - PPh₃'s phenyls on a crowded
   metal - are each turned on their bond out of the page, all the same way
   round (a propeller), and so seen in perspective: foreshortened across
@@ -755,7 +852,13 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   only where it reads better by the benchmark's measures, at 45, 60 or 70
   degrees, whichever reads best - and only to rings that hang from the
   atom, not to what the atom hangs from (BINAP's naphthalene, beyond its
-  P, is the rest of the molecule).
+  P, is the rest of the molecule). The structure is grown with its blades
+  so turned from the start, at each angle, as well as flat, and every
+  start is set right and measured alike: grown flat, four PPh₃ round a
+  metal lie phenyl on phenyl in pairs, every frame the same drawing
+  turned, and setting that right went by hairs. Blades of two hubs are
+  two things: one drawn on the other is a fault, as anywhere else - only
+  the atoms of one solid may lie over each other's ink.
 - **Clean-up draws a complex as writing out its label does**: the same
   engine, given the same structure - a haptic bond's star with its pi
   system - and each star put afterwards at the centre of its system's
@@ -778,7 +881,12 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 5. Last, turn a macrolide's sugars to their face and make room for the
    H's of labels and the letters of names, each by a small local move
    (sections 4 and 5); and turn
-   aryl rings crowded round an atom as a propeller (section 7).
+   aryl rings crowded round an atom as a propeller (section 7), where
+   they were not grown so. Drawings that read as well as each other
+   until then - phorbol's skeleton turned end for end - are each set
+   right to the end and measured with their stereochemistry drawn as it
+   will be (section 6): an H drawn on a centre may find a clear place in
+   one and none in the other, its wedge going onto a ring bond instead.
 6. Set the pieces of a salt or a mixture side by side, the largest first,
    with a bond and a half of paper between one's ink and the next's: a
    label's symbol, its H beside it and its charge count as ink (an OH

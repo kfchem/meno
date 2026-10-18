@@ -2501,3 +2501,90 @@ describe("runsPlaces", () => {
     places.forEach((x, n) => expect(x).toBe(runsWidth(cut(n), 1.7)));
   });
 });
+
+describe("a label being written over an atom", () => {
+  const o = opts({ showImplicitHydrogens: false });
+  const one: Bond[] = [{ a1: 0, a2: 1, order: 1, stereo: "none" }];
+  const letters = (text: string) => [{ x: 0, y: 0, text, fontPx: o.fontPx, runs: [{ text }] }];
+  const laid = (writing?: Atom["writing"], el = "C") =>
+    layoutMolecule(
+      [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: 1.5, y: 0, el, writing },
+      ],
+      one,
+      o,
+      40,
+    );
+  const asDrawn = laid(undefined, "O").lines[0].x2;
+  const ends = new Map([[0, 1], [1, 1]]);
+
+  it("stops its bonds short of what is written, as of the label, and draws no label for it", () => {
+    const l = laid({ items: letters("O"), k: 1, hidden: true });
+    expect(l.lines[0].x2).toBeCloseTo(asDrawn, 6);
+    expect(l.texts.filter((t) => t.atom === 1)).toEqual([]);
+    // (nor a carbon's round end at the atom, under the letters)
+    expect(joinsAtAtoms([{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: 1.5, y: 0, el: "C", writing: { items: letters("O"), k: 1, hidden: true } }], one, o, ends).caps.has(1)).toBe(false);
+    expect(joinsAtAtoms([{ id: 1, x: 0, y: 0, el: "C" }, { id: 2, x: 1.5, y: 0, el: "C" }], one, o, ends).caps.has(1)).toBe(true);
+  });
+
+  it("brings them back from the atom a share of the way - from where they stopped before, where it had a label", () => {
+    expect(laid({ items: letters("O"), k: 0, hidden: true }).lines[0].x2).toBeCloseTo(1.5, 6);
+    expect(laid({ items: letters("O"), k: 0.5, hidden: true }).lines[0].x2).toBeCloseTo((1.5 + asDrawn) / 2, 6);
+    // (from a label that reached further: from there)
+    const wide = laid({ items: letters("OMe"), k: 1, hidden: true }).lines[0].x2;
+    expect(laid({ items: letters("O"), k: 0, was: { items: letters("OMe"), k: 1 }, hidden: true }).lines[0].x2).toBeCloseTo(wide, 6);
+  });
+
+  it("goes back to the label as drawn - none, a carbon - from what was written, the label drawn meanwhile", () => {
+    const back = (k: number) => laid({ k, was: { items: letters("O"), k: 1 } });
+    expect(back(0).lines[0].x2).toBeCloseTo(asDrawn, 6);
+    expect(back(1).lines[0].x2).toBeCloseTo(1.5, 6);
+    const kept = laid({ k: 1, was: { items: letters("O"), k: 1 } }, "O");
+    expect(kept.lines[0].x2).toBeCloseTo(asDrawn, 6);
+    expect(kept.texts.some((t) => t.atom === 1)).toBe(true);
+  });
+});
+
+describe("a double bond at an atom a label is being written over", () => {
+  const o = opts();
+  const two: Bond[] = [
+    { a1: 0, a2: 1, order: 1, stereo: "none" },
+    { a1: 1, a2: 2, order: 2, stereo: "none" },
+  ];
+  const letters = (text: string) => [{ x: 0, y: 0, text, fontPx: o.fontPx, runs: [{ text }] }];
+  const second = (el: string, writing?: Atom["writing"]) =>
+    layoutMolecule(
+      [
+        { id: 1, x: 0, y: 0, el: "C" },
+        { id: 2, x: 1.3, y: 0.75, el: "C" },
+        { id: 3, x: 2.6, y: 0, el, writing },
+      ],
+      two,
+      o,
+      40,
+    ).lines[2];
+  const close = (p: LineSeg, q: LineSeg) => [p.x1 - q.x1, p.y1 - q.y1, p.x2 - q.x2, p.y2 - q.y2].every((d) => Math.abs(d) < 1e-6);
+
+  it("has its second line go over to where the label leaves it, a share of the way - no jump as it begins", () => {
+    const plain = second("C");
+    // (begun: as it was)
+    expect(close(second("C", { items: letters("O"), k: 0, hidden: true }), plain)).toBe(true);
+    const there = second("C", { items: letters("O"), k: 1, hidden: true });
+    const half = second("C", { items: letters("O"), k: 0.5, hidden: true });
+    expect(half.x2).toBeCloseTo((plain.x2 + there.x2) / 2, 6);
+    expect(half.y2).toBeCloseTo((plain.y2 + there.y2) / 2, 6);
+    // (and no jump as it is kept: the label drawn where the letters were)
+    expect(close(second("O"), there)).toBe(true);
+    expect(close(second("O", { k: 0.3, was: { items: letters("O"), k: 1 } }), there)).toBe(true);
+  });
+
+  it("goes back the same way, let go over a carbon", () => {
+    const plain = second("C");
+    const there = second("C", { items: letters("O"), k: 1, hidden: true });
+    const back = (k: number) => second("C", { k, was: { items: letters("O"), k: 1 } });
+    expect(close(back(0), there)).toBe(true);
+    expect(back(0.5).x2).toBeCloseTo((plain.x2 + there.x2) / 2, 6);
+    expect(close(back(1), plain)).toBe(true);
+  });
+});

@@ -14,6 +14,7 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers, Like } from "../../../../lib/roles/client";
 import type { OptionValues } from "../../../../lib/options";
 import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/molblock";
+import { readMolfile } from "../../../../lib/chem/ctfile";
 import { abbreviationOf } from "../../../../lib/chem/abbreviations";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { editorModelOf, processFileContent } from "../utils/io";
@@ -39,7 +40,15 @@ const GAP = 1.5 * NOMINAL_BOND_LENGTH;
  * atoms and bonds each of the block's is; made again, where the one made
  * before has its atoms (`likeOf`).
  */
-export type Block = { molblock: string; atoms: number[]; bonds: number[]; part: Model; like?: Like };
+export type Block = {
+  molblock: string;
+  atoms: number[];
+  bonds: number[];
+  part: Model;
+  like?: Like;
+  /** Its bonds from a metal to a star at a ring's, chain's or double bond's centre, by atom place in the block as written: the metal and the atoms (`centresIn`). */
+  centres?: { metal: number; atoms: number[] }[];
+};
 
 /**
  * Whether the drawing still holds each block as it was when its 3D
@@ -104,8 +113,11 @@ export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
       // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound)
       const asked = etaBound(part);
       const index = molIndex(asked);
+      const molblock = chemMolblock(asked);
+      const centres = centresIn(molblock);
       return {
-        molblock: chemMolblock(asked),
+        ...(centres.length ? { centres } : {}),
+        molblock,
         // (the drawing's own atoms: the stars etaBound adds come after them, and are no atoms of the drawing)
         atoms: part.atoms.map((a) => a.id),
         bonds: index.bonds.map((b) => b.id),
@@ -161,6 +173,8 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
       };
     }),
     bonds: bondsKept.map((i) => ({ a1: atomAt.get(c.bonds[i].a1)!, a2: atomAt.get(c.bonds[i].a2)!, order: c.bonds[i].order })),
+    // (each multi-centre bond one stick from the metal to its atoms' centre, the star no atom: utils/molecule3d withCentres)
+    ...centresOf(block, atomAt),
     ...(c.frames.length > 1 ? { frames: c.frames.slice(1).map(places) } : {}),
     energies: c.energies,
     drawnFrom: kept.map((i) => (i < block.part.atoms.length ? block.atoms[i] : null)),
@@ -168,7 +182,7 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
     conformerSet: true,
     // (made from a drawing shown magnified: shown as large - docs/WORKSPACE.md, *Magnified display*)
     ...(block.part.atoms[0]?.magnified != null && block.part.atoms[0].magnified !== 1 ? { magnified: block.part.atoms[0].magnified } : {}),
-    ...(c.how?.length ? { made: { how: c.how } } : {}),
+    ...(c.how?.length || c.method ? { made: { ...(c.method ? { method: c.method } : {}), how: c.how ?? [] } } : {}),
     stereo: {
       atoms: numbered(renumbered(c.cip?.atoms, atomAt)),
       bonds: numbered(renumbered(c.cip?.bonds, bondAt)),
@@ -177,6 +191,30 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
         : {}),
     },
   };
+}
+
+/**
+ * The multi-centre bonds of a block as it is written (`molblock`), each
+ * its metal and the atoms it binds, by their place in the block - which is
+ * their place in the plugin's answer: a ring drawn bound by one bond, and
+ * one written out of a label (Cp on a metal, Cp2ZrCl2) alike.
+ */
+export function centresIn(molblock: string): { metal: number; atoms: number[] }[] {
+  const ct = readMolfile(molblock);
+  if (!ct) return [];
+  return ct.bonds.flatMap((b) => {
+    if (!b.endpoints?.length || b.attach === "any") return [];
+    const metal = ct.atoms[b.a1]?.symbol === "*" ? b.a2 : b.a1;
+    return b.endpoints.length >= 2 && !b.endpoints.includes(metal) ? [{ metal, atoms: [...b.endpoints] }] : [];
+  });
+}
+
+/** A block's bonds to centres, by the molecule in 3D's atom index (`at`): those whose atoms it keeps. */
+function centresOf(block: Block, at: Map<number, number>): Pick<Molecule3D, "centres"> {
+  const centres = (block.centres ?? []).flatMap((c) =>
+    at.has(c.metal) && c.atoms.every((i) => at.has(i)) ? [{ metal: at.get(c.metal)!, atoms: c.atoms.map((i) => at.get(i)!) }] : [],
+  );
+  return centres.length ? { centres } : {};
 }
 
 const numbered = (r: Record<string, string> | undefined): Record<number, string> =>

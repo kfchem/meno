@@ -23,7 +23,7 @@ export type PageWords = FieldHost & { undo(): void; redo(): void };
 export function pageField(
   canvas: HTMLElement,
   ed: PageWords,
-  o: { label: string; lines: boolean; keep: () => void; letGo: () => void; key?: (e: KeyboardEvent) => boolean },
+  o: { label: string; lines: boolean; keep: (byEnter?: boolean) => void; letGo: () => void; key?: (e: KeyboardEvent) => boolean },
 ): { field: TypingField; dispose: () => void } {
   const host = canvas.parentElement ?? document.body;
   const ec = hasEditContext();
@@ -69,7 +69,7 @@ export function pageField(
       field?.sync();
     } else if (e.key === "Enter" && (!e.shiftKey || !o.lines) && !e.altKey && !e.ctrlKey && !e.metaKey) {
       stop();
-      o.keep();
+      o.keep(true);
     } else if (e.key === "Escape") {
       stop();
       o.letGo();

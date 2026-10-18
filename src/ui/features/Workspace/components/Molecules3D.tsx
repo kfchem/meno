@@ -794,6 +794,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             split={splits[m.id]}
             onRisen={() => store.getState().risen3d(m.id)}
             stereoShown={stereoShownOf(m)}
+            atomNumbers={m.atomNumbers ?? null}
             stereoFont={stereoFont}
             overlay={!!overlay[m.id]}
             linkedAtom={hoveredDrawn != null && m.drawnFrom ? (m.drawnFrom.indexOf(hoveredDrawn) >= 0 ? m.drawnFrom.indexOf(hoveredDrawn) : null) : null}

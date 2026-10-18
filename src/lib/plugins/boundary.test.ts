@@ -3,7 +3,7 @@
  *
  * Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it
  * from there. This test reads the manifest of every bundled plugin (src-tauri/resources/plugins/<id>/manifest.json), collects
- * what the plugins declare - plugin ids, the programs they run and what they provide, the looks they make, the kinds of a step
+ * what the plugins declare - plugin ids, the programs they run and what they provide, the looks and motions they make, the kinds of a step
  * they fill, the kinds of file they read and write - and fails on any string literal in core's source (src/ and
  * src-tauri/src, without tests) equal to one of them. Comments may say anything.
  *
@@ -73,6 +73,7 @@ function declared(): Map<string, string[]> {
       const role = r as Json;
       for (const p of list(role.programs)) for (const n of str(p)) add(n, `${who}: program`);
       for (const l of list(role.looks)) for (const n of typeof l === "string" ? [l] : str((l as Json).id)) add(n, `${who}: look`);
+      for (const mo of list(role.motions)) for (const n of str((mo as Json).id)) add(n, `${who}: motion`);
     }
   }
   return out;

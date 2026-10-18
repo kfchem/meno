@@ -1,4 +1,5 @@
 import "./fonts";
+import { allylCurve } from "./allylArc";
 import { ARIAL } from "./arial";
 import { labelFont, type LabelFont } from "./labelFonts";
 import { ringSidesOf } from "./aromaticSides";
@@ -47,7 +48,21 @@ export type Atom = AtomChem & {
   highlight?: string;
   /** How large its structure is shown: laid out in the style so many times over (layoutStructures `magnifiedOptions`). Unset, 1. */
   magnified?: number;
+  /**
+   * A label being written over it, or just kept or let go (the canvas's
+   * LabelTyping2D): what its bonds stop short of, on its way there.
+   * Unset, its label as drawn.
+   */
+  writing?: Writing;
 };
+/**
+ * What an atom's bonds stop short of while a label is written over it:
+ * `items`, the letters as they are written there, about the atom - or,
+ * none given, its label as drawn - `k` of the way (0 to 1) from what they
+ * stopped short of before (`was`; none, the atom itself). Where `hidden`,
+ * no label is drawn for it: the writing draws its own.
+ */
+export type Writing = { items?: readonly TextItem[]; k: number; was?: Writing; hidden?: boolean };
 export type Bond = BondChem & {
   a1: number;
   a2: number;
@@ -2385,6 +2400,8 @@ export function buildTextLabels(
     // 1996 writes methane CH4.
     // (a pi system's centre, where a haptic bond ends, is drawn as nothing)
     if (hapticCentres.has(i)) continue;
+    // (a label being written over it: its letters the writing's own)
+    if (a.writing?.hidden) continue;
     const show = showsLabel(a, opts) || !bonded.has(i);
     // its charge and its radical's dots, after the symbol on its line; its
     // mass number before it
@@ -2436,9 +2453,11 @@ export function buildTextLabels(
     }
     // A label that is not an element: an Rgroup, an atom list, an
     // abbreviation or any text, written as such, with no hydrogens of its own
+    // (read outward from its bonds where they come in from the right, all of them together and none leaving to the left - a
+    // ring's atom on its left side, an NFmoc at a ring's lower left reading FmocN, as one bond so does)
     const towardAll = away.get(i) ?? { x: 0, y: 0 };
     const fromRight =
-      names.get(i)?.left ?? ((ways.get(i)?.length ?? 0) === 1 && towardAll.x > Math.hypot(towardAll.x, towardAll.y) * band);
+      names.get(i)?.left ?? ((ways.get(i)?.length ?? 0) >= 1 && !leftward.has(i) && towardAll.x > Math.hypot(towardAll.x, towardAll.y) * band);
     const special = specialLabel(a, fromRight);
     if (special) {
       const runs = [...head, ...special.runs, ...tail];
@@ -2606,17 +2625,78 @@ export function labelTrims(
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
   const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
-    if (!showsLabel(at, opts)) return 0;
+    // (a label being written: on its way from what its bonds stopped short of before, `k` of the way)
+    if (at.writing) {
+      const band = { n, lo, hi };
+      const set = labelSetOf(opts);
+      const clear = (w: Writing): number => {
+        const k = Math.min(1, Math.max(0, w.k));
+        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margin, band) : drawn(idx, at, towards, band);
+        return k >= 1 ? now : (w.was ? clear(w.was) : 0) * (1 - k) + now * k;
+      };
+      return clear(at.writing);
+    }
+    return drawn(idx, at, towards, { n, lo, hi });
+  };
+  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }) => {
+    // (a pi system's centre, where a haptic bond ends, has no label to stop
+    // short of: the line reaches the centre, as the bond is to the system
+    // as a whole - IUPAC GR-1.7)
+    if (!showsLabel(at, opts) || (bond.endpoints?.length && at.el === "*")) return 0;
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
-    return labelClearance(hulls, towards, margin, { n, lo, hi });
+    return labelClearance(hulls, towards, margin, band);
   };
   return {
     a: reach(bond.a1, p, dir, -across.right1, across.left1),
     b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
     room: L0 * (opts.labelShareMax ?? 0.9),
   };
+}
+
+/**
+ * How far an atom a label is being written over (`Atom.writing`) has come
+ * to being drawn as labelled, 0 to 1 - its bonds' ends cut by a label, a
+ * double bond's second line running up to it - each step `k` of the way
+ * from the one before: none before, none labelled. Null where nothing is
+ * being written over it.
+ */
+export function writingShare(at: Atom, opts: Pick<LayoutOptions, "showCarbonLabels" | "showChargedCarbons">): number | null {
+  if (!at.writing) return null;
+  const labelled = showsLabel(at, opts) ? 1 : 0;
+  const share = (w: Writing): number => {
+    const k = Math.min(1, Math.max(0, w.k));
+    const now = w.items ? (w.items.length ? 1 : 0) : labelled;
+    return k >= 1 ? now : (w.was ? share(w.was) : 0) * (1 - k) + now * k;
+  };
+  return share(at.writing);
+}
+
+/**
+ * A bond's lines and shapes `t` of the way from `a` to `b`, drawn the two
+ * ways (writingShare): each line's and shape's points between, where the
+ * two have as many - otherwise the nearer way - the meets and bends of the
+ * nearer way, and the free ends of `b`, any of the way along.
+ */
+function blendPrimitives(a: BondPrimitives, b: BondPrimitives, t: number): BondPrimitives {
+  const near = t < 0.5 ? a : b;
+  const mix = (p: number, q: number) => p + (q - p) * t;
+  const lines =
+    a.lines.length === b.lines.length
+      ? a.lines.map((l, i) => ({ ...b.lines[i], x1: mix(l.x1, b.lines[i].x1), y1: mix(l.y1, b.lines[i].y1), x2: mix(l.x2, b.lines[i].x2), y2: mix(l.y2, b.lines[i].y2) }))
+      : near.lines;
+  const polys =
+    a.polys.length === b.polys.length && a.polys.every((p, i) => p.points.length === b.polys[i].points.length)
+      ? a.polys.map((p, i) => ({ ...b.polys[i], points: p.points.map((v, j) => ({ x: mix(v.x, b.polys[i].points[j].x), y: mix(v.y, b.polys[i].points[j].y) })) }))
+      : near.polys;
+  // (a line's free end finished round where it stops: both ways stop it where the letters are)
+  return { ...near, lines, polys, ends: t > 0 ? b.ends : a.ends };
+}
+
+/** The ink of letters set about an atom (each `TextItem` where it is set, the atom at the origin), its tail aside: labelHulls of each. */
+function itemsHulls(items: readonly TextItem[], fontSize: number, set: LabelSet): Vec2[][] {
+  return items.flatMap((t) => labelHulls(t, fontSize, set, false).map((h) => h.map((p) => ({ x: p.x + t.x, y: p.y + t.y }))));
 }
 
 /** The least share of a bond seen between the labels at its ends, however much of it they would take. */
@@ -2634,7 +2714,9 @@ export function buildBondPrimitives(
   autoSgn?: number,
   adjBonds?: Map<number, Bond[]>,
   labelShapes?: Map<number, Vec2[][]>,
-  doubleSides?: Map<Bond, number | undefined>
+  doubleSides?: Map<Bond, number | undefined>,
+  // (an atom a label is being written over, as labelled - false: as it was, unlabelled - writingShare)
+  writtenAs = true,
 ): BondPrimitives {
   const a = atoms[bond.a1];
   const c = atoms[bond.a2];
@@ -2646,7 +2728,8 @@ export function buildBondPrimitives(
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
   const minPx = Math.max(0.5, opts.minLinePx ?? 1);
   if (!(lwPx >= minPx)) lwPx = minPx;
-  const hasLabel = (at: Atom) => showsLabel(at, opts);
+  // (a label being written over it takes the bond's end as a label does)
+  const hasLabel = (at: Atom) => showsLabel(at, opts) || (!!at.writing && writtenAs);
   const lineHalf = pxToWorld(lwPx * 0.5, zoom);
   // how wide a bold bond is, and a wedge at its broad end, either side of its line
   const boldHalf =
@@ -3205,9 +3288,10 @@ export function joinsAtAtoms(
   const mitres = new Map<number, Vec2[]>();
   for (let i = 0; i < atoms.length; i++) {
     const d = deg.get(i) || 0;
-    const showLabel = showsLabel(atoms[i], opts);
-    // A label takes the bond's end with it, and a wedge's wide end covers its
-    // own join, so neither wants anything here.
+    const showLabel = showsLabel(atoms[i], opts) || (writingShare(atoms[i], opts) ?? 0) > 0;
+    // A label takes the bond's end with it - one being written over the
+    // atom too - and a wedge's wide end covers its own join, so neither
+    // wants anything here.
     if (showLabel || wedgeEnds.has(i)) continue;
     // A free end of a plain bond, or any atom bonds meet at - including one
     // where only wedges meet, whose thin ends are each a bond wide and do
@@ -3409,6 +3493,71 @@ export function ringCircles(
   return { circles, edges: aromaticEdges };
 }
 
+/**
+ * Of a haptic bond `b`, its atoms as an η3-allyl - three, bonded in a chain,
+ * its ends not bonded to each other - by index, an end, the middle, the
+ * other end; null for a ring or anything else.
+ */
+function allylChainOf(atoms: Atom[], bonds: readonly Bond[], b: Bond): [number, number, number] | null {
+  if (b.endpoints?.length !== 3 || b.attach === "any") return null;
+  const indexOf = new Map(atoms.map((a, i) => [a.id, i]));
+  const e = b.endpoints.map((id) => indexOf.get(id));
+  if (e.some((i) => i == null)) return null;
+  const bonded = (u: number, v: number) => bonds.some((x) => !x.endpoints?.length && ((x.a1 === u && x.a2 === v) || (x.a1 === v && x.a2 === u)));
+  for (const k of [0, 1, 2]) {
+    const [p, q] = e.filter((_, i) => i !== k) as number[];
+    if (bonded(p, e[k]!) && bonded(q, e[k]!) && !bonded(p, q)) return [p, e[k]!, q];
+  }
+  return null;
+}
+
+/**
+ * The bonds as drawn, an η3-allyl's two bonds single whatever their orders
+ * (the maintainer, 2026-10-18; IUPAC GR-6.4: the curve is the delocalised
+ * system, the single bonds its frame), as a ring's circle does. The drawing's own bonds keep their orders.
+ */
+function allylsSingle(atoms: Atom[], bonds: Bond[]): Bond[] {
+  if (!bonds.some((b) => b.endpoints?.length === 3)) return bonds;
+  const single = new Set<string>();
+  for (const b of bonds) {
+    const chain = allylChainOf(atoms, bonds, b);
+    if (!chain) continue;
+    for (const [u, v] of [[chain[0], chain[1]], [chain[1], chain[2]]]) single.add(u < v ? `${u}-${v}` : `${v}-${u}`);
+  }
+  if (!single.size) return bonds;
+  return bonds.map((b) => (!b.endpoints?.length && b.order !== 1 && single.has(b.a1 < b.a2 ? `${b.a1}-${b.a2}` : `${b.a2}-${b.a1}`) ? { ...b, order: 1 } : b));
+}
+
+/**
+ * An η3-allyl's delocalisation curve (lib/chem/allylArc), where `b` is the
+ * haptic bond of one - three atoms bonded in a chain, its ends not bonded
+ * to each other: short straight pieces just inside the chain, solid and as
+ * wide as the bond's line (IUPAC GR-6.2), the corners between them finished
+ * as a wave's are; none otherwise.
+ */
+function allylCurvePrimitives(
+  atoms: Atom[],
+  bonds: readonly Bond[],
+  b: Bond,
+  widthPx: number,
+  opts: LayoutOptions,
+  zoom: number,
+): { lines: LineSeg[]; bends: Bend[]; ends: Vec2[]; middle: Vec2 } | null {
+  const chain = allylChainOf(atoms, bonds, b);
+  if (!chain) return null;
+  // (kept from the chain's bonds by a double bond's spacing in the style, measured where it comes nearest: GR-6.1)
+  const { points, middle } = allylCurve(atoms[chain[0]], atoms[chain[1]], atoms[chain[2]], toWorld(opts.doubleOffsetPx, zoom, opts.units ?? "px"));
+  const lines: LineSeg[] = [];
+  for (let i = 1; i < points.length; i++) lines.push({ x1: points[i - 1].x, y1: points[i - 1].y, x2: points[i].x, y2: points[i].y, widthPx });
+  const bends: Bend[] = [];
+  for (let i = 1; i < lines.length; i++) {
+    const prev = lines[i - 1];
+    const next = lines[i];
+    bends.push({ at: { x: next.x1, y: next.y1 }, dirs: [vnorm({ x: prev.x1 - prev.x2, y: prev.y1 - prev.y2 }), vnorm({ x: next.x2 - next.x1, y: next.y2 - next.y1 })] });
+  }
+  return { lines, bends, ends: [points[0], points[points.length - 1]], middle };
+}
+
 export function buildAllPrimitives(
   atoms: Atom[],
   bonds: Bond[],
@@ -3424,6 +3573,7 @@ export function buildAllPrimitives(
   reach: BondReach[];
   crowded: Crowded[];
 } {
+  bonds = allylsSingle(atoms, bonds);
   const lines: LineSeg[] = [];
   const polys: Poly[] = [];
   const circles: Circle[] = [];
@@ -3602,18 +3752,14 @@ export function buildAllPrimitives(
     // which side the second line of a double bond takes, worked out for every
     // one of them first so that each knows what its neighbours are doing
     const autoSgn = doubleSides.get(b);
-    const r = buildBondPrimitives(
-      atoms,
-      beff,
-      opts,
-      zoom,
-      deg,
-      undefined,
-      autoSgn,
-      adjBonds,
-      labelShapes,
-      doubleSides
-    );
+    // (at an atom on its way between labelled and not - a label being
+    // written over a carbon, or let go - the bond drawn both ways, the
+    // share of the way it has come between them: a double bond's second
+    // line goes over to where a label leaves it, not there at once)
+    const shares = [writingShare(atoms[b.a1], opts), writingShare(atoms[b.a2], opts)].filter((w): w is number => w != null);
+    const share = shares.find((w) => w > 0 && w < 1);
+    const build = (writtenAs: boolean) => buildBondPrimitives(atoms, beff, opts, zoom, deg, undefined, autoSgn, adjBonds, labelShapes, doubleSides, writtenAs);
+    const r = share != null ? blendPrimitives(build(false), build(true), share) : build(!shares.includes(0));
     reach.push(bondReach(beff, opts, zoom, deg, doubleSides));
     // (two labels wanting more of it than their room: said, for Clean-up)
     if (b.a1 !== b.a2 && showsLabel(atoms[b.a1], opts) && showsLabel(atoms[b.a2], opts)) {
@@ -3622,6 +3768,29 @@ export function buildAllPrimitives(
         const L = Math.hypot(atoms[b.a2].x - atoms[b.a1].x, atoms[b.a2].y - atoms[b.a1].y);
         crowded.push({ atoms: [atoms[b.a1].id, atoms[b.a2].id], need: ((t.a + t.b) / t.room) * L });
       }
+    }
+    // (an η3-allyl's bond: its curve, as the bond's own ink, and its line from the metal pointing at the curve's
+    // middle, stopping short of it as a bond stops short of a label - the maintainer, 2026-10-18)
+    const arc = r.lines.length ? allylCurvePrimitives(atoms, bonds, beff, r.lines[0].widthPx, opts, zoom) : null;
+    if (arc) {
+      const metal = atoms[b.a1].el === "*" ? atoms[b.a2] : atoms[b.a1];
+      const main = r.lines[0];
+      const near = Math.hypot(main.x1 - metal.x, main.y1 - metal.y) <= Math.hypot(main.x2 - metal.x, main.y2 - metal.y) ? { x: main.x1, y: main.y1 } : { x: main.x2, y: main.y2 };
+      const trim = Math.hypot(near.x - metal.x, near.y - metal.y);
+      const L = Math.hypot(arc.middle.x - metal.x, arc.middle.y - metal.y);
+      const units = opts.units ?? "px";
+      const margin = opts.labelMarginPx != null ? toWorld(opts.labelMarginPx, zoom, units) : toWorld(opts.fontPx, zoom, units) * 0.16;
+      if (L > trim + margin) {
+        const dir = { x: (arc.middle.x - metal.x) / L, y: (arc.middle.y - metal.y) / L };
+        const start = { x: metal.x + dir.x * trim, y: metal.y + dir.y * trim };
+        const end = { x: metal.x + dir.x * (L - margin), y: metal.y + dir.y * (L - margin) };
+        r.lines = [{ ...main, x1: start.x, y1: start.y, x2: end.x, y2: end.y }, ...arc.lines];
+        r.ends = [start, end, ...arc.ends];
+      } else {
+        r.lines = [...arc.lines];
+        r.ends = [...arc.ends];
+      }
+      r.bends = [...(r.bends ?? []), ...arc.bends];
     }
     const behind = brokenBehind(atoms, bonds, b, r.lines, rWorld);
     const tint = <T extends object>(x: T): T & { color?: string } => (b.color ? { ...x, color: b.color } : x);

@@ -9,8 +9,8 @@
  */
 import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
-import { pdfRoom } from "../../../../lib/pdf/layout";
-import { takenOnPage } from "../chem/make3d";
+import { styleOf } from "../../../../lib/chem/style";
+import { pageBoxes } from "../utils/freePlace";
 import { placedBeside, readBox, readPicture, regionOf } from "../utils/figures";
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
@@ -47,12 +47,13 @@ export async function readStructure(
       return;
     }
     const st = store.getState();
-    const taken: Region[] = [...takenOnPage(st, []), ...st.pictures.map(pictureRegion), ...st.pdfs.map(pdfRoom)];
-    const placed = placedBeside(read, region, taken);
+    // (clear of all there is on the page - structures, words, arrows, pictures, PDFs, sheets, molecules in 3D - as what Open puts down is)
+    const style = styleOf(st.docStyle);
+    const placed = placedBeside(read, region, pageBoxes(st, style), style);
     store.getState().putRead(placed.model, placed.scheme);
     // (beyond the view, the view takes it in)
     const view = ui.view();
-    const at = regionOf(placed);
+    const at = regionOf(placed, style);
     if (view && at && (at.x0 < view.x0 || at.x1 > view.x1 || at.y0 < view.y0 || at.y1 > view.y1)) ui.fit();
   } catch (e: unknown) {
     ui.say(`The figure could not be read: ${e instanceof Error ? e.message : String(e)}`);

@@ -59,6 +59,29 @@ export function createSelectionSlice(set: SetState) {
     setSel: (sel: Sel, anchor: number | null = null) =>
       set((prev: EditorState) => ({ ...prev, sel, selAnchor: anchor })),
 
+    clickSelectAtom: (id: number) =>
+      set((prev: EditorState) => {
+        if (!prev.model.atoms.some((a) => a.id === id)) return prev;
+        return {
+          ...prev,
+          sel: { atoms: new Set([id]), bonds: new Set<number>() },
+          selAnchor: id,
+          clickShade: { atomId: id, at: performance.now(), was: prev.sel, anchor: prev.selAnchor, fresh: !prev.sel.atoms.has(id), back: false },
+        };
+      }),
+
+    clickTakeBack: (id: number) => {
+      let taken = false;
+      set((prev: EditorState) => {
+        const c = prev.clickShade;
+        // (the click's selection as it left it: nothing chosen since)
+        if (!c || c.back || c.atomId !== id || prev.sel.atoms.size !== 1 || !prev.sel.atoms.has(id) || prev.sel.bonds.size) return prev;
+        taken = true;
+        return { ...prev, sel: c.was, selAnchor: c.anchor, clickShade: { ...c, at: performance.now(), back: true } };
+      });
+      return taken;
+    },
+
     /** An atom added to the selection, or taken out of it (Ctrl or ⌘ and a click). */
     toggleAtomSel: (id: number) =>
       set((prev: EditorState) => {

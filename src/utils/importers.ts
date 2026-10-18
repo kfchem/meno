@@ -365,6 +365,8 @@ function markSgroups(
     const k = bonds.findIndex((x) => x.id === bondIdOf(i));
     if (k < 0) return;
     const ends = b.endpoints.map(idOf).filter((id) => present.has(id));
+    // (none left: bound to a pi system of a label it was contracted to, which keeps it - contractAbbreviations)
+    if (!ends.length) return;
     bonds[k] = { ...bonds[k], endpoints: ends, attach: b.attach ?? "all" };
   });
   const ids = new Map<number, number>();
@@ -452,6 +454,14 @@ function contractAbbreviations(
     const out = crossing[0] != null ? ct.bonds[crossing[0]] : undefined;
     const outside = out ? atoms.find((x) => x.id === idOf(inside.has(out.a1) ? out.a2 : out.a1)) : undefined;
     if (outside) structure.toward = { x: outside.x - head.x, y: outside.y - head.y };
+    // (its bonds out to a pi system's star of it, bound through all that system's atoms - ENDPTS - by the drawing's
+    // atoms at each end, with the system's atoms by their place in the structure)
+    const piOf = new Map<string, number[]>();
+    for (const i of crossing) {
+      const cb = ct.bonds[i];
+      if (cb.endpoints?.length && cb.endpoints.every((e) => inside.has(e))) piOf.set(`${idOf(cb.a1)}-${idOf(cb.a2)}`, cb.endpoints.map((e) => g.atoms.indexOf(e)));
+    }
+    const bondedThrough = new Set<number>();
     for (let k = bonds.length - 1; k >= 0; k--) {
       const b = bonds[k];
       const ia = ids.get(b.a);
@@ -460,10 +470,23 @@ function contractAbbreviations(
         // inside: into the structure, out of the drawing
         structure.bonds.unshift({ a1: ia, a2: ib, order: b.order, stereo: b.stereo ?? "none", ...bondChem(b) });
         bonds.splice(k, 1);
-      } else if (ia != null) {
-        bonds[k] = { ...b, a: head.id };
-      } else if (ib != null) {
-        bonds[k] = { ...b, b: head.id };
+      } else if (ia != null || ib != null) {
+        // out of it: from its labelled atom - and where it goes to a pi system's star of it, bound through all that
+        // system's atoms (ENDPTS), that system kept with the structure, the bond out a plain one as a label's is drawn: so
+        // that a Cp or cod written out of a label on a metal (molWriter) reads back as it was drawn
+        const inner = ia != null ? b.a : b.b;
+        const outer = ia != null ? b.b : b.a;
+        const pi = piOf.get(`${b.a}-${b.b}`) ?? null;
+        if (pi) (structure.haptic ??= []).push({ star: ids.get(inner)!, atoms: pi });
+        // (a ligand bound through two pi systems to one metal - cod - drawn with one bond to it, as it was: the other
+        // is bound again as it is written out)
+        if (pi && bondedThrough.has(outer)) {
+          bonds.splice(k, 1);
+          continue;
+        }
+        if (pi) bondedThrough.add(outer);
+        const { endpoints: _endpoints, attach: _attach, coordination: _coordination, ...plain } = b;
+        bonds[k] = { ...(pi ? plain : b), ...(ia != null ? { a: head.id } : { b: head.id }) };
       }
     }
     for (let k = atoms.length - 1; k >= 0; k--) {

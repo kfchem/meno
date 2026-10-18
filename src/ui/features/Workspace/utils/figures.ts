@@ -18,6 +18,7 @@ import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
 import { boxPicture } from "../../../../lib/pdf/reader";
 import { chemWorker } from "../../../../lib/roles/worker";
+import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
 import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/figure/structure";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -28,6 +29,10 @@ import { systemGlyphs } from "./glyphShapes";
 import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Atom, Bond, FigureSpot, Model, PictureItem } from "../store/types";
 import { picturePng } from "./pictures";
+import { labelBoxes, labelledPart } from "./freePlace";
+import { captionBox } from "./extent";
+import { editorLayoutOptions } from "../layoutOptions";
+import type { DrawingStyle } from "../../../../lib/chem/style";
 
 /** A label as drawn read as one typed is: an element with its charge and its mass number (13C), or a group's name - or nothing. */
 /**
@@ -127,14 +132,29 @@ export async function readBox(sha256: string, page: number, box: Box, working?: 
 
 /** How finely a figure that is a picture is drawn to be read: enough for its letters, more than a picture's reader looks at. */
 const READ_DPI = 200;
-/** How long a picture's reading may take: the first loads the plugin's model - a minute or more, the first time a computer loads it. */
-const READ_MS = 300_000;
+/** How long the first picture a worker reads may take: it loads the plugin's model first - a minute or more, the first time a computer loads it. */
+export const FIRST_READ_MS = 300_000;
+/**
+ * How long a picture may take once the worker has read one, its model
+ * loaded: a picture is read in seconds, the slowest in half a minute; one
+ * taking longer is not going to end, and its worker is started afresh for
+ * the next (lib/plugins/queue).
+ */
+export const READ_MS = 90_000;
+/** The workers that have read a picture: their model loaded. One started afresh is another, and loads its model again. */
+const loaded = new WeakSet<ChemClient>();
 
 /** A picture read by the plugin that reads structures from pictures: what it read, in the picture's pixels; or why nothing came of it. */
 async function readByPlugin(bytes: Uint8Array): Promise<FigureRead | Unread> {
   const worker = await chemWorker("pictures");
-  const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, READ_MS);
-  return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+  try {
+    const answer = await worker.request("read_picture", { picture: toBase64(bytes) }, loaded.has(worker) ? READ_MS : FIRST_READ_MS);
+    loaded.add(worker);
+    return pictureFigure(answer) ?? { none: "No structure was found in the picture." };
+  } catch (e) {
+    if (e instanceof ChemTimeout) return { none: "Reading the picture took too long, so nothing was read from it." };
+    throw e;
+  }
 }
 
 /** A box of a PDF's page drawn as a picture and read by the plugin that reads pictures, each atom tied to its place on the page. */
@@ -172,6 +192,7 @@ export function figureFrom(given: FigureDrawn, sha256: string, page: number, kno
   // one whose words are all outlines, no letter written to tell, turned the way most of them read as letters)
   const { drawn, back } = uprightOf(given, given.letters.length || !glyphs.length ? undefined : quarterOfOutlines(given, glyphs));
   const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel);
+  if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
     return { none: drawn.pictures.length ? "This figure is a picture, not a drawing: there are no lines to read." : "No structure is drawn there." };
@@ -274,16 +295,15 @@ function pointsOf(read: FigureResult): { x: number; y: number }[] {
  * A figure read moved to lie beside what it was read from - its left edge
  * two bonds past the region's right, its top level with the region's -
  * and on to the right until it is clear of what is `taken`: its structure
- * and its scheme together, as they stand to each other.
+ * and its scheme together, as they stand to each other, measured as
+ * `regionOf` measures it.
  */
-export function placedBeside(read: FigureResult, region: Region, taken: readonly Region[]): FigureResult {
-  const pts = pointsOf(read);
-  if (!pts.length) return read;
-  const xs = pts.map((a) => a.x);
-  const ys = pts.map((a) => a.y);
+export function placedBeside(read: FigureResult, region: Region, taken: readonly Region[], style?: DrawingStyle): FigureResult {
+  const room = regionOf(read, style);
+  if (!room) return read;
   const pad = 0.5 * NOMINAL_BOND_LENGTH;
-  const w = Math.max(...xs) - Math.min(...xs);
-  const h = Math.max(...ys) - Math.min(...ys);
+  const w = room.x1 - room.x0;
+  const h = room.y1 - room.y0;
   const gap = 2 * NOMINAL_BOND_LENGTH;
   let x0 = region.x1 + gap;
   const top = region.y1;
@@ -293,8 +313,8 @@ export function placedBeside(read: FigureResult, region: Region, taken: readonly
     if (!hit.length) break;
     x0 = Math.max(...hit.map((t) => t.x1)) + gap;
   }
-  const dx = x0 - Math.min(...xs);
-  const dy = top - Math.max(...ys);
+  const dx = x0 - room.x0;
+  const dy = top - room.y1;
   const by = <T extends { x: number; y: number }>(p: T): T => ({ ...p, x: p.x + dx, y: p.y + dy });
   const scheme = read.scheme && {
     ...read.scheme,
@@ -305,12 +325,20 @@ export function placedBeside(read: FigureResult, region: Region, taken: readonly
   return { model: { ...read.model, atoms: read.model.atoms.map(by) }, ...(scheme ? { scheme } : {}) };
 }
 
-/** Where on the page a figure read stands: the box round all of it, half a bond wider all round. */
-export function regionOf(read: FigureResult): Region | null {
+/**
+ * Where on the page a figure read stands: the box round all of it, half a
+ * bond wider all round - and, given the drawing's style, its labels as far
+ * as the layout sets them and its words as far as they are set, as the page
+ * measures what lies on it (./freePlace `labelBoxes`, ./extent `captionBox`).
+ */
+export function regionOf(read: FigureResult, style?: DrawingStyle): Region | null {
   const pts = pointsOf(read);
   if (!pts.length) return null;
-  const xs = pts.map((a) => a.x);
-  const ys = pts.map((a) => a.y);
+  const boxes = style
+    ? [...labelBoxes(labelledPart(read.model), style), ...(read.scheme?.captions ?? []).map((c) => captionBox(c, editorLayoutOptions(style)))]
+    : [];
+  const xs = [...pts.map((a) => a.x), ...boxes.flatMap((b) => [b.x0, b.x1])];
+  const ys = [...pts.map((a) => a.y), ...boxes.flatMap((b) => [b.y0, b.y1])];
   return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
 }
 

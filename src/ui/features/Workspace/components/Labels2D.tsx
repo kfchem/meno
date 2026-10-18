@@ -32,6 +32,12 @@ export default function Labels2D() {
   const { layout, atoms } = useDrawnLayout();
   const store = useEditorStore();
   const waited = useEditor((s) => s.labelLeft != null);
+  // (a label written over and let go - or kept as it was - comes back as the writing goes: faded in, not there at once)
+  const ended = useEditor((s) => s.labelEnd);
+  const arriving = useMemo(
+    () => (ended && ended.how !== "kept" ? new Set([`atom-${ended.atomId}`, `mark-${ended.atomId}`]) : undefined),
+    [ended],
+  );
   const keyOf = (t: TextItem, i: number) => {
     const index = t.beside ? t.markOf : t.atom;
     const id = index != null ? atoms[index]?.id : undefined;
@@ -49,7 +55,7 @@ export default function Labels2D() {
   const keys = useMemo(() => shown.map((e) => e.key), [layout.texts, signature]);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- the same
   const leaving = useMemo(() => new Set(leavingKeys), [signature]);
-  return <Texts2D texts={texts} keyOf={(_, i) => keys[i]} leaving={leaving} onDrawn={waited ? () => store.getState().labelShown() : undefined} />;
+  return <Texts2D texts={texts} keyOf={(_, i) => keys[i]} leaving={leaving} arriving={arriving} onDrawn={waited ? () => store.getState().labelShown() : undefined} />;
 }
 
 /** troika's text, as far as Meno looks into it: whether its letters are still to be set, or being set. */
@@ -78,6 +84,10 @@ type TextsProps = {
   keyOf?: (t: TextItem, i: number) => string;
   /** The texts, by `keyOf`, gone from the drawing and fading out (Labels2D). */
   leaving?: ReadonlySet<string>;
+  /** The texts, by `keyOf`, faded in as they are drawn rather than seen at once: a label back as what was written over it goes (Labels2D). */
+  arriving?: ReadonlySet<string>;
+  /** How opaque all of them are, read at each frame: a label being written as it comes and goes (LabelTyping2D). */
+  opacity?: { readonly current: number };
 };
 
 export function Texts2D(props: TextsProps) {
@@ -235,7 +245,7 @@ function EachText2D({
  * while it is the same item, faded in as the font comes, told when drawn -
  * as `EachText2D` draws them one by one.
  */
-function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving }: TextsProps) {
+function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, keyOf, leaving, arriving, opacity }: TextsProps) {
   const { opts } = useDrawnLayout();
   const family = opts.fontFamily ?? "Arial";
   const fallback = useMemo(() => needsFallback(items.map((t) => t.text)), [items]);
@@ -250,6 +260,8 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
   const labelZoom = useDrawnZoom((z) => (opts.units === "px" ? z : null));
   const labelColor = opts.labelColor ?? "black";
   const under = useRef<unknown[]>([]);
+  // (how far each label going, or coming back, has come: 1 whole, 0 gone)
+  const out = useRef(new Map<string, number>());
   useLayoutEffect(() => {
     const b = batch;
     if (!b) return;
@@ -266,11 +278,15 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
       const key = keyOf ? keyOf(t, i) : `txt-${i}`;
       keep.add(key);
       if (b.has(key, t)) return;
+      // (one coming back: from naught, or from as far as it had faded)
+      if (arriving?.has(key) && !b.holds(key) && !out.current.has(key)) out.current.set(key, 0);
+      const fading = out.current.get(key);
       const fontWorld = labelZoom != null ? t.fontPx / Math.max(labelZoom, 1e-6) : t.fontPx;
       const runs: BatchRun[] = placeLabel(t, fontWorld, set)
         .filter((run) => !run.mark)
         .map((run) => ({ text: glyphs.shown(run.text), x: run.x, y: run.y, size: run.size, color: run.color ?? t.color ?? labelColor, italic: !!run.italic, bold: !!run.bold }));
-      b.set(key, t, runs, seen.current.level);
+      const level = Math.min(seen.current.level, opacity?.current ?? 1);
+      b.set(key, t, runs, fading != null ? Math.min(level, fadedOpacity(fading)) : level);
     });
     b.keepOnly(keep);
     invalidate();
@@ -302,23 +318,41 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
     for (const t of b.members()) fadeLetters(t, s.level);
     invalidate();
   });
+  // (as opaque as they are told, frame by frame: a batch's members are not in the scene's tree, for a traverse to reach)
+  const told = useRef(1);
+  useFrame(() => {
+    const b = batch;
+    if (!b || !opacity) return;
+    const l = Math.min(seen.current.level, opacity.current);
+    if (l === told.current) return;
+    told.current = l;
+    for (const t of b.members()) fadeLetters(t, l);
+    invalidate();
+  });
   // the labels gone, faded out - each to naught in DURATION.quick, then let go by what holds them; one back
-  // before then (a redo) seen whole again: its members' opacity, by key
-  const out = useRef(new Map<string, number>());
+  // before then (a redo), or `arriving`, faded in again in as long: its members' opacity, by key
   useFrame((_, dt) => {
     const b = batch;
     if (!b) return;
+    const d = Math.min(dt, 1 / 20);
     let going = false;
     for (const k of leaving ?? []) {
-      const level = fadingOut(out.current.get(k) ?? 1, Math.min(dt, 1 / 20), DURATION.quick);
+      const level = fadingOut(out.current.get(k) ?? 1, d, DURATION.quick);
       out.current.set(k, level);
       b.fadeKey(k, Math.min(seen.current.level, fadedOpacity(level)));
       if (level > 0) going = true;
     }
-    for (const k of [...out.current.keys()]) {
+    for (const [k, was] of [...out.current]) {
       if (leaving?.has(k)) continue;
-      out.current.delete(k);
-      b.fadeKey(k, seen.current.level);
+      const level = Math.min(1, was + d / DURATION.quick);
+      if (level >= 1) {
+        out.current.delete(k);
+        b.fadeKey(k, seen.current.level);
+        continue;
+      }
+      out.current.set(k, level);
+      b.fadeKey(k, Math.min(seen.current.level, fadedOpacity(level)));
+      going = true;
     }
     if (going) invalidate();
   });
@@ -337,7 +371,20 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
  * is in view. Moved, they are moved by what holds them: a set placed
  * elsewhere is another set.
  */
-export function WholeTexts2D({ texts, fadeIn = false, onDrawn, renderOrder }: { texts: readonly TextItem[]; fadeIn?: boolean; onDrawn?: (texts: readonly TextItem[]) => void; renderOrder?: number }) {
+export function WholeTexts2D({
+  texts,
+  fadeIn = false,
+  onDrawn,
+  renderOrder,
+  opacity,
+}: {
+  texts: readonly TextItem[];
+  fadeIn?: boolean;
+  onDrawn?: (texts: readonly TextItem[]) => void;
+  renderOrder?: number;
+  /** How opaque they are, read at each frame (Texts2D `opacity`). */
+  opacity?: { readonly current: number };
+}) {
   // (two sets, one shown and one being set - each set made anew, so that it waits in its own Suspense)
   const sets = useRef<{ at: [readonly TextItem[] | null, readonly TextItem[] | null]; front: 0 | 1; told: readonly TextItem[] | null }>({ at: [null, null], front: 0, told: null });
   const [, setShown] = useState(0);
@@ -369,7 +416,7 @@ export function WholeTexts2D({ texts, fadeIn = false, onDrawn, renderOrder }: { 
         return (
           <Suspense key={i} fallback={null}>
             <group visible={i === s.front}>
-              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} />
+              <Texts2D texts={items} fade={fadeIn && first.current} onDrawn={(t) => drawn(i, t)} renderOrder={renderOrder} opacity={opacity} />
             </group>
           </Suspense>
         );

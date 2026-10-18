@@ -11,7 +11,8 @@
  * halogen hangs on the atom before it; an oxygen or a sulfur is either a
  * double-bonded oxygen on the atom before it (the C=O of COMe, the S=O of
  * SO2Me) or the next atom of the chain (the O of CH2OH) - whichever makes
- * every atom's valence one it has, an =O tried first; any other element is
+ * every atom's valence one it has, an =O tried first, but never an O an H
+ * is written right after, whose H it is (the OH of SO2H); any other element is
  * the chain's next atom; what parentheses hold, with its count, hangs on
  * the atom before it (CH(CH3)2) - an O or an S alone in them an =O, as
  * one unbracketed may be (C(O)NMe2, C(O)OMe), a group alone in them as
@@ -21,12 +22,13 @@
 
 /** The valences each element may have in such a group: carbon four, sulfur two, four or six. */
 const VALENCES: Record<string, number[]> = {
-  H: [1], F: [1], Cl: [1], Br: [1], I: [1],
+  H: [1], D: [1], F: [1], Cl: [1], Br: [1], I: [1],
   O: [2], S: [2, 4, 6], Se: [2, 4, 6],
   N: [3], P: [3, 5], As: [3, 5], B: [3],
   C: [4], Si: [4], Ge: [4], Sn: [4],
 };
-const HALOGENS = new Set(["F", "Cl", "Br", "I"]);
+/** What hangs on the atom before it by one bond, an atom of its own: the halogens, and deuterium - D, written [2H] - wherever an H could stand (CD3, OD). */
+const HANGING = new Set(["F", "Cl", "Br", "I", "D"]);
 const OXO = new Set(["O", "S"]);
 
 /** A group's label, found at `i` in a text, longest first; and its SMILES, "*" first. */
@@ -124,15 +126,18 @@ function readOn(items: Item[], k: number, r: Read): Read | null {
     n.atoms[n.at].used += 1;
     return readOn(items, k + 1, n);
   }
-  if (HALOGENS.has(el)) {
+  if (HANGING.has(el)) {
     const n = copy(r);
     n.atoms[n.at].used += 1;
     n.atoms.push({ el, hs: 0, used: 1 });
     n.bonds.push({ a: n.at, b: n.atoms.length - 1, order: 1 });
     return readOn(items, k + 1, n);
   }
-  // an =O on the atom before - tried first - while it can take one
-  if (OXO.has(el) && cur.used + 2 <= Math.max(...VALENCES[cur.el])) {
+  // an =O on the atom before - tried first - while it can take one; never one an H is written right after, which is
+  // that O's own (the OH of SO2H, as of CO2H)
+  const next = items[k + 1];
+  const hAfter = next?.kind === "element" && next.el === "H";
+  if (OXO.has(el) && !hAfter && cur.used + 2 <= Math.max(...VALENCES[cur.el])) {
     const n = copy(r);
     n.atoms[n.at].used += 2;
     n.atoms.push({ el, hs: 0, used: 2 });
@@ -147,6 +152,34 @@ function readOn(items: Item[], k: number, r: Read): Read | null {
   n.atoms.push({ el, hs: 0, used: 1 });
   n.bonds.push({ a: n.at, b: n.atoms.length - 1, order: 1 });
   return readOn(items, k + 1, { ...n, at: n.atoms.length - 1 });
+}
+
+/**
+ * Oxygens with hydrogens written after them, as an acid's are (CO2H, SO3H,
+ * PO3H2): each H - or D - on an O of its own, the rest of them =O as before
+ * (P(=O)(OH)2), never the H on the atom they hang on. The first atom, the
+ * one bound, is left as it is.
+ */
+function acids(items: Item[]): Item[] {
+  const out: Item[] = [];
+  const isEl = (x: Item | undefined, ...els: string[]): x is Extract<Item, { kind: "element" }> => x?.kind === "element" && els.includes(x.el);
+  for (let k = 0; k < items.length; ) {
+    let o = k;
+    while (o > 0 && isEl(items[o], "O")) o++;
+    let h = o;
+    while (isEl(items[h], "H", "D")) h++;
+    const os = o - k;
+    const hs = h - o;
+    if (os && hs && hs <= os) {
+      for (let j = 0; j < os - hs; j++) out.push(items[k + j]);
+      for (let j = 0; j < hs; j++) out.push({ kind: "branch", items: [items[k], items[o + j]] });
+      k = h;
+      continue;
+    }
+    out.push(items[k]);
+    k++;
+  }
+  return out;
 }
 
 /** Whether an atom's valence, with `more` yet to come, is one it has. */
@@ -166,7 +199,7 @@ export function chainGroup(label: string, groups: GroupsAt): string | null {
   // (at least two atoms or groups besides the H: a lone element is read as an element is)
   if (items.filter((x) => !(x.kind === "element" && x.el === "H")).length < 2) return null;
   const start: Read = { atoms: [{ el: items[0].el, hs: 0, used: 1 }], bonds: [], groups: [], at: 0 };
-  const read = readOn(items, 1, start);
+  const read = readOn(acids(items), 1, start);
   if (!read || !read.atoms.every((_, i) => closed(read, i))) return null;
   return "*" + smilesOf(read, 0, -1);
 }
@@ -174,7 +207,7 @@ export function chainGroup(label: string, groups: GroupsAt): string | null {
 /** The SMILES of the chain from atom `i`, come to from `from`: bracket atoms with their H, groups as branches. */
 function smilesOf(r: Read, i: number, from: number): string {
   const a = r.atoms[i];
-  const me = `[${a.el}${a.hs ? `H${a.hs > 1 ? a.hs : ""}` : ""}]`;
+  const me = a.el === "D" ? "[2H]" : `[${a.el}${a.hs ? `H${a.hs > 1 ? a.hs : ""}` : ""}]`;
   const out: string[] = [];
   for (const g of r.groups) if (g.on === i) out.push(g.smiles.slice(1));
   for (const b of r.bonds) {

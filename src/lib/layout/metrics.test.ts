@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { layoutMetrics, ringIrregularity, scoreParts } from "./metrics";
+import { labelsCrowding, labelsOnVertices, layoutMetrics, ringIrregularity, scoreParts } from "./metrics";
 
 /** A regular polygon's atoms and bonds, bond length 1. */
 function polygon(k: number, cx = 0, cy = 0, turn = 0) {
@@ -72,6 +72,75 @@ describe("layoutMetrics", () => {
     });
     expect(m.crossings).toBe(1);
     expect(m.overlaps).toBeGreaterThanOrEqual(1);
+  });
+
+  it("counts a label on a bare vertex, half as much on the sheet, more the nearer", () => {
+    // an O 0.55 of a bond from the end of another bond, and 0.8 from it
+    const near = { x: [0, 1, 1.55, 2.55], y: [0, 0, 0, 0], edges: [[0, 1], [2, 3]] as [number, number][], labelled: [false, false, true, false] };
+    expect(layoutMetrics({ ...near, labelRoom: 0 }).crowdedLabels).toBe(0);
+    expect(layoutMetrics(near).crowdedLabels).toBeCloseTo(0.25, 6);
+    expect(layoutMetrics({ ...near, labelRoom: 1 }).crowdedLabels).toBeCloseTo(0.5, 6);
+    expect(layoutMetrics({ ...near, x: [0, 1, 1.8, 2.8], labelRoom: 1 }).crowdedLabels).toBe(0);
+    const found = labelsOnVertices(near.x, near.y, 1, near.labelled, () => false);
+    expect([...found.entries()]).toEqual([[2, { vertex: 1, by: expect.closeTo(0.5, 6) }]]);
+  });
+
+  it("counts two labels whose ink comes near, symbol on symbol or H on H, more the nearer", () => {
+    // two OH's on the ends of two bonds side by side, HO over HO, apart by
+    // `d` straight up: each H before its O (the bonds leave to the right)
+    const at = (d: number, inkRoom?: number) =>
+      layoutMetrics({
+        x: [0, 0.866, 0, 0.866],
+        y: [0, -0.5, d, d - 0.5],
+        edges: [
+          [0, 1],
+          [2, 3],
+        ],
+        elements: ["O", "C", "O", "C"],
+        hydrogens: [1, 3, 1, 3],
+        labelled: [true, false, true, false],
+        hydrogenRoom: 0,
+        inkRoom,
+      }).crowdedLabels;
+    // (half a bond of paper between their letters, or more, is clear)
+    expect(at(1.1)).toBe(0);
+    expect(at(0.85, 0)).toBe(0);
+    expect(at(0.85)).toBeGreaterThan(at(0.95));
+    expect(at(0.95)).toBeGreaterThan(0);
+    expect(at(0.85, 1)).toBeCloseTo(2 * at(0.85), 6);
+    // (under 0.8 of a bond apart they crowd by their atoms: counted once)
+    expect(at(0.7)).toBe(1);
+    const found = labelsCrowding([0, 0], [0, 0.85], 1, ["O", "O"], [1, 1], [true, true], [[], []], () => false);
+    expect(found).toEqual([{ a: 0, b: 1, by: expect.closeTo(0.5, 6) }]);
+  });
+
+  it("counts a label near a bare vertex and on one of its bonds once, as a clash", () => {
+    // a bare vertex at (0, 0) with a bond to the right, and an O 0.55 from
+    // it - 30 degrees up, over the bond, or 120 degrees round, clear of it
+    const at = (deg: number) => {
+      const r = (deg * Math.PI) / 180;
+      const ox = 0.55 * Math.cos(r);
+      const oy = 0.55 * Math.sin(r);
+      return layoutMetrics({ x: [0, 1, ox, ox], y: [0, 0, oy, oy + 1], edges: [[0, 1], [2, 3]], labelled: [false, false, true, false], elements: ["C", "C", "O", "C"] });
+    };
+    expect(at(30).clashes).toBe(1);
+    expect(at(30).crowdedLabels).toBe(0);
+    expect(at(120).clashes).toBe(0);
+    expect(at(120).crowdedLabels).toBeCloseTo(0.25, 6);
+  });
+
+  it("counts a label on a bond from a little further off than a bare vertex", () => {
+    // a bond from (0, 0) to (1, 0), and an atom 0.35 of a bond above its middle, bonded to one above it
+    const at = (labelled: boolean) =>
+      layoutMetrics({
+        x: [0, 1, 0.5, 0.5],
+        y: [0, 0, 0.35, 1.35],
+        edges: [[0, 1], [2, 3]],
+        labelled: [false, false, labelled, false],
+        elements: ["C", "C", labelled ? "H" : "C", "C"],
+      }).clashes;
+    expect(at(false)).toBe(0);
+    expect(at(true)).toBe(1);
   });
 
   it("takes a zigzag chain's angles as right, and a straight one's as wrong", () => {
@@ -310,6 +379,7 @@ describe("how a drawing sits", () => {
         hydrogens: [3, 2, 0, 1, 2, 3],
         labelled: [false, false, true, true, false, false],
         hydrogenRoom: 0,
+        labelRoom: 0,
       }).crowdedLabels;
     expect(at(Math.cos(Math.PI / 6), Math.sin(Math.PI / 6))).toBe(1);
     expect(at(0, -1)).toBe(0);
@@ -350,6 +420,22 @@ describe("how a drawing sits", () => {
     expect(at(0, 0)).toBe(1);
     // (not in a molecule with no metal, which is drawn well without it)
     expect(at(0, 0, "Si")).toBe(0);
+  });
+
+  it("counts a ligand of a metal drawn inside its chelate's ring, of any size up to eight, as an overlap", () => {
+    // a seven-membered chelate (0-6, the palladium at 0) with a chlorine (7)
+    // on the palladium: outside, then inside the ring
+    const h = polygon(7, 0, 0, Math.PI);
+    const at = (cx: number, cy: number) =>
+      layoutMetrics({
+        x: [...h.x, cx],
+        y: [...h.y, cy],
+        edges: [...h.edges, [0, 7]] as [number, number][],
+        elements: ["Pd", "P", "C", "C", "C", "C", "P", "Cl"],
+        labelled: [true, true, false, false, false, false, true, true],
+      }).overlaps;
+    expect(at(h.x[0] - 1.4, h.y[0])).toBe(0);
+    expect(at(0, 0)).toBe(1);
   });
 
   it("counts a name's letters running into an atom, read outward from a bond coming in from the right", () => {

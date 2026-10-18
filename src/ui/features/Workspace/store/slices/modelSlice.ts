@@ -26,6 +26,7 @@ import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { editAtTrueSize } from "../../utils/trueSize";
 import { style3dOf } from "../../style3d";
+import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
 
 type SetState = StoreApi<EditorState>["setState"];
@@ -142,8 +143,10 @@ export const createModelSlice = (
     excludeId: number | null = null,
   ): number | null => {
     let best: { id: number; d: number } | null = null;
+    // (a haptic bond's star is no atom to land on: chem/eta)
+    const stars = hapticStars(get().model);
     for (const a of get().model.atoms) {
-      if (excludeId != null && a.id === excludeId) continue;
+      if ((excludeId != null && a.id === excludeId) || stars.has(a.id)) continue;
       const d = Math.hypot(x - a.x, y - a.y);
       if (d <= tol && (!best || d < best.d)) best = { id: a.id, d };
     }
@@ -227,6 +230,13 @@ export const createModelSlice = (
     });
   },
 
+  setAtomNumbers: (of: Parameters<typeof ops.setAtomNumbers>[1], show: boolean) => {
+    doc.edit(show ? "show atom numbers" : "hide atom numbers", (d) => ops.setAtomNumbers(d, of, show));
+  },
+  setAtomNumberKind: (molecules: readonly number[], kind: Parameters<typeof ops.setAtomNumberKind>[2]) => {
+    doc.edit("atom numbers' kind", (d) => ops.setAtomNumberKind(d, molecules, kind));
+  },
+
   setAtomMap: (arrowId: number, map: ArrowAtomMap | null) => {
     doc.edit("atom map", (d) => ops.setAtomMap(d, arrowId, map));
   },
@@ -263,6 +273,10 @@ export const createModelSlice = (
 
   drawStrokeAt: (start: { x: number; y: number }, nodes: Parameters<typeof ops.addStroke>[2]) => {
     doc.edit("draw chain", (d) => ops.addStrokeAt(d, start, nodes));
+  },
+
+  bindRing: (metal: number, ring: readonly number[]) => {
+    doc.edit("bind ring", (d) => ops.bindRing(d, metal, ring));
   },
 
   drawStroke: (

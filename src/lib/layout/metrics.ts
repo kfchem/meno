@@ -69,6 +69,20 @@ export type Geometry = {
    */
   hydrogenInk?: boolean;
   /**
+   * What a label on a bare vertex it is not bonded to counts for, in
+   * crowdings (`labelsOnVertices`): half of one unless given. A layout sets
+   * its parts first, not counting it, and makes room for such a label
+   * last, with its H's, by moving bonds a little.
+   */
+  labelRoom?: number;
+  /**
+   * What two labels whose ink comes near each other count for, in
+   * crowdings (`labelsCrowding`): half of one unless given - over and above
+   * a pair under 0.8 of a bond apart, which counts one. A layout counts it
+   * as `labelRoom`.
+   */
+  inkRoom?: number;
+  /**
    * What a name's letters running into something count for (OTBS over an
    * atom), in crowdings: one unless given. A layout sets its parts first,
    * counting them lightly, and makes room for them last, with its H's.
@@ -229,6 +243,54 @@ export function scoreParts(m: Omit<LayoutMetrics, "score">): Record<keyof typeof
   return parts;
 }
 
+/**
+ * How near, in bond lengths, a labelled atom may lie to a bare vertex it is
+ * not bonded to before its letter crowds the bonds meeting there; half a
+ * bond is an overlap.
+ */
+export const LABEL_VERTEX = 0.6;
+
+/** What a label on a bare vertex, or two labels' ink near each other, counts for on the measure, in crowdings, unless given. */
+export const LABEL_ROOM = 0.5;
+
+/**
+ * Each label lying on a bare vertex: nearer than `LABEL_VERTEX`, its letter
+ * running into the bonds that meet there - vancomycin's acid C=O with its
+ * O on the corner of the benzene ring beside it, forskolin's 9-OH on its
+ * ketone's carbon. By label, the vertex nearest it and how far in, 0 to 1
+ * (1 at half a bond, an overlap). `apart` passes over a pair (bonded, or
+ * drawn over each other as a solid is seen). Given the bonds at each atom,
+ * a vertex is passed over where the label already lies on one of its
+ * bonds: that ink is a clash (`LABEL_ON_BOND`), counted once, there.
+ */
+export function labelsOnVertices(
+  x: readonly number[],
+  y: readonly number[],
+  L: number,
+  labelled: readonly boolean[],
+  apart: (a: number, b: number) => boolean,
+  neighbours?: readonly (readonly number[])[],
+): Map<number, { vertex: number; by: number }> {
+  const room = LABEL_VERTEX * L;
+  const into = (LABEL_VERTEX - 0.5) * L;
+  const out = new Map<number, { vertex: number; by: number }>();
+  for (let a = 0; a < x.length; a++) {
+    if (!labelled[a]) continue;
+    for (let b = 0; b < x.length; b++) {
+      if (labelled[b] || a === b) continue;
+      const dx = x[a] - x[b];
+      const dy = y[a] - y[b];
+      if (Math.abs(dx) >= room || Math.abs(dy) >= room) continue;
+      const d = Math.hypot(dx, dy);
+      if (d >= room || apart(a, b)) continue;
+      if (neighbours?.[b].some((c) => c !== a && pointToSegment(x[a], y[a], x[b], y[b], x[c], y[c]) < LABEL_ON_BOND * L)) continue;
+      const by = Math.min(1, (room - d) / into);
+      if (by > (out.get(a)?.by ?? 0)) out.set(a, { vertex: b, by });
+    }
+  }
+  return out;
+}
+
 const TAU = Math.PI * 2;
 const deg = (r: number) => (r * 180) / Math.PI;
 
@@ -239,6 +301,42 @@ function median(v: number[]): number {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
+
+/**
+ * Of a bridged system's cycles as small as its smallest set's rings, a
+ * smallest set: as many as its rings, shortest first, then the nearest
+ * regular, each kept where no sum of those kept gives it.
+ */
+function bestFitting(t: { own: readonly number[][]; alike: readonly number[][] }, x: readonly number[], y: readonly number[], bond: number): number[][] {
+  const bondOf = new Map<number, number>();
+  const n = x.length;
+  const vectorOf = (r: readonly number[]) => {
+    let v = 0n;
+    r.forEach((a, k) => {
+      const b = r[(k + 1) % r.length];
+      const key = a < b ? a * n + b : b * n + a;
+      if (!bondOf.has(key)) bondOf.set(key, bondOf.size);
+      v ^= 1n << BigInt(bondOf.get(key)!);
+    });
+    return v;
+  };
+  const ranked = t.alike.map((r) => ({ r, off: ringIrregularity(x, y, r, bond) })).sort((p, q) => p.r.length - q.r.length || p.off - q.off);
+  const basis: bigint[] = [];
+  const kept: number[][] = [];
+  for (const { r } of ranked) {
+    let v = vectorOf(r);
+    for (const b of basis) if ((v ^ b) < v) v ^= b;
+    if (!v) continue;
+    basis.push(v);
+    basis.sort((p, q) => (p > q ? -1 : p < q ? 1 : 0));
+    kept.push(r);
+    if (kept.length === t.own.length) break;
+  }
+  return kept;
+}
+
+/** How near a bond, in bond lengths, a label may lie before it is on it (a clash): a bare vertex, 0.3. */
+export const LABEL_ON_BOND = 0.4;
 
 /** How far a ring is from a regular polygon of its size, in bond lengths. */
 export function ringIrregularity(
@@ -276,15 +374,14 @@ export function ringIrregularity(
 
 
 /**
- * How far a label's ink reaches along `d` from its atom, in bond lengths, of
- * what lies in the path of a bond leaving that way: its symbol's first letter
- * centred on the atom, half a bond high, the rest after it, and its H where
- * the drawing sets it (hydrogenSpot), as inkReach reckons them. A charged
- * carbon, a bare vertex, reaches nowhere.
+ * A label's ink, from its atom in bond lengths (y up), as the drawing sets
+ * it: its symbol's first letter centred on the atom, half a bond high, the
+ * rest after it, and its H where the drawing puts it (hydrogenSpot), with
+ * its count. A charged carbon, a bare vertex, has none here.
  */
-function labelInk(el: string, hs: number, ways: readonly { x: number; y: number }[], d: { x: number; y: number }): number {
+function inkBoxes(el: string, hs: number, ways: readonly { x: number; y: number }[]): { x0: number; x1: number; y0: number; y1: number }[] {
   const symbol = el === "C" ? 0 : el.length;
-  if (!symbol) return 0;
+  if (!symbol) return [];
   const boxes = [{ x0: -0.25, x1: 0.25 + 0.4 * (symbol - 1), y0: -0.25, y1: 0.25 }];
   if (hs > 0) {
     const h = ways.length ? hydrogenSpot(ways) : { x: 0.5, y: 0 };
@@ -295,6 +392,79 @@ function labelInk(el: string, hs: number, ways: readonly { x: number; y: number 
         : { x0: h.x - 0.2, x1: h.x + 0.2 + count, y0: h.y - 0.25, y1: h.y + 0.25 },
     );
   }
+  return boxes;
+}
+
+/**
+ * How much paper, in bond lengths, two labels' ink wants between it before
+ * they read as crowded - one over the other (cortisol's two HO's a bond
+ * apart, one straight over the other), or side by side; and how little
+ * before they count as fully crowded.
+ */
+export const INK_GAP = 0.5;
+export const INK_TIGHT = 0.2;
+
+/**
+ * Each pair of labels, not bonded, whose ink - symbol on symbol, or H on
+ * H, where the drawing puts them (`inkBoxes`) - comes nearer than
+ * `INK_GAP`: by pair,
+ * how far in, 0 to 1 (1 at `INK_TIGHT`). Names (OTBS) are passed over:
+ * their letters are given room by themselves. `apart` passes over a pair
+ * (bonded, or drawn over each other as a solid is seen).
+ */
+export function labelsCrowding(
+  x: readonly number[],
+  y: readonly number[],
+  L: number,
+  elements: readonly string[],
+  hydrogens: readonly number[],
+  labelled: readonly boolean[],
+  neighbours: readonly (readonly number[])[],
+  apart: (a: number, b: number) => boolean,
+): { a: number; b: number; by: number }[] {
+  const reach = (1 + INK_GAP) * L;
+  const inks: ({ x0: number; x1: number; y0: number; y1: number }[] | null)[] = x.map((_, a) => {
+    if (!labelled[a] || isName(elements[a])) return null;
+    const ways = neighbours[a].map((b) => {
+      const d = Math.hypot(x[b] - x[a], y[b] - y[a]) || 1;
+      return { x: (x[b] - x[a]) / d, y: (y[b] - y[a]) / d };
+    });
+    const boxes = inkBoxes(elements[a], hydrogens[a] ?? 0, ways);
+    return boxes.length ? boxes.map((b) => ({ x0: x[a] + b.x0 * L, x1: x[a] + b.x1 * L, y0: y[a] + b.y0 * L, y1: y[a] + b.y1 * L })) : null;
+  });
+  const out: { a: number; b: number; by: number }[] = [];
+  for (let a = 0; a < x.length; a++) {
+    const ia = inks[a];
+    if (!ia) continue;
+    for (let b = a + 1; b < x.length; b++) {
+      const ib = inks[b];
+      if (!ib || Math.abs(x[a] - x[b]) > reach + L || Math.abs(y[a] - y[b]) > reach || apart(a, b)) continue;
+      // (symbol on symbol, H on H: an H on another's symbol is the H's own
+      // rule's, which leaves a sliver of paper enough one over the other)
+      let gap = Infinity;
+      for (const [i, p] of ia.entries()) {
+        for (const [j, q] of ib.entries()) {
+          if ((i === 0) !== (j === 0)) continue;
+          gap = Math.min(gap, Math.max(p.x0 - q.x1, q.x0 - p.x1, p.y0 - q.y1, q.y0 - p.y1));
+        }
+      }
+      if (gap >= INK_GAP * L) continue;
+      out.push({ a, b, by: Math.min(1, (INK_GAP * L - gap) / ((INK_GAP - INK_TIGHT) * L)) });
+    }
+  }
+  return out;
+}
+
+/**
+ * How far a label's ink reaches along `d` from its atom, in bond lengths, of
+ * what lies in the path of a bond leaving that way: its symbol's first letter
+ * centred on the atom, half a bond high, the rest after it, and its H where
+ * the drawing sets it (hydrogenSpot), as inkReach reckons them. A charged
+ * carbon, a bare vertex, reaches nowhere.
+ */
+function labelInk(el: string, hs: number, ways: readonly { x: number; y: number }[], d: { x: number; y: number }): number {
+  const boxes = inkBoxes(el, hs, ways);
+  if (!boxes.length) return 0;
   // (the band a line and a little paper either side of it take)
   const band = 0.1;
   const n = { x: -d.y, y: d.x };
@@ -380,6 +550,12 @@ type Structure = {
   orderOf: Map<number, number>;
   /** The rings of eight or fewer drawn flat. */
   small: number[][];
+  /**
+   * Each bridged system drawn flat with more than one smallest set of
+   * rings: its rings among `small`, and every cycle as small as one of
+   * them (`ringsAlike`) - its shapes read from the set that fits best.
+   */
+  tiedSets: { own: number[][]; alike: number[][] }[];
   inSmall: Set<number>;
   /** The rings of nine or more not run mostly through other rings. */
   macrocycles: number[][];
@@ -563,6 +739,7 @@ function readStructure(g: Geometry): Structure {
   // or more anywhere among rings fused to each other)
   const bridgedAt = new Set<number>();
   let alike: number[][] = [];
+  const tiedSets: Structure["tiedSets"] = [];
   {
     const system = rings.map((_, i) => i);
     const root = (i: number): number => (system[i] === i ? i : (system[i] = root(system[i])));
@@ -588,6 +765,12 @@ function readStructure(g: Geometry): Structure {
       const known = alikeRings.get(edges);
       alike = known ?? [...bridgedSystems].flatMap((s) => ringsAlike(rings.filter((r, i) => root(i) === s && r.length < 9), neighbours));
       if (!known) alikeRings.set(edges, alike);
+      for (const sys of bridgedSystems) {
+        const own = rings.filter((r, i) => root(i) === sys && r.length < 9);
+        const atoms = new Set(own.flat());
+        const cycles = alike.filter((c) => atoms.has(c[0]));
+        if (cycles.length > own.length && !cycles.some(inDepth)) tiedSets.push({ own, alike: cycles });
+      }
     }
   }
   const outsideOf = ringNeighbours.map((inside, a) => neighbours[a].filter((b) => !inside.includes(b)));
@@ -611,7 +794,11 @@ function readStructure(g: Geometry): Structure {
       ringsAt[a].every((r) => r.length >= 5 && r.length <= 8),
   );
   const complex = (g.elements ?? []).some((e) => isMetal(e));
-  const insideRings = complex ? small.filter((q) => q.length <= 6).map((ring) => ({ ring, system: systemOf.get(ring[0]) })) : [];
+  // (and a chelate's ring, closed at a metal, of any size drawn flat: a
+  // ligand of its metal drawn inside it is hidden there - Krische's
+  // catalyst's allyl inside its bisphosphine's seven)
+  const chelate = (q: readonly number[]) => q.some((a) => isMetal(g.elements?.[a] ?? ""));
+  const insideRings = complex ? small.filter((q) => q.length <= 6 || chelate(q)).map((ring) => ({ ring, system: systemOf.get(ring[0]) })) : [];
   const passedInside = Array.from({ length: n }, (_, p) => isH(p) || (!!persp && (!!persp[p] || neighbours[p].some((q) => persp[q]))));
   const main = live.length ? live.reduce((b, s) => (s.size > b.size ? s : b)) : null;
   const fusedMain = main
@@ -636,6 +823,7 @@ function readStructure(g: Geometry): Structure {
     neighbours,
     orderOf,
     small,
+    tiedSets,
     inSmall,
     macrocycles,
     ringBonds,
@@ -689,7 +877,6 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   const pair = (p: number, q: number) => (p < q ? p * n + q : q * n + p);
   const persp = g.perspective;
   const solid = (...atoms: number[]) => !!persp && atoms.every((a) => persp[a]);
-  const solid2 = (a: number, b: number) => !!persp && !!persp[a] && !!persp[b];
   // one bond in front of the other, where the drawing gives depth
   const z = g.depth;
   const passes = (a: number, b: number, c: number, d: number) => {
@@ -716,6 +903,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     neighbours,
     orderOf,
     small,
+    tiedSets,
     inSmall,
     macrocycles,
     ringBonds,
@@ -802,8 +990,15 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   }
   const angleError = angleCount ? angleSum / angleCount : 0;
 
-  const ringError = small.length
-    ? small.reduce((s, r) => s + ringIrregularity(x, y, r, L), 0) / small.length
+  // (a bridged system's rings as the smallest set that fits the drawing
+  // best, where it has more than one - which of them the rings were
+  // found as goes by the order of the atoms, and the same drawing reads
+  // the same either way: shortest first, then the most regular, each kept
+  // where it is no sum of those kept - quinuclidine drawn flat, its two
+  // regular hexagons, not the arc round its bridge)
+  const shaped = tiedSets.length ? [...small.filter((r) => !tiedSets.some((t) => t.own.includes(r))), ...tiedSets.flatMap((t) => bestFitting(t, x, y, L))] : small;
+  const ringError = shaped.length
+    ? shaped.reduce((s, r) => s + ringIrregularity(x, y, r, L), 0) / shaped.length
     : 0;
 
   // round a macrocycle: each atom that is in no smaller ring, its angle
@@ -841,6 +1036,22 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
         if (Math.hypot(x[a] - x[b], y[a] - y[b]) < 0.8 * L) crowdedLabels++;
       }
     }
+  }
+  // and a label on a bare vertex (`labelsOnVertices`), not on one of its
+  // bonds already - a clash, below
+  const labelRoom = g.labelRoom ?? LABEL_ROOM;
+  if (labelRoom > 0 && g.labelled) {
+    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null), neighbours);
+    for (const { by } of near.values()) crowdedLabels += labelRoom * by;
+  }
+  // and two labels whose ink, H's and all, comes near (`labelsCrowding`),
+  // not already a crowding by their atoms
+  const inkRoom = g.inkRoom ?? LABEL_ROOM;
+  if (inkRoom > 0 && g.labelled && g.elements) {
+    const near = labelsCrowding(x, y, L, g.elements, g.hydrogens ?? [], g.labelled, neighbours, (a, b) =>
+      bonded.has(pair(a, b)) || solid(a, b) || Math.hypot(x[a] - x[b], y[a] - y[b]) < 0.8 * L,
+    );
+    for (const { by } of near) crowdedLabels += inkRoom * by;
   }
   // and a label's H, where the drawing sets it, clear of every other
   // label, atom and bond: an OH's H is ink as much as its O. A quarter of
@@ -1740,6 +1951,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     if ((side(onA) === side(onB)) !== cis) wrongDoubles++;
   }
 
+  // (atoms of one solid drawn in perspective - a cage, a ring turned on
+  // its bond - may lie over each other's ink as the solid is seen; atoms
+  // of two such, two phenyls of PPh3 turned as a propeller's blades, are
+  // two things drawn one on the other, as anywhere else)
+  const oneSolid = (...atoms: number[]) => solid(...atoms) && atoms.every((a) => systemOf.get(a) === systemOf.get(atoms[0]));
   // (the atoms from left to right, to pass over pairs far apart across -
   // every pair, where a place is not a number)
   const sweep = L > 0 && x.every(Number.isFinite) && y.every(Number.isFinite);
@@ -1752,7 +1968,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const dx = x[a] - x[b];
       const dy = y[a] - y[b];
       if (dx * dx + dy * dy >= 0.25 * L * L) continue;
-      if (bonded.has(pair(a, b)) || solid2(a, b)) continue;
+      if (bonded.has(pair(a, b)) || oneSolid(a, b)) continue;
       overlaps++;
     }
   }
@@ -1818,21 +2034,24 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const [c, d] = edges[j];
       if (a === c || a === d || b === c || b === d) continue;
       if (!segmentsCross(x[a], y[a], x[b], y[b], x[c], y[c], x[d], y[d])) continue;
-      if (solid(a, b, c, d) || passes(a, b, c, d)) continue;
+      if (oneSolid(a, b, c, d) || passes(a, b, c, d)) continue;
       crossings++;
     }
   }
 
+  // (a label - an atom's letters, a wedge's H - on a bond a little further
+  // off than a bare vertex: its letter is ink half a bond high)
   let clashes = 0;
-  const near = 0.3 * L;
+  const reach = (g.labelled ? LABEL_ON_BOND : 0.3) * L;
   for (let p = 0; p < n; p++) {
     const px = x[p];
     const py = y[p];
+    const near = (g.labelled?.[p] ? LABEL_ON_BOND : 0.3) * L;
     // (the first bond whose box can reach the atom, with a bond's length to spare)
     let lo = 0;
     for (let hi = sweep ? E : 0; lo < hi; ) {
       const mid = (lo + hi) >> 1;
-      if (lox[bondsByX[mid]] < px - near - widest - L) lo = mid + 1;
+      if (lox[bondsByX[mid]] < px - reach - widest - L) lo = mid + 1;
       else hi = mid;
     }
     for (let s = lo; s < E; s++) {
@@ -1842,7 +2061,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       const [a, b] = edges[e];
       if (p === a || p === b) continue;
       if (pointToSegment(px, py, x[a], y[a], x[b], y[b]) >= near) continue;
-      if (solid(p, a, b)) continue;
+      if (oneSolid(p, a, b)) continue;
       clashes++;
     }
   }

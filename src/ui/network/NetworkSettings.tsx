@@ -38,7 +38,7 @@ export default function NetworkSettings() {
       <div className="rounded-lg border border-gh-line bg-white px-4 py-3 flex items-start gap-4">
         <div className="flex-1">
           <div className="text-sm text-gh-black">Work offline</div>
-          <p className="text-xs text-gh-gray mt-0.5">
+          <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
             Nothing leaves this computer: a download Meno would make is refused,
             and so is anything the Python you run reaches for. Structures, files
             and everything else keep working.
@@ -98,7 +98,7 @@ export default function NetworkSettings() {
         <h3 className="text-xs font-semibold uppercase tracking-wider text-gh-gray">
           Connections since Meno started
         </h3>
-        <p className="mt-1 text-xs text-gh-gray">
+        <p className="mt-1 text-xs text-gh-gray max-w-2xl">
           The whole record, from every session, is kept in network-log.jsonl in
           Meno's data folder.
         </p>

@@ -11,6 +11,7 @@ import { pluginClient } from "../../../../../lib/calc/workers";
 import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
+import { stopWorker } from "../../../../../lib/plugins/process";
 import { pluginWorker } from "../../../../../lib/roles/worker";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
@@ -24,9 +25,9 @@ import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { energiesBy, keepRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoInTurns } from "../../workflow/meno";
-import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D } from "../types";
+import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, finishEntry } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
@@ -146,6 +147,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
   /** Meno's steps working in turns asked to stop: given up at their next turn. */
   const menoStops = new Set<number>();
+  /** How to stop at once a step worked in a plugin's worker as Meno's are (a conformer search on structures drawn): its worker stopped. */
+  const menoKills = new Map<number, () => void>();
 
   /**
    * Meno's Duplicates, worked out in turns that let the page go on - a
@@ -326,11 +329,43 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * *Kinds of step*).
    */
   async function searchDrawn(id: number, plugin: PythonPlugin, at: number): Promise<void> {
+    // (working already: Run pressed again meanwhile starts nothing)
+    if (get().menoWorking[id]) return;
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
     const input = inputOf(d, id);
     if (!input) return void fail(id, "Nothing comes into it", at, key);
+    // (working, as Meno's steps are said to be - how many structures it has been through - and stopped as they are: its worker stopped, started afresh when next asked)
+    menoStops.delete(id);
+    const working = (patch: { done: number } | null) =>
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        if (patch) rest[id] = { since: at, total: input.structures.length, ...patch };
+        else delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    working({ done: 0 });
+    menoKills.set(id, () => void stopWorker(plugin.id, `${plugin.name} was stopped with the step it worked for`));
+    try {
+      await searchEach(id, plugin, at, key, input, step, working);
+    } finally {
+      working(null);
+      menoStops.delete(id);
+      menoKills.delete(id);
+    }
+  }
+
+  async function searchEach(
+    id: number,
+    plugin: PythonPlugin,
+    at: number,
+    key: string,
+    input: NonNullable<ReturnType<typeof inputOf>>,
+    step: WorkflowStep,
+    working: (patch: { done: number }) => void,
+  ): Promise<void> {
+    const d = doc.getState();
     const options = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const worked: Worked[] = [];
     let compounds = 0;
@@ -339,12 +374,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       let chem = await pluginWorker(plugin);
       for (const [place, atoms] of input.structures.entries()) {
+        if (menoStops.has(id)) break;
+        working({ done: place });
         const block = blocksOf(d.model, atoms)[0];
         if (!block) continue;
         let made;
         try {
           made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, MAKE_3D_MS)).isomers[0];
         } catch {
+          if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
           failed.push(place + 1);
           // (its worker may have gone with it - held past its time, or stopped: the next is asked of the one running now, started afresh where need be)
@@ -367,13 +405,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             bonds: m.bonds,
             xyz: frameXyz(m, f),
             ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
-            ...(f === 0 ? { calc, keep: { drawnFrom: m.drawnFrom, drawnAs: m.drawnAs, ...(m.stereo ? { stereo: m.stereo } : {}), ...(m.made ? { made: m.made } : {}) } } : {}),
+            ...(f === 0 ? { calc, keep: keptOf(m) } : {}),
           });
         }
         compounds++;
       }
     } catch (e) {
-      return void fail(id, message(e), at, key);
+      if (!menoStops.has(id)) return void fail(id, message(e), at, key);
+    }
+    // (stopped: nothing put in, and the step says so, as Meno's say it)
+    if (menoStops.has(id)) {
+      const still = stepOf(doc.getState(), id);
+      if (!still) return;
+      const took = Date.now() - at;
+      const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
+      return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
     if (!worked.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
     const took = Date.now() - at;
@@ -958,11 +1004,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     },
     stopStep: (id: number) => {
       if (get().menoWorking[id]) menoStops.add(id);
+      menoKills.get(id)?.();
       for (const j of stepOf(doc.getState(), id)?.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },
     stopAll: () => {
       for (const id of Object.keys(get().menoWorking)) menoStops.add(Number(id));
+      menoKills.forEach((kill) => kill());
       for (const s of doc.getState().steps ?? []) for (const j of s.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },

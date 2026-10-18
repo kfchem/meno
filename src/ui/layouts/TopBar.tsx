@@ -1,9 +1,12 @@
-import { ArrowDownTrayIcon, PlusIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { PlusIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
+import { motion } from "motion/react";
 import type { MouseEvent } from "react";
 import { TabKind } from "../../lib/core";
 import { IS_MAC, shortcutLabel } from "../../lib/doc/shortcuts";
 import OfflineToggle from "../network/OfflineToggle";
+import { DURATION, EASE } from "../theme/motion";
+import SaveIcon from "./SaveIcon";
 import { TabStrip, type TabMeta } from "./Tabs";
 import WindowButtons, { SystemButtonsRoom } from "./WindowButtons";
 
@@ -26,8 +29,10 @@ const stop = (e: MouseEvent) => e.stopPropagation();
 
 /**
  * The window's title bar, drawn by Meno: the tabs on the line that runs
- * under them, "+" for a new workspace, online or offline, Save - the tab
- * in front, where it is a workspace - Settings, and the window's buttons -
+ * under them, "+" for a new workspace right after the last of them (going
+ * along as they come and go), and at the right, evenly spaced, online or
+ * offline, Save - the tab in front, where it is a workspace - Settings, and
+ * the window's buttons -
  * on a Mac the system's own, at the left, on a window with the system's
  * rounded corners and shadow (tauri.macos.conf.json); elsewhere Meno's, at
  * the right. Dragged by any of it that is not a button, it moves the
@@ -44,26 +49,33 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
       {mac && <SystemButtonsRoom />}
       <div className="h-px bg-transparent border-t border-gh-line absolute bottom-0 right-0 left-0" />
 
-      <TabStrip
-        tabOrder={tabOrder}
-        tabsById={tabsById}
-        activeId={activeId}
-        reorder={reorder}
-        select={select}
-        close={close}
-      />
+      {/* The tabs, "+" right after the last, and the rest of the bar to drag the window by. */}
+      <div data-tauri-drag-region className="flex-1 min-w-0 h-full flex items-stretch">
+        <TabStrip
+          tabOrder={tabOrder}
+          tabsById={tabsById}
+          activeId={activeId}
+          reorder={reorder}
+          select={select}
+          close={close}
+        />
+        <div data-tauri-drag-region className="shrink-0 h-full flex items-center pr-1">
+          <motion.button
+            layout="position"
+            transition={{ layout: { duration: DURATION.base, ease: EASE } }}
+            aria-label="New workspace"
+            title="New workspace"
+            onClick={add}
+            onMouseDown={stop}
+            className="h-7 w-7 rounded-md flex items-center justify-center text-gh-gray transition-colors duration-150 ease-meno hover:bg-gray-200 hover:text-gh-black"
+          >
+            <PlusIcon className="h-4 w-4" />
+          </motion.button>
+        </div>
+        <div data-tauri-drag-region className="flex-1" />
+      </div>
 
       <div className={clsx("h-full flex items-center gap-1", mac && "pr-2")}>
-        <button
-          aria-label="New workspace"
-          title="New workspace"
-          onClick={add}
-          onMouseDown={stop}
-          className="h-7 px-2 rounded-md border border-gh-line bg-white transition-colors duration-150 ease-meno hover:bg-gray-100"
-        >
-          <PlusIcon className="h-3 w-3" />
-        </button>
-
         <OfflineToggle />
         <button
           aria-label="Save"
@@ -72,9 +84,9 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
           disabled={!save}
           onMouseDown={stop}
           onClick={save}
-          className="h-7 w-7 ml-1 rounded-md flex items-center justify-center text-gh-gray transition-[color,background-color,opacity] duration-150 ease-meno hover:bg-gray-200 hover:text-gh-black disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gh-gray"
+          className="h-7 w-7 rounded-md flex items-center justify-center text-gh-gray transition-[color,background-color,opacity] duration-150 ease-meno hover:bg-gray-200 hover:text-gh-black disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-gh-gray"
         >
-          <ArrowDownTrayIcon className="h-4.5 w-4.5" />
+          <SaveIcon className="h-4.5 w-4.5" />
         </button>
         <button
           aria-label="Settings"

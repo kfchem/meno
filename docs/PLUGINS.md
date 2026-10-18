@@ -165,7 +165,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `xyzEnergies` | list of `{id, pattern, unit?}` | How the program writes a frame's energy on an XYZ file's comment line, from its documentation: `pattern` a regular expression (case-insensitive) with one capture group holding the number; `unit` its number's - `hartree` (the default), `eV`, `kcal/mol` or `kJ/mol` - which Meno converts to hartrees. Meno reads a frame's energy only by the patterns of the plugins added (docs/FILE-IO.md); where two find different numbers on a line, none. |
-| `roles` | list of `{role, programs?, options?, looks?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it makes (`looks`: each declared in full - *Looks*, below). |
+| `roles` | list of `{role, programs?, options?, looks?, motions?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
 | `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
@@ -448,9 +448,21 @@ A render plugin declares its looks in its role's `looks`, each as an object; Men
 
 The options that adjust a look are the role's own, each shown `when` its look is chosen (`when: {id: "look", in: [...]}`). The card offers the canvas's look and then those the added render plugins declare, in their order. A plugin that adds a look changes no line of core.
 
+## Motions
+
+A render plugin declares the motions it makes of a film in its role's `motions`, each as an object; Meno keeps no list of them (docs/RENDER.md, *Motions a renderer makes*):
+
+| Field | Meaning |
+|---|---|
+| `id` | The motion's id: lowercase letters, digits and hyphens; none of Meno's own (`turn`, `frames`, `vibration`). |
+| `label` | What the card's *Moving* calls it. |
+| `description` | A short sentence saying what it is. |
+
+The card offers Meno's own motions the molecules can make, then those the added render plugins declare, in their order. A film of a declared motion is written still, the molecules' atoms and bonds in the scene's extras, and the entry says the motion (`motion`). The options that adjust a motion are the role's own, each shown `when` its motion is chosen (`when: {id: "motion", in: [...]}`) - Once or Loop among them. A plugin that adds a motion changes no line of core.
+
 ## The boundary, kept by a test
 
-Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it there. `src/lib/plugins/boundary.test.ts` keeps this: it reads the manifest of every bundled plugin and collects what they declare - plugin ids, programs and what they provide, looks, kinds of step, kinds of file read and written - and fails on any string literal equal to one of them in core's source (`src/` and `src-tauri/src`, without tests). Comments may say anything. The words core legitimately owns are in the test's `ALLOWED` list, each with why (the kinds of step Meno defines, the materials of its scene file, an element's name); a new entry is a decision, made in a review.
+Core knows no program and no plugin by name: what a plugin makes, reads or does it says in its manifest, and Meno learns it there. `src/lib/plugins/boundary.test.ts` keeps this: it reads the manifest of every bundled plugin and collects what they declare - plugin ids, programs and what they provide, looks, motions, kinds of step, kinds of file read and written - and fails on any string literal equal to one of them in core's source (`src/` and `src-tauri/src`, without tests). Comments may say anything. The words core legitimately owns are in the test's `ALLOWED` list, each with why (the kinds of step Meno defines, the materials of its scene file, an element's name); a new entry is a decision, made in a review.
 
 ## When plugins run
 
@@ -493,7 +505,13 @@ fills.
   (`lib/plugins/queue.ts`). A request asked after another that is still
   within its own time stops nothing: the worker is busy with the one
   before it, such as a picture plugin loading its model for its first
-  picture, which has five minutes. What else was waiting on the stopped
+  picture, which has five minutes. A picture after that, the model loaded,
+  has a minute and a half: one is read in seconds, the slowest in about
+  half a minute, and one that takes longer is not going to end. The part
+  that asked says *Reading the picture took too long, so nothing was read
+  from it*, and the next picture starts the worker afresh, with the five
+  minutes again for its model (`readByPlugin` in
+  `ui/features/Workspace/utils/figures.ts`). What else was waiting on the stopped
   worker fails with *... was started again: it did not finish what it was
   asked before in time*, which the part that asked shows as its own error
   (the formula banner, a file's reading, a step's log).
@@ -712,9 +730,13 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   of file, who reads it, who else adds to it, and who writes it. Meno's
   own parts show there as "Meno".
 - **The other roles are chosen where they are used:**
-  - in *Chemistry*, who parses SMILES, checks a structure and assigns R/S;
-  - in *Molecules in 3D*, who makes a structure in 3D and its conformers,
-    and by what method;
+  - in *Chemistry* - what is done on a structure drawn, at once, and who
+    does it (the maintainer, 2026-10-17) - who parses SMILES, checks a
+    structure and assigns R/S, and, on a card of their own, *Molecules in
+    3D*, who makes a structure in 3D and its conformers, and by what
+    method, its stereoisomers, a formula drawn from it, and its renders.
+    (*Molecules in 3D* itself is how they look and turn; a workflow step's
+    defaults are in *Calculations*);
   - in a workflow step, who runs it, defaulting to the choice in Settings.
 - **A choice taken away gives way** (the maintainer, 2026-10-12): when the
   plugin chosen for a role is taken away and another plugin that fills it

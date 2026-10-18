@@ -27,6 +27,8 @@ const easeOutCubic = (u: number) => 1 - Math.pow(1 - u, 3);
  */
 export default function AtomsHoverRings2D() {
   const hovered = useEditor((s) => s.hovered);
+  // (none behind a label being written: its letters stand on the page alone - docs/EDITOR-2D.md, *Labels typed in place*)
+  const writing = useEditor((s) => (s.labelEdit.active ? s.labelEdit.atomId : null));
   const drawn = useDrawnLayout();
   const invalidate = useThree((s) => s.invalidate);
   // each ring: how far in it is (0 out, 1 in), and where its atom was last
@@ -45,7 +47,7 @@ export default function AtomsHoverRings2D() {
       r.y = a.y;
     }
   }
-  const id = hovered.atomId;
+  const id = hovered.atomId !== writing ? hovered.atomId : null;
   if (id != null && !rings.current.has(id)) {
     const a = at.get(id);
     if (a) rings.current.set(id, { u: 0, x: a.x, y: a.y });
@@ -54,8 +56,10 @@ export default function AtomsHoverRings2D() {
   useFrame((_, dt) => {
     let moving = false;
     for (const [k, r] of rings.current) {
-      const inward = k === hovered.atomId;
-      const u = Math.min(1, Math.max(0, r.u + (inward ? dt / DUR_IN : -dt / DUR_OUT)));
+      const inward = k === id;
+      // (a frame slow to come - the canvas busy, a label begun - taking it no further than a 30th of a second would)
+      const d = Math.min(dt, 1 / 30);
+      const u = Math.min(1, Math.max(0, r.u + (inward ? d / DUR_IN : -d / DUR_OUT)));
       if (u !== r.u) {
         r.u = u;
         moving = true;

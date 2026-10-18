@@ -89,28 +89,28 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         <div className="text-sm text-gh-black">
           {p.name} <span className="text-gh-gray">{p.version}</span>
         </div>
-        {p.uses.length > 0 && <p className="text-xs text-gh-gray mt-0.5">Uses {p.uses.map((u) => `${u.name} ${u.version}`).join(", ")}</p>}
-        <p className="text-xs text-gh-gray mt-0.5">{p.description}</p>
+        {p.uses.length > 0 && <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">Uses {p.uses.map((u) => `${u.name} ${u.version}`).join(", ")}</p>}
+        <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">{p.description}</p>
         {runs(p) && (
           <>
-            {p.reads.length > 0 && <p className="text-xs text-gh-gray mt-1">Reads {p.reads.map(named).join(", ")}.</p>}
-            {p.writes.length > 0 && <p className="text-xs text-gh-gray mt-1">Writes {p.writes.map((w) => `${w.name} (${w.extensions.join(", ")})`).join(", ")}.</p>}
-            {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
-            {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1">In a workflow: {stepNames(p).join(", ")}.</p>}
+            {p.reads.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Reads {p.reads.map(named).join(", ")}.</p>}
+            {p.writes.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">Writes {p.writes.map((w) => `${w.name} (${w.extensions.join(", ")})`).join(", ")}.</p>}
+            {p.roles.length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">{p.roles.map((r) => ROLES[r].name).join("; ")}.</p>}
+            {stepNames(p).length > 0 && <p className="text-xs text-gh-gray mt-1 max-w-2xl">In a workflow: {stepNames(p).join(", ")}.</p>}
             {p.installed.map((d) => (
               <Installed key={d.name} plugin={p.id} decl={d} />
             ))}
           </>
         )}
         {p.suggests.length > 0 && (
-          <p className="text-xs text-gh-gray mt-1">Suggests {p.suggests.map((s) => anyPluginById(s.plugin)?.name ?? s.plugin).join(", ")}.</p>
+          <p className="text-xs text-gh-gray mt-1 max-w-2xl">Suggests {p.suggests.map((s) => anyPluginById(s.plugin)?.name ?? s.plugin).join(", ")}.</p>
         )}
-        <p className="text-xs text-gh-gray mt-1">
+        <p className="text-xs text-gh-gray mt-1 max-w-2xl">
           {p.licence} · {p.homepage.replace(/^https?:\/\//, "")}
           {!runs(p) && " · Comes with Meno: nothing to download."}
         </p>
         {refused.length > 0 && (
-          <p className="text-xs text-gh-gray mt-1">
+          <p className="text-xs text-gh-gray mt-1 max-w-2xl">
             Not taken: {refused.map((r) => `“${r.mark}”`).join(", ")} - what a file of Meno's own holds too, so it cannot tell {p.name}'s kinds.
           </p>
         )}

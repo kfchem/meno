@@ -79,7 +79,7 @@ export default function StackChip3D({
         about={shown.calc ? calcLine(shown.calc) : undefined}
         results={stackedResults(shown, frame)}
         unread={shown.calc?.unread}
-        made={shown.made?.how}
+        made={shown.made}
       />
     </group>
   );

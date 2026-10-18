@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, LINE_LEAST_PX, lineWidth, type Style3D } from "../../../lib/chem/style3d";
 import { solidsBounds } from "../../../lib/chem/layout2d";
 import { EYE_HEIGHT } from "./utils/page";
-import { bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
+import { withCentres, bondLines, bondsAt, frameOf, heightOf, linesOf, lookOf, magnifiedOf, pictureMarks, solidOf, WORLD_PER_ANGSTROM } from "./utils/molecule3d";
 import { outlineMaterial } from "./utils/outlineMaterial";
 import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "./utils/measure3d";
 import { COLORS } from "../../theme/colors";
@@ -11,6 +11,7 @@ import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
 import { backToFront } from "./utils/backToFront";
 import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
+import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersShownOn } from "./utils/atomNumbers";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
 import { watchShaderErrors } from "./utils/menoShader";
@@ -196,7 +197,8 @@ export function rendered3d(
       // its atoms, one ball each (none, for one its look leaves out), and
       // its bonds - those the frame shown has, where they go frame by frame -
       // their hollows shaded as the canvas shades them
-      const bonds = drawn.atoms !== "space" ? bondsAt(molecule, frameOf(solid, m.frame)).filter((b) => !left[b.a1] && !left[b.a2]) : [];
+      // (and its sticks to ring centres: withCentres)
+      const bonds = drawn.atoms !== "space" ? withCentres(molecule, bondsAt(molecule, frameOf(solid, m.frame))).filter((b) => !left[b.a1] && !left[b.a2]) : [];
       const lines = bondLines({ ...molecule, bonds }, places, bondRadiusOf(drawn) * WORLD_PER_ANGSTROM, solid.ends[look], drawn.multipleBonds === "one");
       const occlusion = drawn.occlusion > 0 ? occlusionNow(places, radii, packLines(lines)) : null;
       const finish = { roughness: drawn.roughness, metalness: drawn.metalness };
@@ -225,6 +227,31 @@ export function rendered3d(
       }
       atomsMesh.castShadow = atomsMesh.receiveShadow = true;
       group.add(atomsMesh);
+      // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above)
+      if (m.atomNumbers) {
+        const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
+        const on = numbersShownOn(molecule);
+        const digits = Uint8Array.from(nums, (v, i) => (on[i] ? digitsOf(v) : 0));
+        group.updateMatrixWorld(true);
+        const centres = new Float32Array(3 * m.atoms.length);
+        const v = new THREE.Vector3();
+        const rs = Float32Array.from(m.atoms, (_, i) => (left[i] ? 0 : radii[i]));
+        m.atoms.forEach((_, i) => {
+          v.set(places[3 * i], places[3 * i + 1], places[3 * i + 2]).applyMatrix4(group.matrixWorld);
+          centres.set([v.x, v.y, v.z], 3 * i);
+        });
+        const heights = Float32Array.from(m.atoms, (_, i) => numberHeight(digits[i], rs[i] / WORLD_PER_ANGSTROM));
+        const at = new Float32Array(3 * m.atoms.length);
+        // (where they stand as the picture shows them: magnified as the molecule is - utils/molecule3d `magnifiedOf`)
+        const seen = rs.map((r) => r * mag);
+        numberPlaces(centres, seen, heights, digits, at, lines.length ? { bonds, r: bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * mag } : null);
+        ball.setAttribute("ballNumber", new THREE.InstancedBufferAttribute(nums, 1));
+        ball.setAttribute("ballNumberPlace", new THREE.InstancedBufferAttribute(Float32Array.from({ length: 4 * m.atoms.length }, (_, k) => (k % 4 === 3 ? on[k >> 2] : at[3 * (k >> 2) + (k % 4)])), 4));
+        ao.numbers.shown.value = 1;
+        ao.numbers.pxPer.value = pxPerWorld;
+        ao.numbers.least.value = NUMBER_LEAST_PX * cssPx;
+        ao.numbers.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
+      }
       // the style's line round every ball and stick, and its depth fade (utils/outlineMaterial, occlusionMaterial)
       const fades = [ao.fade];
       const lined: { of: THREE.InstancedMesh; geometry: THREE.BufferGeometry }[] = [];

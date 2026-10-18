@@ -113,7 +113,7 @@ atoms at its ends, as a dative bond does not: an ammine stays NH3.
 | An alias (A line) | The atom is drawn as - and taken to be - its alias, its letters' case as written: CO is carbon monoxide, Co cobalt, HO a hydroxy. One in small letters only is read as an element's symbol where it is one (co is Co), as a label typed so is. | |
 | A contracted abbreviation (SUP not expanded, or the old G line) | One atom, labelled, where the group's first attachment is, holding the atoms and bonds it stands for (`abbrev`); its bonds out leave from it. *Expand abbreviation*, in its menu, draws them out, turned with its bond. | |
 | An expanded abbreviation | Its atoms. | |
-| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3. |
+| Any other label - an abbreviation, a class (Nu, Alk), a reserved type (A, Q, X, M, R, *) | Its counts subscript (CO2Me), a sign at its end its charge; read outward from its bond when that comes in from the right - or from its bonds, all of them from the right and none to the left, as a ring's atom on its left side has them: TBSO, MeO2C, BocHN, F3C - a symbol for a kind of group (PG, LG, EWG, EDG, Nu, E, Hal, Het: docs/EDITOR-2D.md) as the name it is, PGO, and a word read as nothing else whole, a capital and its small letters, AlkO. No hydrogens of its own. | GR-2.3. |
 | The prefixes n-, s-, t-, sec-, tert-, i- (hyphenated) and o-, m-, p- | In italics: *t*-Bu, *s*-Bu, *p*-Ts; iPr and iBu upright, unhyphenated. The canvas leans the label's own letters; an SVG or EMF asks for the typeface's italic. | Table II sets them so, and prefers it (upright is acceptable); the names have them so (isopropyl, *tert*-butyl). |
 | A substituted aryl group named ring last (2,6-diMeBz, 4-MeOC6H4) | As written on either side of its bond - it is not read outward - the ring's group, or a formula's C6, at the bond when that comes in from the right. Positions are no counts: not subscript. | Meno's own: such labels name the ring last. |
 | A valence the file sets (V2000's vvv, V3000's VAL) | Hydrogens counted to it; a carbon of other than four shows its label, CH2. | |
@@ -209,10 +209,17 @@ What is put together from them is read by rule, not listed:
   group or a halogen hangs on the atom before it; an O or an S is either
   =O on the atom before it or the chain's next atom - =O tried first,
   whichever leaves every atom at a valence it has (C 4, N 3, O 2; S 2, 4
-  or 6; P 3 or 5); what parentheses hold, with its count, hangs on the
+  or 6; P 3 or 5), but never an O that an H is written right after: the H
+  is that O's, as in CO2H, so SO2H is a sulfinic acid, S(=O)OH, not
+  S(=O)2H; what parentheses hold, with its count, hangs on the
   atom before them - an O or an S alone in them an =O, as one unbracketed
   may be (C(O)NMe2, C(O)OMe, C(O)NiPr2), a group alone in them as it is
-  unbracketed (N(iPr)2). CO and CH2 are none, nor anything with a charge; Cp is
+  unbracketed (N(iPr)2). O's with H's written after them are an acid's:
+  each H on an O of its own, the rest =O (CO2H, SO3H, SO2H S(=O)OH, PO3H2
+  P(=O)(OH)2), never on the atom they hang on (the maintainer,
+  2026-10-17). D is deuterium wherever an H could stand, an atom of its
+  own written as hydrogen of mass 2 (CD3, OD, ND2, OCD3; a file gives it
+  `M  ISO`). CO and CH2 are none, nor anything with a charge; Cp is
   in none. A reagent this reads as the same molecule leaves the
   dictionary: (COCl)2, oxalyl chloride, is read so now.
 
@@ -314,7 +321,10 @@ Read by rule, besides, as whole molecules:
   elements with their counts, it is a molecule where one atom of valence
   two or more has as many groups and univalent atoms as its valence - Et3N,
   i-Pr2NEt, MeMgBr, Bu3SnH, CH2Cl2, MeOH, Ac2O, (Boc)2O - or two univalent
-  parts are joined - n-BuLi, TMSCl, TBSOTf, Fmoc-OSu, HCl. Sodium and
+  parts are joined - n-BuLi, TMSCl, TBSOTf, Fmoc-OSu, HCl. D in it is
+  deuterium, an atom of hydrogen of mass 2, wherever an H could stand
+  (CDCl3, CD2Cl2, D2O, NaBD4), its molecular formula written with D
+  after H (CDCl3). Sodium and
   potassium are bound as ions, lithium so but to carbon: NaOMe is Na⁺ and
   MeO⁻, NaN3 Na⁺ and azide, n-BuLi keeps its C-Li bond. A label with a bond
   left free (OMe, NMe2, CH2Br) is no such formula, and stays a group;
@@ -396,7 +406,13 @@ ester as a group does.
 
 A label known any of these ways can be expanded, is counted and written out
 whole, and is what RDKit is asked about; one not known is text. Ar is
-argon's symbol as well as aryl's (GR-9.2): typed, it is argon. The groups
+argon's symbol as well as aryl's (GR-9.2): typed alone, it is argon; drawn
+with a bond, which argon never has, it is aryl's - written as a label, a
+star atom with its alias, as is any element that forms no bonds (He, Ne)
+drawn with one. Y is yttrium's symbol and a variable's (the maintainer,
+2026-10-17): alone, or with several bonds, it is yttrium; with one bond, in
+a substituent's place, it stands for a group as X and Z do, and a file is
+written with it as a label, a star atom with its alias. The groups
 named as an element is - Ac (acetyl), Pr (propyl), Ts (tosyl), Fm
 (fluorenylmethyl), At (HOAt's) - are the groups (the maintainer,
 2026-10-10): typed, or written by Clean-up, the atom holds the group
@@ -450,6 +466,15 @@ centres go in their fields. Enhanced stereo is written as V3000 collections
 An abbreviation is written out - the atoms a file gave it, or the
 dictionary's, laid out by Meno's own engine on from its bond - with an
 abbreviation Sgroup labelling them, so that it reads back contracted. A
+label on a metal that names a ligand bound in a complex - Cp, Cp*, allyl,
+cod, CO - is written out as bound (lib/chem/boundLigand): a pi system
+through all its atoms, by a multi-centre bond (ENDPTS, ATTACH=ALL) to a
+star at its centre, one for each of its pi systems (cod's two C=C); a
+neutral donor by a coordination bond. Read back, its Sgroup contracts to
+the label again, on its metal by one bond as it was drawn, the pi systems
+kept with it (the bonds out to its stars, `haptic`), so that it is written
+and made in 3D as before: a ferrocene drawn with Cp labels, saved and
+opened, is still a sandwich. A
 label the dictionary does not know is a star atom with an alias (V2000), or
 an abbreviation Sgroup of its one star atom (V3000, which has no alias). An
 Rgroup, an atom list, a valence and a query hydrogen count go in their

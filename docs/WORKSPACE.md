@@ -427,6 +427,14 @@ Taken on 2026-10-07:
   - since 2026-10-09 it lies over the canvas's right side, the view
     following it, and the PDFs read there are named among its texts
     (docs/PDF.md, step 2).
+  - **it fills the workspace** (the maintainer, 2026-10-17): *Fill the
+    workspace*, the column's button beside *Hide texts*, or Ctrl/Cmd+Shift+F,
+    has the PDF or text it shows cover the whole canvas, easing out to it as
+    the column opens - the tabs and the column's header kept; *Back beside
+    the canvas* (the same button, or the key again, or Esc once Find is
+    closed) eases it back to the width it had. It is the tab's while it is
+    open, not saved; hiding the column ends it, and another PDF or text
+    shown in it keeps it.
   The small previews on the page, decided on 2026-10-04, are made: each
   text has a sheet on the page with its first lines and its name under it,
   coming as an icon (docs/PDF.md, *A text*).
@@ -452,7 +460,9 @@ Taken on 2026-10-13:
   calculation's output or a PDF opened (Ctrl/Cmd+O) is added to the
   workspace in front, as a drop on its canvas adds it: in free space near
   the middle of the view, one step to undo, an SD file as a stack. Free
-  space is clear of all on the page and of a workflow's sets and steps'
+  space is clear of all on the page - the page's labels as far as the
+  layout sets their letters, as they are drawn, so that an NHBoc or a
+  PO3H2 is not grazed (`pageBoxes`) - and of a workflow's sets and steps'
   cards - a structure put down in a set's frame would be taken as what the
   set holds - its own labels and "+" signs counted. Only a `.meno` opens a
   tab of its own, untouched: opened with other files at once, it opens
@@ -494,12 +504,56 @@ Taken on 2026-10-13:
   atoms at the covalent length plus 0.15 Å from the metal, counts a ring of
   five or a chain of three drawn neutral as the cyclopentadienide or allyl
   anion it is bound as (not a CH2, nor radical carbons), and gives no
-  energies; the star is no atom of the molecule in 3D.
-- **A haptic bond binds its ring whole** (2026-10-13): where an atom of
-  the ring it binds is deleted or merged onto another, or it is pasted or
-  taken as part of a structure without its ring, it binds none - a plain
-  bond to its star - rather than name atoms gone, or the ring it was
-  copied from (`endpointsHeld`, on every edit).
+  energies; the star is no atom of the molecule in 3D. Two rings of one
+  metal are kept from overlapping, at least 2.9 Å apart atom from atom
+  (RDKit plugin 0.1.4; before, Cp2ZrCl2's rings could fold onto each
+  other, the force field counting nothing between fragments). Nothing more
+  is held: the angle between a sandwich's rings is UFF's, and ferrocene
+  comes out within about 6 degrees of straight, Cp*2Fe within about 10 -
+  as it was made, and said so (below).
+  - A label for a ligand bound through more pi systems than it has bonds
+    drawn - cod, nbd: two C=C - bonded to a metal by one bond is bound
+    through each of them, one multi-centre bond each, to that metal (the
+    writer, `prepared`); no star is left unbound, as an atom of nothing.
+  - A metal's valence as the drawing states it (a SMILES's bracket atom,
+    [Fe] in C[Fe]C, or a file's VAL) is left out where its bonds bind
+    ligand labels or rings so (etaBound): it counted them as plain bonds,
+    and left in, the metal stays two-valent - each Cp bound by one carbon,
+    an H on the metal. The drawing keeps it. (The other way, dropping it
+    from the drawing as its bonds change, would lose it for a file written
+    from the drawing; asking leaves the drawing as it was.)
+  - Made so, the molecule in 3D is as drawn: a label at the place of a pi
+    system's star - Cp, cod - is no atom of it, so no atom it is tied to,
+    and what it was made from takes in the labels bonded to its atoms
+    (utils/drawnLink `signatureOf`), on making and since. Before, Cp2Fe
+    and PtCl2(cod) drawn with labels said *Its drawing has changed* at once.
+- **A 3D structure made from a drawing is a starting geometry**
+  (the maintainer, 2026-10-18): embedded and tidied by a force field, with
+  only what that force field cannot say held - a metal's bonds at their
+  covalent lengths, an eta ring at its distance over its metal, two rings
+  apart, a square-planar metal's angles - never a shape it is expected to
+  have. How it was made is said in one line with it, in the plugin's
+  words (`method`: "ETKDG v3 + UFF; restrained: eta rings: metal-ring
+  atom distances, rings ≥ 2.9 Å apart"), first under *How it was made*
+  where it is pointed at, and kept with it in a workspace. An eta complex's
+  shape most of all is held, not modelled: a real geometry comes from
+  optimising it - an xTB or DFT step of a workflow.
+- **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
+  made in 3D from a drawing with a multi-centre bond - a Cp, an arene, an
+  allyl, an alkene bound through both carbons - shows one stick from the
+  metal to the centre of the atoms it binds, and no stick from the metal to
+  each of them; the atoms keep their own bonds, and the star at the centre
+  is no atom of it (`Molecule3D.centres`, utils/molecule3d `withCentres`).
+  Every way the molecule is drawn - the canvas, its shading, a render and
+  a picture of it - draws that stick; a press on it is a press on the
+  molecule, and a calculation's pair results are not said of it.
+- **A haptic bond binds its ring whole** (2026-10-13; 2026-10-17): where
+  an atom of the ring it binds is deleted or merged onto another, or it is
+  pasted or taken as part of a structure without its ring, it goes, and its
+  star with it - rather than name atoms gone, bind the ring it was copied
+  from, or leave its star on the drawing as an atom of its own (chem/eta
+  `etaHeld`, on every edit; a part Clean-up lays out keeps the bond to its
+  star, `endpointsHeld`).
 - **A lone atom** (the maintainer, 2026-10-13) is made in 3D where it stands
   for a molecule: an element with the H it carries - C is methane, O water,
   N ammonia - or a label Meno knows, written out as the molecule it stands
@@ -1460,6 +1514,55 @@ the rest is for later, through a plugin.
   the molecules looked for them where the canvas's events are, so the
   value under the pointer was never found - no highlight, no menu, no
   keeping values apart. They now look in that layer.
+
+## Atom numbers
+
+Asked for by the maintainer on 2026-10-17: a molecule in 3D can show each
+atom's number on its ball. Hover alone showed it before. The number is on
+the atom, never beside it: with many atoms, a number set beside its atom,
+as R and S are, cannot be told from its neighbours'.
+
+- **What is shown.** The right-click menu has *Show atom numbers* and
+  *Hide atom numbers*, beside R/S, and acts as that does: on the molecule
+  right-clicked, or on the atoms chosen in it, or on the selection there.
+  Right-clicked on an atom with none chosen, the menu also has *Show this
+  atom's number* (or *Hide*), for that atom alone. A molecule keeps which
+  atoms show their numbers: saved with the workspace and carried by a copy,
+  each change one undo step.
+- **The kinds.** *Atom order*, the default, numbers the atoms from 1 in
+  the molecule's own order - as calculations number them, and as files
+  are written and read. *Atom map* shows each atom's atom-map number,
+  where a reaction's map gives it one (docs/ATOM-MAPPING.md). Where a molecule
+  showing numbers has both, the menu offers both, the one shown ticked.
+  More kinds go in one list (`ATOM_NUMBER_KINDS`, utils/atomNumbers).
+- **How they are drawn.** In the balls' own shader (utils/occlusionMaterial,
+  `withBallNumbers`), from a picture of the digits 0 to 9: upright and
+  facing the viewer whichever way the molecule is turned, so that they
+  never turn with it nor shake. Each is sized to its ball - 0.78 of its
+  radius high, at most 0.95 Å, and narrower when it has more digits - in
+  dark ink on a light ball and white on a dark one, whatever the style's
+  colours. They are drawn flat over the ball, its shading under them and
+  never on them, so that they read as well in its shade as in its light
+  (the maintainer's choice, 2026-10-17, of two tried by hand: the other
+  printed them on the sphere, bent round it and lit with it, and its white
+  ink went grey on a dark ball's shaded side).
+- **Where on the ball.** In the largest part of the ball not hidden behind
+  another ball or a stick, as it is seen now - its middle, where the whole
+  ball is seen (`numberPlaces`). Where that part is too small, the number
+  is drawn smaller, and not at all under half its size. While the molecule
+  turns, a number keeps its place for as long as it still fits there, and
+  glides to a new one rather than hopping. Past 600 atoms every number is
+  set in its ball's middle.
+- **Too small to read.** A number whose digits would be under 6 pixels
+  high on the screen is not drawn, so that, zooming out, the hydrogens'
+  go first. Numbers come and go eased (0.08 s), each on its own.
+- **Pictures.** A picture of the molecule, or an export, shows the numbers
+  it shows, drawn as the canvas draws them (render3d), with the 6 pixels
+  counted in the picture's own pixels.
+- **In 2D.** A drawing shows atom-map numbers, small beside each atom,
+  where its reaction arrow's map is shown (*Show atom map* on the arrow's
+  menu; lib/chem/layout2d `atomNotes`). The 3D menu's words follow it:
+  *Show atom numbers*, and *Atom map* for that kind.
 
 ## Ribbons
 

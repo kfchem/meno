@@ -80,6 +80,12 @@ export type Molecule = {
    */
   dienes: DieneRing[];
   /**
+   * The pi systems bound to a metal that make no ring - an alkene's C=C,
+   * an allyl's three atoms - by their stars: the atom the star is bonded
+   * to first (an allyl's middle one), then the rest.
+   */
+  open?: Map<number, number[]>;
+  /**
    * Each atom's neighbours and, for a ring bound face-on and its star, each
    * other: what is moved with an atom - a side of a bond, a branch - goes
    * through a metal to its rings and on.
@@ -131,6 +137,13 @@ export type MetalUnit = {
   pair?: { metal: number; bridges: [number, number] };
   /** (`up`: which way is up as the cluster is seen, from the metals below its middle to those above - set when it is laid out) */
   cluster?: { metals: number[]; bridges: number[]; up?: { from: number[]; to: number[] } };
+  /**
+   * The ring system a metal with a tub is in itself - a chelate's (acac,
+   * dppe, bpy) or a diene's bound by two pi systems of its own (nbd) -
+   * taken into the unit: laid out flat, as it would be on its own, and set
+   * on the metal where its other ligands go.
+   */
+  chelate?: RingSystem;
 };
 
 export const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -155,15 +168,21 @@ export function perceive(input: LayoutInput): Molecule {
   const ofDiene = new Map(dienesFound.flatMap((d) => d.stars.map((s) => [s.star, s.pi] as const)));
   // A star's pi system: a ring of it (Cp, an arene) is drawn round it, the
   // star a member of the ring's system; any other (an alkene's C=C, an
-  // allyl) hangs from it by a bond to its first atom, as a chain would
+  // allyl) hangs from it by a bond to one of its atoms - an allyl's middle
+  // one, bonded to both the others - as a chain would (`open`)
   const ringOfPi = new Map<number, number[]>();
+  const open = new Map<number, number[]>();
   input.atoms.forEach((a, star) => {
     if (!a.pi || a.pi.length < 2 || ofDiene.has(star)) return;
     const cycle = cycleOf(a.pi, neighbours);
     if (cycle) ringOfPi.set(star, cycle);
     else {
-      bonds.push({ a: star, b: a.pi[0], order: 1 });
-      join(star, a.pi[0], bonds.length - 1);
+      const pi = a.pi;
+      const middle = pi.length === 3 ? pi.find((p) => pi.every((q) => q === p || neighbours[p].includes(q))) : undefined;
+      const first = middle ?? pi[0];
+      open.set(star, [first, ...pi.filter((p) => p !== first)]);
+      bonds.push({ a: star, b: first, order: 1 });
+      join(star, first, bonds.length - 1);
     }
   });
   const edges = [...bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]);
@@ -253,20 +272,31 @@ export function perceive(input: LayoutInput): Molecule {
     if (!corners || !bridging) return;
     units.push({ metal: metals[0], eta: [], dienes: [], system: i, cluster: { metals, bridges } });
   });
+  // (a metal in a ring of its own with a tub - Rh(cod)(acac) - that ring's
+  // system too: the tub's stars are in the tub's system, which only its
+  // metal's unit lays out. A ring face-on to a metal in a ring of its own
+  // is drawn round its star, the metal outside it, as a group is)
   for (let m = 0; m < n; m++) {
     const own = eta.filter((e) => e.metal === m);
     const tubs = dienes.filter((d) => d.metal === m);
-    if ((!own.length && !tubs.length) || systemOf[m] >= 0 || !isMetal(input.atoms[m].el)) continue;
+    if ((!own.length && !tubs.length) || !isMetal(input.atoms[m].el)) continue;
+    const at = systemOf[m];
+    if (at >= 0 && (!tubs.length || units.some((u) => u.system === at))) continue;
+    const chelate = at >= 0 ? systems[at] : undefined;
     const parts = [...own, ...tubs];
-    const merged = { atoms: [m, ...parts.flatMap((e) => e.atoms)], rings: parts.flatMap((e) => systems[e.system].rings) };
+    const merged = {
+      atoms: [...(chelate?.atoms ?? [m]), ...parts.flatMap((e) => e.atoms)],
+      rings: [...(chelate?.rings ?? []), ...parts.flatMap((e) => systems[e.system].rings)],
+    };
     const index = systems.length;
     systems.push(merged);
+    if (chelate) systems[at] = { atoms: [], rings: [] };
     for (const e of parts) {
       systems[e.system] = { atoms: [], rings: [] };
       e.system = index;
     }
     for (const a of merged.atoms) systemOf[a] = index;
-    units.push({ metal: m, eta: own, dienes: tubs, system: index });
+    units.push({ metal: m, eta: own, dienes: tubs, system: index, ...(chelate ? { chelate } : {}) });
   }
   // (the systems a unit took in, emptied, are left out)
   const kept = systems.map((sys, i) => (sys.atoms.length ? i : -1)).filter((i) => i >= 0);
@@ -323,6 +353,7 @@ export function perceive(input: LayoutInput): Molecule {
     eta,
     units,
     dienes,
+    open,
     linked: neighbours.map((nb, a) => [
       ...nb,
       ...(ringOfPi.get(a) ?? []),
@@ -384,6 +415,81 @@ export function ringsBondedAtomByAtom(input: LayoutInput): { metal: number; ring
       if (r.length < 3 || r.length > 8) continue;
       const ring = r.map((k) => local[k]);
       out.push({ metal, ring, bonds: ring.map((a) => around.get(a)!) });
+    }
+  }
+  return out;
+}
+
+/**
+ * The pi systems a drawing binds to a metal atom by atom, each with its
+ * metal, its atoms and the bonds from the metal to them (by index): the
+ * rings `ringsBondedAtomByAtom` finds, and a run of three atoms or more
+ * bonded to each other in a chain, each bonded to the same metal - an allyl
+ * (three), a diene in a ring (four, cyclohexadiene's), the part of a ring
+ * the metal is bound to. Each is what one bond to its centre says
+ * (eta, the CTfile's multi-centre bond). Two atoms so bonded are left as
+ * drawn: a three-membered ring with the metal is also how a
+ * metallacyclopropane is drawn.
+ */
+export function etaBondedAtomByAtom(input: LayoutInput): { metal: number; ring: number[]; bonds: number[] }[] {
+  const rings = ringsBondedAtomByAtom(input);
+  const out = [...rings];
+  const toMetal = new Map<number, Map<number, number>>();
+  input.bonds.forEach((b, i) => {
+    for (const [m, x] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      // (not an H - a hydride - nor a star already at a pi system's centre)
+      const el = input.atoms[x]?.el ?? "";
+      if (!isMetal(input.atoms[m]?.el ?? "") || isMetal(el) || el === "H" || el === "*") continue;
+      if (!toMetal.has(m)) toMetal.set(m, new Map());
+      toMetal.get(m)!.set(x, i);
+    }
+  });
+  for (const [metal, around] of toMetal) {
+    if (around.size < 3) continue;
+    // (the atoms bonded to it that no ring found takes, each run of them bonded together, if it has no ring of its own)
+    const taken = new Set(rings.filter((r) => r.metal === metal).flatMap((r) => r.ring));
+    const free = [...around.keys()].filter((a) => !taken.has(a)).sort((p, q) => p - q);
+    const inFree = new Set(free);
+    const next = new Map<number, number[]>(free.map((a) => [a, []]));
+    let edges = 0;
+    for (const b of input.bonds) {
+      if (b.a === b.b || !inFree.has(b.a) || !inFree.has(b.b)) continue;
+      next.get(b.a)!.push(b.b);
+      next.get(b.b)!.push(b.a);
+      edges++;
+    }
+    if (!edges) continue;
+    const seen = new Set<number>();
+    for (const start of free) {
+      if (seen.has(start)) continue;
+      // (in order along it, from an end where it has one)
+      const run: number[] = [];
+      const todo = [start];
+      seen.add(start);
+      while (todo.length) {
+        const a = todo.shift()!;
+        run.push(a);
+        for (const n of next.get(a)!) {
+          if (seen.has(n)) continue;
+          seen.add(n);
+          todo.push(n);
+        }
+      }
+      const own = run.reduce((s, a) => s + next.get(a)!.length, 0) / 2;
+      if (run.length < 3 || own !== run.length - 1) continue;
+      const end = run.find((a) => next.get(a)!.length === 1) ?? run[0];
+      const ordered: number[] = [];
+      const walked = new Set<number>();
+      const walk = (a: number) => {
+        walked.add(a);
+        ordered.push(a);
+        for (const n of next.get(a)!) if (!walked.has(n)) walk(n);
+      };
+      walk(end);
+      out.push({ metal, ring: ordered, bonds: ordered.map((a) => around.get(a)!) });
     }
   }
   return out;

@@ -448,6 +448,17 @@ function leanAway(mol: Molecule, pos: Grown, a: number, taken: readonly number[]
   return best;
 }
 
+/**
+ * The pi system a star stands for, where it is bound to a metal and makes
+ * no ring - an alkene's two atoms, an allyl's three, in no ring (`open`),
+ * the atom the star is bonded to first - or null.
+ */
+function openPi(mol: Molecule, star: number): number[] | null {
+  const pi = mol.open?.get(star);
+  if (!pi || mol.systemOf[star] >= 0 || pi.length > 3 || pi.some((v) => mol.systemOf[v] >= 0)) return null;
+  return mol.neighbours[star].some((v) => isMetal(mol.el[v])) ? pi : null;
+}
+
 /** Which child goes which way from atom `a`. */
 function assign(
   mol: Molecule,
@@ -471,6 +482,34 @@ function assign(
     return atMetal(mol, sides, a, placed[0], taken[0], children);
   }
 
+  // A pi system bound to a metal that makes no ring - an alkene's C=C, an
+  // allyl - across the metal's bond, its centre where the star is: a C=C
+  // square to the bond, as chemists draw an alkene's complex, an allyl
+  // bent round with its middle atom away from the metal - not hung from
+  // the star end on, a chain, the metal's bond drawn to its far middle
+  // (Karstedt's catalyst's lines from Pt across its vinyl groups).
+  if (placed.length === 1 && openPi(mol, a) && k === 1 && isMetal(mol.el[placed[0]])) {
+    const p = taken[0];
+    return [[children[0], openPi(mol, a)!.length === 2 ? p + Math.PI / 2 : p + Math.PI]];
+  }
+  const pi = placed.length === 1 ? openPi(mol, placed[0]) : null;
+  if (pi && pi[0] === a) {
+    const p = taken[0];
+    const metal = mol.neighbours[placed[0]].find((v) => v !== a && pos.has(v));
+    // (what the pi system's atoms carry, away from the metal)
+    const away = (t: number) => (metal == null ? 0 : -dist(add(at, dir(t)), pos.get(metal)!));
+    const ends = pi.slice(1).filter((v) => children.includes(v));
+    const rest = byWeight.filter((c) => !ends.includes(c));
+    if (pi.length === 2) {
+      const slots = [p + Math.PI + Math.PI / 3, p + Math.PI - Math.PI / 3].sort((u, v) => away(u) - away(v));
+      return [...ends.map((e): [number, number] => [e, p]), ...rest.map((c, i): [number, number] => [c, slots[i % 2]])];
+    }
+    return [
+      ...ends.map((e, i): [number, number] => [e, p + (i ? -1 : 1) * (Math.PI / 3)]),
+      ...rest.map((c, i): [number, number] => [c, p + Math.PI + (i - (rest.length - 1) / 2) * (Math.PI / 3)]),
+    ];
+  }
+
   if (mol.systemOf[a] >= 0 || placed.length !== 1) {
     // a ring atom: the room outside the rings split evenly, the heaviest
     // branch nearest straight out
@@ -479,6 +518,26 @@ function assign(
     const centres = mol.ringsOf[a]
       .filter((r) => mol.rings[r].length < MACROCYCLE)
       .map((r) => angleOf(sub(centroid(mol.rings[r].map((v) => pos.get(v)!)), at)));
+    // A metal in a ring (a chelate's): its ligands out of the ring evenly
+    // over the room outside it, the one it was reached by among them - not
+    // the rest crowded into the widest gap that one leaves (Hoveyda-Grubbs
+    // II's two Cl together on one side of its carbene, by the mesityl's
+    // methyl, the other side bare).
+    const own = placed.filter((v) => mol.systemOf[v] === mol.systemOf[a]);
+    if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && own.length >= 2 && own.length < placed.length) {
+      const ownAt = own.map((v) => angleOf(sub(pos.get(v)!, at)));
+      // (two evenly as well, a third of the room apart - not a
+      // gem-dimethyl's pair, 60 degrees apart: from three quarters' split)
+      const total = k + placed.length - own.length;
+      const q = total === 2 ? splitOutside(ownAt, centres, 3) : null;
+      const all = q ? [q[0] + (q[1] - q[0]) / 3, q[2] - (q[1] - q[0]) / 3] : splitOutside(ownAt, centres, total);
+      const inAt = placed.filter((v) => !own.includes(v)).map((v) => angleOf(sub(pos.get(v)!, at)));
+      const free = [...all];
+      for (const t of inAt) free.splice(free.reduce((b, u, i) => (Math.abs(wrap(u - t)) < Math.abs(wrap(free[b] - t)) ? i : b), 0), 1);
+      const mid = all.reduce((sum, t) => sum + t, 0) / all.length;
+      const byCentre = [...free].sort((p, q) => Math.abs(wrap(p - mid)) - Math.abs(wrap(q - mid)));
+      return byWeight.map((c, i) => [c, byCentre[i]]);
+    }
     const even = mol.systemOf[a] >= 0 ? splitOutside(taken, centres, k) : splitWidestGap(taken, k);
     const slots = mol.systemOf[a] >= 0 ? leanAway(mol, pos, a, taken, even) : even;
     const mid = slots.reduce((s, t) => s + t, 0) / slots.length;
@@ -808,8 +867,17 @@ function placeChild(
   upright: ReadonlySet<number> = new Set(),
   sides?: Map<string, number>,
 ): void {
-  // (a metal's bond to a ligand drawn longer, as it is: room for the ligands)
-  const length = isMetal(mol.el[a]) !== isMetal(mol.el[child]) && mol.el[a] !== "*" && mol.el[child] !== "*" ? METAL_BOND : 1;
+  // (a metal's bond to a ligand drawn longer, as it is: room for the
+  // ligands; a pi system across a metal's bond, its centre at the star)
+  const pi = openPi(mol, a);
+  const length =
+    pi && pi[0] === child
+      ? pi.length === 2
+        ? 0.5
+        : 1 / 3
+      : isMetal(mol.el[a]) !== isMetal(mol.el[child]) && mol.el[a] !== "*" && mol.el[child] !== "*"
+        ? METAL_BOND
+        : 1;
   const at = add(pos.get(a)!, { x: Math.cos(t) * length, y: Math.sin(t) * length });
   const s = mol.systemOf[child];
   if (s < 0) {

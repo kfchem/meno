@@ -3,6 +3,7 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { MARK_REACH, pushAtoms } from "../document";
@@ -573,12 +574,13 @@ function pictureFromOf(v: unknown): PictureItem["from"] | null {
 /** How a molecule was made, as a file carries it: rows of text, each read as data; otherwise none. */
 function madeOf(v: unknown): Carried3D["made"] {
   const how = (v as { how?: unknown } | null | undefined)?.how;
-  if (!Array.isArray(how)) return undefined;
-  const rows = how
+  const method = (v as { method?: unknown } | null | undefined)?.method;
+  const rows = (Array.isArray(how) ? how : [])
     .slice(0, 20)
     .filter((r): r is { label: string; text: string } => typeof r?.label === "string" && typeof r?.text === "string")
     .map((r) => ({ label: r.label.slice(0, 80), text: r.text.slice(0, 300) }));
-  return rows.length ? { how: rows } : undefined;
+  const said = typeof method === "string" && method ? { method: method.slice(0, 300) } : {};
+  return rows.length || "method" in said ? { ...said, how: rows } : undefined;
 }
 
 /** A molecule's open list as a file carries it; otherwise none. */
@@ -626,6 +628,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
       ? (m.drawnFrom as (number | null)[])
       : undefined;
   const stereo = readStereo(m.stereo, n, bonds.length);
+  const numbers = readAtomNumbers(m.atomNumbers, n);
   const biopolymer = readBiopolymer(m.biopolymer, n);
   const calc = readCalc(m.calc, n, 1 + frames.length);
   return {
@@ -648,6 +651,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
+    ...(centresOf(m.centres, n) ? { centres: centresOf(m.centres, n) } : {}),
     ...(biopolymer ? { biopolymer } : {}),
     ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" || m.bondOrders === "estimated" ? { bondOrders: m.bondOrders } : {}),
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
@@ -663,8 +667,31 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
     ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
     ...(stereo ? { stereo } : {}),
+    ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */
+function readAtomNumbers(given: unknown, atoms: number): Carried3D["atomNumbers"] | undefined {
+  const s = given as { kind?: unknown; atoms?: unknown } | null | undefined;
+  if (!s || typeof s !== "object" || !ATOM_NUMBER_KINDS.some((k) => k.kind === s.kind)) return undefined;
+  const kind = s.kind as AtomNumberKind;
+  if (s.atoms === undefined) return { kind };
+  if (!Array.isArray(s.atoms) || !s.atoms.length || !s.atoms.every((i) => Number.isInteger(i) && i >= 0 && i < atoms)) return undefined;
+  return { kind, atoms: [...new Set(s.atoms as number[])].sort((a, b) => a - b) };
+}
+
+/** A molecule's bonds to ring centres (`Molecule3D.centres`), where they read: each a metal and two atoms or more of its own, the metal not among them. */
+function centresOf(given: unknown, atoms: number): Carried3D["centres"] | undefined {
+  if (!Array.isArray(given)) return undefined;
+  const atom = (i: unknown): i is number => Number.isInteger(i) && (i as number) >= 0 && (i as number) < atoms;
+  const out = given.flatMap((c) => {
+    const x = c as { metal?: unknown; atoms?: unknown } | null;
+    if (!x || !atom(x.metal) || !Array.isArray(x.atoms) || x.atoms.length < 2 || !x.atoms.every(atom) || x.atoms.includes(x.metal)) return [];
+    return [{ metal: x.metal, atoms: [...(x.atoms as number[])] }];
+  });
+  return out.length ? out : undefined;
 }
 
 /**

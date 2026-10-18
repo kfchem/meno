@@ -87,8 +87,8 @@ before, not a record of how particular molecules are drawn.
 |---|---|
 | overlaps | atoms not bonded but closer than half a bond |
 | crossings | bonds crossing bonds |
-| clashes | atoms lying on a bond they are not part of |
-| crowded labels | labelled atoms (anything but a neutral C) close enough for their labels to meet; and, a quarter as much, a label's H - beside its symbol, or under or over it between bonds on both sides, as the drawing sets it - that runs into another label (side by side, with less than a space between them), an atom or a bond |
+| clashes | atoms lying on a bond they are not part of: within 0.3 of a bond, or 0.4 for a label (its letter, or a wedge's H, is ink half a bond high) |
+| crowded labels | labelled atoms (anything but a neutral C) close enough for their labels to meet; and, a quarter as much, a label's H - beside its symbol, or under or over it between bonds on both sides, as the drawing sets it - that runs into another label (side by side, with less than a space between them), an atom or a bond; and, half as much, a label on a bare vertex it is not bonded to (under 0.6 of a bond, and not on one of the bonds there: that is a clash), and two labels whose ink - symbol on symbol, or H on H, where the drawing puts them - comes within half a bond of each other, more the nearer |
 
 **Shape**:
 
@@ -96,7 +96,7 @@ before, not a record of how particular molecules are drawn.
 |---|---|
 | bond lengths | how much bond lengths vary |
 | angles | how far angles at chain atoms are from ideal: 120°, or 180° across a triple bond, between two double bonds or between two phosphate crosses; a bond joining a cross to a zigzag may give way to 150° |
-| rings | how far rings of up to eight are from regular polygons |
+| rings | how far rings of up to eight are from regular polygons. In a bridged system drawn flat with more than one smallest set of rings, the set that fits the drawing best is read - shortest first, then the most regular - not the one the order of the atoms gives |
 | macrocycle angles | how far the angles round a ring of nine or more are from a zigzag's 120° - a macrocycle drawn as a round polygon is far off; a ring that runs through other rings (a porphyrin's) is a ring of rings, and not counted |
 | substituents | how far a ring atom's other bonds are from splitting the room outside the ring evenly: an H at a ring fusion drawn straight out, not aslant. In a bridged system the room outside is read against every ring as small as one of its smallest set - all three of quinuclidine's six-membered cycles, of which the set holds two by the order of the atoms |
 | wedges on rings | wedges and hashes on ring bonds, where they read badly |

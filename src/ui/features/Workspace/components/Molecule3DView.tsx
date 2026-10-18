@@ -10,7 +10,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -26,7 +26,8 @@ import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
 import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
-import { ballLinesOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
+import { ballLinesOf, ballNumbersOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
+import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
 import { dollyAt, dollyMatrix, RISE_ACROSS_FROM, RISE_END, RISE_GROW, RISE_UP } from "../utils/rise";
@@ -110,6 +111,12 @@ const ATOM_SWELL = 1.1;
  */
 const STEREO_OFFSET = "translate(0.95em, -0.95em)";
 const STEREO_HALO = "0 0 2px #fff, 0 0 2px #fff, 0 0 3px #fff";
+/** How quickly the numbers on the balls come and go, in seconds. */
+const NUMBERS_TAU = 0.08;
+/** The most atoms a molecule has for its numbers to be placed clear of the balls in front: past it, each in its ball's middle. */
+const NUMBERS_PLACED_MOST = 600;
+/** Every atom's number in its ball's middle, at its full size, not shown: x, y, share, shown, for each. */
+const restingPlaces = (n: number) => Float32Array.from({ length: 4 * n }, (_, k) => (k % 4 === 2 ? 1 : 0));
 /** How far apart two stereo labels keep at the least, in ems of their size. */
 const STEREO_APART = 0.6;
 const easeOutCubic = (u: number) => 1 - (1 - Math.min(Math.max(u, 0), 1)) ** 3;
@@ -203,6 +210,8 @@ export type Molecule3DViewProps = {
    * far off its ball, as a share of the drawing's label size.
    */
   stereoFont: { size: number; units: "world" | "px"; family: string; parentheses: boolean; gap: number };
+  /** The numbers shown on its atoms: of what kind, and on which (utils/atomNumbers); none, none. */
+  atomNumbers?: AtomNumbersShown | null;
   onRisen?: () => void;
   /** The motion it moves in - a vibration, its list's row chosen: its atoms' displacements, x, y, z of each; none, it rests. */
   motion?: number[] | null;
@@ -249,7 +258,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // bond any frame has, each drawn as far as the frame shown has it, growing
   // and shrinking as frames go (utils/molecule3d `frameBondsOf`)
   const fb = useMemo(() => frameBondsOf(m), [m]);
-  const drawn = useMemo(() => (fb ? { ...m, bonds: fb.bonds } : m), [m, fb]);
+  // (and a stick from a metal to each ring's or double bond's centre it is bound to, after them: withCentres)
+  const drawn = useMemo(() => (fb || m.centres?.length ? { ...m, bonds: withCentres(m, fb ? fb.bonds : m.bonds) } : m), [m, fb]);
   const lineCount = useMemo(() => drawn.bonds.reduce((k, b) => k + linesOf(b.order), 0), [drawn.bonds]);
   const placed = useRef<THREE.Group>(null!);
   /** What it is drawn through while it rises: seen in perspective (utils/rise `dollyMatrix`). */
@@ -272,6 +282,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // the atoms' colours as drawn now (linear RGB, three to an atom), and whether they are still going over to the style's
   const atomCols = useRef<Float32Array | null>(null);
   const recolour = useRef(true);
+  // (the kind of number its balls show, or last showed: kept as they fade out)
+  const numbersKind = useRef<AtomNumberKind>("order");
+  // (how many digits each atom's number has; and, worked out each frame they are shown, where each goes)
+  const numberDigits = useRef<Uint8Array>(new Uint8Array(0));
+  const numbersWanted = useRef<Uint8Array>(new Uint8Array(0));
+  const numbersPlaced = useRef(false);
+  const numbersAt = useRef("");
+  const numberScratch = useRef<{ centres: Float32Array; radii: Float32Array; heights: Float32Array; digits: Uint8Array; places: Float32Array; was: Float32Array; now: Float32Array } | null>(null);
   const bondHull = useRef<THREE.InstancedMesh>(null);
   // the lines that curve in to a lone atom (utils/stickBend), drawn apart - their sticks, the line round them, their highlight: none, where none curves
   const bentSticks = useRef<THREE.InstancedMesh>(null);
@@ -516,10 +534,18 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const lined = new Float32Array(n);
     for (let i = 0; i < n; i++) lined[i] = linedBall(m.atoms[i].el, style.primary) || linedBall(m.atoms[i].el, style.secondary) ? 1 : 0;
     atoms.current.geometry.setAttribute("ballLined", new THREE.InstancedBufferAttribute(lined, 1));
+    // (each atom's number, of the kind shown - or that last shown, as it fades out - and which are to be shown)
+    if (props.atomNumbers) numbersKind.current = props.atomNumbers.kind;
+    const nums = atomNumbersOf(m, numbersKind.current);
+    setBallNumbers(atoms.current.geometry, nums);
+    numberDigits.current = Uint8Array.from(nums, digitsOf);
+    numbersWanted.current = numbersShownOn({ atoms: m.atoms, atomNumbers: props.atomNumbers ?? undefined });
+    numbersPlaced.current = false;
+    if ((atoms.current.geometry.getAttribute("ballNumberPlace")?.count ?? -1) !== n) setBallNumberPlaces(atoms.current.geometry, restingPlaces(n));
     if (places.current.length !== target.length) places.current = Float32Array.from(target);
     dirty.current = true;
     invalidate();
-  }, [m, n, target, style, atomGoals, invalidate]);
+  }, [m, n, target, style, atomGoals, invalidate, props.atomNumbers]);
 
   // measurements come and go, fading
   useEffect(() => {
@@ -633,7 +659,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     return () => window.clearTimeout(t);
   }, [cardShown, card, invalidate]);
 
-  useEffect(() => invalidate(), [lit, selected, look, frame, turn, invalidate]);
+  useEffect(() => invalidate(), [lit, selected, look, frame, turn, props.atomNumbers, invalidate]);
 
   // (before the labels' Html places them, so that they are placed where the
   // atoms are drawn this frame, not the one before: FRAME_ORDER)
@@ -1051,13 +1077,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       };
       const same = solid.ends.primary === solid.ends.secondary && oneLevel.current.primary === oneLevel.current.secondary;
       const all = same || f <= 0 ? linesOf3d("primary") : f >= 1 ? linesOf3d("secondary") : linesBetween(linesOf3d("primary"), linesOf3d("secondary"), f);
-      if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]]));
+      if (fb) all.forEach((l, k) => (l.r *= there.current[lineBond[k]] ?? 1));
       if (leaves) all.forEach((l, k) => (l.r *= keptOf(drawn.bonds[lineBond[k]])));
       return all;
     };
     let lines: BondLine[] | null = null;
     if (reshaped) {
       placeAtoms(atoms.current, p, radius, 0);
+      numbersPlaced.current = false;
       if (bonds.current) {
         lines = linesNow();
         // (those that curve drawn apart: none of them among the straight)
@@ -1088,6 +1115,75 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     const eye = eyeOf(camera);
     // (and, for what is drawn inside it, in its own units - as large as it is shown)
     const px = 1 / (camera.zoom * seenAt(0, 0, height, eye).k);
+    // the numbers on the balls: each in the part of its ball not behind
+    // another, or a stick, as it is seen now - gliding there, and coming and
+    // going, each on its own
+    {
+      const bn = ballNumbersOf(atomsMat.current);
+      const want = numbersWanted.current;
+      let sc = numberScratch.current;
+      if (!sc || sc.radii.length !== n) {
+        sc = numberScratch.current = {
+          centres: new Float32Array(3 * n),
+          radii: new Float32Array(n),
+          heights: new Float32Array(n),
+          digits: new Uint8Array(n),
+          places: new Float32Array(3 * n),
+          was: new Float32Array(3 * n),
+          now: restingPlaces(n),
+        };
+        numbersPlaced.current = false;
+      }
+      let any = false;
+      for (let i = 0; i < n && !any; i++) any = want[i] === 1 || sc.now[4 * i + 3] > 0;
+      bn.shown.value = any ? 1 : 0;
+      bn.pxPer.value = 1 / px;
+      bn.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
+      if (any) {
+        const mesh = atoms.current;
+        mesh.updateWorldMatrix(true, false);
+        const view = new THREE.Matrix4().multiplyMatrices(camera.matrixWorldInverse, mesh.matrixWorld);
+        const scale = new THREE.Vector3().setFromMatrixScale(view).x;
+        const key = view.elements.join() + fill.current + risen.current + bondR;
+        if (!numbersPlaced.current || numbersAt.current !== key) {
+          numbersPlaced.current = true;
+          numbersAt.current = key;
+          const v = new THREE.Vector3();
+          for (let i = 0; i < n; i++) {
+            v.set(p[3 * i], p[3 * i + 1], p[3 * i + 2]).applyMatrix4(view);
+            sc.centres[3 * i] = v.x;
+            sc.centres[3 * i + 1] = v.y;
+            sc.centres[3 * i + 2] = v.z;
+            const r = radius(i);
+            sc.radii[i] = r * scale;
+            // (placed only where it is shown, or going)
+            sc.digits[i] = want[i] || sc.now[4 * i + 3] > 0 ? (numberDigits.current[i] ?? 0) : 0;
+            sc.heights[i] = numberHeight(sc.digits[i], r / WORLD_PER_ANGSTROM);
+            sc.was[3 * i] = sc.now[4 * i];
+            sc.was[3 * i + 1] = sc.now[4 * i + 1];
+            sc.was[3 * i + 2] = sc.now[4 * i + 3] > 0 ? sc.now[4 * i + 2] : 0;
+          }
+          if (n <= NUMBERS_PLACED_MOST) numberPlaces(sc.centres, sc.radii, sc.heights, sc.digits, sc.places, bondsShown ? { bonds: drawn.bonds, r: bondR * scale } : null, sc.was);
+          else for (let i = 0; i < n; i++) sc.places.set([0, 0, 1], 3 * i);
+        }
+        let still = true;
+        for (let i = 0; i < n; i++) {
+          const w = follow(sc.now[4 * i + 3], want[i], step, NUMBERS_TAU);
+          sc.now[4 * i + 3] = Math.abs(w - want[i]) < 1e-3 ? want[i] : w;
+          // (one coming in starts where it is to be; one shown glides there)
+          for (let k = 0; k < 3; k++) {
+            const to = sc.places[3 * i + k];
+            const at = sc.now[4 * i + k];
+            const g = sc.now[4 * i + 3] > 0 && w > 1e-3 ? follow(at, to, step, NUMBERS_TAU) : to;
+            sc.now[4 * i + k] = Math.abs(g - to) < 1e-3 ? to : g;
+            if (sc.now[4 * i + k] !== to) still = false;
+          }
+          if (sc.now[4 * i + 3] !== want[i]) still = false;
+        }
+        setBallNumberPlaces(mesh.geometry, sc.now);
+        if (!still) moving = true;
+      }
+    }
     const pxIn = px / mag;
     // the outline
     const outPx = Math.max(outlineAt(level.current, OUTLINE_PX), SELECTED_PX * selLevel.current);
@@ -1514,7 +1610,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               pairResults.length
                 ? (e) => {
                     const b = e.instanceId != null ? lineBond[e.instanceId] : undefined;
-                    if (b != null && b !== hoverBond) setHoverBond(b);
+                    // (a stick to a centre is no bond of two atoms a calculation says anything of)
+                    if (b != null && b !== hoverBond && !(drawn.bonds[b] as DrawnBond | undefined)?.endpoints) setHoverBond(b);
                   }
                 : undefined
             }
@@ -1544,7 +1641,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 pairResults.length
                   ? (e) => {
                       const b = e.instanceId != null ? lineBond[bent[e.instanceId]] : undefined;
-                      if (b != null && b !== hoverBond) setHoverBond(b);
+                      if (b != null && b !== hoverBond && !(drawn.bonds[b] as DrawnBond | undefined)?.endpoints) setHoverBond(b);
                     }
                   : undefined
               }
@@ -1815,7 +1912,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               about={m.calc ? calcLine(m.calc) : undefined}
               results={m.calc?.results}
               unread={m.calc?.unread}
-              made={m.made?.how}
+              made={m.made}
               said={m.said}
               area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}

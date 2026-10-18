@@ -5,6 +5,7 @@ import { useLeaving } from "../../theme/leaving";
 import { Fragment, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { CheckIcon } from "@heroicons/react/24/outline";
 import { BOND_ICONS, MENU_ICONS } from "./menuIcons";
+import { withRules } from "./menuRules";
 import { BOND_KIND_NAMES, COMMON_BOND_KINDS, OTHER_BOND_KINDS, type BondKindName } from "./utils/bondKinds";
 import { swallowPress } from "./utils/press";
 import { guideNotice } from "../../../lib/plugins/guides";
@@ -145,6 +146,7 @@ export default function PartMenu({
   target,
   records,
   stereo,
+  numbers,
   onDelete,
   onCleanUp,
   onMake3d,
@@ -157,6 +159,7 @@ export default function PartMenu({
   onExpand,
   onChain,
   asTyped,
+  onEditLabel,
   onArrowStyle,
   onEditText,
   onShowSource,
@@ -186,6 +189,7 @@ export default function PartMenu({
   shape,
   cycle,
   onBoxAround,
+  onCombinePdfs,
   canvas = [],
   clipboard,
   molecule3d,
@@ -216,6 +220,8 @@ export default function PartMenu({
   onChain?: () => void;
   /** Its label as it was typed (obz, read as OBz), and the label made that again; unset, where it was read as typed. */
   asTyped?: { typed: string; run: () => void };
+  /** The atom's label opened to be written in place, holding what it says (docs/EDITOR-2D.md, *Labels typed in place*). */
+  onEditLabel?: () => void;
   /** A reaction arrow's own line and head, in a panel beside the canvas. */
   onArrowStyle: () => void;
   /** The words right-clicked, written anew. */
@@ -267,7 +273,14 @@ export default function PartMenu({
     onStructures?: () => void;
     /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
     onWrite?: () => void;
+    /** A new PDF made from it (docs/PDF.md, *A new PDF from pages*): its pages numbered, or put in order, turned, some left out - each from a card. */
+    onNumbers: () => void;
+    onPages: () => void;
+    /** Its bytes written to a file. */
+    onSave: () => void;
   };
+  /** The PDFs selected made one new PDF, in the order they are read on the page. */
+  onCombinePdfs?: () => void;
   /** The picture right-clicked copied, for Meno and as a picture for other programs. */
   onCopyPicture?: () => void;
   /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
@@ -373,6 +386,8 @@ export default function PartMenu({
   records?: { spread: boolean; run: () => void };
   /** R and S, E and Z shown on what was right-clicked - or the selection there - or hidden from it, in the words it says (utils/stereoShown); unset, where it has none. */
   stereo?: { name: string; run: () => void };
+  /** Atom numbers on the molecules in 3D right-clicked, or chosen or selected there - or the atom right-clicked: shown or hidden, in the words each says, and the kinds offered (utils/atomNumbersShown); unset, where there is none. */
+  numbers?: { items: { name: string; run: () => void }[]; kinds: { name: string; checked: boolean; run: () => void }[] };
   /** A measurement right-clicked that can be set: how many atoms it is of, and its value opened to be typed. */
   measure3d?: { atoms: number; onSet: () => void };
   /**
@@ -449,7 +464,15 @@ export default function PartMenu({
   const colour: Item[] = onColour ? [{ name: "Colour…", keys: "", run: onColour, icon: MENU_ICONS.colour }] : [];
   // (a record of a stack of drawings: its stack laid out as a grid, or stacked again)
   const stackItem: Item[] = records ? [{ name: records.spread ? "Stack again" : "Lay out as a grid", keys: "", run: records.run, divider: true }] : [];
-  const stereoItem: Item[] = stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : [];
+  const stereoItem: Item[] = [
+    ...(stereo ? [{ name: stereo.name, keys: "", run: stereo.run, divider: true }] : []),
+    ...(numbers
+      ? [
+          ...numbers.items.map((it, k) => ({ name: it.name, keys: "", run: it.run, ...(k === 0 && !stereo ? { divider: true } : {}) })),
+          ...numbers.kinds.map((k) => ({ name: k.name, keys: "", run: k.run, checked: k.checked })),
+        ]
+      : []),
+  ];
   // a molecule in 3D: its look and its turn, as icons; a measurement of its chosen atoms, its frames, what its calculation gave and its drawing, listed
   const measureName = ["", "", "Measure distance", "Measure angle", "Measure torsion angle"];
   const moleculeRow: Item[] = molecule3d
@@ -668,6 +691,15 @@ export default function PartMenu({
           ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
           ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
+          // (a new PDF from it, and it written to a file)
+          ...(pdf
+            ? [
+                { name: "Page numbers…", keys: "", run: pdf.onNumbers, divider: true },
+                { name: "Pages…", keys: "", run: pdf.onPages },
+                ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs }] : []),
+                { name: "Save as PDF…", keys: "", run: pdf.onSave },
+              ]
+            : []),
         ]
       : target.kind === "text"
       ? [
@@ -784,6 +816,7 @@ export default function PartMenu({
           ...stackItem,
           ...(onSlideAround ? [{ name: "Slide around these", keys: "", run: onSlideAround, divider: true }] : []),
           ...(onBoxAround ? [{ name: "Box around these", keys: "", run: onBoxAround, divider: !onSlideAround }] : []),
+          ...(onCombinePdfs ? [{ name: "Combine into one PDF", keys: "", run: onCombinePdfs, divider: true }] : []),
           ...(onUseAsInput ? [{ name: "Use as input", keys: "", run: onUseAsInput, divider: true }] : []),
           ...(drawing ? [{ name: "Save as abbreviation…", keys: "", run: onSaveAbbreviation, divider: !onUseAsInput }] : []),
         ]
@@ -808,7 +841,7 @@ export default function PartMenu({
         ? [
             { name: "Paste", keys: shortcut("V"), run: clipboard.onPaste, icon: MENU_ICONS.paste },
             { name: "Select all", keys: shortcut("A"), run: clipboard.onSelectAll, icon: MENU_ICONS.selectAll },
-            ...canvas.map((item, i) => ({ ...item, divider: i > 0 && item.divider })),
+            ...canvas,
           ]
         : [
           // an atom's charge - the + and - keys do it too - and its radical
@@ -835,6 +868,7 @@ export default function PartMenu({
           del(target.kind === "atom" ? "Delete atom" : "Delete bond", keys),
           ...(target.kind === "atom"
             ? [
+                ...(onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
                 ...(onChain ? [{ name: "Chain from here", keys: "", run: onChain }] : []),
                 { name: radical ? "No unpaired electron" : "Unpaired electron", keys: "", run: onRadical },
                 ...(onExpand ? [{ name: "Expand abbreviation", keys: "", run: onExpand }] : []),
@@ -849,7 +883,7 @@ export default function PartMenu({
   const row = items.filter((i) => i.icon && !i.compact);
   const compact = items.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
-  const list = items.filter((i) => !i.icon);
+  const list = withRules(items.filter((i) => !i.icon));
   const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     if (!item.keep) onClose();

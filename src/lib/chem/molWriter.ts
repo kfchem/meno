@@ -6,6 +6,8 @@ import type { AbbreviationStructure, AtomChem, BondChem, Radical, SgroupMark } f
 import { ELEMENTS } from "./elements";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
+import { isMetal } from "../layout/perceive";
+import { boundLigandStructure } from "./boundLigand";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number; magnified?: number };
@@ -122,6 +124,14 @@ const V3000_COUNTS = "  0  0  0     0  0  0  0  0  0999 V3000";
 const RADICAL_CODE = { singlet: 1, doublet: 2, triplet: 3 } as const;
 
 const ELEMENT_SYMBOLS = new Set(ELEMENTS.map((e) => e.symbol));
+/** The elements that form no bonds: one drawn with a bond stands for something else - Ar for an aryl group. */
+const NO_BONDS = new Set(["He", "Ne", "Ar"]);
+/**
+ * The elements whose symbol is a variable's too (the maintainer, 2026-10-17): Y with one bond, in a substituent's place, stands
+ * for a group as X and Z do; alone, or with several bonds, it is yttrium.
+ */
+const VARIABLES = new Set(["Y"]);
+
 /** The atom types "CTfile Formats" reserves: written as they are. */
 const RESERVED = new Set(["A", "Q", "X", "M", "R", "*", "LP", "R#", "L"]);
 
@@ -144,12 +154,19 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
   let nextId = Math.max(0, greatest(model.atoms.map((a) => a.id))) + 1;
   const byId = new Map(atoms.map((a) => [a.id, a]));
   for (const a of model.atoms) {
-    // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds)
-    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev) || RESERVED.has(a.el) || a.list) continue;
     const touching = bonds.filter((b) => b.a === a.id || b.b === a.id);
+    // (a group named as an element is - Ac, Pr, Ts - written out as the group it holds; an element that forms no bonds drawn
+    // with one - Ar, an aryl group's symbol as well as argon's (IUPAC GR-9.2) - is no element: its label, as any other; nor is a
+    // variable named as an element is - Y with one bond, a substituent's place, as X and Z are)
+    const bondless = NO_BONDS.has(a.el) && touching.length > 0;
+    const variable = VARIABLES.has(a.el) && touching.length === 1;
+    if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    // (a label on a metal that names a ligand bound so - Cp, allyl, CO - written out as bound: lib/chem/boundLigand)
+    const bound = !a.abbrev && touching.length === 1 && first && isMetal(first.el) ? boundLigandStructure(a.el, { x: first.x - a.x, y: first.y - a.y }) : null;
     const structure: AbbreviationStructure | null =
       a.abbrev ??
+      bound ??
       (abbreviationOf(a.el)
         ? placedAbbreviation(a.el, first ? { x: first.x - a.x, y: first.y - a.y } : null, NOMINAL_BOND_LENGTH)
         : null);
@@ -181,6 +198,16 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
       // (a donor that lends its pair: a coordination bond)
       else if (structure.lends?.[k] && !b.dative) Object.assign(b, { coordination: true });
     });
+    // (a ligand bound through more pi systems than it is drawn with bonds - cod, nbd: two C=C - bonded to a metal by one:
+    // bound through each of them all the same, to that metal, a star left with no bond being no atom of anything)
+    const metal = touching.length === 1 ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    if (metal && isMetal(metal.el)) {
+      for (const at of structure.attach.slice(1)) {
+        const pi = structure.haptic?.find((h) => h.star === at);
+        if (!pi) continue;
+        bonds.push({ ...touching[0], a: metal.id, b: ids[at], endpoints: pi.atoms.map((e) => ids[e]), attach: "all", coordination: true });
+      }
+    }
     sups.push({ label: a.el, atoms: [a.id, ...ids.filter((id) => id !== a.id)] });
   }
   return { model: { atoms, bonds }, sups, aliases };

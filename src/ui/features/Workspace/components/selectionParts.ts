@@ -1,3 +1,4 @@
+import { allylCurveOf, hapticStars } from "../chem/eta";
 import type { Model } from "../store/types";
 
 type Point = { x: number; y: number };
@@ -20,15 +21,21 @@ export function roomFor(n: number): number {
 export function selectedParts(shown: Model, atoms: ReadonlySet<number>, bonds: ReadonlySet<number>): Map<string, ShadedPart> {
   const at = new Map(shown.atoms.map((a) => [a.id, a]));
   const parts = new Map<string, ShadedPart>();
+  // (a haptic bond's star no disc of its own: its bond is shaded to it - chem/eta)
+  const stars = hapticStars(shown);
   for (const id of atoms) {
     const a = at.get(id);
-    if (a) parts.set(`a${id}`, { atom: { x: a.x, y: a.y } });
+    if (a && !stars.has(id)) parts.set(`a${id}`, { atom: { x: a.x, y: a.y } });
   }
   for (const b of shown.bonds) {
     if (!bonds.has(b.id)) continue;
     const p = at.get(b.a);
     const q = at.get(b.b);
     if (p && q) parts.set(`b${b.id}`, { bond: { p: { x: p.x, y: p.y }, q: { x: q.x, y: q.y } } });
+    // (an η3-allyl's bond: its curve shaded with it, in four pieces - few, so that where they overlap shows little - chem/eta)
+    const arc = b.endpoints?.length === 3 ? allylCurveOf(b, at, shown.bonds) : null;
+    const step = arc ? (arc.length - 1) / 4 : 0;
+    for (let k = 1; arc && k <= 4; k++) parts.set(`b${b.id}~${k}`, { bond: { p: arc[(k - 1) * step], q: arc[k * step] } });
   }
   return parts;
 }

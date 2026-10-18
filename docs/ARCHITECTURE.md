@@ -44,6 +44,8 @@ src/
   lib/units.ts            Meno's units table (CODATA 2018): energies, temperatures, lengths, converted within a dimension only
   lib/boltzmann.ts        Meno's one Boltzmann distribution: the 3D view's shares and the Populations step
   lib/entry.ts            the entry record a workflow's molecule is (docs/WORKFLOWS-FOUNDATION.md, PR 1)
+  lib/chem/identity.ts    a structure's identity (its canonical text, Kekulé-free) and symmetry: orbits from the
+                          automorphisms Clean-up's canonical search finds, and the group they generate, capped
   lib/doc/                documents and undo; savers.ts; menoFile.ts: the workspace file, a zip
                           (mimetype, workspace.json, files kept by SHA-256), written off the page
                           (menoFileWorker.ts) - docs/FILE-IO.md, *The workspace file*
@@ -1096,9 +1098,11 @@ was left there is taken away (`roaming.rs`), by name only: `uv`, `pixi` and
 `tools` at each start while they are there, and a plugin's environment there
 as the plugin is removed; `jobs` only where it holds no job. While a job there
 still waits or runs, everything there is left, as its program may be using its
-environment; jobs kept there are left with their files. The rest of that
-folder - the settings, the log, the window's place - moves as above, and the
-folder goes once it is empty. What is left, and why, goes in Meno's log.
+environment; jobs kept there are left with their files - said in Meno's log
+at the start the rest is moved, or something is taken away, not again at every
+start. The rest of that folder - the settings, the log, the window's place -
+moves as above, and the folder goes once it is empty. What is left, and why,
+goes in Meno's log.
 
 ### PDFs
 

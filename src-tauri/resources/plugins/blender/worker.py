@@ -20,8 +20,10 @@ One JSON object per line each way, as every plugin's:
 It fills the role Render, and runs nothing itself: `prepare` writes each
 job's settings and its script, render.py, which Blender runs in its own
 Python - beside the scene Meno writes into the job's folder (each entry's
-`scene`) - and says the command Meno runs, apart from Meno, in the job's
-folder; `collect` says what the job made - a picture, a PNG, or a film,
+`scene`), and, for a film of one of its motions (the entry's `motion`),
+the studio they share (studio.py) and the motion's own script
+(motion_<id>.py) - and says the command Meno runs, apart from Meno, in the
+job's folder; `collect` says what the job made - a picture, a PNG, or a film,
 an MP4 - or, where it failed, why. One job for each entry.
 
 Blender is run as its manual says (docs.blender.org, Blender 5.2,
@@ -40,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
@@ -69,6 +71,10 @@ MARBLES = {"carrara", "swirl"}
 PILES = {"long", "short"}
 CLAYS = {"terracotta", "elements"}
 PORCELAINS = {"porcelain", "pearl"}
+# the film motions this plugin makes (the manifest's `motions`), each a script of its own beside the studio they share
+MOTIONS = {"reveal", "pulse", "assemble", "scan", "dissolve"}
+MODES = {"once", "loop"}
+STUDIO_SCRIPT = "studio.py"
 NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\.gltf$")
 
 
@@ -155,6 +161,8 @@ def settings_of(entry, options):
         "pile": one_of(options.get("pile", "long"), "pile", PILES),
         "clay_colour": one_of(options.get("clay-colour", "terracotta"), "clay colour", CLAYS),
         "porcelain_finish": one_of(options.get("porcelain-finish", "porcelain"), "porcelain finish", PORCELAINS),
+        # (a film's motion, where it is one of this plugin's: none for Meno's own, keyed into the scene; Once or Loop)
+        **({"motion": one_of(entry["motion"], "motion", MOTIONS), "mode": one_of(options.get("mode", "once"), "mode", MODES)} if film and entry.get("motion") is not None else {}),
     }
 
 
@@ -184,6 +192,8 @@ def op_prepare(m):
             "files": [
                 {"name": SCRIPT, "text": script_text()},
                 {"name": LOOKS_SCRIPT, "text": script_text(LOOKS_SCRIPT)},
+                # (a motion's script and the studio it is made in, where the film is one of this plugin's motions)
+                *([{"name": STUDIO_SCRIPT, "text": script_text(STUDIO_SCRIPT)}, {"name": f"motion_{settings['motion']}.py", "text": script_text(f"motion_{settings['motion']}.py")}] if "motion" in settings else []),
                 {"name": SETTINGS, "text": json.dumps(settings, indent=1) + "\n"},
             ],
             "reads": [],
