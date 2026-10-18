@@ -1,3 +1,4 @@
+import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
@@ -472,7 +473,7 @@ export type Molecule3D = {
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
   /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
-  made?: { how: { label: string; text: string }[] };
+  made?: { method?: string; how: { label: string; text: string }[] };
   /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
   said?: { label: string; text: string }[];
   /**
@@ -495,6 +496,8 @@ export type Molecule3D = {
    * its drawing left open (`stereoShownOf`).
    */
   stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
+  /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
+  atomNumbers?: AtomNumbersShown;
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -1388,13 +1391,29 @@ export type EditorState = {
     opened?: { at: number; value: string };
     /** Each edit its own number, given as it begins. */
     n?: number;
+    /** Begun by a letter typed over the atom: its first letter grows out of the atom (LabelTyping2D). */
+    grow?: boolean;
+    /** Begun with what it says selected: the atom's menu's *Edit label* on a carbon drawn as a corner. */
+    selectAll?: boolean;
   };
+  /**
+   * How the last label edit ended: kept and changed (`kept`),
+   * kept as it was (`same`), or let go (`cancelled`) - what the writing and
+   * the label it had do as it goes (LabelTyping2D, Labels2D).
+   */
+  labelEnd: { n: number; atomId: number; how: "kept" | "same" | "cancelled" } | null;
   /**
    * A label just written, drawn as it was written until the drawing's own is
    * drawn in its place (LabelTyping2D), so that it never goes from the page
    * for a frame: its atom, its edit's number, what it says.
    */
   labelLeft: { atomId: number; n: number; text: string } | null;
+  /**
+   * A label just kept by Enter (`commitLabelEdit`): an Enter straight after
+   * draws it out, as *Expand abbreviation* does - nothing in between, the
+   * drawing and what is selected as they were when it was kept.
+   */
+  labelKept: { atomId: number; model: Model; sel: EditorState["sel"] } | null;
   /** The drawing's labels drawn again: a label just written no longer drawn over its own. */
   labelShown: () => void;
   moveDrag: {
@@ -1491,6 +1510,21 @@ export type EditorState = {
     orient: NonNullable<Bond["stereoOrient"]>,
   ) => void;
   setSel: (sel: Sel, anchor?: number | null) => void;
+  /**
+   * An atom clicked: selected alone at once, its shade spreading from it -
+   * and, the second click of a double-click following, taken back, the
+   * selection as it was, its shade drawn back in (`clickTakeBack`).
+   */
+  clickSelectAtom: (id: number) => void;
+  /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
+  clickTakeBack: (id: number) => boolean;
+  /**
+   * The atom a click selected last, when, what was selected before, whether
+   * it was not selected then (`fresh`: its shade spreads from it, and draws
+   * back in, taken back - SelectionShade2D) and whether it has been taken
+   * back since.
+   */
+  clickShade: { atomId: number; at: number; was: Sel; anchor: number | null; fresh: boolean; back: boolean } | null;
   toggleAtomSel: (id: number) => void;
   toggleBondSel: (id: number) => void;
   selectPathTo: (id: number) => void;
@@ -1556,6 +1590,10 @@ export type EditorState = {
    * given, by id, and the molecules in 3D's, by index (all of a molecule's,
    * given none): one undo step (document `setStereoShown`).
    */
+  /** Atom numbers shown on molecules in 3D, by id - on the atoms given, by index, all of them given none - or hidden: one undo step (document `setAtomNumbers`). */
+  setAtomNumbers: (of: readonly { id: number; atoms?: readonly number[] }[], show: boolean) => void;
+  /** The kind of number the molecules in 3D given, by id, show (document `setAtomNumberKind`): one undo step. */
+  setAtomNumberKind: (molecules: readonly number[], kind: AtomNumberKind) => void;
   setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
   /**
    * Metal `metal` bound to a ring through all its atoms - one bond to a star
@@ -1678,10 +1716,14 @@ export type EditorState = {
     excludeId?: number | null,
   ) => number | null;
   /** An atom's label opened to be written: as it is, or begun with `initial`, a letter typed over it. */
-  beginLabelEdit: (atomId: number, initial?: string) => void;
+  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean }) => void;
   setLabelEditValue: (value: string) => void;
-  /** The label written kept; `typed`, what was typed for it, where it is read as something else. */
-  commitLabelEdit: (typed?: string) => void;
+  /** The label written kept; `typed`, what was typed for it, where it is read as something else; `byEnter`, where Enter kept it. */
+  commitLabelEdit: (typed?: string, byEnter?: boolean) => void;
+  /** A key pressed after a label kept by Enter: an Enter draws it out, any other key leaves it as it is. Whether there was one to answer. */
+  keyAfterLabel: (enter: boolean) => boolean;
+  /** A label kept by Enter no longer to be drawn out by the next: something done in between. */
+  forgetLabelKept: () => void;
   /** An atom's label made what was typed for it, read as nothing else: obz, not OBz - one step. */
   labelAsTyped: (atomId: number) => void;
   cancelLabelEdit: () => void;

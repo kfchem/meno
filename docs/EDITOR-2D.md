@@ -40,12 +40,18 @@ and in particular:
     degrees from a bond already there it snaps to that, and an arc grows
     out of the atom to tell it from the 30-degree grid. (Agreed 2026-09-28,
     after trying it: a plain drag drawing a bond was hard to get used to.)
-  - A click alone edits the atom's label once the system's double-click
-    time has passed (DOUBLE_CLICK_MS, half a second); a double-click
-    slower than that, finding its first click already editing, takes the
-    edit back. The end of a drag is not a click, though the browser fires
-    one wherever the button comes up: a bond let go on the atom it has just
-    drawn does not go on to edit that atom's label (utils/press).
+  - A click alone selects the atom, alone, at once: its shade spreads out
+    from the atom in 160 ms (`SPREAD_MS`, eased). The second click of a
+    double-click, within DOUBLE_CLICK_MS (half a second), takes it back -
+    the selection as it was, the shade drawing back into the atom in 140 ms
+    (`DRAW_BACK_MS`) - as it draws the bond (`clickSelectAtom`,
+    `clickTakeBack`; the maintainer, 2026-10-18: a click with no answer
+    looked broken. Before, a click edited the label once the double-click
+    time had passed). An atom selected already is not spread again. The
+    end of a drag is not a click, though the browser fires one wherever the
+    button comes up: a bond let go on the atom it has just drawn does not
+    go on to select that atom (utils/press). A label is written by typing
+    over the atom, or from its menu (*Labels typed in place*, below).
   - A pause in a drag (FREE_MS) lets a bond or a moved atom go exactly
     where the pointer is, off the grid.
   - A bond led within reach of an atom closes onto it, and so does one led
@@ -258,8 +264,8 @@ held still before it is let go stays where it was put. (It used to glide on
 by its last move whatever came after - a drag held still went on drifting
 when it was let go.)
 
-**A click keeps each view's own meaning**: in 2D a click on an atom edits
-its label and a click on a bond changes its kind, as drawing wants - and
+**A click keeps each view's own meaning**: in 2D a click on an atom selects
+it and a click on a bond changes its kind, as drawing wants - and
 the bond's right-click menu chooses its kind outright (the maintainer,
 2026-10-14: both), for every bond selected at once, as one step; in 3D a
 click on an atom chooses it, for a measurement, and a click elsewhere on the
@@ -338,16 +344,15 @@ atom dragged alone snaps as before, to the drawing's lengths and angles.
 **A long press** is a press held still for LONG_PRESS_MS (0.32 s), on the
 first press only: the second of a double-click held still waits to be
 dragged - on a bond as on an atom or empty space (until 2026-10-13 a
-bond's second press began one: `pressOnBond`). It is counted while the button is held, so a click's label edit,
-which waits for DOUBLE_CLICK_MS after the button comes up, is unaffected.
+bond's second press began one: `pressOnBond`). It is counted while the button is held.
 As it is held, the selection's shade spreads out from the atom along the
 bonds, reaching the whole structure as it is selected; on empty space a
 ring opens where the box will begin (`HoldProgress2D`). Let go early, it
 goes again. Let go where it was held, the long press has selected and
-that is all: the click its release makes edits no label, being held off
-as it comes (`suppressDoubleClick`), not when the edit would begin.
+that is all: the click its release makes selects nothing more, being
+held off as it comes (`suppressDoubleClick`).
 Another button pressed with it, on an atom or a bond, makes it no press
-at all - nothing selected, no label edited on release, no drag - as the
+at all - nothing selected, on release or held, no drag - as the
 menu opens none for such a chord (`onChord`, utils/press; the command
 centre, 2026-10-14: before, the long press went on and selected the
 structure the right-click had been meant for). On a
@@ -676,8 +681,8 @@ All hover-based, as above.
   PR #66: the selection, by the same keys or its menu, in one step.)
 - Selection: Ctrl/⌘ and a click on an atom or a bond adds it or takes it
   out, Shift and a click everything along the bonds to it, a long press a
-  whole structure, a box or a lasso what it holds (a click alone edits a
-  label, not the selection); move, rotate and flip what is selected.
+  whole structure, a box or a lasso what it holds, a click alone the atom
+  alone; move, rotate and flip what is selected.
   (PR #66, as above.)
 - Elements without typing; charges, radicals and isotopes, drawn as
   superscripts and carried through the model, the files and the hydrogen
@@ -691,26 +696,69 @@ All hover-based, as above.
   typing - N+, NH3+, O-, Fe2+, 13C, or a charge alone - by + and - over
   an atom, or from its menu, which also gives or takes an unpaired
   electron.)
-- **Labels typed in place** (the maintainer, 2026-10-10: no HTML box). A
-  label is written where it stands, drawn by Meno as words on the page are
-  (*Text*, below; `LabelTyping2D`): set as a label is set, in the drawing's
-  typeface at its size, its first letter on the atom - a two-letter
-  symbol's middle - on a light of its own that hides the label it had, its
-  charge too; with the caret, what is selected and what an input method
-  composes drawn over it. Typed through the field words on the page are
-  typed through (`pageField`), laid at the caret so that an input method's
-  candidates show there - an input method's full-width letters are taken
-  as the ordinary ones once it gives them. Begun by a click on an atom, or
-  by a letter typed over one; Enter keeps it, Escape lets it go, a press
-  elsewhere keeps it; a click in it puts the caret, a drag selects. Kept,
-  it is drawn as written until the drawing's own label is drawn in its
-  place, then goes in a moment, the label coming through: never a frame
-  with no label, nor with the old one. The drawing's labels are drawn each
-  by its atom (`Labels2D` `keyOf`): a label added or taken away sets no
-  other label's letters again. A label taken away - undone, redone away,
-  deleted with its atom, its atom drawn plain again - fades out in
-  DURATION.quick, gently at first, kept by its atom's key as it goes
-  (`usePresence`, `fadingOut`); before, it went in one frame.
+- **Labels typed in place** (the maintainer, 2026-10-10: no HTML box;
+  2026-10-18, as it is now). A label is written where it stands, drawn by
+  Meno as words on the page are (*Text*, below; `LabelTyping2D`): set as a
+  label is set, in the drawing's typeface at its size, its first letter on
+  the atom - a two-letter symbol's middle (utils/writtenLetters) - with the
+  caret, what is selected and what an input method composes drawn over it,
+  and nothing under it: no light. The drawing draws no label for the atom
+  meanwhile - the label it had, its charge too, fading out in
+  DURATION.quick - and its bonds stop short of what is written as they
+  would of a label (lib/chem/layout2d `Writing`). Typed through the field
+  words on the page are typed through (`pageField`), laid at the caret so
+  that an input method's candidates show there - an input method's
+  full-width letters are taken as the ordinary ones once it gives them;
+  Cut, Copy, Paste and Select All work on its letters as on words.
+  - Begun by a letter typed over an atom - O, then the pointer moved on,
+    is O - or from the atom's menu, *Edit label*, holding what it says,
+    the caret at its end; a carbon drawn as a corner opens with a C,
+    selected, to be typed over. A click on an atom no longer begins one.
+  - Nothing jumps (the maintainer, 2026-10-18). Begun by a letter, the
+    letter grows out of the atom, from 0.4 of its size, as it comes into
+    view, while the atom's bonds draw back to make room for it - both in
+    120 ms (`WRITE_MS`, DURATION.quick), eased in and out as what moves the
+    drawing in place is (theme/motion `easeInOut`), and counted by the
+    frames drawn (`frameClock`): the canvas is busy for a moment as a label
+    begins, and a clock of its own would have had the motion mostly done
+    by the first frame. A double bond to the atom has its second line go
+    over to where the label leaves it in the same time - drawn both ways,
+    as the atom was and as labelled, and taken the share of the way the
+    writing has come (lib/chem/layout2d `writingShare`) - and back, let
+    go. Each letter after, the
+    bonds go on to make room in as long, from where they had come. Let
+    go, the letters draw back into the atom as the bonds come back and the
+    label it had fades back in (`labelEnd`, Labels2D `arriving`). Kept, it
+    is drawn as written until the drawing's own label is drawn in its
+    place, then goes in a moment, the label coming through: never a frame
+    with no label, nor with the old one - and the bonds go over from what
+    was written to the label as drawn, a label drawn the other way round
+    (MeO) among them.
+  - Enter keeps it, and so does the pointer leaving the atom and its
+    letters (utils/labelLeave): out past the atom's own disc - as it is
+    picked - and the letters' box by more than 0.15 of a bond for 150 ms
+    together, or by more than half a bond at once, or off the canvas. A
+    hand's tremor keeps nothing; a drag among its letters, selecting, is
+    not leaving them. Only the pointer moving away leaves them: where it is
+    on the screen is set against the label as it is drawn now, each frame,
+    so a pan or a zoom carrying the label off from under a still pointer
+    keeps nothing, one bringing it to the pointer finds it there, and a
+    move away after a zoom is seen as one. Opened from the menu,
+    it waits for the pointer to come to the atom first. A press elsewhere
+    keeps it, Escape lets it go; a click in it puts the caret, a drag
+    selects.
+  - Enter again, straight after the Enter that kept it - no other key,
+    press or selection between - draws the label out, as *Expand
+    abbreviation* does, one step after the label's own; a label with
+    nothing to draw out stays as it is. An Enter over a label not just
+    typed draws nothing out.
+  - The drawing's labels are drawn each by its atom (`Labels2D` `keyOf`):
+    a label added or taken away sets no other label's letters again. A
+    label taken away - undone, redone away, deleted with its atom, its
+    atom drawn plain again - fades out in DURATION.quick, gently at first,
+    kept by its atom's key as it goes (`usePresence`, `fadingOut`); before,
+    it went in one frame. One back before it has gone - redone, or a label
+    let go - fades in again in as long, from as far as it had faded.
 - **Labels read as they are meant** (the maintainer, 2026-10-10: nh2 is
   NH2, obz OBz, hnfmoc NHFmoc; `lib/chem/smartLabel.ts`). No list of what
   is typed: of the labels Meno reads (docs/CTFILE.md, *Atoms that are not
@@ -805,6 +853,12 @@ All hover-based, as above.
   and E/Z from a button on the canvas, later shown on what they are asked
   for on; valence warnings in Settings › Chemistry; neither in an exported
   picture.)
+  - **A halogen bridging metals** (μ-X; the maintainer, 2026-10-18) -
+    μ-Cl in [Pd(allyl)Cl]2, drawn with a plain bond to each metal - is
+    not marked: its bonds to metals count as the dative bonds they are, so
+    that it is checked by its bonds to the rest, none or the one it has as
+    usual. One with two bonds to carbons is marked still, metal or not
+    (chem/marks `bridgesMetals`).
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
@@ -1345,7 +1399,12 @@ lipids each have their own way of being drawn, which it should know.
      SMILES do it: a bond drawn by hand keeps its length.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
-     (*Expand abbreviation*) still draws all of it; what is shown by name
+     (*Expand abbreviation*) puts the group in free space: away from all
+     the atom's bonds, out of a ring from a ring's atom, and clear of the
+     drawing's atoms, bonds and labels as far as their letters are set -
+     turned, or seen in a mirror where it has no stereo of its own, only
+     where it is not clear as laid out; nothing else moves
+     (`utils/expandPlace.ts`). It still draws all of it; what is shown by name
      is Clean-up's to decide, by what the group does and how much of the
      molecule it is:
      - a protecting, activating or leaving group (`role` in

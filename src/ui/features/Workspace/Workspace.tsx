@@ -48,6 +48,7 @@ import ExportCard from "./ExportCard";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
+import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
 import { setTextTaker } from "../../views/texts";
@@ -84,6 +85,7 @@ import { askToOpen } from "../../layouts/commands";
 import { bondsAt, chosenPath, frameOf, lookOf, poseOf, seenBounds, solidOf } from "./utils/molecule3d";
 import { movingAtoms, movingFor } from "./utils/edit3d";
 import { abbreviationOf } from "../../../lib/chem/abbreviations";
+import { numbersItemsFor } from "./utils/atomNumbersShown";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 
 /** No atoms or bonds: the same array each time, so that nothing redraws for it. */
@@ -2194,6 +2196,15 @@ function WorkspaceContent({
             const item = stereoItemFor(st, menu);
             return item ? { name: item.name, run: () => showStereo(item) } : undefined;
           })()}
+          numbers={(() => {
+            const st = store.getState();
+            const got = numbersItemsFor(st, menu);
+            if (!got) return undefined;
+            return {
+              items: got.items.map((it) => ({ name: it.name, run: () => st.setAtomNumbers(it.of, it.show) })),
+              kinds: got.kinds.map((k) => ({ name: k.name, checked: k.checked, run: () => st.setAtomNumberKind(k.molecules, k.kind) })),
+            };
+          })()}
           onTurnOver={(axis) => store.getState().turnSelectionOver(axis)}
           onCharge={(step) => {
             if (menu.kind === "atom" && menu.id != null) chargeAtom(menu.id, step);
@@ -2215,6 +2226,13 @@ function WorkspaceContent({
               ? () => store.getState().expandAbbreviation(menu.id!)
               : undefined
           }
+          onEditLabel={(() => {
+            const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
+            if (!a) return undefined;
+            // (a carbon drawn as a corner: a C, selected, to be typed over)
+            const bare = labelTextOf(a) === "";
+            return () => store.getState().beginLabelEdit(a.id, bare ? "C" : "", { select: bare });
+          })()}
           asTyped={(() => {
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             return a?.typed && a.typed !== a.el ? { typed: a.typed, run: () => store.getState().labelAsTyped(a.id) } : undefined;

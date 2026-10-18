@@ -19,32 +19,17 @@
  * for it come after them, so that the 3D structure's atoms stay tied to the
  * drawing's by their place (make3d `moleculeOf`).
  */
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { placedStructure } from "../../../../lib/chem/abbreviationPlace";
-import { ligandStructure, namedLigand } from "../../../../lib/chem/ligands";
+import { boundLigandStructure } from "../../../../lib/chem/boundLigand";
 import { etaBondedAtomByAtom, isMetal, type LayoutInput } from "../../../../lib/layout/perceive";
+import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 
 type Atom = Model["atoms"][number];
 type Bond = Model["bonds"][number];
 
-/**
- * A label bonded to one metal that names a ligand only in a complex (Cp,
- * allyl, CO, =CHPh): its structure as written out, laid off from the metal,
- * a neutral donor's bond to it a coordination bond (as chem/abbreviations
- * writes a ligand's). A ligand that binds as an anion (Cp, through its
- * ring) is written neutral, as a label on a metal is drawn: the plugin
- * counts the ring's charge.
- */
+/** A label bonded to one metal that names a ligand only in a complex: written out as bound (lib/chem/boundLigand). */
 function boundLigand(a: Atom, metal: Atom): Atom["abbrev"] | null {
-  const named = namedLigand(a.el.trim(), true);
-  if (!named?.ligand.inComplex) return null;
-  const { anionic, double, ...s } = ligandStructure(named.ligand, named.descriptor);
-  const net = s.atoms.reduce((q, x) => q + (x.charge ?? 0), 0);
-  const atoms = net ? s.atoms.map(({ charge: _charge, ...atom }) => atom) : s.atoms;
-  const pi = new Set((s.haptic ?? []).map((h) => h.star));
-  const lends = s.attach.map((at, k) => !anionic[k] && !double[k] && !pi.has(at));
-  return placedStructure({ ...s, atoms, ...(lends.some(Boolean) ? { lends } : {}) }, { x: metal.x - a.x, y: metal.y - a.y }, NOMINAL_BOND_LENGTH);
+  return boundLigandStructure(a.el, { x: metal.x - a.x, y: metal.y - a.y });
 }
 
 /**
@@ -52,6 +37,37 @@ function boundLigand(a: Atom, metal: Atom): Atom["abbrev"] | null {
  * one multi-centre bond (above); the same structure where it has none.
  */
 export function etaBound(part: Model): Model {
+  return withoutStaleValence(etaBoundAsDrawn(part));
+}
+
+/**
+ * A metal's valence as a drawing states it (`valence`: a SMILES's bracket
+ * atom, a file's VAL - [Fe] in C[Fe]C is two) counts its bonds as drawn,
+ * each a plain bond: where any of them binds a ligand written out (a label
+ * bonded to it: Cp, cod, CO) or a ring or chain through all its atoms, they
+ * are no such bonds, and the count no longer holds - left to the plugin,
+ * it reads the metal as two-valent still and binds each Cp by one carbon,
+ * an H on the metal. Left out, as for a metal drawn by hand; the drawing
+ * keeps it.
+ */
+function withoutStaleValence(m: Model): Model {
+  const byId = new Map(m.atoms.map((a) => [a.id, a]));
+  const ligandOf = (a: Atom | undefined) => !!a && (a.el === "*" || !!a.abbrev || !isElementSymbol(a.el));
+  const bound = new Set<number>();
+  for (const b of m.bonds) {
+    for (const [x, y] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      const metal = byId.get(x);
+      if (metal?.valence != null && isMetal(metal.el) && (b.endpoints?.length || ligandOf(byId.get(y)))) bound.add(x);
+    }
+  }
+  if (!bound.size) return m;
+  return { ...m, atoms: m.atoms.map((a) => (bound.has(a.id) ? (({ valence: _valence, ...rest }) => rest)(a) : a)) };
+}
+
+function etaBoundAsDrawn(part: Model): Model {
   const byId = new Map(part.atoms.map((a) => [a.id, a]));
   const bondsOf = (id: number) => part.bonds.filter((b) => b.a === id || b.b === id);
   // (a donor's bond to its metal written from the donor, as a coordination bond is read: from the atom that lends its pair)

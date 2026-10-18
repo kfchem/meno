@@ -7,6 +7,7 @@
 import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
+import { isMetal } from "../../../../lib/layout/perceive";
 import type { Model } from "../store/types";
 
 /** A stereodescriptor's letters, against the labels': on the drawing and on a molecule in 3D alike. */
@@ -42,7 +43,7 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
   for (const a of analysis.atoms) {
     const atom = atoms[a.index];
     if (!atom) continue;
-    if (a.valenceError) marks.valence.set(atom.id, a.valenceError);
+    if (a.valenceError && !bridgesMetals(model, atom, a.valenceError)) marks.valence.set(atom.id, a.valenceError);
     if (a.cip) marks.centres.set(atom.id, a.cip);
   }
   for (const b of analysis.bonds) {
@@ -52,6 +53,30 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
     if (bond && b.cip) marks.doubleBonds.set(bond.id, b.cip === "M" ? "Ra" : b.cip === "P" ? "Sa" : b.cip);
   }
   return marks;
+}
+
+/** The halogens: group 17, by atomic number. */
+const HALOGEN = new Set(ELEMENTS.filter((e) => [9, 17, 35, 53, 85, 117].includes(e.number)).map((e) => e.symbol));
+
+/**
+ * A halogen bridging metals - μ-Cl in [Pd(allyl)Cl]2, drawn with a plain
+ * bond to each Pd - has no more bonds than it can have (the maintainer,
+ * 2026-10-18): its bonds to metals count as the dative bonds they are, so
+ * that what it is checked by is its bonds to the rest - none, or the one it
+ * has as usual. A halogen bonded past that to non-metals (two carbons) is
+ * marked still.
+ */
+function bridgesMetals(model: Model, atom: Model["atoms"][number], p: ValenceProblem): boolean {
+  if (!HALOGEN.has(atom.el)) return false;
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  let toMetals = 0;
+  for (const b of model.bonds) {
+    const other = b.a === atom.id ? b.b : b.b === atom.id ? b.a : null;
+    if (other == null) continue;
+    const o = byId.get(other);
+    if (o && isMetal(o.el)) toMetals += b.order;
+  }
+  return toMetals > 0 && p.valence - toMetals <= (p.most ?? 1);
 }
 
 const NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));

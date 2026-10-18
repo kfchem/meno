@@ -366,6 +366,9 @@ export function createEditorStore(
     autoFitSuspended: false,
     labelEdit: { active: false, atomId: null, value: "" },
     labelLeft: null,
+    labelKept: null,
+    labelEnd: null,
+    clickShade: null,
     moveDrag: {
       active: false,
       atomId: null,

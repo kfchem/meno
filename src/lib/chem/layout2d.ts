@@ -48,7 +48,21 @@ export type Atom = AtomChem & {
   highlight?: string;
   /** How large its structure is shown: laid out in the style so many times over (layoutStructures `magnifiedOptions`). Unset, 1. */
   magnified?: number;
+  /**
+   * A label being written over it, or just kept or let go (the canvas's
+   * LabelTyping2D): what its bonds stop short of, on its way there.
+   * Unset, its label as drawn.
+   */
+  writing?: Writing;
 };
+/**
+ * What an atom's bonds stop short of while a label is written over it:
+ * `items`, the letters as they are written there, about the atom - or,
+ * none given, its label as drawn - `k` of the way (0 to 1) from what they
+ * stopped short of before (`was`; none, the atom itself). Where `hidden`,
+ * no label is drawn for it: the writing draws its own.
+ */
+export type Writing = { items?: readonly TextItem[]; k: number; was?: Writing; hidden?: boolean };
 export type Bond = BondChem & {
   a1: number;
   a2: number;
@@ -2386,6 +2400,8 @@ export function buildTextLabels(
     // 1996 writes methane CH4.
     // (a pi system's centre, where a haptic bond ends, is drawn as nothing)
     if (hapticCentres.has(i)) continue;
+    // (a label being written over it: its letters the writing's own)
+    if (a.writing?.hidden) continue;
     const show = showsLabel(a, opts) || !bonded.has(i);
     // its charge and its radical's dots, after the symbol on its line; its
     // mass number before it
@@ -2609,6 +2625,20 @@ export function labelTrims(
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
   const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
+    // (a label being written: on its way from what its bonds stopped short of before, `k` of the way)
+    if (at.writing) {
+      const band = { n, lo, hi };
+      const set = labelSetOf(opts);
+      const clear = (w: Writing): number => {
+        const k = Math.min(1, Math.max(0, w.k));
+        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margin, band) : drawn(idx, at, towards, band);
+        return k >= 1 ? now : (w.was ? clear(w.was) : 0) * (1 - k) + now * k;
+      };
+      return clear(at.writing);
+    }
+    return drawn(idx, at, towards, { n, lo, hi });
+  };
+  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }) => {
     // (a pi system's centre, where a haptic bond ends, has no label to stop
     // short of: the line reaches the centre, as the bond is to the system
     // as a whole - IUPAC GR-1.7)
@@ -2616,13 +2646,57 @@ export function labelTrims(
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
-    return labelClearance(hulls, towards, margin, { n, lo, hi });
+    return labelClearance(hulls, towards, margin, band);
   };
   return {
     a: reach(bond.a1, p, dir, -across.right1, across.left1),
     b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
     room: L0 * (opts.labelShareMax ?? 0.9),
   };
+}
+
+/**
+ * How far an atom a label is being written over (`Atom.writing`) has come
+ * to being drawn as labelled, 0 to 1 - its bonds' ends cut by a label, a
+ * double bond's second line running up to it - each step `k` of the way
+ * from the one before: none before, none labelled. Null where nothing is
+ * being written over it.
+ */
+export function writingShare(at: Atom, opts: Pick<LayoutOptions, "showCarbonLabels" | "showChargedCarbons">): number | null {
+  if (!at.writing) return null;
+  const labelled = showsLabel(at, opts) ? 1 : 0;
+  const share = (w: Writing): number => {
+    const k = Math.min(1, Math.max(0, w.k));
+    const now = w.items ? (w.items.length ? 1 : 0) : labelled;
+    return k >= 1 ? now : (w.was ? share(w.was) : 0) * (1 - k) + now * k;
+  };
+  return share(at.writing);
+}
+
+/**
+ * A bond's lines and shapes `t` of the way from `a` to `b`, drawn the two
+ * ways (writingShare): each line's and shape's points between, where the
+ * two have as many - otherwise the nearer way - the meets and bends of the
+ * nearer way, and the free ends of `b`, any of the way along.
+ */
+function blendPrimitives(a: BondPrimitives, b: BondPrimitives, t: number): BondPrimitives {
+  const near = t < 0.5 ? a : b;
+  const mix = (p: number, q: number) => p + (q - p) * t;
+  const lines =
+    a.lines.length === b.lines.length
+      ? a.lines.map((l, i) => ({ ...b.lines[i], x1: mix(l.x1, b.lines[i].x1), y1: mix(l.y1, b.lines[i].y1), x2: mix(l.x2, b.lines[i].x2), y2: mix(l.y2, b.lines[i].y2) }))
+      : near.lines;
+  const polys =
+    a.polys.length === b.polys.length && a.polys.every((p, i) => p.points.length === b.polys[i].points.length)
+      ? a.polys.map((p, i) => ({ ...b.polys[i], points: p.points.map((v, j) => ({ x: mix(v.x, b.polys[i].points[j].x), y: mix(v.y, b.polys[i].points[j].y) })) }))
+      : near.polys;
+  // (a line's free end finished round where it stops: both ways stop it where the letters are)
+  return { ...near, lines, polys, ends: t > 0 ? b.ends : a.ends };
+}
+
+/** The ink of letters set about an atom (each `TextItem` where it is set, the atom at the origin), its tail aside: labelHulls of each. */
+function itemsHulls(items: readonly TextItem[], fontSize: number, set: LabelSet): Vec2[][] {
+  return items.flatMap((t) => labelHulls(t, fontSize, set, false).map((h) => h.map((p) => ({ x: p.x + t.x, y: p.y + t.y }))));
 }
 
 /** The least share of a bond seen between the labels at its ends, however much of it they would take. */
@@ -2640,7 +2714,9 @@ export function buildBondPrimitives(
   autoSgn?: number,
   adjBonds?: Map<number, Bond[]>,
   labelShapes?: Map<number, Vec2[][]>,
-  doubleSides?: Map<Bond, number | undefined>
+  doubleSides?: Map<Bond, number | undefined>,
+  // (an atom a label is being written over, as labelled - false: as it was, unlabelled - writingShare)
+  writtenAs = true,
 ): BondPrimitives {
   const a = atoms[bond.a1];
   const c = atoms[bond.a2];
@@ -2652,7 +2728,8 @@ export function buildBondPrimitives(
   let lwPx = units === "world" ? opts.lineWidthPx * zoom : opts.lineWidthPx;
   const minPx = Math.max(0.5, opts.minLinePx ?? 1);
   if (!(lwPx >= minPx)) lwPx = minPx;
-  const hasLabel = (at: Atom) => showsLabel(at, opts);
+  // (a label being written over it takes the bond's end as a label does)
+  const hasLabel = (at: Atom) => showsLabel(at, opts) || (!!at.writing && writtenAs);
   const lineHalf = pxToWorld(lwPx * 0.5, zoom);
   // how wide a bold bond is, and a wedge at its broad end, either side of its line
   const boldHalf =
@@ -3211,9 +3288,10 @@ export function joinsAtAtoms(
   const mitres = new Map<number, Vec2[]>();
   for (let i = 0; i < atoms.length; i++) {
     const d = deg.get(i) || 0;
-    const showLabel = showsLabel(atoms[i], opts);
-    // A label takes the bond's end with it, and a wedge's wide end covers its
-    // own join, so neither wants anything here.
+    const showLabel = showsLabel(atoms[i], opts) || (writingShare(atoms[i], opts) ?? 0) > 0;
+    // A label takes the bond's end with it - one being written over the
+    // atom too - and a wedge's wide end covers its own join, so neither
+    // wants anything here.
     if (showLabel || wedgeEnds.has(i)) continue;
     // A free end of a plain bond, or any atom bonds meet at - including one
     // where only wedges meet, whose thin ends are each a bond wide and do
@@ -3674,18 +3752,14 @@ export function buildAllPrimitives(
     // which side the second line of a double bond takes, worked out for every
     // one of them first so that each knows what its neighbours are doing
     const autoSgn = doubleSides.get(b);
-    const r = buildBondPrimitives(
-      atoms,
-      beff,
-      opts,
-      zoom,
-      deg,
-      undefined,
-      autoSgn,
-      adjBonds,
-      labelShapes,
-      doubleSides
-    );
+    // (at an atom on its way between labelled and not - a label being
+    // written over a carbon, or let go - the bond drawn both ways, the
+    // share of the way it has come between them: a double bond's second
+    // line goes over to where a label leaves it, not there at once)
+    const shares = [writingShare(atoms[b.a1], opts), writingShare(atoms[b.a2], opts)].filter((w): w is number => w != null);
+    const share = shares.find((w) => w > 0 && w < 1);
+    const build = (writtenAs: boolean) => buildBondPrimitives(atoms, beff, opts, zoom, deg, undefined, autoSgn, adjBonds, labelShapes, doubleSides, writtenAs);
+    const r = share != null ? blendPrimitives(build(false), build(true), share) : build(!shares.includes(0));
     reach.push(bondReach(beff, opts, zoom, deg, doubleSides));
     // (two labels wanting more of it than their room: said, for Clean-up)
     if (b.a1 !== b.a2 && showsLabel(atoms[b.a1], opts) && showsLabel(atoms[b.a2], opts)) {

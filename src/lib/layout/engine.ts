@@ -316,7 +316,7 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       const hub = metalHub(mol, sys.rings.map((r) => mol.rings[r]));
       return void local.set(i, hub ? layoutFlat(mol, sys, v).pos : placeRingSystem(mol, sys, v));
     }
-    const laid = u ? placeUnit(mol, u, v) : placeEta(mol, e!, v);
+    const laid = u ? placeUnit(mol, u, v, u.chelate && layoutFlat(mol, u.chelate).pos) : placeEta(mol, e!, v);
     local.set(i, laid.pos);
     laid.hints.forEach((m, a) => (hints.set(a, m), hintsM.set(a, m)));
     laid.lift.forEach((l, a) => lifts.set(a, l));

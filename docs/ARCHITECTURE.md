@@ -1098,9 +1098,11 @@ was left there is taken away (`roaming.rs`), by name only: `uv`, `pixi` and
 `tools` at each start while they are there, and a plugin's environment there
 as the plugin is removed; `jobs` only where it holds no job. While a job there
 still waits or runs, everything there is left, as its program may be using its
-environment; jobs kept there are left with their files. The rest of that
-folder - the settings, the log, the window's place - moves as above, and the
-folder goes once it is empty. What is left, and why, goes in Meno's log.
+environment; jobs kept there are left with their files - said in Meno's log
+at the start the rest is moved, or something is taken away, not again at every
+start. The rest of that folder - the settings, the log, the window's place -
+moves as above, and the folder goes once it is empty. What is left, and why,
+goes in Meno's log.
 
 ### PDFs
 

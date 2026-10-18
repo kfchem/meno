@@ -3,9 +3,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode }
 import { useFrame, useThree } from "@react-three/fiber";
 import { useEditor } from "../store";
 import {
+  labelSetOf,
   sameAtZooms,
   type Atom as LAtom,
   type Bond as LBond,
+  type Layout,
 } from "../../../../lib/chem/layout2d";
 import { layoutByStructure, structureLayouts } from "../../../../lib/chem/layoutStructures";
 import { editorLayoutOptions, layoutAtomOf, layoutBond } from "../layoutOptions";
@@ -18,10 +20,11 @@ import { NEW_ATOM, type StrokeNode } from "../utils/stroke";
 import { ChainGrow } from "../utils/chainGrow";
 import { CHAIN_EASE } from "../constants";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { DURATION, easeOut } from "../../../theme/motion";
+import { DURATION, easeOut, frameClock } from "../../../theme/motion";
 import { glideAt, partsOf, planGlide, type GlidePlan, type Pt } from "../utils/glide";
 import { nearZoom, SETTLE_MS, zoomedLarge } from "../utils/largeZoom";
 import { starsAtTheirAtoms } from "../chem/eta";
+import { nextWriteStep, writeMoving, writingAt, writtenLetters, type WriteStep } from "../utils/writtenLetters";
 
 /**
  * How far an atom may move in one change, while a button is held, and still
@@ -389,6 +392,76 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   const fonts = useTypefaces(style.fontFamily, anyJapanese);
   // (a label is read by the abbreviations Meno knows, the user's among them)
   const abbreviations = useAppSettings((s) => s.abbreviations);
+  // A label being written over an atom - or just kept or let go - its
+  // bonds on their way to stop short of what is written, a step at a time,
+  // and back to its label as drawn (lib/chem/layout2d `Writing`): the
+  // writing (LabelTyping2D) draws the letters, the drawing none for it.
+  const labelEdit = useEditor((s) => s.labelEdit);
+  const writes = useRef(new Map<number, { n: number; step: WriteStep }>());
+  const lastLaid = useRef<{ atoms: LAtom[]; layout: Layout } | null>(null);
+  const writtenOut = useRef(new Map<number, { from: LAtom; n: number; out: LAtom }>());
+  const [writeTick, setWriteTick] = useState(0);
+  const writeOn = useRef(false);
+  // (counted by the frames drawn: the canvas busy as a label begins takes the bonds no further than a frame would)
+  const [writeClock] = useState(() => frameClock());
+  const written: LAtom[] = useMemo(() => {
+    const now = writeClock.now();
+    const map = writes.current;
+    const set = labelSetOf(opts);
+    const letters = (text: string) => writtenLetters(text, opts.fontPx, set).items;
+    const editing = labelEdit.active && labelEdit.atomId != null && labelEdit.n != null ? labelEdit.atomId : null;
+    if (editing != null) {
+      const entry = map.get(editing);
+      const text = labelEdit.value;
+      if (!entry || entry.n !== labelEdit.n) {
+        // (begun: from the label it had, as it was drawn - or from where it was on its way, written over again)
+        let was: WriteStep | undefined = entry?.step;
+        const last = lastLaid.current;
+        const at = last ? last.atoms.findIndex((a) => a.id === editing) : -1;
+        if (!was && last && at >= 0) {
+          const a = last.atoms[at];
+          const items = last.layout.texts.filter((t) => (t.beside ? t.markOf : t.atom) === at).map((t) => ({ ...t, x: t.x - a.x, y: t.y - a.y }));
+          if (items.length) was = { n: nextWriteStep(), items, since: Number.NEGATIVE_INFINITY, hidden: false };
+        }
+        map.set(editing, { n: labelEdit.n!, step: { n: nextWriteStep(), text, items: letters(text), since: now, was, hidden: true } });
+      } else if (entry.step.text !== text) {
+        // (a letter more, or fewer: on from where it was)
+        map.set(editing, { n: entry.n, step: { n: nextWriteStep(), text, items: letters(text), since: now, was: entry.step, hidden: true } });
+      }
+    }
+    for (const [id, entry] of map) {
+      if (id === editing) continue;
+      // (kept or let go: back to its label as drawn, from what was written)
+      if (entry.step.text != null) {
+        map.set(id, { n: entry.n, step: { n: nextWriteStep(), since: now, was: entry.step, hidden: false } });
+      } else if (!writeMoving(entry.step, now)) map.delete(id);
+    }
+    writeOn.current = [...map.values()].some((e) => writeMoving(e.step, now));
+    if (!map.size) {
+      writtenOut.current.clear();
+      return drawnAtoms;
+    }
+    const kept = writtenOut.current;
+    for (const id of [...kept.keys()]) if (!map.has(id)) kept.delete(id);
+    return drawnAtoms.map((a) => {
+      const entry = map.get(a.id);
+      if (!entry) return a;
+      // (the same object while it is the same, all the way there: its structure not laid out again)
+      const there = !writeMoving(entry.step, now);
+      const k = kept.get(a.id);
+      if (there && k && k.from === a && k.n === entry.step.n) return k.out;
+      const out = { ...a, writing: writingAt(entry.step, now) };
+      if (there) kept.set(a.id, { from: a, n: entry.step.n, out });
+      return out;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- writeTick: a frame of the way
+  }, [drawnAtoms, labelEdit, writeTick, opts]);
+  useFrame((_, dt) => {
+    if (!writeOn.current) return;
+    writeClock.tick(dt);
+    setWriteTick((n) => n + 1);
+    invalidate();
+  });
   large.current = zoomedLarge(drawnAtoms.length);
   // The zoom it is laid out at: the view's - or, where the layout made at
   // the zoom it was last laid out at is the drawing at this one as well
@@ -401,12 +474,13 @@ export function DrawnLayoutProvider({ children }: { children: ReactNode }) {
   laidAt.current = layoutZoom;
   const laid = useRef(structureLayouts());
   const layout = useMemo(
-    () => layoutByStructure(drawnAtoms, bonds, opts, layoutZoom, laid.current, [fonts, abbreviations]),
-    [drawnAtoms, bonds, opts, layoutZoom, fonts, abbreviations],
+    () => layoutByStructure(written, bonds, opts, layoutZoom, laid.current, [fonts, abbreviations]),
+    [written, bonds, opts, layoutZoom, fonts, abbreviations],
   );
+  lastLaid.current = { atoms: written, layout };
   const value = useMemo(
-    () => ({ atoms: drawnAtoms, bonds, opts, layout, laidAt: layoutZoom }),
-    [drawnAtoms, bonds, opts, layout, layoutZoom],
+    () => ({ atoms: written, bonds, opts, layout, laidAt: layoutZoom }),
+    [written, bonds, opts, layout, layoutZoom],
   );
   return (
     <DrawnZoomContext.Provider value={drawnZoom}>

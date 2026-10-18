@@ -75,6 +75,11 @@ export class TextBatch {
     for (const l of [...this.listeners]) l();
   };
 
+  /** Whether `key` is drawn, from whatever item. */
+  holds(key: string): boolean {
+    return this.held.has(key);
+  }
+
   /** Whether `key` is drawn from `item` already. */
   has(key: string, item: object): boolean {
     return this.held.get(key)?.item === item;

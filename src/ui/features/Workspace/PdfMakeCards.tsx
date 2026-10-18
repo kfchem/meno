@@ -3,7 +3,8 @@ import clsx from "clsx";
 import { motion } from "motion/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { boxPicture, type HeldPdf } from "../../../lib/pdf/reader";
-import { makePdf, numberedName, numberText, pagesName, pagesTyped, type PageNumbers, type PageTake } from "../../../lib/pdf/make";
+import { clickedPages, makePdf, numberedName, numberText, pagesName, pagesTyped, type PageNumbers, type PageTake } from "../../../lib/pdf/make";
+import { addsToSelection, IS_MAC } from "../../../lib/doc/shortcuts";
 import { DURATION, EASE, RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
 import type { PdfItem } from "./store/types";
@@ -189,7 +190,7 @@ export function PdfNumbersCard({ pdf, at, onMade, onClose }: { pdf: PdfItem; at:
   const make = () =>
     run(async () => {
       const held = await makePdf({ pages: pdf.pages.map((_, page) => ({ sha: pdf.sha256, page, turn: 0 })), numbers: shown });
-      onMade(held, numberedName(pdf.name));
+      onMade(held, numberedName(pdf.name, shown));
     });
   return (
     <Card label="Page numbers" width={380} height={300} at={at} onClose={onClose}>
@@ -257,7 +258,7 @@ export function PdfPagesCard({ pdf, at, onMade, onClose }: { pdf: PdfItem; at: P
   const [dragging, setDragging] = useState<number | null>(null);
   const { busy, error, run } = useMaking(onClose);
   const cells = useRef(new Map<number, HTMLElement>());
-  const press = useRef<{ page: number; x: number; y: number; shift: boolean; moved: boolean } | null>(null);
+  const press = useRef<{ page: number; x: number; y: number; shift: boolean; toggle: boolean; moved: boolean } | null>(null);
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const p = press.current;
@@ -290,17 +291,10 @@ export function PdfPagesCard({ pdf, at, onMade, onClose }: { pdf: PdfItem; at: P
       setDragging(null);
       if (!p || p.moved) return;
       // (a click: that page chosen; with Shift, the run from the one chosen last)
-      setChosen((was) => {
-        if (p.shift && last != null) {
-          const order = kept.map((k) => k.page);
-          const [a, b] = [order.indexOf(last), order.indexOf(p.page)].sort((x, y) => x - y);
-          return new Set([...was, ...order.slice(a, b + 1)]);
-        }
-        const next = new Set(was);
-        if (!next.delete(p.page)) next.add(p.page);
-        return next;
-      });
-      setLast(p.page);
+      // (a click: that page alone; with Shift, the run from the one clicked last; with Ctrl - Cmd on a Mac - that one added or taken away)
+      const after = clickedPages(chosen, kept.map((k) => k.page), last, p.page, { shift: p.shift, toggle: p.toggle });
+      setChosen(after.selected);
+      setLast(after.anchor);
     };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
@@ -310,7 +304,7 @@ export function PdfPagesCard({ pdf, at, onMade, onClose }: { pdf: PdfItem; at: P
       window.removeEventListener("pointerup", up);
       window.removeEventListener("pointercancel", up);
     };
-  }, [kept, last]);
+  }, [kept, last, chosen]);
   const turn = (by: number) => setKept((was) => was.map((k) => (chosen.has(k.page) ? { ...k, turn: k.turn + by } : k)));
   const takeOut = () => {
     setKept((was) => was.filter((k) => !chosen.has(k.page)));
@@ -368,7 +362,7 @@ export function PdfPagesCard({ pdf, at, onMade, onClose }: { pdf: PdfItem; at: P
             onPointerDown={(e) => {
               if (e.button !== 0) return;
               e.preventDefault();
-              press.current = { page: k.page, x: e.clientX, y: e.clientY, shift: e.shiftKey, moved: false };
+              press.current = { page: k.page, x: e.clientX, y: e.clientY, shift: e.shiftKey, toggle: addsToSelection(e), moved: false };
             }}
             className={clsx(
               "rounded-md p-1 flex flex-col items-center cursor-grab transition-colors duration-150 ease-meno",
@@ -382,7 +376,7 @@ export function PdfPagesCard({ pdf, at, onMade, onClose }: { pdf: PdfItem; at: P
         ))}
       </div>
       <p className="mt-2 text-[11px] text-gh-gray">
-        Drag a page to move it; click to select, Shift-click for a run. A new PDF goes beside {pdf.name}, which stays as it is.
+        Drag a page to move it; click to select it, Shift-click for a run, {IS_MAC ? "⌘" : "Ctrl"}-click to add or take one away. A new PDF goes beside {pdf.name}, which stays as it is.
       </p>
       {error && <p className="mt-1 text-xs text-accel-accent">{error}</p>}
       <div className="mt-2 flex justify-end gap-2">

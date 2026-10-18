@@ -6,6 +6,8 @@ import type { AbbreviationStructure, AtomChem, BondChem, Radical, SgroupMark } f
 import { ELEMENTS } from "./elements";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
+import { isMetal } from "../layout/perceive";
+import { boundLigandStructure } from "./boundLigand";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number; magnified?: number };
@@ -160,8 +162,11 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
     const variable = VARIABLES.has(a.el) && touching.length === 1;
     if ((ELEMENT_SYMBOLS.has(a.el) && !a.abbrev && !bondless && !variable) || RESERVED.has(a.el) || a.list) continue;
     const first = touching[0] ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    // (a label on a metal that names a ligand bound so - Cp, allyl, CO - written out as bound: lib/chem/boundLigand)
+    const bound = !a.abbrev && touching.length === 1 && first && isMetal(first.el) ? boundLigandStructure(a.el, { x: first.x - a.x, y: first.y - a.y }) : null;
     const structure: AbbreviationStructure | null =
       a.abbrev ??
+      bound ??
       (abbreviationOf(a.el)
         ? placedAbbreviation(a.el, first ? { x: first.x - a.x, y: first.y - a.y } : null, NOMINAL_BOND_LENGTH)
         : null);
@@ -193,6 +198,16 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
       // (a donor that lends its pair: a coordination bond)
       else if (structure.lends?.[k] && !b.dative) Object.assign(b, { coordination: true });
     });
+    // (a ligand bound through more pi systems than it is drawn with bonds - cod, nbd: two C=C - bonded to a metal by one:
+    // bound through each of them all the same, to that metal, a star left with no bond being no atom of anything)
+    const metal = touching.length === 1 ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    if (metal && isMetal(metal.el)) {
+      for (const at of structure.attach.slice(1)) {
+        const pi = structure.haptic?.find((h) => h.star === at);
+        if (!pi) continue;
+        bonds.push({ ...touching[0], a: metal.id, b: ids[at], endpoints: pi.atoms.map((e) => ids[e]), attach: "all", coordination: true });
+      }
+    }
     sups.push({ label: a.el, atoms: [a.id, ...ids.filter((id) => id !== a.id)] });
   }
   return { model: { atoms, bonds }, sups, aliases };

@@ -767,7 +767,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   toward them wedges, as for a ring face-on; stood with its C=C upright,
   the metal beside them. A second such ring goes to the metal's other
   side; the metal's other ligands opposite a lone one. Both C=C are cis,
-  as they are; drawn as one ring with the metal, one came out trans.
+  as they are; drawn as one ring with the metal, one came out trans. A
+  metal that is in a ring of its own as well - a chelate's, Rh(cod)(acac),
+  [Rh(cod)(dppe)]+; or norbornadiene's, whose C=C are not a ring of their
+  own - has that ring system laid out flat, as it would be alone, and set
+  on the metal where its other ligands go: its atoms bonded to the metal
+  side by side, opposite a lone tub. The metal, its tubs and that ring
+  system are one system (left out of it, the tub's stars had no place, and
+  Clean-up threw).
 - **Two metals bridged by two atoms** - [Rh(cod)Cl]2's chlorides,
   [Rh(cod)OMe]2's methoxides; or a transition metal and a main-group one,
   the Tebbe reagent's Ti and Al, the transition metal first - are their

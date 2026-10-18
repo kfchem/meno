@@ -137,6 +137,13 @@ export type MetalUnit = {
   pair?: { metal: number; bridges: [number, number] };
   /** (`up`: which way is up as the cluster is seen, from the metals below its middle to those above - set when it is laid out) */
   cluster?: { metals: number[]; bridges: number[]; up?: { from: number[]; to: number[] } };
+  /**
+   * The ring system a metal with a tub is in itself - a chelate's (acac,
+   * dppe, bpy) or a diene's bound by two pi systems of its own (nbd) -
+   * taken into the unit: laid out flat, as it would be on its own, and set
+   * on the metal where its other ligands go.
+   */
+  chelate?: RingSystem;
 };
 
 export const key = (a: number, b: number): string => (a < b ? `${a},${b}` : `${b},${a}`);
@@ -265,20 +272,31 @@ export function perceive(input: LayoutInput): Molecule {
     if (!corners || !bridging) return;
     units.push({ metal: metals[0], eta: [], dienes: [], system: i, cluster: { metals, bridges } });
   });
+  // (a metal in a ring of its own with a tub - Rh(cod)(acac) - that ring's
+  // system too: the tub's stars are in the tub's system, which only its
+  // metal's unit lays out. A ring face-on to a metal in a ring of its own
+  // is drawn round its star, the metal outside it, as a group is)
   for (let m = 0; m < n; m++) {
     const own = eta.filter((e) => e.metal === m);
     const tubs = dienes.filter((d) => d.metal === m);
-    if ((!own.length && !tubs.length) || systemOf[m] >= 0 || !isMetal(input.atoms[m].el)) continue;
+    if ((!own.length && !tubs.length) || !isMetal(input.atoms[m].el)) continue;
+    const at = systemOf[m];
+    if (at >= 0 && (!tubs.length || units.some((u) => u.system === at))) continue;
+    const chelate = at >= 0 ? systems[at] : undefined;
     const parts = [...own, ...tubs];
-    const merged = { atoms: [m, ...parts.flatMap((e) => e.atoms)], rings: parts.flatMap((e) => systems[e.system].rings) };
+    const merged = {
+      atoms: [...(chelate?.atoms ?? [m]), ...parts.flatMap((e) => e.atoms)],
+      rings: [...(chelate?.rings ?? []), ...parts.flatMap((e) => systems[e.system].rings)],
+    };
     const index = systems.length;
     systems.push(merged);
+    if (chelate) systems[at] = { atoms: [], rings: [] };
     for (const e of parts) {
       systems[e.system] = { atoms: [], rings: [] };
       e.system = index;
     }
     for (const a of merged.atoms) systemOf[a] = index;
-    units.push({ metal: m, eta: own, dienes: tubs, system: index });
+    units.push({ metal: m, eta: own, dienes: tubs, system: index, ...(chelate ? { chelate } : {}) });
   }
   // (the systems a unit took in, emptied, are left out)
   const kept = systems.map((sys, i) => (sys.atoms.length ? i : -1)).filter((i) => i >= 0);

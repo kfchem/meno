@@ -124,6 +124,9 @@ describe("making a drawn structure in 3D", () => {
     expect(m.made).toBeUndefined();
     const how = [{ label: "Optimised", text: "MMFF94s, at most 300 steps" }];
     expect(moleculeOf({ ...answer, how }, blocksOf(ethanol, [11])[0]).made).toEqual({ how });
+    // (and its method, the one line the plugin says it in, kept with it)
+    const method = "ETKDG v3 + MMFF94";
+    expect(moleculeOf({ ...answer, how, method }, blocksOf(ethanol, [11])[0]).made).toEqual({ method, how });
   });
 
   it("keeps each centre's label, and - made with the other stereoisomers - which were left open, so that they are told apart", () => {

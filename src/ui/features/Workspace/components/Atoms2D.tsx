@@ -10,7 +10,7 @@ import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
-import { clickClock, clickEditHeldOff, clickStillEdits, pressNumber } from "../utils/clickCount";
+import { oncePerEvent, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { commitInstanceMatrices } from "./instances";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -18,9 +18,6 @@ import { labelReach } from "../workflow/selectionSet";
 import { setLabelReach } from "../utils/labelHits";
 import { hapticStars } from "../chem/eta";
 import { bondLengthFrom } from "../utils/magnified";
-
-/** A click edits a label this long after it, unless a second click follows. */
-const EDIT_DELAY_MS = DOUBLE_CLICK_MS;
 
 // The hit area is world-fixed, the size of the hover ring
 // (ATOM_PICK_RADIUS_RATIO), so what lights up is what can be picked.
@@ -31,7 +28,6 @@ export function Atoms2D() {
     connectAtoms,
     replaceDraggedAtomWith,
     findAtomNear,
-    beginLabelEdit,
     setHoveredFromId,
     clearAtomHover,
     startExtend,
@@ -92,19 +88,6 @@ export function Atoms2D() {
     lasty: 0,
   });
   const endedByInteractive = useRef(false);
-  const pendingEdit = useRef<{ tid: number | null; atomId: number | null }>({
-    tid: null,
-    atomId: null,
-  });
-  const cancelPendingEdit = () => {
-    if (pendingEdit.current.tid != null) {
-      try {
-        window.clearTimeout(pendingEdit.current.tid as any);
-      } catch {}
-      pendingEdit.current.tid = null;
-      pendingEdit.current.atomId = null;
-    }
-  };
   const holdTimer = useRef<number | null>(null);
   const clearHold = () => {
     if (holdTimer.current != null) {
@@ -374,8 +357,13 @@ export function Atoms2D() {
 
   // (what a press, a move or a double-click on an atom does: on its disc, or on its
   // label's other letters - the H of HO is the O - `indexOf` taking what was hit to the atom's index)
+  // (each pointer event handled once, whichever of the atom's meshes it met first)
+  const firstPress = useMemo(oncePerEvent, []);
+  const firstDoubleClick = useMemo(oncePerEvent, []);
   const atomEvents = (indexOf: (hit: number | undefined) => number | undefined) => ({
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      // (one press, one count: met on the disc and the label's letters both, it is handled once)
+      if (!firstPress((e as any).nativeEvent)) return;
       const idx = indexOf((e as any).instanceId as number | undefined);
       if (idx == null || idx < 0) return;
       const a = model.atoms[idx];
@@ -394,7 +382,6 @@ export function Atoms2D() {
       const native = (e as any).nativeEvent as PointerEvent | undefined;
       if (native && (addsToSelection(native) || native.shiftKey)) {
         (e as any).stopPropagation?.();
-        cancelPendingEdit();
         forgetPresses();
         if (native.shiftKey) selectPathTo(a.id);
         else toggleAtomSel(a.id);
@@ -423,7 +410,8 @@ export function Atoms2D() {
         // double-click does that). (Chains, a bond laid down for every
         // bond length the pointer goes, are not drawn this way for now:
         // utils/stroke still knows them.)
-        cancelPendingEdit();
+        // (the first click's selection taken back, its shade drawing back in, as the bond is drawn)
+        store.getState().clickTakeBack(a.id);
         // (a third click may follow)
         lastDown.current = { t: now, id: a.id, x: cx, y: cy, count: 2 };
         strokeGesture(a.id, "bond", pid, (ev) => {
@@ -445,7 +433,7 @@ export function Atoms2D() {
       }
       lastDown.current = { t: now, id: a.id, x: cx, y: cy, count: 1 };
       // A drag moves the atom - or, the atom selected with others, the
-      // selection; a click edits its label. Held still, the press selects
+      // selection; a click selects it. Held still, the press selects
       // the whole structure, the selection spreading out from the atom as
       // it is held (HoldProgress2D); a drag from there moves it.
       let held = false;
@@ -454,7 +442,6 @@ export function Atoms2D() {
         // (nor where the view has moved under the press: viewGoal)
         if (!cand.current.active || cand.current.started || pressMovedUnder(camera)) return;
         held = true;
-        cancelPendingEdit();
         forgetPresses();
         // (the structure alone: what else was selected let go, as a hold on words or a shape does)
         store.getState().clearSel();
@@ -466,7 +453,6 @@ export function Atoms2D() {
       const offChord = onChord(1, () => {
         chorded = true;
         letGo();
-        cancelPendingEdit();
         forgetPresses();
       });
       const letGo = () => {
@@ -480,7 +466,6 @@ export function Atoms2D() {
         window.removeEventListener("pointermove", onFirstMove);
         window.removeEventListener("pointerup", onEarlyUp, true);
         letGo();
-        cancelPendingEdit();
         // a drag is not the first click of a double-click
         forgetPresses();
         const st = store.getState();
@@ -504,31 +489,21 @@ export function Atoms2D() {
           forgetPresses();
           return;
         }
-        // A click: its label is edited, unless a second click follows -
-        // then onPointerDown cancels this.
-        cancelPendingEdit();
-        pendingEdit.current.atomId = a.id;
-        // (unless it turns out to be the second click of a double-click,
-        // as the system reckons one, which draws a bond instead - or
-        // something else is begun before then: a press elsewhere, to move
-        // the view, say, or a label typed over another atom)
-        const since = clickClock();
-        pendingEdit.current.tid = window.setTimeout(() => {
-          if (pendingEdit.current.atomId === a.id && clickStillEdits(since) && !clickEditHeldOff(store.getState())) beginLabelEdit(a.id);
-          cancelPendingEdit();
-        }, EDIT_DELAY_MS) as unknown as number;
+        // A click: the atom selected, alone, at once, its shade spreading
+        // from it - taken back if the second click of a double-click
+        // follows, which draws a bond (docs/EDITOR-2D.md, *How it is worked*).
+        store.getState().clickSelectAtom(a.id);
       };
       window.addEventListener("pointermove", onFirstMove);
       window.addEventListener("pointerup", onEarlyUp, true);
     },
     onDoubleClick: (e: ThreeEvent<MouseEvent>) => {
+      if (!firstDoubleClick((e as any).nativeEvent)) return;
       // Suppress Canvas dblclick if we just did interactive commit
       if (endedByInteractive.current) {
         (e as any).stopPropagation?.();
         endedByInteractive.current = false;
       }
-      // On double-click, cancel any pending single-click edit
-      cancelPendingEdit();
     },
     onPointerMove: (e: ThreeEvent<PointerEvent>) => {
       const idx = indexOf((e as any).instanceId as number | undefined);
@@ -545,8 +520,7 @@ export function Atoms2D() {
       clearAtomHover();
     },
     onClick: () => {
-      // Do nothing here since beginLabelEdit is triggered immediately in onPointerUp
-      // Avoid double execution via default browser click propagation
+      // (a click is the press's own: onPointerDown's, as it comes up)
       return;
     },
   });

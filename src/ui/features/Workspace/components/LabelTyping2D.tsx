@@ -2,26 +2,29 @@
  * An atom's label written in place (docs/EDITOR-2D.md, *Labels typed in
  * place*), drawn by Meno as words on the page are (CaptionTyping2D): set as
  * a label is set, in the drawing's typeface at its size, its first letter on
- * the atom - a two-letter symbol's middle - over a light of its own that
- * hides the label it had; with the caret, what is selected and what the IME
- * composes drawn over it. Typed through the field words on the page are
- * typed through (pageField), laid at the caret, so that the IME's
- * candidates show there.
+ * the atom - a two-letter symbol's middle - with the caret, what is
+ * selected and what the IME composes drawn over it, and nothing under it:
+ * the drawing draws no label for the atom meanwhile, its bonds making room
+ * for what is written as they would for the label (DrawnLayout). Typed
+ * through the field words on the page are typed through (pageField), laid
+ * at the caret, so that the IME's candidates show there.
  *
- * Begun by a click on an atom, or by typing a letter over one (the letter
- * it begins with). Enter keeps it, Escape lets it go, and a press elsewhere
- * keeps it too; a click in it puts the caret, two select a word, a drag
- * selects on. Kept, it is drawn as written until the drawing's own label is
- * drawn in its place (`labelLeft`), then goes - as one let go goes - in a
- * moment, the label under it coming through.
+ * Begun by typing a letter over an atom - the letter growing out of the
+ * atom as its bonds draw back - or from the atom's menu, *Edit label*, with
+ * what it says. Enter keeps it, and so does the pointer leaving the atom
+ * and its letters or a press elsewhere; Escape lets it go, the letters
+ * drawing back into the atom as the label it had comes back. A click in it
+ * puts the caret, two select a word, a drag selects on. Kept, it is drawn
+ * as written until the drawing's own label is drawn in its place
+ * (`labelLeft`), then goes in a moment, the label under it coming through.
  */
 import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { CAPTION_LINE, captionPlaces, captionRuns, captionSet } from "../../../../lib/chem/captions";
-import { fontStack, labelBox, labelSetOf, runsWidth, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
-import { COLORS } from "../../../theme/colors";
-import { TAU, follow } from "../../../theme/motion";
+import { CAPTION_LINE, captionPlaces } from "../../../../lib/chem/captions";
+import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { easeInOut, easeOut, frameClock } from "../../../theme/motion";
 import type { TypingField } from "../../TextEditor/typingField";
 import { useEditor, useEditorStore } from "../store";
 import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
@@ -32,25 +35,41 @@ import { pageAt } from "../utils/page";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { WholeTexts2D } from "./Labels2D";
 import { pageField } from "./pageField";
-import { overWhite } from "./selectionShade";
+import { leaveWatch, pastLabel } from "../utils/labelLeave";
+import { WRITE_MS, writtenLetters } from "../utils/writtenLetters";
 import { measured, usePressAmong, useWriting, writingMarks, type WritingDrawn } from "./writing";
 
 type Pt = { x: number; y: number };
 
-/** The light it is written on, as words being written are lit, laid over the white page: it hides the label it had. */
-const LIGHT = overWhite(COLORS.highlight, 0.16);
-/** How far round the letters - the new and the old - the light reaches, in ems; how round its corners are. */
+/** How far round the letters a click among them is theirs, in ems. */
 const PAD = 0.18;
-const ROUND = 0.25;
-/** Over the drawing's labels (Labels2D, 30): its light, then its letters. */
-const LIGHT_ORDER = 34;
+/** Over the drawing's labels (Labels2D, 30). */
 const TEXT_ORDER = 35;
-/** How long it is drawn at most, kept, waiting for the drawing's own label; and how long it takes to go. */
+/** How long it is drawn at most, kept, waiting for the drawing's own label; and how long it takes to go, kept. */
 const LEFT_MS = 500;
 const GO_MS = 160;
+/** How large its first letter is as it begins to grow out of the atom - and as it draws back into it, let go. */
+const GROWN_FROM = 0.4;
 
-/** A label being written (`typing`), kept and waiting for the drawing's own (`left`), or going (`gone`, since when). */
-type Session = { n: number; atomId: number; phase: "typing" | "left" | "gone"; since?: number };
+/**
+ * A label being written (`typing`), kept and waiting for the drawing's own
+ * (`left`), or going (`gone`, since when, and how it ended); `grow`, begun
+ * by a letter typed over the atom.
+ */
+type Session = { n: number; atomId: number; phase: "typing" | "left" | "gone"; grow: boolean; since?: number; how?: "kept" | "same" | "cancelled" };
+
+/** Where the pointer was last in the window: where a label begun by a key finds it. */
+const pointer: { x: number | null; y: number | null } = { x: null, y: null };
+if (typeof window !== "undefined") {
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      pointer.x = e.clientX;
+      pointer.y = e.clientY;
+    },
+    true,
+  );
+}
 
 export default function LabelTyping2D() {
   const store = useEditorStore();
@@ -77,13 +96,38 @@ export default function LabelTyping2D() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [hoveredAtom, edit.active, store]);
 
+  // a label kept by Enter: an Enter straight after draws it out (docs/EDITOR-2D.md, *Labels typed in place*) - any other key, or a press,
+  // first, and it is left as it is
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const s = store.getState();
+      if (!s.labelKept || e.repeat || e.isComposing) return;
+      const enter = e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+      if (s.keyAfterLabel(enter) && enter) e.preventDefault();
+    };
+    const onPress = () => store.getState().forgetLabelKept();
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onPress, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onPress, true);
+    };
+  }, [store]);
+
   // those written, each kept on - the same, written, kept and going - until gone
   const sessions = useRef(new Map<number, Session>());
+  const ended = useEditor((s) => s.labelEnd);
   const live = new Map<number, Session>();
-  if (left) live.set(left.n, { n: left.n, atomId: left.atomId, phase: "left" });
-  if (edit.active && edit.n != null && edit.atomId != null) live.set(edit.n, { n: edit.n, atomId: edit.atomId, phase: "typing" });
   const now = performance.now();
-  for (const [n, s] of sessions.current) if (!live.has(n) && s.phase !== "gone") sessions.current.set(n, { ...s, phase: "gone", since: now });
+  const known = (n: number) => sessions.current.get(n);
+  if (left) live.set(left.n, { n: left.n, atomId: left.atomId, phase: "left", grow: known(left.n)?.grow ?? false });
+  if (edit.active && edit.n != null && edit.atomId != null) live.set(edit.n, { n: edit.n, atomId: edit.atomId, phase: "typing", grow: !!edit.grow });
+  for (const [n, s] of sessions.current) {
+    if (live.has(n) || s.phase === "gone") continue;
+    // (kept and drawn: gone as the drawing's own label is there; else as the edit ended)
+    const how = s.phase === "left" ? "kept" : ended?.n === n ? ended.how : "cancelled";
+    sessions.current.set(n, { ...s, phase: "gone", since: now, how });
+  }
   for (const [n, s] of live) sessions.current.set(n, s);
   for (const [n, s] of sessions.current) if (s.phase === "gone" && now - (s.since ?? now) > GO_MS + 40) sessions.current.delete(n);
   const going = [...sessions.current.values()].some((s) => s.phase === "gone");
@@ -113,8 +157,10 @@ export default function LabelTyping2D() {
 /** One label written in place. */
 function Typing({ session }: { session: Session }) {
   const { n, atomId, phase } = session;
+  const sessionNow = useRef(session);
+  sessionNow.current = session;
   const store = useEditorStore();
-  const { opts, atoms, layout } = useDrawnLayout();
+  const { opts, atoms } = useDrawnLayout();
   const { camera, gl, size, invalidate } = useThree();
   const [, setTick] = useState(0);
   const [ed] = useState(() => {
@@ -122,6 +168,8 @@ function Typing({ session }: { session: Session }) {
     // (as it is typed: its letters' case as they are meant - nh2 NH2 - or, so set, as typed)
     e.reading = (t) => (useAppSettings.getState().labels.smart ? liveLabel(t, labelReading) : t);
     e.read();
+    // (from the atom's menu on a carbon drawn as a corner: what it says, selected, to be typed over)
+    if (store.getState().labelEdit.selectAll) e.sel = { anchor: 0, head: e.text.length };
     return e;
   });
   const field = useRef<TypingField | null>(null);
@@ -144,28 +192,18 @@ function Typing({ session }: { session: Session }) {
   const c = typing ? ed.composing : null;
   const text = ed.text;
   const shownText = c ? text.slice(0, c.from) + c.text + text.slice(c.to) : text;
-  // (its first letter on the atom - a two-letter symbol's middle - as the drawing sets a label)
-  const first = [...shownText][0];
-  const whole = runsWidth(captionRuns(shownText), fs, set);
-  const mid = { x: /^[A-Z][a-z]$/.test(shownText) || !first ? at.x : at.x - runsWidth([{ text: first }], fs, set) / 2 + whole / 2, y: at.y };
-  const laid = captionSet(shownText, 0, 0, fs, set);
+  // (its first letter on the atom - a two-letter symbol's middle - as the drawing sets a label: utils/writtenLetters, as its bonds make room for it)
+  const { laid, dx } = writtenLetters(shownText, fs, set);
+  const mid = { x: at.x + dx, y: at.y };
   const places = captionPlaces(text, mid.x, mid.y, fs, set);
   const shown = c ? captionPlaces(shownText, mid.x, mid.y, fs, set) : places;
-  // the light it is written on: round what it says, and round the label it had - its charge, set beside it, too
+  // where a click is among its letters
   const room = (() => {
     const pad = PAD * fs;
-    let x0 = mid.x - Math.max(laid.halfW, fs * 0.3);
-    let x1 = mid.x + Math.max(laid.halfW, fs * 0.3);
-    let y0 = mid.y - Math.max(laid.halfH, fs * 0.5);
-    let y1 = mid.y + Math.max(laid.halfH, fs * 0.5);
-    for (const t of layout.texts) {
-      if (index < 0 || (t.beside ? t.markOf : t.atom) !== index) continue;
-      const b = labelBox(t, fs, set);
-      x0 = Math.min(x0, t.x - b.left);
-      x1 = Math.max(x1, t.x + b.right);
-      y0 = Math.min(y0, t.y - b.bottom);
-      y1 = Math.max(y1, t.y + b.top);
-    }
+    const x0 = mid.x - Math.max(laid.halfW, fs * 0.3);
+    const x1 = mid.x + Math.max(laid.halfW, fs * 0.3);
+    const y0 = mid.y - Math.max(laid.halfH, fs * 0.5);
+    const y1 = mid.y + Math.max(laid.halfH, fs * 0.5);
     return { x0: x0 - pad, x1: x1 + pad, y0: y0 - pad, y1: y1 + pad };
   })();
 
@@ -175,7 +213,10 @@ function Typing({ session }: { session: Session }) {
   const nowDrawn: WritingDrawn = { items: laid.items, places, shown, sel: ed.sel, c, halfW: laid.halfW, halfH: laid.halfH };
   latest.current = nowDrawn;
   if (drawnNow.current && sameTexts(drawnNow.current.items, nowDrawn.items)) drawnNow.current = nowDrawn;
+  // (whether its letters have been drawn: what grows out of the atom grows from then, not while they are being set)
+  const shown0 = useRef(false);
   const onDrawn = (items: readonly TextItem[]) => {
+    shown0.current = true;
     const l = latest.current;
     if (l && sameTexts(items, l.items)) drawnNow.current = l;
     setTick((t) => t + 1);
@@ -191,7 +232,7 @@ function Typing({ session }: { session: Session }) {
   };
 
   /** Kept, or let go - once, while it is still this edit's to keep. */
-  const finish = (keep: boolean) => {
+  const finish = (keep: boolean, byEnter = false) => {
     if (done.current) return;
     done.current = true;
     const s = store.getState();
@@ -199,7 +240,7 @@ function Typing({ session }: { session: Session }) {
     if (keep) {
       // (as it is kept: as it reads from its bond - aco OAc - its italic prefixes hyphenated - tbu t-Bu)
       s.setLabelEditValue(useAppSettings.getState().labels.smart ? keptLabel(ed.typed, labelReading) : ed.typed);
-      s.commitLabelEdit(ed.typed);
+      s.commitLabelEdit(ed.typed, byEnter);
     } else s.cancelLabelEdit();
   };
   const finishing = useRef(finish);
@@ -225,7 +266,7 @@ function Typing({ session }: { session: Session }) {
   // the field: made as it is written, given the keys, laid at the caret - gone once it is kept or let go
   useLayoutEffect(() => {
     if (!typing) return;
-    const { field: f, dispose } = pageField(gl.domElement, ed, { label: "Label", lines: false, keep: () => finishing.current(true), letGo: () => finishing.current(false) });
+    const { field: f, dispose } = pageField(gl.domElement, ed, { label: "Label", lines: false, keep: (byEnter) => finishing.current(true, byEnter), letGo: () => finishing.current(false) });
     field.current = f;
     f.sync();
     return () => {
@@ -236,55 +277,88 @@ function Typing({ session }: { session: Session }) {
   const caretRef = useWriting(ed, field, () => setTick((t) => t + 1));
   usePressAmong({ ed, field, among, world, off: !typing });
 
-  // seen as it begins, until it goes - a moment either way - the letters and their light together
-  const level = useRef(0);
+  // the pointer leaving it keeps it: the pointer where it is on the screen, against the label where it is drawn now - each frame, so that the view
+  // moving under it is taken in (utils/labelLeave)
+  const area = useRef({ at, room });
+  area.current = { at, room };
+  const watching = useRef<{ frame: () => void } | null>(null);
+  useEffect(() => {
+    if (!typing) return;
+    const L = NOMINAL_BOND_LENGTH;
+    const past = (c: { x: number; y: number }) => pastLabel(world.current(c.x, c.y), area.current.at, area.current.room, L);
+    let cur = pointer.x != null && pointer.y != null ? { x: pointer.x, y: pointer.y } : null;
+    // (from a key over the atom, there already; from its menu, once it comes to it)
+    const watch = leaveWatch({ keep: () => finishing.current(true), L, armed: !!cur && past(cur) === 0 });
+    const onMove = (e: PointerEvent) => {
+      // (how far past it the pointer was, where the label is drawn now - and is: further, it moved away)
+      const before = cur ? past(cur) : null;
+      cur = { x: e.clientX, y: e.clientY };
+      const now = past(cur);
+      watch.point(now, e.buttons !== 0, before == null || now > before);
+    };
+    const onOut = (e: PointerEvent) => watch.out(e.buttons !== 0);
+    // (the view moved under a still pointer: the label brought to it is at it - carried off from it, not left)
+    watching.current = { frame: () => cur && watch.point(past(cur), false, false) };
+    const canvas = gl.domElement;
+    window.addEventListener("pointermove", onMove, true);
+    canvas.addEventListener("pointerleave", onOut);
+    return () => {
+      watching.current = null;
+      watch.stop();
+      window.removeEventListener("pointermove", onMove, true);
+      canvas.removeEventListener("pointerleave", onOut);
+    };
+  }, [typing, gl]);
+  useFrame(() => watching.current?.frame());
+
+  // seen as it begins - begun by a letter, growing out of the atom - until it goes: kept, in a moment; let go, drawing back into the atom
   const group = useRef<THREE.Group>(null);
-  const light = useRef<THREE.MeshBasicMaterial>(null);
+  const scaled = useRef<THREE.Group>(null);
+  const opacity = useRef(0);
+  // (gone from the page: the frame drawn again without it - the canvas draws only as asked)
+  useEffect(() => () => invalidate(), [invalidate]);
+  // (each way counted by the frames drawn, each at most a 60th of a second: a busy canvas skips none of it - theme/motion `frameClock`)
+  const [coming] = useState(() => frameClock());
+  const [going] = useState(() => frameClock());
+  const waited = useRef(0);
   useFrame((_, dt) => {
-    const goal = phase === "gone" ? 0 : 1;
-    if (Math.abs(level.current - goal) < 1e-3) level.current = goal;
-    else {
-      level.current = follow(level.current, goal, Math.min(dt, 1 / 20), TAU.quick);
-      invalidate();
+    const s = sessionNow.current;
+    // (nothing drawn a while on - nothing to draw: on from then)
+    if (!shown0.current && (waited.current += dt * 1000) > 300) shown0.current = true;
+    if (shown0.current) coming.tick(dt);
+    const grown = easeInOut(coming.now() / WRITE_MS);
+    let seen = grown;
+    let size = s.grow ? GROWN_FROM + (1 - GROWN_FROM) * grown : 1;
+    let moving = grown < 1;
+    if (s.phase === "gone") {
+      going.tick(dt);
+      const ms = s.how === "kept" ? GO_MS : WRITE_MS;
+      const gone = s.how === "kept" ? easeOut(going.now() / ms) : easeInOut(going.now() / ms);
+      seen = Math.min(seen, 1 - gone);
+      if (s.how === "cancelled" && s.grow) size = Math.min(size, GROWN_FROM + (1 - GROWN_FROM) * (1 - gone));
+      moving = gone < 1;
     }
-    if (light.current) light.current.opacity = level.current;
+    scaled.current?.scale.setScalar(size);
+    opacity.current = seen;
     group.current?.traverse((o) => {
-      if ("fillOpacity" in o) (o as unknown as { fillOpacity: number }).fillOpacity = level.current;
+      if ("fillOpacity" in o) (o as unknown as { fillOpacity: number }).fillOpacity = seen;
     });
+    if (moving) invalidate();
   });
 
   const d = drawnNow.current;
   const marks: ReactNode[] = d && typing ? writingMarks(d, { fs, lineH: fs * CAPTION_LINE, px, ink: opts.labelColor ?? "#000000", caretRef, z: 0.07, text: TEXT_ORDER }) : [];
-  const w = room.x1 - room.x0;
-  const h = room.y1 - room.y0;
-  const shape = useMemo(() => roundedRect(w, h, Math.min(ROUND * fs, w / 2, h / 2)), [w, h, fs]);
-  useEffect(() => () => shape.dispose(), [shape]);
+  // (about the atom: what grows out of it, and draws back into it)
   return (
-    <group ref={group}>
-      <mesh position={[(room.x0 + room.x1) / 2, (room.y0 + room.y1) / 2, 0.065]} renderOrder={LIGHT_ORDER} geometry={shape}>
-        <meshBasicMaterial ref={light} color={LIGHT} transparent opacity={0} depthTest={false} depthWrite={false} toneMapped={false} />
-      </mesh>
-      <group position={[mid.x, mid.y, 0.07]}>
-        <WholeTexts2D texts={laid.items} onDrawn={onDrawn} renderOrder={TEXT_ORDER} />
+    <group ref={group} position={[at.x, at.y, 0]}>
+      <group ref={scaled}>
+        <group position={[-at.x, -at.y, 0]}>
+          <group position={[mid.x, mid.y, 0.07]}>
+            <WholeTexts2D texts={laid.items} onDrawn={onDrawn} renderOrder={TEXT_ORDER} opacity={opacity} />
+          </group>
+          {marks}
+        </group>
       </group>
-      {marks}
     </group>
   );
-}
-
-/** A rectangle `w` by `h` about its middle, its corners rounded `r`. */
-function roundedRect(w: number, h: number, r: number): THREE.ShapeGeometry {
-  const s = new THREE.Shape();
-  const x = -w / 2;
-  const y = -h / 2;
-  s.moveTo(x + r, y);
-  s.lineTo(x + w - r, y);
-  s.quadraticCurveTo(x + w, y, x + w, y + r);
-  s.lineTo(x + w, y + h - r);
-  s.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
-  s.lineTo(x + r, y + h);
-  s.quadraticCurveTo(x, y + h, x, y + h - r);
-  s.lineTo(x, y + r);
-  s.quadraticCurveTo(x, y, x + r, y);
-  return new THREE.ShapeGeometry(s, 6);
 }
