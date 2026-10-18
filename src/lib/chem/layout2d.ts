@@ -48,7 +48,21 @@ export type Atom = AtomChem & {
   highlight?: string;
   /** How large its structure is shown: laid out in the style so many times over (layoutStructures `magnifiedOptions`). Unset, 1. */
   magnified?: number;
+  /**
+   * A label being written over it, or just kept or let go (the canvas's
+   * LabelTyping2D): what its bonds stop short of, on its way there.
+   * Unset, its label as drawn.
+   */
+  writing?: Writing;
 };
+/**
+ * What an atom's bonds stop short of while a label is written over it:
+ * `items`, the letters as they are written there, about the atom - or,
+ * none given, its label as drawn - `k` of the way (0 to 1) from what they
+ * stopped short of before (`was`; none, the atom itself). Where `hidden`,
+ * no label is drawn for it: the writing draws its own.
+ */
+export type Writing = { items?: readonly TextItem[]; k: number; was?: Writing; hidden?: boolean };
 export type Bond = BondChem & {
   a1: number;
   a2: number;
@@ -2386,6 +2400,8 @@ export function buildTextLabels(
     // 1996 writes methane CH4.
     // (a pi system's centre, where a haptic bond ends, is drawn as nothing)
     if (hapticCentres.has(i)) continue;
+    // (a label being written over it: its letters the writing's own)
+    if (a.writing?.hidden) continue;
     const show = showsLabel(a, opts) || !bonded.has(i);
     // its charge and its radical's dots, after the symbol on its line; its
     // mass number before it
@@ -2609,6 +2625,20 @@ export function labelTrims(
   const across = bondReach(bond, opts, zoom, deg, doubleSides);
   /** Where a bond stops, leaving the atom along `towards`, its ink from `lo` to `hi` along `n`. */
   const reach = (idx: number, at: Atom, towards: Vec2, lo: number, hi: number) => {
+    // (a label being written: on its way from what its bonds stopped short of before, `k` of the way)
+    if (at.writing) {
+      const band = { n, lo, hi };
+      const set = labelSetOf(opts);
+      const clear = (w: Writing): number => {
+        const k = Math.min(1, Math.max(0, w.k));
+        const now = w.items ? labelClearance(itemsHulls(w.items, fontWorld, set), towards, margin, band) : drawn(idx, at, towards, band);
+        return k >= 1 ? now : (w.was ? clear(w.was) : 0) * (1 - k) + now * k;
+      };
+      return clear(at.writing);
+    }
+    return drawn(idx, at, towards, { n, lo, hi });
+  };
+  const drawn = (idx: number, at: Atom, towards: Vec2, band: { n: Vec2; lo: number; hi: number }) => {
     // (a pi system's centre, where a haptic bond ends, has no label to stop
     // short of: the line reaches the centre, as the bond is to the system
     // as a whole - IUPAC GR-1.7)
@@ -2616,13 +2646,18 @@ export function labelTrims(
     const hulls =
       (idx >= 0 ? labelShapes?.get(idx) : undefined) ??
       labelHulls({ x: 0, y: 0, text: at.el, fontPx: opts.fontPx, runs: [{ text: at.el }] }, fontWorld, labelSetOf(opts));
-    return labelClearance(hulls, towards, margin, { n, lo, hi });
+    return labelClearance(hulls, towards, margin, band);
   };
   return {
     a: reach(bond.a1, p, dir, -across.right1, across.left1),
     b: reach(bond.a2, q, vscale(dir, -1), -across.right2, across.left2),
     room: L0 * (opts.labelShareMax ?? 0.9),
   };
+}
+
+/** The ink of letters set about an atom (each `TextItem` where it is set, the atom at the origin), its tail aside: labelHulls of each. */
+function itemsHulls(items: readonly TextItem[], fontSize: number, set: LabelSet): Vec2[][] {
+  return items.flatMap((t) => labelHulls(t, fontSize, set, false).map((h) => h.map((p) => ({ x: p.x + t.x, y: p.y + t.y }))));
 }
 
 /** The least share of a bond seen between the labels at its ends, however much of it they would take. */
