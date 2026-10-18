@@ -51,6 +51,39 @@ describe("marksOf", () => {
     expect([...marks.doubleBonds]).toEqual([[21, "E"]]);
   });
 
+  it("leaves a halogen bridging metals unmarked - μ-Cl in [Pd(allyl)Cl]2 drawn with plain bonds - and marks a real overload", () => {
+    // ([Pd(allyl)Cl]2: two Pd bridged by two Cl, each Pd with its allyl drawn by three plain bonds)
+    const dimer: Model = {
+      atoms: [atom(1, -1, 0, "Pd"), atom(2, 1, 0, "Pd"), atom(3, 0, 1, "Cl"), atom(4, 0, -1, "Cl"), atom(5, -2, 1), atom(6, -2.5, 0), atom(7, -2, -1), atom(8, 2, 1), atom(9, 2.5, 0), atom(10, 2, -1)],
+      bonds: [
+        bond(1, 1, 3), bond(2, 1, 4), bond(3, 2, 3), bond(4, 2, 4),
+        bond(5, 5, 6, 2), bond(6, 6, 7), bond(7, 1, 5), bond(8, 1, 6), bond(9, 1, 7),
+        bond(10, 8, 9, 2), bond(11, 9, 10), bond(12, 2, 8), bond(13, 2, 9), bond(14, 2, 10),
+      ],
+    };
+    // (as the checks plugin answers: each Cl two bonds where it can have one)
+    const said = marksOf(dimer, {
+      atoms: [
+        { index: 2, hydrogens: 0, valenceError: { valence: 2, most: 1 } },
+        { index: 3, hydrogens: 0, valenceError: { valence: 2 } },
+      ],
+      bonds: [],
+    });
+    expect([...said.valence]).toEqual([]);
+    // (a Cl on a metal and a carbon, as a halide bonded on as usual and to a metal: unmarked too)
+    const onBoth: Model = { atoms: [atom(1, 0, 0, "Pd"), atom(2, 1, 0, "Cl"), atom(3, 2, 0)], bonds: [bond(1, 1, 2), bond(2, 2, 3)] };
+    expect(marksOf(onBoth, { atoms: [{ index: 1, hydrogens: 0, valenceError: { valence: 2, most: 1 } }], bonds: [] }).valence.size).toBe(0);
+    // (a Cl with two bonds to carbons - CH2Cl2 drawn wrong, Cl between two C - is marked; and one with two to carbons as well
+    // as one to a metal)
+    const overload: Model = { atoms: [atom(1, 0, 0), atom(2, 1, 0, "Cl"), atom(3, 2, 0)], bonds: [bond(1, 1, 2), bond(2, 2, 3)] };
+    expect([...marksOf(overload, { atoms: [{ index: 1, hydrogens: 0, valenceError: { valence: 2, most: 1 } }], bonds: [] }).valence]).toEqual([[2, { valence: 2, most: 1 }]]);
+    const both: Model = { atoms: [...overload.atoms, atom(4, 1, 1, "Pd")], bonds: [...overload.bonds, bond(3, 2, 4)] };
+    expect(marksOf(both, { atoms: [{ index: 1, hydrogens: 0, valenceError: { valence: 3, most: 1 } }], bonds: [] }).valence.size).toBe(1);
+    // (an atom of another element bridging metals is marked as the plugin says: the rule is the halogens')
+    const carbon: Model = { atoms: [atom(1, 0, 0, "Pd"), atom(2, 1, 0, "C"), atom(3, 2, 0, "Pd")], bonds: [bond(1, 1, 2), bond(2, 2, 3)] };
+    expect(marksOf(carbon, { atoms: [{ index: 1, hydrogens: 0, valenceError: { valence: 5, most: 4 } }], bonds: [] }).valence.size).toBe(1);
+  });
+
   it("says an axis of chirality's M or P as Ra or Sa, as a label says (R)-BINAP", () => {
     const axis = (cip: "M" | "P") => marksOf(butene, { atoms: [], bonds: [{ index: 0, cip }] }).doubleBonds.get(20);
     expect(axis("M")).toBe("Ra");

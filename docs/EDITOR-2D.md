@@ -702,7 +702,11 @@ All hover-based, as above.
   candidates show there - an input method's full-width letters are taken
   as the ordinary ones once it gives them. Begun by a click on an atom, or
   by a letter typed over one; Enter keeps it, Escape lets it go, a press
-  elsewhere keeps it; a click in it puts the caret, a drag selects. Kept,
+  elsewhere keeps it; a click in it puts the caret, a drag selects. Enter
+  again, straight after the Enter that kept it - no other key, press or
+  selection between - draws the label out, as *Expand abbreviation* does,
+  one step after the label's own; a label with nothing to draw out stays
+  as it is. An Enter over a label not just typed draws nothing out. Kept,
   it is drawn as written until the drawing's own label is drawn in its
   place, then goes in a moment, the label coming through: never a frame
   with no label, nor with the old one. The drawing's labels are drawn each
@@ -805,6 +809,12 @@ All hover-based, as above.
   and E/Z from a button on the canvas, later shown on what they are asked
   for on; valence warnings in Settings › Chemistry; neither in an exported
   picture.)
+  - **A halogen bridging metals** (μ-X; the maintainer, 2026-10-18) -
+    μ-Cl in [Pd(allyl)Cl]2, drawn with a plain bond to each metal - is
+    not marked: its bonds to metals count as the dative bonds they are, so
+    that it is checked by its bonds to the rest, none or the one it has as
+    usual. One with two bonds to carbons is marked still, metal or not
+    (chem/marks `bridgesMetals`).
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
@@ -1345,7 +1355,12 @@ lipids each have their own way of being drawn, which it should know.
      SMILES do it: a bond drawn by hand keeps its length.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
-     (*Expand abbreviation*) still draws all of it; what is shown by name
+     (*Expand abbreviation*) puts the group in free space: away from all
+     the atom's bonds, out of a ring from a ring's atom, and clear of the
+     drawing's atoms, bonds and labels as far as their letters are set -
+     turned, or seen in a mirror where it has no stereo of its own, only
+     where it is not clear as laid out; nothing else moves
+     (`utils/expandPlace.ts`). It still draws all of it; what is shown by name
      is Clean-up's to decide, by what the group does and how much of the
      molecule it is:
      - a protecting, activating or leaving group (`role` in

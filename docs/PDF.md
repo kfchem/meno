@@ -286,17 +286,23 @@ PDFs there - one step, which an undo takes back. It is held as any other
 - **Page numbers…** A card shows the first page with its number where it will
   be, as it is chosen: 1, 2, 3 or S1, S2, S3 (supporting information's); the
   first page's number; at the foot's left, middle or right. *Make numbered
-  copy* makes "paper (numbered).pdf": each page's number in Helvetica, 9 pt,
+  copy* makes "paper (numbered 1).pdf" - "(numbered S1)", "(numbered 12)":
+  the first page's number, as chosen - each page's number in Helvetica, 9 pt,
   its foot 28 pt from the page's foot (a corner's 28 pt from the side), upright
   on the page as it is shown, however the page is turned.
 - **Pages…** A card of the PDF's pages, drawn small as they come into view: a
   page dragged goes where it is let go, the others making room, eased; a
-  click selects one, Shift and a click a run, and pages typed ("3-5", "1, 4,
-  7-9") select those. *Turn left* and *Turn right* turn those selected a
+  click selects that page alone, Shift and a click the run from the page
+  clicked last, Ctrl (⌘ on a Mac) and a click adds a page or takes it away,
+  and pages typed ("3-5", "1, 4, 7-9") select those. *Turn left* and *Turn right* turn those selected a
   quarter; *Take out* leaves them out. *Make new PDF* makes one of the pages
   as they are now ("paper (arranged).pdf"); *Extract selected* one of those
-  selected alone ("paper (pages 3-5).pdf" for a run, "paper (page 2).pdf"
-  for one).
+  selected alone ("paper (pages 3–5).pdf", an en dash, for a run; "paper
+  (page 2).pdf" for one).
+- **Names** (the Windows pre-release check, 2026-10-18): one already on the
+  page is counted on - "paper (numbered S1) 2.pdf", "Combined 3.pdf" - so no
+  two share a name; and the part in brackets is kept on one line under its
+  icon (its spaces and dashes shown as ones a line does not break at).
 - **Combine into one PDF** makes "Combined.pdf" of the PDFs selected, in the
   order they are read on the page - rows top to bottom, each left to right -
   each one's pages in order. Put in another order after, with *Pages…*.

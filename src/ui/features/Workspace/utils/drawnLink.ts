@@ -1,3 +1,4 @@
+import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model, Molecule3D } from "../store/types";
 
 /**
@@ -19,6 +20,26 @@ export function signatureOf(model: Model, ids: Iterable<number>): string {
       [b.a, b.b],
     ]) {
       if (of.has(other) && model.atoms.some((a) => a.id === star && a.el === "*")) of.add(star);
+    }
+  }
+  // (and a label bonded to it - Cp, cod - written out for the plugin: where it is bound through a pi system, its place in
+  // the structure asked about is that system's star, no atom of the molecule in 3D, so no atom the molecule is tied to;
+  // of the structure all the same, as the bond to it is - else every complex so labelled read as drawn otherwise)
+  const label = (a: Model["atoms"][number]) => !!a.abbrev || (a.el !== "*" && !isElementSymbol(a.el));
+  const byId = new Map(model.atoms.map((a) => [a.id, a]));
+  for (let grew = true; grew; ) {
+    grew = false;
+    for (const b of model.bonds) {
+      for (const [x, y] of [
+        [b.a, b.b],
+        [b.b, b.a],
+      ]) {
+        const other = byId.get(y);
+        if (of.has(x) && !of.has(y) && other && label(other)) {
+          of.add(y);
+          grew = true;
+        }
+      }
     }
   }
   const atoms = model.atoms

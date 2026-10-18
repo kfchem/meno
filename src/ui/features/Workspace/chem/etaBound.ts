@@ -23,6 +23,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { placedStructure } from "../../../../lib/chem/abbreviationPlace";
 import { ligandStructure, namedLigand } from "../../../../lib/chem/ligands";
 import { etaBondedAtomByAtom, isMetal, type LayoutInput } from "../../../../lib/layout/perceive";
+import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 
 type Atom = Model["atoms"][number];
@@ -52,6 +53,37 @@ function boundLigand(a: Atom, metal: Atom): Atom["abbrev"] | null {
  * one multi-centre bond (above); the same structure where it has none.
  */
 export function etaBound(part: Model): Model {
+  return withoutStaleValence(etaBoundAsDrawn(part));
+}
+
+/**
+ * A metal's valence as a drawing states it (`valence`: a SMILES's bracket
+ * atom, a file's VAL - [Fe] in C[Fe]C is two) counts its bonds as drawn,
+ * each a plain bond: where any of them binds a ligand written out (a label
+ * bonded to it: Cp, cod, CO) or a ring or chain through all its atoms, they
+ * are no such bonds, and the count no longer holds - left to the plugin,
+ * it reads the metal as two-valent still and binds each Cp by one carbon,
+ * an H on the metal. Left out, as for a metal drawn by hand; the drawing
+ * keeps it.
+ */
+function withoutStaleValence(m: Model): Model {
+  const byId = new Map(m.atoms.map((a) => [a.id, a]));
+  const ligandOf = (a: Atom | undefined) => !!a && (a.el === "*" || !!a.abbrev || !isElementSymbol(a.el));
+  const bound = new Set<number>();
+  for (const b of m.bonds) {
+    for (const [x, y] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      const metal = byId.get(x);
+      if (metal?.valence != null && isMetal(metal.el) && (b.endpoints?.length || ligandOf(byId.get(y)))) bound.add(x);
+    }
+  }
+  if (!bound.size) return m;
+  return { ...m, atoms: m.atoms.map((a) => (bound.has(a.id) ? (({ valence: _valence, ...rest }) => rest)(a) : a)) };
+}
+
+function etaBoundAsDrawn(part: Model): Model {
   const byId = new Map(part.atoms.map((a) => [a.id, a]));
   const bondsOf = (id: number) => part.bonds.filter((b) => b.a === id || b.b === id);
   // (a donor's bond to its metal written from the donor, as a coordination bond is read: from the atom that lends its pair)

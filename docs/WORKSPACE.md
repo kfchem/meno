@@ -511,6 +511,22 @@ Taken on 2026-10-13:
   is held: the angle between a sandwich's rings is UFF's, and ferrocene
   comes out within about 6 degrees of straight, Cp*2Fe within about 10 -
   as it was made, and said so (below).
+  - A label for a ligand bound through more pi systems than it has bonds
+    drawn - cod, nbd: two C=C - bonded to a metal by one bond is bound
+    through each of them, one multi-centre bond each, to that metal (the
+    writer, `prepared`); no star is left unbound, as an atom of nothing.
+  - A metal's valence as the drawing states it (a SMILES's bracket atom,
+    [Fe] in C[Fe]C, or a file's VAL) is left out where its bonds bind
+    ligand labels or rings so (etaBound): it counted them as plain bonds,
+    and left in, the metal stays two-valent - each Cp bound by one carbon,
+    an H on the metal. The drawing keeps it. (The other way, dropping it
+    from the drawing as its bonds change, would lose it for a file written
+    from the drawing; asking leaves the drawing as it was.)
+  - Made so, the molecule in 3D is as drawn: a label at the place of a pi
+    system's star - Cp, cod - is no atom of it, so no atom it is tied to,
+    and what it was made from takes in the labels bonded to its atoms
+    (utils/drawnLink `signatureOf`), on making and since. Before, Cp2Fe
+    and PtCl2(cod) drawn with labels said *Its drawing has changed* at once.
 - **A 3D structure made from a drawing is a starting geometry**
   (the maintainer, 2026-10-18): embedded and tidied by a force field, with
   only what that force field cannot say held - a metal's bonds at their
