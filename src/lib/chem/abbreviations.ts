@@ -491,6 +491,20 @@ function groupBy(label: string): Abbreviation | undefined {
   if (carrying) return carrying;
   const halided = halidedGroupOf(label);
   if (halided) return halided;
+  const prefixed = prefixedGroupOf(label);
+  if (prefixed) return prefixed;
+  // (last, a condensed formula: OCH3, CH2OH, COMe, SO2Me, NO - ./chain; Cp in none, only on a metal)
+  const chain = chainGroup(label, {
+    at: (text, i) => groupLabels().find((l) => l.length > 1 && l !== "Cp" && text.startsWith(l, i)),
+    smiles: (l) => (BY_LABEL.get(l) ?? custom.get(l))?.smiles,
+  });
+  if (chain) return { label, smiles: chain, name: label };
+  // (and an atom with its H and the groups it carries, its other bonds the drawing's: SiH(COOH), CH(CO2Me), N(CO2Me), Si(Me)(OMe))
+  return atomCarryingGroups(label);
+}
+
+/** A group behind O, S, NH or in an ester (`COMPOSED`) - OMe, SPh, NHBoc, CO2Me - or none. */
+function prefixedGroupOf(label: string): Abbreviation | undefined {
   for (const c of COMPOSED) {
     if (!label.startsWith(c.prefix) || label.length === c.prefix.length) continue;
     const rest = label.slice(c.prefix.length);
@@ -501,13 +515,78 @@ function groupBy(label: string): Abbreviation | undefined {
     const own = c.prefix + g.label;
     return { label: own, ...(own !== label ? { also: [label] } : {}), smiles: c.smiles + g.smiles.slice(1), name: composedName(g.name, c.word) };
   }
-  // (last, a condensed formula: OCH3, CH2OH, COMe, SO2Me, NO - ./chain; Cp in none, only on a metal)
-  const chain = chainGroup(label, {
-    at: (text, i) => groupLabels().find((l) => l.length > 1 && l !== "Cp" && text.startsWith(l, i)),
-    smiles: (l) => (BY_LABEL.get(l) ?? custom.get(l))?.smiles,
-  });
-  if (chain) return { label, smiles: chain, name: label };
   return undefined;
+}
+
+/**
+ * The atoms that may carry groups, their other bonds the drawing's - an
+ * atom of a ring, with its two ring bonds, say - and each one's name as a
+ * diyl (`atomCarryingGroups`).
+ */
+const CARRIERS_OF_GROUPS: Record<string, { word: string; carries: number }> = {
+  // (each with how many it carries - its H and its groups together - its valence but the drawing's two bonds; B only with its H,
+  // BPh4 and its like being anions' formulas)
+  B: { word: "boranediyl", carries: 1 },
+  C: { word: "methanediyl", carries: 2 },
+  N: { word: "azanediyl", carries: 1 },
+  P: { word: "phosphanediyl", carries: 1 },
+  As: { word: "arsanediyl", carries: 1 },
+  Si: { word: "silanediyl", carries: 2 },
+  Ge: { word: "germanediyl", carries: 2 },
+  Sn: { word: "stannanediyl", carries: 2 },
+};
+
+/**
+ * An atom written with its H, if it has any, and then the groups it
+ * carries, one or more, each a group Meno reads of two letters or more -
+ * its other bonds the drawing's: SiHCOOH is Si with an H and a carboxy
+ * group, CHCO2Me a CH with a methoxycarbonyl, NCO2Me an N with one,
+ * SiMeOMe an Si with a methyl and a methoxy (the maintainer, 2026-10-18: a
+ * ring's Si labelled SiHCOOH was read as nothing, and its letters then as
+ * S and I). By rule, not by a list: any atom of `CARRIERS_OF_GROUPS`, any
+ * of the groups, as many as with its H fill its valence but two bonds -
+ * an Si's or a C's two, an N's or a P's one (B only with its H: BPh4 is an
+ * anion's formula). None for any other label - one that reads otherwise is
+ * read so first.
+ */
+function atomCarryingGroups(label: string): Abbreviation | undefined {
+  const m = /^([A-Z][a-z]?)(?:H(\d*))?([A-Z(].*)$/.exec(label);
+  if (!m || !CARRIERS_OF_GROUPS[m[1]]) return undefined;
+  const hs = m[2] == null ? 0 : m[2] === "" ? 1 : Number(m[2]);
+  const groupAt = (text: string): Abbreviation | undefined => {
+    // (a group named - Meno's, the user's own, one behind O, S or NH: not one put together of bare elements, ICl2 - so that nicl2 is still NiCl2)
+    const g = BY_LABEL.get(text) ?? custom.get(text) ?? prefixedGroupOf(text);
+    // (a contracted group - CO2H, CN, NO2 - is carried as any other: SiH(COOH))
+    return g && !g.kind && !g.carrying && g.smiles.startsWith("*") && g.label !== "Cp" && text.length >= 2 ? g : undefined;
+  };
+  // (the groups, one after another, each the longest that leaves the rest readable - three at most)
+  const split = (text: string, left: number): Abbreviation[] | null => {
+    if (!text) return [];
+    if (left === 0) return null;
+    // (one in brackets, as it is also written: SiH(COOH), Si(Me)(OMe))
+    const held = /^\(([^()]+)\)/.exec(text);
+    if (held) {
+      const g = groupAt(held[1]);
+      const rest = g ? split(text.slice(held[0].length), left - 1) : null;
+      return g && rest ? [g, ...rest] : null;
+    }
+    for (let k = text.length; k >= 2; k--) {
+      const g = groupAt(text.slice(0, k));
+      if (!g) continue;
+      const rest = split(text.slice(k), left - 1);
+      if (rest) return [g, ...rest];
+    }
+    return null;
+  };
+  const groups = split(m[3], 3);
+  if (!groups?.length) return undefined;
+  const carrier = CARRIERS_OF_GROUPS[m[1]];
+  // (as many as fill its valence with two bonds of the drawing's - a ring's - or fewer, with its H; B only with its H)
+  if (hs + groups.length < carrier.carries || (m[1] === "B" && !hs)) return undefined;
+  const atom = hs ? `[${m[1]}H${hs > 1 ? hs : ""}]` : m[1].length > 1 || !"BCNP".includes(m[1]) ? `[${m[1]}]` : m[1];
+  const smiles = `*${atom}` + groups.map((g) => `(${g.smiles.slice(1)})`).join("");
+  const names = groups.map((g) => g.name.replace(/ \(.*\)$/, ""));
+  return { label, smiles, name: `(${names.join(")(")})${carrier.word}`, carrying: true };
 }
 
 const COMPOSED_SEEN = new Map<string, Abbreviation | undefined>();
