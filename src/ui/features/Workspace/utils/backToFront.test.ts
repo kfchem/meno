@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { backToFront } from "./backToFront";
+import { measured } from "../../../../testing/timeouts";
 
 /** A triangle about (x, y, z), small. */
 const tri = (x: number, y: number, z: number) => [x, y, z, x + 0.1, y, z, x, y + 0.1, z];
@@ -67,5 +68,5 @@ describe("backToFront", () => {
       last = Math.min(last, depth);
     }
     expect(seen.every((s) => s === 1)).toBe(true);
-  });
+  }, measured(690));
 });

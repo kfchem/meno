@@ -3,6 +3,7 @@ import { Text } from "troika-three-text";
 import * as THREE from "three";
 import { readFileSync } from "node:fs";
 import { BATCH_MOST, PACKED_COLOUR, TextBatch, type BatchRun } from "./textBatch";
+import { measured } from "../../../../testing/timeouts";
 
 const run = (text: string, more: Partial<BatchRun> = {}): BatchRun => ({ text, x: 1, y: 2, size: 0.5, color: "#141414", italic: false, bold: false, ...more });
 
@@ -90,7 +91,7 @@ describe("texts drawn as a batch", () => {
     expect(b.root.children).toHaveLength(2);
     b.dispose();
     expect(b.root.children).toHaveLength(0);
-  });
+  }, measured(420));
 
   it("unpacks a member's colour as the page's colours are: the line of troika's shader it replaces is there to be replaced", () => {
     // (./textBatch's PageBatch replaces the line that unpacks a member's colour with Meno's, which reads it as

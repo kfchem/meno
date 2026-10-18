@@ -6,6 +6,7 @@ import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { nextFree } from "../chem/engineLayout";
 import { kindOf } from "../../../../lib/io/kinds";
 import { deleteParts, emptyWorkspaceDocument } from "../document";
+import { measured } from "../../../../testing/timeouts";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
@@ -446,7 +447,7 @@ describe("a selection of very many atoms", () => {
   it("is written as a molfile, and Clean-up finds the next free id past it", () => {
     expect(writeMolfile({ atoms, bonds: [] } as never)).toContain("V3000");
     expect(nextFree({ atoms, bonds: [] } as never)).toBe(150_001);
-  });
+  }, measured(360));
 
   it("has a middle", () => {
     expect(middleOf({ atoms, bonds: [] } as unknown as Model, ids)).toEqual({ x: (499 * 1.8) / 2, y: (-299 * 1.8) / 2 });

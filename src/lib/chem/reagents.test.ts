@@ -7,6 +7,7 @@ import { structureFormula, type GroupStructure } from "./ligands";
 import { implicitHydrogens, valenceOrder } from "./molecule";
 import { REAGENTS } from "./reagents";
 import { readSmiles } from "./smiles";
+import { measured } from "../../testing/timeouts";
 
 const of = (label: string) => abbreviationStructure(label)!;
 const formula = (label: string) => structureFormula(of(label));
@@ -172,7 +173,7 @@ describe("configurations", () => {
     const csa = placedAbbreviation("(1S)-CSA", null, L)!;
     expect(csa.atoms.filter((a) => a.stereoCentre)).toHaveLength(2);
     expect(csa.atoms.some((a) => a.z != null)).toBe(true);
-  });
+  }, measured(630));
 });
 
 describe("simple formulas, read by rule", () => {
@@ -293,7 +294,7 @@ describe("hydrogens as a drawing counts them", () => {
     expect(ipr.lends).toEqual([true]);
     // acac's: its enolate O an anion's, bound covalently; its C=O O lends
     expect(placedAbbreviation("acac", { x: -L, y: 0 }, L)!.lends).toEqual([false, true]);
-  });
+  }, measured(430));
 
   it("let the kekulizer read an [nH] and a charged N", () => {
     expect(formula("imidazole")).toBe("C3H4N2");

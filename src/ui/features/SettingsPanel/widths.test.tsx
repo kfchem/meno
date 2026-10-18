@@ -2,6 +2,7 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import SettingsPanel from "./SettingsPanel";
 import type { SettingsSection } from "./section";
+import { measured } from "../../../testing/timeouts";
 import { COLUMN_WIDTH, PROSE_WIDTH, SECTION_WIDTH } from "./widths";
 
 // (the section shown, as the test asks: the server's renderer reads a store as it began, so the store is stood in for)
@@ -62,7 +63,7 @@ describe("Settings' widths", () => {
         expect(c, `${id}: ${c.join(" ")}`).toContain(PROSE_WIDTH);
       }
     }
-  });
+  }, measured(300));
 
   it("lay the tabs and every section out as one column, centred with equal margins in a wide window and padded in a narrow one", () => {
     // (the column: as wide as a section and the padding either side - 64rem and 1.5rem each, max-w-5xl and px-6 - and no wider)

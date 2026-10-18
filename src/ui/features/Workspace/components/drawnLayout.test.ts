@@ -13,6 +13,7 @@ import { ACS_1996, MENO } from "../../../../lib/chem/style";
 import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { editorModelOf } from "../utils/io";
 import { editorLayoutOptions, layoutBonds, startingZoom } from "../layoutOptions";
+import { measured } from "../../../../testing/timeouts";
 
 /** A file's structures as the canvas lays them out: its atoms and bonds as DrawnLayout hands them on. */
 function drawn(text: string): { atoms: LAtom[]; bonds: LBond[] } {
@@ -146,7 +147,7 @@ describe("a drawing laid out for the canvas", () => {
     // (where every bond was tried again for every circle, six million reads
     // more than without: a few times each bond now)
     expect(reads - plain.reads).toBeLessThan(20 * bonds.length);
-  });
+  }, measured(640));
 
   it("fills two thousand rings, each ring's bonds read, not every bond for each", () => {
     const atoms: LAtom[] = [];
@@ -170,7 +171,7 @@ describe("a drawing laid out for the canvas", () => {
     // (where every bond was looked through for every ring filled, 24 million
     // reads more than unfilled: a few times each bond now)
     expect(reads - plain.reads).toBeLessThan(20 * bonds.length);
-  });
+  }, measured(1_100));
 });
 
 /** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */

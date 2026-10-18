@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type * as THREE from "three";
 import { FADE_MS, levelFor, OVERSAMPLE, Pictures, QUICK, PREVIEW_PX, TILE, UNDER_MOST, type Pic, type TileAsk } from "./pdfPictures";
+import { measured } from "../../../../testing/timeouts";
 
 // (the reader: a tile drawn at once - or, while `hold` is set, never)
 const reader = vi.hoisted(() => ({ hold: false }));
@@ -114,7 +115,7 @@ describe("a page's tiles kept", () => {
     }
     // (the tiles of a screen at each of the levels seen in the last few seconds, and those kept under: tens, not hundreds)
     expect(most).toBeLessThan(10 * 12 + UNDER_MOST);
-  });
+  }, measured(430));
 });
 
 describe("the level a page's part seen is drawn at now", () => {

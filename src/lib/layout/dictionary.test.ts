@@ -3,6 +3,7 @@ import { placedAbbreviation } from "../chem/abbreviationPlace";
 import { ABBREVIATIONS } from "../chem/abbreviations";
 import { LIGANDS } from "../chem/ligands";
 import { REAGENTS } from "../chem/reagents";
+import { measured } from "../../testing/timeouts";
 
 /**
  * What the dictionary names, each written out as the editor writes a label
@@ -38,5 +39,5 @@ describe("the dictionary's structures", () => {
     expect(tried.filter((t) => !t.read).map((t) => t.label)).toEqual([]);
     expect(tried.length).toBeGreaterThan(140);
     // (about 10 s here; slower on CI's runners)
-  }, 60_000);
+  }, measured(29_000));
 });

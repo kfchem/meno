@@ -36,6 +36,7 @@ import { readCarried3D } from "./copyPaste";
 import { placesOf } from "./edit3d";
 import { calcResult } from "./io";
 import { bondsAt, frameBondsOf, frameOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { measured } from "../../../../testing/timeouts";
 
 /** How many molecules each reader is given. */
 const CASES = 200;
@@ -388,7 +389,7 @@ describe("a molecule's frames and what belongs to each stay together, whatever r
     // (energies kept on molecules of several frames: (c) is tested)
     expect(withEnergies).toBeGreaterThan(10);
     expect(failures).toEqual([]);
-  });
+  }, measured(270));
 
   it("a PDB file's models (readStructures)", () => {
     const { failures, read } = run("pdb", (r) => {
@@ -405,7 +406,7 @@ describe("a molecule's frames and what belongs to each stay together, whatever r
     });
     expect(read).toBeGreaterThan(CASES / 2);
     expect(failures).toEqual([]);
-  });
+  }, measured(300));
 
   it("a calculation's output, its readers' findings put together (combine, then calcResult)", () => {
     const { failures, read, withEnergies } = run("calc", (r) => {

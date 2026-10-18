@@ -5,6 +5,7 @@ import { LIGANDS, ligandPicture } from "../chem/ligands";
 import { layout2D } from "./engine";
 import { FORESHORTEN, metalSlots } from "./hapto";
 import { METAL_BOND } from "./perceive";
+import { measured } from "../../testing/timeouts";
 
 type Placed = NonNullable<ReturnType<typeof placedAbbreviation>>;
 const laid = (label: string): Placed => placedAbbreviation(label, null, 1)!;
@@ -160,7 +161,7 @@ describe("ligands round a metal", () => {
     expect(dist(pd, m, p1)).toBeCloseTo(dist(pd, m, p2), 4);
     expect(angleAt(pd, m, p1, p2)).toBeGreaterThan(60);
     // (the whole engine on a complex this size: slower on CI's runners)
-  }, 30_000);
+  }, measured(2_400));
 
   it("turn crowded aryl rings as a propeller where that reads better, their near edges bold, the bonds toward them wedges", () => {
     const pd = laid("Pd(PPh3)4");
@@ -168,7 +169,7 @@ describe("ligands round a metal", () => {
     expect(turned.length).toBeGreaterThan(0);
     expect(pd.bonds.some((b) => b.display === "bold")).toBe(true);
     expect(pd.bonds.some((b) => b.display === "wedge")).toBe(true);
-  }, 30_000);
+  }, measured(9_900));
 });
 
 describe("a ring bound to a metal through two of its C=C (cod)", () => {
@@ -197,7 +198,7 @@ describe("a ring bound to a metal through two of its C=C (cod)", () => {
     const xs = stars.map((k) => Math.sign(ni.atoms[k].x - ni.atoms[m].x));
     expect(xs.filter((x) => x > 0)).toHaveLength(2);
     expect(xs.filter((x) => x < 0)).toHaveLength(2);
-  });
+  }, measured(1_100));
 });
 
 describe("a tub on a metal that is in a ring of its own (a chelate's)", () => {
@@ -247,7 +248,7 @@ describe("two metals bridged by two atoms", () => {
         for (const l of bound(m).filter((a) => !bridges.includes(a))) expect(Math.sign(s.atoms[l].x - middle), label).toBe(side);
       }
     }
-  });
+  }, measured(310));
 });
 
 describe("a structure with no metal", () => {
@@ -378,7 +379,7 @@ describe("a metal that two chelates or more close at", () => {
       return out;
     };
     expect(inside(at(k, star), ring([ir, ...path(ps[0], ps[1])]))).toBe(false);
-  }, 60_000);
+  }, measured(6_000));
 });
 
 describe("a pi system bound to a metal that makes no ring", () => {

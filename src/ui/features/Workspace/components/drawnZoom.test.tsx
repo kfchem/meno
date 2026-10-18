@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { renderToString } from "react-dom/server";
 import ts from "typescript";
 import { DrawnZoomContext, drawnZoomOf, useDrawnZoom } from "./drawnLayoutContext";
+import { measured } from "../../../../testing/timeouts";
 
 /** A line kept a pixel wide on the screen, in page units, at the zoom the drawing is taken up at. */
 function Hair() {
@@ -64,5 +65,5 @@ describe("the zoom the drawing is taken up at", () => {
       visit(file);
     }
     expect(offenders).toEqual([]);
-  });
+  }, measured(260));
 });

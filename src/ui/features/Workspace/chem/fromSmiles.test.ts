@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { WILEY } from "../../../../lib/chem/style";
+import { measured } from "../../../../testing/timeouts";
 
 // (the plugin's drawing of ethanol, and the engine's layout, stood in for: what is asked of each is what is looked at)
 const ETHANOL = "\n  Meno\n\n  3  2  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.0000    0.0000 C   0  0\n    1.2990    0.7500    0.0000 C   0  0\n    2.5981    0.0000    0.0000 O   0  0\n  1  2  1  0\n  2  3  1  0\nM  END\n";
@@ -16,5 +17,5 @@ describe("a structure from its SMILES", () => {
     // (none given: the layout's own default, the app's style)
     await structureFromSmiles("CCO");
     expect(laidOut).toHaveBeenLastCalledWith(expect.objectContaining({ atoms: expect.any(Array) }), undefined);
-  });
+  }, measured(390));
 });
