@@ -802,6 +802,23 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
 - **A chelate that closes at a metal** - dppf's two P on Pd, through the
   ferrocene - has the metal at the apex over its two donors, its bonds
   alike and as long as a square angle there needs.
+- **A metal that two chelates or more close at** - a salen's Mn, three
+  rings through it; a bisphosphine's and a cyclometallated benzoate's on
+  Krische's catalyst's Ir - is drawn as a metal is, not as an atom shared
+  by rings each regular: its donors round it a square angle apart (four,
+  or fewer, as a square-planar or an octahedral metal is drawn), or
+  evenly round where five or more - or three that make a ring of their
+  own - close round it; each chelate's ring then drawn between its two
+  donors, giving at the metal where a regular ring would not (three rings
+  regular round Mn left the salen's two O 35 degrees apart, Cl drawn over
+  one: now they are a square angle apart, Cl between them). The donors of
+  one chelate are next to each other, chelates sharing a donor in their
+  chain; separate chains - Krische's two chelates - can go round the
+  metal more than one way (which P is beside the benzoate's C), and each
+  way is tried with what hangs from it, as a macrocycle's shapes are, its
+  phenyls turned as a propeller's blades as well as flat. A ligand of the
+  metal drawn inside one of its chelates' rings, of any size up to eight,
+  is hidden there, as an atom inside a small ring is.
 - **Aryl rings crowded round one atom** - PPh₃'s phenyls on a crowded
   metal - are each turned on their bond out of the page, all the same way
   round (a propeller), and so seen in perspective: foreshortened across

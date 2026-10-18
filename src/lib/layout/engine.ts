@@ -26,7 +26,7 @@ import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
 import { hydrogenRunsInto, hydrogenSpot, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
-import { extendRingSystem, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
+import { extendRingSystem, metalHub, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
 import { bridgeAcross } from "./bridge";
 import { drawnRingSets, keptFlat } from "./ringSets";
 import { affineFit, axialOut, cageCore, flatCost, isCage, keepsConfigurations, projectCage, solidOf, templateOnBond, tiedViews, type CageView } from "./cage";
@@ -310,7 +310,12 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
     }
     const e = etaOf.get(i);
     const u = unitOf.get(i);
-    if (!e && !u) return void local.set(i, placeRingSystem(mol, mol.systems[i], v));
+    // (a metal's chelates set round it one way or another: eased as laid flat)
+    if (!e && !u) {
+      const sys = mol.systems[i];
+      const hub = metalHub(mol, sys.rings.map((r) => mol.rings[r]));
+      return void local.set(i, hub ? layoutFlat(mol, sys, v).pos : placeRingSystem(mol, sys, v));
+    }
     const laid = u ? placeUnit(mol, u, v) : placeEta(mol, e!, v);
     local.set(i, laid.pos);
     laid.hints.forEach((m, a) => (hints.set(a, m), hintsM.set(a, m)));
@@ -393,14 +398,35 @@ function laidOut(input: LayoutInput, redo: Redo): { out: Layout2D; mol: Molecule
       // sixty atoms - each tried the other way and untangled where it helps:
       // substituents inside a macrocycle are crowded until then, and the
       // frame that reads best may not be the one that grew best
+      // (and where aryl rings crowd round an atom, a metal's chelates set
+      // round it one way or another: with its blades turned as a
+      // propeller's too, as the drawing will try them below - flat, the
+      // way round that crowds them least won over one that reads better
+      // turned, Krische's catalyst's)
+      const hubs = mol.systems[i].atoms.some((a) => isMetal(mol.el[a])) ? bladeHubs(mol, piece) : [];
       const grown = framesFor(mol, piece)
-        .map((frame) => {
+        .flatMap((frame) => {
           const { L, H } = setUp(frame);
           const pos = grow(mol, piece, L, frame, sides, H, upright);
-          return { pos, score: score(pos) };
+          const out = [{ pos, score: score(pos), scoreOf: score }];
+          const crowded = hubs.length ? clashing(mol, piece, pos) : new Set<number>();
+          if (hubs.some((hub) => hub.rings.some((c) => sideAtoms(mol, hub.x, c).some((v) => crowded.has(v))))) {
+            for (const phi of PROPELLER) {
+              const trial = new Map(pos);
+              const lift = new Map<number, number>();
+              for (const hub of hubs) turnBlades(mol, hub, phi, trial, lift);
+              const d = [...depth];
+              const q = [...measured];
+              for (const [v, l] of lift) [d[v], q[v]] = [l, true];
+              const turned = kept(scorer(mol, piece, d, q, 0, false));
+              out.push({ pos: trial, score: turned(trial), scoreOf: turned });
+            }
+          }
+          return out;
         })
         .sort(bestFirst(mol, piece));
       for (const top of grown.slice(0, piece.length <= 60 ? 3 : 1)) {
+        const score = top.scoreOf;
         const better = improve(mol, top.pos, top.score, flipsHere, sides, score, false, swapsHere);
         // (a cage's textbook view kept unless another reads clearly better:
         // camphor as it is always drawn, not the other way round)
@@ -1178,11 +1204,11 @@ function layoutSystem(mol: Molecule, i: number, asSolid = false, asWhole = false
 }
 
 /** A ring system laid flat, by its rings - or, a bridge crowding or crossing the ring it spans, the bridge across that ring's face. */
-export function layoutFlat(mol: Molecule, sys: RingSystem): SystemLayout {
+export function layoutFlat(mol: Molecule, sys: RingSystem, variant?: number): SystemLayout {
   // (as laid out already in choosing its rings)
-  const kept = keptFlat(mol, sys);
+  const kept = variant == null ? keptFlat(mol, sys) : null;
   if (kept) return kept;
-  let flat = placeRingSystem(mol, sys);
+  let flat = placeRingSystem(mol, sys, variant ?? 0);
   const rings = sys.rings.map((r) => mol.rings[r]);
   const bridged = rings.some((r, j) =>
     rings.some((q, k) => k > j && q.filter((a) => r.includes(a)).length >= 3 && q.length < 9 && r.length < 9),
