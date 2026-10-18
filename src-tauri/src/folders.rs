@@ -116,6 +116,12 @@ pub fn moves() -> Vec<Moved> {
     out
 }
 
+/// Whether `said` - what `move_old` did - has anything moved from `from`.
+pub fn moved_from(said: &[String], from: &Path) -> bool {
+    let head = format!("moved from {} to ", from.display());
+    said.iter().any(|s| s.starts_with(&head))
+}
+
 /// Each old folder moved into its new one, as far as it can be now: what was done, a line each.
 pub fn move_old(moves: &[Moved]) -> Vec<String> {
     let mut said = Vec::new();
@@ -585,6 +591,7 @@ mod tests {
         assert_eq!(names(&old), ["jobs", "pixi", "tools", "uv"]);
         // (said in the log, though the folder stays for what another takes away: the Windows pre-release check found no line for it)
         assert_eq!(said, [format!("moved from {} to {}: logs, settings.json, window.json", old.display(), new.display())]);
+        assert!(moved_from(&said, &old) && !moved_from(&said, &new));
         assert_eq!(names(&new), ["logs", "settings.json", "window.json"]);
         // (a cache folder: Meno's own caches moved, the system's left)
         let caches = base.join("Caches");
