@@ -57,6 +57,30 @@ export function easeOut(u: number): number {
   return 1 - (1 - t) ** 3;
 }
 
+/**
+ * The easing curve as gentle out of the start as into the end: cubic, in
+ * and out - for what moves the drawing in place (a label being written, its
+ * bonds drawing back), as EASE_SLIDE is for a panel.
+ */
+export function easeInOut(u: number): number {
+  const t = Math.min(Math.max(u, 0), 1);
+  return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
+}
+
+/**
+ * A clock for a short motion that counts frames as they are drawn, each at
+ * most `most` seconds: a frame slow to come - the canvas busy as the motion
+ * begins - takes it no further than one on time would, so that it is seen
+ * all the way rather than mostly gone by the first frame.
+ */
+export function frameClock(most = 1 / 60) {
+  let ms = 0;
+  return {
+    now: () => ms,
+    tick: (dt: number) => void (ms += Math.min(Math.max(dt, 0), most) * 1000),
+  };
+}
+
 /** How long something takes to go out of view, and how: `DURATION.base`, with `EASE_LEAVE`. */
 export const LEAVE = { duration: DURATION.base, ease: EASE_LEAVE } as const;
 

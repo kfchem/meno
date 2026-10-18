@@ -45,7 +45,7 @@ export function createUiSlice(
     markOpenedOver: (name: string) =>
       set((prev: EditorState) => ({ ...prev, savedPath: null, openedName: name })),
 
-    beginLabelEdit: (atomId: number, initial = "") =>
+    beginLabelEdit: (atomId: number, initial = "", how?: { select?: boolean }) =>
       set((prev: EditorState) => {
         const base = prev.model.atoms.find((a) => a.id === atomId);
         // (an atom no longer drawn has no label to write)
@@ -60,6 +60,8 @@ export function createUiSlice(
             value: val,
             opened: { at: typeof performance !== "undefined" ? performance.now() : Date.now(), value: val },
             n: ++labelEdits,
+            grow: initial.length > 0 && !how?.select,
+            selectAll: !!how?.select,
           },
         };
       }),
@@ -110,6 +112,7 @@ export function createUiSlice(
       set((prev: EditorState) => ({
         ...prev,
         labelEdit: { active: false, atomId: null, value: "" },
+        labelEnd: labelEdit.n != null ? { n: labelEdit.n, atomId: id, how: changed ? "kept" : "same" } : prev.labelEnd,
         // (written anew: drawn as written until the drawing's own label is)
         labelLeft: changed && labelEdit.n != null ? { atomId: id, n: labelEdit.n, text: value } : prev.labelLeft,
         // (kept by Enter: an Enter straight after draws it out - the drawing and its selection as they are now, to tell nothing came between)
@@ -142,6 +145,10 @@ export function createUiSlice(
       set((prev: EditorState) => ({
         ...prev,
         labelEdit: { active: false, atomId: null, value: "" },
+        labelEnd:
+          prev.labelEdit.active && prev.labelEdit.n != null && prev.labelEdit.atomId != null
+            ? { n: prev.labelEdit.n, atomId: prev.labelEdit.atomId, how: "cancelled" }
+            : prev.labelEnd,
       })),
 
     setAromaticEnabled: (v: boolean) => {

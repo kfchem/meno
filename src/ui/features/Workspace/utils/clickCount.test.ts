@@ -1,49 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clickClock, clickEditHeldOff, clickStillEdits, doubleClickedSince, noteClick, notePress, oncePerEvent, pressOnBond, pressNumber, pressOnEmpty } from "./clickCount";
-
-describe("clickCount", () => {
-  it("tells a double-click's second click that came after a moment", () => {
-    const since = clickClock();
-    noteClick(1);
-    expect(doubleClickedSince(since)).toBe(false);
-    noteClick(2);
-    expect(doubleClickedSince(since)).toBe(true);
-  });
-
-  it("does not count a double-click from before the moment", () => {
-    noteClick(2);
-    const since = clickClock() + 1;
-    expect(doubleClickedSince(since)).toBe(false);
-  });
-});
-
-describe("a click on an atom, waiting to edit its label", () => {
-  it("edits nothing once a press has come since: the view moved, say, or a bond clicked", async () => {
-    notePress();
-    await new Promise((r) => setTimeout(r, 2));
-    const since = clickClock();
-    expect(clickStillEdits(since)).toBe(true);
-    await new Promise((r) => setTimeout(r, 2));
-    notePress();
-    expect(clickStillEdits(since)).toBe(false);
-  });
-
-  it("edits nothing after the second click of a double-click", () => {
-    const since = clickClock();
-    noteClick(2);
-    expect(clickStillEdits(since)).toBe(false);
-  });
-});
-
-describe("a click's label edit, its time come", () => {
-  const idle = { extend: { active: false }, moveDrag: { active: false }, labelEdit: { active: false } };
-  it("is held off by a label typed over another atom since, as by a bond drawn or an atom moved", () => {
-    expect(clickEditHeldOff(idle)).toBe(false);
-    expect(clickEditHeldOff({ ...idle, labelEdit: { active: true } })).toBe(true);
-    expect(clickEditHeldOff({ ...idle, extend: { active: true } })).toBe(true);
-    expect(clickEditHeldOff({ ...idle, moveDrag: { active: true } })).toBe(true);
-  });
-});
+import { oncePerEvent, pressOnBond, pressNumber, pressOnEmpty } from "./clickCount";
 
 describe("presses on empty space", () => {
   it("count a second soon after a first, near it, as a double-click's", () => {

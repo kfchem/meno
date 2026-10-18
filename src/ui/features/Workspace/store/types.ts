@@ -1391,7 +1391,17 @@ export type EditorState = {
     opened?: { at: number; value: string };
     /** Each edit its own number, given as it begins. */
     n?: number;
+    /** Begun by a letter typed over the atom: its first letter grows out of the atom (LabelTyping2D). */
+    grow?: boolean;
+    /** Begun with what it says selected: the atom's menu's *Edit label* on a carbon drawn as a corner. */
+    selectAll?: boolean;
   };
+  /**
+   * How the last label edit ended: kept and changed (`kept`),
+   * kept as it was (`same`), or let go (`cancelled`) - what the writing and
+   * the label it had do as it goes (LabelTyping2D, Labels2D).
+   */
+  labelEnd: { n: number; atomId: number; how: "kept" | "same" | "cancelled" } | null;
   /**
    * A label just written, drawn as it was written until the drawing's own is
    * drawn in its place (LabelTyping2D), so that it never goes from the page
@@ -1500,6 +1510,21 @@ export type EditorState = {
     orient: NonNullable<Bond["stereoOrient"]>,
   ) => void;
   setSel: (sel: Sel, anchor?: number | null) => void;
+  /**
+   * An atom clicked: selected alone at once, its shade spreading from it -
+   * and, the second click of a double-click following, taken back, the
+   * selection as it was, its shade drawn back in (`clickTakeBack`).
+   */
+  clickSelectAtom: (id: number) => void;
+  /** The click on `id` taken back by a double-click's second (`clickSelectAtom`): false where nothing was. */
+  clickTakeBack: (id: number) => boolean;
+  /**
+   * The atom a click selected last, when, what was selected before, whether
+   * it was not selected then (`fresh`: its shade spreads from it, and draws
+   * back in, taken back - SelectionShade2D) and whether it has been taken
+   * back since.
+   */
+  clickShade: { atomId: number; at: number; was: Sel; anchor: number | null; fresh: boolean; back: boolean } | null;
   toggleAtomSel: (id: number) => void;
   toggleBondSel: (id: number) => void;
   selectPathTo: (id: number) => void;
@@ -1691,7 +1716,7 @@ export type EditorState = {
     excludeId?: number | null,
   ) => number | null;
   /** An atom's label opened to be written: as it is, or begun with `initial`, a letter typed over it. */
-  beginLabelEdit: (atomId: number, initial?: string) => void;
+  beginLabelEdit: (atomId: number, initial?: string, how?: { select?: boolean }) => void;
   setLabelEditValue: (value: string) => void;
   /** The label written kept; `typed`, what was typed for it, where it is read as something else; `byEnter`, where Enter kept it. */
   commitLabelEdit: (typed?: string, byEnter?: boolean) => void;
