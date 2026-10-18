@@ -460,7 +460,9 @@ Taken on 2026-10-13:
   calculation's output or a PDF opened (Ctrl/Cmd+O) is added to the
   workspace in front, as a drop on its canvas adds it: in free space near
   the middle of the view, one step to undo, an SD file as a stack. Free
-  space is clear of all on the page and of a workflow's sets and steps'
+  space is clear of all on the page - the page's labels as far as the
+  layout sets their letters, as they are drawn, so that an NHBoc or a
+  PO3H2 is not grazed (`pageBoxes`) - and of a workflow's sets and steps'
   cards - a structure put down in a set's frame would be taken as what the
   set holds - its own labels and "+" signs counted. Only a `.meno` opens a
   tab of its own, untouched: opened with other files at once, it opens

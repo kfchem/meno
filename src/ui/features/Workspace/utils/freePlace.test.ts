@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { freePlace } from "./freePlace";
+import { freePlace, labelBoxes, labelledPart, pageBoxes } from "./freePlace";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import { createWorkspaceDocument } from "../document";
+import { editorLayoutOptions } from "../layoutOptions";
+import { styleOf } from "../../../../lib/chem/style";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 const foot = { x0: -2, y0: -1, x1: 2, y1: 1 };
 
@@ -46,5 +51,32 @@ describe("where a file opened onto a page goes", () => {
     const at = freePlace([everywhere], foot, { x: 1, y: 2 }, 1.5);
     expect(at.y).toBe(2);
     expect(at.x + foot.x0).toBeGreaterThanOrEqual(1000 + 1.5);
+  });
+});
+
+describe("all there is on a page, as what is put down takes it", () => {
+  it("takes a structure's labels as far as the layout sets their letters: put down beside an NHBoc, clear of all of it", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().appendModel({
+      atoms: [
+        { id: 1, x: 0, y: 0, r: 0.9, el: "C" },
+        { id: 2, x: NOMINAL_BOND_LENGTH, y: 0, r: 0.9, el: "NHBoc" },
+      ],
+      bonds: [{ id: 1, a: 1, b: 2, order: 1 }],
+    });
+    const st = store.getState();
+    const style = styleOf(st.docStyle);
+    const letters = labelBoxes(labelledPart(st.model), style);
+    const font = editorLayoutOptions(style).fontPx;
+    const n = st.model.atoms.find((a) => a.el === "NHBoc")!;
+    // (its letters reach far past the pad round its atom)
+    expect(Math.max(...letters.map((b) => b.x1))).toBeGreaterThan(n.x + 2 * font);
+    // (something small asked to go among them, two letters on from its atom: put clear of every letter)
+    const foot = { x0: -font / 4, y0: -font / 4, x1: font / 4, y1: font / 4 };
+    const at = freePlace(pageBoxes(st, style), foot, { x: n.x + 2 * font, y: n.y }, font / 2, 0);
+    const box = { x0: at.x + foot.x0, y0: at.y + foot.y0, x1: at.x + foot.x1, y1: at.y + foot.y1 };
+    expect(letters.some((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1)).toBe(false);
   });
 });
