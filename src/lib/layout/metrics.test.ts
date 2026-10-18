@@ -140,6 +140,29 @@ describe("layoutMetrics", () => {
     expect(hydrogenWritten({ x: -0.5, y: 0 }, 1)).toEqual({ x: -0.5, y: 0, count: false });
   });
 
+  it("counts an OH's H beside another label's letter, short of a word's space, as running into it", () => {
+    // an OH with its bond to the left, and an N on the H's row to its right
+    // (tacrolimus's hemiketal OH and its piperidine N): the H 0.69 of a bond
+    // from the N's middle reads OHN; 0.85, two labels
+    const at = (nx: number) =>
+      layoutMetrics({
+        x: [-0.92, 0, nx, nx + 0.5, nx + 0.5],
+        y: [0.4, 0, 0.16, 1.03, -0.71],
+        edges: [
+          [0, 1],
+          [2, 3],
+          [2, 4],
+        ],
+        elements: ["C", "O", "N", "C", "C"],
+        hydrogens: [1, 1, 0, 2, 2],
+        labelled: [false, true, true, false, false],
+        labelRoom: 0,
+        inkRoom: 0,
+      }).crowdedLabels;
+    expect(at(1.19)).toBeCloseTo(0.25, 6);
+    expect(at(1.35)).toBe(0);
+  });
+
   it("counts a label near a bare vertex and on one of its bonds once, as a clash", () => {
     // a bare vertex at (0, 0) with a bond to the right, and an O 0.55 from
     // it - 30 degrees up, over the bond, or 120 degrees round, clear of it

@@ -510,13 +510,16 @@ export const HYDROGEN_COUNT = 0.3;
  * Whether an atom `d` off a label's H (in bond lengths, y up) is where the
  * H's ink runs into it - its own ink, a label's (`labelled`) or a bare
  * vertex's: an H's ink is 0.4 of a bond across and half a bond high, an O's
- * a little more; side by side they want a space between them, or OH O reads
- * as one word, one over the other a sliver of paper. Its count (`count`),
+ * a little more; side by side they want a word's space between them, or
+ * OH O reads as one word - 0.8 of a bond between the H and the other
+ * symbol's middle (at 0.65, tacrolimus's OH ended 0.69 short of its
+ * piperidine's N and read OHN) - one over the other a sliver of paper.
+ * Its count (`count`),
  * written after it and set lower, reaches as far again to the right and a
  * little further down (NH2's 2 above an O under it).
  */
 export function hydrogenRunsInto(d: { x: number; y: number }, labelled: boolean, count: boolean): boolean {
-  const [w, t] = labelled ? [0.65, 0.58] : [0.33, 0.33];
+  const [w, t] = labelled ? [0.8, 0.58] : [0.33, 0.33];
   const right = count ? w + 0.3 : w;
   const down = count ? t + 0.1 : t;
   return d.x > -w && d.x < right && d.y > -down && d.y < t;

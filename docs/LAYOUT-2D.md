@@ -598,7 +598,10 @@ symbol: NH. lib/layout/names `rowClearer`, `clearRowSide`, which the
 drawing and the engine share). Written before its symbol with a count -
 H2N - the count comes between the two, and the H stands a count's width
 further out (`hydrogenWritten`): taken as beside the N, cephalosporin C's
-H2N ran into the O of the C=O a bond to its left unseen. Where it - or
+H2N ran into the O of the C=O a bond to its left unseen. Beside another
+label's symbol, on its row, an H wants a word's space: 0.8 of a bond
+between the H and that symbol's middle, or OH N reads as one word
+(tacrolimus's hemiketal OH, 0.69 short of its piperidine's N). Where it - or
 its count, NH2's 2 after it and set lower - would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a
