@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { labelsCrowding, labelsOnVertices, layoutMetrics, ringIrregularity, scoreParts } from "./metrics";
+import { HYDROGEN_COUNT, hydrogenWritten, labelsCrowding, labelsOnVertices, layoutMetrics, ringIrregularity, scoreParts } from "./metrics";
 
 /** A regular polygon's atoms and bonds, bond length 1. */
 function polygon(k: number, cx = 0, cy = 0, turn = 0) {
@@ -112,6 +112,32 @@ describe("layoutMetrics", () => {
     expect(at(0.7)).toBe(1);
     const found = labelsCrowding([0, 0], [0, 0.85], 1, ["O", "O"], [1, 1], [true, true], [[], []], () => false);
     expect(found).toEqual([{ a: 0, b: 1, by: expect.closeTo(0.5, 6) }]);
+  });
+
+  it("counts the H of an H2N written before its N running into a label beside it", () => {
+    // a C=O's O, and a bond and a quarter to its right an NH2 whose bond
+    // leaves up and a little to the right: written H2N, the 2 between the
+    // H and the N, so the H a count's width further out than beside the N
+    const at = (nx: number) =>
+      layoutMetrics({
+        x: [-0.96, 0, nx, nx + 0.26],
+        y: [-0.26, 0, 0.17, 1.14],
+        edges: [
+          [0, 1],
+          [2, 3],
+        ],
+        orders: [2, 1],
+        elements: ["C", "O", "N", "C"],
+        hydrogens: [0, 0, 2, 1],
+        labelled: [false, true, true, false],
+        labelRoom: 0,
+        inkRoom: 0,
+      }).crowdedLabels;
+    expect(at(1.26)).toBeCloseTo(0.25, 6);
+    expect(at(1.7)).toBe(0);
+    expect(hydrogenWritten({ x: -0.5, y: 0 }, 2)).toEqual({ x: -0.5 - HYDROGEN_COUNT, y: 0, count: true });
+    expect(hydrogenWritten({ x: 0.5, y: 0 }, 2)).toEqual({ x: 0.5, y: 0, count: true });
+    expect(hydrogenWritten({ x: -0.5, y: 0 }, 1)).toEqual({ x: -0.5, y: 0, count: false });
   });
 
   it("counts a label near a bare vertex and on one of its bonds once, as a clash", () => {

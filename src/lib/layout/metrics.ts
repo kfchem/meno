@@ -491,6 +491,22 @@ function labelInk(el: string, hs: number, ways: readonly { x: number; y: number 
 }
 
 /**
+ * Where a label's H is written, from its atom in bond lengths (`h`, from
+ * hydrogenSpot), and whether its count follows it (`count`): written after
+ * the symbol or under it, its count after it; written before the symbol
+ * with a count (H2N), the count between the two, so the H a count's width
+ * further out - it was taken as beside the symbol, and H2N's H ran into an
+ * O a bond to the left of the N unseen (cephalosporin C's).
+ */
+export function hydrogenWritten(h: { x: number; y: number }, hs: number): { x: number; y: number; count: boolean } {
+  if (hs > 1 && h.x < 0) return { x: h.x - HYDROGEN_COUNT, y: h.y, count: true };
+  return { x: h.x, y: h.y, count: hs > 1 && h.x >= 0 };
+}
+
+/** How wide an H's count (the 2 of NH2) is, in bond lengths. */
+export const HYDROGEN_COUNT = 0.3;
+
+/**
  * Whether an atom `d` off a label's H (in bond lengths, y up) is where the
  * H's ink runs into it - its own ink, a label's (`labelled`) or a bare
  * vertex's: an H's ink is 0.4 of a bond across and half a bond high, an O's
@@ -1069,7 +1085,8 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
           return { x: (x[b] - x[a]) / d, y: (y[b] - y[a]) / d };
         }),
       );
-      spots.push({ a, x: x[a] + h.x * L, y: y[a] + h.y * L, count: g.hydrogens[a] > 1 && h.x >= 0 });
+      const w = hydrogenWritten(h, g.hydrogens[a]);
+      spots.push({ a, x: x[a] + w.x * L, y: y[a] + w.y * L, count: w.count });
     }
     for (const [i, h] of spots.entries()) {
       let crowded = false;
