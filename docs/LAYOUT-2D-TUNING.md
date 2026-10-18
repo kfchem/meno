@@ -58,10 +58,15 @@ molecules with their references.
    - `faceSugars` turns a sugar hung on a macrolide over to its face,
      leaving the aglycone as it is;
    - `roomForHydrogens` turns or lengthens a bond a little so that each
-     label's H has room.
+     label's H has room, and each label on a bare vertex (`labelRoom`) and
+     each pair of labels whose ink comes near (`inkRoom`); or sets a
+     branch on the other side of the chain atom it hangs from, the other
+     way a zigzag goes. It takes no move that leaves a stereocentre of a
+     solid, shown by the drawing for sure, unsure (`byAHair`).
 
    Neither takes a move that crosses bonds.
-6. `squareUp` (a piece with no square ring); the pieces set side by side,
+6. `squareUp` (a piece with no square ring), by the bonds as they lay
+   before step 5; the pieces set side by side,
    the largest first, a bond and a half of paper between their ink
    (`inkReach`: how far each atom's label reaches left and right); the
    depth of a bridge seen from its other side; and `placeStereo`.
@@ -87,13 +92,24 @@ A fault must outweigh anything it would clear, and a convention must
 outweigh the shape it costs. Where a new term fights an old one, decide
 which comes first and weigh them so.
 
-Two options set a draft apart from the final score:
+Four options set a draft apart from the final score:
 
 - `hydrogenRoom`: what a label's H running into something counts, in
   crowdings - 0 while drafting, 1 in `roomForHydrogens`, and a quarter on
   the sheet (a leftover shows, but never outweighs a drawing's shape);
 - `sugarFaces`: false while drafting, so that a hung sugar's face does not
-  pull the aglycone round.
+  pull the aglycone round;
+- `labelRoom`: what a label on a bare vertex counts (`labelsOnVertices`) -
+  0 while drafting and in choosing a cage's drawing, 1 in
+  `roomForHydrogens`, and a half on the sheet. Counted while drafting, it
+  moved the metal complexes and the cages; on the sheet alone it moves
+  nothing (2026-10-17);
+- `inkRoom`: what two labels whose ink comes near counts
+  (`labelsCrowding`: symbol on symbol, or H on H, where the drawing puts
+  them, with less than half a bond of paper between, fully at a fifth) -
+  0 while drafting and in choosing a cage's drawing, and a half in
+  `roomForHydrogens` and on the sheet alike, so that what the last step
+  clears shows on the sheet (2026-10-18).
 
 A rule for where something goes belongs in `readingOrder`; one for how a
 fused system lies in `ringOrder`; which face a system is seen from in
