@@ -325,6 +325,7 @@ export function createEditorStore(
     hoveredPdf: null,
     hoveredPicture: null,
     picturesLaid: new Set<number>(),
+    renderFrames: [],
     selPictures: new Set<number>(),
     selCaptions: new Set<number>(),
     selSlides: new Set<number>(),

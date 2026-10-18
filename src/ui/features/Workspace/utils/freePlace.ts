@@ -1,4 +1,4 @@
-import { besidesBoxes, type Box } from "./extent";
+import { besidesBoxes, captionBox, type Box } from "./extent";
 import type { EditorState, Model } from "../store/types";
 import type { DrawingStyle } from "../../../../lib/chem/style";
 import { buildTextLabels, labelHulls, labelSetOf } from "../../../../lib/chem/layout2d";
@@ -52,15 +52,18 @@ const NONE = new Set<number>();
 
 /**
  * Boxes round all there is on the page, selected or not, each as it is
- * drawn (./extent) - and a workflow's sets and its steps' cards: a
+ * drawn (./extent) - a workflow's sets and its steps' cards: a
  * structure put down in a set's frame would be taken as what the set
- * holds (workflow/entries), and one on a step's card would hide it.
+ * holds (workflow/entries), and one on a step's card would hide it - and
+ * the frames of renders under way, where what they make will land.
  */
 export function pageBoxes(st: EditorState, style: DrawingStyle): Box[] {
   const out = besidesBoxes(
     { ...st, sel: { atoms: NONE, bonds: NONE }, sel3d: NONE, selCaptions: NONE, selArrows: NONE, selPluses: NONE, selPictures: NONE, selPdfs: NONE, selTexts: NONE, selSlides: NONE, selShapes: NONE, selInks: NONE, selCycles: NONE },
     style,
   );
+  // (and where renders under way will put what they make: render/renders)
+  out.push(...(st.renderFrames ?? []));
   for (const b of st.sets ?? []) out.push({ x0: Math.min(b.x0, b.x1), y0: Math.min(b.y0, b.y1), x1: Math.max(b.x0, b.x1), y1: Math.max(b.y0, b.y1) });
   // (each as far as its card closed reaches, as workflow/parts measures them)
   for (const s of st.steps ?? []) out.push({ x0: s.x, y0: s.y - CARD_H, x1: s.x + CARD_W, y1: s.y });
@@ -113,8 +116,8 @@ export function labelledPart(model: Model): Model {
 /**
  * The room what a file brings takes, about the middle of its atoms (its
  * centroid): its atoms, its labels as far as they reach - a reagent written
- * over the arrow - its molecules in 3D, its arrow and its "+" signs, as
- * `scheme` places them about that middle.
+ * over the arrow - its molecules in 3D, its arrow, its "+" signs and its
+ * words, as `scheme` places them about that middle.
  */
 export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, drawingStyle: DrawingStyle, style: Style3D): Box {
   const pad = NOMINAL_BOND_LENGTH / 2;
@@ -137,6 +140,11 @@ export function footOf(result: ProcessedFileResult, scheme: ImportedScheme, draw
     const r = solidOf({ ...m, id: 0, at }, style).reach[lookOf(m)];
     take(at.x - r, at.y - r, at.x + r, at.y + r);
   });
+  // (its words, as far as they are set: ./extent)
+  for (const c of scheme.captions ?? []) {
+    const b = captionBox(c, editorLayoutOptions(drawingStyle));
+    take(b.x0, b.y0, b.x1, b.y1);
+  }
   for (const a of scheme.arrows ?? []) {
     const hx = (a.length / 2) * Math.abs(Math.cos(a.angle));
     const hy = (a.length / 2) * Math.abs(Math.sin(a.angle));

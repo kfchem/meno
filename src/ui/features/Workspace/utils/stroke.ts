@@ -18,6 +18,8 @@ import { snapBond, type Pt } from "./extendSnap";
 import { followChain, startChain, type Chain } from "./chain";
 import { cellOf, nearestCell, neighboursOf } from "./honeycomb";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { etaBondAt, etaRingAt } from "../chem/eta";
+import { ATOM_PICK_RADIUS_RATIO } from "../constants";
 
 /**
  * An atom a stroke has reached: a new one where it goes, an atom already
@@ -26,7 +28,13 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
  * or from `from` (a path index likewise) - where a ring a chain draws goes
  * off from the chain.
  */
-export type StrokeNode = Pt & { atomId?: number; pathIndex?: number; from?: number };
+export type StrokeNode = Pt & {
+  atomId?: number;
+  pathIndex?: number;
+  from?: number;
+  /** A bond from a metal ending inside a ring, on no atom: the ring it binds through all its atoms (chem/eta). */
+  ring?: number[];
+};
 
 /** The stroke's own start, as a path index. */
 export const BASE = -1;
@@ -109,6 +117,8 @@ function atomNear(model: StrokeModel, index: StrokeIndex, p: Pt, reach: number, 
 
 /** How near an atom the end of a bond has to come to close onto it. */
 export const JOIN_REACH = 0.4;
+/** How far off a double bond's line, against a bond's length, a bond from a metal ending on its middle binds it (eta2). */
+export const ETA2_ACROSS = 0.2;
 
 /**
  * A stroke from the atom `baseId`, or - a chain - from `start` on empty
@@ -289,6 +299,8 @@ export type StrokeTarget = {
   /** The bond it makes 120 degrees with, when it snapped to that. */
   trigonalTo?: number;
   turn?: 1 | -1;
+  /** Set when a bond from a metal ends inside a ring, on no atom: the ring it binds, `end` its centre (chem/eta). */
+  ring?: number[];
 };
 
 /** The angle each stroke's bond was last held at (`snapBond`), for as long as the stroke is the same. */
@@ -317,6 +329,13 @@ export function strokeTarget(
     trigonalTo = b.trigonalTo;
   }
   // closing onto an atom within reach: one already there...
+  // from a metal, on the middle of a double or triple bond, on no atom:
+  // that bond, bound through both its atoms by one bond to its middle
+  // (eta2, chem/eta)
+  if (s.kind === "bond" && t.tipAtom != null && s.nodes.length === 0) {
+    const eta2 = etaBondAt(model as unknown as Parameters<typeof etaBondAt>[0], t.tipAtom, pointer, ETA2_ACROSS * length, ATOM_PICK_RADIUS_RATIO * length);
+    if (eta2) return { tip: t.tip, end: eta2.centre, ring: eta2.ring };
+  }
   const reach = JOIN_REACH * length;
   let bestFar = reach;
   let join: { atomId?: number; pathIndex?: number; at: Pt } | null = null;
@@ -332,6 +351,12 @@ export function strokeTarget(
       }
     }
     if (join) bestFar = 0;
+    // ...or, from a metal, inside a ring on no atom: the ring, bound
+    // through all its atoms by one bond to its centre (chem/eta)
+    if (!join && t.tipAtom != null && s.nodes.length === 0) {
+      const eta = etaRingAt(model as unknown as Parameters<typeof etaRingAt>[0], t.tipAtom, pointer);
+      if (eta) return { tip: t.tip, end: eta.centre, ring: eta.ring };
+    }
   }
   for (const a of model.atoms) {
     if (a.id === t.tipAtom || t.bonded.has(a.id)) continue;
@@ -368,6 +393,7 @@ function lay(s: Stroke, target: StrokeTarget): Stroke {
   const node: StrokeNode = { x: target.end.x, y: target.end.y };
   if (target.atomId != null) node.atomId = target.atomId;
   if (target.pathIndex != null) node.pathIndex = target.pathIndex;
+  if (target.ring) node.ring = target.ring;
   return {
     ...s,
     nodes: [...s.nodes, node],

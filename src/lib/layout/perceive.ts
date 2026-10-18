@@ -402,6 +402,81 @@ export function ringsBondedAtomByAtom(input: LayoutInput): { metal: number; ring
   return out;
 }
 
+/**
+ * The pi systems a drawing binds to a metal atom by atom, each with its
+ * metal, its atoms and the bonds from the metal to them (by index): the
+ * rings `ringsBondedAtomByAtom` finds, and a run of three atoms or more
+ * bonded to each other in a chain, each bonded to the same metal - an allyl
+ * (three), a diene in a ring (four, cyclohexadiene's), the part of a ring
+ * the metal is bound to. Each is what one bond to its centre says
+ * (eta, the CTfile's multi-centre bond). Two atoms so bonded are left as
+ * drawn: a three-membered ring with the metal is also how a
+ * metallacyclopropane is drawn.
+ */
+export function etaBondedAtomByAtom(input: LayoutInput): { metal: number; ring: number[]; bonds: number[] }[] {
+  const rings = ringsBondedAtomByAtom(input);
+  const out = [...rings];
+  const toMetal = new Map<number, Map<number, number>>();
+  input.bonds.forEach((b, i) => {
+    for (const [m, x] of [
+      [b.a, b.b],
+      [b.b, b.a],
+    ]) {
+      // (not an H - a hydride - nor a star already at a pi system's centre)
+      const el = input.atoms[x]?.el ?? "";
+      if (!isMetal(input.atoms[m]?.el ?? "") || isMetal(el) || el === "H" || el === "*") continue;
+      if (!toMetal.has(m)) toMetal.set(m, new Map());
+      toMetal.get(m)!.set(x, i);
+    }
+  });
+  for (const [metal, around] of toMetal) {
+    if (around.size < 3) continue;
+    // (the atoms bonded to it that no ring found takes, each run of them bonded together, if it has no ring of its own)
+    const taken = new Set(rings.filter((r) => r.metal === metal).flatMap((r) => r.ring));
+    const free = [...around.keys()].filter((a) => !taken.has(a)).sort((p, q) => p - q);
+    const inFree = new Set(free);
+    const next = new Map<number, number[]>(free.map((a) => [a, []]));
+    let edges = 0;
+    for (const b of input.bonds) {
+      if (b.a === b.b || !inFree.has(b.a) || !inFree.has(b.b)) continue;
+      next.get(b.a)!.push(b.b);
+      next.get(b.b)!.push(b.a);
+      edges++;
+    }
+    if (!edges) continue;
+    const seen = new Set<number>();
+    for (const start of free) {
+      if (seen.has(start)) continue;
+      // (in order along it, from an end where it has one)
+      const run: number[] = [];
+      const todo = [start];
+      seen.add(start);
+      while (todo.length) {
+        const a = todo.shift()!;
+        run.push(a);
+        for (const n of next.get(a)!) {
+          if (seen.has(n)) continue;
+          seen.add(n);
+          todo.push(n);
+        }
+      }
+      const own = run.reduce((s, a) => s + next.get(a)!.length, 0) / 2;
+      if (run.length < 3 || own !== run.length - 1) continue;
+      const end = run.find((a) => next.get(a)!.length === 1) ?? run[0];
+      const ordered: number[] = [];
+      const walked = new Set<number>();
+      const walk = (a: number) => {
+        walked.add(a);
+        ordered.push(a);
+        for (const n of next.get(a)!) if (!walked.has(n)) walk(n);
+      };
+      walk(end);
+      out.push({ metal, ring: ordered, bonds: ordered.map((a) => around.get(a)!) });
+    }
+  }
+  return out;
+}
+
 export function isMetal(el: string): boolean {
   return METALS.has(el);
 }

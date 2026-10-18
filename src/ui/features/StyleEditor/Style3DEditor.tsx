@@ -234,7 +234,7 @@ export function Row({
       <div className={clsx("flex gap-3", stacked ? "flex-col items-stretch gap-2" : "items-start")}>
         <div className="min-w-0 flex-1">
           <div className={clsx("text-sm", warn ? "text-accel-accent font-medium" : "text-gh-black")}>{field.label}</div>
-          <p className="text-xs leading-snug text-gh-gray mt-0.5">{field.description}</p>
+          <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">{field.description}</p>
         </div>
         <div className={clsx("shrink-0 flex items-center gap-1.5", stacked ? "justify-end" : "pt-0.5", off && "pointer-events-none")} inert={off || undefined}>
           <Control field={field} value={value} onSet={onSet} />

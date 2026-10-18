@@ -174,11 +174,27 @@ export type Worked = SetEntry & {
   path?: number[][];
   pathEnergies?: number[];
   calc?: CalcInfo;
-  /** What the molecule made keeps besides: the drawing it was made from, its stereo labels, how it was made. */
-  keep?: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made">;
+  /** What the molecule made keeps besides: the drawing it was made from, its stereo labels, how it was made, its sticks to ring centres. */
+  keep?: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
+
+/**
+ * What a molecule made in 3D for a step keeps besides its atoms, bonds and
+ * places (`Worked.keep`): the drawing it was made from, its stereo labels,
+ * how it was made, and its bonds to ring centres (eta) - its atoms in the
+ * same order, as the step's entries keep them.
+ */
+export function keptOf(m: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">): NonNullable<Worked["keep"]> {
+  return {
+    drawnFrom: m.drawnFrom,
+    drawnAs: m.drawnAs,
+    ...(m.stereo ? { stereo: m.stereo } : {}),
+    ...(m.made ? { made: m.made } : {}),
+    ...(m.centres?.length ? { centres: m.centres } : {}),
+  };
+}
 
 /** What a step gave, as its result set is to hold it: its molecules in 3D, those it set aside, and what kind of set they make. */
 export function resultsOf(outcome: Extract<Outcome, { ok: true }>): RunResults {

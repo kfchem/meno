@@ -13,7 +13,7 @@ export default function PictureSettings() {
     <div className="rounded-lg border border-gh-line bg-white px-4 py-3 flex items-start gap-4">
       <div className="flex-1">
         <div className="text-sm text-gh-black">Resolution</div>
-        <p className="text-xs text-gh-gray mt-0.5 max-w-xl">
+        <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
           Of a copied picture where it is made of pixels: molecules in 3D in it, and the whole of it in a program
           that takes no drawing in lines. Higher is sharper, and takes more room.
         </p>

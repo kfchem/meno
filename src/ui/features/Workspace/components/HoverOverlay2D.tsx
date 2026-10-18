@@ -7,6 +7,18 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lineHalfOf, type BondReach } from "../../../../lib/chem/layout2d";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { bandAround } from "./hoverBand";
+import { allylCurveOf } from "../chem/eta";
+
+/** A band `half` wide either side of a line through `pts`, as an outline: along one side, then back along the other. */
+function bandAlong(pts: readonly { x: number; y: number }[], half: number): { x: number; y: number }[] {
+  const side = pts.map((p, i) => {
+    const a = pts[Math.max(0, i - 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
+    const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+    return { x: -(b.y - a.y) / len, y: (b.x - a.x) / len, p };
+  });
+  return [...side.map((s) => ({ x: s.p.x + s.x * half, y: s.p.y + s.y * half })), ...side.reverse().map((s) => ({ x: s.p.x - s.x * half, y: s.p.y - s.y * half }))];
+}
 
 /** The highlight's width once it has come in, over THICKNESS_RATIO's. */
 const SETTLED = 1.35;
@@ -122,7 +134,10 @@ export default function HoverOverlay2D() {
       const swing = Math.sin(Math.PI * band.pulse);
       const w = targetWorld * widthAt(band.u) * (1 - 0.25 * swing);
       const opacity = Math.min(1, ALPHA.highlight * easeOutCubic(band.u) * (1 + 0.35 * swing));
-      const key = `${a1.x},${a1.y},${a2.x},${a2.y},${w},${drawn.laidAt},${k >= 0 ? JSON.stringify(reach) : ""}`;
+      // (an η3-allyl's bond: its curve banded with it - chem/eta)
+      const bond = model.bonds.find((b) => b.id === id);
+      const arc = bond?.endpoints?.length === 3 ? allylCurveOf(bond, new Map(drawn.atoms.map((a) => [a.id, a])), model.bonds) : null;
+      const key = `${a1.x},${a1.y},${a2.x},${a2.y},${w},${drawn.laidAt},${k >= 0 ? JSON.stringify(reach) : ""},${arc ? `${arc[0].x},${arc[0].y},${arc[arc.length - 1].x},${arc[arc.length - 1].y}` : ""}`;
       if (key !== band.drawnAt) {
         band.drawnAt = key;
         const outline = bandAround(
@@ -135,7 +150,9 @@ export default function HoverOverlay2D() {
           w / (targetWorld * SETTLED),
         );
         const old = mesh.geometry;
-        mesh.geometry = new THREE.ShapeGeometry(new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, p.y))));
+        const shapes = [new THREE.Shape(outline.map((p) => new THREE.Vector2(p.x, p.y)))];
+        if (arc) shapes.push(new THREE.Shape(bandAlong(arc, w / 2).map((p) => new THREE.Vector2(p.x, p.y))));
+        mesh.geometry = new THREE.ShapeGeometry(shapes);
         old?.dispose();
       }
       (mesh.material as THREE.MeshBasicMaterial).opacity = opacity;

@@ -121,6 +121,13 @@ export type LookParts = {
 };
 export type LookDecl = { id: string; label: string; description?: string; parts?: LookParts; own?: true; seeThrough?: true };
 
+/**
+ * A motion a render plugin makes of a film (docs/RENDER.md, *Motions a renderer makes*): its id, what the card calls it, and a
+ * short description. The plugin builds it from the scene and its molecules' atoms and bonds; Meno writes the scene still for it.
+ * Its options - Once or Loop among them - are the role's, each `when` this motion is chosen.
+ */
+export type MotionDecl = { id: string; label: string; description?: string };
+
 /** A role a plugin fills (lib/plugins/roles), by the id Meno gives it; the programs it runs for it, by name, where it runs one as a job (Render: Blender); and its options where the role takes them. */
 export type RoleDecl = {
   role: RoleId;
@@ -128,6 +135,8 @@ export type RoleDecl = {
   options: Option[];
   /** The looks it makes, each declared in full, where the role has looks (Render: docs/RENDER.md); none declared, none said. */
   looks?: LookDecl[];
+  /** The motions it makes of a film, each declared in full, where the role has them (Render); none declared, none said. */
+  motions?: MotionDecl[];
 };
 
 /**
@@ -405,6 +414,26 @@ function acceptLooks(v: unknown): LookDecl[] {
   return out;
 }
 
+/** The ids Meno's own film motions have (render/renderScene): a plugin's motion takes none of them. */
+export const MENO_MOTIONS = ["turn", "frames", "vibration"] as const;
+
+/** The motions a render role declares, each checked: an id (none of Meno's own), a label, a description - what is not understood is left out. */
+function acceptMotions(v: unknown): MotionDecl[] {
+  const seen = new Set<string>();
+  const out: MotionDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !LOOK_ID.test(r.id) || seen.has(r.id) || (MENO_MOTIONS as readonly string[]).includes(r.id)) continue;
+    const label = typeof r.label === "string" ? r.label.trim().slice(0, 80) : "";
+    if (!label) continue;
+    seen.add(r.id);
+    const description = typeof r.description === "string" && r.description.trim() ? r.description.trim().slice(0, 200) : undefined;
+    out.push({ id: r.id, label, ...(description ? { description } : {}) });
+    if (out.length >= 40) break;
+  }
+  return out;
+}
+
 /** What a plugin says it uses: each a name and the version its lock fixes; what is not that is left out. */
 function acceptUses(v: unknown): UsesDecl[] {
   const out: UsesDecl[] = [];
@@ -676,7 +705,8 @@ export function acceptManifest(raw: unknown): Manifest | null {
           const programs = [...new Set(list(r.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
           // (options only for a role that takes them)
           const looks = acceptLooks(r.looks);
-          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [], ...(looks.length ? { looks } : {}) };
+          const motions = acceptMotions(r.motions);
+          return { role: r.role, programs, options: "options" in ROLES[r.role] ? acceptOptions(r.options) : [], ...(looks.length ? { looks } : {}), ...(motions.length ? { motions } : {}) };
         },
         (r) => r.role,
       )

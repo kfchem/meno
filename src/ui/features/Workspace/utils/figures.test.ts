@@ -11,7 +11,7 @@ import { WRITTEN_AS_WORDS } from "../../../../lib/figure/scheme";
 import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/glyphs";
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
-import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, wholeLabel, type FigureResult, type Unread } from "./figures";
+import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, regionOf, wholeLabel, type FigureResult, type Unread } from "./figures";
 
 /** What a figure as drawn reads as: its structure, or why there is none. */
 const structureFrom = (drawn: FigureDrawn, sha: string, page: number): Model | Unread => {
@@ -210,6 +210,17 @@ describe("where a structure read goes", () => {
     expect(placed.scheme!.captions![0]).toMatchObject({ x: 3 + dx, y: 0.8 + dy, arrowAt: 0 });
     // (its left edge two bonds past the region's right: the "+" sign's, leftmost of all)
     expect(-2 + dx).toBeCloseTo(10 + 2 * NOMINAL_BOND_LENGTH);
+  });
+  it("takes its own words' room as they are set, not as a point", () => {
+    const style = styleOf(DEFAULT_STYLE_CHOICE);
+    const read: FigureResult = { model: m, scheme: { captions: [{ x: 0, y: 3, text: "a long line of conditions written over it" }] } };
+    const plain = regionOf(read)!;
+    const set = regionOf(read, style)!;
+    expect(set.x1 - set.x0).toBeGreaterThan(plain.x1 - plain.x0 + 4 * NOMINAL_BOND_LENGTH);
+    // (and so kept clear of what lies past it: its words' right end, not its middle)
+    const taken = [{ x0: set.x1 - set.x0 + 10 + 2 * NOMINAL_BOND_LENGTH - 5, y0: -50, x1: 400, y1: 50 }];
+    const placed = placedBeside(read, { x0: 0, y0: 0, x1: 10, y1: 8 }, taken, style);
+    expect(Math.min(...placed.model.atoms.map((a) => a.x))).toBeGreaterThan(400);
   });
 });
 

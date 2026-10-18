@@ -20,6 +20,7 @@ import JobSettings from "./JobSettings";
 import ProcedureSettings from "./ProcedureSettings";
 import PluginSettings from "./PluginSettings";
 import { useSettingsSection, type SettingsSection } from "./section";
+import { COLUMN_WIDTH, SECTION_WIDTH } from "./widths";
 
 const SECTIONS: { id: SettingsSection; name: string }[] = [
   { id: "general", name: "General" },
@@ -41,13 +42,8 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
  * of file and how sharp a copied picture is, the calculations of a workflow and how its jobs run, the plugins, what the labels Meno reads stand for, and what Meno
  * may do on the network.
  */
-/**
- * Every section as wide as the others (the maintainer, 2026-10-17): as wide
- * as a style editor needs for its settings beside its preview
- * (StyleEditor/sideBySide), its words at their own measure within it - so
- * that going from one section to the next, nothing changes width.
- */
-const SECTION = "mt-6 max-w-5xl";
+/** Every section as wide as the others, its words at one measure within it (./widths). */
+const SECTION = `mt-6 ${SECTION_WIDTH}`;
 
 export default function SettingsPanel() {
   const drawingStyle = useAppSettings((s) => s.drawingStyle);
@@ -58,7 +54,9 @@ export default function SettingsPanel() {
   const section = useSettingsSection((s) => s.section);
   return (
     <div className="w-full h-full overflow-auto bg-gh-base/40">
-      <div className="max-w-[88rem] mx-auto px-6 py-6">
+      {/* (the tabs and the section as one column, centred in a wide window - its margins
+          equal - and the window's width, less its padding, in a narrow one: ./widths) */}
+      <div className={`${COLUMN_WIDTH} mx-auto px-6 py-6`}>
         {/* The sections' names each on one line, and as many on a row as
             the window has room for: past that they go on to a row of
             their own, under the heading, and on from there. */}
