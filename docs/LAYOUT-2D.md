@@ -57,18 +57,34 @@ another order. Where the rules below leave a tie, it is settled so:
   structure leaves alike - the drawings either way the same, or mirror
   images.
 
-The benchmark's measure reads a drawing the same way
-however its atoms are listed: in a bridged system it reads every ring as
-small as one of its smallest set, not the set alone - quinuclidine has
-three six-membered cycles, and which two make the set goes by the order
-of the atoms. So too does Clean-up read whether a ring system is a cage,
-and which part of it is its cage: from every smallest set of its rings,
-not the one it was given. It is a cage only where each set reads it as
-one (paeoniflorin's six-membered ring is one of three, and in one set
-all its rings are bridged, in the others not), and its cage is the atoms
-every set has in it (ibogaine's isoquinuclidine: its seven-membered ring
-shares three atoms with one of the cage's three six-membered cycles, and
-is fused on a side of the other two).
+The benchmark's measure reads a drawing the same way however its atoms
+are listed: in a bridged system it reads every ring as small as one of
+its smallest set, not the set alone - quinuclidine has three
+six-membered cycles, and which two make the set goes by the order of the
+atoms. Its rings' shapes too: in such a system drawn flat they are read
+as the smallest set that fits the drawing best (shortest first, then the
+most regular, each kept where no sum of those kept gives it), not as the
+set the atoms' order gives. So too does Clean-up read whether a ring
+system is a cage, and which part of it is its cage: from every smallest
+set of its rings, not the one it was given. It is a cage only where each
+set reads it as one (paeoniflorin's six-membered ring is one of three,
+and in one set all its rings are bridged, in the others not), and its
+cage is the atoms every set has in it (ibogaine's isoquinuclidine: its
+seven-membered ring shares three atoms with one of the cage's three
+six-membered cycles, and is fused on a side of the other two). And so it
+chooses which set a bridged system is drawn from: laid flat, which rings
+come out regular and which arc round a bridge goes by the set it is laid
+out from, so it is laid flat from each set in turn and drawn from the
+one whose drawing reads best - by a measure that reads every set's
+rings, not the one it came from - the canonical rank deciding only
+between drawings as good. Ibogaine's isoquinuclidine laid from one pair
+of its three six-membered cycles crowds its bonds out (18.98 by
+`flatCost`, with their room); from either other pair, 2.45 and 2.50 -
+still a bond crossing another by its N, so that its cage in perspective
+is drawn instead, as the whole drawing reads better. At most eight sets
+are tried, those whose rings are bridged across one another least where
+a system has more. A cage is not: it is drawn from its solid, which
+reads the same from every set.
 
 ## What a good drawing is
 
@@ -321,7 +337,12 @@ they hang from.
   them, seen from either hand - each of those is tried with what hangs from
   it too, none favoured: which came first went by the order of the atoms,
   and a gem-dimethyl on a ring fused to adamantane had room from some of
-  them only. Of these and the flat
+  them only. And each other side within 3 of the best by the system alone
+  is tried with what hangs from it as well, taken only where that reads
+  better by the 3, as a cage's next textbook views are: the system alone
+  sees none of the H's and labels round it, and ibogaine's isoquinuclidine
+  from its best side by itself put the H at its junction against the
+  indole's NH, where another side leaves both clear. Of these and the flat
   drawing, the one with the fewest faults, where that is clearly fewer
   than flat; the cage alone before the whole, unless the whole reads far
   better. Then the whole drawing decides, measured as it will be drawn -
@@ -579,7 +600,9 @@ A label lying on a bare vertex it is not bonded to - nearer than 0.6 of a
 bond, its letter running into the bonds that meet there - is given room
 the same way and at the same time (`labelsOnVertices`): vancomycin's acid
 C=O had its O on the corner of the benzene ring beside it, and forskolin's
-9-OH sat on its ketone's carbon. It is counted only then, not while the
+9-OH sat on its ketone's carbon. A label already on one of the bonds
+that meet there is a clash, and is not counted on the vertex as well:
+one piece of ink, one fault. It is counted only then, not while the
 parts are set, nor in turning a sugar to its face (a macrolide's sugar
 turned over for it crowded an OH on an OH); on the sheet, as half a
 crowding. So are two labels whose ink comes near - symbol on symbol, or

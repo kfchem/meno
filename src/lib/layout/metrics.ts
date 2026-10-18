@@ -259,7 +259,9 @@ export const LABEL_ROOM = 0.5;
  * O on the corner of the benzene ring beside it, forskolin's 9-OH on its
  * ketone's carbon. By label, the vertex nearest it and how far in, 0 to 1
  * (1 at half a bond, an overlap). `apart` passes over a pair (bonded, or
- * drawn over each other as a solid is seen).
+ * drawn over each other as a solid is seen). Given the bonds at each atom,
+ * a vertex is passed over where the label already lies on one of its
+ * bonds: that ink is a clash (`LABEL_ON_BOND`), counted once, there.
  */
 export function labelsOnVertices(
   x: readonly number[],
@@ -267,6 +269,7 @@ export function labelsOnVertices(
   L: number,
   labelled: readonly boolean[],
   apart: (a: number, b: number) => boolean,
+  neighbours?: readonly (readonly number[])[],
 ): Map<number, { vertex: number; by: number }> {
   const room = LABEL_VERTEX * L;
   const into = (LABEL_VERTEX - 0.5) * L;
@@ -280,6 +283,7 @@ export function labelsOnVertices(
       if (Math.abs(dx) >= room || Math.abs(dy) >= room) continue;
       const d = Math.hypot(dx, dy);
       if (d >= room || apart(a, b)) continue;
+      if (neighbours?.[b].some((c) => c !== a && pointToSegment(x[a], y[a], x[b], y[b], x[c], y[c]) < LABEL_ON_BOND * L)) continue;
       const by = Math.min(1, (room - d) / into);
       if (by > (out.get(a)?.by ?? 0)) out.set(a, { vertex: b, by });
     }
@@ -297,6 +301,42 @@ function median(v: number[]): number {
   const m = s.length >> 1;
   return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
 }
+
+/**
+ * Of a bridged system's cycles as small as its smallest set's rings, a
+ * smallest set: as many as its rings, shortest first, then the nearest
+ * regular, each kept where no sum of those kept gives it.
+ */
+function bestFitting(t: { own: readonly number[][]; alike: readonly number[][] }, x: readonly number[], y: readonly number[], bond: number): number[][] {
+  const bondOf = new Map<number, number>();
+  const n = x.length;
+  const vectorOf = (r: readonly number[]) => {
+    let v = 0n;
+    r.forEach((a, k) => {
+      const b = r[(k + 1) % r.length];
+      const key = a < b ? a * n + b : b * n + a;
+      if (!bondOf.has(key)) bondOf.set(key, bondOf.size);
+      v ^= 1n << BigInt(bondOf.get(key)!);
+    });
+    return v;
+  };
+  const ranked = t.alike.map((r) => ({ r, off: ringIrregularity(x, y, r, bond) })).sort((p, q) => p.r.length - q.r.length || p.off - q.off);
+  const basis: bigint[] = [];
+  const kept: number[][] = [];
+  for (const { r } of ranked) {
+    let v = vectorOf(r);
+    for (const b of basis) if ((v ^ b) < v) v ^= b;
+    if (!v) continue;
+    basis.push(v);
+    basis.sort((p, q) => (p > q ? -1 : p < q ? 1 : 0));
+    kept.push(r);
+    if (kept.length === t.own.length) break;
+  }
+  return kept;
+}
+
+/** How near a bond, in bond lengths, a label may lie before it is on it (a clash): a bare vertex, 0.3. */
+export const LABEL_ON_BOND = 0.4;
 
 /** How far a ring is from a regular polygon of its size, in bond lengths. */
 export function ringIrregularity(
@@ -510,6 +550,12 @@ type Structure = {
   orderOf: Map<number, number>;
   /** The rings of eight or fewer drawn flat. */
   small: number[][];
+  /**
+   * Each bridged system drawn flat with more than one smallest set of
+   * rings: its rings among `small`, and every cycle as small as one of
+   * them (`ringsAlike`) - its shapes read from the set that fits best.
+   */
+  tiedSets: { own: number[][]; alike: number[][] }[];
   inSmall: Set<number>;
   /** The rings of nine or more not run mostly through other rings. */
   macrocycles: number[][];
@@ -693,6 +739,7 @@ function readStructure(g: Geometry): Structure {
   // or more anywhere among rings fused to each other)
   const bridgedAt = new Set<number>();
   let alike: number[][] = [];
+  const tiedSets: Structure["tiedSets"] = [];
   {
     const system = rings.map((_, i) => i);
     const root = (i: number): number => (system[i] === i ? i : (system[i] = root(system[i])));
@@ -718,6 +765,12 @@ function readStructure(g: Geometry): Structure {
       const known = alikeRings.get(edges);
       alike = known ?? [...bridgedSystems].flatMap((s) => ringsAlike(rings.filter((r, i) => root(i) === s && r.length < 9), neighbours));
       if (!known) alikeRings.set(edges, alike);
+      for (const sys of bridgedSystems) {
+        const own = rings.filter((r, i) => root(i) === sys && r.length < 9);
+        const atoms = new Set(own.flat());
+        const cycles = alike.filter((c) => atoms.has(c[0]));
+        if (cycles.length > own.length && !cycles.some(inDepth)) tiedSets.push({ own, alike: cycles });
+      }
     }
   }
   const outsideOf = ringNeighbours.map((inside, a) => neighbours[a].filter((b) => !inside.includes(b)));
@@ -766,6 +819,7 @@ function readStructure(g: Geometry): Structure {
     neighbours,
     orderOf,
     small,
+    tiedSets,
     inSmall,
     macrocycles,
     ringBonds,
@@ -845,6 +899,7 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     neighbours,
     orderOf,
     small,
+    tiedSets,
     inSmall,
     macrocycles,
     ringBonds,
@@ -931,8 +986,15 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
   }
   const angleError = angleCount ? angleSum / angleCount : 0;
 
-  const ringError = small.length
-    ? small.reduce((s, r) => s + ringIrregularity(x, y, r, L), 0) / small.length
+  // (a bridged system's rings as the smallest set that fits the drawing
+  // best, where it has more than one - which of them the rings were
+  // found as goes by the order of the atoms, and the same drawing reads
+  // the same either way: shortest first, then the most regular, each kept
+  // where it is no sum of those kept - quinuclidine drawn flat, its two
+  // regular hexagons, not the arc round its bridge)
+  const shaped = tiedSets.length ? [...small.filter((r) => !tiedSets.some((t) => t.own.includes(r))), ...tiedSets.flatMap((t) => bestFitting(t, x, y, L))] : small;
+  const ringError = shaped.length
+    ? shaped.reduce((s, r) => s + ringIrregularity(x, y, r, L), 0) / shaped.length
     : 0;
 
   // round a macrocycle: each atom that is in no smaller ring, its angle
@@ -971,10 +1033,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       }
     }
   }
-  // and a label on a bare vertex (`labelsOnVertices`)
+  // and a label on a bare vertex (`labelsOnVertices`), not on one of its
+  // bonds already - a clash, below
   const labelRoom = g.labelRoom ?? LABEL_ROOM;
   if (labelRoom > 0 && g.labelled) {
-    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null));
+    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null), neighbours);
     for (const { by } of near.values()) crowdedLabels += labelRoom * by;
   }
   // and two labels whose ink, H's and all, comes near (`labelsCrowding`),
@@ -1972,16 +2035,19 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
     }
   }
 
+  // (a label - an atom's letters, a wedge's H - on a bond a little further
+  // off than a bare vertex: its letter is ink half a bond high)
   let clashes = 0;
-  const near = 0.3 * L;
+  const reach = (g.labelled ? LABEL_ON_BOND : 0.3) * L;
   for (let p = 0; p < n; p++) {
     const px = x[p];
     const py = y[p];
+    const near = (g.labelled?.[p] ? LABEL_ON_BOND : 0.3) * L;
     // (the first bond whose box can reach the atom, with a bond's length to spare)
     let lo = 0;
     for (let hi = sweep ? E : 0; lo < hi; ) {
       const mid = (lo + hi) >> 1;
-      if (lox[bondsByX[mid]] < px - near - widest - L) lo = mid + 1;
+      if (lox[bondsByX[mid]] < px - reach - widest - L) lo = mid + 1;
       else hi = mid;
     }
     for (let s = lo; s < E; s++) {
