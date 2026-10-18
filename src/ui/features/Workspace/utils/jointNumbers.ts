@@ -100,7 +100,8 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
           halo = max( halo, cover( q + vec2( cos( t ) * ring / ${DIGIT_CELL.toFixed(3)}, sin( t ) * ring ), dx, dy ) );
         }
         float a = halo * vShown * shown * smoothstep( ${(NUMBER_LEAST_PX * 0.75).toFixed(2)}, ${(NUMBER_LEAST_PX * 1.25).toFixed(2)}, vPx * 0.7 );
-        if ( a <= 0.003 ) discard;
+        // (under one step of an 8-bit alpha: nothing to draw)
+        if ( a < 1.0 / 255.0 ) discard;
         bool white = dot( vInk, vec3( 0.2126, 0.7152, 1.0 - 0.2126 - 0.7152 ) ) < ${INK_TURN.toFixed(3)};
         vec3 inkColour = white ? vec3( 0.97 ) : vec3( 0.1 );
         vec3 ringColour = white ? vec3( 0.1 ) : vec3( 0.97 );
