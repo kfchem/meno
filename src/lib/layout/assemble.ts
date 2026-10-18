@@ -518,6 +518,26 @@ function assign(
     const centres = mol.ringsOf[a]
       .filter((r) => mol.rings[r].length < MACROCYCLE)
       .map((r) => angleOf(sub(centroid(mol.rings[r].map((v) => pos.get(v)!)), at)));
+    // A metal in a ring (a chelate's): its ligands out of the ring evenly
+    // over the room outside it, the one it was reached by among them - not
+    // the rest crowded into the widest gap that one leaves (Hoveyda-Grubbs
+    // II's two Cl together on one side of its carbene, by the mesityl's
+    // methyl, the other side bare).
+    const own = placed.filter((v) => mol.systemOf[v] === mol.systemOf[a]);
+    if (isMetal(mol.el[a]) && mol.systemOf[a] >= 0 && own.length >= 2 && own.length < placed.length) {
+      const ownAt = own.map((v) => angleOf(sub(pos.get(v)!, at)));
+      // (two evenly as well, a third of the room apart - not a
+      // gem-dimethyl's pair, 60 degrees apart: from three quarters' split)
+      const total = k + placed.length - own.length;
+      const q = total === 2 ? splitOutside(ownAt, centres, 3) : null;
+      const all = q ? [q[0] + (q[1] - q[0]) / 3, q[2] - (q[1] - q[0]) / 3] : splitOutside(ownAt, centres, total);
+      const inAt = placed.filter((v) => !own.includes(v)).map((v) => angleOf(sub(pos.get(v)!, at)));
+      const free = [...all];
+      for (const t of inAt) free.splice(free.reduce((b, u, i) => (Math.abs(wrap(u - t)) < Math.abs(wrap(free[b] - t)) ? i : b), 0), 1);
+      const mid = all.reduce((sum, t) => sum + t, 0) / all.length;
+      const byCentre = [...free].sort((p, q) => Math.abs(wrap(p - mid)) - Math.abs(wrap(q - mid)));
+      return byWeight.map((c, i) => [c, byCentre[i]]);
+    }
     const even = mol.systemOf[a] >= 0 ? splitOutside(taken, centres, k) : splitWidestGap(taken, k);
     const slots = mol.systemOf[a] >= 0 ? leanAway(mol, pos, a, taken, even) : even;
     const mid = slots.reduce((s, t) => s + t, 0) / slots.length;

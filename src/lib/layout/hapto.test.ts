@@ -361,3 +361,17 @@ describe("a pi system bound to a metal that makes no ring", () => {
     for (const b of close) expect(angleAt(pd, b.a2, b.a1, b.endpoints![0])).toBeCloseTo(90, 0);
   }, 30_000);
 });
+
+describe("a metal in a chelate's ring", () => {
+  it("has its other ligands evenly over the room outside the ring, the one it was reached by among them", () => {
+    const hg = laid("HG-II");
+    const [ru] = find(hg, "Ru");
+    const cls = find(hg, "Cl");
+    // (the carbene: the carbon bonded to Ru and to two N)
+    const nb = (i: number) => hg.bonds.flatMap((b) => (b.endpoints ? [] : b.a1 === i ? [b.a2] : b.a2 === i ? [b.a1] : []));
+    const carbene = nb(ru).find((c) => hg.atoms[c].el === "C" && nb(c).filter((v) => hg.atoms[v].el === "N").length === 2)!;
+    const [a, b] = cls.map((cl) => angleAt(hg, ru, cl, carbene));
+    expect(a).toBeCloseTo(b, 0);
+    expect(Math.min(a, b)).toBeGreaterThan(55);
+  }, 30_000);
+});

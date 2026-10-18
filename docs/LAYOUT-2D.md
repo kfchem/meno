@@ -819,6 +819,11 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   phenyls turned as a propeller's blades as well as flat. A ligand of the
   metal drawn inside one of its chelates' rings, of any size up to eight,
   is hidden there, as an atom inside a small ring is.
+- **A metal in a chelate's ring** has its other ligands evenly over the
+  room outside the ring - two a third of it apart, not a gem-dimethyl's
+  pair - the ligand it was reached by among them: Hoveyda-Grubbs II's two
+  Cl either side of its carbene, not both on one side of it, by the
+  mesityl's methyl.
 - **A pi system bound to a metal that makes no ring** - an alkene's C=C,
   dba's on Pd, an allyl's three atoms - lies across the metal's bond, its
   centre a bond from the metal: a C=C square to the bond, as chemists
