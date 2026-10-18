@@ -1345,7 +1345,12 @@ lipids each have their own way of being drawn, which it should know.
      SMILES do it: a bond drawn by hand keeps its length.
    - Clean-up writes by name the groups a chemist would write so
      (`lib/chem/contract.ts`, agreed 2026-10-02). Drawing a label out
-     (*Expand abbreviation*) still draws all of it; what is shown by name
+     (*Expand abbreviation*) puts the group in free space: away from all
+     the atom's bonds, out of a ring from a ring's atom, and clear of the
+     drawing's atoms, bonds and labels as far as their letters are set -
+     turned, or seen in a mirror where it has no stereo of its own, only
+     where it is not clear as laid out; nothing else moves
+     (`utils/expandPlace.ts`). It still draws all of it; what is shown by name
      is Clean-up's to decide, by what the group does and how much of the
      molecule it is:
      - a protecting, activating or leaving group (`role` in

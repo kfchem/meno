@@ -12,7 +12,8 @@ import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
 import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
-import { DEFAULT_STYLE_CHOICE, type StyleChoice } from "../../../lib/chem/style";
+import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
+import { groupTurn } from "./utils/expandPlace";
 import { magnificationWithin } from "./utils/magnified";
 import { magnifiedTo, oneMagnificationEach } from "../../../lib/chem/magnified2d";
 import { DEFAULT_WORKSPACE_3D, type Workspace3D } from "../../../lib/chem/workspaceStyle3d";
@@ -618,7 +619,15 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number): Workspac
   const touching = doc.model.bonds.filter((b) => b.a === id || b.b === id);
   const out = touching[0] ? atoms.find((x) => x.id === (touching[0].a === id ? touching[0].b : touching[0].a)) : undefined;
   const now = out ? { x: out.x - a.x, y: out.y - a.y } : null;
-  const s = a.abbrev ?? placedAbbreviation(a.el, now, NOMINAL_BOND_LENGTH);
+  // (laid out away from all the atom's bonds together - out of a ring, from a ring's atom, as its bonds open - not on along the first alone)
+  const all = touching.flatMap((b) => {
+    const o = atoms.find((x) => x.id === (b.a === id ? b.b : b.a));
+    const l = o ? Math.hypot(o.x - a.x, o.y - a.y) : 0;
+    return o && l ? [{ x: (o.x - a.x) / l, y: (o.y - a.y) / l }] : [];
+  });
+  const sum = all.reduce((p, q) => ({ x: p.x + q.x, y: p.y + q.y }), { x: 0, y: 0 });
+  const inward = all.length > 1 && Math.hypot(sum.x, sum.y) > 1e-6 ? sum : now;
+  const s = a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH);
   if (!s || !s.atoms.length) return doc;
   // a file's: turned by as much as its bond out has turned since
   const turn = a.abbrev && s.toward && now ? Math.atan2(now.y, now.x) - Math.atan2(s.toward.y, s.toward.x) : 0;
@@ -627,7 +636,33 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number): Workspac
   const head = s.attach[0] ?? 0;
   let nextId = doc.nextId;
   const ids = s.atoms.map((_, k) => (k === head ? id : nextId++));
-  const placed = s.atoms.map((p) => ({ x: a.x + p.x * cos - p.y * sin, y: a.y + p.x * sin + p.y * cos }));
+  const laid = s.atoms.map((p) => ({ x: a.x + p.x * cos - p.y * sin, y: a.y + p.x * sin + p.y * cos }));
+  // (set down in free space - clear of the drawing's atoms, bonds and labels, out of the label's own ring - turned, or mirrored, only where
+  // it is not as it was laid out: utils/expandPlace)
+  const placed = (() => {
+    if (s.attach.length > 1 || s.haptic?.length) return laid;
+    const group = laid.filter((_, k) => k !== head);
+    if (!group.length) return laid;
+    const mid = group.reduce((p, q) => ({ x: p.x + q.x / group.length, y: p.y + q.y / group.length }), { x: 0, y: 0 });
+    const mirrorable = !s.bonds.some((b) => b.stereo && b.stereo !== "none") && !s.atoms.some((x) => x.stereoCentre);
+    const t = groupTurn(doc.model, id, laid[head], group, s.bonds.map((b) => [laid[b.a1], laid[b.a2]] as [{ x: number; y: number }, { x: number; y: number }]), { x: mid.x - laid[head].x, y: mid.y - laid[head].y }, styleOf(doc.style), mirrorable);
+    if (!t.turn && !t.mirror) return laid;
+    const h = laid[head];
+    const ax = (() => {
+      const l = Math.hypot(mid.x - h.x, mid.y - h.y) || 1;
+      return { x: (mid.x - h.x) / l, y: (mid.y - h.y) / l };
+    })();
+    return laid.map((p) => {
+      let x = p.x - h.x;
+      let y = p.y - h.y;
+      if (t.mirror) {
+        const along = x * ax.x + y * ax.y;
+        x = 2 * along * ax.x - x;
+        y = 2 * along * ax.y - y;
+      }
+      return { x: h.x + x * Math.cos(t.turn) - y * Math.sin(t.turn), y: h.y + x * Math.sin(t.turn) + y * Math.cos(t.turn) };
+    });
+  })();
   const atomOf = (k: number): Atom => {
     const { x: _x, y: _y, z, stereoCentre, ...chem } = s.atoms[k];
     return {
