@@ -263,7 +263,7 @@ describe("a workspace with what is no entry in its lists", () => {
   const STRAYS: unknown[] = [null, 0, 7, "", "C", [], [1, 2], true];
   const job = "0f8fad5b-d9cb-469f-a165-70867728950e";
   const ink = { pen: "pen", strokes: [{ points: [0, 0, 0.5, 1, 1, 0.5] }] };
-  const molecule = { ...water3d, made: { how: [{ label: "Optimised", text: "MMFF94" }] } };
+  const molecule = { ...water3d, made: { method: "ETKDG v3 + MMFF94", how: [{ label: "Optimised", text: "MMFF94" }] } };
   // (a cyclopropane, its ring filled, an electron-pushing arrow on it - and one of everything else a workspace holds)
   const WHOLE = {
     format: "meno-workspace",
