@@ -352,6 +352,9 @@ describe("an element's symbol typed in any case (the maintainer, 2026-10-18)", (
     for (const t of ["CL", "BR", "NA", "SE", "FE", "ZN", "PD", "PT", "MG", "AL"]) expect(kept(t), t).toBe(t[0] + t[1].toLowerCase());
     // (a charge after it stays after it)
     expect(kept("FE+")).toBe("Fe+");
+    // (the element, not turned round as drawn on a bond's left: that only to a heteroatom first)
+    expect(kept("SB")).toBe("Sb");
+    expect(kept("EU")).toBe("Eu");
   });
 
   it("leaves those the letters as typed read otherwise: a ligand's name, a whole molecule, rule 3, none after uranium", () => {
@@ -366,6 +369,9 @@ describe("an element's symbol typed in any case (the maintainer, 2026-10-18)", (
     expect(kept("NO")).toBe("NO");
     expect(kept("NH")).toBe("NH");
     expect(kept("FM")).toBe("FM");
+    // (PO is P and O - Po, so typed, polonium: the maintainer, 2026-10-18)
+    expect(kept("PO")).toBe("PO");
+    expect(readLabel(kept("Po"), (x) => ELEMENTS.some((y) => y.symbol === x))).toMatchObject({ kind: "element", el: "Po" });
   });
 });
 
