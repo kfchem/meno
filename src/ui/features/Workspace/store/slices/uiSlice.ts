@@ -1,3 +1,4 @@
+import type { ShowBox } from "../../utils/viewShow";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { marksAll } from "../../../../../lib/chem/captions";
@@ -237,6 +238,9 @@ export function createUiSlice(
 
     requestFit: () =>
       set((prev: EditorState) => ({ ...prev, fitNonce: prev.fitNonce + 1 })),
+
+    requestShow: (box: ShowBox) =>
+      set((prev: EditorState) => ({ ...prev, showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } })),
 
     beginAutoFitSuspend: () =>
       set((prev: EditorState) => ({ ...prev, autoFitSuspended: true })),

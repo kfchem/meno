@@ -1,3 +1,4 @@
+import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
@@ -56,6 +57,23 @@ function forgetDeleted(set: SetState) {
  * in order and never again, an Sgroup's among them - selected, so that it
  * can be dragged straight on.
  */
+/**
+ * Where the atoms numbered from `start` on lie, a bond's length round them
+ * for their labels: what was just put down, to be shown (utils/viewShow).
+ * None, where none were.
+ */
+export function addedBox(start: number, model: Model): ShowBox | null {
+  const atoms = model.atoms.filter((a) => a.id >= start);
+  if (!atoms.length) return null;
+  const pad = NOMINAL_BOND_LENGTH;
+  return {
+    x0: Math.min(...atoms.map((a) => a.x)) - pad,
+    x1: Math.max(...atoms.map((a) => a.x)) + pad,
+    y0: Math.min(...atoms.map((a) => a.y)) - pad,
+    y1: Math.max(...atoms.map((a) => a.y)) + pad,
+  };
+}
+
 function added(start: number, model: Model): EditorState["sel"] {
   return {
     atoms: new Set(model.atoms.filter((a) => a.id >= start).map((a) => a.id)),
@@ -603,8 +621,11 @@ export const createModelSlice = (
     if (!doc.edit("read structure", (d) => ops.withImportedScheme(ops.appendModel(d, next), scheme))) return;
     // (selected, as what is pasted is, to be moved or put right straight on - a scheme's words with it, its compounds' numbers among them)
     const endCaption = doc.getState().nextCaptionId ?? 1;
+    // (and shown: the view moved to take it in, where it is not seen whole - docs/WORKSPACE.md, *Putting things down*)
+    const box = addedBox(start, get().model);
     set((prev: EditorState) => ({
       ...prev,
+      ...(box ? { showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } } : {}),
       sel: added(start, prev.model),
       selCaptions: new Set(Array.from({ length: endCaption - startCaption }, (_, i) => startCaption + i)),
       sel3d: new Set(),
@@ -618,6 +639,9 @@ export const createModelSlice = (
 
   appendModel: (next: Model, scheme?: ImportedScheme) => {
     const start = doc.getState().nextId;
+    // (onto an empty page, it is opened - fitted, as a canvas opens; onto one with something on it, shown where it went)
+    const before = get();
+    const empty = !before.model.atoms.length && !before.pdfs.length && !before.pictures.length && !before.captions.length && !before.molecules3d.length && !before.texts.some((t) => t.at);
     const start3d = doc.getState().nextMolecule3dId ?? 1;
     const edited = doc.edit("add structure", (d) =>
       ops.withImportedScheme(ops.appendModel(d, next), scheme),
@@ -636,7 +660,10 @@ export const createModelSlice = (
       // (as it is shown: of a stack of drawings it brings, the record shown - utils/stacks)
       ...(edited && next.atoms.length ? { sel: added(start, model), selAnchor: null } : {}),
       hovered: { atomId: null, bondId: null },
-      fitNonce: prev.fitNonce + 1,
+      ...(() => {
+        const box = edited ? addedBox(start, model) : null;
+        return empty || !box ? { fitNonce: prev.fitNonce + 1 } : { showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } };
+      })(),
     }));
   },
 

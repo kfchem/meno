@@ -1332,7 +1332,11 @@ it where it lies out of view.
 **What is put on the page**: the structure, beside the PDF or the picture -
 its left two bonds past their right edge, its top level with theirs, and on
 to the right past whatever lies there - selected, as one step. Where it
-lies out of view, the view takes it in.
+is not seen whole - out of view, or under the column, which is not counted
+as what can be seen - the view eases to it: along first, as little as takes
+it in with a margin, and out only as far as it must, never in
+(docs/WORKSPACE.md, *Putting things down*; the maintainer, 2026-10-18: read
+with the PDF in the column, the structure was lost from sight).
 
 **Tied to the figure, atom by atom**: each atom keeps where on its PDF's
 page it was drawn (`seen`: the PDF's SHA-256, the page, the point, and how

@@ -22,7 +22,7 @@ import { styleOf } from "../../../../lib/chem/style";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 const said: (string | null)[] = [];
-const ui = { working: () => {}, say: (w: string | null) => void said.push(w), view: () => null, fit: () => {} };
+const ui = { working: () => {}, say: (w: string | null) => void said.push(w) };
 
 describe("a structure read from a PDF's figure, put on the page", () => {
   it("is put clear of all there is: words put down before, as much as structures", async () => {
