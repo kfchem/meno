@@ -31,11 +31,14 @@ fn old_folder() -> Option<PathBuf> {
     crate::folders::old_roaming()
 }
 
-/// The folders in the roaming folder taken away, in the background, at a start: those Meno no longer uses.
-pub fn tidy() {
+/// The folders in the roaming folder taken away, in the background, at a
+/// start: those Meno no longer uses. `moved`: whether the rest of the folder
+/// was moved into Meno's at this start (folders.rs) - the jobs kept there said
+/// then, not at every start after.
+pub fn tidy(moved: bool) {
     let Some(old) = old_folder().filter(|old| real_folder(old)) else { return };
     std::thread::spawn(move || {
-        for said in tidy_in(&old) {
+        for said in tidy_in(&old, moved) {
             crate::logfile::logged!("{said}");
         }
     });
@@ -57,8 +60,11 @@ fn take_away(path: &Path) -> String {
 /// Takes away, from the roaming folder `old`, the folders Meno made there
 /// and no longer uses - by their names only - and says what it did, a line
 /// each: nothing at all while a job there waits or runs; its jobs' folder
-/// only where it holds no job.
-pub fn tidy_in(old: &Path) -> Vec<String> {
+/// only where it holds no job. The finished jobs left there are said once,
+/// as something else is done there - taken away now, or the rest of the
+/// folder moved at this start (`moved`) - not again at every start after
+/// (the Windows pre-release check found the line at every start).
+pub fn tidy_in(old: &Path, moved: bool) -> Vec<String> {
     let jobs = old.join(JOBS);
     let mut said = Vec::new();
     let under_way = if real_folder(&jobs) { crate::jobs::under_way(&jobs) } else { 0 };
@@ -76,7 +82,7 @@ pub fn tidy_in(old: &Path) -> Vec<String> {
         let kept = jobs_kept(&jobs);
         if kept == 0 {
             said.push(take_away(&jobs));
-        } else {
+        } else if moved || !said.is_empty() {
             said.push(format!("{kept} finished job(s) kept in {}: left there, with their files", jobs.display()));
         }
     }
@@ -171,12 +177,12 @@ mod tests {
         fs::create_dir_all(old.join("jobs")).unwrap();
         // (something of another's in the folder, named as none of Meno's)
         fs::create_dir_all(old.join("uv-mine")).unwrap();
-        let said = tidy_in(&old);
+        let said = tidy_in(&old, false);
         assert_eq!(left(&old), ["logs", "settings.json", "uv-mine", "window.json"]);
         assert_eq!(said.len(), 4, "{said:?}");
         assert!(said.iter().all(|s| s.starts_with("removed ")));
         // (again: nothing left to do)
-        assert!(tidy_in(&old).is_empty());
+        assert!(tidy_in(&old, false).is_empty());
         let _ = fs::remove_dir_all(old);
     }
 
@@ -187,7 +193,7 @@ mod tests {
         // (no record yet, just asked for: waiting, its runner starting)
         let waiting = job(&old, "waiting");
         fs::remove_file(waiting.join("state.json")).unwrap();
-        let said = tidy_in(&old);
+        let said = tidy_in(&old, false);
         assert_eq!(left(&old), ["jobs", "logs", "pixi", "settings.json", "tools", "uv", "window.json"]);
         assert_eq!(said.len(), 1);
         assert!(said[0].contains("still wait or run"), "{}", said[0]);
@@ -203,9 +209,12 @@ mod tests {
         job(&old, "failed");
         // (a job whose runner went without a word, the computer restarted: gone, finished)
         job(&old, "running");
-        let said = tidy_in(&old);
+        let said = tidy_in(&old, false);
         assert_eq!(left(&old), ["jobs", "logs", "settings.json", "window.json"]);
         assert!(said.last().unwrap().starts_with("3 finished job(s) kept in "), "{said:?}");
+        // (the next start, nothing to do there and nothing moved: not said again; at a start the rest was moved, said)
+        assert!(tidy_in(&old, false).is_empty());
+        assert!(tidy_in(&old, true).last().unwrap().starts_with("3 finished job(s) kept in "));
         assert_eq!(fs::read_dir(old.join("jobs")).unwrap().count(), 3);
         let _ = fs::remove_dir_all(old);
     }
@@ -233,7 +242,7 @@ mod tests {
         }
         fs::remove_dir_all(old.join("logs")).unwrap();
         fs::create_dir_all(old.join("jobs")).unwrap();
-        let said = tidy_in(&old);
+        let said = tidy_in(&old, false);
         assert!(!old.exists(), "{said:?}");
         assert_eq!(said.last().unwrap(), &format!("removed {}, no longer used", old.display()));
     }
@@ -247,7 +256,7 @@ mod tests {
         fs::write(elsewhere.join("keep.txt"), b"x").unwrap();
         fs::remove_dir_all(old.join("tools")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, old.join("tools")).unwrap();
-        tidy_in(&old);
+        tidy_in(&old, false);
         assert!(elsewhere.join("keep.txt").exists());
         let _ = fs::remove_dir_all(old);
         let _ = fs::remove_dir_all(elsewhere);

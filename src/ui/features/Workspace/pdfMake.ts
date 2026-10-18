@@ -5,14 +5,14 @@
  */
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { writeFile } from "@tauri-apps/plugin-fs";
-import { COMBINED_NAME, allPages, makePdf, readingOrder } from "../../../lib/pdf/make";
+import { COMBINED_NAME, allPages, makePdf, readingOrder, unusedName } from "../../../lib/pdf/make";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { pdfBytes, type HeldPdf } from "../../../lib/pdf/reader";
 import type { EditorState, PdfItem } from "./store/types";
 
-/** A new PDF put on the page beside `beside`, clear of the PDFs there - one step, which an undo takes back. */
-export function putBeside(st: Pick<EditorState, "addPdfs">, held: HeldPdf, name: string, beside: Pick<PdfItem, "x" | "y">): void {
-  st.addPdfs([{ name, sha256: held.sha256, pages: held.pages }], { x: beside.x, y: beside.y });
+/** A new PDF put on the page beside `beside`, clear of the PDFs there - one step, which an undo takes back - named as none there is. */
+export function putBeside(st: Pick<EditorState, "addPdfs" | "pdfs">, held: HeldPdf, name: string, beside: Pick<PdfItem, "x" | "y">): void {
+  st.addPdfs([{ name: unusedName(name, st.pdfs.map((p) => p.name)), sha256: held.sha256, pages: held.pages }], { x: beside.x, y: beside.y });
 }
 
 /** PDFs made one, in the order they are read on the page - a row those whose tops are within half the first's height - each one's pages in order. */

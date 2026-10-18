@@ -70,7 +70,7 @@ export function createUiSlice(
         labelEdit: { ...prev.labelEdit, value },
       })),
 
-    commitLabelEdit: (typed?: string) => {
+    commitLabelEdit: (typed?: string, byEnter?: boolean) => {
       const { labelEdit } = get();
       if (!labelEdit.active || labelEdit.atomId == null) return;
       const id = labelEdit.atomId;
@@ -112,8 +112,22 @@ export function createUiSlice(
         labelEdit: { active: false, atomId: null, value: "" },
         // (written anew: drawn as written until the drawing's own label is)
         labelLeft: changed && labelEdit.n != null ? { atomId: id, n: labelEdit.n, text: value } : prev.labelLeft,
+        // (kept by Enter: an Enter straight after draws it out - the drawing and its selection as they are now, to tell nothing came between)
+        labelKept: changed && byEnter ? { atomId: id, model: prev.model, sel: prev.sel } : null,
       }));
     },
+
+    keyAfterLabel: (enter: boolean) => {
+      const kept = get().labelKept;
+      if (!kept) return false;
+      set((prev: EditorState) => ({ ...prev, labelKept: null }));
+      // (nothing in between: the drawing and what is selected the same; a label that cannot be drawn out stays as it is, nothing said)
+      const st = get();
+      if (enter && st.model === kept.model && st.sel === kept.sel && st.model.atoms.some((a) => a.id === kept.atomId)) st.expandAbbreviation(kept.atomId);
+      return true;
+    },
+
+    forgetLabelKept: () => set((prev: EditorState) => (prev.labelKept ? { ...prev, labelKept: null } : prev)),
 
     labelAsTyped: (atomId: number) => {
       const atom = get().model.atoms.find((a) => a.id === atomId);

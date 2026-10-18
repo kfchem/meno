@@ -1398,6 +1398,12 @@ export type EditorState = {
    * for a frame: its atom, its edit's number, what it says.
    */
   labelLeft: { atomId: number; n: number; text: string } | null;
+  /**
+   * A label just kept by Enter (`commitLabelEdit`): an Enter straight after
+   * draws it out, as *Expand abbreviation* does - nothing in between, the
+   * drawing and what is selected as they were when it was kept.
+   */
+  labelKept: { atomId: number; model: Model; sel: EditorState["sel"] } | null;
   /** The drawing's labels drawn again: a label just written no longer drawn over its own. */
   labelShown: () => void;
   moveDrag: {
@@ -1687,8 +1693,12 @@ export type EditorState = {
   /** An atom's label opened to be written: as it is, or begun with `initial`, a letter typed over it. */
   beginLabelEdit: (atomId: number, initial?: string) => void;
   setLabelEditValue: (value: string) => void;
-  /** The label written kept; `typed`, what was typed for it, where it is read as something else. */
-  commitLabelEdit: (typed?: string) => void;
+  /** The label written kept; `typed`, what was typed for it, where it is read as something else; `byEnter`, where Enter kept it. */
+  commitLabelEdit: (typed?: string, byEnter?: boolean) => void;
+  /** A key pressed after a label kept by Enter: an Enter draws it out, any other key leaves it as it is. Whether there was one to answer. */
+  keyAfterLabel: (enter: boolean) => boolean;
+  /** A label kept by Enter no longer to be drawn out by the next: something done in between. */
+  forgetLabelKept: () => void;
   /** An atom's label made what was typed for it, read as nothing else: obz, not OBz - one step. */
   labelAsTyped: (atomId: number) => void;
   cancelLabelEdit: () => void;

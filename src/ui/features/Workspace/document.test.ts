@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import * as ops from "./document";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
-import { pt } from "../../../lib/chem/style";
+import { pt, styleOf } from "../../../lib/chem/style";
+import { labelBoxes, labelledPart } from "./utils/freePlace";
+import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import type { Model } from "./store/types";
 
 const doc = () => emptyWorkspaceDocument();
@@ -384,6 +386,65 @@ describe("an abbreviation", () => {
     const methyl = out.model.atoms[2];
     expect(methyl.x).toBeCloseTo(2 * L, 6);
     expect(methyl.y).toBeCloseTo(0, 6);
+  });
+
+  it("is drawn out in free space: from a ring's atom out of the ring, clear of the drawing and its labels", () => {
+    // (a macrocycle drawn as two zigzag chains, top and bottom, closed at each end through a carbon: an NBoc on a corner of the top chain
+    // that points into the ring, an NFmoc on the bottom one, a CH2Ph on the carbon beside the NBoc, out of the ring)
+    const B = NOMINAL_BOND_LENGTH;
+    const zig = (k: number, top: boolean) => ({ x: k * B * Math.cos(Math.PI / 6), y: (top ? 1 : -1) * (1.5 * B - (k % 2 ? B / 2 : 0)) });
+    let d = emptyWorkspaceDocument();
+    const topIds: number[] = [];
+    const bottomIds: number[] = [];
+    for (let k = 0; k < 8; k++) {
+      const t = zig(k, true);
+      d = ops.addAtom(d, t.x, t.y, k === 3 ? "NBoc" : "C");
+      topIds.push(d.model.atoms[d.model.atoms.length - 1].id);
+      const b = zig(k, false);
+      d = ops.addAtom(d, b.x, b.y, k === 4 ? "NFmoc" : "C");
+      bottomIds.push(d.model.atoms[d.model.atoms.length - 1].id);
+    }
+    for (let k = 0; k < 7; k++) {
+      d = ops.addBond(d, topIds[k], topIds[k + 1], 1);
+      d = ops.addBond(d, bottomIds[k], bottomIds[k + 1], 1);
+    }
+    // (the ends: a carbon left of the first pair, one right of the last)
+    d = ops.addAtom(d, -0.8 * B, 0);
+    const left = d.model.atoms[d.model.atoms.length - 1].id;
+    d = ops.addAtom(d, 7 * B * Math.cos(Math.PI / 6) + 0.8 * B, 0);
+    const right = d.model.atoms[d.model.atoms.length - 1].id;
+    d = ops.addBond(d, topIds[0], left, 1);
+    d = ops.addBond(d, left, bottomIds[0], 1);
+    d = ops.addBond(d, topIds[7], right, 1);
+    d = ops.addBond(d, right, bottomIds[7], 1);
+    const c4 = zig(4, true);
+    d = ops.addAtom(d, c4.x, c4.y + B, "CH2Ph");
+    d = ops.addBond(d, topIds[4], d.model.atoms[d.model.atoms.length - 1].id, 1);
+    const ring = [...topIds, right, ...[...bottomIds].reverse(), left];
+    const before = d.model.atoms;
+    const out = ops.expandAbbreviation(d, topIds[3]);
+    const added = out.model.atoms.filter((a) => !before.some((b) => b.id === a.id));
+    expect(added.length).toBeGreaterThan(4);
+    // (every atom of the Boc out of the ring, none within half a bond of an atom there was, no bond of it crossing one there was)
+    const polygon = ring.map((id) => out.model.atoms.find((a) => a.id === id)!);
+    const inRing = (p: { x: number; y: number }) => {
+      let n = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+        const [a, b] = [polygon[i], polygon[j]];
+        if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) n = !n;
+      }
+      return n;
+    };
+    for (const a of added) {
+      expect(inRing(a), a.el).toBe(false);
+      for (const b of before) if (b.id !== topIds[3]) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(0.5 * B);
+    }
+    // (nor among the CH2Ph's letters, as far as they are set)
+    const letters = labelBoxes(labelledPart({ atoms: before.filter((a) => a.el === "CH2Ph"), bonds: [] }), styleOf(d.style));
+    expect(letters.length).toBe(1);
+    for (const a of added) expect(a.x > letters[0].x0 && a.x < letters[0].x1 && a.y > letters[0].y0 && a.y < letters[0].y1, a.el).toBe(false);
+    // (and nothing that was there moved)
+    for (const b of before) if (b.id !== topIds[3]) expect(out.model.atoms.find((a) => a.id === b.id)).toMatchObject({ x: b.x, y: b.y });
   });
 
   it("is gone with what it stood for once relabelled", () => {

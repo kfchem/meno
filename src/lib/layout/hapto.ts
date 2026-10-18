@@ -197,10 +197,16 @@ export function unitVariants(mol: Molecule, unit: MetalUnit): number {
  * ligands hinted along the other slots, the bulkiest furthest apart.
  * `variant` gives each ring's spin, the first ring's fastest.
  */
-export function placeUnit(mol: Molecule, unit: MetalUnit, variant = 0): EtaLayout {
+export function placeUnit(
+  mol: Molecule,
+  unit: MetalUnit,
+  variant = 0,
+  /** Its `chelate` laid out on its own, flat - as the engine lays out a ring system. */
+  chelate?: ReadonlyMap<number, Point>,
+): EtaLayout {
   if (unit.pair) return placePair(mol, unit, variant);
   if (unit.cluster) return placeCluster(mol, unit);
-  if (unit.dienes.length && !unit.eta.length) return placeTubs(mol, unit);
+  if (unit.dienes.length && !unit.eta.length) return placeTubs(mol, unit, chelate);
   const m = unit.metal;
   const stars = new Set(unit.eta.map((e) => e.star));
   const others = mol.neighbours[m].filter((l) => !stars.has(l));
@@ -337,9 +343,12 @@ export function placeTub(d: DieneRing): { pos: Map<number, Point>; lift: Map<num
  * Ir(cod)Cl: the first tub to the metal's left, a second to its right (seen
  * from the same side, so mirrored), and the metal's other ligands hinted
  * where they are left room: opposite a lone tub, spread; above and below
- * two.
+ * two. A ring system the metal is in itself - Rh(cod)(acac)'s chelate - is
+ * set on it as `chelateAt` has it, turned so that it lies the way its atoms
+ * bonded to the metal would go, side by side; the rest of the metal's
+ * ligands where the others would.
  */
-function placeTubs(mol: Molecule, unit: MetalUnit): EtaLayout {
+function placeTubs(mol: Molecule, unit: MetalUnit, chelateAt?: ReadonlyMap<number, Point>): EtaLayout {
   const m = unit.metal;
   const pos = new Map<number, Point>([[m, { x: 0, y: 0 }]]);
   const lift = new Map<number, number>([[m, 0]]);
@@ -350,15 +359,28 @@ function placeTubs(mol: Molecule, unit: MetalUnit): EtaLayout {
     for (const [a, l] of laid.lift) if (a !== m) lift.set(a, l);
   });
   const stars = new Set(unit.dienes.flatMap((d) => d.stars.map((s) => s.star)));
-  const others = mol.neighbours[m].filter((l) => !stars.has(l));
+  // (the chelate's atoms bonded to the metal first, side by side)
+  const inChelate = new Set(unit.chelate?.atoms ?? []);
+  const near = mol.neighbours[m].filter((l) => !stars.has(l));
+  const others = [...near.filter((l) => inChelate.has(l)), ...near.filter((l) => !inChelate.has(l))];
   const k = others.length;
   const step = k <= 2 ? Math.PI / 2 : (2 * Math.PI) / 3 / (k - 1);
   const angles =
     unit.dienes.length === 1
       ? others.map((_, i) => (i - (k - 1) / 2) * step)
       : others.map((_, i) => (i % 2 ? -1 : 1) * (Math.PI / 2));
+  const bonded = others.filter((l) => inChelate.has(l));
+  const at = chelateAt?.get(m);
+  if (bonded.length && chelateAt && at) {
+    // its atoms bonded to the metal toward where their slots go, together
+    const toward = bonded.reduce((v, _, i) => add(v, dir(angles[i])), { x: 0, y: 0 });
+    const want = Math.hypot(toward.x, toward.y) > 1e-6 ? angleOf(toward) : angles[0];
+    const has = angleOf(sub(centroid(bonded.map((l) => chelateAt.get(l)!)), at));
+    for (const a of unit.chelate!.atoms) if (a !== m) pos.set(a, rotate(sub(chelateAt.get(a)!, at), want - has));
+  }
   const hints = new Map<number, Map<number, Point>>();
-  if (k) hints.set(m, new Map(others.map((l, i) => [l, dir(angles[i])])));
+  const hinted = others.flatMap((l, i) => (inChelate.has(l) ? [] : [[l, dir(angles[i])] as const]));
+  if (hinted.length) hints.set(m, new Map(hinted));
   return { pos, hints, lift };
 }
 

@@ -88,3 +88,23 @@ export function pressOnBond(last: (BondPress & { count: number }) | null, press:
 export function pressNumber(last: { id: number | null; t: number; count: number }, id: number, now: number, windowMs: number): 1 | 2 {
   return last.id === id && now - last.t <= windowMs && last.count === 1 ? 2 : 1;
 }
+
+/**
+ * A test that a pointer's event is met for the first time - one press, one
+ * count. The canvas's renderer calls a handler once for each object a press
+ * hits, so an atom's handlers, on its disc and on its label's letters both
+ * (Atoms2D: a label's other letters are its atom), ran twice for a press
+ * where the two overlap: a double-click's second press was counted as a
+ * first, and dragged the atom instead of drawing a bond (the Windows
+ * pre-release check, 2026-10-18). Each test keeps its own events; an event
+ * without one (a test's, say) is always new.
+ */
+export function oncePerEvent(): (event: object | undefined | null) => boolean {
+  const met = new WeakSet<object>();
+  return (event) => {
+    if (!event) return true;
+    if (met.has(event)) return false;
+    met.add(event);
+    return true;
+  };
+}

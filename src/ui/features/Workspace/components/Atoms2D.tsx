@@ -10,7 +10,7 @@ import { dragsSelection } from "../store/slices/selectionSlice";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { computeMoveSnap } from "../utils/moveSnap";
 import { ATOM_PICK_RADIUS_RATIO, DOUBLE_CLICK_MS, FREE_MS, LONG_PRESS_MS, MOV_PX } from "../constants";
-import { clickClock, clickEditHeldOff, clickStillEdits, pressNumber } from "../utils/clickCount";
+import { clickClock, clickEditHeldOff, clickStillEdits, oncePerEvent, pressNumber } from "../utils/clickCount";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { commitInstanceMatrices } from "./instances";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -374,8 +374,13 @@ export function Atoms2D() {
 
   // (what a press, a move or a double-click on an atom does: on its disc, or on its
   // label's other letters - the H of HO is the O - `indexOf` taking what was hit to the atom's index)
+  // (each pointer event handled once, whichever of the atom's meshes it met first)
+  const firstPress = useMemo(oncePerEvent, []);
+  const firstDoubleClick = useMemo(oncePerEvent, []);
   const atomEvents = (indexOf: (hit: number | undefined) => number | undefined) => ({
     onPointerDown: (e: ThreeEvent<PointerEvent>) => {
+      // (one press, one count: met on the disc and the label's letters both, it is handled once)
+      if (!firstPress((e as any).nativeEvent)) return;
       const idx = indexOf((e as any).instanceId as number | undefined);
       if (idx == null || idx < 0) return;
       const a = model.atoms[idx];
@@ -522,6 +527,7 @@ export function Atoms2D() {
       window.addEventListener("pointerup", onEarlyUp, true);
     },
     onDoubleClick: (e: ThreeEvent<MouseEvent>) => {
+      if (!firstDoubleClick((e as any).nativeEvent)) return;
       // Suppress Canvas dblclick if we just did interactive commit
       if (endedByInteractive.current) {
         (e as any).stopPropagation?.();
