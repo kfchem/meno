@@ -18,10 +18,15 @@ import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
 import { withCentres, bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
+import { MENO_MOTIONS } from "../../../../lib/plugins/manifest";
 import type { Carried3D, Molecule3D } from "../store/types";
 
-/** What a film shows moving: each molecule turning once about the up of the page, in place; its frames, one after another; or the vibration it shows. */
-export type Motion = "turn" | "frames" | "vibration";
+/**
+ * What a film shows moving: Meno's own - each molecule turning once about the up of the page, in place ("turn"); its frames,
+ * one after another ("frames"); or the vibration it shows ("vibration") - keyed into the scene; or a motion the renderer
+ * declares (its manifest's `motions`, by id), which it makes itself of the scene written still.
+ */
+export type Motion = string;
 
 /** A picture's or a film's shape: fitted to what is drawn, or of a width to its height. */
 export type Shape = "fit" | "16:9" | "4:3" | "1:1";
@@ -186,6 +191,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
   const up = new THREE.Vector3(0, 1, 0);
   const v = new THREE.Vector3();
 
+  const made: { atoms: { el: string; p: Vec3 }[]; bonds: { a: number; b: number; order: number }[] }[] = [];
+  const ownMotion = film && !!motion && !(MENO_MOTIONS as readonly string[]).includes(motion);
   for (const { m, surfaces, move } of shown) {
     const molecule = { ...m, id: 0 } as Molecule3D;
     const solid = solidOf(molecule, style);
@@ -241,6 +248,22 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     };
     const samples = Array.from({ length: count }, (_, s) => sampleAt(s));
     const animated = moving || swinging;
+    // (what it is made of, for a renderer that makes a motion of its own: each atom drawn, its element and where it stands in the
+    // scene, in ångströms, and its bonds between them - Meno's own data, written only for such a motion: a large entry's every
+    // atom would only weigh down any other scene)
+    if (ownMotion) {
+      const at = new Map<number, number>();
+      const atoms: { el: string; p: Vec3 }[] = [];
+      const mag0 = magnifiedOf(molecule);
+      for (let i = 0; i < n; i++) {
+        if (left[i] || radii[i] <= 0) continue;
+        const p0 = samples[0].places;
+        v.set(p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]).applyQuaternion(samples[0].turn).multiplyScalar(mag0);
+        at.set(i, atoms.length);
+        atoms.push({ el: m.atoms[i].el, p: [centre[0] + v.x, centre[1] + v.y, centre[2] + v.z] });
+      }
+      made.push({ atoms, bonds: bonds.filter((b) => at.has(b.a1) && at.has(b.a2)).map((b) => ({ a: at.get(b.a1)!, b: at.get(b.a2)!, order: b.order })) });
+    }
 
     // the molecule: a node where it stands, turned as it is, holding its atoms, bonds and surfaces
     const root = nodes.length;
@@ -416,7 +439,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     lights: [{ name: "Key light", type: "directional", colour: [1, 1, 1], intensity: style.keyLight }],
     animations,
     // (what glTF has no word for: the scene's even light, and what the film is)
-    extras: { meno: { ambientLight: style.ambientLight, keyLight: style.keyLight, width, height, frames: count, fps, film } },
+    extras: { meno: { ambientLight: style.ambientLight, keyLight: style.keyLight, width, height, frames: count, fps, film, ...(ownMotion ? { molecules: made } : {}) } },
   };
   return {
     gltf: writeGltf(scene),
