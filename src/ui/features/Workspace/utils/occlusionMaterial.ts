@@ -217,7 +217,8 @@ function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void
         // (where the point is seen, from where its number stands)
         vec2 p = nv.xy - vNumberPlace.xy;
         ballNumberAt = ballNumberCover( p, dFdx( p ), dFdy( p ) );
-        ballNumberWhite = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 0.0722 ) ) < ${INK_TURN.toFixed(3)};
+        // (white on a dark ball: its brightness by Rec. 709's weights, the blue the rest of one)
+        ballNumberWhite = dot( diffuseColor.rgb, vec3( 0.2126, 0.7152, 1.0 - 0.2126 - 0.7152 ) ) < ${INK_TURN.toFixed(3)};
       }`,
     )
     .replace(
