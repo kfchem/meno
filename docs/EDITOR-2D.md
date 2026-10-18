@@ -805,6 +805,12 @@ All hover-based, as above.
   and E/Z from a button on the canvas, later shown on what they are asked
   for on; valence warnings in Settings › Chemistry; neither in an exported
   picture.)
+  - **A halogen bridging metals** (μ-X; the maintainer, 2026-10-18) -
+    μ-Cl in [Pd(allyl)Cl]2, drawn with a plain bond to each metal - is
+    not marked: its bonds to metals count as the dative bonds they are, so
+    that it is checked by its bonds to the rest, none or the one it has as
+    usual. One with two bonds to carbons is marked still, metal or not
+    (chem/marks `bridgesMetals`).
   - **Stereochemistry drawn by luck** (the maintainer, 2026-10-11): a
     stereocentre whose wedge says its configuration only as its bonds
     happen to fall - two of them in a line, or all of them in one half of
