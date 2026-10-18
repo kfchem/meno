@@ -1,17 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { allPages, numberText, numberedName, pagesName, pagesTyped, readingOrder } from "./make";
+import { allPages, clickedPages, numberText, numberedName, pagesName, pagesTyped, readingOrder, shownUnbroken, unusedName } from "./make";
 
 describe("a new PDF from pages", () => {
   it("is named for what it is made of", () => {
-    expect(numberedName("paper.pdf")).toBe("paper (numbered).pdf");
-    expect(numberedName("Paper.PDF")).toBe("Paper (numbered).pdf");
+    // (its first page's number in its name: which way it was numbered)
+    expect(numberedName("paper.pdf", { prefix: "", start: 1, at: "centre" })).toBe("paper (numbered 1).pdf");
+    expect(numberedName("Paper.PDF", { prefix: "S", start: 1, at: "right" })).toBe("Paper (numbered S1).pdf");
+    expect(numberedName("paper.pdf", { prefix: "", start: 12, at: "left" })).toBe("paper (numbered 12).pdf");
     const t = (page: number, turn = 0) => ({ page, turn });
-    expect(pagesName("paper.pdf", [t(2), t(3), t(4)], 10)).toBe("paper (pages 3-5).pdf");
+    // (a run with an en dash)
+    expect(pagesName("paper.pdf", [t(2), t(3), t(4)], 10)).toBe("paper (pages 3\u20135).pdf");
     expect(pagesName("paper.pdf", [t(1)], 10)).toBe("paper (page 2).pdf");
     // (out of order, turned, or all of them as they were rearranged: arranged)
     expect(pagesName("paper.pdf", [t(3), t(2)], 10)).toBe("paper (arranged).pdf");
     expect(pagesName("paper.pdf", [t(2, 90), t(3)], 10)).toBe("paper (arranged).pdf");
     expect(pagesName("paper.pdf", [t(0), t(1), t(2)], 3)).toBe("paper (arranged).pdf");
+  });
+
+  it("is named as no PDF on the page is: the same made again counted on", () => {
+    expect(unusedName("paper (numbered S1).pdf", ["paper.pdf"])).toBe("paper (numbered S1).pdf");
+    expect(unusedName("paper (numbered S1).pdf", ["paper (numbered S1).pdf"])).toBe("paper (numbered S1) 2.pdf");
+    expect(unusedName("Combined.pdf", ["Combined.pdf", "Combined 2.pdf"])).toBe("Combined 3.pdf");
+  });
+
+  it("shows its name with the part in brackets kept on one line, the name itself as it was", () => {
+    // (troika-three-text breaks a line after a space, a hyphen or an en dash - not after U+00A0 or U+2011)
+    expect(shownUnbroken("paper (pages 3\u20135).pdf")).toBe("paper (pages\u00a03\u20115).pdf");
+    expect(shownUnbroken("my paper (numbered S1) 2.pdf")).toBe("my paper (numbered\u00a0S1) 2.pdf");
+    expect(shownUnbroken("a-b c.pdf")).toBe("a-b c.pdf");
+    // (only the last bracketed part: an earlier one as it was)
+    expect(shownUnbroken("x (a b) y (c d).pdf")).toBe("x (a b) y (c\u00a0d).pdf");
+  });
+
+  it("selects pages as a click asks: alone, a run with Shift, one added or taken away with Ctrl or Cmd", () => {
+    const order = [4, 0, 1, 2, 3];
+    // (a plain click: that page alone, whatever was selected)
+    expect([...clickedPages(new Set([0, 1]), order, 0, 2, {}).selected]).toEqual([2]);
+    // (Shift: the run, in the order shown, from the page clicked last - which stays the anchor)
+    const run = clickedPages(new Set([0]), order, 4, 1, { shift: true });
+    expect([...run.selected]).toEqual([4, 0, 1]);
+    expect(run.anchor).toBe(4);
+    expect([...clickedPages(run.selected, order, run.anchor, 2, { shift: true }).selected]).toEqual([4, 0, 1, 2]);
+    // (Ctrl or Cmd: one added, or taken away)
+    expect([...clickedPages(new Set([0]), order, 0, 3, { toggle: true }).selected].sort()).toEqual([0, 3]);
+    expect([...clickedPages(new Set([0, 3]), order, 3, 3, { toggle: true }).selected]).toEqual([0]);
+    // (Shift with no page clicked before: that page alone)
+    expect([...clickedPages(new Set(), order, null, 1, { shift: true }).selected]).toEqual([1]);
   });
 
   it("numbers its pages from the number chosen, as supporting information is where asked", () => {
