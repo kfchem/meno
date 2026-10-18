@@ -527,3 +527,27 @@ describe("a figure of a great many lines", () => {
     expect(readScheme({ paths: dots(300), letters: [], pictures: [] }).tooMany).toBeUndefined();
   });
 });
+
+describe("a table drawn in a scheme's figure", () => {
+  const box = (x0: number, y0: number, x1: number, y1: number): FigurePath[] => [stroke([[x0, y0], [x1, y0]]), stroke([[x0, y1], [x1, y1]]), stroke([[x0, y0], [x0, y1]]), stroke([[x1, y0], [x1, y1]])];
+
+  it("leaves a data table's words out, the words outside its cells - its caption - kept", () => {
+    // (a ring, and beside it a table of two rows and three columns, a word or a number in each cell; under it, outside its cells, a caption)
+    const ring = Array.from({ length: 6 }, (_, i): P => [30 + L * Math.cos((Math.PI / 3) * i + Math.PI / 6), 40 + L * Math.sin((Math.PI / 3) * i + Math.PI / 6)]);
+    const grid: FigurePath[] = [];
+    for (let r = 0; r <= 2; r++) grid.push(stroke([[60, 20 + r * L], [60 + 6 * L, 20 + r * L]]));
+    for (let c = 0; c <= 3; c++) grid.push(stroke([[60 + c * 2 * L, 20], [60 + c * 2 * L, 20 + 2 * L]]));
+    const cells = [...word("entry", [64, 20 + 0.7 * L]), ...word("yield", [64 + 2 * L, 20 + 0.7 * L]), ...word("ee", [64 + 4 * L, 20 + 0.7 * L]), ...word("1", [64, 20 + 1.7 * L]), ...word("82", [64 + 2 * L, 20 + 1.7 * L]), ...word("97", [64 + 4 * L, 20 + 1.7 * L])];
+    const caption = word("standard conditions", [60, 20 + 2 * L + 14]);
+    const s = readScheme({ paths: [stroke([...ring, ring[0]]), ...grid], letters: [...cells, ...caption], pictures: [] });
+    expect(s.figure.atoms).toHaveLength(6);
+    expect(s.words.map((w) => w.text)).toEqual(["standard conditions"]);
+  });
+
+  it("keeps the words of a panel round part of the scheme: a cell holding a structure is no data table's", () => {
+    // (two panels side by side, framed, sharing a side - each a structure and its number under it)
+    const frames = [...box(-10, 60, 100, 140), ...box(100, 60, 210, 140)];
+    const s = readScheme({ paths: [chain([10, 100]), chain([120, 100]), ...frames], letters: [...word("1a", [30, 125]), ...word("2b", [140, 125])], pictures: [] });
+    expect(s.words.map((w) => w.text).sort()).toEqual(["1a", "2b"]);
+  });
+});

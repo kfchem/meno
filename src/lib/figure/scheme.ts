@@ -873,8 +873,14 @@ export function readScheme(
   const label = (w: SchemeWords) => w.text.replace(/\s+/g, "").replace(/[\u2212\u2013]/g, "-");
   const molecules = all.filter((w) => w.arrow == null && !w.text.includes("\n") && joined(w) && whole(label(w)));
   const written = molecules.map((w) => ({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2, label: label(w), box: w.box, unsure: [WRITTEN_AS_WORDS] }));
-  const words = all.filter((w) => !molecules.includes(w));
-  return { figure: { ...figure, atoms: [...figure.atoms, ...written], left: { letters: [] } }, arrows, pluses: signed, words, bond: atBond };
+  // (a table's words - in a cell that holds no part of a structure nor of an arrow, a data table's, not a panel round part of the scheme -
+  // are the table's: none an arrow's, nor any outside its cells, its caption or a footnote)
+  const inside = (p: Point, b: readonly number[]) => p.x > b[0] && p.x < b[2] && p.y > b[1] && p.y < b[3];
+  const dataCells = (figure.table ?? []).filter((b) => !figure.atoms.some((a) => inside(a, b)) && !arrows.some((a) => [a.tail, a.point, ...a.corners].some((p) => inside(p, b))));
+  const inTable = (w: SchemeWords) => w.arrow == null && dataCells.some((b) => inside({ x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 }, b));
+  const words = all.filter((w) => !molecules.includes(w) && !inTable(w));
+  const { table: _table, ...read } = figure;
+  return { figure: { ...read, atoms: [...read.atoms, ...written], left: { letters: [] } }, arrows, pluses: signed, words, bond: atBond };
 }
 
 /** The box round all a scheme has: its atoms, its arrows' points, its "+" signs and its words; none, where it has nothing. */

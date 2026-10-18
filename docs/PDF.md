@@ -1131,7 +1131,12 @@ workspace holds.
   share a side, as a table's rows and columns do, and short level or
   upright lines set within those cells, its dashes; a structure beside it
   is read as ever. A ring is never drawn so; a Fischer projection's
-  crossing lines make no cells.
+  crossing lines make no cells. Its words - those in a cell that holds no
+  part of a structure nor of an arrow, a data table's cell - are the
+  table's, not the scheme's, and are not put on the page with the
+  structure. Words outside its cells (its caption, a footnote) and an
+  arrow's words come through as ever, and a cell holding a structure or an
+  arrow is a panel framing part of the scheme, whose words are kept.
   Where every line is drawn short between labels - a metal's bonds, Pt to
   N and Cl - each is measured on to the middles of the letters it is cut
   short of.
