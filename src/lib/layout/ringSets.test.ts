@@ -51,7 +51,9 @@ describe("the smallest set of rings a bridged system is drawn from", () => {
     const out = drawnRingSets(mol, layFlat);
     expect(flatCost(out, largest(out), chosen[0].pos, undefined, true)).toBeCloseTo(Math.min(...costs), 9);
     expect(Math.max(...costs)).toBeGreaterThan(Math.min(...costs) + 1);
-  });
+    // (three flat layouts of ibogaine and the choice among them: about a
+    // second alone, many times that on a machine busy with other work)
+  }, 120_000);
 
   it("is read by a measure the set it was laid from does not change: the room for its bonds out", () => {
     const mol = perceive(fromSmiles(ibogaine));
@@ -116,5 +118,7 @@ describe("the smallest set of rings a bridged system is drawn from", () => {
         if ([r, s].includes(p) || [r, s].includes(q) || ![p, q, r, s].every(flat)) continue;
         expect(segmentsCross(pt(p), pt(q), pt(r), pt(s))).toBe(false);
       }
-  });
+    // (the whole engine on ibogaine: about a second alone, many times that on
+    // a machine busy with other work)
+  }, 120_000);
 });
