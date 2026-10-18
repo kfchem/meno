@@ -6,6 +6,7 @@ import type { AbbreviationStructure, AtomChem, BondChem, Radical, SgroupMark } f
 import { ELEMENTS } from "./elements";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
+import { isMetal } from "../layout/perceive";
 
 /** An atom to write: what it is (./molecule), and where, in the editor's world units. */
 export type WriterAtom = AtomChem & { id: number; x: number; y: number; magnified?: number };
@@ -193,6 +194,16 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
       // (a donor that lends its pair: a coordination bond)
       else if (structure.lends?.[k] && !b.dative) Object.assign(b, { coordination: true });
     });
+    // (a ligand bound through more pi systems than it is drawn with bonds - cod, nbd: two C=C - bonded to a metal by one:
+    // bound through each of them all the same, to that metal, a star left with no bond being no atom of anything)
+    const metal = touching.length === 1 ? byId.get(touching[0].a === a.id ? touching[0].b : touching[0].a) : undefined;
+    if (metal && isMetal(metal.el)) {
+      for (const at of structure.attach.slice(1)) {
+        const pi = structure.haptic?.find((h) => h.star === at);
+        if (!pi) continue;
+        bonds.push({ ...touching[0], a: metal.id, b: ids[at], endpoints: pi.atoms.map((e) => ids[e]), attach: "all", coordination: true });
+      }
+    }
     sups.push({ label: a.el, atoms: [a.id, ...ids.filter((id) => id !== a.id)] });
   }
   return { model: { atoms, bonds }, sups, aliases };
