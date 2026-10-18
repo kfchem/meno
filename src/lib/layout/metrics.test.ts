@@ -114,6 +114,21 @@ describe("layoutMetrics", () => {
     expect(found).toEqual([{ a: 0, b: 1, by: expect.closeTo(0.5, 6) }]);
   });
 
+  it("counts a label near a bare vertex and on one of its bonds once, as a clash", () => {
+    // a bare vertex at (0, 0) with a bond to the right, and an O 0.55 from
+    // it - 30 degrees up, over the bond, or 120 degrees round, clear of it
+    const at = (deg: number) => {
+      const r = (deg * Math.PI) / 180;
+      const ox = 0.55 * Math.cos(r);
+      const oy = 0.55 * Math.sin(r);
+      return layoutMetrics({ x: [0, 1, ox, ox], y: [0, 0, oy, oy + 1], edges: [[0, 1], [2, 3]], labelled: [false, false, true, false], elements: ["C", "C", "O", "C"] });
+    };
+    expect(at(30).clashes).toBe(1);
+    expect(at(30).crowdedLabels).toBe(0);
+    expect(at(120).clashes).toBe(0);
+    expect(at(120).crowdedLabels).toBeCloseTo(0.25, 6);
+  });
+
   it("counts a label on a bond from a little further off than a bare vertex", () => {
     // a bond from (0, 0) to (1, 0), and an atom 0.35 of a bond above its middle, bonded to one above it
     const at = (labelled: boolean) =>

@@ -259,7 +259,9 @@ export const LABEL_ROOM = 0.5;
  * O on the corner of the benzene ring beside it, forskolin's 9-OH on its
  * ketone's carbon. By label, the vertex nearest it and how far in, 0 to 1
  * (1 at half a bond, an overlap). `apart` passes over a pair (bonded, or
- * drawn over each other as a solid is seen).
+ * drawn over each other as a solid is seen). Given the bonds at each atom,
+ * a vertex is passed over where the label already lies on one of its
+ * bonds: that ink is a clash (`LABEL_ON_BOND`), counted once, there.
  */
 export function labelsOnVertices(
   x: readonly number[],
@@ -267,6 +269,7 @@ export function labelsOnVertices(
   L: number,
   labelled: readonly boolean[],
   apart: (a: number, b: number) => boolean,
+  neighbours?: readonly (readonly number[])[],
 ): Map<number, { vertex: number; by: number }> {
   const room = LABEL_VERTEX * L;
   const into = (LABEL_VERTEX - 0.5) * L;
@@ -280,6 +283,7 @@ export function labelsOnVertices(
       if (Math.abs(dx) >= room || Math.abs(dy) >= room) continue;
       const d = Math.hypot(dx, dy);
       if (d >= room || apart(a, b)) continue;
+      if (neighbours?.[b].some((c) => c !== a && pointToSegment(x[a], y[a], x[b], y[b], x[c], y[c]) < LABEL_ON_BOND * L)) continue;
       const by = Math.min(1, (room - d) / into);
       if (by > (out.get(a)?.by ?? 0)) out.set(a, { vertex: b, by });
     }
@@ -1029,10 +1033,11 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
       }
     }
   }
-  // and a label on a bare vertex (`labelsOnVertices`)
+  // and a label on a bare vertex (`labelsOnVertices`), not on one of its
+  // bonds already - a clash, below
   const labelRoom = g.labelRoom ?? LABEL_ROOM;
   if (labelRoom > 0 && g.labelled) {
-    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null));
+    const near = labelsOnVertices(x, y, L, g.labelled, (a, b) => bonded.has(pair(a, b)) || solid(a, b) || (z?.[a] != null && z?.[b] != null), neighbours);
     for (const { by } of near.values()) crowdedLabels += labelRoom * by;
   }
   // and two labels whose ink, H's and all, comes near (`labelsCrowding`),

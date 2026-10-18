@@ -88,7 +88,7 @@ before, not a record of how particular molecules are drawn.
 | overlaps | atoms not bonded but closer than half a bond |
 | crossings | bonds crossing bonds |
 | clashes | atoms lying on a bond they are not part of: within 0.3 of a bond, or 0.4 for a label (its letter, or a wedge's H, is ink half a bond high) |
-| crowded labels | labelled atoms (anything but a neutral C) close enough for their labels to meet; and, a quarter as much, a label's H - beside its symbol, or under or over it between bonds on both sides, as the drawing sets it - that runs into another label (side by side, with less than a space between them), an atom or a bond; and, half as much, a label on a bare vertex it is not bonded to (under 0.6 of a bond), and two labels whose ink - symbol on symbol, or H on H, where the drawing puts them - comes within half a bond of each other, more the nearer |
+| crowded labels | labelled atoms (anything but a neutral C) close enough for their labels to meet; and, a quarter as much, a label's H - beside its symbol, or under or over it between bonds on both sides, as the drawing sets it - that runs into another label (side by side, with less than a space between them), an atom or a bond; and, half as much, a label on a bare vertex it is not bonded to (under 0.6 of a bond, and not on one of the bonds there: that is a clash), and two labels whose ink - symbol on symbol, or H on H, where the drawing puts them - comes within half a bond of each other, more the nearer |
 
 **Shape**:
 

@@ -600,7 +600,9 @@ A label lying on a bare vertex it is not bonded to - nearer than 0.6 of a
 bond, its letter running into the bonds that meet there - is given room
 the same way and at the same time (`labelsOnVertices`): vancomycin's acid
 C=O had its O on the corner of the benzene ring beside it, and forskolin's
-9-OH sat on its ketone's carbon. It is counted only then, not while the
+9-OH sat on its ketone's carbon. A label already on one of the bonds
+that meet there is a clash, and is not counted on the vertex as well:
+one piece of ink, one fault. It is counted only then, not while the
 parts are set, nor in turning a sugar to its face (a macrolide's sugar
 turned over for it crowded an OH on an OH); on the sheet, as half a
 crowding. So are two labels whose ink comes near - symbol on symbol, or
