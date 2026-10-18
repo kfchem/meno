@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { useEditor, useEditorStore } from "../store";
 import { stageOf } from "./stage";
 
@@ -6,6 +7,7 @@ import { stageOf } from "./stage";
  * is given, a surface over everything takes the pointer - the canvas's part
  * of the talk (Presenter) says what a press, a drag or the wheel does there
  * - everything about the slide shown is black, as slides software has it,
+ * and stays black on the way to the next, but for the two slides,
  * the screen can be made black or white, and the slide's number
  * shows a moment as it comes. Always there, and nothing - letting the
  * pointer through - while no talk is given.
@@ -14,6 +16,8 @@ export default function PresentLayer() {
   const store = useEditorStore();
   const on = useEditor((s) => s.presenting != null);
   const stage = stageOf(store);
+  // (the veil's mask, its own in each workspace's layer)
+  const mask = `meno-veil-${useId().replace(/:/g, "")}`;
   return (
     <div
       ref={(el) => {
@@ -36,16 +40,28 @@ export default function PresentLayer() {
         className="absolute inset-0 pointer-events-none"
         style={{ opacity: 0 }}
       >
-        {[0, 1, 2, 3].map((i) => (
-          <div
-            key={i}
-            ref={(el) => {
-              stage.bands[i] = el;
-            }}
-            className="absolute bg-black"
-            style={{ left: 0, top: 0, width: 0, height: 0 }}
-          />
-        ))}
+        {/* (black but for its windows, the slides: two windows that meet or overlap stay one opening) */}
+        <svg className="absolute inset-0 w-full h-full">
+          <defs>
+            <mask id={mask}>
+              <rect x="0" y="0" width="100%" height="100%" fill="white" />
+              {[0, 1].map((i) => (
+                <rect
+                  key={i}
+                  ref={(el) => {
+                    stage.windows[i] = el;
+                  }}
+                  x="0"
+                  y="0"
+                  width="0"
+                  height="0"
+                  fill="black"
+                />
+              ))}
+            </mask>
+          </defs>
+          <rect x="0" y="0" width="100%" height="100%" fill="#000000" mask={`url(#${mask})`} />
+        </svg>
       </div>
       <div
         ref={(el) => {

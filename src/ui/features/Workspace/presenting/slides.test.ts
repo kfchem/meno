@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boxOf, holds, isStandard, joinOf, OF_VIEW, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, talkEnd, viewOf, WIDE, zoomOf } from "./slides";
-import { bandsAbout } from "./stage";
+import { slideOnScreen } from "./stage";
 import { presentIntent } from "../../../../lib/doc/shortcuts";
 
 describe("slides on the page", () => {
@@ -107,16 +107,11 @@ describe("slides on the page", () => {
     expect(presentIntent({ key: "Enter", metaKey: true, target: { tagName: "TEXTAREA" } })).toBeNull();
   });
 
-  it("are veiled about, in four bands that cover the rest of the canvas and nothing of the slide", () => {
-    const bands = bandsAbout({ left: 100, top: 50, width: 800, height: 450 }, 1000, 600);
-    expect(bands).toEqual([
-      [0, 0, 1000, 50],
-      [0, 500, 1000, 100],
-      [0, 50, 100, 450],
-      [900, 50, 100, 450],
-    ]);
-    // (a slide larger than the canvas: no band)
-    expect(bandsAbout({ left: -10, top: -10, width: 1200, height: 800 }, 1000, 600).every(([, , w, h]) => w * h === 0)).toBe(true);
+  it("leave the veil a window where each lies on the canvas", () => {
+    // (a slide 16 by 9 units, the view on its middle, 50 pixels to the unit: in the canvas's middle, 800 by 450)
+    expect(slideOnScreen({ x: 3, y: 4, w: 16, h: 9 }, { x: 3, y: 4, zoom: 50 }, 1000, 600)).toEqual({ left: 100, top: 75, width: 800, height: 450 });
+    // (the view moved right and up of it: it lies to the left and lower down; page's y up, the canvas's down)
+    expect(slideOnScreen({ x: 3, y: 4, w: 16, h: 9 }, { x: 5, y: 6, zoom: 50 }, 1000, 600)).toEqual({ left: 0, top: 175, width: 800, height: 450 });
   });
 });
 
