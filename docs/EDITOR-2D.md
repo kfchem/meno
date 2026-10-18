@@ -907,6 +907,15 @@ All hover-based, as above.
     leaves open shows its open centres until it is asked otherwise, to
     tell them apart (docs/WORKSPACE.md, *Told apart*). Settings no longer
     has a switch for them; one in an old settings file is not read.
+  - **Come and go together** (the maintainer, 2026-10-19: they had come
+    in bursts). Those shown at once - on a drawing and on a molecule in 3D
+    alike - fade in together and fade out together, eased, in the same
+    time either way (120 ms, as every mark). On a drawing, those asked for
+    are shown from the R and S at hand where those were worked out for
+    the structure as it is, and otherwise all wait for those worked out
+    after (`shownMarks`); never a few at once and the rest a moment later.
+    On a molecule in 3D, none starts before every one of them is there to
+    be seen, the molecule still or turning (`fadeStep`).
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
