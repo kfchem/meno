@@ -8,9 +8,12 @@ import {
   marksOf,
   placeMark,
   segmentHitsRect,
+  shownMarks,
+  stereoAskedOf,
   type Rect,
   stereoTextEms,
   stereoWaysOut,
+  type ChemMarks,
   valenceMessage,
   waysOut,
 } from "./marks";
@@ -248,5 +251,57 @@ describe("R and S as the canvas writes them", () => {
     expect(stereoTextEms("R", true)).toBeGreaterThan(stereoTextEms("R", false));
     expect(stereoTextEms("r", false)).toBeLessThan(stereoTextEms("R", false));
     expect(stereoTextEms("Ra", false)).toBeGreaterThan(stereoTextEms("R", false));
+  });
+});
+
+describe("R and S, E and Z shown", () => {
+  // (three centres and a double bond, all worked out; centres 1 and 2 and the bond asked for when they were)
+  const marks: ChemMarks = {
+    valence: new Map(),
+    centres: new Map([[1, "R"], [2, "S"], [3, "R"]]),
+    doubleBonds: new Map([[10, "E"]]),
+  };
+  const model = (shown: number[], bondShown: boolean): Model => ({
+    atoms: [1, 2, 3, 4].map((id) => ({ ...atom(id, id, 0), ...(shown.includes(id) ? { stereoShown: true as const } : {}) })),
+    bonds: [{ ...bond(10, 3, 4, 2), ...(bondShown ? { stereoShown: true as const } : {}) }],
+  });
+  const then = stereoAskedOf(model([1, 2], true));
+
+  it("shows those asked for now that were asked for as the marks were worked out", () => {
+    const s = shownMarks(marks, model([1, 2], true), then, () => false);
+    expect([...s.centres.keys()]).toEqual([1, 2]);
+    expect([...s.doubleBonds.keys()]).toEqual([10]);
+  });
+
+  it("keeps one asked for since a change to the structure back until marks worked out after it come", () => {
+    const s = shownMarks(marks, model([1, 2, 3], true), then, () => false);
+    expect([...s.centres.keys()]).toEqual([1, 2]);
+    // (worked out again, with 3 asked for: all three)
+    const again = shownMarks(marks, model([1, 2, 3], true), stereoAskedOf(model([1, 2, 3], true)), () => false);
+    expect([...again.centres.keys()]).toEqual([1, 2, 3]);
+  });
+
+  it("shows those asked for since at once, all together, where the marks are for the structure as it is", () => {
+    const s = shownMarks(marks, model([1, 2, 3], true), stereoAskedOf(model([], false)), () => true);
+    expect([...s.centres.keys()]).toEqual([1, 2, 3]);
+    expect([...s.doubleBonds.keys()]).toEqual([10]);
+  });
+
+  it("shows nothing from marks worked out for another structure before any was asked for", () => {
+    const s = shownMarks(marks, model([1, 2, 3], true), stereoAskedOf(model([], false)), () => false);
+    expect(s.centres.size).toBe(0);
+    expect(s.doubleBonds.size).toBe(0);
+  });
+
+  it("asks whether the marks are for the structure as it is only where something has been asked for since", () => {
+    let asked = 0;
+    shownMarks(marks, model([1, 2], true), then, () => (asked++, true));
+    expect(asked).toBe(0);
+  });
+
+  it("takes away at once those no longer asked for, all of them together", () => {
+    const s = shownMarks(marks, model([], false), then, () => false);
+    expect(s.centres.size).toBe(0);
+    expect(s.doubleBonds.size).toBe(0);
   });
 });
