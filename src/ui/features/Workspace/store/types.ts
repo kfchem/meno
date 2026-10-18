@@ -1,3 +1,4 @@
+import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
@@ -495,6 +496,8 @@ export type Molecule3D = {
    * its drawing left open (`stereoShownOf`).
    */
   stereo?: { atoms: Record<number, string>; bonds: Record<number, string>; chosen?: { atoms: number[]; bonds: number[] }; shown?: { atoms: number[]; bonds: number[] } };
+  /** The numbers shown on its atoms (utils/atomNumbers): of what kind, and on which of them - all, given none; unset, none. */
+  atomNumbers?: AtomNumbersShown;
   /** What the calculation it was read from says of it, besides its geometries and energies (lib/calc). */
   calc?: CalcInfo;
   /**
@@ -1556,6 +1559,10 @@ export type EditorState = {
    * given, by id, and the molecules in 3D's, by index (all of a molecule's,
    * given none): one undo step (document `setStereoShown`).
    */
+  /** Atom numbers shown on molecules in 3D, by id - on the atoms given, by index, all of them given none - or hidden: one undo step (document `setAtomNumbers`). */
+  setAtomNumbers: (of: readonly { id: number; atoms?: readonly number[] }[], show: boolean) => void;
+  /** The kind of number the molecules in 3D given, by id, show (document `setAtomNumberKind`): one undo step. */
+  setAtomNumberKind: (molecules: readonly number[], kind: AtomNumberKind) => void;
   setStereoShown: (of: { atoms?: readonly number[]; bonds?: readonly number[]; molecules?: readonly { id: number; atoms?: readonly number[]; bonds?: readonly number[] }[] }, show: boolean) => void;
   /**
    * Metal `metal` bound to a ring through all its atoms - one bond to a star

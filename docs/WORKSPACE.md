@@ -1480,6 +1480,55 @@ the rest is for later, through a plugin.
   value under the pointer was never found - no highlight, no menu, no
   keeping values apart. They now look in that layer.
 
+## Atom numbers
+
+Asked for by the maintainer on 2026-10-17: a molecule in 3D can show each
+atom's number on its ball. Hover alone showed it before. The number is on
+the atom, never beside it: with many atoms, a number set beside its atom,
+as R and S are, cannot be told from its neighbours'.
+
+- **What is shown.** The right-click menu has *Show atom numbers* and
+  *Hide atom numbers*, beside R/S, and acts as that does: on the molecule
+  right-clicked, or on the atoms chosen in it, or on the selection there.
+  Right-clicked on an atom with none chosen, the menu also has *Show this
+  atom's number* (or *Hide*), for that atom alone. A molecule keeps which
+  atoms show their numbers: saved with the workspace and carried by a copy,
+  each change one undo step.
+- **The kinds.** *Atom order*, the default, numbers the atoms from 1 in
+  the molecule's own order - as calculations number them, and as files
+  are written and read. *Atom map* shows each atom's atom-map number,
+  where a reaction's map gives it one (docs/ATOM-MAPPING.md). Where a molecule
+  showing numbers has both, the menu offers both, the one shown ticked.
+  More kinds go in one list (`ATOM_NUMBER_KINDS`, utils/atomNumbers).
+- **How they are drawn.** In the balls' own shader (utils/occlusionMaterial,
+  `withBallNumbers`), from a picture of the digits 0 to 9: upright and
+  facing the viewer whichever way the molecule is turned, so that they
+  never turn with it nor shake. Each is sized to its ball - 0.78 of its
+  radius high, at most 0.95 Å, and narrower when it has more digits - in
+  dark ink on a light ball and white on a dark one, whatever the style's
+  colours. They are drawn flat over the ball, its shading under them and
+  never on them, so that they read as well in its shade as in its light
+  (the maintainer's choice, 2026-10-17, of two tried by hand: the other
+  printed them on the sphere, bent round it and lit with it, and its white
+  ink went grey on a dark ball's shaded side).
+- **Where on the ball.** In the largest part of the ball not hidden behind
+  another ball or a stick, as it is seen now - its middle, where the whole
+  ball is seen (`numberPlaces`). Where that part is too small, the number
+  is drawn smaller, and not at all under half its size. While the molecule
+  turns, a number keeps its place for as long as it still fits there, and
+  glides to a new one rather than hopping. Past 600 atoms every number is
+  set in its ball's middle.
+- **Too small to read.** A number whose digits would be under 6 pixels
+  high on the screen is not drawn, so that, zooming out, the hydrogens'
+  go first. Numbers come and go eased (0.08 s), each on its own.
+- **Pictures.** A picture of the molecule, or an export, shows the numbers
+  it shows, drawn as the canvas draws them (render3d), with the 6 pixels
+  counted in the picture's own pixels.
+- **In 2D.** A drawing shows atom-map numbers, small beside each atom,
+  where its reaction arrow's map is shown (*Show atom map* on the arrow's
+  menu; lib/chem/layout2d `atomNotes`). The 3D menu's words follow it:
+  *Show atom numbers*, and *Atom map* for that kind.
+
 ## Ribbons
 
 Built in lane L5 on 2026-10-10, as proposed to the maintainer and agreed:

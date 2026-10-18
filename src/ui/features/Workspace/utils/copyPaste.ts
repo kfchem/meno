@@ -3,6 +3,7 @@
  * what it finds there - pure, over the editor's model (the clipboard
  * itself is lib/clipboard).
  */
+import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { MARK_REACH, pushAtoms } from "../document";
@@ -615,6 +616,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
       ? (m.drawnFrom as (number | null)[])
       : undefined;
   const stereo = readStereo(m.stereo, n, bonds.length);
+  const numbers = readAtomNumbers(m.atomNumbers, n);
   const biopolymer = readBiopolymer(m.biopolymer, n);
   const calc = readCalc(m.calc, n, 1 + frames.length);
   return {
@@ -653,8 +655,19 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
     ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
     ...(stereo ? { stereo } : {}),
+    ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */
+function readAtomNumbers(given: unknown, atoms: number): Carried3D["atomNumbers"] | undefined {
+  const s = given as { kind?: unknown; atoms?: unknown } | null | undefined;
+  if (!s || typeof s !== "object" || !ATOM_NUMBER_KINDS.some((k) => k.kind === s.kind)) return undefined;
+  const kind = s.kind as AtomNumberKind;
+  if (s.atoms === undefined) return { kind };
+  if (!Array.isArray(s.atoms) || !s.atoms.length || !s.atoms.every((i) => Number.isInteger(i) && i >= 0 && i < atoms)) return undefined;
+  return { kind, atoms: [...new Set(s.atoms as number[])].sort((a, b) => a - b) };
 }
 
 /** A molecule's bonds to ring centres (`Molecule3D.centres`), where they read: each a metal and two atoms or more of its own, the metal not among them. */

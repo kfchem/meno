@@ -41,6 +41,11 @@ export function ballLinesOf(material: THREE.MeshStandardMaterial) {
   return uniformsOf(material, "atoms").lines;
 }
 
+/** What draws the numbers on a molecule's balls (utils/occlusionMaterial, ../utils/atomNumbers): the atoms' material's own. */
+export function ballNumbersOf(material: THREE.MeshStandardMaterial) {
+  return uniformsOf(material, "atoms").numbers;
+}
+
 /** How far a molecule's sticks are coloured by their atoms (utils/occlusionMaterial): the bonds' material's own. */
 export function byAtomOf(material: THREE.MeshStandardMaterial) {
   return uniformsOf(material, "bonds").byAtom;

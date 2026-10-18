@@ -6,6 +6,7 @@
  * What is deliberately *not* here: hover, drag previews, the camera, the label
  * edit buffer, fit requests. Those belong to the view (see store/).
  */
+import { numbersWith, type AtomNumberKind } from "./utils/atomNumbers";
 import { createDocument, type DocumentStore } from "../../../lib/doc";
 import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
 import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
@@ -1347,6 +1348,33 @@ export function setStereoShown(
       return { ...m, stereo: { ...st, shown } };
     });
   }
+  return out;
+}
+
+/**
+ * Atom numbers (docs/WORKSPACE.md, *Atom numbers*) shown on the molecules
+ * in 3D given, by id - on the atoms given, by index, or all of a molecule's,
+ * given none - or hidden from them; of the kind each shows, or its atoms'
+ * order where it shows none yet.
+ */
+export function setAtomNumbers(doc: WorkspaceDocument, of: readonly { id: number; atoms?: readonly number[] }[], show: boolean): WorkspaceDocument {
+  let out = doc;
+  for (const g of of) {
+    out = withMolecule3d(out, g.id, (m) => {
+      const next = numbersWith(m, g.atoms?.length ? g.atoms : null, show);
+      if (JSON.stringify(next ?? null) === JSON.stringify(m.atomNumbers ?? null)) return m;
+      if (next) return { ...m, atomNumbers: next };
+      const { atomNumbers: _n, ...rest } = m;
+      return rest;
+    });
+  }
+  return out;
+}
+
+/** The kind of number the molecules in 3D given, by id, show, where they show any. */
+export function setAtomNumberKind(doc: WorkspaceDocument, molecules: readonly number[], kind: AtomNumberKind): WorkspaceDocument {
+  let out = doc;
+  for (const id of molecules) out = withMolecule3d(out, id, (m) => (m.atomNumbers && m.atomNumbers.kind !== kind ? { ...m, atomNumbers: { ...m.atomNumbers, kind } } : m));
   return out;
 }
 
