@@ -1,6 +1,6 @@
 [package]
 name = "Meno"
-version = "0.1.13"
+version = "0.1.14"
 description = "Molecular Editor for Notation and Orbitals"
 authors = ["Keisuke Fukaya"]
 edition = "2021"
