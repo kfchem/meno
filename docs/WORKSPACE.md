@@ -275,7 +275,8 @@ Taken on 2026-10-03:
     near enough;
   - held as a style, as the 2D drawing's is, so that it can be set the
     same way later.
-  - Since 2026-10-04 it is set in Settings, under Molecules in 3D, as
+  - Since 2026-10-04 it is set in Settings, under 3D (named *Molecules in
+    3D* until 2026-10-19), as
     the drawing style is: a preset - Ball and stick (the viewer's look;
     named Meno until 2026-10-10), Glossy or Space-filling - and what was
     changed from it, each change marked and taken back alone or all at
@@ -1289,7 +1290,7 @@ space-filling side by side is better science than either alone.
   (lib/chem/workspaceStyle3d). Its file carries them whole (FILE-IO.md,
   *The workspace file*), so it opens the same on any computer. A
   right-click on empty space, *Styles…*, opens the workspace's styles: its
-  drawing style, and under *Molecules in 3D* the same slots and cards as
+  drawing style (*Drawing*), and under *3D* the same slots and cards as
   Settings' page - its two in the slots, Settings' styles below, and one
   it carries that this computer's Settings has none like (made on another
   computer, or changed in Settings since) on a card of its own, *In this

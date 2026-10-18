@@ -17,8 +17,8 @@ vi.mock("./section", async (actual) => {
 
 const NAMES: Record<SettingsSection, string> = {
   general: "General",
-  style: "Drawing style",
-  style3d: "Molecules in 3D",
+  style: "Drawing",
+  style3d: "3D",
   chemistry: "Chemistry",
   files: "Files",
   calculations: "Calculations",
@@ -40,7 +40,7 @@ function drawn(id: SettingsSection): string {
 const classesOf = (html: string) => [...html.matchAll(/<(div|section|p|ul|ol|form)\b[^>]*?class="([^"]*)"/g)].map((m) => m[2].split(/\s+/));
 
 describe("Settings' widths", () => {
-  it("are one width for every section, and one measure for every explanatory word in it", () => {
+  it("are one width for every section, its account of itself as wide, and one measure for the words beside a setting", () => {
     for (const id of SECTIONS) {
       const html = drawn(id);
       const classes = classesOf(html);
@@ -57,10 +57,10 @@ describe("Settings' widths", () => {
       for (const c of classes.filter((cs) => cs.includes("text-xs") && cs.includes("text-gh-gray") && (cs.includes("mt-0.5") || cs.includes("mt-1")) && !cs.includes("text-center"))) {
         expect(c, `${id}: ${c.join(" ")}`).toContain(PROSE_WIDTH);
       }
-      // (a section's own account of itself: at the same measure)
-      for (const c of classes.filter((cs) => cs.includes("text-sm") && cs.includes("text-gh-gray") && cs.includes("mt-1"))) {
-        expect(c, `${id}: ${c.join(" ")}`).toContain(PROSE_WIDTH);
-      }
+      // (a section's own account of itself, at its top: the section's width, as its cards - no measure of its own)
+      const intros = classes.filter((cs) => cs.includes("text-sm") && cs.includes("text-gh-gray") && cs.includes("mt-1"));
+      expect(intros.length, id).toBeGreaterThan(0);
+      for (const c of intros) expect(c.filter((x) => x.startsWith("max-w-")), `${id}: ${c.join(" ")}`).toEqual([]);
     }
   });
 
@@ -80,6 +80,13 @@ describe("Settings' widths", () => {
       expect(row![1].split(/\s+/).filter((c) => /^(m[lrx]?|p[lrx]?)-|^(min-|max-)?w-/.test(c)), id).toEqual([]);
       expect(inside.indexOf('role="tablist"'), id).toBeLessThan(inside.indexOf(`<section class="mt-6 ${SECTION_WIDTH}"`));
     }
+  });
+
+  it("name each tab in one word", () => {
+    const html = drawn("general");
+    const tabs = [...html.matchAll(/role="tab"[^>]*>([^<]+)</g)].map((m) => m[1]);
+    expect(tabs).toEqual(["General", "Drawing", "3D", "Chemistry", "Files", "Calculations", "Plugins", "Dictionary", "Network"]);
+    for (const t of tabs) expect(t, t).toMatch(/^\S+$/);
   });
 
   it("let the Dictionary's search and its cards run the section's width", () => {

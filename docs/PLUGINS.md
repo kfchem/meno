@@ -732,10 +732,10 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 - **The other roles are chosen where they are used:**
   - in *Chemistry* - what is done on a structure drawn, at once, and who
     does it (the maintainer, 2026-10-17) - who parses SMILES, checks a
-    structure and assigns R/S, and, on a card of their own, *Molecules in
-    3D*, who makes a structure in 3D and its conformers, and by what
-    method, its stereoisomers, a formula drawn from it, and its renders.
-    (*Molecules in 3D* itself is how they look and turn; a workflow step's
+    structure and assigns R/S, and, on a card of their own, *3D*, who
+    makes a structure in 3D and its conformers, and by what method, its
+    stereoisomers, a formula drawn from it, and its renders. (Settings'
+    *3D* tab itself is how they look and turn; a workflow step's
     defaults are in *Calculations*);
   - in a workflow step, who runs it, defaulting to the choice in Settings.
 - **A choice taken away gives way** (the maintainer, 2026-10-12): when the
@@ -753,7 +753,7 @@ By the maintainer, 2026-10-06:
    does now: started when first needed, kept for the session. (Revised
    2026-10-13: kept while it is used, stopped once unused for 15 minutes.)
 2. **The other roles are chosen where they are used** (*Chemistry*,
-   *Molecules in 3D*, a workflow step), not in the Plugins tab. The
+   its *3D* card among them, a workflow step), not in the Plugins tab. The
    Plugins tab says what each plugin offers.
 3. **RDKit can be taken away like any plugin.** The core features then
    say what to add.
@@ -805,8 +805,8 @@ After the files (FILE-IO.md's order, steps 2 to 5):
 1. **RDKit as a plugin** (FILE-IO.md's step 6; built). It gets its own
    entry in the list. Its roles are named, and it is assigned to the core
    roles by default, started when first needed as now. Molecules reach it
-   as MOL blocks (decision 4, revised). The choices go in *Chemistry* and
-   *Molecules in 3D*, with RDKit as the only plugin at first.
+   as MOL blocks (decision 4, revised). The choices go in *Chemistry* (its
+   *3D* card for molecules in 3D), with RDKit as the only plugin at first.
 2. **New roles, each with a plugin that fills it:** fingerprints into
    the workflow, a structure search, running a calculation.
 3. **Plugins without Python, perhaps** (raised by the maintainer on

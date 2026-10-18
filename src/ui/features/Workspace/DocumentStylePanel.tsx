@@ -59,7 +59,8 @@ export default function DocumentStylePanel({
                 p === part ? "bg-accel-base text-white" : "bg-white text-gh-gray hover:bg-gh-base",
               )}
             >
-              {p === "drawing" ? "Drawing" : "Molecules in 3D"}
+              {/* (as Settings names its tabs: one word each) */}
+              {p === "drawing" ? "Drawing" : "3D"}
             </button>
           ))}
         </div>

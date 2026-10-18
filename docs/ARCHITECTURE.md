@@ -85,8 +85,8 @@ src/
     Workspace/            the workspace: 2D editor, molecules in 3D, texts, PDFs, workflows (see below)
     TextEditor/           a text Meno draws: its editor, line pictures, and the field typed through
     StyleEditor/          every drawing setting, with a preview
-    SettingsPanel/        Settings: drawing style, molecules in 3D, chemistry, files, calculations
-                          and their jobs, plugins, dictionary, network
+    SettingsPanel/        Settings, a tab each: General, Drawing, 3D, Chemistry, Files, Calculations
+                          and their jobs, Plugins, Dictionary, Network
 src-tauri/
   src/lib.rs              Tauri commands (see table below)
   src/fonts.rs            the system's typefaces

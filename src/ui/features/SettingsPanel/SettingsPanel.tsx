@@ -24,8 +24,9 @@ import { COLUMN_WIDTH, SECTION_WIDTH } from "./widths";
 
 const SECTIONS: { id: SettingsSection; name: string }[] = [
   { id: "general", name: "General" },
-  { id: "style", name: "Drawing style" },
-  { id: "style3d", name: "Molecules in 3D" },
+  // (each named in one word - the maintainer, 2026-10-19; a section's own heading may say more)
+  { id: "style", name: "Drawing" },
+  { id: "style3d", name: "3D" },
   { id: "chemistry", name: "Chemistry" },
   { id: "files", name: "Files" },
   { id: "calculations", name: "Calculations" },
@@ -98,7 +99,7 @@ export default function SettingsPanel() {
         {section === "general" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">General</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">How Meno works as a whole. Changes are saved as you make them.</p>
+            <p className="mt-1 mb-4 text-sm text-gh-gray">How Meno works as a whole. Changes are saved as you make them.</p>
             <PointerSettings />
             <CanvasSettings />
             <LabelSettings />
@@ -110,7 +111,7 @@ export default function SettingsPanel() {
             <h2 className="text-base font-semibold text-gh-black">
               Drawing style
             </h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               The style new workspaces are drawn in, on the canvas and in
               exported pictures. Start from a journal's style and change what
               you like. A workspace keeps the style it was made in; change it
@@ -127,7 +128,7 @@ export default function SettingsPanel() {
             <h2 className="text-base font-semibold text-gh-black">
               Molecules in 3D
             </h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               How molecules in 3D look in new workspaces, on the canvas and in
               exported pictures, and how they turn under the pointer. A molecule
               is drawn in the primary style; a double-click takes it to the
@@ -143,7 +144,7 @@ export default function SettingsPanel() {
         ) : section === "chemistry" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Chemistry</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               What is pointed out on a structure as it is drawn, and who does
               it. The marks are Meno's, not the drawing's: no exported picture
               has them.
@@ -153,14 +154,14 @@ export default function SettingsPanel() {
         ) : section === "files" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Files</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               Who reads each kind of file Meno opens, and who writes it. Where more than one can read a kind, one
               reads it - the molecule, and what the calculation was, are its - and those ticked read it as well,
               what they find added beside it.
             </p>
             <FileSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Copied pictures</h3>
-            <p className="mt-1 mb-3 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-3 text-sm text-gh-gray">
               What a copy puts beside a structure for other programs - Word, PowerPoint - to paste.
             </p>
             <PictureSettings />
@@ -168,18 +169,18 @@ export default function SettingsPanel() {
         ) : section === "calculations" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Calculations</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               Default options for each calculation in a workflow, by what does it: each plugin added, and Meno. A
               step put on the page starts with these; options changed in a step are that step's alone.
             </p>
             <CalculationSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Jobs</h3>
-            <p className="mt-1 mb-3 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-3 text-sm text-gh-gray">
               The programs steps run, on this computer. They go on when Meno closes, and those waiting start in turn.
             </p>
             <JobSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Procedures</h3>
-            <p className="mt-1 mb-3 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-3 text-sm text-gh-gray">
               Workflows saved without their molecules - their steps, as they are set, and the sets they take their input
               from - to put down again from Quick Add, or to share as a workspace file.
             </p>
@@ -188,7 +189,7 @@ export default function SettingsPanel() {
         ) : section === "plugins" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Plugins</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               What Meno does beyond itself: read files, make sense of a structure, make it in 3D, run calculations - and its first steps.
               A plugin that runs a program is downloaded when it is added, or first needed - Meno asks first - and any can be taken away again.
             </p>
@@ -197,7 +198,7 @@ export default function SettingsPanel() {
         ) : section === "abbreviations" ? (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Dictionary</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               What each label stands for - Boc, DMP, XPhos, Grubbs II - drawn. Labels of your own are saved as you add them.
             </p>
             <AbbreviationSettings />
@@ -205,7 +206,7 @@ export default function SettingsPanel() {
         ) : (
           <section className={SECTION}>
             <h2 className="text-base font-semibold text-gh-black">Network</h2>
-            <p className="mt-1 mb-4 text-sm text-gh-gray max-w-2xl">
+            <p className="mt-1 mb-4 text-sm text-gh-gray">
               Meno asks before anything first uses the network, shows each
               connection as it happens, and keeps a record of them all.
             </p>
