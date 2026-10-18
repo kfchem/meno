@@ -7,7 +7,8 @@ import PageHtml from "../components/PageHtml";
 import { setViewGoal } from "../components/viewGoal";
 import { pageAt } from "../utils/page";
 import { HTML_DISTANCE, PX } from "../workflow/look";
-import { boxOf, rendersOf, stopRender, wordsPlace, type Rendering } from "./renders";
+import { frameWords, wordsReach } from "./frameWords";
+import { boxOf, rendersOf, stopRender, type Rendering } from "./renders";
 
 /**
  * Renders under way on the page (docs/RENDER.md): each where what it makes
@@ -26,8 +27,12 @@ export default function Renders2D() {
     const added = list.filter((r) => r.key > seen.current);
     if (!added.length) return;
     seen.current = Math.max(...added.map((r) => r.key));
-    // (where what it makes will lie, and what it renders)
-    const boxes = added.flatMap((r) => [boxOf(r.at), r.around]);
+    // (where what it makes will lie, with its words where they are below it, and what it renders)
+    const boxes = added.flatMap((r) => {
+      const b = boxOf(r.at);
+      const reach = wordsReach(r.at.w / PX, frameWords(r.at.w / PX, r.at.h / PX));
+      return [{ x0: b.x0 - reach.side * PX, x1: b.x1 + reach.side * PX, y0: b.y0 - reach.below * PX, y1: b.y1 }, r.around];
+    });
     const x0 = Math.min(...boxes.map((b) => b.x0));
     const x1 = Math.max(...boxes.map((b) => b.x1));
     const y0 = Math.min(...boxes.map((b) => b.y0));
@@ -70,9 +75,16 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
   const h = r.at.h / PX;
   const failed = r.state === "failed";
   const share = r.total ? Math.min(1, (r.done ?? 0) / r.total) : null;
-  const inside = wordsPlace(w, h) === "inside";
+  // (where its words go and how large, set by all it may say as it runs, or by why it failed: frameWords)
+  const fw = failed ? frameWords(w, h, [said(r)], true) : frameWords(w, h);
+  const inside = fw.place === "inside";
   const words = (
-    <span className={`text-[13px] leading-5 ${inside ? "max-w-full" : ""} ${failed ? "text-accel-accent" : "text-gh-black"}`} role={failed ? "alert" : "status"}>
+    <span
+      className={`${inside ? "line-clamp-2 max-w-full" : "min-w-0 flex-1"} ${failed ? "text-accel-accent" : "text-gh-black"}`}
+      style={{ fontSize: fw.px, lineHeight: `${(fw.px * 20) / 13}px` }}
+      role={failed ? "alert" : "status"}
+      title={failed ? said(r) : undefined}
+    >
       {said(r)}
     </span>
   );
@@ -110,9 +122,13 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
         </span>
       )}
       {inside && stop}
-      {/* (a small frame's words, just below it, with its button: as wide as they need, up to a line's) */}
-      {!inside && (
-        <div className="absolute left-1/2 top-full mt-1.5 flex w-max max-w-[320px] -translate-x-1/2 items-center gap-1 rounded-md bg-white/80 pl-2 text-left" title={failed ? undefined : r.line}>
+      {/* (a small frame's words, just below it, with its button: as wide as two lines of them need, or as the frame) */}
+      {fw.place === "below" && (
+        <div
+          className="absolute left-1/2 top-full mt-1.5 flex -translate-x-1/2 items-center gap-1 rounded-md bg-white/80 pl-2 text-center"
+          style={{ width: fw.width }}
+          title={failed ? undefined : r.line}
+        >
           {words}
           {stop}
         </div>

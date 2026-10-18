@@ -64,23 +64,6 @@ type Renders = { list: Rendering[] };
 /** A render's place as a box, in the page's units. */
 export const boxOf = (at: Rendering["at"]) => ({ x0: at.x - at.w / 2, x1: at.x + at.w / 2, y0: at.y - at.h / 2, y1: at.y + at.h / 2 });
 
-/**
- * How small a frame (CSS px of the page, which its words zoom with) still
- * holds what it says: the longest, "Waiting for other jobs to finish…", in
- * two lines between side margins as wide as the stop button's place, its
- * bar and its job's last line.
- */
-export const FRAME_HOLDS = { w: 208, h: 112 };
-
-/**
- * Where a frame `w` by `h` (as `FRAME_HOLDS`) has what it says: inside it,
- * or, where it is smaller - a small picture - just below it, with its
- * button, the frame keeping only its bar. Its size is set as the render
- * begins and kept, so it never moves from one to the other.
- */
-export function wordsPlace(w: number, h: number): "inside" | "below" {
-  return w >= FRAME_HOLDS.w && h >= FRAME_HOLDS.h ? "inside" : "below";
-}
 const stores = new WeakMap<EditorStore, UseBoundStore<StoreApi<Renders>>>();
 
 /** The renders of a workspace, by its store. */

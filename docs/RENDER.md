@@ -194,9 +194,16 @@ While it renders, a dashed frame stands where what it makes will lie,
 as large as it will be - beside the molecules, on the right, as large as
 they are drawn; or, where something lies there, in the free space nearest
 it, clear of all on the page and of other renders' frames - saying how
-far it is and what its job said last, with a button that stops it; a
-frame too small for that - a small picture's - has its words and its
-button just below it, keeping only its bar. What
+far it is and what its job said last, with a button that stops it. Its
+words are set inside it in two lines at most, between margins clear of
+the button - at 13 px, or as little less, to 10, as holds the longest it
+may say; a frame too small for that - a small picture's - has them and
+its button just below it, in a box as wide as two lines of them need or
+as the frame, keeping only its bar. The frame and its words zoom with the
+page alike, so where they go is the same at every zoom, and it is set as
+the render begins, by all it may say as it runs; why one failed goes
+inside where it holds, below where it is long. Where the view eases to a
+render, it takes in its words below the frame too. What
 it makes lands just there, in the frame's place; meanwhile the frame is
 kept clear, as all on the page is, by what is put there - a file opened,
 a set placed - so that nothing comes under where it lands.
