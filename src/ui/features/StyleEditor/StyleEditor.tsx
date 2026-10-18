@@ -526,7 +526,7 @@ function Preview({
                 className="flex-1 flex items-center [&>svg]:max-w-full [&>svg]:max-h-12 [&>svg]:w-auto [&>svg]:h-auto"
                 dangerouslySetInnerHTML={{ __html: b.svg }}
               />
-              <figcaption className="text-[10px] text-gh-gray mt-1">
+              <figcaption className="text-[10px] text-gh-gray mt-1 max-w-2xl">
                 {b.name}
               </figcaption>
             </figure>
@@ -619,7 +619,7 @@ export function SettingRow({
       >
         <div className="min-w-0 flex-1">
           <div className="text-sm text-gh-black">{field.label}</div>
-          <p className="text-xs leading-snug text-gh-gray mt-0.5">
+          <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">
             {field.description}
           </p>
           {field.automatic && (

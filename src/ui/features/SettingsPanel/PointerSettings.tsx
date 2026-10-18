@@ -15,7 +15,7 @@ export default function PointerSettings() {
       <div className="px-3 py-2.5 flex gap-3 items-start">
         <div className="min-w-0 flex-1">
           <div className="text-sm text-gh-black">The wheel turned upwards</div>
-          <p className="text-xs leading-snug text-gh-gray mt-0.5">
+          <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">
             Which way a mouse's wheel zooms the canvas. Pinching on a trackpad zooms as the fingers go, whichever is chosen.
           </p>
         </div>
