@@ -56,7 +56,7 @@ import { labelFont } from "../../../../lib/chem/labelFonts";
 import { COLORS } from "../../../theme/colors";
 import { BASE, FADE_MS, GRAY, levelFor, LINE, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures, type Mark, type Pic, type Tile } from "./pdfPictures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
-import { followLink, readerOf } from "./pdfColumnReader";
+import { followLink, followsLink, linkHint, readerOf } from "./pdfColumnReader";
 import { linkAt, linksOf, type PdfLink } from "../../../../lib/pdf/reader";
 import { letterNear, placeAt, textHad, wordAt, type PageText } from "../../../../lib/pdf/text";
 import { placeBefore, selects } from "../utils/pdfSelection";
@@ -422,11 +422,38 @@ export default function Pdfs2D() {
     if (!hit) return null;
     return { page: hit.page, x: (q.x - (hit.s.x - hit.s.w / 2)) / pointOf(p), y: (hit.s.y + hit.s.h / 2 - q.y) / pointOf(p), sheet: hit.s };
   };
-  /** Over a link on a PDF, the system's hand (its words are selected by a long press, not the text cursor's drag). */
+  /**
+   * Over a link on a PDF, what ⌘- or Ctrl-click does, and the system's hand
+   * only with the key held (followsLink; its words are selected by a long
+   * press, not the text cursor's drag) - again as the key is pressed or let go.
+   */
+  const keys = useRef({ metaKey: false, ctrlKey: false });
+  const hovering = useRef<{ p: PdfItem | null; q?: { x: number; y: number } }>({ p: null });
+  const hoverNow = useRef<(p: PdfItem | null, q?: { x: number; y: number }) => void>(() => {});
+  useEffect(() => {
+    const note = (e: KeyboardEvent | PointerEvent) => {
+      const was = followsLink(keys.current);
+      keys.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+      if (followsLink(keys.current) !== was && hovering.current.p) hoverNow.current(hovering.current.p, hovering.current.q);
+    };
+    window.addEventListener("keydown", note, true);
+    window.addEventListener("keyup", note, true);
+    window.addEventListener("pointermove", note, true);
+    return () => {
+      window.removeEventListener("keydown", note, true);
+      window.removeEventListener("keyup", note, true);
+      window.removeEventListener("pointermove", note, true);
+    };
+  }, []);
   const hoverAt = (p: PdfItem | null, q?: { x: number; y: number }) => {
-    const want = p && q && linkOn(p, q) ? "pointer" : "";
+    hovering.current = { p, q };
+    const link = p && q ? linkOn(p, q) : null;
+    const want = link && followsLink(keys.current) ? "pointer" : "";
     const dom = gl.domElement as HTMLCanvasElement;
     if (dom.style.cursor !== want) dom.style.cursor = want;
+    const hint = link ? linkHint(link) : "";
+    if (dom.title !== hint) dom.title = hint;
+    hoverNow.current = hoverAt;
     // (over where an atom read from a figure was drawn: that atom lit in the drawing)
     const hit = p && q ? sheetUnder(p, q) : null;
     const st = store.getState();
@@ -627,7 +654,8 @@ export default function Pdfs2D() {
       // a click: the words selected let go, a link followed - or else the PDF selected, alone
       store.getState().setPdfSel(null);
       const now = store.getState().pdfs.find((x) => x.id === p.id);
-      const link = now ? linkOn(now, toWorld(u.clientX, u.clientY)) : null;
+      // (only with ⌘ or Ctrl held: a plain click on a link is a click on the page)
+      const link = now && followsLink(u) ? linkOn(now, toWorld(u.clientX, u.clientY)) : null;
       if (now && link) followLink(store, now, link);
       else if (now) {
         const s2 = store.getState();
