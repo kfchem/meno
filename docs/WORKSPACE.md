@@ -505,6 +505,22 @@ Taken on 2026-10-13:
   five or a chain of three drawn neutral as the cyclopentadienide or allyl
   anion it is bound as (not a CH2, nor radical carbons), and gives no
   energies; the star is no atom of the molecule in 3D.
+  - A label for a ligand bound through more pi systems than it has bonds
+    drawn - cod, nbd: two C=C - bonded to a metal by one bond is bound
+    through each of them, one multi-centre bond each, to that metal (the
+    writer, `prepared`); no star is left unbound, as an atom of nothing.
+  - A metal's valence as the drawing states it (a SMILES's bracket atom,
+    [Fe] in C[Fe]C, or a file's VAL) is left out where its bonds bind
+    ligand labels or rings so (etaBound): it counted them as plain bonds,
+    and left in, the metal stays two-valent - each Cp bound by one carbon,
+    an H on the metal. The drawing keeps it. (The other way, dropping it
+    from the drawing as its bonds change, would lose it for a file written
+    from the drawing; asking leaves the drawing as it was.)
+  - Made so, the molecule in 3D is as drawn: a label at the place of a pi
+    system's star - Cp, cod - is no atom of it, so no atom it is tied to,
+    and what it was made from takes in the labels bonded to its atoms
+    (utils/drawnLink `signatureOf`), on making and since. Before, Cp2Fe
+    and PtCl2(cod) drawn with labels said *Its drawing has changed* at once.
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
   made in 3D from a drawing with a multi-centre bond - a Cp, an arene, an
   allyl, an alkene bound through both carbons - shows one stick from the
