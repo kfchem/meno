@@ -19,7 +19,7 @@ function editor() {
   return { st, c, x };
 }
 
-describe("a click on an atom (docs/EDITOR-2D.md, Selecting)", () => {
+describe("a click on an atom (docs/EDITOR-2D.md, How it is worked)", () => {
   it("selects the atom alone at once - and the second click of a double-click takes it back, as it was", () => {
     const { st, c, x } = editor();
     st().setSel({ atoms: new Set([c]), bonds: new Set() }, c);

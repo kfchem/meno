@@ -21,7 +21,7 @@ export const SELECTION_SHADE = overWhite(COLORS.highlight, ALPHA.highlight * SHA
 /**
  * How long an atom's shade takes to spread from it, the atom clicked - and
  * to draw back into it, the click taken back by a double-click's second
- * (docs/EDITOR-2D.md, *Selecting*), in ms.
+ * (docs/EDITOR-2D.md, *How it is worked*), in ms.
  */
 export const SPREAD_MS = 160;
 export const DRAW_BACK_MS = 140;

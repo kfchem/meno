@@ -491,7 +491,7 @@ export function Atoms2D() {
         }
         // A click: the atom selected, alone, at once, its shade spreading
         // from it - taken back if the second click of a double-click
-        // follows, which draws a bond (docs/EDITOR-2D.md, *Selecting*).
+        // follows, which draws a bond (docs/EDITOR-2D.md, *How it is worked*).
         store.getState().clickSelectAtom(a.id);
       };
       window.addEventListener("pointermove", onFirstMove);

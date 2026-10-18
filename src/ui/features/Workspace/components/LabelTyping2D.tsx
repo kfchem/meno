@@ -24,7 +24,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { CAPTION_LINE, captionPlaces } from "../../../../lib/chem/captions";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { easeInOut, easeOut } from "../../../theme/motion";
+import { easeInOut, easeOut, frameClock } from "../../../theme/motion";
 import type { TypingField } from "../../TextEditor/typingField";
 import { useEditor, useEditorStore } from "../store";
 import { keptLabel, liveLabel } from "../../../../lib/chem/smartLabel";
@@ -52,9 +52,9 @@ const GO_MS = 160;
 const GROWN_FROM = 0.4;
 
 /**
- * A label being written (`typing`), kept and waiting for
- * the drawing's own (`left`), or going (`gone`, since when, and how it
- * ended); `grow`, begun by a letter typed over the atom.
+ * A label being written (`typing`), kept and waiting for the drawing's own
+ * (`left`), or going (`gone`, since when, and how it ended); `grow`, begun
+ * by a letter typed over the atom.
  */
 type Session = { n: number; atomId: number; phase: "typing" | "left" | "gone"; grow: boolean; since?: number; how?: "kept" | "same" | "cancelled" };
 
@@ -160,7 +160,7 @@ function Typing({ session }: { session: Session }) {
   const sessionNow = useRef(session);
   sessionNow.current = session;
   const store = useEditorStore();
-  const { opts, atoms, layout } = useDrawnLayout();
+  const { opts, atoms } = useDrawnLayout();
   const { camera, gl, size, invalidate } = useThree();
   const [, setTick] = useState(0);
   const [ed] = useState(() => {
@@ -206,7 +206,6 @@ function Typing({ session }: { session: Session }) {
     const y1 = mid.y + Math.max(laid.halfH, fs * 0.5);
     return { x0: x0 - pad, x1: x1 + pad, y0: y0 - pad, y1: y1 + pad };
   })();
-  void layout;
 
   // what is drawn: the caret and what is selected as the letters drawn have them - those last given, until they are drawn
   const latest = useRef<WritingDrawn | null>(null);
@@ -314,23 +313,22 @@ function Typing({ session }: { session: Session }) {
   // (gone from the page: the frame drawn again without it - the canvas draws only as asked)
   useEffect(() => () => invalidate(), [invalidate]);
   // (each way counted by the frames drawn, each at most a 60th of a second: a busy canvas skips none of it - theme/motion `frameClock`)
-  const inMs = useRef(0);
-  const outMs = useRef(0);
+  const [coming] = useState(() => frameClock());
+  const [going] = useState(() => frameClock());
   const waited = useRef(0);
   useFrame((_, dt) => {
     const s = sessionNow.current;
-    const step = Math.min(Math.max(dt, 0), 1 / 60) * 1000;
     // (nothing drawn a while on - nothing to draw: on from then)
     if (!shown0.current && (waited.current += dt * 1000) > 300) shown0.current = true;
-    if (shown0.current) inMs.current += step;
-    const grown = easeInOut(inMs.current / WRITE_MS);
+    if (shown0.current) coming.tick(dt);
+    const grown = easeInOut(coming.now() / WRITE_MS);
     let seen = grown;
     let size = s.grow ? GROWN_FROM + (1 - GROWN_FROM) * grown : 1;
     let moving = grown < 1;
     if (s.phase === "gone") {
-      outMs.current += step;
+      going.tick(dt);
       const ms = s.how === "kept" ? GO_MS : WRITE_MS;
-      const gone = s.how === "kept" ? easeOut(outMs.current / ms) : easeInOut(outMs.current / ms);
+      const gone = s.how === "kept" ? easeOut(going.now() / ms) : easeInOut(going.now() / ms);
       seen = Math.min(seen, 1 - gone);
       if (s.how === "cancelled" && s.grow) size = Math.min(size, GROWN_FROM + (1 - GROWN_FROM) * (1 - gone));
       moving = gone < 1;
