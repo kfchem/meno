@@ -819,6 +819,14 @@ make of the molecule (`hapto.ts`, `assemble.ts`).
   phenyls turned as a propeller's blades as well as flat. A ligand of the
   metal drawn inside one of its chelates' rings, of any size up to eight,
   is hidden there, as an atom inside a small ring is.
+- **A pi system bound to a metal that makes no ring** - an alkene's C=C,
+  dba's on Pd, an allyl's three atoms - lies across the metal's bond, its
+  centre a bond from the metal: a C=C square to the bond, as chemists
+  draw an alkene's complex; an allyl bent round, its middle atom away from
+  the metal and its ends toward it. What its atoms carry points away from
+  the metal (an E alkene's second group then toward it, as its
+  configuration needs). Hung from its star as a chain, it was drawn end on
+  to the metal, the metal's bond running to its far middle.
 - **Aryl rings crowded round one atom** - PPh₃'s phenyls on a crowded
   metal - are each turned on their bond out of the page, all the same way
   round (a propeller), and so seen in perspective: foreshortened across

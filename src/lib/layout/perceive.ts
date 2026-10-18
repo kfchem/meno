@@ -80,6 +80,12 @@ export type Molecule = {
    */
   dienes: DieneRing[];
   /**
+   * The pi systems bound to a metal that make no ring - an alkene's C=C,
+   * an allyl's three atoms - by their stars: the atom the star is bonded
+   * to first (an allyl's middle one), then the rest.
+   */
+  open?: Map<number, number[]>;
+  /**
    * Each atom's neighbours and, for a ring bound face-on and its star, each
    * other: what is moved with an atom - a side of a bond, a branch - goes
    * through a metal to its rings and on.
@@ -155,15 +161,21 @@ export function perceive(input: LayoutInput): Molecule {
   const ofDiene = new Map(dienesFound.flatMap((d) => d.stars.map((s) => [s.star, s.pi] as const)));
   // A star's pi system: a ring of it (Cp, an arene) is drawn round it, the
   // star a member of the ring's system; any other (an alkene's C=C, an
-  // allyl) hangs from it by a bond to its first atom, as a chain would
+  // allyl) hangs from it by a bond to one of its atoms - an allyl's middle
+  // one, bonded to both the others - as a chain would (`open`)
   const ringOfPi = new Map<number, number[]>();
+  const open = new Map<number, number[]>();
   input.atoms.forEach((a, star) => {
     if (!a.pi || a.pi.length < 2 || ofDiene.has(star)) return;
     const cycle = cycleOf(a.pi, neighbours);
     if (cycle) ringOfPi.set(star, cycle);
     else {
-      bonds.push({ a: star, b: a.pi[0], order: 1 });
-      join(star, a.pi[0], bonds.length - 1);
+      const pi = a.pi;
+      const middle = pi.length === 3 ? pi.find((p) => pi.every((q) => q === p || neighbours[p].includes(q))) : undefined;
+      const first = middle ?? pi[0];
+      open.set(star, [first, ...pi.filter((p) => p !== first)]);
+      bonds.push({ a: star, b: first, order: 1 });
+      join(star, first, bonds.length - 1);
     }
   });
   const edges = [...bondIndex.keys()].map((k) => k.split(",").map(Number) as [number, number]);
@@ -323,6 +335,7 @@ export function perceive(input: LayoutInput): Molecule {
     eta,
     units,
     dienes,
+    open,
     linked: neighbours.map((nb, a) => [
       ...nb,
       ...(ringOfPi.get(a) ?? []),

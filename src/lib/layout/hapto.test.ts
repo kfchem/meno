@@ -336,3 +336,28 @@ describe("a metal that two chelates or more close at", () => {
     expect(inside(at(k, star), ring([ir, ...path(ps[0], ps[1])]))).toBe(false);
   }, 60_000);
 });
+
+describe("a pi system bound to a metal that makes no ring", () => {
+  it("lies across the metal's bond, its centre where the star is: an allyl bent round, its middle away from the metal", () => {
+    const pd = laid("[Pd(allyl)Cl]2");
+    const metals = find(pd, "Pd");
+    for (const star of find(pd, "*")) {
+      const bond = pd.bonds.find((b) => b.endpoints && b.a2 === star)!;
+      const m = bond.a1;
+      expect(metals).toContain(m);
+      expect(dist(pd, m, star)).toBeCloseTo(1, 1);
+      const [a, b, c] = bond.endpoints!;
+      const middle = [a, b, c].find((v) => [a, b, c].every((w) => w === v || pd.bonds.some((x) => !x.endpoints && ((x.a1 === v && x.a2 === w) || (x.a2 === v && x.a1 === w)))))!;
+      const ends = [a, b, c].filter((v) => v !== middle);
+      for (const e of ends) expect(dist(pd, m, middle)).toBeGreaterThan(dist(pd, m, e) - 0.2);
+      expect(dist(pd, m, middle)).toBeGreaterThan(dist(pd, m, star));
+    }
+  });
+
+  it("draws an alkene's C=C square to the metal's bond, a bond from the metal (Pd2(dba)3's)", () => {
+    const pd = laid("Pd2(dba)3");
+    const close = pd.bonds.filter((b) => b.endpoints && b.endpoints.length === 2 && dist(pd, b.a1, b.a2) < 1.2);
+    expect(close.length).toBeGreaterThanOrEqual(2);
+    for (const b of close) expect(angleAt(pd, b.a2, b.a1, b.endpoints![0])).toBeCloseTo(90, 0);
+  }, 30_000);
+});
