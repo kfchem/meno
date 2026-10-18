@@ -30,25 +30,25 @@ describe("atom numbers where the sticks meet", () => {
     expect((mesh.geometry.getAttribute("jointShown") as THREE.InstancedBufferAttribute).array[3]).toBe(0.5);
   });
 
-  it("are placed for a thousand atoms in well under a millisecond a frame - ten thousand in a few", () => {
-    for (const n of [1000, 10000]) {
-      const mesh = jointNumbersMesh(n);
-      const p = Float32Array.from({ length: 3 * n }, (_, k) => k * 0.01);
-      const nums = Float32Array.from({ length: n }, (_, i) => i + 1);
-      const shown = new Float32Array(n).fill(1);
-      const inks = new Float32Array(3 * n).fill(0.5);
-      const at = new THREE.Matrix4();
-      const frame = () => {
-        for (let i = 0; i < n; i++) mesh.setMatrixAt(i, at.makeTranslation(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
-        mesh.instanceMatrix.needsUpdate = true;
-        setJointAttributes(mesh, nums, shown, inks);
-      };
-      for (let k = 0; k < 20; k++) frame();
-      const t0 = performance.now();
-      const frames = 100;
-      for (let k = 0; k < frames; k++) frame();
-      const ms = (performance.now() - t0) / frames;
-      expect(ms, `${n} atoms: ${ms.toFixed(3)} ms a frame`).toBeLessThan(n === 1000 ? 1 : 8);
-    }
+  it("cost a frame no more than the atoms' places and what changed: nothing written again where nothing did", () => {
+    const n = 1000;
+    const mesh = jointNumbersMesh(n);
+    const nums = Float32Array.from({ length: n }, (_, i) => i + 1);
+    const shown = new Float32Array(n).fill(1);
+    const inks = new Float32Array(3 * n).fill(0.5);
+    setJointAttributes(mesh, nums, shown, inks);
+    const attrs = ["jointNumber", "jointShown", "jointInk"].map((k) => mesh.geometry.getAttribute(k) as THREE.InstancedBufferAttribute);
+    const versions = attrs.map((a) => a.version);
+    // (as at every frame of a turn, nothing about the numbers changing: no attribute sent again, nor made again)
+    for (let k = 0; k < 10; k++) setJointAttributes(mesh, nums, shown, inks);
+    expect(attrs.map((a) => a.version)).toEqual(versions);
+    expect(["jointNumber", "jointShown", "jointInk"].map((k) => mesh.geometry.getAttribute(k))).toEqual(attrs);
+    // (one fading: only how far each is shown sent again)
+    shown[0] = 0.5;
+    setJointAttributes(mesh, nums, shown, inks);
+    expect(attrs.map((a) => a.version)).toEqual([versions[0], versions[1] + 1, versions[2]]);
+    // (and however many atoms, one mesh - one draw)
+    expect(mesh.isInstancedMesh).toBe(true);
+    expect(mesh.count).toBe(n);
   });
 });
