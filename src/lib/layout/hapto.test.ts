@@ -200,6 +200,32 @@ describe("a ring bound to a metal through two of its C=C (cod)", () => {
   });
 });
 
+describe("a tub on a metal that is in a ring of its own (a chelate's)", () => {
+  it("is laid out with that ring: the tub to one side of the metal, the ring opposite, each C=C cis", () => {
+    // (each of these threw in Clean-up: the tub's stars were in its ring's
+    // system, which only its metal's unit lays out, and the metal, in its
+    // chelate, made no unit)
+    for (const label of ["Rh(cod)(acac)", "Ir(cod)(acac)", "[Rh(cod)(dppe)]BF4", "Rh(cod)(bpy)", "Ir(cod)(phen)"]) {
+      const s = laid(label);
+      const [m] = s.atoms.flatMap((a, i) => (["Rh", "Ir"].includes(a.el) ? [i] : []));
+      const bound = new Set(s.bonds.flatMap((x) => x.endpoints ?? []));
+      const tub = s.bonds.filter((x) => x.order === 2 && bound.has(x.a1) && bound.has(x.a2) && s.bonds.some((y) => y.endpoints?.includes(x.a1) && [y.a1, y.a2].includes(m)));
+      expect(tub, label).toHaveLength(2);
+      const side = Math.sign(s.atoms[tub[0].a1].x - s.atoms[m].x);
+      for (const b of tub) for (const e of [b.a1, b.a2]) expect(Math.sign(s.atoms[e].x - s.atoms[m].x), label).toBe(side);
+      // the metal's own bonds into its ring, a bond long, on the other side
+      const stars = new Set(find(s, "*"));
+      const donors = s.bonds.flatMap((b) => (b.a1 === m && !stars.has(b.a2) ? [b.a2] : b.a2 === m && !stars.has(b.a1) ? [b.a1] : []));
+      expect(donors.length, label).toBeGreaterThanOrEqual(2);
+      for (const d of donors) {
+        expect(Math.sign(s.atoms[d].x - s.atoms[m].x), label).toBe(-side);
+        expect(dist(s, m, d), label).toBeGreaterThan(0.9);
+        expect(dist(s, m, d), label).toBeLessThan(1.6);
+      }
+    }
+  }, 30_000);
+});
+
 describe("two metals bridged by two atoms", () => {
   it("lie level, their bridges above and below between them, each one's ligands outside", () => {
     for (const label of ["[Ir(cod)Cl]2", "[RhCl(cod)]2", "[RuCl2(p-cymene)]2", "[Cp*RhCl2]2"]) {
