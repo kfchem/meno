@@ -102,7 +102,7 @@ export function FramesChip({
   /** The readers chosen to read it as well that could not, and why: said with what it found. */
   unread?: { from: string; why: string }[];
   /** How it was made, where something made it - its conformers' method and force field: said with the rest, opened. */
-  made?: { label: string; text: string }[];
+  made?: { method?: string; how: { label: string; text: string }[] };
   /** What the text it was read from says of it - its charge and multiplicity, its energies: said with the rest, opened. */
   said?: { label: string; text: string }[];
   /** What it keeps within: the canvas. */
@@ -204,7 +204,9 @@ export function FramesChip({
     return { text: valueText(v, r), marked: isMarked(v, r) };
   });
   if (unread?.length) details.push({ group: "Could not read it", rows: unread.map((u) => ({ label: readerNameOf(u.from), text: u.why })) });
-  if (made?.length) details.push({ group: "How it was made", rows: made.map((r) => ({ label: r.label, text: r.text })) });
+  // (its method first, in the words of what made it: a starting geometry, as it was made)
+  const madeRows = made ? [...(made.method ? [{ label: "Method", text: made.method }] : []), ...made.how] : [];
+  if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })) });
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
   const line = (energy?: number) => chipLine([about ?? "", energy != null ? absolute(energy) : ""], results);
   // how far it has risen to stay within the canvas, followed each frame
@@ -233,11 +235,11 @@ export function FramesChip({
   return (
     <div
       ref={root}
-      className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || made?.length || fromText?.length)) ? "cursor-pointer" : ""}`}
+      className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
       style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
-        else if (single && (about || made?.length || fromText?.length)) setPinned((v) => !v);
+        else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);
       }}
       onPointerEnter={() => setHovered(true)}
       onPointerLeave={() => {

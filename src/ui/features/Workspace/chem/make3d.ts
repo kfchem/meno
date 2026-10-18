@@ -182,7 +182,7 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
     conformerSet: true,
     // (made from a drawing shown magnified: shown as large - docs/WORKSPACE.md, *Magnified display*)
     ...(block.part.atoms[0]?.magnified != null && block.part.atoms[0].magnified !== 1 ? { magnified: block.part.atoms[0].magnified } : {}),
-    ...(c.how?.length ? { made: { how: c.how } } : {}),
+    ...(c.how?.length || c.method ? { made: { ...(c.method ? { method: c.method } : {}), how: c.how ?? [] } } : {}),
     stereo: {
       atoms: numbered(renumbered(c.cip?.atoms, atomAt)),
       bonds: numbered(renumbered(c.cip?.bonds, bondAt)),

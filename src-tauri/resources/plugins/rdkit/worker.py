@@ -881,6 +881,11 @@ ETA_EXTRA = 0.15
 #: How near an atom of an eta system and another ligand's donor of the same
 #: metal may come (A).
 ETA_CLEAR = 2.6
+#: How near two atoms of two eta systems of one metal may come (A): about
+#: the nearest two carbons of two rings come in a bent metallocene, so that
+#: the rings do not overlap - the one restraint between them, the force field
+#: counting nothing between fragments; their angle at the metal is UFF's.
+ETA_APART = 2.9
 
 
 def eta_systems(mol):
@@ -937,6 +942,20 @@ def as_ligand_anions(mol, eta):
         if problem != Chem.SanitizeFlags.SANITIZE_NONE:
             raise ValueError(f"cannot make sense of the structure ({problem})")
     return changed
+
+
+def eta_apart(mol, eta):
+    """Two eta systems of one metal kept from overlapping: each pair of their
+    heavy atoms at least ETA_APART apart, [(i, j, low)]."""
+    by_metal = {}
+    for metal, _, atoms in eta:
+        by_metal.setdefault(metal, []).append([c for c in atoms if mol.GetAtomWithIdx(c).GetAtomicNum() > 1])
+    out = []
+    for systems in by_metal.values():
+        for x, a in enumerate(systems):
+            for b in systems[x + 1:]:
+                out += [(i, j, ETA_APART) for i in a for j in b]
+    return out
 
 
 def eta_length(mol, metal, atom):
@@ -1020,6 +1039,11 @@ def metal_bounds(mol, eta=()):
                 lo, hi = min(k, c), max(k, c)
                 bm[hi][lo] = max(bm[hi][lo], ETA_CLEAR)
                 bm[lo][hi] = max(bm[lo][hi], ETA_CLEAR)
+    # (two eta systems of one metal kept from overlapping: eta_apart)
+    for i, j, low in eta_apart(mol, eta):
+        lo, hi = min(i, j), max(i, j)
+        bm[hi][lo] = max(bm[hi][lo], low)
+        bm[lo][hi] = max(bm[lo][hi], low)
     if not DistanceGeometry.DoTriangleSmoothing(bm):
         return None
     return bm
@@ -1232,6 +1256,8 @@ def uff_stood_in(mol, ids, iters, eta=()):
             for k in (x.GetIdx() for x in mol.GetAtomWithIdx(metal).GetNeighbors()):
                 if k not in stars:
                     apart.append((c, k, ETA_CLEAR, 100.0))
+    # (and its systems kept from overlapping, as while embedding: the force field counts nothing between them)
+    apart += [(i, j, low, 100.0) for i, j, low in eta_apart(mol, eta)]
     uff_with_metals(mol, ids, iters, ff_mol=ff_mol, bonds=bonds, apart=apart, interfrag=bool(eta))
     return True
 
@@ -1262,6 +1288,25 @@ def typed_for_uff(mol, sites=None):
             atom.SetHybridization(UFF_GEOMETRY[took])
         said.append((atom.GetSymbol(), took))
     return said
+
+
+def method_of(mol, ids, field, stood_in, metals, eta):
+    """How a structure's conformers were made, in one line: embedding, the
+    force field, and each thing held while it optimised that is no term of
+    the force field's - so that a shape is read as what made it, a starting
+    geometry, not taken for one found."""
+    made = "ETKDG v3 + " + (field or ("UFF" if stood_in else "no force field"))
+    held = []
+    # (a metal's own bonds - not to an eta system's star, which is no atom)
+    if any(is_metal(a) and any(x.GetAtomicNum() > 0 for x in a.GetNeighbors()) for a in mol.GetAtoms()):
+        held.append("metal bonds at covalent lengths")
+    if eta:
+        held.append("η rings: metal–ring atom distances, rings ≥ %g Å apart" % ETA_APART)
+    if metals and any(planar_angles(mol, cid) for cid in ids[:1]):
+        held.append("square-planar angles")
+    if bridges(mol):
+        held.append("bridging halides' angles as embedded")
+    return made + ("; restrained: " + ", ".join(held) if held else "")
 
 
 def conformers_of(iso, how, made):
@@ -1339,6 +1384,7 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
         field, results = None, None
         stood_in = uff_stood_in(mol, ids, iters)
     energy = {cid: e for cid, (_, e) in zip(ids, results)} if results else None
+    method = method_of(mol, ids, field, stood_in, metals, eta)
     for _, star, atoms in eta:
         for cid in ids:
             conf = mol.GetConformer(cid)
@@ -1379,6 +1425,8 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
         **({"energies": [energy[cid] / KCAL_PER_HARTREE for cid in kept]} if energy else {}),
         **({"stars": sorted(star for _, star, _ in eta)} if eta else {}),
         "field": field or ("UFF" if stood_in else "none"),
+        # (how they were made, in one line - and what was held that the force field does not say: shown with them)
+        "method": method,
         # (short rows: the chip says them in a narrow card)
         "how": [
             {"label": "Embedded", "text": "ETKDG v3"},

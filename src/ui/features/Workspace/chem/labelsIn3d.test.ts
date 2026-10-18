@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import type { Conformers } from "../../../../lib/roles/client";
 import type { Model } from "../store/types";
+import { writeMolfile } from "../../../../lib/chem/molWriter";
+import { editorModelOf } from "../utils/io";
+import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 import { blocksOf, linkOf, moleculeOf } from "./make3d";
 
@@ -90,5 +93,45 @@ describe("a complex drawn with ligand labels, made in 3D", () => {
     // (C[Fe]C as it is, its bonds plain: kept)
     const plain: Model = { atoms: [atom(1, "Fe", 0, 0, { valence: 2 }), atom(2, "C", 0, 1.5), atom(3, "C", 0, -1.5)], bonds: [bond(1, 1, 2), bond(2, 1, 3)] };
     expect(etaBound(plain).atoms[0].valence).toBe(2);
+  });
+
+  it("reads back from a file Meno wrote as it was drawn - each label still a label, on its metal by one bond, bound as before - and makes the same 3D", () => {
+    for (const drawn of [cp2fe(), ptcod()]) {
+      const text = writeMolfile(drawn as never, { version: "V3000" });
+      const back = editorModelOf(moleculesToEditorModel(readMoleculesFromText(text, "mol")).model);
+      // (the labels as drawn, each one bond to its metal)
+      expect(back.atoms.map((a) => a.el).sort()).toEqual(drawn.atoms.map((a) => a.el).sort());
+      expect(back.bonds).toHaveLength(drawn.bonds.length);
+      for (const b of back.bonds) expect(b.endpoints).toBeUndefined();
+      // (asked about as the drawing is: the same multi-centre bonds, each the same atoms)
+      const bound = (m: Model) =>
+        asked(m)
+          .mol.bonds.filter((b) => b.endpoints?.length)
+          .map((b) => b.endpoints!.length)
+          .sort();
+      expect(bound(back)).toEqual(bound(drawn));
+      expect(bound(back).length).toBeGreaterThan(0);
+      // (and as drawn once made: no "Make again")
+      expect(linkOf(answered(back), back)).toBe("live");
+    }
+  });
+
+  it("round trips every pi ligand label so: on a metal, written, read back and asked about, bound through the same atoms", () => {
+    for (const label of ["Cp", "Cp*", "allyl", "cod", "nbd"]) {
+      const drawn: Model = { atoms: [atom(1, "Rh", 0, 0), atom(2, "Cl", 1.5, 0), atom(3, label, -1.5, 0)], bonds: [bond(1, 1, 2), bond(2, 1, 3)] };
+      const back = editorModelOf(moleculesToEditorModel(readMoleculesFromText(writeMolfile(drawn as never, { version: "V3000" }), "mol")).model);
+      const bound = (m: Model) =>
+        asked(m)
+          .mol.bonds.filter((b) => b.endpoints?.length)
+          .map((b) => b.endpoints!.length)
+          .sort();
+      expect({ label, bound: bound(back), bonds: back.bonds.length }).toEqual({ label, bound: bound(drawn), bonds: 2 });
+      expect(bound(drawn).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("writes a Cp label on a metal as the ring bound through all its atoms, not as cyclopentadienyl bound by one carbon", () => {
+    const text = writeMolfile(cp2fe() as never, { version: "V3000" });
+    expect(text.match(/ENDPTS=\(5 /g)).toHaveLength(2);
   });
 });

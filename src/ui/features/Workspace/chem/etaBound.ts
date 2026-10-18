@@ -19,9 +19,7 @@
  * for it come after them, so that the 3D structure's atoms stay tied to the
  * drawing's by their place (make3d `moleculeOf`).
  */
-import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { placedStructure } from "../../../../lib/chem/abbreviationPlace";
-import { ligandStructure, namedLigand } from "../../../../lib/chem/ligands";
+import { boundLigandStructure } from "../../../../lib/chem/boundLigand";
 import { etaBondedAtomByAtom, isMetal, type LayoutInput } from "../../../../lib/layout/perceive";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
@@ -29,23 +27,9 @@ import type { Model } from "../store/types";
 type Atom = Model["atoms"][number];
 type Bond = Model["bonds"][number];
 
-/**
- * A label bonded to one metal that names a ligand only in a complex (Cp,
- * allyl, CO, =CHPh): its structure as written out, laid off from the metal,
- * a neutral donor's bond to it a coordination bond (as chem/abbreviations
- * writes a ligand's). A ligand that binds as an anion (Cp, through its
- * ring) is written neutral, as a label on a metal is drawn: the plugin
- * counts the ring's charge.
- */
+/** A label bonded to one metal that names a ligand only in a complex: written out as bound (lib/chem/boundLigand). */
 function boundLigand(a: Atom, metal: Atom): Atom["abbrev"] | null {
-  const named = namedLigand(a.el.trim(), true);
-  if (!named?.ligand.inComplex) return null;
-  const { anionic, double, ...s } = ligandStructure(named.ligand, named.descriptor);
-  const net = s.atoms.reduce((q, x) => q + (x.charge ?? 0), 0);
-  const atoms = net ? s.atoms.map(({ charge: _charge, ...atom }) => atom) : s.atoms;
-  const pi = new Set((s.haptic ?? []).map((h) => h.star));
-  const lends = s.attach.map((at, k) => !anionic[k] && !double[k] && !pi.has(at));
-  return placedStructure({ ...s, atoms, ...(lends.some(Boolean) ? { lends } : {}) }, { x: metal.x - a.x, y: metal.y - a.y }, NOMINAL_BOND_LENGTH);
+  return boundLigandStructure(a.el, { x: metal.x - a.x, y: metal.y - a.y });
 }
 
 /**
