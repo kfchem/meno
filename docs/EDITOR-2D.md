@@ -702,7 +702,11 @@ All hover-based, as above.
   candidates show there - an input method's full-width letters are taken
   as the ordinary ones once it gives them. Begun by a click on an atom, or
   by a letter typed over one; Enter keeps it, Escape lets it go, a press
-  elsewhere keeps it; a click in it puts the caret, a drag selects. Kept,
+  elsewhere keeps it; a click in it puts the caret, a drag selects. Enter
+  again, straight after the Enter that kept it - no other key, press or
+  selection between - draws the label out, as *Expand abbreviation* does,
+  one step after the label's own; a label with nothing to draw out stays
+  as it is. An Enter over a label not just typed draws nothing out. Kept,
   it is drawn as written until the drawing's own label is drawn in its
   place, then goes in a moment, the label coming through: never a frame
   with no label, nor with the old one. The drawing's labels are drawn each

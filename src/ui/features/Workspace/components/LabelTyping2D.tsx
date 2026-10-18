@@ -77,6 +77,24 @@ export default function LabelTyping2D() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [hoveredAtom, edit.active, store]);
 
+  // a label kept by Enter: an Enter straight after draws it out (docs/EDITOR-2D.md, *Labels typed in place*) - any other key, or a press,
+  // first, and it is left as it is
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const s = store.getState();
+      if (!s.labelKept || e.repeat || e.isComposing) return;
+      const enter = e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+      if (s.keyAfterLabel(enter) && enter) e.preventDefault();
+    };
+    const onPress = () => store.getState().forgetLabelKept();
+    window.addEventListener("keydown", onKey, true);
+    window.addEventListener("pointerdown", onPress, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("pointerdown", onPress, true);
+    };
+  }, [store]);
+
   // those written, each kept on - the same, written, kept and going - until gone
   const sessions = useRef(new Map<number, Session>());
   const live = new Map<number, Session>();
@@ -191,7 +209,7 @@ function Typing({ session }: { session: Session }) {
   };
 
   /** Kept, or let go - once, while it is still this edit's to keep. */
-  const finish = (keep: boolean) => {
+  const finish = (keep: boolean, byEnter = false) => {
     if (done.current) return;
     done.current = true;
     const s = store.getState();
@@ -199,7 +217,7 @@ function Typing({ session }: { session: Session }) {
     if (keep) {
       // (as it is kept: as it reads from its bond - aco OAc - its italic prefixes hyphenated - tbu t-Bu)
       s.setLabelEditValue(useAppSettings.getState().labels.smart ? keptLabel(ed.typed, labelReading) : ed.typed);
-      s.commitLabelEdit(ed.typed);
+      s.commitLabelEdit(ed.typed, byEnter);
     } else s.cancelLabelEdit();
   };
   const finishing = useRef(finish);
@@ -225,7 +243,7 @@ function Typing({ session }: { session: Session }) {
   // the field: made as it is written, given the keys, laid at the caret - gone once it is kept or let go
   useLayoutEffect(() => {
     if (!typing) return;
-    const { field: f, dispose } = pageField(gl.domElement, ed, { label: "Label", lines: false, keep: () => finishing.current(true), letGo: () => finishing.current(false) });
+    const { field: f, dispose } = pageField(gl.domElement, ed, { label: "Label", lines: false, keep: (byEnter) => finishing.current(true, byEnter), letGo: () => finishing.current(false) });
     field.current = f;
     f.sync();
     return () => {
