@@ -76,7 +76,7 @@ and in particular:
     convex the same way, nowhere nearer its bonds than a double bond's
     spacing in the style - measured where it comes nearest, by the apex
     (within GR-6.1's band) - shorter than the chain as a double bond's inner
-    line is (0.68 of the way along each bond), solid and as wide as a single
+    line is (0.8 of the way along each bond), solid and as wide as a single
     bond (GR-6.2). The metal's one plain line points at the curve's middle
     and stops short of it, as a bond stops short of a label (the label
     margin); its star stands at the curve's middle (`chem/eta` `starPlace`, `lib/chem/allylArc`

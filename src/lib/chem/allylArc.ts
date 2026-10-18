@@ -16,8 +16,8 @@ type Pt = { x: number; y: number };
 
 /** How far the curve keeps from the chain's bonds, as a share of their length, where no style says: about a double bond's spacing (GR-6.1). */
 export const CURVE_GAP = 0.18;
-/** How far along each bond, from the middle carbon, the curve reaches (the maintainer, 2026-10-18: shorter than to the end carbons, as a double bond's inner line is). */
-export const CURVE_REACH = 0.68;
+/** How far along each bond, from the middle carbon, the curve reaches (the maintainer, 2026-10-18: 80%, picked by eye from 68% to 84% - short of the end carbons, as a double bond's inner line is). */
+export const CURVE_REACH = 0.8;
 /** How many straight pieces the curve is drawn in. */
 const PIECES = 16;
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allylCurve, CURVE_GAP } from "./allylArc";
+import { allylCurve, CURVE_GAP, CURVE_REACH } from "./allylArc";
 
 /** An allyl as drawn: a "^", its bonds of length 1 at 120 degrees, its middle carbon on top. */
 const a = { x: -0.866, y: 0 };
@@ -30,13 +30,19 @@ describe("an η3-allyl's delocalisation curve", () => {
   });
 
   it("keeps the gap it is given from the chain's bonds where it comes nearest, and reaches as far along them as asked", () => {
+    // (80% unless asked: the maintainer's pick, 2026-10-18)
+    expect(CURVE_REACH).toBe(0.8);
+    const along = (p: { x: number; y: number }, e: { x: number; y: number }) =>
+      ((p.x - mid.x) * (e.x - mid.x) + (p.y - mid.y) * (e.y - mid.y)) / Math.hypot(e.x - mid.x, e.y - mid.y);
     for (const gap of [0.1, 0.18, 0.25]) {
-      const { points } = allylCurve(a, mid, b, gap, 0.68);
-      const nearest = Math.min(...points.map((p) => Math.min(off(p, mid, a), off(p, mid, b))));
-      expect(nearest).toBeCloseTo(gap, 6);
-      // (its ends 0.68 of the way along their bonds from the middle carbon)
-      const along = ((points[0].x - mid.x) * (a.x - mid.x) + (points[0].y - mid.y) * (a.y - mid.y)) / Math.hypot(a.x - mid.x, a.y - mid.y);
-      expect(along).toBeCloseTo(0.68, 4);
+      for (const reach of [undefined, 0.68]) {
+        const { points } = allylCurve(a, mid, b, gap, reach);
+        const nearest = Math.min(...points.map((p) => Math.min(off(p, mid, a), off(p, mid, b))));
+        expect(nearest).toBeCloseTo(gap, 6);
+        // (its ends that far along their bonds from the middle carbon, both ends alike)
+        expect(along(points[0], a)).toBeCloseTo(reach ?? CURVE_REACH, 4);
+        expect(along(points[points.length - 1], b)).toBeCloseTo(reach ?? CURVE_REACH, 4);
+      }
     }
   });
 
