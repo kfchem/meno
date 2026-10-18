@@ -171,6 +171,25 @@ describe("a SMILES's ring-fusion centres, pasted", () => {
     }
   }, 30_000);
 
+  it("leaves a centre the SMILES leaves undefined undefined - drawn flat with no wedge, never guessed - and the rest as given", async () => {
+    // (taxol with C3's configuration left out of the SMILES)
+    const open = TAXOL.replace("[C@]([C@H]3[C@@H](", "[C@](C3[C@@H](");
+    expect(open).not.toBe(TAXOL);
+    const given = centresOf(fromSmiles(open));
+    const { model, job, centres } = await pasted(open);
+    expect(given.filter(Boolean)).toHaveLength(10);
+    given.forEach((t, i) => {
+      if (t) expect(sameConfiguration(t, centres[i]!), `centre ${i} as given`).toBe(true);
+      else expect(centres[i], `atom ${i}: no configuration made up`).toBeUndefined();
+    });
+    // (and no wedge, nor a wedged H, at the centre left undefined)
+    const c3 = given.findIndex((t, i) => !t && job.input.atoms[i].el === "C" && fromSmiles(TAXOL).atoms[i]?.tetra);
+    expect(c3).toBeGreaterThanOrEqual(0);
+    const id = job.ids[c3];
+    const wedged = model.bonds.filter((b) => (b.a === id || b.b === id) && (b.stereo === "up" || b.stereo === "down"));
+    expect(wedged).toHaveLength(0);
+  }, 30_000);
+
   it("shows cis- and trans-decalin's and -hydrindane's fusion as given, each fusion centre by an H", async () => {
     const cases: [string, string][] = [
       ["cis-decalin", "C1CC[C@H]2CCCC[C@H]2C1"],
