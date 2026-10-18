@@ -504,15 +504,24 @@ Taken on 2026-10-13:
   atoms at the covalent length plus 0.15 Å from the metal, counts a ring of
   five or a chain of three drawn neutral as the cyclopentadienide or allyl
   anion it is bound as (not a CH2, nor radical carbons), and gives no
-  energies; the star is no atom of the molecule in 3D. A sandwich - a metal
-  bound by two rings and nothing else, ferrocene, bis(benzene)chromium - is
-  made straight, its rings parallel either side of the metal (the angle
-  between their centres held at 179 to 180 degrees, each ring's atoms at
-  least twice its height over the metal from the other's); two rings of
-  one metal with other ligands besides - Cp2ZrCl2 - are kept at least
-  2.9 Å apart, atom from atom, and left bent as embedding and the other
-  ligands make them (RDKit plugin 0.1.4; before, nothing held either, the
-  force field not counting what lies between fragments).
+  energies; the star is no atom of the molecule in 3D. Two rings of one
+  metal are kept from overlapping, at least 2.9 Å apart atom from atom
+  (RDKit plugin 0.1.4; before, Cp2ZrCl2's rings could fold onto each
+  other, the force field counting nothing between fragments). Nothing more
+  is held: the angle between a sandwich's rings is UFF's, and ferrocene
+  comes out within about 6 degrees of straight, Cp*2Fe within about 10 -
+  as it was made, and said so (below).
+- **A 3D structure made from a drawing is a starting geometry**
+  (the maintainer, 2026-10-18): embedded and tidied by a force field, with
+  only what that force field cannot say held - a metal's bonds at their
+  covalent lengths, an eta ring at its distance over its metal, two rings
+  apart, a square-planar metal's angles - never a shape it is expected to
+  have. How it was made is said in one line with it, in the plugin's
+  words (`method`: "ETKDG v3 + UFF; restrained: eta rings: metal-ring
+  atom distances, rings ≥ 2.9 Å apart"), first under *How it was made*
+  where it is pointed at, and kept with it in a workspace. An eta complex's
+  shape most of all is held, not modelled: a real geometry comes from
+  optimising it - an xTB or DFT step of a workflow.
 - **A bond to a ring's centre is one stick** (eta; 2026-10-17): a molecule
   made in 3D from a drawing with a multi-centre bond - a Cp, an arene, an
   allyl, an alkene bound through both carbons - shows one stick from the

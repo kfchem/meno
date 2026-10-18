@@ -563,12 +563,13 @@ function pictureFromOf(v: unknown): PictureItem["from"] | null {
 /** How a molecule was made, as a file carries it: rows of text, each read as data; otherwise none. */
 function madeOf(v: unknown): Carried3D["made"] {
   const how = (v as { how?: unknown } | null | undefined)?.how;
-  if (!Array.isArray(how)) return undefined;
-  const rows = how
+  const method = (v as { method?: unknown } | null | undefined)?.method;
+  const rows = (Array.isArray(how) ? how : [])
     .slice(0, 20)
     .filter((r): r is { label: string; text: string } => typeof r?.label === "string" && typeof r?.text === "string")
     .map((r) => ({ label: r.label.slice(0, 80), text: r.text.slice(0, 300) }));
-  return rows.length ? { how: rows } : undefined;
+  const said = typeof method === "string" && method ? { method: method.slice(0, 300) } : {};
+  return rows.length || "method" in said ? { ...said, how: rows } : undefined;
 }
 
 /** A molecule's open list as a file carries it; otherwise none. */

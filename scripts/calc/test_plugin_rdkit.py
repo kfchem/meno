@@ -457,21 +457,15 @@ class EtaBound(unittest.TestCase):
     def made(self, block):
         return self.worker.op_conformers({"molblock": block})["isomers"][0]
 
-    def test_makes_a_sandwich_straight_its_rings_parallel(self):
-        # (ferrocene came out up to 6 degrees bent, nothing holding its rings' centres in line with the metal)
-        import numpy as np
+    def test_says_how_it_was_made_and_what_was_held(self):
+        # (one line, with every structure: embedding, the force field, and what was held that is no term of it)
         entry = self.made(self.ferrocene())
-        for frame in entry["frames"]:
-            P = np.array(frame).reshape(-1, 3)
-            a, b = P[11] - P[0], P[12] - P[0]
-            self.assertGreater(float(np.degrees(np.arccos(a @ b / np.linalg.norm(a) / np.linalg.norm(b)))), 178.5)
-            for star, ring in ((11, range(1, 6)), (12, range(6, 11))):
-                # (each ring square to the line from the metal to its centre)
-                q = P[list(ring)] - P[star]
-                normal = np.cross(q[0], q[1])
-                axis = P[star] - P[0]
-                tilt = float(np.degrees(np.arccos(abs(normal @ axis) / np.linalg.norm(normal) / np.linalg.norm(axis))))
-                self.assertLess(tilt, 2.0)
+        self.assertTrue(entry["method"].startswith("ETKDG v3 + UFF; restrained: "), entry["method"])
+        self.assertIn("\u03b7 rings: metal\u2013ring atom distances", entry["method"])
+        self.assertIn("rings \u2265 2.9 \u00c5 apart", entry["method"])
+        # (a molecule of no metal: nothing held)
+        plain = self.worker.op_conformers({"molblock": self.worker.op_from_smiles({"smiles": "CCO"})["molblock"]})["isomers"][0]
+        self.assertEqual(plain["method"], "ETKDG v3 + MMFF94")
 
     def test_keeps_a_bent_metallocenes_rings_apart(self):
         # (Cp2ZrCl2's rings were let fold onto each other, 41 degrees apart at the metal: nothing kept them apart)
