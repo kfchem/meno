@@ -750,11 +750,14 @@ All hover-based, as above.
   - Enter again, straight after the Enter that kept it - no other key,
     press or selection between - draws the label out, as *Expand
     abbreviation* does, one step after the label's own; a label with
-    nothing to draw out stays as it is. An Enter over a label not just
-    typed draws nothing out. An Enter is one however it comes - as an
+    nothing to draw out stays as it is. A label kept by Enter as it was -
+    typed over an atom that already said it, as a structure read from a
+    figure has its groups - is drawn out by the next Enter too (the
+    maintainer's report, 2026-10-18: SO2H typed over a read SO2H, then
+    Enter, drew nothing out). An Enter over a label not just typed draws
+    nothing out. An Enter is one however it comes - as an
     input method on Windows gives every key, "Process" with the key
-    pressed in its code, nothing being composed (pageField `enterKey`;
-    the maintainer's report, 2026-10-18: Enter twice did nothing there) -
+    pressed in its code, nothing being composed (pageField `enterKey`) -
     and one that confirms what an input method composes is not.
   - The drawing's labels are drawn each by its atom (`Labels2D` `keyOf`):
     a label added or taken away sets no other label's letters again. A
