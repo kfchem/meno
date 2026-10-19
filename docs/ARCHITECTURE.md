@@ -1028,7 +1028,10 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
+they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
+molecule now saying how many conformers are sought; Stop, while a 3D
+structure is being made, stops the worker and lets the question go at
+once). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
 RDKit's own depictor lays out: for those, CoordGen's layout took from
