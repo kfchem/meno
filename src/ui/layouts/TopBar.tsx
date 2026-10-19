@@ -69,8 +69,8 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
             onMouseDown={stop}
             className="h-7 w-7 rounded-md flex items-center justify-center text-gh-gray transition-colors duration-150 ease-meno hover:bg-gray-200 hover:text-gh-black"
           >
-            {/* (a little smaller than it was: as heavy as a tab's ×, neither drawing the eye from the other - the maintainer, 2026-10-19) */}
-            <PlusIcon className="h-3.5 w-3.5" />
+            {/* (as large as a tab's ×, drawn in the same 12 px and the same line: neither drawing the eye from the other - the maintainer, 2026-10-19) */}
+            <PlusIcon className="h-3 w-3" />
           </motion.button>
         </div>
         <div data-tauri-drag-region className="flex-1" />

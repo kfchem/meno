@@ -3,7 +3,7 @@ import { XMarkIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { useEffect, useRef, type RefObject } from "react";
 import { DURATION, EASE, FADE, LEAVE } from "../theme/motion";
-import { dragWithin } from "./tabDrag";
+import { dragWithin, scrollToShow } from "./tabDrag";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
 
@@ -16,6 +16,9 @@ export type TabMeta = { id: string; label: string; dirty?: boolean };
  * chosen one brought into view; a tab too narrow for its name and its ×
  * shows what it can of its name, the chosen one keeping both.
  */
+/** How far the chosen tab's corners stand past its sides, in pixels (`Shoulders`). */
+const CORNER_PX = 8;
+
 export function TabStrip({
   tabOrder,
   tabsById,
@@ -43,8 +46,16 @@ export function TabStrip({
   useEffect(() => {
     const strip = stripRef.current;
     if (!strip || !activeId) return;
-    const bring = () =>
-      strip.querySelector<HTMLElement>(`[data-tab="${CSS.escape(activeId)}"]`)?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+    // (sideways only: scrollIntoView went up and down too - a tab coming in, still rising from below, was scrolled
+    // into view, and the whole row jumped up with it and back down as it rose: the maintainer, 2026-10-19)
+    const bring = () => {
+      const tab = strip.querySelector<HTMLElement>(`[data-tab="${CSS.escape(activeId)}"]`);
+      if (strip.scrollTop) strip.scrollTop = 0;
+      if (!tab) return;
+      // (its corners shown too: as wide as the strip's padding on the right, the last tab's end against the strip's)
+      const to = scrollToShow(tab.offsetLeft, tab.offsetWidth, strip.scrollLeft, strip.clientWidth, CORNER_PX);
+      if (to != null) strip.scrollTo({ left: to, behavior: "smooth" });
+    };
     // (once laid out - a tab just added has its place the frame after, and
     // its coming in stops a scroll begun meanwhile - and again as the bar narrows)
     const frame = requestAnimationFrame(() => requestAnimationFrame(bring));
