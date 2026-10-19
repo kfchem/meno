@@ -1,3 +1,4 @@
+import type { ShowBox } from "../utils/viewShow";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -1377,6 +1378,14 @@ export type EditorState = {
   arrows: Arrow[];
   pluses: Plus[];
   fitNonce: number;
+  /**
+   * What was just put down on the page, to be shown (utils/viewShow): the
+   * view moved along to take it in, or out as little as needed - each
+   * request its own number.
+   */
+  showRequest: { box: ShowBox; n: number } | null;
+  /** The view to show `box`, as what was just put down is shown (`showRequest`). */
+  requestShow: (box: ShowBox) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
