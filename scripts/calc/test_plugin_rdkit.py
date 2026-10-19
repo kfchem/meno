@@ -415,38 +415,42 @@ class RingChairs(unittest.TestCase):
 
     def chairs(self, smiles):
         """Each conformer of `smiles` as (kcal/mol above the lowest, how far its substituent leans off the ring's
-        normal): a chair's axial bond lies along the normal, its equatorial bond across it."""
+        normal): a chair's axial bond lies along the normal, its equatorial bond across it. Of a cyclohexane
+        with one substituent on it, whatever that substituent is."""
         import numpy as np
         mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
         entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
         els = [a["el"] for a in entry["atoms"]]
-        nbr = {}
+        nbr, single = {}, {}
         for b in entry["bonds"]:
             nbr.setdefault(b["a1"], []).append(b["a2"])
             nbr.setdefault(b["a2"], []).append(b["a1"])
-        oxy = els.index("O")
-        # (the ring carbon on the oxygen, not the methyl: it is the one with carbon neighbours)
-        c1 = next(i for i in nbr[oxy] if els[i] == "C" and sum(1 for n in nbr[i] if els[n] == "C") >= 2)
+            if b["order"] == 1:
+                single.setdefault(b["a1"], []).append(b["a2"])
+                single.setdefault(b["a2"], []).append(b["a1"])
 
         def walk(at, path):
+            """Six carbons joined by single bonds, back where it began: the saturated ring, not a benzene."""
             if len(path) == 6:
-                return path if c1 in nbr[at] else None
-            for n in nbr[at]:
-                if els[n] == "C" and n not in path and n != oxy:
+                return path if path[0] in single.get(at, []) else None
+            for n in single.get(at, []):
+                if els[n] == "C" and n not in path:
                     got = walk(n, path + [n])
                     if got:
                         return got
             return None
 
-        ring = walk(c1, [c1])
-        self.assertEqual(len(ring or []), 6)
+        ring = next(filter(None, (walk(i, [i]) for i, el in enumerate(els) if el == "C")), None)
+        self.assertEqual(len(ring or []), 6, smiles)
+        # (the ring carbon that carries the substituent, and the substituent's first atom)
+        c1, sub = next((i, n) for i in ring for n in nbr[i] if els[n] != "H" and n not in ring)
         lowest = min(entry["energies"])
         out = []
         for k, frame in enumerate(entry["frames"]):
             P = np.array(frame).reshape(-1, 3)
             R = P[ring]
             normal = np.linalg.svd(R - R.mean(axis=0))[2][2]
-            v = P[oxy] - P[c1]
+            v = P[sub] - P[c1]
             out.append(((entry["energies"][k] - lowest) * 627.5094740631, abs(float(v @ normal)) / float(np.linalg.norm(v))))
         return out
 
@@ -461,6 +465,134 @@ class RingChairs(unittest.TestCase):
         # (the equatorial chair is the lowest, and the axial one is near it, not a ring flip away in energy)
         self.assertEqual(min(equatorial), 0.0)
         self.assertLess(min(axial), 2.0)
+
+    def test_gives_both_chairs_of_phenylcyclohexane_whose_axial_one_is_rarely_embedded(self):
+        # (an embedding falls into phenylcyclohexane's axial chair about once in twenty-five tries - measured over
+        # 8000 embeddings, 4.3% - so thirty tries missed it altogether: it is the molecule that says how many are
+        # needed of a ring that can flip, not a fixed number)
+        chairs = self.chairs("c1ccccc1C1CCCCC1")
+        axial = [kcal for kcal, cos in chairs if cos > 0.6]
+        equatorial = [kcal for kcal, cos in chairs if cos < 0.5]
+        self.assertTrue(equatorial, chairs)
+        self.assertTrue(axial, chairs)
+        self.assertEqual(min(equatorial), 0.0)
+        # (the axial chair of a phenyl is some 3 kcal/mol up, and a real minimum: in a set of its conformers)
+        self.assertLess(min(axial), 4.0)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class HowManySought(unittest.TestCase):
+    """How many conformers are tried is the molecule's to say: by the bonds in it that turn (Ebejer, Morris and
+    Deane's rule), with more for a ring that can flip, whose other form an embedding seldom reaches, and few for
+    a molecule that has only the one shape."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def sought(self, smiles):
+        return self.worker.sought(Chem.MolFromSmiles(smiles))
+
+    def test_asks_few_of_a_molecule_that_has_only_the_one_shape(self):
+        few = self.worker.FEW_CONFORMERS
+        for smiles in ("c1ccccc1", "Cn1cnc2c1c(=O)n(C)c(=O)n2C", "C1C2CC3CC1CC(C2)C3", "C1CC2CCC1C2", "CC(C)(C)C"):
+            self.assertEqual(self.sought(smiles), few, smiles)
+
+    def test_asks_more_of_a_ring_that_can_flip_than_its_turning_bonds_would(self):
+        # (cyclohexane and a sugar have no turning bond at all between them, and two chairs each)
+        for smiles in ("C1CCCCC1", "c1ccccc1C1CCCCC1", "C1CCNCC1", "C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O"):
+            self.assertGreaterEqual(self.sought(smiles), self.worker.RING_CONFORMERS, smiles)
+
+    def test_counts_a_ring_lying_on_a_bigger_one_as_able_to_flip(self):
+        # (a six-ring sharing two bonds with a thirteen-ring: a cyclodextrin's sugars lie on its macrocycle
+        #  that way, and ten carbons round the back hold a chair in no one shape, as a bridge would)
+        self.assertGreaterEqual(self.sought("C1CCCCCCCCCC2CCCC1C2"), self.worker.RING_CONFORMERS)
+        # (but a bridge of its own size or shorter does: a bicyclo[2.2.2]octane)
+        self.assertEqual(self.sought("C1CC2CCC1CC2"), self.worker.FEW_CONFORMERS)
+
+    def test_asks_by_the_bonds_that_turn_where_no_ring_can_flip(self):
+        self.assertEqual(self.sought("CC(C)CC1=CC=C(C=C1)C(C)C(=O)O"), 50)  # (ibuprofen: four)
+        self.assertEqual(self.sought("CCCCCCCCCCC"), 200)  # (undecane: eight)
+        self.assertEqual(self.sought("CCCCCCCCCCCCCCCC"), 300)  # (hexadecane: thirteen)
+
+    def test_asks_the_same_whether_or_not_the_molecule_carries_its_hydrogens(self):
+        # (a molecule read back from 3D has them, and a pattern counting neighbours would count those too)
+        for smiles in ("c1ccccc1C1CCCCC1", "CCCCCC", "Cn1cnc2c1c(=O)n(C)c(=O)n2C"):
+            mol = Chem.MolFromSmiles(smiles)
+            self.assertEqual(self.worker.sought(Chem.AddHs(mol)), self.worker.sought(mol), smiles)
+
+    def test_leaves_the_number_alone_where_the_request_asks_for_one(self):
+        self.assertEqual(self.worker.options_of({"options": {"sought": "fixed", "count": 12}})["count"], 12)
+        self.assertEqual(self.worker.options_of({"options": {"count": 12}})["count"], 12)
+        # (and asks the molecule where it does not)
+        self.assertIsNone(self.worker.options_of({"options": {"sought": "needed", "count": 12}})["count"])
+        self.assertIsNone(self.worker.options_of({"options": {}})["count"])
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class SwappedAtoms(unittest.TestCase):
+    """The same shape with equivalent atoms swapped - a tert-butyl's three methyls turned round, a phenyl
+    flipped - is the one conformer. Told apart atom against atom, every atom of it was somewhere else, so it
+    was kept again and again: a tert-butylcyclohexane came back as 26 conformers which were 5."""
+
+    #: A tetrakis(triphenylphosphine)palladium: its four phosphines and twelve phenyls map onto each other more
+    #: ways than there is any trying - millions - which is the case the prune must not set about.
+    MANY_WAYS = "[Pd](P(c1ccccc1)(c1ccccc1)c1ccccc1)(P(c1ccccc1)(c1ccccc1)c1ccccc1)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1"
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles):
+        mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
+        entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        lowest = min(entry["energies"])
+        return entry, [(e - lowest) * 627.5094740631 for e in entry["energies"]]
+
+    def test_counts_a_tert_butyls_methyls_turned_round_as_the_one_shape(self):
+        entry, kcal = self.made("CC(C)(C)C1CCCCC1")
+        # (its two chairs and a few twist-boats - not two dozen of those with the methyls turned round)
+        self.assertLess(len(entry["frames"]), 12, kcal)
+        self.assertGreater(len(entry["frames"]), 1, kcal)
+
+    def test_keeps_two_shapes_that_only_fall_together_once_swapped(self):
+        # (a twist-boat of it falls within 0.44 A of its chair once the methyls are swapped round, and sits 6
+        #  kcal/mol above it: two shapes, which their energies say and their atoms, swapped, do not)
+        _, kcal = self.made("CC(C)(C)C1CCCCC1")
+        self.assertTrue(any(k > 4.0 for k in kcal), kcal)
+
+    def test_leaves_a_molecule_whose_atoms_cannot_swap_alone(self):
+        # (a sugar: every atom of it is its own, so there is nothing to swap and nothing to look for)
+        glucose = Chem.MolFromSmiles("C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O")
+        self.assertIsNone(self.worker.swappable(Chem.AddHs(glucose)))
+
+    def test_will_not_swap_where_there_are_no_energies_to_show_it_is_the_one_shape(self):
+        # (an osmium of eight bonds: no force field here has parameters for it, so nothing is optimised and no
+        #  energies come back - and without them there is no showing that a swap left the shape as it was,
+        #  which is the whole of what makes two shapes one. Its halides do swap, 576 ways, and are not tried)
+        mol = Chem.MolFromSmiles("Cl[Os](Cl)(Cl)(Cl)(Br)(Br)(Br)Br")
+        if mol is None:
+            self.skipTest("RDKit read no eight-bonded osmium here")
+        swappable = self.worker.swappable
+        self.assertIsNotNone(swappable(Chem.AddHs(Chem.Mol(mol))), "this molecule's atoms must be ones that swap")
+        asked = []
+        self.worker.swappable = lambda m: asked.append(m) or swappable(m)
+        try:
+            entry = self.worker.conformers(mol, count=30)
+        finally:
+            self.worker.swappable = swappable
+        self.assertNotIn("energies", entry)
+        self.assertEqual(asked, [])
+
+    def test_leaves_a_molecule_with_more_ways_than_can_be_tried_as_it_was(self):
+        # (trying every way of this one took 2.1 s for a single pair of conformers, and there are thousands of pairs)
+        self.assertIsNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles(self.MANY_WAYS))))
+        # (where there are few enough, they are tried: a tert-butyl's methyls, a ring read round either way)
+        self.assertIsNotNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))))
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")

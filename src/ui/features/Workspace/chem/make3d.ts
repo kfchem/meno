@@ -30,8 +30,14 @@ import { etaBound } from "./etaBound";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
-/** How long a structure's conformers may take: a large one's, on a slow machine, minutes. */
-export const CONFORMERS_MS = 5 * 60_000;
+/**
+ * How long a structure's conformers may take: a large one's, on a slow machine, minutes. Fifteen of them
+ * since 2026-10-20, when how many are sought became the molecule's to say: a ciclosporin took 2.5 minutes
+ * here and a vancomycin 2.4, which on a machine half as quick is past the five minutes this allowed before.
+ * The chemist need not wait it out - Stop, while a 3D structure is being made, stops the plugin's worker
+ * and lets the question go at once.
+ */
+export const CONFORMERS_MS = 15 * 60_000;
 /** The room between a drawing and the molecule in 3D that rises out of it, and between molecules. */
 const GAP = 1.5 * NOMINAL_BOND_LENGTH;
 
