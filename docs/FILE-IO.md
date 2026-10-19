@@ -753,6 +753,30 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
   the document's icon, carried as `icons\document\meno-document.ico`
   (`windows/hooks.nsh`). Uninstalling takes the ProgID away, and gives
   `.meno` back what it was associated with before.
+- **Offered for the files it reads, never their default** (the
+  maintainer, 2026-10-19): Meno is in the system's Open With for the
+  structure files and PDFs it reads - `.mol`, `.sdf`, `.rxn`, `.xyz`,
+  `.pdb`, `.cube`, `.cub`, `.pdf` (`OPENED_WITH` in `opened.rs`; not
+  calculations' outputs, `.out` and `.log`, which other programs use too) -
+  and whatever opens them still does. A test holds the three lists below
+  alike.
+  - macOS (`Info.plist`): a document type for the structure files and one
+    for PDF, each with `LSHandlerRank` Alternate - "a secondary viewer of
+    files of this type", ranked after Owner and Default (Apple, Information
+    Property List Key Reference) - and role Viewer. PDF by the system's
+    type, `com.adobe.pdf`. The structure files by their extensions
+    (`CFBundleTypeExtensions`), with no type of Meno's own declared: where
+    another app declares a type for one of them, the system gives the file
+    that type, and a claim on a type of Meno's would not reach it.
+  - Windows (`windows/hooks.nsh`, this user's, as the `.meno` association
+    is): each extension's `OpenWithProgids` holds Meno's ProgID,
+    `Meno.OpenWith` - a value beside any other program's, the extension's
+    own default left as it is - and Meno.exe's `Applications` entry lists
+    each among its `SupportedTypes` (Microsoft, "How to Include an
+    Application in the Open With Dialog Box", "Application Registration").
+    Uninstalling takes Meno's value out of each, the keys it was in only
+    where nothing else is left in them, and Meno's ProgID and `Applications`
+    entry whole.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -
