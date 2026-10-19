@@ -31,13 +31,15 @@ const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =
 /**
  * The parts among the sets and steps given: those sets - one made by a step
  * not among them, as a set the chemist drew - those steps, without what they
- * did (their runs are theirs, and their jobs'), and the wires among them.
+ * did (their runs are theirs, and their jobs'), and the wires among them. A
+ * set goes without its members, which are this page's: put down elsewhere,
+ * it holds what then lies inside it (workflow/model `membersSettled`).
  */
 export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet<number>): FlowParts {
   return {
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
-      .map((b) => (b.made && !steps.has(b.made.step) ? (({ made: _m, aside: _a, ...rest }) => rest)(b) : b)),
+      .map(({ members: _m, keep: _k, notKept: _n, ...b }) => (b.made && !steps.has(b.made.step) ? (({ made: _m, aside: _a, ...rest }) => rest)(b) : b)),
     steps: (doc.steps ?? [])
       .filter((s) => steps.has(s.id))
       .map(({ ran: _r, runs: _k, running: _g, ...s }) => s),

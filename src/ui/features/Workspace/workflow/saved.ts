@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { AsideEntry, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { AsideEntry, Member, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -24,6 +24,22 @@ const asideIn = (v: unknown): AsideEntry[] =>
       : [],
   );
 
+/**
+ * A set's members as a file says them: a structure by its atoms' ids, a
+ * molecule in 3D or a picture by its place in the file's list (utils/workspace
+ * puts them back as the ids they are given when it opens). What does not
+ * read is left out.
+ */
+function membersIn(v: unknown): Member[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  return v.flatMap((m: { structure?: unknown; molecule?: unknown; picture?: unknown }): Member[] => {
+    if (Array.isArray(m?.structure) && m.structure.length && m.structure.every((id) => isId(id))) return [{ structure: m.structure as number[] }];
+    if (Number.isInteger(m?.molecule) && (m.molecule as number) >= 0) return [{ molecule: m.molecule as number }];
+    if (Number.isInteger(m?.picture) && (m.picture as number) >= 0) return [{ picture: m.picture as number }];
+    return [];
+  });
+}
+
 function readSet(v: unknown): WorkflowSet | null {
   const b = v as Partial<Record<keyof WorkflowSet, unknown>> | null;
   if (!b || !isId(b.id) || !isNum(b.x0) || !isNum(b.y0) || !isNum(b.x1) || !isNum(b.y1)) return null;
@@ -39,6 +55,16 @@ function readSet(v: unknown): WorkflowSet | null {
     // (the name the chemist gave it, where they gave one)
     ...(typeof b.name === "string" && b.name.trim() ? { name: b.name } : {}),
     ...(aside.length ? { aside } : {}),
+    ...(() => {
+      const members = membersIn(b.members);
+      return members ? { members } : {};
+    })(),
+    // (a result set kept out of its file, and what it held when it was saved)
+    ...(b.keep === false && made ? { keep: false as const } : {}),
+    ...(() => {
+      const n = b.notKept as { count?: unknown; hash?: unknown } | undefined;
+      return n && Number.isInteger(n.count) && (n.count as number) >= 0 && typeof n.hash === "string" ? { notKept: { count: n.count as number, hash: n.hash } } : {};
+    })(),
   };
 }
 

@@ -5,6 +5,8 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
 import { readTexts, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
+import { addSet } from "../workflow/model";
+import { collectionHash } from "../workflow/entries";
 import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
@@ -233,7 +235,7 @@ describe("a workspace file", () => {
   it("is not read where it is not one, or of a version this one does not read", () => {
     expect(readWorkspace("not json")).toBeNull();
     expect(readWorkspace(JSON.stringify({ format: "meno-structure", version: 1, atoms: [], bonds: [] }))).toBeNull();
-    expect(readWorkspace(JSON.stringify({ format: "meno-workspace", version: 2, atoms: [], bonds: [] }))).toBeNull();
+    expect(readWorkspace(JSON.stringify({ format: "meno-workspace", version: 3, atoms: [], bonds: [] }))).toBeNull();
   });
 });
 
@@ -248,7 +250,7 @@ describe("a workspace that does not open", () => {
     state().addCaption("K2CO3, DMF", 0, 0);
     const saved = workspaceText(state());
     expect(workspaceProblem(saved)).toBeNull();
-    const newer = JSON.stringify({ ...JSON.parse(saved), version: 2 });
+    const newer = JSON.stringify({ ...JSON.parse(saved), version: 3 });
     expect(workspaceProblem(newer)).toBe("it was saved by a newer Meno - update Meno to open it");
     expect(workspaceProblem("{")).toBe("it is not a workspace Meno reads");
     expect(workspaceProblem(JSON.stringify({ format: "something else", version: 1 }))).toBe("it is not a workspace Meno reads");
@@ -405,3 +407,67 @@ describe("a ring's circle, saved", () => {
   });
 });
 
+
+describe("a workspace's sets, saved (version 2)", () => {
+  /** The canvas with a set round the ethanol and the second molecule, and a step's result set round the first, kept out of the file where told. */
+  function withSets(keep?: false) {
+    const { doc, st } = canvas();
+    doc.edit("sets", (d) => {
+      let next = addSet(d, { x0: -1, y0: -1, x1: 3, y1: 2 });
+      next = { ...next, sets: next.sets!.map((b) => ({ ...b, members: [...b.members!, { molecule: 2 }] })) };
+      next = addSet(next, { x0: 9, y0: -1, x1: 11, y1: 1 });
+      return { ...next, sets: next.sets!.map((b) => (b.id === 2 ? { ...b, made: { step: 9, holds: "molecules" as never }, ...(keep === false ? { keep } : {}) } : b)) };
+    });
+    return { doc, st };
+  }
+
+  it("keeps each set's members: a structure by its atoms' ids, a molecule by its place - and they open as they were", () => {
+    const { st } = withSets();
+    const text = workspaceText(st());
+    const saved = JSON.parse(text);
+    expect(saved.version).toBe(2);
+    expect(saved.sets[0].members).toEqual([{ structure: [1, 2, 3] }, { molecule: 1 }]);
+    expect(saved.sets[1].members).toEqual([{ molecule: 0 }]);
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().openWorkspace(readWorkspace(text)!, true);
+    const s = store.getState();
+    expect(s.sets.map((b) => b.members)).toEqual(st().sets.map((b) => b.members));
+  });
+
+  it("reads a molecule member by its place among those that read: one that does not read before it shifts it, one it names that does not read is left out", () => {
+    const { st } = withSets();
+    const saved = JSON.parse(workspaceText(st()));
+    saved.molecules3d = [null, ...saved.molecules3d];
+    saved.sets[0].members = [{ structure: [1, 2, 3] }, { molecule: 2 }, { molecule: 0 }];
+    const ws = readWorkspace(JSON.stringify(saved))!;
+    expect(ws.workflow!.sets[0].members).toEqual([{ structure: [1, 2, 3] }, { molecule: 2 }]);
+  });
+
+  it("of a result set kept out of the file: its molecules not written, only how many it held and their collection's hash", () => {
+    const kept = JSON.parse(workspaceText(withSets().st()));
+    const { st } = withSets(false);
+    const hash = collectionHash(st(), st().sets[1]);
+    const saved = JSON.parse(workspaceText(st()));
+    expect(saved.molecules3d).toHaveLength(kept.molecules3d.length - 1);
+    expect(saved.sets[1].members).toBeUndefined();
+    expect(saved.sets[1].notKept).toEqual({ count: 1, hash });
+    // (the other set's molecule by its place among those written)
+    expect(saved.sets[0].members).toEqual([{ structure: [1, 2, 3] }, { molecule: 0 }]);
+    const ws = readWorkspace(JSON.stringify(saved))!;
+    expect(ws.workflow!.sets[1].notKept).toEqual({ count: 1, hash });
+  });
+
+  it("of a file of version 1 - sets that did not keep members - are what lies inside each frame as it opens", () => {
+    const { st } = withSets();
+    const saved = JSON.parse(workspaceText(st()));
+    saved.version = 1;
+    for (const b of saved.sets) delete b.members;
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().openWorkspace(readWorkspace(JSON.stringify(saved))!, true);
+    expect(store.getState().sets[0].members).toEqual([{ structure: [1, 2, 3] }]);
+  });
+});
