@@ -45,3 +45,26 @@ export function bandsAbout(r: { left: number; top: number; width: number; height
     [right, top, width - right, bottom - top],
   ];
 }
+
+/** A rectangle on the canvas, in pixels from its top left. */
+export type OnScreen = { left: number; top: number; width: number; height: number };
+
+/**
+ * Where a slide lies on a canvas `width` by `height` pixels as a talk shows
+ * it (slides `slideFit`): as large as it fits below `top` - a Mac's notch -
+ * in the middle of what is left. The frame of the screen it is shown in:
+ * black about it.
+ */
+export function frameOnScreen(s: { w: number; h: number }, width: number, height: number, top = 0): OnScreen {
+  const room = Math.max(1, height - top);
+  const zoom = Math.min(width / s.w, room / s.h);
+  const fw = s.w * zoom;
+  const fh = s.h * zoom;
+  return { left: (width - fw) / 2, top: top + (room - fh) / 2, width: fw, height: fh };
+}
+
+/** A rectangle `t` of the way from `a` to `b`. */
+export function rectBetween(a: OnScreen, b: OnScreen, t: number): OnScreen {
+  const at = (p: number, q: number) => p + (q - p) * t;
+  return { left: at(a.left, b.left), top: at(a.top, b.top), width: at(a.width, b.width), height: at(a.height, b.height) };
+}

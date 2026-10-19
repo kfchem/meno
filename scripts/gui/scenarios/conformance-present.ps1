@@ -22,9 +22,10 @@
 #   own over the whole screen - notes.txt: borderless, at 0,0 and the
 #   screen's size, the window it came from behind it - the slide filling it
 #   below the notch, black about it (notes.txt: the bands sampled black).
-# - "talk-flight", "talk-slide-2": on the way to the next slide the black
-#   lifted and the page seen whole (sampled white); come to it, black again;
-#   "2 / 2" for a moment in a corner.
+# - "talk-flight", "talk-slide-2": on the way to the next slide the page seen
+#   whole within the slide's frame, the bands about the frame black all the
+#   way (sampled black, 2026-10-19; before, they went white); come to it,
+#   black about it; "2 / 2" for a moment in a corner.
 # - "talk-dragged": a mouse drag in a talk moves the view - nothing written
 #   (only a pen writes in a talk; the harness has no pen to try).
 # - "talk-other-look": two clicks on the molecule in 3D - its other look.
