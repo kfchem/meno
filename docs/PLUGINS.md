@@ -406,10 +406,33 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   (`roles: [{role, options}]`, for a role that takes them); Settings draws
   them under the role, where it is chosen, and the plugin is sent them
   with each request for the role (`options`). RDKit declares its conformer
-  search's (0.1.8): how many sought, the force field (MMFF94, MMFF94s,
-  UFF), the steps an optimisation may take, the RMSD within which two are
-  the same shape, the random seed - and its *Conformers* step takes the
-  same, said once.
+  search's (0.1.8): how many sought - as many as the molecule needs, or a
+  number given - the force field (MMFF94, MMFF94s, UFF), the steps an
+  optimisation may take, the RMSD within which two are the same shape, the
+  random seed - and its *Conformers* step takes the same, said once.
+- **How many conformers are sought is the molecule's to say**
+  (2026-10-20): a fixed number is too few for a molecule with much to
+  explore and more than a rigid one has shapes, so the RDKit plugin asks
+  the molecule, unless the chemist sets a number (*Conformers sought*,
+  *This many*). By the bonds in it that turn, it is Ebejer, Morris and
+  Deane's rule - fifty up to seven such bonds, two hundred to twelve,
+  three hundred beyond (*Conformer Generation using RDKit*, 1st RDKit User
+  General Meeting, London 2012; *Freely Available Conformer Generation
+  Methods: How Good Is Good Enough?*, J. Chem. Inf. Model. 2012, 52,
+  1146-1158). Two things are added to it, both measured here:
+  - **a ring that can flip is worth at least two hundred.** A ring's two
+    chairs are shapes of its own that no turning bond counts, and an
+    embedding falls into the rarer one seldom - 3.8% of embeddings for
+    tert-butylcyclohexane, 4.3% for phenylcyclohexane, over 8000
+    embeddings of each of twelve monosubstituted cyclohexanes - so thirty
+    tries missed the axial chair of phenylcyclohexane altogether. At two
+    hundred, both chairs came back for all twelve, at every seed tried. A
+    ring counts if it has five atoms or more, is not aromatic, and is not
+    bridged, a bridge holding its ring in the one shape.
+  - **a molecule that cannot change shape is worth ten**, RDKit's own
+    number for an embedding: nothing in it turns and no ring of it can
+    flip, so each try gives the same shape back (benzene, caffeine,
+    adamantane).
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
