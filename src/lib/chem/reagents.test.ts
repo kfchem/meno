@@ -16,6 +16,9 @@ const centres = (s: GroupStructure) => s.atoms.filter((a) => a.tetra).map((a) =>
 describe("the reagents", () => {
   // each one's molecular formula, as its name gives it
   const formulas: Record<string, string> = {
+    // (bases and coupling reagents: the formulas PubChem gives the records their structures were checked against)
+    MTBD: "C8H15N3", BEMP: "C13H31N4P", "P4-tBu": "C22H63N13P4", BTMG: "C9H21N3",
+    PyAOP: "C17H27F6N7OP2", TCFH: "C5H12ClF6N2P", DEPBT: "C11H14N3O5P", EEDQ: "C14H17NO3", "BOP-Cl": "C6H8ClN2O5P",
     DMP: "C13H13IO8", IBX: "C7H5IO4", PIDA: "C10H11IO4", PIFA: "C10H5F6IO4", TEMPO: "C9H18NO", AZADO: "C9H14NO",
     PCC: "C5H6ClCrNO3", PDC: "C10H12Cr2N2O7", TPAP: "C12H28NO4Ru", NMO: "C5H11NO2", mCPBA: "C7H5ClO3", DDQ: "C8Cl2N2O2",
     Oxone: "H3K5O18S4", OsO4: "O4Os", KMnO4: "KMnO4", MnO2: "MnO2",
