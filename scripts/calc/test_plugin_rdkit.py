@@ -403,6 +403,67 @@ class Metals(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
+class RingChairs(unittest.TestCase):
+    """A ring's two chairs are both conformers of it: pruning while embedding, on coordinates no force field had
+    touched yet, kept whichever chair came first and threw the other away."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def chairs(self, smiles):
+        """Each conformer of `smiles` as (kcal/mol above the lowest, how far its substituent leans off the ring's
+        normal): a chair's axial bond lies along the normal, its equatorial bond across it."""
+        import numpy as np
+        mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
+        entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        els = [a["el"] for a in entry["atoms"]]
+        nbr = {}
+        for b in entry["bonds"]:
+            nbr.setdefault(b["a1"], []).append(b["a2"])
+            nbr.setdefault(b["a2"], []).append(b["a1"])
+        oxy = els.index("O")
+        # (the ring carbon on the oxygen, not the methyl: it is the one with carbon neighbours)
+        c1 = next(i for i in nbr[oxy] if els[i] == "C" and sum(1 for n in nbr[i] if els[n] == "C") >= 2)
+
+        def walk(at, path):
+            if len(path) == 6:
+                return path if c1 in nbr[at] else None
+            for n in nbr[at]:
+                if els[n] == "C" and n not in path and n != oxy:
+                    got = walk(n, path + [n])
+                    if got:
+                        return got
+            return None
+
+        ring = walk(c1, [c1])
+        self.assertEqual(len(ring or []), 6)
+        lowest = min(entry["energies"])
+        out = []
+        for k, frame in enumerate(entry["frames"]):
+            P = np.array(frame).reshape(-1, 3)
+            R = P[ring]
+            normal = np.linalg.svd(R - R.mean(axis=0))[2][2]
+            v = P[oxy] - P[c1]
+            out.append(((entry["energies"][k] - lowest) * 627.5094740631, abs(float(v @ normal)) / float(np.linalg.norm(v))))
+        return out
+
+    def test_gives_both_chairs_of_methoxycyclohexane_the_equatorial_one_lowest(self):
+        # (the axial chair is a real minimum about half a kcal/mol above the equatorial one: a set without it is
+        # wrong for anyone reasoning about a ring's substituents)
+        chairs = [(kcal, cos) for kcal, cos in self.chairs("COC1CCCCC1") if kcal < 3.0]
+        axial = [kcal for kcal, cos in chairs if cos > 0.6]
+        equatorial = [kcal for kcal, cos in chairs if cos < 0.5]
+        self.assertTrue(equatorial, chairs)
+        self.assertTrue(axial, chairs)
+        # (the equatorial chair is the lowest, and the axial one is near it, not a ring flip away in energy)
+        self.assertEqual(min(equatorial), 0.0)
+        self.assertLess(min(axial), 2.0)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
 class EtaBound(unittest.TestCase):
     """A ring bound to a metal through all its atoms, written as the CTfile's multi-centre bond (a bond to a star
     at its centre, ENDPTS its atoms, ATTACH=ALL): held over its metal, its star at its centre, its cyclopentadienide
