@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useThree } from "@react-three/fiber";
 import { captionPlace, wordsFontPx, wordsSet, type CaptionSet } from "../../../../lib/chem/captions";
 import { labelSetOf, type LabelSet } from "../../../../lib/chem/layout2d";
@@ -19,7 +19,8 @@ import { type Held } from "./held";
 import { HeldGlow } from "./HeldLight";
 import { WholeTexts2D } from "./Labels2D";
 import { SELECTION_SHADE } from "./selectionShade";
-import { holdCursor, setCursor } from "../../../theme/cursors";
+import { holdCursor, setCursor, type CursorName } from "../../../theme/cursors";
+import { captionPointer } from "./captionPointer";
 import { NO_RAYCAST, PartFramesProvider, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 type Pt = { x: number; y: number };
@@ -120,16 +121,30 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
   // taken hold of by a press held on it: where, from its middle, lit from there
   const [held, setHeld] = useState<(Held & Pt) | null>(null);
   useEffect(() => invalidate(), [held, invalidate]);
+  // the pointer over its words, its edge or both, and the pointer for that (captionPointer)
+  const over = useRef({ words: false, edge: false });
+  // (the canvas's pointer changed only where it is to be: others ask for theirs on it and write theirs too)
+  const pointerOn = useCallback(
+    (part: "words" | "edge" | "both", on: boolean) => {
+      if (part === "both") over.current = { words: on, edge: on };
+      else over.current[part] = on;
+      const el = gl.domElement;
+      const { asked, own } = captionPointer(over.current, { asked: el.dataset.cursor, own: el.style.cursor });
+      if (asked !== el.dataset.cursor) setCursor(el, (asked ?? null) as CursorName | null);
+      if (own !== el.style.cursor) el.style.cursor = own;
+    },
+    [gl],
+  );
+  const onEdge = useCallback((on: boolean) => pointerOn("edge", on), [pointerOn]);
   // gone from under the pointer without the pointer leaving it - its words
   // written in its place: no longer under it
   useEffect(
     () => () => {
       const s = store.getState();
       if (s.hoveredCaption === c.id) s.setHoveredCaption(null);
-      setCursor(gl.domElement, null);
-      gl.domElement.style.cursor = "";
+      pointerOn("both", false);
     },
-    [store, c.id, gl],
+    [store, c.id, pointerOn],
   );
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
@@ -266,12 +281,11 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
       position={[0, 0, 0.04]}
       onPointerOver={() => {
         store.getState().setHoveredCaption(c.id);
-        // (words: the system's text pointer, as over words anywhere)
-        gl.domElement.style.cursor = "text";
+        pointerOn("words", true);
       }}
       onPointerOut={() => {
         store.getState().setHoveredCaption(null);
-        gl.domElement.style.cursor = "";
+        pointerOn("words", false);
       }}
       onPointerDown={onDown}
     >
@@ -281,8 +295,8 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
       {held && <HeldGlow held={held} b={box} at={held} z={0.005} gone={() => setHeld(null)} />}
       {(hovered || resizing) && (
         <>
-          <CaptionEdge side={-1} laid={laid} margin={margin} onResizing={setResizing} />
-          <CaptionEdge side={1} laid={laid} margin={margin} onResizing={setResizing} />
+          <CaptionEdge side={-1} laid={laid} margin={margin} onResizing={setResizing} onPointer={onEdge} />
+          <CaptionEdge side={1} laid={laid} margin={margin} onResizing={setResizing} onPointer={onEdge} />
         </>
       )}
     </group>
@@ -342,7 +356,20 @@ function LitAndShaded({ w, h, lit, shaded, gone }: { w: number; h: number; lit: 
  * cursor too - the caption made as wide as from its other edge to the
  * pointer, its words broken into lines at it, as one step.
  */
-function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: Laid; margin: number; onResizing: (on: boolean) => void }) {
+function CaptionEdge({
+  side,
+  laid,
+  margin,
+  onResizing,
+  onPointer,
+}: {
+  side: -1 | 1;
+  laid: Laid;
+  margin: number;
+  onResizing: (on: boolean) => void;
+  /** The pointer come onto the edge, or gone from it: its caption gives the canvas the pointer for both. */
+  onPointer: (on: boolean) => void;
+}) {
   const { c, halfW, halfH } = laid;
   const store = useEditorStore();
   const { opts } = useDrawnLayout();
@@ -356,11 +383,13 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
     return { x: p.x, y: p.y };
   };
   const tall = 2 * (halfH + margin);
+  // (gone - the pointer off the caption, the edges with it: no longer under it)
+  useEffect(() => () => onPointer(false), [onPointer]);
   return (
     <group
       position={[side * (halfW + margin), 0, 0.001]}
-      onPointerOver={() => setCursor(gl.domElement, "sideways")}
-      onPointerOut={() => setCursor(gl.domElement, null)}
+      onPointerOver={() => onPointer(true)}
+      onPointerOut={() => onPointer(false)}
       onPointerDown={(e) => {
         if (e.nativeEvent.button !== 0) return;
         e.stopPropagation();
@@ -395,7 +424,6 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
           s.endPanHold(ev.pointerId);
           s.suppressDoubleClick(200);
           onResizing(false);
-          setCursor(gl.domElement, null);
         };
         window.addEventListener("pointermove", onMove);
         window.addEventListener("pointerup", onUp, true);
