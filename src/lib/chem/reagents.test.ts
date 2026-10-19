@@ -36,7 +36,7 @@ describe("the reagents", () => {
     DIAD: "C8H14N2O4",
     NBS: "C4H4BrNO2", NCS: "C4H4ClNO2", NIS: "C4H4INO2", DBDMH: "C5H6Br2N2O2", TCCA: "C3Cl3N3O3",
     Selectfluor: "C7H14B2ClF9N2", NFSI: "C12H10FNO4S2", DAST: "C4H10F3NS", "Deoxo-Fluor": "C6H14F3NO2S",
-    "Togni I": "C10H10F3IO", "Togni II": "C8H4F3IO2", "Ruppert–Prakash reagent": "C4H9F3Si", "Langlois reagent": "CF3NaO2S", SOCl2: "Cl2OS", "Ghosez's reagent": "C6H12ClN",
+    "Togni I": "C10H10F3IO", "Togni II": "C8H4F3IO2", "Ruppert–Prakash reagent": "C4H9F3Si", "Langlois reagent": "CF3NaO2S", "Umemoto Reagent II": "C14H6F8O3S2", "Umemoto Reagent IV": "C16H6F12O5S2", SOCl2: "Cl2OS", "Ghosez's reagent": "C6H12ClN",
     POCl3: "Cl3OP", PCl5: "Cl5P",
     TFAA: "C4F6O3",
     "Comins' reagent": "C7H3ClF6N2O4S2", HMDS: "C6H19NSi2", "Meerwein's salt": "C3H9BF4O", "Eschenmoser's salt": "C3H8IN",

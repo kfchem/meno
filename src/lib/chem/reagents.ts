@@ -219,6 +219,8 @@ export const REAGENTS: Reagent[] = [
   { label: "Deoxo-Fluor", use: "halogenation", smiles: "COCCN(CCOC)S(F)(F)F", name: "bis(2-methoxyethyl)aminosulfur trifluoride" },
   { label: "Togni I", also: ["Togni reagent I", "Togni's reagent I"], use: "halogenation", smiles: "CC1(C)O[I](C(F)(F)F)c2ccccc21", name: "3,3-dimethyl-1-(trifluoromethyl)-1,2-benziodoxole" },
   { label: "Togni II", also: ["Togni reagent II", "Togni's reagent II"], use: "halogenation", smiles: "FC(F)(F)[I]1OC(=O)c2ccccc21", name: "1-(trifluoromethyl)-1,2-benziodoxol-3(1H)-one" },
+  { label: "Umemoto Reagent II", also: ["Umemoto reagent II", "Umemoto's reagent II", "Umemoto's Reagent II"], use: "halogenation", smiles: "FC(F)(F)[S+]1c2ccc(F)cc2-c2cc(F)ccc12.[O-]S(=O)(=O)C(F)(F)F", name: "2,8-difluoro-S-(trifluoromethyl)dibenzothiophenium triflate" },
+  { label: "Umemoto Reagent IV", also: ["Umemoto reagent IV", "Umemoto's reagent IV", "Umemoto's Reagent IV"], use: "halogenation", smiles: "FC(F)(F)Oc1ccc2c(c1)-c1cc(OC(F)(F)F)ccc1[S+]2C(F)(F)F.[O-]S(=O)(=O)C(F)(F)F", name: "2,8-bis(trifluoromethoxy)-S-(trifluoromethyl)dibenzothiophenium triflate" },
   { label: "Ruppert–Prakash reagent", also: ["Ruppert-Prakash reagent"], use: "halogenation", smiles: "C[Si](C)(C)C(F)(F)F", name: "(trifluoromethyl)trimethylsilane" },
   { label: "Langlois reagent", also: ["Langlois' reagent"], use: "halogenation", smiles: "[Na+].[O-]S(=O)C(F)(F)F", name: "sodium trifluoromethanesulfinate" },
   { label: "SOCl2", use: "halogenation", smiles: "O=S(Cl)Cl", name: "thionyl chloride", formula: true },
