@@ -19,7 +19,7 @@ import { type Held } from "./held";
 import { HeldGlow } from "./HeldLight";
 import { WholeTexts2D } from "./Labels2D";
 import { SELECTION_SHADE } from "./selectionShade";
-import { holdCursor, setCursor } from "../../../theme/cursors";
+import { holdCursor, setCursor, type CursorName } from "../../../theme/cursors";
 import { captionPointer } from "./captionPointer";
 import { NO_RAYCAST, PartFramesProvider, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
@@ -123,12 +123,15 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
   useEffect(() => invalidate(), [held, invalidate]);
   // the pointer over its words, its edge or both, and the pointer for that (captionPointer)
   const over = useRef({ words: false, edge: false });
+  // (the canvas's pointer changed only where it is to be: others ask for theirs on it and write theirs too)
   const pointerOn = useCallback(
-    (part: "words" | "edge", on: boolean) => {
-      over.current[part] = on;
-      const { asked, own } = captionPointer(over.current);
-      setCursor(gl.domElement, asked);
-      gl.domElement.style.cursor = own;
+    (part: "words" | "edge" | "both", on: boolean) => {
+      if (part === "both") over.current = { words: on, edge: on };
+      else over.current[part] = on;
+      const el = gl.domElement;
+      const { asked, own } = captionPointer(over.current, { asked: el.dataset.cursor, own: el.style.cursor });
+      if (asked !== el.dataset.cursor) setCursor(el, (asked ?? null) as CursorName | null);
+      if (own !== el.style.cursor) el.style.cursor = own;
     },
     [gl],
   );
@@ -139,10 +142,9 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
     () => () => {
       const s = store.getState();
       if (s.hoveredCaption === c.id) s.setHoveredCaption(null);
-      setCursor(gl.domElement, null);
-      gl.domElement.style.cursor = "";
+      pointerOn("both", false);
     },
-    [store, c.id, gl],
+    [store, c.id, pointerOn],
   );
   const toWorld = (cx: number, cy: number) => {
     const rect = gl.domElement.getBoundingClientRect();
