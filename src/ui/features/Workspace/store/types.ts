@@ -472,8 +472,13 @@ export type Molecule3D = {
   centres?: { metal: number; atoms: number[] }[];
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
-  /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
-  made?: { method?: string; how: { label: string; text: string }[] };
+  /**
+   * How it was made, where something made it - its conformers' method and
+   * force field - as rows to show, in the words of what made it; and what
+   * its energies are (`energies`), where it gave them: the force field's
+   * name, as it said it.
+   */
+  made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
   /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
   said?: { label: string; text: string }[];
   /**

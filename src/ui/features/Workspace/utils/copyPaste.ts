@@ -593,8 +593,12 @@ function madeOf(v: unknown): Carried3D["made"] {
     .slice(0, 20)
     .filter((r): r is { label: string; text: string } => typeof r?.label === "string" && typeof r?.text === "string")
     .map((r) => ({ label: r.label.slice(0, 80), text: r.text.slice(0, 300) }));
-  const said = typeof method === "string" && method ? { method: method.slice(0, 300) } : {};
-  return rows.length || "method" in said ? { ...said, how: rows } : undefined;
+  const energies = (v as { energies?: unknown } | null | undefined)?.energies;
+  const said = {
+    ...(typeof method === "string" && method ? { method: method.slice(0, 300) } : {}),
+    ...(typeof energies === "string" && energies ? { energies: energies.slice(0, 80) } : {}),
+  };
+  return rows.length || Object.keys(said).length ? { ...said, how: rows } : undefined;
 }
 
 /** A molecule's open list as a file carries it; otherwise none. */
