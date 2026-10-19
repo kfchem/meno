@@ -4,6 +4,7 @@ import { insidePolygon } from "./geometry";
 import type { LayoutInput } from "./perceive";
 import { drawnVolume, placeStereo } from "./stereo";
 import { key, perceive } from "./perceive";
+import { fromSmiles } from "./testdata/fromSmiles";
 
 /** Reads a centre's configuration back off the drawing, the way the drawing shows it. */
 function readBack(input: LayoutInput, centre: number): number {
@@ -135,6 +136,25 @@ describe("stereo", () => {
       expect(readBack(input, 0)).toBe(volume);
       // on no ring bond
       expect(out.wedges.every((w) => w.to === -1)).toBe(true);
+    }
+  });
+
+  it("draws an H on each fusion carbon of cis- and trans-decalin and -hydrindane, each read as given", () => {
+    for (const [smiles, cis] of [
+      ["C1CC[C@H]2CCCC[C@H]2C1", true],
+      ["C1CC[C@@H]2CCCC[C@H]2C1", false],
+      ["C1CC[C@H]2CCC[C@H]2C1", true],
+      ["C1CC[C@H]2CCC[C@@H]2C1", false],
+    ] as const) {
+      const input = fromSmiles(smiles);
+      const centres = input.atoms.flatMap((a, i) => (a.tetra ? [i] : []));
+      expect(centres, smiles).toHaveLength(2);
+      const out = layout2D(input);
+      expect(out.hydrogens.map((h) => h.on).sort(), smiles).toEqual(centres);
+      expect(out.wedges.every((w) => w.to === -1), smiles).toBe(true);
+      for (const c of centres) expect(readBack(input, c), `${smiles} ${c}`).toBe(input.atoms[c].tetra!.volume);
+      // cis: both H on the same side of the page
+      expect(out.wedges[0].stereo === out.wedges[1].stereo, smiles).toBe(cis);
     }
   });
 });

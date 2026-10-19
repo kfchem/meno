@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CURSORS, cursorCss, cursorSvg, installCursors, setCursor, type CursorName } from "./cursors";
+import { CURSORS, cursorCss, cursorSvg, holdCursor, installCursors, setCursor, type CursorName } from "./cursors";
 
 const NAMES = Object.keys(CURSORS) as CursorName[];
 
@@ -48,5 +48,45 @@ describe("Meno's pointers", () => {
     expect(el.dataset.cursor).toBe("turning");
     setCursor(el, null);
     expect("cursor" in el.dataset).toBe(false);
+  });
+
+  it("are held over the whole page for a drag, before any other asked for, and let go", () => {
+    const css = cursorCss();
+    for (const name of NAMES) {
+      const rule = css.split("\n").find((r) => r.startsWith(`[data-cursor-held="${name}"]`))!;
+      // (over every element under the page's root, and over a pointer asked for there - words' text cursor, set on the element itself)
+      expect(rule.startsWith(`[data-cursor-held="${name}"], [data-cursor-held="${name}"] * {`)).toBe(true);
+      expect(rule.match(/!important/g)).toHaveLength(2);
+      expect(rule).toContain(`12 12, ${CURSORS[name].fallback} !important`);
+    }
+    const win = new EventTarget();
+    const page = { documentElement: { dataset: {} as DOMStringMap }, defaultView: win } as unknown as Document;
+    const letGo = holdCursor("sideways", page);
+    expect(page.documentElement.dataset.cursorHeld).toBe("sideways");
+    letGo();
+    expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+    // (held again before the first is let go, of the same name or another: the later hold's, until its own release)
+    const first = holdCursor("sideways", page);
+    const second = holdCursor("sideways", page);
+    first();
+    expect(page.documentElement.dataset.cursorHeld).toBe("sideways");
+    second();
+    expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+  });
+
+  it("let go where the drag is lost: the window left, or the pointer taken from it", () => {
+    for (const lost of ["blur", "pointercancel"]) {
+      const win = new EventTarget();
+      const page = { documentElement: { dataset: {} as DOMStringMap }, defaultView: win } as unknown as Document;
+      const letGo = holdCursor("sideways", page);
+      win.dispatchEvent(new Event(lost));
+      expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+      // (the drag's own release later, as its gesture ends: nothing more to let go, and a later hold kept)
+      holdCursor("corner-up", page);
+      letGo();
+      expect(page.documentElement.dataset.cursorHeld).toBe("corner-up");
+      win.dispatchEvent(new Event(lost));
+      expect("cursorHeld" in page.documentElement.dataset).toBe(false);
+    }
   });
 });

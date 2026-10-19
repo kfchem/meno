@@ -141,7 +141,9 @@ describe("what a set holds", () => {
     const alone = addSet({ ...page, model: { atoms: drawn.atoms.filter((a) => last.has(a.id)), bonds: drawn.bonds.filter((b) => last.has(b.a)) } }, all);
     const grownAlone = fitSets({ ...alone, model: moved(alone.model) }, alone);
     expect(grown.sets![0].x1).toBeGreaterThan(all.x1);
-    expect(grown.sets).toEqual(grownAlone.sets);
+    // (their frames: what each holds is its own - a thousand structures against one)
+    const frame = (s: WorkspaceDocument["sets"]) => s!.map(({ x0, y0, x1, y1 }) => ({ x0, y0, x1, y1 }));
+    expect(frame(grown.sets)).toEqual(frame(grownAlone.sets));
     // (the very same structures for every set asking of the page: found once, not again for each set)
     const everything = setMembers(page, all).structures;
     expect(setMembers(page, left).structures.every((ids) => everything.includes(ids))).toBe(true);

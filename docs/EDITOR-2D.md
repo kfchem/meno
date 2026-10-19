@@ -750,8 +750,15 @@ All hover-based, as above.
   - Enter again, straight after the Enter that kept it - no other key,
     press or selection between - draws the label out, as *Expand
     abbreviation* does, one step after the label's own; a label with
-    nothing to draw out stays as it is. An Enter over a label not just
-    typed draws nothing out.
+    nothing to draw out stays as it is. A label kept by Enter as it was -
+    typed over an atom that already said it, as a structure read from a
+    figure has its groups - is drawn out by the next Enter too (the
+    maintainer's report, 2026-10-18: SO2H typed over a read SO2H, then
+    Enter, drew nothing out). An Enter over a label not just typed draws
+    nothing out. An Enter is one however it comes - as an
+    input method on Windows gives every key, "Process" with the key
+    pressed in its code, nothing being composed (pageField `enterKey`) -
+    and one that confirms what an input method composes is not.
   - The drawing's labels are drawn each by its atom (`Labels2D` `keyOf`):
     a label added or taken away sets no other label's letters again. A
     label taken away - undone, redone away, deleted with its atom, its
@@ -768,7 +775,15 @@ All hover-based, as above.
      molecule - a reagent, a complex - as a label on a structure stands
      for part of one (co2me is CO2Me, not a complex of cobalt; hf is Hf,
      HF typed so); then the fewest letters made capitals (co is Co, ph Ph,
-     ipr iPr - not the NHC IPr).
+     ipr iPr - not the NHC IPr). But two capitals that are an element's
+     symbol are that element (the maintainer, 2026-10-18): SI is Si, not S
+     and I; CL Cl, FE Fe, a charge after them kept (FE+ is Fe+). Not where
+     the two letters as typed are a name Meno reads whole (CO, carbon
+     monoxide, as a ligand), a whole molecule (HF), or are turned round as
+     drawn on a bond's left to a heteroatom first (HO is OH, HS SH, SN NS:
+     rule 3 - SB and EU are Sb and Eu, not turned round), nor an element
+     after uranium (rule 2: CN, NO and NH as they are). PO is P and O; Po,
+     so typed, is polonium.
   2. No element after uranium is read from letters typed small: nh is NH,
      cn CN, no NO; ts is tosyl, fm Fm. Nor is deuterium: D is deuterium
      only as typed (CDCl3, CD3), so pdcl2 is PdCl2.
@@ -1255,7 +1270,7 @@ All hover-based, as above.
     Backspace under the pointer or from their menu, too.
   - Made wider or narrower by their edges, shown as they are lit (the
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
-    it, the other edge staying where it is, their words are broken at
+    it - kept through the drag, over the words too - the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
     each as fit, each line still centred, a number or a range never parted
     from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two

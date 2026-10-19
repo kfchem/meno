@@ -1,3 +1,4 @@
+import type { ShowBox } from "../utils/viewShow";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -588,7 +589,23 @@ export type WorkflowSet = {
   made?: { step: number; holds: SetHolds };
   name?: string;
   aside?: AsideEntry[];
+  /**
+   * What it holds, in order (docs/WORKFLOWS-FOUNDATION.md, *Members are
+   * explicit*): each a structure drawn (by its atoms' ids), a molecule in
+   * 3D or a picture (by id). Dropping something into the frame adds it at
+   * its place, dragging it out takes it out, a frame resized takes in and
+   * lets go of what then lies inside it or not (workflow/model
+   * `membersSettled`); a step's result set holds what the step made, in its
+   * order. None yet: what lies inside it, as a set was before.
+   */
+  members?: Member[];
+  /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
+  keep?: false;
+  /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
+  notKept?: { count: number; hash: string };
 };
+/** One of a set's members: a structure drawn, by its atoms' ids; a molecule in 3D, or a picture, by id. */
+export type Member = { structure: number[] } | { molecule: number } | { picture: number };
 /** An entry a step set aside: its compound, by its place among the set's (a, b...); its number among that compound's conformers; its energy, in hartrees. */
 export type AsideEntry = { compound: number; number: number; energy?: number };
 /**
@@ -1297,6 +1314,8 @@ export type EditorState = {
   placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => void;
   /** A chemist's set named anew; an empty name takes its name away (*Input* again). */
   renameSet: (id: number, name: string) => void;
+  /** A step's result set kept in the workspace's file, or not: one step. */
+  keepSet: (id: number, keep: boolean) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
@@ -1359,6 +1378,14 @@ export type EditorState = {
   arrows: Arrow[];
   pluses: Plus[];
   fitNonce: number;
+  /**
+   * What was just put down on the page, to be shown (utils/viewShow): the
+   * view moved along to take it in, or out as little as needed - each
+   * request its own number.
+   */
+  showRequest: { box: ShowBox; n: number } | null;
+  /** The view to show `box`, as what was just put down is shown (`showRequest`). */
+  requestShow: (box: ShowBox) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
