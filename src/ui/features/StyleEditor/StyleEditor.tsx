@@ -156,26 +156,10 @@ export default function StyleEditor({
   // crossing from one to the other keeps the fields and the preview as they
   // are, and the search box its caret)
   return (
+    // (two columns, the settings and the preview, sharing the section's width: a list of the
+    // groups beside them left the settings too narrow to read once Settings was centred -
+    // the maintainer, 2026-10-18; the groups are headed in the column, and found by the search)
     <div ref={setBox} className={narrow ? "flex flex-col" : "flex gap-8 items-start"}>
-      {!narrow && (
-        <nav className="hidden xl:block w-44 shrink-0 sticky top-4 text-sm">
-          {STYLE_GROUPS.map((g) => (
-            <a
-              key={g}
-              href={`#${groupId(g)}`}
-              onClick={(e) => {
-                e.preventDefault();
-                document
-                  .getElementById(groupId(g))
-                  ?.scrollIntoView({ behavior: "smooth" });
-              }}
-              className="block px-2 py-1 rounded-md text-gh-gray hover:text-gh-black hover:bg-gh-base"
-            >
-              {g}
-            </a>
-          ))}
-        </nav>
-      )}
       <div className={narrow ? "pt-3" : "contents"}>{fields}</div>
       {/* (narrow, a little wider than the settings it lies over: a chosen preset's ring, scrolled under it, no longer shows at its sides) */}
       <div className={narrow ? "order-first sticky top-0 z-10 -mx-1 px-1 bg-white pb-3 border-b border-gh-line" : "w-[26rem] shrink-0 sticky top-4"}>
