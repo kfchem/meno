@@ -174,18 +174,45 @@ mod tests {
     }
 
     /// Info.plist's document types and the Windows installer's list, as the extensions Meno
-    /// takes: the three alike.
+    /// takes: the three alike - and on macOS Meno the owner of .meno alone, an Alternate for
+    /// all the rest.
     #[test]
     fn offers_itself_where_info_plist_and_the_installer_say() {
         let plist = include_str!("../Info.plist");
         let hooks = include_str!("../windows/hooks.nsh");
-        let mut in_plist: Vec<String> = plist.split("<string>").skip(1).filter_map(|s| s.split("</string>").next()).map(str::to_string).collect();
-        in_plist.retain(|s| OPENED_WITH.contains(&s.as_str()));
-        let mut want: Vec<&str> = OPENED_WITH.iter().copied().filter(|e| *e != "pdf").collect();
-        want.sort();
-        in_plist.sort();
-        assert_eq!(in_plist, want, "Info.plist's extensions");
-        assert!(plist.contains("<string>com.adobe.pdf</string>"));
+        // (the strings of an array under `key` in a document type, in order)
+        fn strings(t: &str, key: &str) -> Vec<String> {
+            let Some(at) = t.find(&format!("<key>{key}</key>")) else { return vec![] };
+            let rest = &t[at..];
+            let array = &rest[..rest.find("</array>").unwrap_or(rest.len())];
+            array.split("<string>").skip(1).filter_map(|s| s.split("</string>").next()).map(str::to_string).collect()
+        }
+        fn string(t: &str, key: &str) -> Option<String> {
+            let at = t.find(&format!("<key>{key}</key>"))?;
+            let rest = &t[at..];
+            rest.split("<string>").nth(1)?.split("</string>").next().map(str::to_string)
+        }
+        let types = &plist[plist.find("<key>CFBundleDocumentTypes</key>").unwrap()..plist.find("<key>UTExportedTypeDeclarations</key>").unwrap()];
+        let docs: Vec<&str> = types.split("<dict>").skip(1).collect();
+        let mut owners = 0;
+        let mut extensions: Vec<String> = Vec::new();
+        let mut uti: Vec<String> = Vec::new();
+        for d in &docs {
+            let rank = string(d, "LSHandlerRank").expect("each document type ranks itself");
+            let utis = strings(d, "LSItemContentTypes");
+            if utis == ["dev.kfchem.meno.workspace"] {
+                assert_eq!(rank, "Owner", "the workspace's own type");
+                owners += 1;
+                continue;
+            }
+            assert_eq!(rank, "Alternate", "every type but the workspace's: {d}");
+            extensions.extend(strings(d, "CFBundleTypeExtensions"));
+            uti.extend(utis);
+        }
+        assert_eq!(owners, 1);
+        let want: Vec<&str> = OPENED_WITH.iter().copied().filter(|e| *e != "pdf").collect();
+        assert_eq!(extensions, want, "Info.plist's extensions");
+        assert_eq!(uti, ["com.adobe.pdf"], "Info.plist's other types");
         let mut in_hooks: Vec<&str> = hooks.lines().filter_map(|l| l.trim().strip_prefix("!insertmacro ${M} \"")).filter_map(|l| l.strip_suffix('"')).collect();
         in_hooks.sort();
         let mut all = OPENED_WITH.to_vec();

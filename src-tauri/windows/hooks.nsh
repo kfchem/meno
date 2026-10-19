@@ -41,13 +41,13 @@
   WriteRegStr SHCTX "${MENO_APPLICATIONS}\${MAINBINARYNAME}.exe\SupportedTypes" ".${EXT}" ""
 !macroend
 
-; Meno's value taken out, and the keys it was put in only where nothing else
-; is left in them (DeleteRegKey /ifempty: no subkeys and no values): another
-; program's ProgIDs, and the extension's default, stay.
+; Meno's value taken out, and nothing else: the keys it was put in stay,
+; empty or not - an empty key is harmless, and another program's ProgIDs,
+; and the extension's default, are in them too. (DeleteRegKey /ifempty is
+; not used: it goes by subkeys alone, and would take the other values
+; with the key.)
 !macro MENO_UNOFFER EXT
   DeleteRegValue SHCTX "Software\Classes\.${EXT}\OpenWithProgids" "${MENO_OPEN_WITH}"
-  DeleteRegKey /ifempty SHCTX "Software\Classes\.${EXT}\OpenWithProgids"
-  DeleteRegKey /ifempty SHCTX "Software\Classes\.${EXT}"
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL
@@ -94,8 +94,8 @@
 
 !macro NSIS_HOOK_PREUNINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-ole'
-  ; Open With: each file type's value, then Meno's ProgID and Meno.exe's
-  ; entry, both its own alone - and Explorer told.
+  ; Open With: Meno's value in each file type's OpenWithProgids, then Meno's
+  ; ProgID and Meno.exe's entry, both its own alone - and Explorer told.
   !insertmacro MENO_OPEN_WITH_TYPES MENO_UNOFFER
   DeleteRegKey SHCTX "Software\Classes\${MENO_OPEN_WITH}"
   DeleteRegKey SHCTX "${MENO_APPLICATIONS}\${MAINBINARYNAME}.exe"

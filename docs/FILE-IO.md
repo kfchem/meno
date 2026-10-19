@@ -774,9 +774,10 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     own default left as it is - and Meno.exe's `Applications` entry lists
     each among its `SupportedTypes` (Microsoft, "How to Include an
     Application in the Open With Dialog Box", "Application Registration").
-    Uninstalling takes Meno's value out of each, the keys it was in only
-    where nothing else is left in them, and Meno's ProgID and `Applications`
-    entry whole.
+    Uninstalling takes Meno's value out of each extension's
+    `OpenWithProgids` and nothing else there - the keys stay, as other
+    programs' values and the extension's default are in them - and Meno's
+    ProgID and `Applications` entry whole.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -
