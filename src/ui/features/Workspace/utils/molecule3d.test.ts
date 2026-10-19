@@ -33,6 +33,8 @@ import {
   widestWay,
   type Turning3D,
   spotFollowed,
+  fadeStep,
+  type LabelFade,
   valueSpots,
   VALUE_SLACK_PX,
   type SpotAbout,
@@ -757,5 +759,75 @@ describe("measurements' values close together on the screen", () => {
       { o: { x: 2 * half.x + VALUE_SLACK_PX + 1, y: 0 }, half, way: { x: 0, y: 1 }, was: off },
     ]);
     expect(clear[1].r).toBe(0);
+  });
+});
+
+describe("fadeStep", () => {
+  const TIME = 0.12;
+  const DT = 1 / 60;
+  const fresh = (): LabelFade => ({ v: 0, from: 0, to: 0, t: 0 });
+
+  it("brings labels shown together into view together, none before all of them are there", () => {
+    const a = fresh();
+    const b = fresh();
+    // (b's element not made yet: neither starts)
+    for (let k = 0; k < 3; k++) {
+      fadeStep(a, 1, false, DT, TIME);
+      fadeStep(b, 1, false, DT, TIME);
+    }
+    expect([a.v, b.v]).toEqual([0, 0]);
+    // (both there: both go, frame by frame alike, and are in view on the same frame)
+    let frames = 0;
+    for (;;) {
+      const goingA = fadeStep(a, 1, true, DT, TIME);
+      const goingB = fadeStep(b, 1, true, DT, TIME);
+      expect(a.v).toBe(b.v);
+      if (!goingA && !goingB) break;
+      frames++;
+    }
+    expect([a.v, b.v]).toEqual([1, 1]);
+    expect(frames).toBeGreaterThan(3);
+  });
+
+  it("takes as long to go out of view as to come into it, eased and never back", () => {
+    const f = fresh();
+    const seen: number[] = [];
+    let inFrames = 0;
+    while (fadeStep(f, 1, true, DT, TIME)) {
+      seen.push(f.v);
+      inFrames++;
+    }
+    let outFrames = 0;
+    let last = f.v;
+    while (fadeStep(f, 0, true, DT, TIME)) {
+      expect(f.v).toBeLessThan(last);
+      last = f.v;
+      outFrames++;
+    }
+    expect(f.v).toBe(0);
+    expect(outFrames).toBe(inFrames);
+    // (into view quick out of its start, as a mark comes; never a jump to the end)
+    expect(seen[0]).toBeGreaterThan(DT / TIME);
+    expect(seen[0]).toBeLessThan(0.5);
+  });
+
+  it("goes out of view from where it stands, hidden as it comes, at once - waiting for no other", () => {
+    const f = fresh();
+    for (let k = 0; k < 3; k++) fadeStep(f, 1, true, DT, TIME);
+    const part = f.v;
+    expect(part).toBeGreaterThan(0);
+    expect(part).toBeLessThan(1);
+    fadeStep(f, 0, false, DT, TIME);
+    expect(f.v).toBeLessThan(part);
+    expect(f.from).toBe(part);
+  });
+
+  it("is all the way once its time is up, and goes nowhere on a frame of no time", () => {
+    const f = fresh();
+    fadeStep(f, 1, true, 10, TIME);
+    expect(f.v).toBe(1);
+    const g = fresh();
+    fadeStep(g, 1, true, -1, TIME);
+    expect(g.v).toBe(0);
   });
 });

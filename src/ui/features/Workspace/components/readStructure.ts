@@ -11,7 +11,7 @@ import type { EditorStore } from "../store";
 import type { PictureItem } from "../store/types";
 import { styleOf } from "../../../../lib/chem/style";
 import { pageBoxes } from "../utils/freePlace";
-import { placedBeside, readBox, readPicture, regionOf } from "../utils/figures";
+import { placedBeside, readBox, readPicture } from "../utils/figures";
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 
@@ -36,7 +36,7 @@ export async function readStructure(
   store: EditorStore,
   source: FigureSource,
   region: Region,
-  ui: { working: (what: string | null) => void; say: (why: string | null) => void; view: () => Region | null; fit: () => void },
+  ui: { working: (what: string | null) => void; say: (why: string | null) => void },
 ): Promise<void> {
   ui.working("picture" in source ? "Reading the picture…" : "Reading the figure…");
   ui.say(null);
@@ -50,11 +50,8 @@ export async function readStructure(
     // (clear of all there is on the page - structures, words, arrows, pictures, PDFs, sheets, molecules in 3D - as what Open puts down is)
     const style = styleOf(st.docStyle);
     const placed = placedBeside(read, region, pageBoxes(st, style), style);
+    // (selected and shown - the view moved to take it in, where the column or the view's edge hides it: modelSlice `putRead`)
     store.getState().putRead(placed.model, placed.scheme);
-    // (beyond the view, the view takes it in)
-    const view = ui.view();
-    const at = regionOf(placed, style);
-    if (view && at && (at.x0 < view.x0 || at.x1 > view.x1 || at.y0 < view.y0 || at.y1 > view.y1)) ui.fit();
   } catch (e: unknown) {
     ui.say(`The figure could not be read: ${e instanceof Error ? e.message : String(e)}`);
   } finally {

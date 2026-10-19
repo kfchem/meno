@@ -12,7 +12,7 @@ import { DURATION } from "../../theme/motion";
 import type { WorkspaceDocument } from "./document";
 import { easeInOut } from "./presenting/zoomPath";
 import { bondPtOf, restyledDocument } from "./restyle";
-import { gestureStep } from "../../../lib/doc/document";
+import { gestureStep, type EditMeta } from "../../../lib/doc/document";
 
 /** The ease under way in each document, so that one begun takes over from it. */
 const going = new WeakMap<object, { stop: () => void }>();
@@ -22,18 +22,20 @@ const withBond = (to: StyleChoice, pt: number): StyleChoice => ({ ...to, changes
 
 /**
  * `to` taken by `doc`, its bond eased in from the old one's length; `frame`
- * is asked for each frame of it (requestAnimationFrame on the page).
+ * is asked for each frame of it (requestAnimationFrame on the page). `step`,
+ * the undo step it is part of - with another change made with it - else
+ * one of its own.
  */
-export function easeStyle(doc: DocumentStore<WorkspaceDocument>, to: StyleChoice, frame: (go: () => void) => void = (go) => void requestAnimationFrame(go)): void {
+export function easeStyle(doc: DocumentStore<WorkspaceDocument>, to: StyleChoice, frame: (go: () => void) => void = (go) => void requestAnimationFrame(go), step?: EditMeta): void {
   going.get(doc)?.stop();
   const start = doc.getState();
   const from = start.style ? bondPtOf(start.style) : null;
   const pt = bondPtOf(to);
   if (from == null || from === pt) {
-    doc.edit("drawing style", () => restyledDocument(start, to));
+    doc.edit("drawing style", () => restyledDocument(start, to), step);
     return;
   }
-  const step = gestureStep(`style-ease:${performance.now()}`);
+  const frames = step ?? gestureStep(`style-ease:${performance.now()}`);
   const t0 = performance.now();
   let stopped = false;
   going.set(doc, { stop: () => (stopped = true) });
@@ -50,7 +52,7 @@ export function easeStyle(doc: DocumentStore<WorkspaceDocument>, to: StyleChoice
     }
     const t = Math.min(1, (performance.now() - t0) / (DURATION.move * 1000));
     // (from the page as it was each time: the last frame is the change made at once)
-    doc.edit("drawing style", () => restyledDocument(start, t < 1 ? withBond(to, from + (pt - from) * easeInOut(t)) : to), step);
+    doc.edit("drawing style", () => restyledDocument(start, t < 1 ? withBond(to, from + (pt - from) * easeInOut(t)) : to), frames);
     last = doc.getState();
     if (t < 1) frame(tick);
     else going.delete(doc);

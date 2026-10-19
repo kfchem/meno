@@ -366,6 +366,12 @@ what a drag there does, not what grabs it, and none is a hand:
   grid, dark with a white edge to be seen on anything, its spot in the
   middle, and writes their rules once as Meno starts (`installCursors`).
   An element asks for one with `data-cursor` (`setCursor`).
+- **Held for a drag**: `holdCursor` puts one over the whole page until
+  the drag lets it go (`data-cursor-held` on the root, its rule
+  `!important`), so that the pointer stays what the drag does wherever
+  it runs - over words, whose text cursor would otherwise take its place.
+  A drag lost (the window left, the pointer cancelled) lets it go too,
+  and each release lets go only its own hold.
 - **Sharp on any screen**: each rule gives the SVG at 1x, then
   `-webkit-image-set` at 1x, 2x and 3x, which WebKit and Chromium read;
   the system's pointer stands behind it.

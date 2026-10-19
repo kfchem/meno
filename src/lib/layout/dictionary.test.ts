@@ -38,6 +38,6 @@ describe("the dictionary's structures", () => {
     expect(tried.filter((t) => t.error)).toEqual([]);
     expect(tried.filter((t) => !t.read).map((t) => t.label)).toEqual([]);
     expect(tried.length).toBeGreaterThan(140);
-    // (about 10 s here; slower on CI's runners)
+    // (about 10 s alone; slower in the whole suite, on CI's runners, and ten or twenty times slower on a Mac under load)
   }, measured(29_000));
 });

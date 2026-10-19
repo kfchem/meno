@@ -4,7 +4,7 @@ import { forFlatReaders } from "./drawing";
 import { chemAtHand, chemWorker, useChem } from "../../../../lib/roles/worker";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { Model } from "../store/types";
-import { marksOf, NO_MARKS, type ChemMarks } from "./marks";
+import { marksOf, NO_MARKS, shownMarks, stereoAskedOf, type ChemMarks, type StereoAsked } from "./marks";
 
 /** How long the structure has to stay as it is before the plugin is asked. */
 const SETTLE_MS = 150;
@@ -15,7 +15,12 @@ const SETTLE_MS = 150;
  * settings, each R or S and E or Z by its atom or bond (`stereoShown`) -
  * brought up to date a moment after it stops changing. Only while the plugin can be had without
  * asking: a structure being drawn never sets it up by itself. Marks for an
- * earlier version stay up until the new ones come, so nothing flickers.
+ * earlier version stay up until the new ones come, so nothing flickers -
+ * but only those shown already: R and S, E and Z asked for since are shown
+ * from them only where they were worked out for the structure as it is,
+ * and otherwise come with the marks worked out after, all of them
+ * together, rather than some at once from the earlier marks and the rest a
+ * moment later.
  */
 export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
   const { valenceWarnings } = useAppSettings((s) => s.chemistry);
@@ -23,7 +28,8 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
   const stereoAsked = useMemo(() => model.atoms.some((a) => a.stereoShown) || model.bonds.some((b) => b.stereoShown), [model]);
   const chem = useChem();
   const [atHand, setAtHand] = useState(false);
-  const [marks, setMarks] = useState<ChemMarks | null>(null);
+  // (with what R and S, E and Z were asked for as they were worked out, and the structure they were for)
+  const [got, setGot] = useState<{ marks: ChemMarks; asked: StereoAsked; molblock: string } | null>(null);
   const wanted =
     active && (valenceWarnings || stereoAsked) && model.atoms.length > 0;
   const ready = chem.state === "ready";
@@ -38,7 +44,7 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
     void chemAtHand().then((v) => {
       if (!live) return;
       setAtHand(v);
-      if (!v) setMarks(null);
+      if (!v) setGot(null);
     });
     return () => {
       live = false;
@@ -49,14 +55,16 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
     if (!wanted || failed || !(atHand || ready)) return;
     let live = true;
     const t = setTimeout(() => {
+      const asked = stereoAskedOf(model);
+      const molblock = chemMolblock(forFlatReaders(model));
       void chemWorker("checks")
-        .then((c) => c.request("analyse", { molblock: chemMolblock(forFlatReaders(model)) }))
+        .then((c) => c.request("analyse", { molblock }))
         .then((r) => {
-          if (live) setMarks(marksOf(model, r));
+          if (live) setGot({ marks: marksOf(model, r), asked, molblock });
         })
         .catch(() => {
           // the plugin could not make sense of it, or has stopped: no marks
-          if (live) setMarks(NO_MARKS);
+          if (live) setGot({ marks: NO_MARKS, asked, molblock });
         });
     }, SETTLE_MS);
     return () => {
@@ -67,19 +75,14 @@ export function useChemMarks(model: Model, active: boolean): ChemMarks | null {
 
   return useMemo(
     () =>
-      wanted && marks
+      wanted && got
         ? {
-            valence: valenceWarnings ? marks.valence : NO_MARKS.valence,
-            centres: stereoAsked ? shownOnly(marks.centres, model.atoms) : NO_MARKS.centres,
-            doubleBonds: stereoAsked ? shownOnly(marks.doubleBonds, model.bonds) : NO_MARKS.doubleBonds,
+            valence: valenceWarnings ? got.marks.valence : NO_MARKS.valence,
+            ...(stereoAsked
+              ? shownMarks(got.marks, model, got.asked, () => chemMolblock(forFlatReaders(model)) === got.molblock)
+              : { centres: NO_MARKS.centres, doubleBonds: NO_MARKS.doubleBonds }),
           }
         : null,
-    [wanted, marks, valenceWarnings, stereoAsked, model],
+    [wanted, got, valenceWarnings, stereoAsked, model],
   );
-}
-
-/** The marks of those parts - atoms, or bonds - whose R or S, E or Z is shown. */
-function shownOnly<T>(marks: Map<number, T>, parts: readonly { id: number; stereoShown?: true }[]): Map<number, T> {
-  const shown = new Set(parts.filter((p) => p.stereoShown).map((p) => p.id));
-  return new Map([...marks].filter(([id]) => shown.has(id)));
 }

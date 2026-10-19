@@ -55,6 +55,41 @@ export function marksOf(model: Model, analysis: Analysis): ChemMarks {
   return marks;
 }
 
+/** The atoms and bonds whose R or S, E or Z was asked for, by id. */
+export type StereoAsked = { atoms: ReadonlySet<number>; bonds: ReadonlySet<number> };
+
+/** The atoms and bonds whose R or S, E or Z is asked for on the drawing. */
+export function stereoAskedOf(model: Model): StereoAsked {
+  return {
+    atoms: new Set(model.atoms.filter((a) => a.stereoShown).map((a) => a.id)),
+    bonds: new Set(model.bonds.filter((b) => b.stereoShown).map((b) => b.id)),
+  };
+}
+
+/**
+ * The R and S, E and Z of `marks` shown on `model`: each whose atom or bond
+ * asks for it now, and asked for it when the marks were worked out
+ * (`askedThen`) - or has been asked for since, and the marks were worked out
+ * for the structure as it is (`forThisStructure`, asked only then). Asked
+ * for since a change to the structure, it waits for marks worked out after,
+ * so that what is shown together comes together: never a few at once from
+ * marks made before and the rest a moment later. One no longer asked for
+ * goes at once.
+ */
+export function shownMarks(
+  marks: ChemMarks,
+  model: Model,
+  askedThen: StereoAsked,
+  forThisStructure: () => boolean,
+): Pick<ChemMarks, "centres" | "doubleBonds"> {
+  const now = stereoAskedOf(model);
+  const since = [...now.atoms].some((id) => !askedThen.atoms.has(id)) || [...now.bonds].some((id) => !askedThen.bonds.has(id));
+  const fresh = since && forThisStructure();
+  const only = <T>(of: Map<number, T>, asked: ReadonlySet<number>, then: ReadonlySet<number>) =>
+    new Map([...of].filter(([id]) => asked.has(id) && (fresh || then.has(id))));
+  return { centres: only(marks.centres, now.atoms, askedThen.atoms), doubleBonds: only(marks.doubleBonds, now.bonds, askedThen.bonds) };
+}
+
 /** The halogens: group 17, by atomic number. */
 const HALOGEN = new Set(ELEMENTS.filter((e) => [9, 17, 35, 53, 85, 117].includes(e.number)).map((e) => e.symbol));
 

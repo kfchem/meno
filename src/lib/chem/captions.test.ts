@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed } from "./captions";
+import { ARROW_CLEAR, ARROW_PAST_WORDS, arrowsWithWords, captionLines, captionPlace, captionPlaceAt, captionPlaces, captionRuns, captionSet, captionWords, CAPTION_LINE, keptWords, LIST_INDENT, listItem, marksOf, stylesOf, withWordsNeed, wordsNeed } from "./captions";
 import { labelBox, placeLabel, runsWidth } from "./layout2d";
 
 const shown = (line: string) =>
@@ -278,7 +278,7 @@ describe("where a caret stands in a caption", () => {
     expect(p.at[2].x - p.at[1].x).toBeLessThan(p.at[1].x - p.at[0].x);
   });
 
-  it("goes down a line at a line typed, and where the setting breaks it - spaces run together standing as the one it keeps", () => {
+  it("goes down a line at a line typed, and where the setting breaks it", () => {
     const text = "Pd2(dba)3\nK2CO3,  dioxane";
     const p = captionPlaces(text, 0, 0, 1);
     expect(p.at).toHaveLength(text.length + 1);
@@ -291,6 +291,46 @@ describe("where a caret stands in a caption", () => {
     expect(wide.at[7]).toMatchObject({ line: 0 });
     expect(wide.at[8]).toMatchObject({ line: 1, x: wide.lines[1].x0 });
     expect(wide.lines[1].x0).toBeCloseTo(wide.lines[0].x0);
+  });
+
+  it("moves on a space for each space typed - between words set as typed, at a line's ends hung off it", () => {
+    const sp = runsWidth([{ text: " " }], 1);
+    // (at the end: past the last letter a space at a time, the letters where they were)
+    const end = captionPlaces("OMe  ", 0, 0, 1);
+    const bare = captionPlaces("OMe", 0, 0, 1);
+    expect(end.at.slice(0, 4)).toEqual(bare.at);
+    expect(end.at[4].x - end.at[3].x).toBeCloseTo(sp);
+    expect(end.at[5].x - end.at[4].x).toBeCloseTo(sp);
+    expect(captionSet("OMe  ", 0, 0, 1).items).toEqual(captionSet("OMe", 0, 0, 1).items);
+    // (between words: each its own place, the words after them on by as many - set so, not run together)
+    const two = captionPlaces("O  Me", 0, 0, 1);
+    for (let k = 1; k < 6; k++) expect(two.at[k].x).toBeGreaterThan(two.at[k - 1].x);
+    expect(captionSet("O  Me", 0, 0, 1).items.map((i) => i.text)).toEqual(["O  Me"]);
+    expect(captionLines("5  mol%", 1)).toEqual(["5  mol%"]);
+    // (before the first letter: hung before it, the letters where they were)
+    const lead = captionPlaces("  O", 0, 0, 1);
+    expect(lead.at.slice(2)).toEqual(captionPlaces("O", 0, 0, 1).at);
+    expect(lead.at[2].x - lead.at[1].x).toBeCloseTo(sp);
+    expect(lead.at[1].x - lead.at[0].x).toBeCloseTo(sp);
+    // (where the setting breaks a line: past its last letter, as many as were typed)
+    const w = runsWidth(captionRuns("one two"), 1) + 0.01;
+    const wide = captionPlaces("one two  three", 0, 0, 1, undefined, w, "left");
+    expect(wide.at[8]).toMatchObject({ line: 0 });
+    expect(wide.at[8].x - wide.at[7].x).toBeCloseTo(sp);
+    expect(wide.at[9]).toMatchObject({ line: 1, x: wide.lines[1].x0 });
+  });
+
+  it("is kept without the spaces hung at its lines' ends, each letter with its style", () => {
+    expect(keptWords("  OMe  ", []).text).toBe("OMe");
+    expect(keptWords("a  b \n  c", []).text).toBe("a  b\nc");
+    expect(keptWords("\n \nx\n\n", []).text).toBe("x");
+    // (an item with nothing after its bullet yet, and a list's tabs: kept)
+    expect(keptWords("• one\n• ", []).text).toBe("• one\n• ");
+    expect(keptWords("\t• two", []).text).toBe("\t• two");
+    const b = { bold: true as const };
+    const kept = keptWords(" ab \n cd", [undefined, b, undefined, undefined, undefined, undefined, b, undefined]);
+    expect(kept.text).toBe("ab\ncd");
+    expect(kept.styles).toEqual([b, undefined, undefined, b, undefined]);
   });
 
   it("is found nearest a point: on the nearest line, the nearest place across", () => {

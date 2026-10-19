@@ -193,6 +193,11 @@ const DIPHOSPHINES: Ligand[] = [
 /** N donors: pyridines, amines, chiral diamines, salen, nitriles. */
 const NITROGEN: Ligand[] = [
   { label: "bpy", also: ["bipy"], smiles: "c1cc[n:1]c(c1)-c1cccc[n:2]1", name: "2,2'-bipyridine" },
+  // (cyclometalated, by the pyridine's N and the phenyl's carbon next to the ring between them - as an anion, its H gone:
+  // King, Spellane, Watts, J. Am. Chem. Soc. 1985, 107, 1431, for Ir(ppy)3; the free compounds as BLD Pharm and PubChem have them)
+  { label: "ppy", smiles: "[c:1]1ccccc1-c1cccc[n:2]1", anionic: [1], name: "2-phenylpyridinato" },
+  // (its F at the phenyl's 2' and 4', its CF3 at the pyridine's 5, bound by the phenyl's 6': Lowry et al., Chem. Mater. 2005, 17, 5712)
+  { label: "dF(CF3)ppy", smiles: "FC(F)(F)c1ccc([n:2]c1)-c1c(F)cc(F)c[c:1]1", anionic: [1], name: "2-(2,4-difluorophenyl)-5-(trifluoromethyl)pyridinato" },
   { label: "dtbpy", also: ["dtbbpy"], smiles: "CC(C)(C)c1cc[n:1]c(c1)-c1cc(C(C)(C)C)cc[n:2]1", name: "4,4'-di-tert-butyl-2,2'-bipyridine" },
   { label: "phen", smiles: "c1c[n:1]c2c(c1)ccc1ccc[n:2]c12", name: "1,10-phenanthroline" },
   { label: "py", smiles: "c1cc[n:1]cc1", name: "pyridine" },
@@ -497,6 +502,14 @@ type Names = {
 };
 
 type GroupOf = (label: string) => GroupStructure | null;
+/** The halides a complex's formula may have as counter-anions after its brackets: [Ru(bpy)3]Cl2, [Co(NH3)6]Br3. */
+const HALIDE_IONS = new Set(["F", "Cl", "Br", "I"]);
+
+/** A halide's ion, as a counter-anion. */
+function halideIon(el: string): GroupStructure {
+  return { atoms: [{ el, charge: -1 }], bonds: [], attach: [] };
+}
+
 /** What texts were read as: each as a metal, a ligand, a halide or a group (`plain`); each as a counter-anion. */
 type Readings = { plain: Map<string, Item | null>; counters: Map<string, Item | null> };
 /**
@@ -726,6 +739,8 @@ export function complexStructure(
   };
 
   const units = items.filter((it): it is Extract<Item, { kind: "unit" }> => it.kind === "unit");
+  // (after its brackets, a halide is a counter-anion, the halide's ion: [Ru(bpy)3]Cl2 - not one bound to a metal, read as it is inside them)
+  if (units.length) items = items.map((it) => (it.kind === "x" && HALIDE_IONS.has(it.label) ? { kind: "counter", ion: halideIon(it.label), name: `${it.label}\u207b`, n: it.n } : it));
   const loose = items.filter((it) => it.kind !== "unit" && it.kind !== "counter");
   const counters = items.filter((it): it is Extract<Item, { kind: "counter" }> => it.kind === "counter");
   // in brackets: the part, and after them its counter-anions only

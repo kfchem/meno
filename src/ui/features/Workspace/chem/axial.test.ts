@@ -53,7 +53,7 @@ describe("an axis of chirality", () => {
     // none said, none drawn
     expect(wedges(expanded("BINAP").model)).toHaveLength(0);
     expect(axisOf(expanded("(±)-BINAP").model)).toBeNull();
-    // (eleven structures laid out by the whole engine, a complex among them: slower on CI's runners)
+    // (eleven structures laid out by the whole engine, a complex among them: slower on CI's runners, and on a Mac under load)
   }, measured(33_000));
 
   it("is kept by Clean-up, and written to a MOL file as a wedge from the axis", () => {

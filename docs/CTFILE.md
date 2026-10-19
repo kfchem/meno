@@ -188,6 +188,19 @@ What is put together from them is read by rule, not listed:
   NMe, NBz - the group's name of two letters
   or more; drawn on a bond's left (BocN, MOMN) it is read turned round, as
   any label is. Every bond to such a label is the atom's;
+- an atom written with its H, if it has any, and then the groups it
+  carries, each one Meno names - its own, the user's, or one behind O, S
+  or NH - its other bonds the drawing's, as a ring's atom has two: SiHCOOH
+  (or SiH(COOH)) an Si with an H and a carboxy group, SiMeOMe an Si with a
+  methyl and a methoxy, CHCO2Me a CH with a methoxycarbonyl, NCO2Me an N
+  with one (the maintainer, 2026-10-18: a ring's SiHCOOH was read as
+  nothing, its letters then as S and I). By rule: an atom that is no
+  metal and takes three bonds or more (its valence as formulas read it),
+  carrying exactly as many - its H and its groups together - as fill its
+  valence but two bonds: an Si's or a C's two, an N's or a P's one; BH2Ph
+  and CH2CO2Me are read as they were, whole. It is read the same on a
+  chain's atom, comes after every other reading - what reads otherwise is
+  read so - and is no part of a formula: BPh4 is still an anion;
 - an O or an S with an alkali metal on it - ONa, OK, SLi - an ion pair, as
   NaOMe's sodium is bound;
 - a substituted aryl group (`src/lib/chem/substitutedAryl.ts`): positions,

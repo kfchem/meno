@@ -74,6 +74,7 @@ import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
+import SettingsStyleAsk from "./SettingsStyleAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -188,6 +189,7 @@ import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
 import { putDownSmiles } from "./utils/quickAddSmiles";
+import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
@@ -482,6 +484,8 @@ function WorkspaceContent({
         const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
         const made: Parameters<ReturnType<typeof store.getState>["riseMolecules3d"]>[0] = [];
         let allInView = true;
+        // (where the rows made lie: shown, where they are not seen whole - utils/viewShow)
+        let made3d: { x0: number; x1: number; y0: number; y1: number } | null = null;
         // (what they keep clear of: the molecules in 3D there already, as they are seen now - and each row made)
         const look3d = style3dOf(store.getState());
         const st = store.getState();
@@ -503,7 +507,10 @@ function WorkspaceContent({
           const row = replacing
             ? { at: rowFrom(turned, replacing.at), inView: true }
             : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken);
-          if ("box" in row) solids.push(row.box);
+          if ("box" in row) {
+            solids.push(row.box);
+            made3d = made3d ? { x0: Math.min(made3d.x0, row.box.x0), x1: Math.max(made3d.x1, row.box.x1), y0: Math.min(made3d.y0, row.box.y0), y1: Math.max(made3d.y1, row.box.y1) } : row.box;
+          }
           allInView &&= row.inView;
           ms.forEach((m, i) =>
             made.push({ m: { ...m, at: row.at[i] }, turn: turned[i].turn, from: turned[i].start, flat: turned[i].flat }),
@@ -516,8 +523,8 @@ function WorkspaceContent({
           return;
         }
         store.getState().riseMolecules3d(made, replacing ? [replacing.id] : []);
-        // (with no room for them in view, the view takes them in)
-        if (!allInView) requestFit();
+        // (with no room for them in view, the view goes to them - along, or out as little as needed)
+        if (!allInView && made3d) store.getState().requestShow(made3d);
       } catch (e: unknown) {
         if (!stopped) setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
@@ -526,7 +533,7 @@ function WorkspaceContent({
         setWorking3d(null);
       }
     },
-    [store, viewBox, requestFit, camRef],
+    [store, viewBox, camRef],
   );
   const make3d = useCallback(
     async (around: Iterable<number>, replacing?: Molecule3D) => {
@@ -588,16 +595,16 @@ function WorkspaceContent({
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
         if (ordersUnknown) setChemError("Bond orders unknown: the formula is drawn with every bond single.");
-        // (beyond the view, the view takes it in)
-        const view = viewBox();
-        if (view && placed.atoms.some((a) => a.x < view.x0 || a.x > view.x1 || a.y < view.y0 || a.y > view.y1)) requestFit();
+        // (shown: the view moved to take it in, where it is not seen whole - utils/viewShow)
+        const box = addedBox(Number.NEGATIVE_INFINITY, placed);
+        if (box) store.getState().requestShow(box);
       } catch (e: unknown) {
         setChemError(`The formula could not be drawn: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         setWorking3d(null);
       }
     },
-    [store, viewBox, requestFit],
+    [store],
   );
   // A molecule in 3D turned to lie as its drawing does, as it did as it rose
   const turnLikeDrawing = useCallback(
@@ -1668,6 +1675,8 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
+      {ownTab && <SettingsStyleAsk active={active} />}
       <AnimatePresence>
         {givingOrders && (
           <OrdersCard
@@ -1942,6 +1951,11 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          keepInFile={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.made ? { kept: set.keep !== false, set: (keep: boolean) => store.getState().keepSet(set.id, keep) } : undefined;
+          })()}
           onUseAsInput={menu.selection === "here" && selectionAsSet() ? () => {
             const frame = selectionAsSet();
             if (!frame) return;
@@ -1950,7 +1964,7 @@ function WorkspaceContent({
           } : undefined}
           onReadStructure={(() => {
             const st = store.getState();
-            const ui = { working: setWorking3d, say: setChemError, view: viewBox, fit: requestFit };
+            const ui = { working: setWorking3d, say: setChemError };
             // (the figure in a box drawn on a PDF: the structure beside the PDF)
             const pdf = menu.kind === "pdf" ? st.pdfs.find((x) => x.id === menu.id) : undefined;
             const box = st.pdfBox;

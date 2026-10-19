@@ -952,7 +952,7 @@ describe("Render as a step", () => {
     expect(st().pictures).toHaveLength(1);
     expect(st().pictures[0].sha256).not.toBe(first[0].sha256);
     expect(st().sets.filter((b) => b.made?.step === step).map((b) => b.id)).toEqual([set.id]);
-    expect(setMembers(st(), set).pictures).toEqual([st().pictures[0].id]);
+    expect(setMembers(st(), st().sets.find((b) => b.id === set.id)!).pictures).toEqual([st().pictures[0].id]);
     doc.undo();
     expect(st().pictures.map((p) => p.sha256)).toEqual([first[0].sha256]);
   });
