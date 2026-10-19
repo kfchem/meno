@@ -1,3 +1,8 @@
+import { editorLayoutOptions } from "../../layoutOptions";
+import { styleOf } from "../../../../../lib/chem/style";
+import { wordsSet } from "../../../../../lib/chem/captions";
+import { labelSetOf } from "../../../../../lib/chem/layout2d";
+import type { ShowBox } from "../../utils/viewShow";
 import { bondPtOf, labelPtOf, wordsKept } from "../../restyle";
 import { restyledDrawn } from "../../utils/copyPaste";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
@@ -57,6 +62,37 @@ function forgetDeleted(set: SetState) {
  * in order and never again, an Sgroup's among them - selected, so that it
  * can be dragged straight on.
  */
+/**
+ * Where the atoms numbered from `start` on lie, a bond's length round them
+ * for their labels: what was just put down, to be shown (utils/viewShow).
+ * None, where none were.
+ */
+export function addedBox(start: number, model: Model): ShowBox | null {
+  const atoms = model.atoms.filter((a) => a.id >= start);
+  if (!atoms.length) return null;
+  const pad = NOMINAL_BOND_LENGTH;
+  return {
+    x0: Math.min(...atoms.map((a) => a.x)) - pad,
+    x1: Math.max(...atoms.map((a) => a.x)) + pad,
+    y0: Math.min(...atoms.map((a) => a.y)) - pad,
+    y1: Math.max(...atoms.map((a) => a.y)) + pad,
+  };
+}
+
+/** `box` taken out to the words on the page numbered from `start` on, as they are set in the workspace's style: a scheme's put down with its structures. */
+function withWordsAdded(box: ShowBox | null, st: Pick<EditorState, "captions" | "docStyle">, start: number): ShowBox | null {
+  const words = st.captions.filter((c) => c.id >= start);
+  if (!words.length) return box;
+  const opts = editorLayoutOptions(styleOf(st.docStyle));
+  let out = box;
+  for (const c of words) {
+    const set = wordsSet(c, opts, labelSetOf(opts));
+    const b = { x0: c.x - set.halfW, x1: c.x + set.halfW, y0: c.y - set.halfH, y1: c.y + set.halfH };
+    out = out ? { x0: Math.min(out.x0, b.x0), x1: Math.max(out.x1, b.x1), y0: Math.min(out.y0, b.y0), y1: Math.max(out.y1, b.y1) } : b;
+  }
+  return out;
+}
+
 function added(start: number, model: Model): EditorState["sel"] {
   return {
     atoms: new Set(model.atoms.filter((a) => a.id >= start).map((a) => a.id)),
@@ -605,8 +641,11 @@ export const createModelSlice = (
     if (!doc.edit("read structure", (d) => ops.withImportedScheme(ops.appendModel(d, next), scheme))) return;
     // (selected, as what is pasted is, to be moved or put right straight on - a scheme's words with it, its compounds' numbers among them)
     const endCaption = doc.getState().nextCaptionId ?? 1;
+    // (and shown: the view moved to take it in, where it is not seen whole - docs/WORKSPACE.md, *Putting things down*)
+    const box = withWordsAdded(addedBox(start, get().model), get(), startCaption);
     set((prev: EditorState) => ({
       ...prev,
+      ...(box ? { showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } } : {}),
       sel: added(start, prev.model),
       selCaptions: new Set(Array.from({ length: endCaption - startCaption }, (_, i) => startCaption + i)),
       sel3d: new Set(),
@@ -620,6 +659,10 @@ export const createModelSlice = (
 
   appendModel: (next: Model, scheme?: ImportedScheme) => {
     const start = doc.getState().nextId;
+    const startCaption = doc.getState().nextCaptionId ?? 1;
+    // (onto an empty page, it is opened - fitted, as a canvas opens; onto one with something on it, shown where it went)
+    const before = get();
+    const empty = !before.model.atoms.length && !before.pdfs.length && !before.pictures.length && !before.captions.length && !before.molecules3d.length && !before.texts.some((t) => t.at);
     const start3d = doc.getState().nextMolecule3dId ?? 1;
     const edited = doc.edit("add structure", (d) =>
       ops.withImportedScheme(ops.appendModel(d, next), scheme),
@@ -638,7 +681,10 @@ export const createModelSlice = (
       // (as it is shown: of a stack of drawings it brings, the record shown - utils/stacks)
       ...(edited && next.atoms.length ? { sel: added(start, model), selAnchor: null } : {}),
       hovered: { atomId: null, bondId: null },
-      fitNonce: prev.fitNonce + 1,
+      ...(() => {
+        const box = edited ? withWordsAdded(addedBox(start, model), get(), startCaption) : null;
+        return empty || !box ? { fitNonce: prev.fitNonce + 1 } : { showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } };
+      })(),
     }));
   },
 

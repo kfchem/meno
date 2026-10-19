@@ -16,13 +16,18 @@ const centres = (s: GroupStructure) => s.atoms.filter((a) => a.tetra).map((a) =>
 describe("the reagents", () => {
   // each one's molecular formula, as its name gives it
   const formulas: Record<string, string> = {
+    // (fluorination and the AZADO family: the formulas PubChem gives the records their structures were checked against)
+    TASF: "C9H27F2N3SSi", TBAT: "C34H51F2NSi", "XtalFluor-E": "C4H10BF6NS", "XtalFluor-M": "C4H8BF6NOS", PyFluor: "C5H4FNO2S",
+    PhenoFluor: "C27H36F2N2", AlkylFluor: "C27H36BF5N2", Fluolead: "C12H17F3S", "Umemoto Reagent I": "C13H8BF7S",
+    "N-fluoropyridinium triflate": "C6H5F4NO3S", "Hu reagent": "C6H5F2NO2S", PhSO2CF2H: "C7H6F2O2S",
+    "1-Me-AZADO": "C10H16NO", "Nor-AZADO": "C8H12NO", ABNO: "C8H14NO", "keto-ABNO": "C8H12NO2", AZADOL: "C9H15NO",
     DMP: "C13H13IO8", IBX: "C7H5IO4", PIDA: "C10H11IO4", PIFA: "C10H5F6IO4", TEMPO: "C9H18NO", AZADO: "C9H14NO",
     PCC: "C5H6ClCrNO3", PDC: "C10H12Cr2N2O7", TPAP: "C12H28NO4Ru", NMO: "C5H11NO2", mCPBA: "C7H5ClO3", DDQ: "C8Cl2N2O2",
-    Oxone: "H3K5O18S4", OsO4: "O4Os", KMnO4: "KMnO4", MnO2: "MnO2",
+    Oxone: "H3K5O18S4", OsO4: "O4Os", RuO4: "O4Ru", "NaBO3·4H2O": "B2H16Na2O14", KMnO4: "KMnO4", MnO2: "MnO2",
     SeO2: "O2Se", CrO3: "CrO3", CAN: "CeH8N8O18", LTA: "C8H12O8Pb", "SO3·py": "C5H5NO3S", DMDO: "C3H6O2",
     TBHP: "C4H10O2", H2O2: "H2O2", O3: "O3", "Davis oxaziridine": "C13H11NO3S",
     LAH: "AlH4Li", STAB: "C6H10BNaO6", DIBAL: "C8H19Al", "Red-Al": "C6H16AlNaO4", "L-Selectride": "C12H28BLi",
-    "K-Selectride": "C12H28BK", "Super-Hydride": "C6H16BLi", "9-BBN": "C8H15B", HBcat: "C6H5BO2",
+    "K-Selectride": "C12H28BK", "Super-Hydride": "C6H16BLi", "Zn(BH4)2": "B2H8Zn", "9-BBN": "C8H15B", HBcat: "C6H5BO2",
     B2pin2: "C12H24B2O4", TTMSS: "C9H28Si4", HEH: "C13H19NO4",
     DBU: "C9H16N2", DBN: "C7H12N2", TBD: "C7H13N3", DMAP: "C7H10N2", DIPEA: "C8H19N", TEA: "C6H15N", DABCO: "C6H12N2",
     NMM: "C5H11NO", "2,6-lutidine": "C7H9N", collidine: "C8H11N", "Proton-Sponge": "C14H18N2", TMG: "C5H13N3",
@@ -32,11 +37,11 @@ describe("the reagents", () => {
     DCC: "C13H22N2", DIC: "C7H14N2", EDC: "C8H17N3", HATU: "C10H15F6N6OP",
     HBTU: "C11H16F6N5OP", TBTU: "C11H16BF4N5O", COMU: "C12H19F6N4O4P", PyBOP: "C18H28F6N6OP2", BOP: "C12H22F6N6OP2",
     T3P: "C9H21O6P3", CDI: "C7H6N4O", DMTMM: "C10H17ClN4O3", Oxyma: "C5H6N2O3", NHS: "C4H5NO3",
-    "Yamaguchi reagent": "C7H2Cl4O", "Mukaiyama reagent": "C6H7ClIN", DPPA: "C12H10N3O3P", DEAD: "C6H10N2O4",
+    "Yamaguchi reagent": "C7H2Cl4O", MNBA: "C16H12N2O7", "Mukaiyama reagent": "C6H7ClIN", DPPA: "C12H10N3O3P", DEAD: "C6H10N2O4",
     DIAD: "C8H14N2O4",
     NBS: "C4H4BrNO2", NCS: "C4H4ClNO2", NIS: "C4H4INO2", DBDMH: "C5H6Br2N2O2", TCCA: "C3Cl3N3O3",
     Selectfluor: "C7H14B2ClF9N2", NFSI: "C12H10FNO4S2", DAST: "C4H10F3NS", "Deoxo-Fluor": "C6H14F3NO2S",
-    "Togni I": "C10H10F3IO", "Togni II": "C8H4F3IO2", "Ruppert–Prakash reagent": "C4H9F3Si", "Langlois reagent": "CF3NaO2S", SOCl2: "Cl2OS",
+    "Togni I": "C10H10F3IO", "Togni II": "C8H4F3IO2", "Ruppert–Prakash reagent": "C4H9F3Si", "Langlois reagent": "CF3NaO2S", "Umemoto Reagent II": "C14H6F8O3S2", "Umemoto Reagent IV": "C16H6F12O5S2", SOCl2: "Cl2OS", "Ghosez's reagent": "C6H12ClN",
     POCl3: "Cl3OP", PCl5: "Cl5P",
     TFAA: "C4F6O3",
     "Comins' reagent": "C7H3ClF6N2O4S2", HMDS: "C6H19NSi2", "Meerwein's salt": "C3H9BF4O", "Eschenmoser's salt": "C3H8IN",
@@ -44,11 +49,13 @@ describe("the reagents", () => {
     "Tebbe reagent": "C13H18AlClTi", "Petasis reagent": "C12H16Ti", "Schwartz's reagent": "C10H11ClZr",
     "Stryker's reagent": "C108H96Cu6P6", Me2CuLi: "C2H6CuLi",
     "Grubbs I": "C43H72Cl2P2Ru", "Grubbs II": "C46H65Cl2N2PRu", "Grubbs III": "C38H42Cl2N4Ru", "HG-I": "C28H45Cl2OPRu",
-    "HG-II": "C31H38Cl2N2ORu", "Schrock's catalyst": "C30H35F12MoNO2", "Wilkinson's catalyst": "C54H45ClP3Rh",
+    "HG-II": "C31H38Cl2N2ORu", "Zhan catalyst-1B": "C33H43Cl2N3O3RuS", "Schrock's catalyst": "C30H35F12MoNO2", "Wilkinson's catalyst": "C54H45ClP3Rh",
     "Crabtree's catalyst": "C31H50F6IrNP2", "PEPPSI-IPr": "C32H40Cl3N3Pd", "Jacobsen's catalyst": "C36H52ClMnN2O2",
     "Karstedt's catalyst": "C24H54O3Pt2Si6", "Krische's catalyst": "C48H36IrNO8P2",
     proline: "C5H9NO2", "MacMillan's catalyst I": "C13H18N2O", "MacMillan's catalyst II": "C15H22N2O",
     "Hayashi–Jørgensen catalyst": "C20H27NOSi", CBS: "C18H20BNO", "Shi's catalyst": "C12H18O6",
+    "4CzIPN": "C56H32N6", "4DPAIPN": "C56H40N6", TPT: "C23H17BF4O", "Mes-Acr-Me BF4": "C23H22BF4N",
+    "Mes-Acr-Me ClO4": "C23H22ClNO4", "Eosin Y disodium salt": "C20H6Br4Na2O5", "Eosin Y free acid": "C20H8Br4O5",
     DMF: "C3H7NO", DMSO: "C2H6OS", DMA: "C4H9NO", NMP: "C5H9NO", HMPA: "C6H18N3OP", DMPU: "C6H12N2O", DME: "C4H10O2",
     diglyme: "C6H14O3", DCM: "CH2Cl2", DCE: "C2H4Cl2", MTBE: "C5H12O", CPME: "C6H12O", "2-MeTHF": "C5H10O",
     dioxane: "C4H8O2", acetone: "C3H6O", toluene: "C7H8", benzene: "C6H6", hexane: "C6H14",
@@ -83,6 +90,9 @@ describe("the reagents", () => {
     // a dash and an apostrophe, as typed or as set
     expect(abbreviationOf("Hoveyda-Grubbs II")?.label).toBe("HG-II");
     expect(abbreviationOf("Comins’ reagent")?.label).toBe("Comins' reagent");
+    // a name sold for several numbered reagents is no one of them
+    expect(abbreviationOf("Umemoto's reagent")).toBeUndefined();
+    expect(abbreviationOf("Umemoto's reagent I")?.label).toBe("Umemoto Reagent I");
     // a name is one unit of a label, its digits not counts; a formula's are
     expect(labelUnits("T3P")).toEqual(["T3P"]);
     expect(labelRuns("NaBH4").some((r) => r.sub && r.text === "4")).toBe(true);

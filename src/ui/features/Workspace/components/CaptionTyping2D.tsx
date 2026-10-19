@@ -33,7 +33,7 @@
 import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, marksOf, WORDS_STEPS, wordsFontPx, wordsSet } from "../../../../lib/chem/captions";
+import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, keptWords, marksOf, WORDS_STEPS, wordsFontPx, wordsSet } from "../../../../lib/chem/captions";
 import { IS_MAC, plusOrEquals } from "../../../../lib/doc/shortcuts";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -155,10 +155,10 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     const s = store.getState();
     // (the word last typed ended as they are kept)
     if (keep) ed.kept();
-    const text = ed.text.replace(/\s+$/, "").replace(/^\s*\n/, "");
-    // (the letters' marks within what is kept: what was cut off its end goes with it)
-    const lead = ed.text.length - ed.text.replace(/^\s*\n/, "").length;
-    const kept = marksOf(ed.styles.slice(lead, lead + text.length));
+    // (without the spaces hung at its lines' ends - nothing drawn moves - nor blank lines around it; the letters' marks with what is kept)
+    const words = keptWords(ed.text, ed.styles);
+    const text = words.text;
+    const kept = marksOf(words.styles);
     // (the caption they are now - none, new ones let go or any written away)
     let still: number | null = edit.id;
     if (keep) {

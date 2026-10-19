@@ -4,8 +4,9 @@ import { layout2D, roomForHydrogens, scorer } from "./engine";
 import { macrocycleShape } from "./macrocycle";
 import { hydrogenSpot, LABEL_VERTEX, labelsCrowding, layoutMetrics } from "./metrics";
 import { segmentMeetsBox } from "./names";
-import { dist } from "./geometry";
-import { perceive, type LayoutBond, type LayoutInput } from "./perceive";
+import { dist, insidePolygon } from "./geometry";
+import { orderOf, perceive, type LayoutBond, type LayoutInput } from "./perceive";
+import benchmark from "../../../scripts/layout/molecules.json";
 import { solidOf } from "./cage";
 import { readStereo, sameConfiguration } from "./drawn";
 import { readSmiles } from "../chem/smiles";
@@ -1213,3 +1214,18 @@ function bilobalide(): LayoutInput {
     bonds: s.bonds.map((b, i) => ({ a: b.a1, b: b.a2, order: orders[i] })),
   };
 }
+
+describe("a macrocycle's groups", () => {
+  it("sets a chain on the ring outside it where a C=O and a methyl can go in instead: tacrolimus's allyl", () => {
+    const smiles = benchmark.molecules.find((m) => m.name === "Tacrolimus")!.smiles;
+    const input = fromSmiles(smiles);
+    const mol = perceive(input);
+    const out = layout2D(input);
+    const ring = mol.rings.reduce((p, q) => (q.length > p.length ? q : p));
+    const polygon = ring.map((a) => ({ x: out.x[a], y: out.y[a] }));
+    // the allyl's end: a CH2= out of every ring
+    const end = mol.el.findIndex((el, a) => el === "C" && mol.hs[a] === 2 && mol.systemOf[a] < 0 && mol.neighbours[a].some((b) => orderOf(mol, a, b) === 2));
+    expect(end).toBeGreaterThanOrEqual(0);
+    expect(insidePolygon({ x: out.x[end], y: out.y[end] }, polygon)).toBe(false);
+  }, 60_000);
+});

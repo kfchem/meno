@@ -3,7 +3,7 @@
  * and writing files, each with what it is given and what it gives, filled by
  * a plugin that says in its manifest that it fills it. Meno names roles, not
  * plugins. A core role is one Meno's everyday drawing rests on; it is chosen
- * where it is used - in Settings, *Chemistry* or *Molecules in 3D*.
+ * where it is used - in Settings, *Chemistry*, molecules in 3D's on its *3D* card.
  */
 
 export type Role = {

@@ -13,7 +13,7 @@
  * that sign back.
  */
 import { angleOf, centroid, drawnVolume, insidePolygon, segmentsCross, splitOutside, splitWidestGap, sub, type Point } from "./geometry";
-import { hydrogenSpot } from "./metrics";
+import { hydrogenSpot, hydrogenWritten } from "./metrics";
 import { key, type Molecule } from "./perceive";
 import { atomDepth, isName, namesLaid } from "./names";
 
@@ -142,7 +142,7 @@ export function placeStereo(
 
   // every atom placed, and the H of every label that has one, where the
   // drawing sets it; and every bond: what an H drawn keeps clear of
-  const atomsAround: { a: number; p: Point; label: boolean }[] = [...pos.entries()].map(([a, p]) => ({ a, p, label: mol.el[a] !== "C" }));
+  const atomsAround: { a: number; p: Point; label: boolean; letters: number }[] = [...pos.entries()].map(([a, p]) => ({ a, p, label: mol.el[a] !== "C", letters: mol.el[a].length }));
   for (const [a, p] of pos) {
     if (mol.el[a] === "C" || !(mol.hs[a] > 0) || !mol.neighbours[a].length) continue;
     const off = hydrogenSpot(
@@ -152,7 +152,8 @@ export function placeStereo(
         return { x: v.x / d, y: v.y / d };
       }),
     );
-    atomsAround.push({ a, p: { x: p.x + off.x, y: p.y + off.y }, label: true });
+    const w = hydrogenWritten(off, mol.hs[a]);
+    atomsAround.push({ a, p: { x: p.x + w.x, y: p.y + w.y }, label: true, letters: 1 });
   }
   const bondsAround = [...mol.bondIndex.keys()]
     .map((k) => k.split(",").map(Number) as [number, number])
@@ -213,7 +214,7 @@ export function placeStereo(
       // than room enough)
       const close = (p: Point) => Math.hypot(p.x - at.x, p.y - at.y) < 3;
       const others = atomsAround.filter((o) => o.a !== c && close(o.p));
-      others.push(...hydrogens.filter((h) => close(h.at)).map((h) => ({ a: -1, p: h.at, label: true })));
+      others.push(...hydrogens.filter((h) => close(h.at)).map((h) => ({ a: -1, p: h.at, label: true, letters: 1 })));
       const bonds = bondsAround.filter(([a, b, u, v]) => a !== c && b !== c && (close(u) || close(v))).map(([, , u, v]) => [u, v] as const);
       const own = mol.neighbours[c].map((n) => angleOf(sub(pos.get(n)!, at)));
       // (its own rings, and whether each has a double bond of its own - one
@@ -233,7 +234,14 @@ export function placeStereo(
       const room = (angle: number) => {
         const p = { x: at.x + Math.cos(angle), y: at.y + Math.sin(angle) };
         let r = Infinity;
-        for (const o of others) r = Math.min(r, Math.hypot(o.p.x - p.x, o.p.y - p.y) - (o.label ? 0.2 : 0));
+        // (a label half by the distance, half by the paper between its ink
+        // and the H's, as the drawing measures two labels' ink: an H a bond
+        // off an O diagonally sits on its letter's corner, which the
+        // distance alone took as room enough - ivermectin's H over its OH)
+        for (const o of others) {
+          const d = Math.hypot(o.p.x - p.x, o.p.y - p.y);
+          r = Math.min(r, o.label ? (d - 0.2 + inkGap(p, o.p, o.letters) + 0.3) / 2 : d);
+        }
         // (as far clear of a name's letters as the drawing reckons a
         // labelled atom must be, or the drawing turns the name round to
         // keep clear of the H - and into whatever is on its other side:
@@ -451,6 +459,19 @@ export function placeStereo(
     }
   }
   return { wedges, hydrogens };
+}
+
+/**
+ * The paper between an H written at `h` and a label at `p` of `letters`
+ * letters, in bond lengths: each letter's ink half a bond high, the first
+ * centred on its atom and 0.4 across the rest after it, as the drawing
+ * measures labels' ink (metrics.ts, inkBoxes); the larger of the two gaps,
+ * across and up, below nothing where they overlap.
+ */
+function inkGap(h: Point, p: Point, letters: number): number {
+  const x0 = p.x - 0.25;
+  const x1 = p.x + 0.25 + 0.4 * (letters - 1);
+  return Math.max(x0 - (h.x + 0.25), h.x - 0.25 - x1, Math.abs(h.y - p.y) - 0.5);
 }
 
 /** How far each bond in the page round a centre is turned, either way, to ask whether a wedge reads the same. */

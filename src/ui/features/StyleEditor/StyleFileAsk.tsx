@@ -58,7 +58,7 @@ export default function StyleFileAsk({
         </h2>
         <p className="text-gh-gray leading-relaxed">
           {count === 1 ? "It is" : "They are"} offered with your own {where} styles in Settings
-          {file.drawing.length ? ", and in every workspace's Drawing style" : ""}.
+          {file.drawing.length ? ", and in every workspace's Styles" : ""}.
         </p>
         {url && <img src={url} alt="" className="mt-3 max-h-40 mx-auto object-contain" />}
         <div className="mt-4 flex justify-end gap-2">

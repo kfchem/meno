@@ -46,6 +46,9 @@ export type Element = {
   radii: readonly [number | null, number | null, number | null];
 };
 
+/** The elements that are no metals: the nonmetals and the metalloids - as a label's smart reading takes a metal's formula, and as an atom carries groups (./abbreviations). */
+export const NOT_METALS: ReadonlySet<string> = new Set("H He B C N O F Ne Si P S Cl Ar Ge As Se Br Kr Sb Te I Xe At Rn".split(" "));
+
 export const ELEMENTS: readonly Element[] = [
   { symbol: "H", number: 1, name: "hydrogen", colour: "#FFFFFF", vdw: 1.2, radii: [32, null, null] },
   { symbol: "He", number: 2, name: "helium", colour: "#D9FFFF", vdw: 1.43, radii: [46, null, null] },

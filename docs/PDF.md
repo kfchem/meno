@@ -929,7 +929,7 @@ Step 5 comes in parts: the trial of typing alone, shown first; the column's text
 
 **Words on the page typed in place** (`components/CaptionTyping2D.tsx`, `utils/wordsEditor.ts`), in place of the field shown over them in HTML:
 - **Drawn by Meno as they will be kept**: set as the drawing sets its labels (a formula's counts low, a prefix in italics), in its typeface at its size, broken into lines as wide as they were made where they were given a width, laid as they will lie - so that what is written is what is kept, its lines broken as they will be. Lit round while they are written.
-- **The caret, what is selected and what the IME composes** are drawn over them, in the drawing's units: the caret blinking, the selection in Meno's light, what is composed underlined clause by clause. Where each place lies comes from how the words are set (lib/chem/captions `captionPlaces`): before each letter, a formula's count no wider than it is set, and spaces the setting runs together standing where the space it keeps does.
+- **The caret, what is selected and what the IME composes** are drawn over them, in the drawing's units: the caret blinking, the selection in Meno's light, what is composed underlined clause by clause. Where each place lies comes from how the words are set (lib/chem/captions `captionPlaces`): before each letter, a formula's count no wider than it is set, each space between words its own place, and spaces at a line's ends hanging off it, a space apart.
 - **Typed through the column's field** (TextEditor/typingField, now typing into any text Meno draws, `FieldHost`): an EditContext on Windows, a textarea on a Mac, laid with its caret on the drawn one, in the words' type at the size they are seen, so that the IME's candidates show at the caret.
   - **Drawn in the frame after a change**, as the column's text is: a change through the EditContext came in an event React does not know and was drawn a frame late - 10 ms at 100 Hz, 33 ms over Remote Desktop. Drawn at once, a conversion shows before the clauses the IME gives just after it: those it gave before are kept to what it has now (lib/text/field `clausesWithin`), where the conversion made it shorter.
   - **Checked on Windows** with Microsoft's IME (2026-10-10): composing, its clauses, Enter, Escape, converting again a word selected, the candidates at the caret after the view is zoomed or moved. Shown, the candidates stay where they are while the view moves under them, as the IME keeps them, and come to the caret again as they are next shown.
@@ -1334,7 +1334,11 @@ it where it lies out of view.
 **What is put on the page**: the structure, beside the PDF or the picture -
 its left two bonds past their right edge, its top level with theirs, and on
 to the right past whatever lies there - selected, as one step. Where it
-lies out of view, the view takes it in.
+is not seen whole - out of view, or under the column, which is not counted
+as what can be seen - the view eases to it: along first, as little as takes
+it in with a margin, and out only as far as it must, never in
+(docs/WORKSPACE.md, *Putting things down*; the maintainer, 2026-10-18: read
+with the PDF in the column, the structure was lost from sight).
 
 **Tied to the figure, atom by atom**: each atom keeps where on its PDF's
 page it was drawn (`seen`: the PDF's SHA-256, the page, the point, and how

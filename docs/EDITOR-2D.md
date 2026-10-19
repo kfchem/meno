@@ -710,6 +710,12 @@ All hover-based, as above.
   that an input method's candidates show there - an input method's
   full-width letters are taken as the ordinary ones once it gives them;
   Cut, Copy, Paste and Select All work on its letters as on words.
+  - A space typed is seen (2026-10-19: spaces typed were not, and piled
+    up unseen): one between letters is set as typed, a run of them as
+    wide as it is - a label may be a reagent's name, Grubbs II - and
+    those at either end hang off its letters, the caret a space on for
+    each, so that the letters stay where they are. Kept, it is kept
+    without those at its ends: nothing drawn moves.
   - Begun by a letter typed over an atom - O, then the pointer moved on,
     is O - or from the atom's menu, *Edit label*, holding what it says,
     the caret at its end; a carbon drawn as a corner opens with a C,
@@ -922,6 +928,15 @@ All hover-based, as above.
     leaves open shows its open centres until it is asked otherwise, to
     tell them apart (docs/WORKSPACE.md, *Told apart*). Settings no longer
     has a switch for them; one in an old settings file is not read.
+  - **Come and go together** (the maintainer, 2026-10-19: they had come
+    in bursts). Those shown at once - on a drawing and on a molecule in 3D
+    alike - fade in together and fade out together, eased, in the same
+    time either way (120 ms, as every mark). On a drawing, those asked for
+    are shown from the R and S at hand where those were worked out for
+    the structure as it is, and otherwise all wait for those worked out
+    after (`shownMarks`); never a few at once and the rest a moment later.
+    On a molecule in 3D, none starts before every one of them is there to
+    be seen, the molecule still or turning (`fadeStep`).
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -1238,7 +1253,15 @@ All hover-based, as above.
     once every letter of it is drawn, the caret and what is selected with
     it; the words being written take the place of their own only once they
     are drawn, and give it back, kept or let go, only once those are
-    (`Labels2D` `WholeTexts2D`).
+    (`Labels2D` `WholeTexts2D`). Changes coming faster than they are set -
+    a long text made wider by its edge, broken into lines again at each
+    move - the one being set is shown as soon as it is, then the latest:
+    the words keep up with the box, a few frames behind, where each change
+    given up for the next one left them standing still until the pointer
+    did (`textSets`). And none is shown before it is drawn whole: the type
+    packed a batch of letters only as it was first shown, after that
+    frame, and words shown in place of others were a blank for two or
+    three frames (`textBatch`, the maintainer's rule against jumps).
   - Set as a label is set, word by word: a formula's counts low (K₂CO₃,
     Pd₂(dba)₃, Pd(PPh₃)₄), a prefix's t- in italics at a word's start
     (*t*-BuOK, not the o of co-solvent), a sign at a formula's end its
@@ -1270,7 +1293,7 @@ All hover-based, as above.
     Backspace under the pointer or from their menu, too.
   - Made wider or narrower by their edges, shown as they are lit (the
     maintainer, 2026-10-09): dragged sideways, with Meno's own pointer for
-    it, the other edge staying where it is, their words are broken at
+    it - kept through the drag, over the words too - the other edge staying where it is, their words are broken at
     their spaces into lines no wider than they are made - as many words on
     each as fit, each line still centred, a number or a range never parted
     from the unit after it (60 °C, 12 h, 2 equiv, 0–25 °C) but where the two
@@ -1280,6 +1303,13 @@ All hover-based, as above.
     maintainer, 2026-10-13); a drag is one undo step. Written anew, they are
     written at that width. *As wide as its words*, in their menu, is a line
     for each line typed again. The width is saved, copied and drawn with them.
+  - Their spaces are set as typed (2026-10-19): a run of them between
+    words as wide as it is, not run into one; those at a line's ends -
+    before its first letter, after its last, and where a line is broken -
+    hang off its words, the caret a space on for each, so that the words
+    stay where they are, centred on their letters. Kept, they are kept
+    without those, nor blank lines before or after (`keptWords`): what is
+    kept is what was drawn, and nothing moves.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align
     left*, *Align centre* (as they come), *Align right*, or *Justify* -
     spread to both edges, but for the last line of each line typed, which

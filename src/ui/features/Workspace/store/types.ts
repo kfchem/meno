@@ -1,3 +1,4 @@
+import type { ShowBox } from "../utils/viewShow";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -1376,6 +1377,14 @@ export type EditorState = {
   arrows: Arrow[];
   pluses: Plus[];
   fitNonce: number;
+  /**
+   * What was just put down on the page, to be shown (utils/viewShow): the
+   * view moved along to take it in, or out as little as needed - each
+   * request its own number.
+   */
+  showRequest: { box: ShowBox; n: number } | null;
+  /** The view to show `box`, as what was just put down is shown (`showRequest`). */
+  requestShow: (box: ShowBox) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
@@ -1756,6 +1765,13 @@ export type EditorState = {
   easeDocumentStyle: (style: StyleChoice) => void;
   /** The workspace's styles in 3D set: one step to undo - a run of a slider's in one `coalesceKey`. Its molecules go over to them, eased. */
   setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => void;
+  /**
+   * Settings' styles taken by the workspace, asked (../SettingsStyleAsk):
+   * its drawing style - its bond eased in, as a preset chosen in its card -
+   * and its two looks in 3D, primary and secondary, its molecules going
+   * over to them eased; either left as it is where none is given. One step.
+   */
+  adoptSettingsStyles: (drawing: StyleChoice | null, roles: Pick<Workspace3D, "primary" | "secondary"> | null) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

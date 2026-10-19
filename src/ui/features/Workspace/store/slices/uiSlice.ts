@@ -1,3 +1,4 @@
+import type { ShowBox } from "../../utils/viewShow";
 import type { DocumentStore } from "../../../../../lib/doc";
 import { gestureStep } from "../../../../../lib/doc/document";
 import { marksAll } from "../../../../../lib/chem/captions";
@@ -184,6 +185,19 @@ export function createUiSlice(
       );
     },
 
+    adoptSettingsStyles: (drawing: StyleChoice | null, roles: Pick<Workspace3D, "primary" | "secondary"> | null) => {
+      // (one step for both: the looks first, then the drawing's bond eased in the same step)
+      drag = null;
+      const step = gestureStep(`settings-styles:${performance.now()}`);
+      if (roles) {
+        const style3d = { ...doc.getState().style3d, ...roles };
+        const style = style3dIn(style3d, useAppSettings.getState().style3d);
+        const { turns3d } = get();
+        doc.edit("3D style", (d) => fitResultSets(ops.setDocumentStyle3d(d, style3d), (m, turn) => reachOverFrames({ ...m, id: 0 }, style, turn), (id) => turns3d[id]), step);
+      }
+      if (drawing) easeStyle(doc, drawing, undefined, step);
+    },
+
     easeDocumentStyle: (style: StyleChoice) => {
       // (a preset chosen: its bond eased in, one step - ./styleEase)
       drag = null;
@@ -238,6 +252,9 @@ export function createUiSlice(
 
     requestFit: () =>
       set((prev: EditorState) => ({ ...prev, fitNonce: prev.fitNonce + 1 })),
+
+    requestShow: (box: ShowBox) =>
+      set((prev: EditorState) => ({ ...prev, showRequest: { box, n: (prev.showRequest?.n ?? 0) + 1 } })),
 
     beginAutoFitSuspend: () =>
       set((prev: EditorState) => ({ ...prev, autoFitSuspended: true })),

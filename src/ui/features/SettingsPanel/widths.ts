@@ -11,5 +11,10 @@
 export const SECTION_WIDTH = "max-w-5xl";
 /** The column the tabs and the section share: the section's width (64rem) and the padding (`px-6`, 1.5rem) either side of it. */
 export const COLUMN_WIDTH = "max-w-[67rem]";
-/** The one measure of Settings' explanatory words: a section's account of itself, a setting's, a note under a card. */
+/**
+ * The one measure of Settings' explanatory words beside a setting's
+ * control: a setting's account of itself, a note under a card. A section's
+ * own account of itself, at its top, runs the section's width, as its cards
+ * do (the maintainer, 2026-10-19).
+ */
 export const PROSE_WIDTH = "max-w-2xl";

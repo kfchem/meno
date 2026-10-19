@@ -19,7 +19,7 @@ import { type Held } from "./held";
 import { HeldGlow } from "./HeldLight";
 import { WholeTexts2D } from "./Labels2D";
 import { SELECTION_SHADE } from "./selectionShade";
-import { setCursor } from "../../../theme/cursors";
+import { holdCursor, setCursor } from "../../../theme/cursors";
 import { NO_RAYCAST, PartFramesProvider, SQUARE, UNSEEN, usePartFrame, usePartFrames } from "./partFrames";
 
 type Pt = { x: number; y: number };
@@ -338,8 +338,9 @@ function LitAndShaded({ w, h, lit, shaded, gone }: { w: number; h: number; lit: 
 
 /**
  * A caption's edge, lit with it: dragged sideways - Meno's own pointer for
- * it - the caption made as wide as from its other edge to the pointer, its
- * words broken into lines at it, as one step.
+ * it, held through the drag over whatever the pointer goes, its words' text
+ * cursor too - the caption made as wide as from its other edge to the
+ * pointer, its words broken into lines at it, as one step.
  */
 function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: Laid; margin: number; onResizing: (on: boolean) => void }) {
   const { c, halfW, halfH } = laid;
@@ -375,6 +376,7 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
         const guide = guideWidth(store, toWorld, { x: e.nativeEvent.clientX, y: e.nativeEvent.clientY }, c.id);
         st.beginPanHold(e.nativeEvent.pointerId);
         onResizing(true);
+        const letCursorGo = holdCursor("sideways");
         const onMove = (ev: PointerEvent) => {
           const q = toWorld(ev.clientX, ev.clientY);
           let edge = side > 0 ? Math.max(fixed + narrowest, q.x) : Math.min(fixed - narrowest, q.x);
@@ -387,6 +389,7 @@ function CaptionEdge({ side, laid, margin, onResizing }: { side: -1 | 1; laid: L
         const onUp = (ev: PointerEvent) => {
           window.removeEventListener("pointermove", onMove);
           window.removeEventListener("pointerup", onUp, true);
+          letCursorGo();
           guide.end();
           const s = store.getState();
           s.endPanHold(ev.pointerId);
