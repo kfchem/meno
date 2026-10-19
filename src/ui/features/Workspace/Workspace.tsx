@@ -479,7 +479,7 @@ function WorkspaceContent({
       setMaking3d(Date.now());
       try {
         const chem = await chemWorker("conformers");
-        // (the options the plugin takes for the role, as chosen in Settings, Molecules in 3D)
+        // (the options the plugin takes for the role, as chosen in Settings, Chemistry, on its 3D card)
         const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
         const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
         const made: Parameters<ReturnType<typeof store.getState>["riseMolecules3d"]>[0] = [];
