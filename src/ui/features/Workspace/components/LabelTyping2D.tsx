@@ -34,7 +34,7 @@ import { LabelWords } from "../utils/labelWords";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { WholeTexts2D } from "./Labels2D";
-import { pageField } from "./pageField";
+import { keyAfterKept, pageField } from "./pageField";
 import { leaveWatch, pastLabel } from "../utils/labelLeave";
 import { WRITE_MS, writtenLetters } from "../utils/writtenLetters";
 import { measured, usePressAmong, useWriting, writingMarks, type WritingDrawn } from "./writing";
@@ -101,8 +101,9 @@ export default function LabelTyping2D() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = store.getState();
-      if (!s.labelKept || e.repeat || e.isComposing) return;
-      const enter = e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+      // (an Enter as an input method on Windows gives it - "Process" - an Enter all the same: pageField `keyAfterKept`)
+      const enter = keyAfterKept(e);
+      if (!s.labelKept || enter == null) return;
       if (s.keyAfterLabel(enter) && enter) e.preventDefault();
     };
     const onPress = () => store.getState().forgetLabelKept();

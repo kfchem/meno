@@ -1847,3 +1847,17 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   instanced from the start.
 - **Testing.** The GUI harness sees a WebGL canvas only while its window
   is on screen.
+
+## Putting things down
+
+What is put on the page - a structure read from a figure, one opened or
+dropped onto a page with something on it, molecules in 3D, a formula drawn
+from one - is selected, and shown (utils/viewShow, `requestShow`): where it
+is not seen whole, the view eases to it, as Fit eases. What can be seen is
+the canvas the column beside it leaves: what lies under the column is not
+in view. The view goes along first, as little as takes it in with a
+margin; only where that is not enough, out as little as needed, it in the
+middle of what can be seen - never in. What is seen whole already leaves
+the view as it is. Opened onto an empty page, it is fitted, as a canvas
+opens. Quick Add and a paste put what they make where the pointer is, in
+view already (the maintainer, 2026-10-18).

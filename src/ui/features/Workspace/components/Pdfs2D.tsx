@@ -12,10 +12,11 @@
  * Full size, a drag on it moves the view, as on empty space; held still a
  * moment on its rim - or anywhere on it, where its words are too small to
  * read - it is taken hold of, lit from the pointer out as a structure is,
- * and then moved by the drag. Its pages spread, a page held so is moved
- * alone, to a place of its own, and its name moves them all. As an icon, a
- * drag moves it. A click selects it, Ctrl/Cmd and a click adds it to the
- * selection or takes it out; selected, a drag moves the whole selection.
+ * selected, and then moved by the drag. Its pages spread, a page held so is
+ * moved alone, to a place of its own, and its name moves them all. As an
+ * icon, a drag moves it at once; held still, it is lit and selected so too.
+ * A click selects it, Ctrl/Cmd and a click adds it to the selection or
+ * takes it out; selected, a drag moves the whole selection.
  * Moved by an undo or a redo, it glides there. The page on top
  * is turned by the corner that folds as the stack is hovered, or by the
  * arrow keys over it (Workspace). Turned, the page lifts off toward
@@ -56,7 +57,7 @@ import { labelFont } from "../../../../lib/chem/labelFonts";
 import { COLORS } from "../../../theme/colors";
 import { BASE, FADE_MS, GRAY, levelFor, LINE, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures, type Mark, type Pic, type Tile } from "./pdfPictures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
-import { followLink, readerOf } from "./pdfColumnReader";
+import { followLink, followsLink, linkHint, readerOf } from "./pdfColumnReader";
 import { linkAt, linksOf, type PdfLink } from "../../../../lib/pdf/reader";
 import { letterNear, placeAt, textHad, wordAt, type PageText } from "../../../../lib/pdf/text";
 import { placeBefore, selects } from "../utils/pdfSelection";
@@ -68,6 +69,7 @@ import { HeldLight } from "./HeldLight";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection, selectionMoving } from "../utils/dragSelection";
 import { heldShows } from "./held";
+import { pdfHold } from "./pdfHold";
 import type { WordPlace } from "../store/types";
 import { spotMoving } from "./figureTie";
 import { atomAtSpot } from "../utils/figures";
@@ -422,11 +424,38 @@ export default function Pdfs2D() {
     if (!hit) return null;
     return { page: hit.page, x: (q.x - (hit.s.x - hit.s.w / 2)) / pointOf(p), y: (hit.s.y + hit.s.h / 2 - q.y) / pointOf(p), sheet: hit.s };
   };
-  /** Over a link on a PDF, the system's hand (its words are selected by a long press, not the text cursor's drag). */
+  /**
+   * Over a link on a PDF, what ⌘- or Ctrl-click does, and the system's hand
+   * only with the key held (followsLink; its words are selected by a long
+   * press, not the text cursor's drag) - again as the key is pressed or let go.
+   */
+  const keys = useRef({ metaKey: false, ctrlKey: false });
+  const hovering = useRef<{ p: PdfItem | null; q?: { x: number; y: number } }>({ p: null });
+  const hoverNow = useRef<(p: PdfItem | null, q?: { x: number; y: number }) => void>(() => {});
+  useEffect(() => {
+    const note = (e: KeyboardEvent | PointerEvent) => {
+      const was = followsLink(keys.current);
+      keys.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+      if (followsLink(keys.current) !== was && hovering.current.p) hoverNow.current(hovering.current.p, hovering.current.q);
+    };
+    window.addEventListener("keydown", note, true);
+    window.addEventListener("keyup", note, true);
+    window.addEventListener("pointermove", note, true);
+    return () => {
+      window.removeEventListener("keydown", note, true);
+      window.removeEventListener("keyup", note, true);
+      window.removeEventListener("pointermove", note, true);
+    };
+  }, []);
   const hoverAt = (p: PdfItem | null, q?: { x: number; y: number }) => {
-    const want = p && q && linkOn(p, q) ? "pointer" : "";
+    hovering.current = { p, q };
+    const link = p && q ? linkOn(p, q) : null;
+    const want = link && followsLink(keys.current) ? "pointer" : "";
     const dom = gl.domElement as HTMLCanvasElement;
     if (dom.style.cursor !== want) dom.style.cursor = want;
+    const hint = link ? linkHint(link) : "";
+    if (dom.title !== hint) dom.title = hint;
+    hoverNow.current = hoverAt;
     // (over where an atom read from a figure was drawn: that atom lit in the drawing)
     const hit = p && q ? sheetUnder(p, q) : null;
     const st = store.getState();
@@ -452,8 +481,9 @@ export default function Pdfs2D() {
    * a figure, or where there are no words, a box - the figure's at once -
    * drawn on likewise; words selected, or a box, pressed are carried out; on
    * its rim, or anywhere on it where its words are too small to read, it is
-   * taken hold of - lit from the pointer out, as a structure is - and the
-   * drag then moves it, as one step. An icon follows a drag at once. Let go
+   * taken hold of - lit from the pointer out, as a structure is - selected,
+   * and the drag then moves it, as one step. An icon follows a drag at once,
+   * and held still is lit and selected likewise. Let go
    * where it was pressed, on a link, the link is followed.
    */
   const startMove = (p: PdfItem, e: { stopPropagation: () => void }) => {
@@ -492,8 +522,10 @@ export default function Pdfs2D() {
     const pageSheet = page != null ? spreadSheets(p)[page] : null;
     const pageOff = pageSheet ? { x: pageSheet.x - q.x, y: pageSheet.y - q.y } : null;
     const readable = (camera as THREE.OrthographicCamera).zoom * pointOf(p) >= READABLE_PX_PER_PT;
-    // what a hold there does: take hold of it, or begin a selection; an icon is moved at once
-    const takes = !p.icon && (onRim(p, q) || !readable);
+    // (selected: a drag moves the whole selection, not the view - a press held still does what it does on any PDF)
+    const selected = st.selPdfs.has(p.id);
+    // what a hold there does: take hold of it, or begin a selection; an icon is moved at once, and taken hold of held still
+    const takes = pdfHold(p, { rim: !p.icon && onRim(p, q), readable, selected }) === "take";
     // (in a figure, its labels too, or where there are no words: a hold draws a box - in a figure, the figure's)
     const figures = !p.icon && !takes && spot ? figuresHad(p.sha256, spot.page, invalidate) : null;
     const fig = figures && spot ? figureAt(figures, spot.x, spot.y) : null;
@@ -509,9 +541,16 @@ export default function Pdfs2D() {
       panHeld = true;
       store.getState().beginPanHold(ev.pointerId ?? null);
     };
-    // (selected: a drag moves the whole selection, not the view - a press held still does what it does on any PDF)
-    const selected = st.selPdfs.has(p.id);
     if (p.icon || selected) holdPan();
+    // (held long enough: it alone selected, as any other thing on the page is - one selected already stays with the rest)
+    let heldDone = false;
+    const selectAlone = () => {
+      heldDone = true;
+      if (selected) return;
+      const s = store.getState();
+      s.clearSel();
+      s.selectPdfs([p.id]);
+    };
     const letHoldGo = () => {
       if (hold != null) window.clearTimeout(hold);
       hold = null;
@@ -525,6 +564,7 @@ export default function Pdfs2D() {
         mode = "moving";
         dragged.current = { id: p.id, page };
         holdPan();
+        selectAlone();
         const m = motion.current.get(p.id);
         if (m?.held) holdPdf(p.id, { ...m.held, done: true });
       }, LONG_PRESS_MS);
@@ -600,6 +640,11 @@ export default function Pdfs2D() {
         return;
       }
       if (mode !== "moving" || (p.icon && away < MOV_PX)) return;
+      // (an icon dragged before it was held long enough: moved, not selected)
+      if (p.icon && hold != null) {
+        letHoldGo();
+        letLightGo();
+      }
       const r = toWorld(m.clientX, m.clientY);
       if (page != null && pageOff) store.getState().placePdfPage(p.id, page, r.x + pageOff.x, r.y + pageOff.y, gesture);
       else {
@@ -615,7 +660,7 @@ export default function Pdfs2D() {
       letLightGo();
       if (panHeld) store.getState().endPanHold(u.pointerId);
       // (a press held - a box drawn, words selected, the PDF taken hold of - ends in a click that lets nothing go)
-      if (mode === "boxing" || mode === "selecting" || (mode === "moving" && !p.icon)) store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
+      if (mode === "boxing" || mode === "selecting" || (mode === "moving" && !p.icon) || heldDone) store.getState().suppressDoubleClick(DOUBLE_CLICK_MS);
       const away = Math.hypot(u.clientX - ev.clientX, u.clientY - ev.clientY);
       if (mode === "boxing") {
         // (a box drawn next to nothing: let go)
@@ -623,11 +668,12 @@ export default function Pdfs2D() {
         if (boxDrawn && b && (b.box[2] - b.box[0] < MIN_BOX_PT || b.box[3] - b.box[1] < MIN_BOX_PT)) store.getState().setPdfBox(null);
         return;
       }
-      if (mode === "selecting" || mode === "panned" || away >= CLICK_PX || (mode === "moving" && !p.icon)) return;
+      if (mode === "selecting" || mode === "panned" || away >= CLICK_PX || (mode === "moving" && !p.icon) || heldDone) return;
       // a click: the words selected let go, a link followed - or else the PDF selected, alone
       store.getState().setPdfSel(null);
       const now = store.getState().pdfs.find((x) => x.id === p.id);
-      const link = now ? linkOn(now, toWorld(u.clientX, u.clientY)) : null;
+      // (only with ⌘ or Ctrl held: a plain click on a link is a click on the page)
+      const link = now && followsLink(u) ? linkOn(now, toWorld(u.clientX, u.clientY)) : null;
       if (now && link) followLink(store, now, link);
       else if (now) {
         const s2 = store.getState();

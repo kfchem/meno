@@ -11,6 +11,7 @@ import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { useEditor, useEditorStore } from "../store";
 import { fadeLetters, fadedOpacity, fadingOut } from "./labelFade";
 import { BOLD, ITALIC_SLANT, TextBatch, type BatchRun } from "./textBatch";
+import { noTextSets, setDrawn, textsGiven } from "./textSets";
 
 // (how far an italic run leans - about a sans-serif italic's slant: the canvas leans the label's own
 // letters, a picture asks for the typeface's italic - and how much a bold run's letters are thickened, as
@@ -369,7 +370,8 @@ function BatchedTexts2D({ texts: items, renderOrder = 30, fade = true, onDrawn, 
  * it. The first set is shown as it comes - nothing was there before it -
  * faded in if `fadeIn`. `onDrawn` is told each set once every letter of it
  * is in view. Moved, they are moved by what holds them: a set placed
- * elsewhere is another set.
+ * elsewhere is another set. Sets given faster than they are set: the one
+ * being set shown, then the latest (textSets).
  */
 export function WholeTexts2D({
   texts,
@@ -385,27 +387,18 @@ export function WholeTexts2D({
   /** How opaque they are, read at each frame (Texts2D `opacity`). */
   opacity?: { readonly current: number };
 }) {
-  // (two sets, one shown and one being set - each set made anew, so that it waits in its own Suspense)
-  const sets = useRef<{ at: [readonly TextItem[] | null, readonly TextItem[] | null]; front: 0 | 1; told: readonly TextItem[] | null }>({ at: [null, null], front: 0, told: null });
+  // (two sets, one shown and one being set - each set made anew, so that it waits in its own Suspense - and the latest, to be set next: textSets)
+  const sets = useRef(noTextSets<readonly TextItem[]>());
   const [, setShown] = useState(0);
   const told = useRef(onDrawn);
   told.current = onDrawn;
   const s = sets.current;
-  const back = (1 - s.front) as 0 | 1;
-  const front = s.at[s.front];
-  if (!front) s.at[s.front] = texts;
-  else if (sameTexts(front, texts)) s.at[back] = null;
-  else if (!(s.at[back] && sameTexts(s.at[back]!, texts))) s.at[back] = texts;
+  textsGiven(s, texts, sameTexts);
   const first = useRef(true);
   const drawn = (i: 0 | 1, items: readonly TextItem[]) => {
-    const now = sets.current;
-    if (now.at[i] !== items || now.told === items) return;
-    if (i !== now.front) {
-      now.front = i;
-      now.at[(1 - i) as 0 | 1] = null;
-      setShown((n) => n + 1);
-    }
-    now.told = items;
+    const was = setDrawn(sets.current, i, items);
+    if (!was) return;
+    if (was === "shown") setShown((n) => n + 1);
     told.current?.(items);
   };
   const out = (
