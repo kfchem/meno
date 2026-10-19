@@ -505,6 +505,13 @@ class HowManySought(unittest.TestCase):
         for smiles in ("C1CCCCC1", "c1ccccc1C1CCCCC1", "C1CCNCC1", "C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O"):
             self.assertGreaterEqual(self.sought(smiles), self.worker.RING_CONFORMERS, smiles)
 
+    def test_counts_a_ring_lying_on_a_bigger_one_as_able_to_flip(self):
+        # (a six-ring sharing two bonds with a thirteen-ring: a cyclodextrin's sugars lie on its macrocycle
+        #  that way, and ten carbons round the back hold a chair in no one shape, as a bridge would)
+        self.assertGreaterEqual(self.sought("C1CCCCCCCCCC2CCCC1C2"), self.worker.RING_CONFORMERS)
+        # (but a bridge of its own size or shorter does: a bicyclo[2.2.2]octane)
+        self.assertEqual(self.sought("C1CC2CCC1CC2"), self.worker.FEW_CONFORMERS)
+
     def test_asks_by_the_bonds_that_turn_where_no_ring_can_flip(self):
         self.assertEqual(self.sought("CC(C)CC1=CC=C(C=C1)C(C)C(=O)O"), 50)  # (ibuprofen: four)
         self.assertEqual(self.sought("CCCCCCCCCCC"), 200)  # (undecane: eight)

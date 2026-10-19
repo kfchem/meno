@@ -428,7 +428,10 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     tries missed the axial chair of phenylcyclohexane altogether. At two
     hundred, both chairs came back for all twelve, at every seed tried. A
     ring counts if it has five atoms or more, is not aromatic, and is not
-    bridged, a bridge holding its ring in the one shape.
+    bridged, a bridge holding its ring in the one shape - bridged meaning
+    that it shares more than one bond with a ring of its own size or
+    smaller, since against a larger ring it is no bridge but the way round
+    it, as each sugar of a cyclodextrin lies on its macrocycle.
   - **a molecule that cannot change shape is worth ten**, RDKit's own
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,

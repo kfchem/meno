@@ -1344,15 +1344,16 @@ def turning_bonds(mol):
 def can_flip(mol):
     """Whether it has a ring with more than one shape of its own: a ring of five atoms or more that is not
     aromatic and is not bridged - a chair and its flipped chair, a sugar's two chairs, a five-ring's puckers.
-    A bridged ring (adamantane, a norbornane, taxol's oxetane) is held in the one shape by its bridge, which
-    is why a ring sharing more than one bond with another does not count."""
+    A bridged ring (adamantane, a norbornane) is held in the one shape by its bridge, which is why a ring
+    sharing more than one bond with another ring of its own size or smaller does not count - against a larger
+    ring it is no bridge but the way round it, as each sugar of a cyclodextrin lies on its macrocycle."""
     by_atoms = mol.GetRingInfo().AtomRings()
     by_bonds = [set(b) for b in mol.GetRingInfo().BondRings()]
     for i, ring in enumerate(by_atoms):
         if len(ring) < 5 or all(mol.GetAtomWithIdx(a).GetIsAromatic() for a in ring):
             continue
-        # (bridged: it shares more than the one bond it would be fused by with another ring)
-        if any(len(by_bonds[i] & by_bonds[j]) > 1 for j in range(len(by_bonds)) if j != i):
+        # (bridged: more than the one bond it would be fused by is shared with a ring no bigger than it)
+        if any(len(by_bonds[i] & by_bonds[j]) > 1 and len(by_atoms[j]) <= len(ring) for j in range(len(by_bonds)) if j != i):
             continue
         return True
     return False
