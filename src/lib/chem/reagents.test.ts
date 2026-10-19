@@ -16,6 +16,11 @@ const centres = (s: GroupStructure) => s.atoms.filter((a) => a.tetra).map((a) =>
 describe("the reagents", () => {
   // each one's molecular formula, as its name gives it
   const formulas: Record<string, string> = {
+    // (fluorination and the AZADO family: the formulas PubChem gives the records their structures were checked against)
+    TASF: "C9H27F2N3SSi", TBAT: "C34H51F2NSi", "XtalFluor-E": "C4H10BF6NS", "XtalFluor-M": "C4H8BF6NOS", PyFluor: "C5H4FNO2S",
+    PhenoFluor: "C27H36F2N2", AlkylFluor: "C27H36BF5N2", Fluolead: "C12H17F3S", "Umemoto's reagent": "C13H8BF7S",
+    "N-fluoropyridinium triflate": "C6H5F4NO3S", "Hu reagent": "C6H5F2NO2S", PhSO2CF2H: "C7H6F2O2S",
+    "1-Me-AZADO": "C10H16NO", "Nor-AZADO": "C8H12NO", ABNO: "C8H14NO", "keto-ABNO": "C8H12NO2", AZADOL: "C9H15NO",
     DMP: "C13H13IO8", IBX: "C7H5IO4", PIDA: "C10H11IO4", PIFA: "C10H5F6IO4", TEMPO: "C9H18NO", AZADO: "C9H14NO",
     PCC: "C5H6ClCrNO3", PDC: "C10H12Cr2N2O7", TPAP: "C12H28NO4Ru", NMO: "C5H11NO2", mCPBA: "C7H5ClO3", DDQ: "C8Cl2N2O2",
     Oxone: "H3K5O18S4", OsO4: "O4Os", KMnO4: "KMnO4", MnO2: "MnO2",

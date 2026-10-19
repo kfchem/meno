@@ -92,6 +92,14 @@ export const REAGENTS: Reagent[] = [
   { label: "PIFA", also: ["PhI(OCOCF3)2", "PhI(TFA)2"], use: "oxidation", smiles: "FC(F)(F)C(=O)O[I](OC(=O)C(F)(F)F)c1ccccc1", name: "[bis(trifluoroacetoxy)iodo]benzene" },
   { label: "TEMPO", use: "oxidation", smiles: "CC1(C)CCCC(C)(C)N1[O]", name: "2,2,6,6-tetramethylpiperidin-1-oxyl" },
   { label: "AZADO", use: "oxidation", smiles: "[O]N1C2CC3CC1CC(C3)C2", name: "2-azaadamantane N-oxyl" },
+  // (the free nitroxyls, their radical on O, as their suppliers' pages and PubChem - by its record, not its name, which gives the
+  // hydroxylamine - have them)
+  { label: "1-Me-AZADO", use: "oxidation", smiles: "CC12CC3CC(C1)CC(C3)N2[O]", name: "1-methyl-2-azaadamantane N-oxyl" },
+  { label: "Nor-AZADO", use: "oxidation", smiles: "[O]N1C2CC3CC1CC3C2", name: "9-azanoradamantane N-oxyl" },
+  { label: "ABNO", use: "oxidation", smiles: "[O]N1C2CCCC1CCC2", name: "9-azabicyclo[3.3.1]nonane N-oxyl" },
+  { label: "keto-ABNO", use: "oxidation", smiles: "O=C1CC2CCCC(C1)N2[O]", name: "9-azabicyclo[3.3.1]nonan-3-one N-oxyl" },
+  // (the hydroxylamine, sold for oxidations as AZADO is: three suppliers' pages - Wako, BLD Pharm, TCI - show it alike)
+  { label: "AZADOL", use: "oxidation", smiles: "ON1C2CC3CC(C2)CC1C3", name: "2-azaadamantan-2-ol" },
   { label: "PCC", use: "oxidation", smiles: "[O-][Cr](=O)(=O)Cl.c1cc[nH+]cc1", name: "pyridinium chlorochromate" },
   { label: "PDC", use: "oxidation", smiles: "[O-][Cr](=O)(=O)O[Cr](=O)(=O)[O-].c1cc[nH+]cc1.c1cc[nH+]cc1", name: "pyridinium dichromate" },
   { label: "TPAP", use: "oxidation", smiles: "CCC[N+](CCC)(CCC)CCC.[O-][Ru](=O)(=O)=O", name: "tetrapropylammonium perruthenate" },
@@ -207,6 +215,20 @@ export const REAGENTS: Reagent[] = [
   { label: "Togni II", also: ["Togni reagent II", "Togni's reagent II"], use: "halogenation", smiles: "FC(F)(F)[I]1OC(=O)c2ccccc21", name: "1-(trifluoromethyl)-1,2-benziodoxol-3(1H)-one" },
   { label: "Ruppert–Prakash reagent", also: ["Ruppert-Prakash reagent"], use: "halogenation", smiles: "C[Si](C)(C)C(F)(F)F", name: "(trifluoromethyl)trimethylsilane" },
   { label: "Langlois reagent", also: ["Langlois' reagent"], use: "halogenation", smiles: "[Na+].[O-]S(=O)C(F)(F)F", name: "sodium trifluoromethanesulfinate" },
+  // (each as it is sold - salts as salts - its structure as its supplier's page and PubChem have it, and its first report: the
+  // list in the PR that added them)
+  { label: "TASF", also: ["TAS-F"], use: "halogenation", smiles: "CN(C)[S+](N(C)C)N(C)C.C[Si-](C)(C)(F)F", name: "tris(dimethylamino)sulfonium difluorotrimethylsilicate" },
+  { label: "TBAT", use: "halogenation", smiles: `${TBA}.F[Si-](F)(c1ccccc1)(c1ccccc1)c1ccccc1`, name: "tetrabutylammonium difluorotriphenylsilicate" },
+  { label: "XtalFluor-E", use: "halogenation", smiles: `CCN(CC)[S+](F)F.${BF4}`, name: "(diethylamino)difluorosulfonium tetrafluoroborate" },
+  { label: "XtalFluor-M", use: "halogenation", smiles: `F[S+](F)N1CCOCC1.${BF4}`, name: "difluoro(morpholino)sulfonium tetrafluoroborate" },
+  { label: "PyFluor", use: "halogenation", smiles: "O=S(=O)(F)c1ccccn1", name: "pyridine-2-sulfonyl fluoride" },
+  { label: "PhenoFluor", use: "halogenation", smiles: "CC(C)c1cccc(C(C)C)c1N1C=CN(c2c(C(C)C)cccc2C(C)C)C1(F)F", name: "1,3-bis(2,6-diisopropylphenyl)-2,2-difluoro-2,3-dihydro-1H-imidazole" },
+  { label: "AlkylFluor", use: "halogenation", smiles: `CC(C)c1cccc(C(C)C)c1-n1cc[n+](c1F)-c1c(C(C)C)cccc1C(C)C.${BF4}`, name: "1,3-bis(2,6-diisopropylphenyl)-2-fluoroimidazolium tetrafluoroborate" },
+  { label: "Fluolead", use: "halogenation", smiles: "Cc1cc(cc(C)c1S(F)(F)F)C(C)(C)C", name: "4-tert-butyl-2,6-dimethylphenylsulfur trifluoride" },
+  { label: "Umemoto's reagent", also: ["Umemoto reagent"], use: "halogenation", smiles: `FC(F)(F)[S+]1c2ccccc2-c2ccccc12.${BF4}`, name: "S-(trifluoromethyl)dibenzothiophenium tetrafluoroborate" },
+  { label: "N-fluoropyridinium triflate", use: "halogenation", smiles: "F[n+]1ccccc1.[O-]S(=O)(=O)C(F)(F)F", name: "N-fluoropyridinium trifluoromethanesulfonate" },
+  { label: "Hu reagent", also: ["Hu's reagent"], use: "halogenation", smiles: "FC(F)S(=O)(=O)c1ccccn1", name: "difluoromethyl 2-pyridyl sulfone" },
+  { label: "PhSO2CF2H", use: "halogenation", smiles: "FC(F)S(=O)(=O)c1ccccc1", name: "difluoromethyl phenyl sulfone", formula: true },
   { label: "SOCl2", use: "halogenation", smiles: "O=S(Cl)Cl", name: "thionyl chloride", formula: true },
   { label: "POCl3", use: "halogenation", smiles: "O=P(Cl)(Cl)Cl", name: "phosphoryl chloride", formula: true },
   { label: "PCl5", use: "halogenation", smiles: "ClP(Cl)(Cl)(Cl)Cl", name: "phosphorus pentachloride", formula: true },
