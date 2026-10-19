@@ -1346,7 +1346,11 @@ def conformers(mol, count=CONFORMERS, seed=SEED, field="MMFF94", same=SAME_SHAPE
     mol = Chem.AddHs(mol)
     params = rdDistGeom.ETKDGv3()
     params.randomSeed = seed
-    params.pruneRmsThresh = same
+    # (nothing pruned while embedding: ETKDG's raw coordinates are not yet chairs, and two embeddings that would
+    # relax into different chairs can sit within `same` of each other there - one was thrown away before the force
+    # field could tell them apart, and which of a ring's two chairs survived was arbitrary. They are pruned once,
+    # after optimisation, on the geometry the chemist is given.)
+    params.pruneRmsThresh = -1.0
     params.numThreads = 0  # (every core)
     bounds = metal_bounds(mol, eta)
     if bounds is not None:
