@@ -22,6 +22,9 @@ describe("the reagents", () => {
     PhenoFluor: "C27H36F2N2", AlkylFluor: "C27H36BF5N2", Fluolead: "C12H17F3S", "Umemoto Reagent I": "C13H8BF7S",
     "N-fluoropyridinium triflate": "C6H5F4NO3S", "Hu reagent": "C6H5F2NO2S", PhSO2CF2H: "C7H6F2O2S",
     "1-Me-AZADO": "C10H16NO", "Nor-AZADO": "C8H12NO", ABNO: "C8H14NO", "keto-ABNO": "C8H12NO2", AZADOL: "C9H15NO",
+    // (bases and coupling reagents: the formulas PubChem gives the records their structures were checked against)
+    MTBD: "C8H15N3", BEMP: "C13H31N4P", "P4-tBu": "C22H63N13P4", BTMG: "C9H21N3",
+    PyAOP: "C17H27F6N7OP2", TCFH: "C5H12ClF6N2P", DEPBT: "C11H14N3O5P", EEDQ: "C14H17NO3", "BOP-Cl": "C6H8ClN2O5P",
     DMP: "C13H13IO8", IBX: "C7H5IO4", PIDA: "C10H11IO4", PIFA: "C10H5F6IO4", TEMPO: "C9H18NO", AZADO: "C9H14NO",
     PCC: "C5H6ClCrNO3", PDC: "C10H12Cr2N2O7", TPAP: "C12H28NO4Ru", NMO: "C5H11NO2", mCPBA: "C7H5ClO3", DDQ: "C8Cl2N2O2",
     Oxone: "H3K5O18S4", OsO4: "O4Os", RuO4: "O4Ru", "NaBO3·4H2O": "B2H16Na2O14", KMnO4: "KMnO4", MnO2: "MnO2",
