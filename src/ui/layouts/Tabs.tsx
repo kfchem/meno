@@ -2,7 +2,7 @@ import { AnimatePresence, Reorder, motion, useMotionValue } from "motion/react";
 import { XMarkIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import { useEffect, useRef, type RefObject } from "react";
-import { DURATION, EASE, FADE, LEAVE } from "../theme/motion";
+import { DURATION, EASE, EASE_SLIDE, FADE, LEAVE } from "../theme/motion";
 import { dragWithin, scrollToShow } from "./tabDrag";
 
 export type TabMeta = { id: string; label: string; dirty?: boolean };
@@ -18,6 +18,10 @@ export type TabMeta = { id: string; label: string; dirty?: boolean };
  */
 /** How far the chosen tab's corners stand past its sides, in pixels (`Shoulders`). */
 const CORNER_PX = 8;
+/** A tab's width with room to spare, the least it narrows to (chosen, and not), and the gap after it, in pixels. */
+const TAB_PX = 192;
+const LEAST_PX = { chosen: 96, other: 32 };
+const GAP_PX = 4;
 
 export function TabStrip({
   tabOrder,
@@ -37,9 +41,9 @@ export function TabStrip({
   const draggingRef = useRef(false);
   const stripRef = useRef<HTMLUListElement>(null);
   // (where a tab dragged may go: the strip as it is seen, within its padding - its last tab's place the furthest, so
-  // that one dragged never runs into the padding and the strip scrolls under it. The padding on the right as wide as
-  // the chosen tab's corners: narrower, they stood past the strip's end, and the strip could be scrolled by that much -
-  // as a drag held there did, the tabs shifting a few pixels)
+  // that one dragged never runs into the padding and the strip scrolls under it. The last tab's gap and the padding
+  // on the right as wide together as the chosen tab's corners: narrower, they stood past the strip's end, and the
+  // strip could be scrolled by that much - as a drag held there did, the tabs shifting a few pixels)
   const roomRef = useRef<HTMLDivElement>(null);
   // (the chosen tab in view: once there were more than the bar holds, the
   // ones past its end were cut off, the chosen one too)
@@ -77,11 +81,13 @@ export function TabStrip({
         values={tabOrder}
         onReorder={reorder}
         layoutScroll
-        className="flex h-full items-end space-x-1 min-w-0 pl-1.5 pr-2 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
+        className="flex h-full items-end min-w-0 pl-1.5 pr-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden relative"
         data-tauri-drag-region
       >
         {/* A tab comes in rising, and closed goes the same way, the others
-            closing up after it. */}
+            closing up after it: each opens and closes its own room, so the
+            tabs after it and "+" move with it - never "+" first, a tab
+            sliding out from beside it (the maintainer, 2026-10-19). */}
         <AnimatePresence initial={false}>
           {tabOrder.map((id) => (
             <Tab
@@ -100,6 +106,9 @@ export function TabStrip({
     </div>
   );
 }
+
+/** A tab closed, gone from view, closing up its room: the tabs after it and "+" moving up as one. */
+const SHUT = { duration: DURATION.base, ease: EASE_SLIDE, delay: LEAVE.duration };
 
 function Tab({
   tab,
@@ -144,9 +153,17 @@ function Tab({
       value={tab.id}
       style={{ x }}
       data-tab={tab.id}
-      initial={{ opacity: 0, y: 30 }}
-      animate={{ opacity: 1, y: 0, transition: { duration: DURATION.base, ease: EASE } }}
-      exit={{ opacity: 0, y: 20, transition: LEAVE }}
+      initial={{ opacity: 0, y: 30, width: 0, minWidth: 0, marginRight: 0 }}
+      animate={{
+        opacity: 1,
+        y: 0,
+        width: TAB_PX,
+        // (in a full bar, the chosen tab widening for its name and the one left narrowing, together)
+        minWidth: selected ? LEAST_PX.chosen : LEAST_PX.other,
+        marginRight: GAP_PX,
+        transition: { duration: DURATION.base, ease: EASE },
+      }}
+      exit={{ opacity: 0, y: 20, width: 0, minWidth: 0, marginRight: 0, transition: { ...LEAVE, width: SHUT, minWidth: SHUT, marginRight: SHUT } }}
       // Chosen or not, a tab goes over in the same time and the same
       // way as its curved corners, which are drawn beside it: the
       // two change together, never one ahead of the other. The line
@@ -154,9 +171,7 @@ function Tab({
       // with its white and its corners turn out into it, and a tab not
       // chosen is clear, so the line runs on under it unbroken.
       className={clsx(
-        "@container relative rounded-t-lg w-48 h-8.5 text-xs flex justify-between items-top0 transition-[background-color,border-color,color] duration-150 ease-meno",
-        // (the chosen tab wide enough for its name; the others as narrow as there is room for, and past that the bar goes on)
-        selected ? "min-w-24" : "min-w-8",
+        "@container relative rounded-t-lg h-8.5 text-xs flex justify-between items-top0 transition-[background-color,border-color,color] duration-150 ease-meno",
         selected
           ? "bg-white text-gh-black border border-gh-line border-b-transparent"
           : "bg-transparent text-gh-gray border border-transparent"

@@ -18,7 +18,9 @@ describe("the tabs in the title bar", () => {
     const html = renderToStaticMarkup(
       <TabStrip tabOrder={["a"]} tabsById={{ a: { id: "a", label: "Workspace" } }} activeId="a" reorder={() => {}} select={() => {}} close={() => {}} />,
     );
-    expect(html).toContain("pl-1.5 pr-2 overflow-x-auto");
+    expect(html).toContain("pl-1.5 pr-1 overflow-x-auto");
+    // (the last tab's gap and the padding together as wide as the corners)
+    expect(html).toContain("margin-right:4px");
     expect(html).toMatch(/class="absolute inset-y-0 left-1\.5 right-2 pointer-events-none"/);
   });
 
