@@ -1766,6 +1766,13 @@ export type EditorState = {
   easeDocumentStyle: (style: StyleChoice) => void;
   /** The workspace's styles in 3D set: one step to undo - a run of a slider's in one `coalesceKey`. Its molecules go over to them, eased. */
   setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => void;
+  /**
+   * Settings' styles taken by the workspace, asked (../SettingsStyleAsk):
+   * its drawing style - its bond eased in, as a preset chosen in its card -
+   * and its two looks in 3D, primary and secondary, its molecules going
+   * over to them eased; either left as it is where none is given. One step.
+   */
+  adoptSettingsStyles: (drawing: StyleChoice | null, roles: Pick<Workspace3D, "primary" | "secondary"> | null) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;
