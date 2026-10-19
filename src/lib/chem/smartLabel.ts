@@ -8,7 +8,13 @@
  *
  * 1. A letter typed small may be read as a capital, one typed as a capital
  *    stays one; of the readings, the one that changes the fewest letters
- *    (co is Co, ph Ph, ipr iPr - not the NHC IPr).
+ *    (co is Co, ph Ph, ipr iPr - not the NHC IPr). But two capitals that are
+ *    an element's symbol are that element (the maintainer, 2026-10-18): SI
+ *    is Si, not S and I - none after uranium
+ *    (rule 2), nor where the letters as typed are a name Meno reads whole
+ *    (CO, carbon monoxide), a whole molecule (HF), or typed as drawn on a
+ *    bond's left to a heteroatom (HO is OH, SN NS: rule 3), nor PO, P and
+ *    O; SB and EU are Sb and Eu.
  * 2. No element after uranium (Np on) is read from letters typed small:
  *    nh is NH, not nihonium; ts tosyl, not tennessine. Nor is deuterium:
  *    D is deuterium only as typed (CDCl3), pdcl2 PdCl2.
@@ -46,6 +52,7 @@
  */
 import { abbreviationOf, byRule, customAbbreviations, GENERIC_SYMBOLS, GROUPS, labelUnitNames, labelUnits, reversedLabel } from "./abbreviations";
 import { ELEMENTS, NOT_METALS } from "./elements";
+import { ligandOf } from "./ligands";
 
 /**
  * What a label reads as: part of a structure - an element with its H and
@@ -436,8 +443,34 @@ function before(a: readonly number[], b: readonly number[]): boolean {
  * lah LAH, not LaH; hotf HOTf, not HoTf); and a group's name of one letter
  * only as part of a structure (co2z is CO2Z; zni2 ZnI2, not ZNi2).
  */
+/**
+ * Two capitals typed - a charge after them, if any - that are an element's
+ * symbol, read as that element (rule 1): SI is Si. None after uranium (rule 2); none where the letters as typed are
+ * a name Meno reads whole - a ligand's, a reagent's, a group's (CO) - or a
+ * whole molecule (HF), or are read the other way round, as drawn on a
+ * bond's left, to a heteroatom first (HO, SN: rule 3 - SB and EU are the
+ * elements), nor PO, which is P and O (the maintainer, 2026-10-18).
+ */
+function symbolInAnyCase(typed: string, reads: Reads): string | null {
+  const m = /^([A-Z]{2})([+\u2212-]*)$/.exec(typed);
+  if (!m) return null;
+  const symbol = m[1][0].toUpperCase() + m[1][1].toLowerCase();
+  if (!SYMBOLS.has(symbol) || HEAVY.has(symbol)) return null;
+  if (vocabulary().units.has(m[1]) || ligandOf(m[1], true)) return null;
+  if (reads(typed)?.whole) return null;
+  // (turned round as drawn on a bond's left only to a heteroatom first, as rule 3 reads it - OH, SH, NS - not SB to BS, nor EU to UE)
+  if (forwards(typed, reads).some((f) => { const r = reads(f); return !!r && !r.whole && HETEROATOM.test(labelUnits(f)[0] ?? ""); })) return null;
+  // (PO is P and O, the maintainer's ruling, 2026-10-18: Po, so typed, is polonium)
+  if (m[1] === "PO") return null;
+  const as = symbol + m[2];
+  return reads(as)?.element === symbol ? as : null;
+}
+
 function chosen(typed: string, reads: Reads): { shown: string; kept: string } {
   if (!typed) return { shown: typed, kept: typed };
+  // (an element's symbol in another case: that element - rule 1)
+  const symbol = symbolInAnyCase(typed, reads);
+  if (symbol) return { shown: symbol, kept: symbol };
   const own = reads(typed);
   // (what reads as it is typed is that - a whole molecule but for HN before a group: HNiPr is NHiPr)
   if (own) return { shown: typed, kept: (own.whole && heteroatomFirst(typed, reads)[0]) || typed };
