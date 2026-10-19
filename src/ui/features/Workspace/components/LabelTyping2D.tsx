@@ -238,9 +238,10 @@ function Typing({ session }: { session: Session }) {
     const s = store.getState();
     if (!s.labelEdit.active || s.labelEdit.n !== n) return;
     if (keep) {
-      // (as it is kept: as it reads from its bond - aco OAc - its italic prefixes hyphenated - tbu t-Bu)
-      s.setLabelEditValue(useAppSettings.getState().labels.smart ? keptLabel(ed.typed, labelReading) : ed.typed);
-      s.commitLabelEdit(ed.typed, byEnter);
+      // (as it is kept: without the spaces hung at its ends - nothing drawn moves - and as it reads from its bond - aco OAc - its italic prefixes hyphenated - tbu t-Bu)
+      const typed = ed.typed.trim();
+      s.setLabelEditValue(useAppSettings.getState().labels.smart ? keptLabel(typed, labelReading) : typed);
+      s.commitLabelEdit(typed, byEnter);
     } else s.cancelLabelEdit();
   };
   const finishing = useRef(finish);

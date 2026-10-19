@@ -106,6 +106,17 @@ describe("a label's letters as they are written over its atom", () => {
     expect(writtenLetters("Cl", o.fontPx, set).dx).toBe(0);
   });
 
+  it("leaves its letters where they are as a space is typed at either end - the space hangs off them, the caret past it", () => {
+    const at = (t: string) => writtenLetters(t, o.fontPx, set).items.map((i) => ({ x: i.x, text: i.text }));
+    expect(at("OMe ")).toEqual(at("OMe"));
+    expect(at("OMe  ")).toEqual(at("OMe"));
+    expect(at(" O")).toEqual(at("O"));
+    expect(writtenLetters("Cl ", o.fontPx, set).dx).toBe(0);
+    // (one typed between its letters: set as typed, the letters after it on by a space)
+    expect(at("Grubbs II")[0].text).toBe("Grubbs II");
+    expect(at("Grubbs  II")[0].text).toBe("Grubbs  II");
+  });
+
   it("brings the bonds round over WRITE_MS a step at a time, each step from where the one before had come", () => {
     expect(WRITE_MS).toBe(120);
     const first = { n: 1, text: "O", items: [], since: 0, hidden: true };

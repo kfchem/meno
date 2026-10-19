@@ -2,9 +2,10 @@
  * A label's letters as they are written over its atom (docs/EDITOR-2D.md,
  * *Labels typed in place*): set as words on the page are (lib/chem/captions),
  * in the drawing's typeface at its size, left to right, the first on the
- * atom - a two-letter symbol's middle - as the drawing sets a label. What
- * the writing draws (LabelTyping2D) and what the atom's bonds stop short of
- * meanwhile (DrawnLayout) are both set by this.
+ * atom - a two-letter symbol's middle - as the drawing sets a label, any
+ * spaces typed before it hanging before it. What the writing draws
+ * (LabelTyping2D) and what the atom's bonds stop short of meanwhile
+ * (DrawnLayout) are both set by this.
  */
 import { captionRuns, captionSet } from "../../../../lib/chem/captions";
 import { runsWidth, type LabelSet, type TextItem, type Writing } from "../../../../lib/chem/layout2d";
@@ -17,8 +18,10 @@ import { DURATION, easeInOut } from "../../../theme/motion";
  */
 export function writtenLetters(text: string, fs: number, set: LabelSet): { laid: ReturnType<typeof captionSet>; dx: number; items: TextItem[] } {
   const laid = captionSet(text, 0, 0, fs, set);
-  const first = [...text][0];
-  const dx = /^[A-Z][a-z]$/.test(text) || !first ? 0 : runsWidth(captionRuns(text), fs, set) / 2 - runsWidth([{ text: first }], fs, set) / 2;
+  // (as it is set: spaces at its ends hang off it - its first letter, the first after them)
+  const core = text.trim();
+  const first = [...core][0];
+  const dx = /^[A-Z][a-z]$/.test(core) || !first ? 0 : runsWidth(captionRuns(core), fs, set) / 2 - runsWidth([{ text: first }], fs, set) / 2;
   return { laid, dx, items: laid.items.map((t) => ({ ...t, x: t.x + dx })) };
 }
 

@@ -214,7 +214,7 @@ export function listItem(line: string): { level: number; mark: string; head: num
 
 /**
  * A line of a caption as it is laid: its letters as they are set - its
- * words one space apart - each letter's place in the caption's text
+ * words as many spaces apart as were typed - each letter's place in the caption's text
  * (`src`), whether a typed line ends with it, and how far in from the
  * width's edge it begins (`indent`: a list's level, and under an item's
  * first line, its bullet).
@@ -249,14 +249,22 @@ function unbreakable(para: string, at: number): { text: string; src: number[] }[
     // (each code unit's place: a letter of two code units, both)
     for (let k = 0; k < word.length; k++) src.push(from + k);
     const last = out[out.length - 1];
-    if (last && NUMBER.test(last.text.split(" ").slice(-1)[0]) && UNIT.test(word)) {
-      // (the space between them: the first of those typed there)
-      const gap = last.src[last.src.length - 1] + 1;
-      last.text = `${last.text} ${word}`;
-      last.src = [...last.src, gap, ...src];
+    if (last && NUMBER.test(last.text.split(/\s+/).slice(-1)[0]) && UNIT.test(word)) {
+      // (the spaces between them, as many as were typed)
+      const gap = spacesBetween(para, at, last.src[last.src.length - 1] + 1, from);
+      last.text = `${last.text}${gap.text}${word}`;
+      last.src = [...last.src, ...gap.src, ...src];
     } else out.push({ text: word, src });
   }
   return out;
+}
+
+/** The spaces typed between two words of a typed line (`para`, from `at` in the caption's text): from `from` up to `to`, each with its place. */
+function spacesBetween(para: string, at: number, from: number, to: number): { text: string; src: number[] } {
+  const src: number[] = [];
+  for (let k = from; k < to; k++) src.push(k);
+  // (a tab among them as a space: set as one)
+  return { text: para.slice(from - at, to - at).replace(/[^\S ]/g, " "), src };
 }
 
 /** Where a word too wide for its line may be broken, as a chemical name is: after a hyphen, a comma or a closing bracket, or before an opening one. */
@@ -419,8 +427,9 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
         continue;
       }
       const was: { text: string; src: number[] } = line;
-      const gap = was.src[was.src.length - 1] + 1;
-      const next = () => ({ text: `${was.text} ${w.text}`, src: [...was.src, gap, ...w.src] });
+      // (the spaces between them as they were typed: a run of them as wide as it is, not one)
+      const gap = spacesBetween(typed, at, was.src[was.src.length - 1] + 1, w.src[0]);
+      const next = () => ({ text: `${was.text}${gap.text}${w.text}`, src: [...was.src, ...gap.src, ...w.src] });
       // (an item's bullet stays with its first word)
       const bulletAlone = item && first && was.src.length && was.src[was.src.length - 1] < at + item.head;
       if (bulletAlone) {
@@ -430,12 +439,12 @@ function linesOf(text: string, fontSize: number, set: LabelSet, width: number | 
       // (the line with the word on it: the line's width and the space and word's - the word its line's first, set as typed, where the line holds no word yet; measured whole only where that comes to the room's edge, so that it is the same to the last bit, and as long a line costs no more)
       let withW = 0;
       if (wraps) {
-        withW = lineW + wide({ text: ` ${w.text}`, src: [gap, ...w.src] }, undefined, { first: tail && !/[^\s,;/]/.test(was.text) });
+        withW = lineW + wide({ text: `${gap.text}${w.text}`, src: [...gap.src, ...w.src] }, undefined, { first: tail && !/[^\s,;/]/.test(was.text) });
         if (Math.abs(withW - room()) <= 1e-9 * Math.max(1, Math.abs(room()))) withW = wide(next(), undefined, { first: tail });
       }
       if (!wraps || withW <= room()) {
-        was.text += ` ${w.text}`;
-        was.src.push(gap, ...w.src);
+        was.text += `${gap.text}${w.text}`;
+        was.src.push(...gap.src, ...w.src);
         lineW = withW;
       } else {
         flush(false);
@@ -518,6 +527,8 @@ function across(laid: readonly Laid[], x: number, box: number, fontSize: number,
     const inset = align === "left" || align === "justify" ? l.indent : 0;
     const lineStart = align === "left" || align === "justify" ? x - box / 2 + inset : align === "right" ? x + box / 2 - w : x - w / 2;
     let starts: number[];
+    // (the line's places as it is set whole - each space between its words its own: none where its words are spread)
+    let along: number[] | null = null;
     if (align === "justify" && !l.ends && words.length > 1) {
       const widths = words.map((m) => wide(l, m.index!, m.index! + m[0].length));
       // (a list item's bullet where its line begins, the words after it spread from where its lines hang)
@@ -535,16 +546,16 @@ function across(laid: readonly Laid[], x: number, box: number, fontSize: number,
       ];
     } else {
       // (each word where the line set whole has it: the line's places found once, not the line up to each word measured anew)
-      const along = runsPlaces(runsOf(l, 0, l.text.length), fontSize, set);
-      starts = words.map((m) => lineStart + (m.index ? along[m.index] : 0));
+      along = runsPlaces(runsOf(l, 0, l.text.length), fontSize, set);
+      starts = words.map((m) => lineStart + (m.index ? along![m.index] : 0));
     }
     const xs: (number | undefined)[] = new Array(l.text.length + 1);
     words.forEach((m, k) => {
       const places = runsPlaces(runsOf(l, m.index!, m.index! + m[0].length), fontSize, set);
       for (let j = 0; j <= m[0].length; j++) xs[m.index! + j] = starts[k] + (places[j] ?? places[places.length - 1]);
     });
-    // (what lies between them, where the setting keeps it: on from the word before - an empty line, where it begins)
-    for (let c = 0; c < xs.length; c++) xs[c] ??= c === 0 ? lineStart : xs[c - 1];
+    // (what lies between them: where the line set whole has it - spread, on from the word before; an empty line, where it begins)
+    for (let c = 0; c < xs.length; c++) xs[c] ??= along && along[c] != null ? lineStart + along[c] : c === 0 ? lineStart : xs[c - 1];
     return xs as number[];
   });
 }
@@ -619,13 +630,35 @@ export function wordsSet(c: Words, sizes: { fontPx: number; pointPx?: number }, 
 }
 
 /**
+ * Words as they are kept once typed: without the spaces they hang at their
+ * lines' ends - before a line's first letter, after its last (a list item's
+ * tabs stay: its level) - nor blank lines before and after them, so that
+ * what is kept is what was drawn; each letter kept with its own style.
+ */
+export function keptWords(text: string, styles: readonly (WordsStyle | undefined)[]): { text: string; styles: (WordsStyle | undefined)[] } {
+  const lines: { text: string; styles: (WordsStyle | undefined)[] }[] = [];
+  let at = 0;
+  for (const line of text.split("\n")) {
+    const from = line.length - line.replace(/^ +/, "").length;
+    // (an item with nothing after its bullet yet: still one)
+    const to = Math.max(line.replace(/\s+$/, "").length, listItem(line)?.head ?? 0);
+    lines.push({ text: line.slice(from, Math.max(from, to)), styles: styles.slice(at + from, at + Math.max(from, to)) });
+    at += line.length + 1;
+  }
+  while (lines.length && !lines[0].text) lines.shift();
+  while (lines.length && !lines[lines.length - 1].text) lines.pop();
+  return { text: lines.map((l) => l.text).join("\n"), styles: lines.flatMap((l, i) => (i ? [undefined, ...l.styles] : l.styles)) };
+}
+
+/**
  * Where each place in a caption's text lies as `captionSet` sets it - the
  * places a caret stands at, before each of its letters and at its end:
  * the line it falls on, as the lines are broken and laid, and how far
  * across; and each line's middle, and where it begins and ends across.
- * Spaces the setting runs together, and those it leaves off a line's ends,
- * stand where the space it keeps does, or at the line's edge; a list
- * item's tabs, where its line begins.
+ * Spaces between words are set as typed, each its own place; those it
+ * leaves off a line's ends - before its first letter and after its last,
+ * and where a line is broken - hang there, a space apart, as many as were
+ * typed; a list item's tabs, where its line begins.
  */
 export type CaptionPlaces = { at: { line: number; x: number; inside?: true }[]; lines: { y: number; x0: number; x1: number }[] };
 
@@ -652,22 +685,27 @@ export function captionPlaces(
   const at: { line: number; x: number; inside?: true }[] = [];
   // (the places between letters as the reader sees them - an emoji with its modifiers one, a letter of two code units one: no caret goes inside one)
   const between = new Set([...letterStarts(text), text.length]);
+  const space = runsWidth([{ text: " " }], fontSize, set);
   let li = 0;
   let from = 0;
   for (const typed of text.split("\n")) {
     // (the laid lines this typed line was laid on: from `li`, to the one it ends with)
     const firstLine = li;
     while (li < laid.length - 1 && !laid[li].ends) li++;
-    let last: { line: number; j: number } | null = null;
+    let last: { line: number; j: number; b: number } | null = null;
+    // (spaces before its first letter set hang before it, one space wide each - a list item's tabs, where its line begins)
+    let first = from;
+    while (first < from + typed.length && !before.has(first)) first++;
+    const lead = first < from + typed.length && !listItem(typed);
     for (let b = from; b <= from + typed.length; b++) {
       const here = b < from + typed.length ? before.get(b) : undefined;
       if (here) {
         at.push({ line: here.line, x: xsOf[here.line][here.j] });
-        last = here;
+        last = { ...here, b };
       } else if (last) {
-        // (past a letter set: just after it - where a space run together, or the line's end, stands)
-        at.push({ line: last.line, x: xsOf[last.line][last.j + 1] });
-      } else at.push({ line: firstLine, x: xsOf[firstLine][0] });
+        // (past a letter set: after it, a space wide for each space not set since - those at a line's end, as they were typed)
+        at.push({ line: last.line, x: xsOf[last.line][last.j + 1] + (b - last.b - 1) * space });
+      } else at.push({ line: firstLine, x: xsOf[firstLine][0] - (lead ? (first - b) * space : 0) });
     }
     from += typed.length + 1;
     li = Math.min(li + 1, laid.length - 1);

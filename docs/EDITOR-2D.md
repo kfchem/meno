@@ -710,6 +710,12 @@ All hover-based, as above.
   that an input method's candidates show there - an input method's
   full-width letters are taken as the ordinary ones once it gives them;
   Cut, Copy, Paste and Select All work on its letters as on words.
+  - A space typed is seen (2026-10-19: spaces typed were not, and piled
+    up unseen): one between letters is set as typed, a run of them as
+    wide as it is - a label may be a reagent's name, Grubbs II - and
+    those at either end hang off its letters, the caret a space on for
+    each, so that the letters stay where they are. Kept, it is kept
+    without those at its ends: nothing drawn moves.
   - Begun by a letter typed over an atom - O, then the pointer moved on,
     is O - or from the atom's menu, *Edit label*, holding what it says,
     the caret at its end; a carbon drawn as a corner opens with a C,
@@ -1265,6 +1271,13 @@ All hover-based, as above.
     maintainer, 2026-10-13); a drag is one undo step. Written anew, they are
     written at that width. *As wide as its words*, in their menu, is a line
     for each line typed again. The width is saved, copied and drawn with them.
+  - Their spaces are set as typed (2026-10-19): a run of them between
+    words as wide as it is, not run into one; those at a line's ends -
+    before its first letter, after its last, and where a line is broken -
+    hang off its words, the caret a space on for each, so that the words
+    stay where they are, centred on their letters. Kept, they are kept
+    without those, nor blank lines before or after (`keptWords`): what is
+    kept is what was drawn, and nothing moves.
   - Their lines lie as their menu says (the maintainer, 2026-10-09): *Align
     left*, *Align centre* (as they come), *Align right*, or *Justify* -
     spread to both edges, but for the last line of each line typed, which
