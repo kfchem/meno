@@ -101,8 +101,8 @@ export default function PenCard({ mode, onMode, onDone }: { mode: InkMode; onMod
         {([0, 1, 2] as const).map((w) => (
           <button
             key={w}
-            aria-label={`${widths[w]} pt`}
-            title={`${widths[w]} pt`}
+            aria-label={widths[w] == null ? "As bonds" : `${widths[w]} pt`}
+            title={widths[w] == null ? "As bonds" : `${widths[w]} pt`}
             aria-pressed={mode.width === w}
             onClick={() => onMode({ ...mode, width: w })}
             className={`rounded-md flex items-center justify-center transition-colors duration-150 ease-meno ${mode.width === w ? "bg-gh-base" : "hover:bg-gh-base"}`}

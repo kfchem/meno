@@ -1,4 +1,5 @@
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
+import { SHAPE_WIDTHS_PT } from "../../../lib/chem/shapes";
 import { AnimatePresence, motion } from "motion/react";
 import { RISE } from "../../theme/motion";
 import { useLeaving } from "../../theme/leaving";
@@ -360,14 +361,16 @@ export default function PartMenu({
   /** A slide made round what is selected, last in the talk. */
   onSlideAround?: () => void;
   /**
-   * What the shape right-clicked can do (docs/PRESENTING.md, *Shapes*):
-   * words written in it (a box); its line thin, regular or thick, dashed or
-   * not; and brought over the other shapes or put under them.
+   * What the shape right-clicked can do (docs/PRESENTING.md, *Shapes*): a
+   * rectangle's corners rounded (`onCorners`, the card of them); its line as
+   * wide as the drawing's bonds or a width of its own in points (`width`,
+   * null as the bonds'), dashed or not; and brought over the other shapes or
+   * put under them.
    */
   shape?: {
-    onWrite?: () => void;
-    weight: "thin" | "regular" | "thick";
-    onWeight: (weight: "thin" | "regular" | "thick") => void;
+    onCorners?: () => void;
+    width: number | null;
+    onWidth: (width: number | null) => void;
     dash: boolean;
     onDash: () => void;
     onFront: () => void;
@@ -375,7 +378,7 @@ export default function PartMenu({
   };
   /** What a catalytic cycle right-clicked on its line can do there: an arrow coming in or going out, the arrow there taken away, the way it goes turned round (lib/chem/cycle). */
   cycle?: { onIn: () => void; onOut: () => void; onRemoveArrow?: () => void; ccw: boolean; onTurn: () => void; gap: number; setGap: (gap: number) => void; onResetEnd?: () => void; onResetAll?: () => void };
-  /** A rounded rectangle made round what is selected. */
+  /** A rectangle, its corners rounded, made round what is selected. */
   onBoxAround?: () => void;
   /** What the workspace does as a whole - open, save as, fit, R and S, its style - offered on empty space. */
   canvas?: CanvasCommand[];
@@ -734,17 +737,12 @@ export default function PartMenu({
         ]
       : target.kind === "shape" && shape
       ? [
-          ...(shape.onWrite ? [{ name: "Edit text", keys: "", run: shape.onWrite, icon: MENU_ICONS.edit }] : []),
           ...colour,
           del("Delete shape"),
-          // (its line's weight, ticked as it is; dashed or not)
-          ...(
-            [
-              ["thin", "Thin line"],
-              ["regular", "Regular line"],
-              ["thick", "Thick line"],
-            ] as const
-          ).map(([w, name]) => ({ name, keys: "", run: () => shape.onWeight(w), checked: shape.weight === w })),
+          // (a rectangle's corners; its line's width - as the bonds', as one is made, or its own - ticked as it is; dashed or not)
+          ...(shape.onCorners ? [{ name: "Corners…", keys: "", run: shape.onCorners }] : []),
+          { name: "Line as bonds", keys: "", run: () => shape.onWidth(null), checked: shape.width == null },
+          ...SHAPE_WIDTHS_PT.map((w) => ({ name: `${w} pt line`, keys: "", run: () => shape.onWidth(w), checked: shape.width === w })),
           { name: "Dashed line", keys: "", run: shape.onDash, checked: shape.dash },
           { name: "Bring to front", keys: "", run: shape.onFront, divider: true },
           { name: "Send to back", keys: "", run: shape.onBack },

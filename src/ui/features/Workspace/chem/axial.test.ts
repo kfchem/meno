@@ -7,6 +7,7 @@ import { torsionSense } from "../../../../lib/layout/stereo";
 import { emptyWorkspaceDocument, expandAbbreviation, relayout } from "../document";
 import type { Model } from "../store/types";
 import { layoutJob, relayoutFrom } from "./engineLayout";
+import { measured } from "../../../../testing/timeouts";
 
 const alone = (el: string): Model => ({ atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el }], bonds: [] });
 const expanded = (label: string) => expandAbbreviation({ ...emptyWorkspaceDocument(), model: alone(label), nextId: 100 }, 1);
@@ -53,7 +54,7 @@ describe("an axis of chirality", () => {
     expect(wedges(expanded("BINAP").model)).toHaveLength(0);
     expect(axisOf(expanded("(±)-BINAP").model)).toBeNull();
     // (eleven structures laid out by the whole engine, a complex among them: slower on CI's runners, and on a Mac under load)
-  }, 120_000);
+  }, measured(33_000));
 
   it("is kept by Clean-up, and written to a MOL file as a wedge from the axis", () => {
     for (const label of ["(R)-BINAP", "(S)-BINAP"]) {
@@ -66,7 +67,7 @@ describe("an axis of chirality", () => {
     // (a wedge, 1, or hashes, 6, in the bond block's stereo field)
     const text = writeMolfile(expanded("(R)-BINAP").model);
     expect(text.split("\n").some((line) => /^\s*\d+\s+\d+\s+1\s+[16]\s/.test(line))).toBe(true);
-  }, 30_000);
+  }, measured(2_100));
 
   it("is not read from a wedge on a bond out of the end's ring: a sulfoxide's S is a centre, and Clean-up does not turn it over", () => {
     // methyl phenyl sulfoxide, the wedge from S to its methyl: S's other

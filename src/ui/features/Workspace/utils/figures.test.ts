@@ -12,6 +12,7 @@ import { glyphShape, LETTERS, type GlyphShape } from "../../../../lib/figure/gly
 import { plusMeasures, plusOutline } from "../../../../lib/chem/reactionScheme";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import { atomAs, atomAtSpot, bondAs, figureFrom, lettersAsShapes, placedBeside, readMarks, regionOf, wholeLabel, type FigureResult, type Unread } from "./figures";
+import { measured } from "../../../../testing/timeouts";
 
 /** What a figure as drawn reads as: its structure, or why there is none. */
 const structureFrom = (drawn: FigureDrawn, sha: string, page: number): Model | Unread => {
@@ -407,7 +408,7 @@ describe("a figure whose labels are outlines", () => {
       pictures: [],
     };
     expect(elementsOf(figureFrom(f, SHA, 0, KNOWN))).toEqual(["Boc", "Boc", "C", "C", "C", "C", "C", "C", "N", "N"]);
-  });
+  }, measured(300));
 
   it("reads one whose page is turned a quarter, no letter written to tell which way, the way its outlines read as letters", () => {
     expect(elementsOf(figureFrom(quarterTurned(sulfone()), SHA, 0, KNOWN))).toEqual(["C", "C", "C", "C", "C", "C", "C", "O", "O", "S"]);

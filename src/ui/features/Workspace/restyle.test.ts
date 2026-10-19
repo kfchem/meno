@@ -42,7 +42,7 @@ function page(): WorkspaceDocument {
     pdfs: [{ id: 1, name: "a.pdf", sha256: "a".repeat(64), pages: [[612, 792]], x: 60, y: 0, page: 0, placed: [{ page: 0, x: 70, y: 5 }], point: POINT }],
     pictures: [{ id: 1, name: "p.png", sha256: "b".repeat(64), media: "image/png", px: [64, 48], x: -10, y: 30, w: 16, h: 12, turn: 0.2 }],
     slides: [{ id: 1, x: 0, y: 0, w: 160, h: 90 }],
-    shapes: [{ id: 1, kind: "callout", x0: -5, y0: -5, x1: 5, y1: 5, tail: { x: 8, y: 9 }, weight: "thick" }],
+    shapes: [{ id: 1, kind: "rect", x0: -5, y0: -5, x1: 5, y1: 5, radius: 4, width: 2 }],
     inks: [{ id: 1, pen: "pen", width: 1, strokes: [{ points: [1, 2, 0.4, 3, 4, 0.6] }] }],
     steps: [{ id: 1, kind: "xtb-opt", x: 100, y: 0 } as unknown as NonNullable<WorkspaceDocument["steps"]>[number]],
     // (a set round the ethane, with room about it)
@@ -78,7 +78,8 @@ describe("a change of drawing style", () => {
     expect(now.pictures![0].turn).toBe(0.2);
     expect(now.captions![0]).toMatchObject({ x: 5 * k, y: 8 * k, width: 24 * k, size: 12 });
     expect(now.arrows![0]).toMatchObject({ x: 30 * k, length: 12 * k, angle: 0.3, corners: [{ along: 0.5, across: 2 * k }] });
-    expect(now.shapes![0]).toMatchObject({ x1: 5 * k, tail: { x: 8 * k, y: 9 * k }, weight: "thick" });
+    // (its corners' radius and its line's width in points, kept)
+    expect(now.shapes![0]).toMatchObject({ x1: 5 * k, radius: 4, width: 2 });
     expect(now.inks![0].strokes[0].points).toEqual([1 * k, 2 * k, 0.4, 3 * k, 4 * k, 0.6]);
     expect(now.pdfs![0]).toMatchObject({ x: 60 * k, placed: [{ page: 0, x: 70 * k, y: 5 * k }], pages: [[612, 792]] });
     // (a PDF's page prints at its own size before and after: 612 pt wide)

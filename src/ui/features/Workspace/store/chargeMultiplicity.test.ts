@@ -74,6 +74,7 @@ import { resultOf } from "../workflow/flow";
 import { KINDS, MENO_DOES, kindInfo, type SetKind, type StepKind } from "../workflow/kinds";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
+import { measured } from "../../../../testing/timeouts";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
@@ -540,7 +541,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
     }
     saying = true;
     expect(problems).toEqual([]);
-  });
+  }, measured(290));
 });
 
 // --- structures drawn -----------------------------------------------------------------

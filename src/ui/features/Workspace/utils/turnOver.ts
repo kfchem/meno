@@ -58,7 +58,7 @@ export function turnOverMiddle(st: EditorState, scheme: Scheme): Pt | null {
     pts.push({ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y1 });
   }
   for (const s of st.slides) if (st.selSlides.has(s.id)) pts.push({ x: s.x - s.w / 2, y: s.y - s.h / 2 }, { x: s.x + s.w / 2, y: s.y + s.h / 2 });
-  for (const s of st.shapes) if (st.selShapes.has(s.id)) pts.push({ x: s.x0, y: s.y0 }, { x: s.x1, y: s.y1 }, ...(s.tail ? [s.tail] : []));
+  for (const s of st.shapes) if (st.selShapes.has(s.id)) pts.push({ x: s.x0, y: s.y0 }, { x: s.x1, y: s.y1 });
   for (const m of st.molecules3d) if (st.sel3d.has(m.id)) pts.push(m.at);
   for (const k of st.inks) {
     const b = st.selInks.has(k.id) ? strokesBounds(k.strokes, 0) : null;
@@ -100,7 +100,7 @@ export function turnedOverRest(st: EditorState, axis: Axis, about: Pt): Pick<Mar
       const was = shapeMiddle(s);
       const to = m(was);
       const placed = shapeMoved(s, { x: to.x - was.x, y: to.y - was.y });
-      return shapePlace({ ...placed, ...(s.tail ? { tail: m(s.tail) } : {}) }, { x: 0, y: 0 });
+      return shapePlace(placed, { x: 0, y: 0 });
     });
   // (writing by hand: each piece by its middle, its strokes as they were written)
   const inks = st.inks.flatMap((k) => {

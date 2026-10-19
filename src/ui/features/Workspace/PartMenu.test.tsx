@@ -151,15 +151,16 @@ describe("the right-click menu", () => {
     expect(html).not.toMatch(/Align left<\/span><svg[^>]*aria-label="Chosen"/);
   });
 
-  it("offers a shape its words, colour and Delete as icons, and its line and its place among the shapes listed", () => {
-    const shape = { onWrite: none, weight: "thick" as const, onWeight: none, dash: false, onDash: none, onFront: none, onBack: none };
+  it("offers a shape its colour and Delete as icons - no words: a shape is a shape - and a rectangle's corners, its line and its place among the shapes listed", () => {
+    const shape = { onCorners: none, width: 2, onWidth: none, dash: false, onDash: none, onFront: none, onBack: none };
     const { icons, listed, html } = menu(target({ kind: "shape", id: 1 }), { shape, onColour: none });
-    expect(icons).toEqual(["Edit text", "Colour…", "Delete shape"]);
-    expect(listed).toEqual(["Thin line", "Regular line", "Thick line", "Dashed line", "Bring to front", "Send to back"]);
-    expect(html).toMatch(/Thick line<\/span><svg[^>]*aria-label="Chosen"/);
-    // (a line holds no words)
-    const line = menu(target({ kind: "shape", id: 1 }), { shape: { ...shape, onWrite: undefined } });
-    expect(line.icons).toEqual(["Delete shape"]);
+    expect(icons).toEqual(["Colour…", "Delete shape"]);
+    expect(listed).toEqual(["Corners…", "Line as bonds", "1 pt line", "2 pt line", "Dashed line", "Bring to front", "Send to back"]);
+    expect(html).toMatch(/2 pt line<\/span><svg[^>]*aria-label="Chosen"/);
+    // (as the bonds, as one is made, ticked so; an ellipse or a line has no corners)
+    const plain = menu(target({ kind: "shape", id: 1 }), { shape: { ...shape, width: null, onCorners: undefined } });
+    expect(plain.html).toMatch(/Line as bonds<\/span><svg[^>]*aria-label="Chosen"/);
+    expect(plain.listed).not.toContain("Corners…");
     // (an arrow is the page's one Arrow, not a shape: its own menu, called so)
     const arrow = menu(target({ kind: "arrow", id: 1 }));
     expect(arrow.html).toContain('aria-label="Arrow"');

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { ringsAlike, smallestRings, type Edge } from "./rings";
 import cages from "./testdata/cages.json";
+import { measured } from "../../testing/timeouts";
 
 /**
  * Horton's search over the whole graph at once, as it was done before each
@@ -221,7 +222,7 @@ describe("smallestRings", () => {
     expect(rings[0].every((a) => a < 28)).toBe(true);
     expect(rings[1].every((a) => a >= 28 && a < 56)).toBe(true);
     expect(rings.slice(1000).every((r) => r.length === 6)).toBe(true);
-  });
+  }, measured(290));
 });
 
 describe("ringsAlike", () => {

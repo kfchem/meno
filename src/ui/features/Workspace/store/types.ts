@@ -5,7 +5,7 @@ import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
-import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
+import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
 import type { Cycle } from "../../../../lib/chem/cycle";
 export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
@@ -219,8 +219,6 @@ export type Caption = {
   size?: number;
   /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
   marks?: WordsMark[];
-  /** The shape it is written in, by id: kept about its middle, as wide as it is inside, going where it goes (docs/PRESENTING.md, *Shapes*). */
-  shape?: number;
 };
 /**
  * A change to words on the page: written anew, moved, put over an arrow or
@@ -313,20 +311,20 @@ export type PictureFrom = { sha256: string; page: number; box: [number, number, 
 export type Slide = { id: number; x: number; y: number; w: number; h: number; around?: true };
 
 /**
- * A shape on the page (docs/PRESENTING.md, *Shapes*): a rectangle, a
- * rounded one, an ellipse, a line, an arrow or a callout, where and how
+ * A shape on the page (docs/PRESENTING.md, *Shapes*): a rectangle - its
+ * corners square or rounded - an ellipse or a line, where and how
  * lib/chem/shapes says - and its line's colour (none of its own, the
  * drawing's ink; "none", no line) and its fill (none of its own, none).
- * Words in it are words on the page that say so (`Caption.shape`). Each
- * lies over those before it.
+ * A shape is a shape: no words in it. Each lies over those before it.
  */
 export type Shape = ShapeGeometry & { id: number; stroke?: string; fill?: string };
 /**
- * A change to a shape: where it lies, its tail, its line's weight, dashed
- * or not, its line's colour and its fill (null, none of its own).
+ * A change to a shape: where it lies, its corners' radius (0, square), its
+ * line's width in points (null, as the drawing's bonds), dashed or not, its
+ * line's colour and its fill (null, none of its own).
  */
-export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail">> & {
-  weight?: ShapeWeight;
+export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "radius">> & {
+  width?: number | null;
   dash?: boolean;
   stroke?: string | null;
   fill?: string | null;
@@ -338,7 +336,8 @@ export type ShapeDraft = { kind: ShapeKind; from: { x: number; y: number }; to: 
  * A piece of writing by hand on the page (docs/PRESENTING.md,
  * *Handwriting*): strokes written one after another in one pen, near each
  * other - selected, moved, coloured and deleted together. `width`, which of
- * the pen's three widths (lib/chem/ink `INK_WIDTHS_PT`); `color`, its own -
+ * the pen's three widths (lib/chem/ink `INK_WIDTHS_PT`: a pen's first as wide
+ * as the drawing's bonds, following its style); `color`, its own -
  * none, a pen's is the drawing's ink and a marker's the first of the colour
  * set in use (lib/chem/ink `markerColour`).
  */
@@ -1151,12 +1150,12 @@ export type EditorState = {
   toggleShapeSel: (id: number) => void;
   /** A shape put on the page, over the others; its id. */
   addShape: (shape: Omit<Shape, "id">) => number | null;
-  /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
+  /** A shape moved, made larger or smaller, its corners rounded, or its look changed: one step for a drag (`gesture`). */
   /** A resize let go: back as it was at the press (Escape, or undo during it). */
   dropShapeChange: (id: number, gesture: string) => void;
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
-  /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
-  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
+  /** The shapes `ids` given the same look - their lines' width, dashed or not - as one step. */
+  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "width" | "dash">) => void;
   /** The shapes `ids` given a colour for their line or their fill - or none of their own - as one step; one for all a chooser gives (`gesture`). */
   colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) => void;
   /** The shapes `ids` brought over all the others, or put under them. */
@@ -1221,7 +1220,7 @@ export type EditorState = {
    * words opened it: the caret put there - and a drag (`drag`) selecting on
    * from there - as if it had pressed there among them.
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; shape?: number } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
@@ -1243,7 +1242,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number }) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words

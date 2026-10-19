@@ -1,4 +1,4 @@
 import heldOut from "../../../scripts/layout/heldout.json";
 import { drawsAlikeInAnyOrder } from "./testdata/inAnyOrder";
 
-drawsAlikeInAnyOrder("the held-out natural products", heldOut.molecules);
+drawsAlikeInAnyOrder("the held-out natural products", heldOut.molecules, 16_000); // (aconitine)

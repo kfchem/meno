@@ -6,6 +6,7 @@ import { implicitHydrogens } from "../chem/molecule";
 import { layout2D } from "./engine";
 import type { LayoutInput } from "./perceive";
 import cages from "./testdata/cages.json";
+import { measured } from "../../testing/timeouts";
 
 const at = (deg: number, r = 1) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
 
@@ -187,7 +188,7 @@ describe("readStereo", () => {
     }
     // (the whole engine on tetrodotoxin's cage: under half a second alone,
     // a few times that on a machine busy with the rest of the tests)
-  }, 30_000);
+  }, measured(1_900));
 
   it("reads a centre with a wedge by its wedge, whatever depth it is drawn at", () => {
     // an atom of a ring laid across another's face, behind it - gibberellic

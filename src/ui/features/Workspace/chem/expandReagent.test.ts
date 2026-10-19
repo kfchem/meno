@@ -7,6 +7,7 @@ import { emptyWorkspaceDocument, expandAbbreviation, relayout } from "../documen
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "./drawing";
 import { layoutJob, relayoutFrom } from "./engineLayout";
+import { measured } from "../../../../testing/timeouts";
 
 const alone = (el: string): Model => ({ atoms: [{ id: 1, x: 0, y: 0, r: 0.9, el }], bonds: [] });
 const expanded = (model: Model, id = 1) => expandAbbreviation({ ...emptyWorkspaceDocument(), model, nextId: 100 }, id).model;
@@ -27,7 +28,7 @@ describe("a reagent's label written out on the canvas", () => {
       }
     }
     // (six reagents laid out, Jacobsen's catalyst among them: a few seconds on a busy machine)
-  }, 30_000);
+  }, measured(1_900));
 
   it("binds a ligand's neutral donor by a coordination bond, which takes no H from a carbene's carbon", () => {
     const model: Model = {
@@ -46,7 +47,7 @@ describe("a reagent's label written out on the canvas", () => {
     const carbene = out.atoms.find((a) => a.id === 2)!;
     expect(carbene.el).toBe("C");
     expect(undrawnHydrogens(out).get(2)).toBe(0);
-  });
+  }, measured(420));
 
   it("is drawn as Clean-up draws it: a complex cleaned up after it is written out does not move", () => {
     for (const label of ["Cp2Fe", "Cp2ZrCl2", "PdCl2(dppf)", "Cp*RuCl(PPh3)2", "PdCl2(PPh3)2", "Grubbs II", "Ni(cod)2", "[Rh(cod)2]BF4", "[Ir(cod)Cl]2"]) {
@@ -70,5 +71,5 @@ describe("a reagent's label written out on the canvas", () => {
       expect(after.atoms.length, label).toBe(model.atoms.length);
     }
     // (nine complexes, each laid out twice by the whole engine: slower on CI's runners)
-  }, 60_000);
+  }, measured(14_000));
 });

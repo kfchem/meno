@@ -32,14 +32,14 @@ export function createShapesSlice(doc: DocumentStore<WorkspaceDocument>, set: Se
     },
     updateShape: (id: number, patch: ShapePatch, gesture?: string) =>
       doc.edit(
-        patch.tail ? "move callout's tail" : patch.x0 !== undefined || patch.x1 !== undefined || patch.y0 !== undefined || patch.y1 !== undefined ? "resize shape" : "change shape",
+        patch.radius !== undefined ? "round shape's corners" : patch.x0 !== undefined || patch.x1 !== undefined || patch.y0 !== undefined || patch.y1 !== undefined ? "resize shape" : "change shape",
         (d) => ops.updateShape(d, id, patch),
         gesture ? gestureStep(`shape:${id}:${gesture}`) : {},
       ),
     dropShapeChange: (id: number, gesture: string) => {
       doc.drop(`shape:${id}:${gesture}`);
     },
-    styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => doc.edit("change shapes' lines", (d) => ops.restyleShapes(d, ids, patch)),
+    styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "width" | "dash">) => doc.edit("change shapes' lines", (d) => ops.restyleShapes(d, ids, patch)),
     colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) =>
       doc.edit(which === "fill" ? "fill shapes" : "colour shapes' lines", (d) => ops.restyleShapes(d, ids, { [which]: color }), gesture ? gestureStep(`colour-shapes:${gesture}`) : undefined),
     orderShapes: (ids: readonly number[], front: boolean) => doc.edit(front ? "bring shapes to front" : "send shapes to back", (d) => ops.orderShapes(d, ids, front)),

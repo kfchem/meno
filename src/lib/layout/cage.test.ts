@@ -7,6 +7,7 @@ import { layout2D } from "./engine";
 import { perceive, type LayoutInput } from "./perceive";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { shuffled, SHUFFLE_SEEDS } from "./testdata/shuffled";
+import { measured } from "../../testing/timeouts";
 
 /** Carbons joined by the bonds given. */
 const carbons = (n: number, bonds: [number, number, number?][]): LayoutInput => ({
@@ -65,7 +66,7 @@ describe("a cage within a ring system", () => {
     for (const { a, b } of input.bonds) expect(Math.hypot(x[a] - x[b], y[a] - y[b])).toBeGreaterThan(0.6);
     // (the whole engine on the fused adamantane: about a second alone, a few
     // times that on a machine busy with the rest of the tests)
-  }, 30_000);
+  }, measured(1_800));
 });
 
 describe("a six-membered ring drawn as a chair or a boat", () => {
@@ -248,7 +249,7 @@ describe("a solid's configurations", () => {
     const sys = ttx.systems.find((x) => x.atoms.length === 14)!;
     const view = projectCage(ttx, sys);
     expect(keepsConfigurations(ttx, sys.atoms, view.pos, view.depth)).toBe(true);
-  });
+  }, measured(280));
 
   it("are kept where the solid has the centre as given, and not where it has its mirror image", () => {
     const near = new Map([[0, 0], [1, 0], [2, 0], [3, 1]]);
@@ -348,7 +349,7 @@ describe("a cage eased onto its template", () => {
       expect(faults).toBeLessThan(1);
       expect(Math.min(...apart)).toBeGreaterThan(0.55);
     }
-  });
+  }, measured(300));
 
   it("leaves bicyclo[2.2.2]octane as the textbook draws it: its back bridge by its back bridgehead, its bonds one length, not eased apart", () => {
     for (const { apart, bonds } of views("OC1CC2CCC1CC2", 8)) {

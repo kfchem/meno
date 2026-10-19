@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { raycastByResidue, raycastCylinders, raycastSpheres } from "./raycast3d";
+import { measured } from "../../../../testing/timeouts";
 
 /** A random number from a seed, the same each run. */
 function seeded(seed: number) {
@@ -109,7 +110,7 @@ describe("what the pointer is over on a molecule in 3D", () => {
       expect(off).toBeGreaterThan(0.6 * 1.7 * 0.97);
     }
     expect(grazed).toBeLessThan(8);
-  });
+  }, measured(560));
 
   it("leaves out atoms not drawn, and what is nearer or farther than the ray looks", () => {
     const mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 16, 16), new THREE.MeshStandardMaterial(), 2);
@@ -266,5 +267,5 @@ describe("what the pointer is over on a molecule in 3D", () => {
     expect(ribbonByResidue).toBeGreaterThan(0);
     expect(ribbonByResidue).toBeLessThan(ribbonAsMesh / 50);
     expect(hits.length).toBe(1);
-  });
+  }, measured(510));
 });

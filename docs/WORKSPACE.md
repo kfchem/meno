@@ -949,7 +949,7 @@ molecules in 3D.
   | A slide, a picture | x, y, w, h | times k; a picture's turn is kept |
   | A PDF | x, y; its own pages' places; `point` | times k, and the point its pages are laid at times k (below); ink on its pages is in its own points and kept |
   | A text's sheet on the page | `at`; `point` | times k, and its point times k |
-  | A shape | x0, y0, x1, y1, a callout's tail | times k; its weight in pt is kept |
+  | A shape | x0, y0, x1, y1 | times k; its corners' radius and its line's width in pt are kept - a line as wide as the bonds' as wide as the new style's |
   | Ink | its strokes' points | x and y times k (not the pressure); its width in pt is kept |
   | A workflow step | x, y | times k |
   | A workflow set | its frame | fitted round what it holds once that has moved (`fitSets`) |

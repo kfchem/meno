@@ -13,7 +13,8 @@
 import { carriedDrawing, hiddenInStacks } from "./stacks";
 import { acceptStyleChoice } from "../../../../lib/chem/styleFields";
 import { fillsAmong } from "./rings";
-import type { StyleChoice } from "../../../../lib/chem/style";
+import { styleOf, type StyleChoice } from "../../../../lib/chem/style";
+import { POINT, pointFor } from "../../../../lib/pdf/layout";
 import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
 import type { Carried3D, Drawn, EditorState, Member, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
 import { collectionHash, setMembers } from "../workflow/entries";
@@ -253,7 +254,9 @@ export function readWorkspace(text: string): Workspace | null {
     pdfShown?: unknown;
   };
   if (r?.format !== WORKSPACE || !READS.includes(r.version as number)) return null;
-  const drawn = readDrawn(data);
+  // (what is drawn read at the point of the style it was drawn in)
+  const style = r.style != null ? acceptStyleChoice(r.style) : undefined;
+  const drawn = readDrawn(data, style ? pointFor(styleOf(style).bondLengthPt) : POINT);
   if (!drawn) return null;
   const rings: Record<string, boolean> = {};
   if (typeof r.aromaticRings === "object" && r.aromaticRings) {
@@ -284,7 +287,7 @@ export function readWorkspace(text: string): Workspace | null {
   return {
     drawn,
     ...(workflow ? { workflow } : {}),
-    ...(r.style != null ? { style: acceptStyleChoice(r.style) } : {}),
+    ...(style !== undefined ? { style } : {}),
     ...(acceptWorkspace3d(r.style3d) ? { style3d: acceptWorkspace3d(r.style3d)! } : {}),
     aromaticEnabled: r.aromaticEnabled === true,
     aromaticRings: rings,
