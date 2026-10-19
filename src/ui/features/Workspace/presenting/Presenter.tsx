@@ -31,7 +31,7 @@ import type { EditorState, Turn3D } from "../store/types";
 import { boxOf, presentAct, slideFit, talkEnd, viewOf, zoomOf } from "./slides";
 import { columnAgain, openColumnAgain, type ColumnWas } from "./columnAgain";
 import { easeInOut, flightMs, zoomPath, type ZoomPath } from "./zoomPath";
-import { slideOnScreen, stageOf } from "./stage";
+import { bandsAbout, frameOnScreen, rectBetween, stageOf } from "./stage";
 import { setViewDriven, setViewGoal } from "../components/viewGoal";
 import { setPresentingWindow, windowFullScreen } from "../../../presenting";
 import { filmPlaying, playFilm, restartFilm } from "../components/pictureTextures";
@@ -75,7 +75,7 @@ type Run = {
   madeFull: boolean;
   /** How far down from the screen's top a slide keeps clear - a Mac's notch - in pixels. */
   top: number;
-  /** The view on its way to a slide - from the slide left, `from`, where there was one; or moved freely by the presenter (`free`, where it is going, eased there); or, neither, at the slide. */
+  /** The view on its way to a slide; or moved freely by the presenter (`free`, where it is going, eased there); or, neither, at the slide. */
   flight: { path: ZoomPath; start: number; ms: number; from: number | null } | null;
   free: ViewNow | null;
   veil: number;
@@ -132,6 +132,7 @@ export default function Presenter() {
       const h = sizeNow.current.height;
       const path = zoomPath(viewOf(viewNow(), w), viewOf(slideFit(s, w, h, r.top), w));
       const reduced = typeof window.matchMedia === "function" && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      // (from the slide left, where there was one: the screen's frame goes from its to the next one's)
       r.flight = { path, start: performance.now(), ms: reduced ? 1 : flightMs(path), from: from !== at ? from : null };
       r.free = null;
       const b = boxOf(s);
@@ -538,8 +539,13 @@ export default function Presenter() {
     const h = size.height;
     let moving = false;
     // the view: on its way to a slide, moved freely, or at the slide - following it as the canvas grows to the screen
+    // (how far on its way the view is, and from which slide: the screen's frame goes with it)
+    let flightT: number | null = null;
+    let flightFrom: number | null = null;
     if (r.flight) {
       const t = (performance.now() - r.flight.start) / r.flight.ms;
+      flightT = Math.min(1, Math.max(0, t));
+      flightFrom = r.flight.from;
       const v = r.flight.path.at(easeInOut(t));
       cam.position.x = v.x;
       cam.position.y = v.y;
@@ -574,25 +580,30 @@ export default function Presenter() {
       }
       moving = true;
     }
-    // the veil over the page about the slides: on the way from one to the next, nothing but the two is seen (the maintainer,
-    // 2026-10-19); at a slide, there unless it shows the page about it; gone while the view is moved freely
+    // the veil over the screen about the slide's frame: there at a slide that does not show the page about it - and on the
+    // way from one to the next, the frame black about all along (the maintainer, 2026-10-19: it went white as the view
+    // went, and black again as it came), unless both show the page about them; gone while the view is moved freely
     const stage = stageOf(store);
-    const flying = r.flight;
-    const veilTo = s && !r.free && (flying || !s.around) ? 1 : 0;
+    const left = flightFrom != null ? st.slides[flightFrom] : undefined;
+    const veilTo = s && !r.free && (flightT != null ? !(s.around && (left?.around ?? true)) : !s.around) ? 1 : 0;
     r.veil = Math.abs(r.veil - veilTo) < 0.002 ? veilTo : follow(r.veil, veilTo, Math.min(dt, 1 / 20), VEIL_TAU);
     if (r.veil !== veilTo) moving = true;
     if (stage.veil && s) {
       stage.veil.style.opacity = String(r.veil);
-      const view = { x: cam.position.x, y: cam.position.y, zoom: cam.zoom };
-      const left = flying && flying.from != null ? st.slides[flying.from] : undefined;
-      [s, left].forEach((slide, i) => {
-        const el = stage.windows[i];
+      const z = cam.zoom;
+      // (at a slide, where it is drawn; on the way, the screen's frame - where the slide left was shown, going to where the
+      // next one will be, as the view goes - not where the slides are: the page is seen within it as the view moves)
+      const rect =
+        flightT != null
+          ? rectBetween(frameOnScreen(left ?? s, w, h, r.top), frameOnScreen(s, w, h, r.top), easeInOut(flightT))
+          : { left: w / 2 + (s.x - s.w / 2 - cam.position.x) * z, top: h / 2 - (s.y + s.h / 2 - cam.position.y) * z, width: s.w * z, height: s.h * z };
+      bandsAbout(rect, w, h).forEach(([x, y, bw, bh], i) => {
+        const el = stage.bands[i];
         if (!el) return;
-        const o = slide ? slideOnScreen(slide, view, w, h) : { left: 0, top: 0, width: 0, height: 0 };
-        el.setAttribute("x", String(o.left));
-        el.setAttribute("y", String(o.top));
-        el.setAttribute("width", String(Math.max(0, o.width)));
-        el.setAttribute("height", String(Math.max(0, o.height)));
+        el.style.left = `${x}px`;
+        el.style.top = `${y}px`;
+        el.style.width = `${bw}px`;
+        el.style.height = `${bh}px`;
       });
     }
     if (moving) invalidate();

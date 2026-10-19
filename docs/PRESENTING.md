@@ -92,13 +92,14 @@ page; a talk is a way through it.
   and everything about it goes black (the maintainer, 2026-10-13: as
   PowerPoint does): the margins where the screen's proportions and the
   slide's differ, and the band beside the notch - unless the slide shows
-  the page around it. On the way from one slide to the next nothing but
-  the two slides is seen (the maintainer, 2026-10-19; before, the black
-  went and the page was seen whole): the black stays about them as the
-  view zooms and moves, the slide left going and the next coming in its
-  frame, and other slides on the way stay black too. Arrived at a slide
-  that shows the page around it, the black goes. Its number (*3 / 5*)
-  shows a moment in a corner.
+  the page around it. On the way from one slide to the next the page is
+  seen whole within the slide's frame on the screen, so that the way
+  between them reads, and the black about that frame stays black all the
+  way (the maintainer, 2026-10-19: it went white as the view moved, and
+  black again as it came) - the frame going from the slide left's to the
+  next one's where their proportions differ; it goes only where both show
+  the page around them. Its number (*3 / 5*) shows a moment in a
+  corner.
 - **In a slide**: a drag on a molecule in 3D turns it and lets it coast, as
   on the page, and two clicks show it in its other look - for the talk
   alone, the workspace's look as it was; a right-press on it - the talk
@@ -267,8 +268,9 @@ words, a width they break into lines at, and how their lines lie.
 - `presenting/Presenter.tsx`, in the canvas: the view on its way and at a
   slide, the pointer and the keys in a talk, the molecules turned and
   turned back, films begun again. `presenting/PresentLayer.tsx`, over it:
-  the surface that takes the pointer, the veil (an SVG mask, black but for
-  the slide's window and, on the way, the slide left's), the black or
+  the surface that takes the pointer, the veil's four bands (about the
+  slide where it is drawn, at a slide; on the way, about the screen's frame,
+  `frameOnScreen`, going from the slide left's to the next one's), the black or
   white screen, the slide's number. PanZoom2D stands aside while a talk
   drives the view (`viewGoal.ts` `setViewDriven`), and takes it up again
   from where the talk left it.

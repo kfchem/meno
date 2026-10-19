@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { boxOf, holds, isStandard, joinOf, OF_VIEW, presentAct, reshaped, slideAround, slideFit, slideInView, slideOfView, slidesBox, STANDARD, talkEnd, viewOf, WIDE, zoomOf } from "./slides";
-import { slideOnScreen } from "./stage";
+import { bandsAbout, frameOnScreen, rectBetween } from "./stage";
 import { presentIntent } from "../../../../lib/doc/shortcuts";
 
 describe("slides on the page", () => {
@@ -107,11 +107,36 @@ describe("slides on the page", () => {
     expect(presentIntent({ key: "Enter", metaKey: true, target: { tagName: "TEXTAREA" } })).toBeNull();
   });
 
-  it("leave the veil a window where each lies on the canvas", () => {
-    // (a slide 16 by 9 units, the view on its middle, 50 pixels to the unit: in the canvas's middle, 800 by 450)
-    expect(slideOnScreen({ x: 3, y: 4, w: 16, h: 9 }, { x: 3, y: 4, zoom: 50 }, 1000, 600)).toEqual({ left: 100, top: 75, width: 800, height: 450 });
-    // (the view moved right and up of it: it lies to the left and lower down; page's y up, the canvas's down)
-    expect(slideOnScreen({ x: 3, y: 4, w: 16, h: 9 }, { x: 5, y: 6, zoom: 50 }, 1000, 600)).toEqual({ left: 0, top: 175, width: 800, height: 450 });
+  it("are veiled about, in four bands that cover the rest of the canvas and nothing of the slide", () => {
+    const bands = bandsAbout({ left: 100, top: 50, width: 800, height: 450 }, 1000, 600);
+    expect(bands).toEqual([
+      [0, 0, 1000, 50],
+      [0, 500, 1000, 100],
+      [0, 50, 100, 450],
+      [900, 50, 100, 450],
+    ]);
+    // (a slide larger than the canvas: no band)
+    expect(bandsAbout({ left: -10, top: -10, width: 1200, height: 800 }, 1000, 600).every(([, , w, h]) => w * h === 0)).toBe(true);
+  });
+
+  it("are framed on the screen where a talk shows them - the frame the black lies about, at a slide and on the way between two", () => {
+    // (16:9 on a 1000 by 700 canvas, 50 pixels kept at its top: as wide as it is, in the middle of what is left)
+    const frame = frameOnScreen({ w: 16, h: 9 }, 1000, 700, 50);
+    expect(frame.left).toBeCloseTo(0);
+    expect(frame.width).toBeCloseTo(1000);
+    expect(frame.height).toBeCloseTo(562.5);
+    expect(frame.top).toBeCloseTo(50 + (650 - 562.5) / 2);
+    // (where the view laid out by slideFit draws the slide: the same)
+    const s = { x: 3, y: 4, w: 16, h: 9 };
+    const v = slideFit(s, 1000, 700, 50);
+    expect(1000 / 2 + (s.x - s.w / 2 - v.x) * v.zoom).toBeCloseTo(frame.left);
+    expect(700 / 2 - (s.y + s.h / 2 - v.y) * v.zoom).toBeCloseTo(frame.top);
+    // (two slides of the same proportions: the same frame all the way; 4:3 to 16:9, from the one to the other)
+    const tall = frameOnScreen({ w: 4, h: 3 }, 1000, 700, 50);
+    expect(rectBetween(frame, frame, 0.4)).toEqual(frame);
+    expect(rectBetween(tall, frame, 0)).toEqual(tall);
+    expect(rectBetween(tall, frame, 1)).toEqual(frame);
+    expect(rectBetween(tall, frame, 0.5).width).toBeCloseTo((tall.width + frame.width) / 2);
   });
 });
 
