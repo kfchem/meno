@@ -16,6 +16,8 @@ import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
 import { useShownFrames } from "./useShownFrames";
+import { useMemberMarks } from "./useMemberMarks";
+import { reachOverFrames } from "../utils/molecule3d";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
@@ -260,6 +262,8 @@ export default function Workflow2D() {
   }, [store, style3d]);
   // (each set's frame as it is drawn: on its way to where the document has it)
   const shownSets = useShownFrames(sets);
+  // (what has just joined a set or left it, marked a moment)
+  const memberMarks = useMemberMarks(sets, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (who does a kind of step changes as plugins are added and taken away)
   useReaders((r) => r.state);
@@ -586,7 +590,10 @@ export default function Workflow2D() {
           const count = countOf(flow, b);
           const made = b.made ? steps.find((s) => s.id === b.made!.step) : undefined;
           const aside = b.aside?.length ?? 0;
-          const counted = !count.entries
+          // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so)
+          const counted = b.notKept && !count.entries
+            ? `Not kept · ${b.notKept.count}`
+            : !count.entries
             ? "Empty"
             : count.holds === "pictures"
               ? plural(count.entries, "picture")
@@ -595,7 +602,7 @@ export default function Workflow2D() {
                 : count.holds === "molecules"
                   ? `${plural(count.compounds, "compound")}${aside ? ` · ${count.entries} of ${count.entries + aside}` : ""}`
                   : `${plural(count.compounds, "compound")} · ${aside ? `${count.entries} of ${count.entries + aside}` : count.entries}`;
-          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: counted }];
+          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: b.keep === false && count.entries ? `${counted} · not kept` : counted }];
         }),
       ),
     [flow, sets, steps],
@@ -752,6 +759,14 @@ export default function Workflow2D() {
           selection's port - and not behind a layer of another's. */}
       <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[18, 18]} pointerEvents="none">
         <div ref={layer} style={{ position: "relative", width: 0, height: 0 }}>
+          {memberMarks.map((k) => (
+            <div key={k.key} style={onLayer(k.frame.x0, k.frame.y1)} className="meno-member-mark">
+              <div
+                className={k.joined ? "rounded-lg border border-accel-base bg-accel-base/5" : "rounded-lg border border-dashed border-gh-gray"}
+                style={{ width: (k.frame.x1 - k.frame.x0) / PX, height: (k.frame.y1 - k.frame.y0) / PX, pointerEvents: "none" }}
+              />
+            </div>
+          ))}
           {shownParts.map(({ key, item, leaving }) =>
             leaving ? (
               // (gone: as it last was, fading, and no longer taking the pointer)

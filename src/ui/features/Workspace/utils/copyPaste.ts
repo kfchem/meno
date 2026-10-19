@@ -272,6 +272,17 @@ export function readRecord(text: string): Drawn | null {
  * bonds, arrows, pluses and molecules in 3D. Null where the atoms or bonds
  * do not read; what else does not read is left out.
  */
+/**
+ * Of a record's molecules in 3D and pictures, the places in its lists of
+ * those that read, in order (as `readDrawn` reads them): what a workspace's
+ * set members, saved by place, are matched by (utils/workspace).
+ */
+export function placesRead(data: unknown): { molecules3d: number[]; pictures: number[] } {
+  const r = data as { molecules3d?: unknown; pictures?: unknown } | null;
+  const places = (list: unknown, reads: (v: unknown) => unknown) => (Array.isArray(list) ? list.flatMap((v, i) => (reads(v) ? [i] : [])) : []);
+  return { molecules3d: places(r?.molecules3d, readCarried3D), pictures: places(r?.pictures, readPicture) };
+}
+
 export function readDrawn(data: unknown): Drawn | null {
   const r = data as {
     format?: unknown;
