@@ -1,40 +1,42 @@
 /**
- * Shapes on the page (docs/PRESENTING.md, *Shapes*): rectangles, rounded
- * rectangles, ellipses, lines and callouts, a rounded box with a tail
- * pointing at something. (An arrow is the page's one Arrow, not a shape.)
- * What each draws - the line it follows, broken into dashes where it is
- * dashed, and the area it fills - is worked out here, once, for the canvas,
- * for SVG and for EMF alike; and where a press takes it, how far it reaches,
- * where its words go, and how it is drawn out, made larger or smaller, moved
- * and turned.
+ * Shapes on the page (docs/PRESENTING.md, *Shapes*): rectangles - their
+ * corners square or rounded, as far as asked - ellipses and lines. A shape
+ * is a shape: no words in it. (An arrow is the page's one Arrow, not a
+ * shape.) What each draws - the line it follows, broken into dashes where
+ * it is dashed, and the area it fills - is worked out here, once, for the
+ * canvas, for SVG and for EMF alike; and where a press takes it, how far it
+ * reaches, and how it is drawn out, made larger or smaller, moved and
+ * turned.
  *
  * Everything is in the page's units; a line's width is in points, as the
  * drawing's labels' size is, `pointPx` page units to the point.
  */
 import type { Vec2 } from "./layout2d";
 
-export type ShapeKind = "rect" | "rounded" | "ellipse" | "line" | "callout";
+export type ShapeKind = "rect" | "ellipse" | "line";
 
 /** The kinds, in the order Quick Add offers them, and their names. */
-export const SHAPE_KINDS: readonly ShapeKind[] = ["rect", "rounded", "ellipse", "line", "callout"];
+export const SHAPE_KINDS: readonly ShapeKind[] = ["rect", "ellipse", "line"];
 export const SHAPE_NAMES: Record<ShapeKind, string> = {
   rect: "Rectangle",
-  rounded: "Rounded rectangle",
   ellipse: "Ellipse",
   line: "Line",
-  callout: "Callout",
 };
 
-/** How heavy a shape's line is: thin, regular (as one is made) or thick. */
-export type ShapeWeight = "thin" | "regular" | "thick";
-/** Each weight's line, in points: a thin one as heavy as a bond's (ACS 1996: 0.6 pt). */
-export const WEIGHT_PT: Record<ShapeWeight, number> = { thin: 0.6, regular: 1, thick: 2 };
+/**
+ * How wide a shape's line is: as the drawing's bonds - as one is made, and
+ * following the drawing's style as it changes - or a width of its own, in
+ * points, picked from these and kept whatever the style.
+ */
+export const SHAPE_WIDTHS_PT = [1, 2] as const;
+/** A bond's line in ACS 1996's style, in points: what a shape's line is as wide as where the drawing's is not given. */
+export const BOND_LINE_PT = 0.6;
 
 /**
- * What a shape's drawing depends on. A box - a rectangle, a rounded one, an
- * ellipse, a callout - lies between two corners, `x0` < `x1` and `y0` < `y1`;
- * a line runs from (`x0`, `y0`) to (`x1`, `y1`). A callout's tail reaches
- * to `tail`.
+ * What a shape's drawing depends on. A box - a rectangle, an ellipse - lies
+ * between two corners, `x0` < `x1` and `y0` < `y1`; a line runs from
+ * (`x0`, `y0`) to (`x1`, `y1`). A rectangle's corners are rounded `radius`
+ * points round - none, square - and never more than half its shorter side.
  */
 export type ShapeGeometry = {
   kind: ShapeKind;
@@ -42,35 +44,51 @@ export type ShapeGeometry = {
   y0: number;
   x1: number;
   y1: number;
-  tail?: Vec2;
-  weight?: "thin" | "thick";
+  radius?: number;
+  /** Its line's width, in points; none, as wide as the drawing's bonds (`asBonds`). */
+  width?: number;
   dash?: true;
 };
 
-/** Whether it is a box, which holds words and can be filled - not a line. */
+/** Whether it is a box, which can be filled - not a line. */
 export function isBox(kind: ShapeKind): boolean {
   return kind !== "line";
 }
 
-/** Its line's width, in page units. */
-export function lineWidthOf(s: Pick<ShapeGeometry, "weight">, pointPx: number): number {
-  return WEIGHT_PT[s.weight ?? "regular"] * pointPx;
+/** Its line's width, in page units: its own, or - `asBonds` not yet asked - a bond's in ACS 1996's style. */
+export function lineWidthOf(s: Pick<ShapeGeometry, "width">, pointPx: number): number {
+  return (s.width ?? BOND_LINE_PT) * pointPx;
 }
 
-/** A rounded box's corners' radius at most, in points; less in a small box. */
-const ROUND_PT = 9;
-const ROUND_SHARE = 0.18;
-/** The points round a corner, and round an ellipse. */
-const ARC_STEPS = 8;
-const ELLIPSE_STEPS = 72;
-/** A callout tail's base, half of it, in points at least and at most, and as a share of its side. */
-const TAIL_HALF_PT: [number, number] = [4, 11];
-const TAIL_HALF_SHARE = 0.1;
+/** `s` as it is drawn in a drawing whose bonds' lines are `bondLinePt` points wide: its line as wide as theirs, where it has no width of its own. */
+export function asBonds<T extends ShapeGeometry>(s: T, bondLinePt: number): T {
+  return s.width != null ? s : { ...s, width: bondLinePt };
+}
 
-/** A box's corners' radius, in page units: none but a rounded rectangle's and a callout's. */
+/** How wide the bonds' lines are, in points, in a drawing laid out as `o` says (lib/chem/layout2d `LayoutOptions`): its line width over its point. */
+export function bondLinePtOf(o: { lineWidthPx: number; pointPx?: number }): number {
+  return o.pointPx ? o.lineWidthPx / o.pointPx : BOND_LINE_PT;
+}
+
+/** Rounded corners as *Box around these* draws them, in points; and at most this share of the shorter side. */
+export const ROUNDED_PT = 9;
+export const ROUNDED_SHARE = 0.18;
+/** The points round a corner - at least, and at most, a corner rounded more taking more, one about each half point of its radius - and round an ellipse. */
+const ARC_STEPS: readonly [number, number] = [8, 48];
+const ELLIPSE_STEPS = 72;
+
+/** The most a box `w` by `h` page units may round its corners, in page units: half its shorter side. */
+export const roundestOf = (w: number, h: number) => Math.max(0, Math.min(w, h) / 2);
+
+/** A box's corners' radius, in page units: a rectangle's as asked, never past half its shorter side; none for an ellipse or a line. */
 export function cornerRadius(s: ShapeGeometry, pointPx: number): number {
-  if (s.kind !== "rounded" && s.kind !== "callout") return 0;
-  return Math.max(0, Math.min(Math.min(s.x1 - s.x0, s.y1 - s.y0) * ROUND_SHARE, ROUND_PT * pointPx));
+  if (s.kind !== "rect" || !s.radius) return 0;
+  return Math.min(Math.max(0, s.radius * pointPx), roundestOf(s.x1 - s.x0, s.y1 - s.y0));
+}
+
+/** Rounded corners for a box `w` by `h` page units, in points, as *Box around these* and rounded rectangles before 2026-10-19 had them: 9 points, less in a small box. */
+export function roundedPt(w: number, h: number, pointPx: number): number {
+  return Math.min(Math.min(w, h) * ROUNDED_SHARE, ROUNDED_PT * pointPx) / pointPx;
 }
 
 /** A box's middle. */
@@ -78,51 +96,20 @@ export function middleOf(s: Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1">): Vec
   return { x: (s.x0 + s.x1) / 2, y: (s.y0 + s.y1) / 2 };
 }
 
-function arc(c: Vec2, r: number, from: number, to: number, out: Vec2[]): void {
+function arc(c: Vec2, r: number, from: number, to: number, out: Vec2[], pointPx: number): void {
   if (r <= 0) {
     out.push({ x: c.x, y: c.y });
     return;
   }
-  for (let k = 0; k <= ARC_STEPS; k++) {
-    const a = from + ((to - from) * k) / ARC_STEPS;
+  // (a large radius in as few steps as a small one showed its corners as facets)
+  const steps = Math.min(ARC_STEPS[1], Math.max(ARC_STEPS[0], Math.ceil((2 * r) / Math.max(pointPx, 1e-9))));
+  for (let k = 0; k <= steps; k++) {
+    const a = from + ((to - from) * k) / steps;
     out.push({ x: c.x + r * Math.cos(a), y: c.y + r * Math.sin(a) });
   }
 }
 
-type Side = "bottom" | "right" | "top" | "left";
-
-/** Which side of a box a callout's tail leaves from, and the points it puts there - none, with its tip within the box. */
-function tailOf(s: ShapeGeometry, r: number, pointPx: number): { side: Side; points: Vec2[] } | null {
-  const t = s.tail;
-  if (!t || s.kind !== "callout") return null;
-  const { x0, y0, x1, y1 } = s;
-  if (t.x >= x0 && t.x <= x1 && t.y >= y0 && t.y <= y1) return null;
-  const c = middleOf(s);
-  const u = (t.x - c.x) / Math.max((x1 - x0) / 2, 1e-9);
-  const v = (t.y - c.y) / Math.max((y1 - y0) / 2, 1e-9);
-  const side: Side = Math.abs(u) >= Math.abs(v) ? (u > 0 ? "right" : "left") : v > 0 ? "top" : "bottom";
-  const across = side === "bottom" || side === "top";
-  // (along the straight of its side, clear of the corners)
-  const lo = (across ? x0 : y0) + r;
-  const hi = (across ? x1 : y1) - r;
-  const length = across ? x1 - x0 : y1 - y0;
-  const half = Math.min(Math.max(TAIL_HALF_PT[0] * pointPx, Math.min(TAIL_HALF_PT[1] * pointPx, length * TAIL_HALF_SHARE)), Math.max(0, (hi - lo) / 2));
-  const want = across ? t.x : t.y;
-  const at = hi - lo < 2 * half ? (lo + hi) / 2 : Math.min(hi - half, Math.max(lo + half, want));
-  const tip = { x: t.x, y: t.y };
-  switch (side) {
-    case "bottom":
-      return { side, points: [{ x: at - half, y: y0 }, tip, { x: at + half, y: y0 }] };
-    case "right":
-      return { side, points: [{ x: x1, y: at - half }, tip, { x: x1, y: at + half }] };
-    case "top":
-      return { side, points: [{ x: at + half, y: y1 }, tip, { x: at - half, y: y1 }] };
-    case "left":
-      return { side, points: [{ x: x0, y: at + half }, tip, { x: x0, y: at - half }] };
-  }
-}
-
-/** A box's edge, round it the way the page's angles go (anticlockwise, y up) - a callout's tail within it. */
+/** A box's edge, round it the way the page's angles go (anticlockwise, y up). */
 function boxOutline(s: ShapeGeometry, pointPx: number): Vec2[] {
   const { x0, y0, x1, y1 } = s;
   if (s.kind === "ellipse") {
@@ -135,19 +122,11 @@ function boxOutline(s: ShapeGeometry, pointPx: number): Vec2[] {
     });
   }
   const r = cornerRadius(s, pointPx);
-  const tail = tailOf(s, r, pointPx);
   const out: Vec2[] = [];
-  const side = (which: Side) => {
-    if (tail?.side === which) out.push(...tail.points);
-  };
-  arc({ x: x0 + r, y: y0 + r }, r, Math.PI, 1.5 * Math.PI, out);
-  side("bottom");
-  arc({ x: x1 - r, y: y0 + r }, r, 1.5 * Math.PI, 2 * Math.PI, out);
-  side("right");
-  arc({ x: x1 - r, y: y1 - r }, r, 0, 0.5 * Math.PI, out);
-  side("top");
-  arc({ x: x0 + r, y: y1 - r }, r, 0.5 * Math.PI, Math.PI, out);
-  side("left");
+  arc({ x: x0 + r, y: y0 + r }, r, Math.PI, 1.5 * Math.PI, out, pointPx);
+  arc({ x: x1 - r, y: y0 + r }, r, 1.5 * Math.PI, 2 * Math.PI, out, pointPx);
+  arc({ x: x1 - r, y: y1 - r }, r, 0, 0.5 * Math.PI, out, pointPx);
+  arc({ x: x0 + r, y: y1 - r }, r, 0.5 * Math.PI, Math.PI, out, pointPx);
   // (no point twice over: a square corner's arc is its corner alone - and
   // one point kept of a box too small to tell its corners apart, whose
   // bounds were else no numbers, taking every other part of a picture's
@@ -230,15 +209,14 @@ function arcBezier(c: Vec2, rx: number, ry: number, a: number, b: number): Vec2[
 /**
  * A box's edge as the curve it is, for pictures - cubic Bezier segments
  * end to end, the start then three points for each, closed where it began
- * - where it has curves: an ellipse, and a rounded rectangle's or a
- * callout's corners; its straight stretches and a callout's tail are
- * segments as straight as lines. It begins at a smooth point (an ellipse's
- * bottom, the middle of the lower left corner) so that a line drawn round
- * it meets itself with no seam. None for a line, a rectangle, or a box too
- * small to round: their edges are straight.
+ * - where it has curves: an ellipse, and a rectangle's rounded corners;
+ * its straight stretches are segments as straight as lines. It begins at a
+ * smooth point (an ellipse's bottom, the middle of the lower left corner)
+ * so that a line drawn round it meets itself with no seam. None for a
+ * line, or a rectangle with square corners: their edges are straight.
  */
 export function outlineCurve(s: ShapeGeometry, pointPx: number): Vec2[] | null {
-  if (!isBox(s.kind) || s.kind === "rect") return null;
+  if (!isBox(s.kind)) return null;
   const { x0, y0, x1, y1 } = s;
   if (s.kind === "ellipse") {
     const c = middleOf(s);
@@ -250,7 +228,6 @@ export function outlineCurve(s: ShapeGeometry, pointPx: number): Vec2[] | null {
   }
   const r = cornerRadius(s, pointPx);
   if (r <= 0) return null;
-  const tail = tailOf(s, r, pointPx);
   const bl = { x: x0 + r, y: y0 + r };
   const out: Vec2[] = [{ x: bl.x + r * Math.cos(1.25 * Math.PI), y: bl.y + r * Math.sin(1.25 * Math.PI) }];
   const lineTo = (q: Vec2) => {
@@ -258,18 +235,14 @@ export function outlineCurve(s: ShapeGeometry, pointPx: number): Vec2[] | null {
     if (Math.hypot(q.x - p.x, q.y - p.y) < 1e-12) return;
     out.push({ x: p.x + (q.x - p.x) / 3, y: p.y + (q.y - p.y) / 3 }, { x: p.x + (2 * (q.x - p.x)) / 3, y: p.y + (2 * (q.y - p.y)) / 3 }, q);
   };
-  const side = (which: Side, to: Vec2) => {
-    if (tail?.side === which) for (const p of tail.points) lineTo(p);
-    lineTo(to);
-  };
   out.push(...arcBezier(bl, r, r, 1.25 * Math.PI, 1.5 * Math.PI));
-  side("bottom", { x: x1 - r, y: y0 });
+  lineTo({ x: x1 - r, y: y0 });
   out.push(...arcBezier({ x: x1 - r, y: y0 + r }, r, r, 1.5 * Math.PI, 2 * Math.PI));
-  side("right", { x: x1, y: y1 - r });
+  lineTo({ x: x1, y: y1 - r });
   out.push(...arcBezier({ x: x1 - r, y: y1 - r }, r, r, 0, 0.5 * Math.PI));
-  side("top", { x: x0 + r, y: y1 });
+  lineTo({ x: x0 + r, y: y1 });
   out.push(...arcBezier({ x: x0 + r, y: y1 - r }, r, r, 0.5 * Math.PI, Math.PI));
-  side("left", { x: x0, y: y0 + r });
+  lineTo({ x: x0, y: y0 + r });
   out.push(...arcBezier(bl, r, r, Math.PI, 1.25 * Math.PI));
   return out;
 }
@@ -366,7 +339,7 @@ export function shapeHit(s: ShapeGeometry, p: Vec2, slack: number, pointPx: numb
   return null;
 }
 
-/** The box round all a shape draws: its line, half its width either side of it, and its tail. */
+/** The box round all a shape draws: its line, half its width either side of it. */
 export function shapeBounds(s: ShapeGeometry, pointPx: number): { x0: number; y0: number; x1: number; y1: number } {
   const pts = outlineOf(s, pointPx).points;
   const h = lineWidthOf(s, pointPx) / 2;
@@ -378,28 +351,15 @@ export function shapeBounds(s: ShapeGeometry, pointPx: number): { x0: number; y0
   };
 }
 
-/**
- * Where a box's words go: about its middle, as wide as it is inside - the
- * rectangle within an ellipse - less `pad` either side; never narrower than
- * `pad`. None for a line.
- */
-export function wordsRoom(s: ShapeGeometry, pad: number): { x: number; y: number; width: number } | null {
-  if (!isBox(s.kind)) return null;
-  const inner = (s.x1 - s.x0) * (s.kind === "ellipse" ? Math.SQRT1_2 : 1);
-  const c = middleOf(s);
-  return { x: c.x, y: c.y, width: Math.max(pad, inner - 2 * pad) };
-}
-
 /** Steps a line drawn with Shift keeps to: 15 degrees. */
 const STEP = Math.PI / 12;
 
 /**
  * A shape drawn from `a` to `b`: a box between them as corners - a square
  * or a circle with `even` - or a line from one to the other, with `even` at
- * a whole step of 15 degrees. A callout's tail points down and to the left
- * of it, as one is usually seen.
+ * a whole step of 15 degrees.
  */
-export function drawnShape(kind: ShapeKind, a: Vec2, b: Vec2, even = false): Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail"> {
+export function drawnShape(kind: ShapeKind, a: Vec2, b: Vec2, even = false): Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1"> {
   if (!isBox(kind)) {
     if (!even) return { x0: a.x, y0: a.y, x1: b.x, y1: b.y };
     const len = Math.hypot(b.x - a.x, b.y - a.y);
@@ -413,19 +373,11 @@ export function drawnShape(kind: ShapeKind, a: Vec2, b: Vec2, even = false): Pic
     dx = (dx < 0 ? -1 : 1) * side;
     dy = (dy < 0 ? -1 : 1) * side;
   }
-  const box = { x0: Math.min(a.x, a.x + dx), y0: Math.min(a.y, a.y + dy), x1: Math.max(a.x, a.x + dx), y1: Math.max(a.y, a.y + dy) };
-  return kind === "callout" ? { ...box, tail: defaultTail(box) } : box;
+  return { x0: Math.min(a.x, a.x + dx), y0: Math.min(a.y, a.y + dy), x1: Math.max(a.x, a.x + dx), y1: Math.max(a.y, a.y + dy) };
 }
 
-/** A callout's tail as it is first drawn: below its box, toward its left. */
-export function defaultTail(b: { x0: number; y0: number; x1: number; y1: number }): Vec2 {
-  const w = b.x1 - b.x0;
-  const h = b.y1 - b.y0;
-  return { x: b.x0 + w * 0.22, y: b.y0 - Math.max(h * 0.55, Math.min(w, h) * 0.7) };
-}
-
-/** What a selected shape's handle takes hold of: a box's corner or side, a line's end, a callout's tail. */
-export type ShapeHandle = "x0y0" | "x1y0" | "x1y1" | "x0y1" | "x0" | "x1" | "y0" | "y1" | "start" | "end" | "tail";
+/** What a selected shape's handle takes hold of: a box's corner or side, a line's end. */
+export type ShapeHandle = "x0y0" | "x1y0" | "x1y1" | "x0y1" | "x0" | "x1" | "y0" | "y1" | "start" | "end";
 
 /** A shape's handles and where each is. */
 export function handlesOf(s: ShapeGeometry): { handle: ShapeHandle; at: Vec2 }[] {
@@ -435,7 +387,7 @@ export function handlesOf(s: ShapeGeometry): { handle: ShapeHandle; at: Vec2 }[]
       { handle: "end", at: { x: s.x1, y: s.y1 } },
     ];
   const c = middleOf(s);
-  const out: { handle: ShapeHandle; at: Vec2 }[] = [
+  return [
     { handle: "x0y0", at: { x: s.x0, y: s.y0 } },
     { handle: "x1y0", at: { x: s.x1, y: s.y0 } },
     { handle: "x1y1", at: { x: s.x1, y: s.y1 } },
@@ -445,18 +397,15 @@ export function handlesOf(s: ShapeGeometry): { handle: ShapeHandle; at: Vec2 }[]
     { handle: "y0", at: { x: c.x, y: s.y0 } },
     { handle: "y1", at: { x: c.x, y: s.y1 } },
   ];
-  if (s.kind === "callout" && s.tail) out.push({ handle: "tail", at: s.tail });
-  return out;
 }
 
 /**
  * `s` with its handle `h` dragged to `p`: a box's corner or side there, the
  * opposite one staying where it is - no smaller than `least` either way,
  * and, `even`, a corner keeping its proportions; a line's end there, `even`
- * at a whole step of 15 degrees from the other; a callout's tail there.
+ * at a whole step of 15 degrees from the other.
  */
 export function reshaped<T extends ShapeGeometry>(s: T, h: ShapeHandle, p: Vec2, least: number, even = false): T {
-  if (h === "tail") return { ...s, tail: { x: p.x, y: p.y } };
   if (h === "start" || h === "end") {
     const fixed = h === "start" ? { x: s.x1, y: s.y1 } : { x: s.x0, y: s.y0 };
     const moved = drawnShape(s.kind, fixed, p, even);
@@ -485,15 +434,14 @@ export function reshaped<T extends ShapeGeometry>(s: T, h: ShapeHandle, p: Vec2,
   return { ...s, x0, y0, x1, y1 };
 }
 
-/** `s` moved by `d`, its tail with it. */
+/** `s` moved by `d`. */
 export function moved<T extends ShapeGeometry>(s: T, d: Vec2): T {
-  return { ...s, x0: s.x0 + d.x, y0: s.y0 + d.y, x1: s.x1 + d.x, y1: s.y1 + d.y, ...(s.tail ? { tail: { x: s.tail.x + d.x, y: s.tail.y + d.y } } : {}) };
+  return { ...s, x0: s.x0 + d.x, y0: s.y0 + d.y, x1: s.x1 + d.x, y1: s.y1 + d.y };
 }
 
 /**
  * `s` carried round `about` by `angle`: a line's ends turned with it; a
- * box upright - the page never tilts - its middle carried round,
- * and its tail turned with it.
+ * box upright - the page never tilts - its middle carried round.
  */
 export function turned<T extends ShapeGeometry>(s: T, about: Vec2, angle: number): T {
   const c = Math.cos(angle);
@@ -506,7 +454,7 @@ export function turned<T extends ShapeGeometry>(s: T, about: Vec2, angle: number
   }
   const m = middleOf(s);
   const to = turn(m);
-  return { ...moved(s, { x: to.x - m.x, y: to.y - m.y }), ...(s.tail ? { tail: turn(s.tail) } : {}) };
+  return moved(s, { x: to.x - m.x, y: to.y - m.y });
 }
 
 /** The colours of a shape's paler fills: each colour as far toward white as `share` says (0, white; 1, the colour). */

@@ -29,10 +29,8 @@ const SHAPES_H = 36 + 9;
 /** Each shape's icon, drawn as Quick Add's are, on a 20-unit square (lib/chem/shapes). An arrow is not one: the row's own *Arrow* draws it. */
 const SHAPE_ICONS: Record<ShapeKind, ReactNode> = {
   rect: <rect x="3" y="5" width="14" height="10" />,
-  rounded: <rect x="3" y="5" width="14" height="10" rx="3" />,
   ellipse: <ellipse cx="10" cy="10" rx="7.5" ry="5.2" />,
   line: <path d="M3.5 15.5 L16.5 4.5" />,
-  callout: <path d="M5 4 H15 Q17 4 17 6 V10.5 Q17 12.5 15 12.5 H9 L5.5 16.5 L6.3 12.5 H5 Q3 12.5 3 10.5 V6 Q3 4 5 4 Z" />,
 };
 
 /**

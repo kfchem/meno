@@ -655,10 +655,10 @@ work.meno (zip)
   step 4b). Slides are listed in `slides`, in the order a talk shows
   them, each by its middle and its size, `around: true` where the page
   about it is shown while it is (docs/PRESENTING.md). Shapes are listed in
-  `shapes`, from the back, each with its kind (a rectangle, a rounded one,
-  an ellipse, a line or a callout - an arrow is in `arrows`), its corners
-  or ends and what of its look is not as a shape is made; words in one say
-  which (`captions[].shape`; docs/PRESENTING.md, *Shapes*). Writing by hand
+  `shapes`, from the back, each with its kind (a rectangle, an ellipse or a
+  line - an arrow is in `arrows`), its corners or ends and what of its
+  look is not as a shape is made: a rectangle's corners' `radius` and its
+  line's `width`, in points (docs/PRESENTING.md, *Shapes*). Writing by hand
   is listed in `inks`, each piece with its pen, width, colour and strokes -
   each stroke's points as x, y and pressure, three numbers to a point
   (docs/PRESENTING.md, *Handwriting*); writing on a PDF's page is kept with

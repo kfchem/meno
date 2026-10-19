@@ -162,16 +162,29 @@ words, a width they break into lines at, and how their lines lie.
 
 ## Shapes
 
-- **Rectangles, rounded rectangles, ellipses, lines and callouts** (a
-  rounded box with a tail that can be moved), each box able to hold words,
-  broken at its width and moving with it.
-- **Their line** - its colour, thin, regular or thick, dashed - **and their
-  fill**, from the palette and its light tints.
+- **A rectangle, an ellipse and a line** (the maintainer, 2026-10-19: a
+  shape is a shape). One rectangle, its corners square or rounded as far
+  as asked - up to round ends - in place of a square and a rounded one; no
+  callout. No words are written in a shape: words go beside it, as words
+  on the page anywhere.
+- **A rectangle's corners**: selected alone, it has one more handle, in
+  the highlight's colour, just inside its top left corner, where their
+  curve begins - dragged along its top, it rounds them, from square to
+  round ends, as one step; and *Corners…* in its menu opens a card of
+  them: *Square*, *Rounded* (9 points, as *Box around these* rounds them),
+  *Round ends*, or another radius typed in points. Chosen there, or undone
+  and redone, the corners go round or square eased; a new rectangle's are
+  square.
+- **Their line** - its colour; as wide as the drawing's bonds (the
+  maintainer, 2026-10-19: as one is made, *Line as bonds* in its menu,
+  following the drawing's style as it changes) or 1 or 2 points of its
+  own (kept whatever the style); dashed - **and their fill**, from the
+  palette and its light tints.
 - **From Quick Add**: *Shapes* opens a second row, as *Calculations* does;
   a shape is drawn from where Quick Add was opened by a drag, or by moving
   the pointer and clicking, as a chain is traced; Shift makes a square or a
   circle, and keeps a line to steps of 15 degrees. The selection's menu has
-  *Box around these*, a rounded rectangle round it.
+  *Box around these*, a rectangle round it, its corners rounded.
 - **An arrow is the page's one Arrow** (the maintainer, 2026-10-12), not a
   shape: Quick Add's *Arrow* draws it, with its kinds, heads, dashes,
   weight, colour and corners in its menu (docs/EDITOR-2D.md, *Arrows*). A
@@ -213,7 +226,10 @@ words, a width they break into lines at, and how their lines lie.
 - **With a mouse or a trackpad**, *Pen* in Quick Add - or *Write on it* in
   a PDF's menu - begins writing, and a pen's card opens: pen, marker,
   eraser, the palette's colours, three widths, Done. Escape or Done ends
-  it; a right drag and the wheel still move and zoom the view.
+  it; a right drag and the wheel still move and zoom the view. A pen
+  writes as wide as the drawing's bonds to begin with (the maintainer,
+  2026-10-19), following the drawing's style as it changes; its two
+  other widths, 1.5 and 3 points, are kept whatever the style.
 - **Smoothed as it is written**, so that nothing jumps when the pen is
   lifted; as thick as the pen is pressed where the system says, else even,
   its ends tapered - a pen that tells no pressure (the same throughout)
@@ -356,6 +372,28 @@ Shift+Enter, since Enter keeps the words, as it did before.
   arrow's menu is called *Arrow* again, and its delete *Delete arrow*. A
   shape of kind `arrow` in a workspace saved before is not read: it opens
   without it.
+- **A shape is a shape** (2026-10-19, the maintainer: no words in one, the
+  callout gone, one rectangle with a corner radius, lines as wide as the
+  bonds). `lib/chem/shapes.ts`: the kinds `rect`, `ellipse` and `line`;
+  `radius`, a rectangle's corners in points (none, square; never past half
+  its shorter side, `cornerRadius`); `width`, its line in points (none, as
+  the drawing's bonds: `asBonds`, `bondLinePtOf` - the layout's line width
+  over its point). `Caption.shape`, the words-in-a-shape layout
+  (`withShapeWords`, `wordsRoom`), the callout's tail and the weights
+  (`thin`, `regular`, `thick`) go. `Shapes2D`: the corners' handle (a
+  rectangle selected alone, `roundHandleAt`: as far in as the curve begins,
+  at least 14 pixels) dragged along the top, the corners drawn as it goes
+  (`roundedByHand`) and eased otherwise (`RoundEase`, TAU.quick, a part's
+  frame work only while they go); `CornersCard.tsx`, as `SizeCard` is. Pens:
+  `INK_WIDTHS_PT` a pen's first width `null`, as the bonds' (`inkWidthPt`).
+- **Workspaces saved before** (no shims kept, nothing lost): a rounded
+  rectangle or a callout opens as a rectangle with the corners it was
+  drawn with (`roundedPt`, read at the point of the style it was saved
+  in), a callout's tail let go; words written in a shape open as words on
+  the page where they were, as wide and as large, the shape no longer
+  theirs; a line's weight opens as a width of its own (thin 0.6, thick 2
+  points), regular as the bonds'. A pen's thin width (0.75 points) opens
+  as the bonds'; its others as they were.
 
 ### Guides (lane L8, fourth part, 2026-10-11)
 
@@ -383,7 +421,7 @@ Shift+Enter, since Enter keeps the words, as it did before.
   (`Shapes2D`: each side moved takes the width or height of something
   near, its proportions free - or kept, with Shift, from the corner
   across). Shapes line up and are sized by the box their line runs round
-  (`shapeFrame`), a callout's tail and an arrow's heads not counted. An
+  (`shapeFrame`), an arrow's heads not counted. An
   atom dragged alone keeps its own snapping to the drawing's lengths and
   angles.
 - Ctrl (⌘ on a Mac) held during the drag holds them off; Shift keeps the
@@ -424,7 +462,9 @@ Shift+Enter, since Enter keeps the words, as it did before.
   points as the pointer gives them, kept whole (*A stroke is kept whole*).
 - `PenCard.tsx`: the pen's card, at the top of the canvas - pen, marker,
   eraser, the colours of the set in use and the pen's own (a marker's own
-  being the set's first, shown once), three widths, Done (or Escape).
+  being the set's first, shown once), three widths - a pen's first as
+  wide as the drawing's bonds, following its style, then 1.5 and 3
+  points (`lib/chem/ink` `INK_WIDTHS_PT`) - Done (or Escape).
   Quick Add's *Pen* opens it; the pointer is a cross while it is open.
   Writing's menu: *Colour…* - whose card, for a marker's writing alone,
   shows the marker's own colour (the set's first) in place of *None*, as
@@ -452,5 +492,4 @@ Shift+Enter, since Enter keeps the words, as it did before.
   the talk ends.
 
 Not yet, and where it comes: writing in the column itself (what is written
-on the page shows there); a slide's notes, with the presenter's view. Words in a shape do not make it taller: words longer
-than it has room for run past its edge.
+on the page shows there); a slide's notes, with the presenter's view.

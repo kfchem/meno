@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { boundsPadded, inkColour, type InkStroke, markerColour, OneEuro, placesOf, pressureFelt, strokeHit, strokeMoved, strokeOutline, strokesBounds, strokeTriangles, thinned } from "./ink";
+import { boundsPadded, inkColour, inkWidth, inkWidthPt, type InkStroke, markerColour, OneEuro, placesOf, pressureFelt, strokeHit, strokeMoved, strokeOutline, strokesBounds, strokeTriangles, thinned } from "./ink";
 import { MENO_SET, OKABE_ITO_SET } from "./palette";
 
 const line: InkStroke = { points: [0, 0, 0.5, 5, 0, 0.5, 10, 0, 0.5] };
@@ -78,5 +78,17 @@ describe("a pen's pressure", () => {
     expect(pressureFelt([0, 0, 0.5, 1, 1, 0.5, 2, 0, 0.5])).toBe(false);
     expect(pressureFelt([0, 0, 0.3, 1, 1, 0.6, 2, 0, 0.4])).toBe(true);
     expect(pressureFelt([0, 0, 0.5])).toBe(false);
+  });
+});
+
+describe("a pen's width", () => {
+  it("is first as wide as the drawing's bonds - following its style - then 1.5 or 3 points whatever the style; a marker's 6, 10 or 16", () => {
+    expect(inkWidthPt({ pen: "pen", width: 0 }, 0.6)).toBe(0.6);
+    expect(inkWidthPt({ pen: "pen", width: 0 }, 0.45)).toBe(0.45);
+    expect(inkWidthPt({ pen: "pen", width: 1 }, 0.45)).toBe(1.5);
+    expect(inkWidthPt({ pen: "pen", width: 2 }, 0.45)).toBe(3);
+    expect(inkWidthPt({ pen: "marker", width: 0 }, 0.45)).toBe(6);
+    // (in the page's units: a point 0.125 of them in ACS 1996's style)
+    expect(inkWidth({ pen: "pen", width: 0 }, 0.125, 0.6)).toBeCloseTo(0.075);
   });
 });

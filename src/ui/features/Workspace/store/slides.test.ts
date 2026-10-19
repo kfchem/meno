@@ -95,7 +95,7 @@ describe("slides on the page", () => {
   it("select the shapes on them too, by their middles", () => {
     const { state } = editor();
     const slide = state().addSlide({ x: 0, y: 0, w: 64, h: 36 })!;
-    const inside = state().addShape({ kind: "rounded", x0: -5, y0: -3, x1: 5, y1: 3 })!;
+    const inside = state().addShape({ kind: "rect", x0: -5, y0: -3, x1: 5, y1: 3, radius: 3 })!;
     state().addShape({ kind: "rect", x0: 100, y0: 0, x1: 110, y1: 5 });
     state().selectOnSlide(slide);
     expect([...state().selShapes]).toEqual([inside]);

@@ -190,12 +190,7 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
     // (one press, one thing: not the arrow under the words as well)
     e.stopPropagation();
     const st = store.getState();
-    // (Ctrl, or ⌘: added to the selection, or taken out of it - words in a shape, the shape)
-    if (addsToSelection(ev) && c.shape != null) {
-      st.toggleShapeSel(c.shape);
-      st.suppressDoubleClick(DOUBLE_CLICK_MS);
-      return;
-    }
+    // (Ctrl, or ⌘: added to the selection, or taken out of it)
     if (addsToSelection(ev)) {
       const now = new Set(st.selCaptions);
       if (now.has(c.id)) now.delete(c.id);
@@ -225,20 +220,6 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
       stop();
       const s = store.getState();
       setHeld((h) => (h ? { ...h, done: true } : h));
-      // (words in a shape: the shape taken hold of - selected, if it is not - and moved, its words with it)
-      if (c.shape != null) {
-        if (!s.selShapes.has(c.shape)) {
-          s.clearSel();
-          s.selectShapes([c.shape]);
-        }
-        dragSelection(store, toWorld, from, (u) => {
-          const s2 = store.getState();
-          s2.endPanHold(u.pointerId);
-          s2.suppressDoubleClick(DOUBLE_CLICK_MS);
-          letGo();
-        });
-        return;
-      }
       if (s.selCaptions.has(c.id) && (s.selCaptions.size > 1 || selectedOf({ ...s, selCaptions: new Set() }).any)) {
         dragSelection(store, toWorld, from, (u) => {
           const s2 = store.getState();
@@ -298,8 +279,7 @@ function CaptionHold({ laid, selected, hovered }: { laid: Laid; selected: boolea
       <mesh args={[SQUARE, UNSEEN]} scale={[box.x1 - box.x0, box.y1 - box.y0, 1]} />
       {glowing && <LitAndShaded w={box.x1 - box.x0} h={box.y1 - box.y0} lit={hovered} shaded={selected} gone={() => setGlowing(false)} />}
       {held && <HeldGlow held={held} b={box} at={held} z={0.005} gone={() => setHeld(null)} />}
-      {/* (words in a shape are as wide as it is: made wider with it) */}
-      {(hovered || resizing) && c.shape == null && (
+      {(hovered || resizing) && (
         <>
           <CaptionEdge side={-1} laid={laid} margin={margin} onResizing={setResizing} />
           <CaptionEdge side={1} laid={laid} margin={margin} onResizing={setResizing} />
