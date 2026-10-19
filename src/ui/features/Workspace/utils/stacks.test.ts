@@ -23,6 +23,7 @@ import {
   stackMembers,
 } from "./stacks";
 import type { AtomStack } from "../store/types";
+import { measured } from "../../../../testing/timeouts";
 
 // (two stacks - one of three, one laid out as a grid - and a molecule of its own)
 const molecules = [
@@ -262,7 +263,7 @@ describe("a stack of more records than a call takes as its arguments", () => {
     expect(shownModel({ atoms, bonds: [] }, {}).atoms.map((a) => a.id)).toEqual([n]);
     expect(recordsGrid({ atoms }, 1).size).toBe(n);
     expect(gridPlaces({ x: 0, y: 0 }, Array.from({ length: n }, () => 1))).toHaveLength(n);
-  });
+  }, measured(300));
 });
 
 /** `xs` read through a count of the times one of them is read by its place - how much of a list a function looks at. */

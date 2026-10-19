@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { isMenoFile, MENO_MEDIA_TYPE, menoFileBytes, MOST_FILE, MOST_FILES, MOST_WORKSPACE, NotMenoFile, readMenoFile } from "./menoFile";
 import { writeMenoFile } from "./menoFileWriter";
 import { holdPicturesOf, pictureBytes } from "../picture/held";
+import { measured } from "../../testing/timeouts";
 
 const sha = (b: Uint8Array) => createHash("sha256").update(b).digest("hex");
 const WORKSPACE = '{"format":"meno-workspace","version":1,"atoms":[],"bonds":[]}\n';
@@ -84,7 +85,7 @@ describe("a workspace file", () => {
     expect(read.every((d, i) => d != null && Buffer.from(d).equals(kept[i].data))).toBe(true);
     expect(took).toBeLessThan(1500);
     expect(file.data("0".repeat(64))).toBeNull();
-  });
+  }, measured(450));
 
   it("is written the same off the page", async () => {
     const written = await writeMenoFile(WORKSPACE, [{ sha256: sha(output), name: "job.log", media: "text/plain", data: output }]);

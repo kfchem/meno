@@ -4,6 +4,7 @@ import { abbreviationOf, abbreviationStructure, labelRuns, labelUnits, reversedL
 import { placedAbbreviation } from "./abbreviationPlace";
 import { complexStructure, forgetComplexReadings, LIGANDS, ligandPicture, ligandStructure, structureFormula, type GroupStructure } from "./ligands";
 import { writeMolfile } from "./molWriter";
+import { measured } from "../../testing/timeouts";
 
 const formula = structureFormula;
 const charge = (s: GroupStructure) => s.atoms.reduce((q, a) => q + (a.charge ?? 0), 0);
@@ -262,5 +263,5 @@ describe("complexes' formulas", () => {
     expect(text).toMatch(/SUP 0 ATOMS=\(77 /);
     // (Pd(PPh3)4 laid out by the whole engine: a second here, several on CI's runners,
     // and 31 to 42 s on a Mac busy at a load average of about 35)
-  }, 120_000);
+  }, measured(9_400));
 });

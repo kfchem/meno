@@ -13,6 +13,7 @@ import { readSmiles } from "../chem/smiles";
 import { kekuleOrders } from "../chem/kekulize";
 import { implicitHydrogens } from "../chem/molecule";
 import { fromSmiles } from "./testdata/fromSmiles";
+import { measured } from "../../testing/timeouts";
 
 /** Carbons joined by the bonds given, as [a, b, order?]. */
 function carbons(n: number, bonds: [number, number, number?][], extra: Partial<LayoutBond>[] = []): LayoutInput {
@@ -163,7 +164,7 @@ describe("layout2D", () => {
         expect(side((i - 1 + n) % n, i, i + 1) === side((i + 2) % n, i, i + 1), `${n} bond ${i}`).toBe(cis);
       }
     }
-  }, 30_000);
+  }, measured(2_100));
 
   it("draws a cis double bond in a long chain as a step in a straight chain", () => {
     // octadec-9-ene, cis: the chain either side of C9=C10 on one line
@@ -279,7 +280,7 @@ describe("layout2D", () => {
     expect(morphine.solid.some(Boolean)).toBe(false);
     // (the whole engine on tetrodotoxin's cage and morphine: about a second
     // alone, a few times that on a machine busy with the rest of the tests)
-  }, 30_000);
+  }, measured(3_100));
 
   it("draws tetrodotoxin level, its guanidine ring beside the cage, not under it", () => {
     const s = readSmiles("C([C@@]1([C@H]2[C@@H]3[C@H](N=C(N[C@@]34[C@@H]([C@@H]1O[C@]([C@H]4O)(O2)O)O)N)O)O)O");
@@ -318,7 +319,7 @@ describe("layout2D", () => {
     const t = around.map((n) => Math.atan2(y[n] - y[c4], x[n] - x[c4])).sort((p, q) => p - q);
     const widest = Math.max(...t.map((v, k) => (k + 1 < t.length ? t[k + 1] : t[0] + 2 * Math.PI) - v));
     expect(widest).toBeLessThan(Math.PI - (12 * Math.PI) / 180);
-  });
+  }, measured(780));
 
   it("opens bilobalide's gap between C4 and C9, its tert-butyl clear of C9's OH", () => {
     // left at 36 degrees, the two were 0.62 of a bond apart, and C4's
@@ -346,7 +347,7 @@ describe("layout2D", () => {
     };
     const { x, y } = layout2D(input);
     for (let i = 0; i < x.length; i++) for (let j = i + 1; j < x.length; j++) expect(Math.hypot(x[i] - x[j], y[i] - y[j])).toBeGreaterThan(0.3);
-  });
+  }, measured(290));
 
   it("fuses rings on a shared side", () => {
     const naphthalene = carbons(10, [...ring(0, 6), [1, 6], [6, 7], [7, 8], [8, 9], [9, 2]]);
@@ -433,7 +434,7 @@ describe("layout2D", () => {
     expect(m.crossings).toBe(1);
     expect(m.overlaps).toBe(0);
     expect(depth.every((d) => d != null)).toBe(true);
-  });
+  }, measured(350));
 
   it("draws norbornane as a boat with its bridge above it", () => {
     // bridgeheads 0 and 3; the bridge 6
@@ -596,7 +597,7 @@ describe("layout2D", () => {
     };
     const ohs = g.atoms.flatMap((a, i) => (a.el === "O" && (a.hs ?? 0) > 0 ? [i] : []));
     expect(ohs.filter(inside)).toHaveLength(6);
-  }, 30_000);
+  }, measured(2_900));
 
   it("draws macrocycles strung through benzene rings as chains, never round", () => {
     // a benzene hub, a macrocycle through it and each of two more benzenes
@@ -720,7 +721,7 @@ describe("layout2D", () => {
       const { wedges } = layout2D(input);
       expect(wedges.find((w) => w.from === 14 && w.to === 18)?.stereo).toBe("up");
     }
-  });
+  }, measured(610));
 
   it("puts the heteroatom of a ring fused to a benzene below it, before how the other rings lie", () => {
     // strychnine: its benzene ring (19-24) on the left, the indoline N (12)
@@ -1009,7 +1010,7 @@ describe("a ring system drawn as a solid", () => {
       expect(centres.length, smiles).toBeGreaterThanOrEqual(4);
       expect(centres.filter((c) => out.wedges.some((w) => w.from === c)).length, smiles).toBeLessThanOrEqual(1);
     }
-  }, 30000);
+  }, measured(4_000));
 });
 
 describe("a macrocycle through a block of fused rings", () => {
@@ -1155,7 +1156,7 @@ describe("a tert-butyl, and the other tridents", () => {
     }
     // (the whole engine on ginkgolide B: about a second alone, a few times that
     // on a machine busy with the rest of the tests)
-  }, 30_000);
+  }, measured(1_600));
 });
 
 describe("a biaryl with something beside its bond on each ring", () => {

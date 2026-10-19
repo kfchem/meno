@@ -1606,4 +1606,5 @@ that every kind of these is in this table, by its id, and no other.
 
 See the README "Development" section. In short: `npm run typecheck`,
 `npm run lint`, `npm test`, `npm run build` for the frontend, and
-`cargo check` / `cargo clippy` / `cargo test` in `src-tauri/`.
+`cargo check` / `cargo clippy` / `cargo test` in `src-tauri/`. How long
+a test may take before it fails: docs/TESTING.md, *Timeouts*.

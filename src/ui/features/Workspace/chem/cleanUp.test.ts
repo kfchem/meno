@@ -18,6 +18,7 @@ import { moleculesToEditorModel, readMoleculesFromText } from "../../../../utils
 import { drawingLayout, drawnOf, structureFileText } from "../fileActions";
 import { editorModelOf } from "../utils/io";
 import messyTaxol from "../../../../../scripts/gui/fixtures/messy-taxol.mol?raw";
+import { measured } from "../../../../testing/timeouts";
 
 const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9, el });
 
@@ -227,7 +228,7 @@ describe("cleanUp", () => {
     // (every cage cleaned up in turn: under a second on a quiet machine, past
     // the 5 s default on a slow CI runner - 5.2 to 5.4 s seen there, with
     // the layout tests all as much slower)
-  }, 30_000);
+  }, measured(2_200));
 
   it("writes tetrodotoxin's C4, shown by the drawing with no wedge, to a MOL or SD file with a wedge that says it", async () => {
     // (C4, in the ring with the C=N, is the drawing's nearest atom, its OH
@@ -266,7 +267,7 @@ describe("cleanUp", () => {
         expect(sameConfiguration(a.tetra, as), `${path}: centre ${i} as given`).toBe(true);
       });
     }
-  }, 30_000);
+  }, measured(3_100));
 
   it("takes away an H it no longer draws, and keeps one it does", async () => {
     // cocaine drawn flat has an H on each bridgehead, to carry its wedge;
@@ -368,7 +369,7 @@ describe("cleanUp", () => {
     // (the whole engine on taxol, each of its ways of being written: about a
     // second alone, a few times that on a machine busy with the rest of the
     // tests)
-  }, 30_000);
+  }, measured(3_500));
 
   it("cleans up taxol drawn any which way with its names and its ring-fusion H clear of one another", async () => {
     // (a drawing a reader cleaned up to find C3's H standing on the A of
@@ -417,7 +418,7 @@ describe("cleanUp", () => {
     // one busy with other work: at a load average of 30 the first Clean-up
     // took 26 s and the whole test 47 s, at 42 the test 87 s - the second
     // Clean-up is 0.25 s. The headroom is for such a machine, not for the work.)
-  }, 240_000);
+  }, measured(68_000));
 
   it("writes a protecting group by name, in the same step, and leaves one just drawn out drawn", async () => {
     // tert-butyldimethylsilyl ethyl ether, drawn atom by atom
