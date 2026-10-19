@@ -27,6 +27,7 @@ import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
 import { ballLinesOf, ballNumbersOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
+import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAttributes } from "../utils/jointNumbers";
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
@@ -287,6 +288,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // (how many digits each atom's number has; and, worked out each frame they are shown, where each goes)
   const numberDigits = useRef<Uint8Array>(new Uint8Array(0));
   const numbersWanted = useRef<Uint8Array>(new Uint8Array(0));
+  // (and where an atom has no ball to carry its number - Sticks - drawn where the sticks meet: utils/jointNumbers)
+  const numbersNow = useRef<Float32Array>(new Float32Array(0));
+  const jointMesh = useMemo(() => jointNumbersMesh(n), [n]);
+  useEffect(() => () => {
+    jointMesh.geometry.dispose();
+    (jointMesh.material as THREE.Material).dispose();
+  }, [jointMesh]);
+  const jointScratch = useRef<{ shown: Float32Array; at: THREE.Matrix4 } | null>(null);
   const numbersPlaced = useRef(false);
   const numbersAt = useRef("");
   const numberScratch = useRef<{ centres: Float32Array; radii: Float32Array; heights: Float32Array; digits: Uint8Array; places: Float32Array; was: Float32Array; now: Float32Array } | null>(null);
@@ -537,6 +546,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     // (each atom's number, of the kind shown - or that last shown, as it fades out - and which are to be shown)
     if (props.atomNumbers) numbersKind.current = props.atomNumbers.kind;
     const nums = atomNumbersOf(m, numbersKind.current);
+    numbersNow.current = nums;
     setBallNumbers(atoms.current.geometry, nums);
     numberDigits.current = Uint8Array.from(nums, digitsOf);
     numbersWanted.current = numbersShownOn({ atoms: m.atoms, atomNumbers: props.atomNumbers ?? undefined });
@@ -1136,7 +1146,25 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       }
       let any = false;
       for (let i = 0; i < n && !any; i++) any = want[i] === 1 || sc.now[4 * i + 3] > 0;
-      bn.shown.value = any ? 1 : 0;
+      // (on the balls, or where the sticks meet - gone over from one to the other as the look is)
+      const share = jointShare(style.primary.atoms === "sticks", style.secondary.atoms === "sticks", fill.current);
+      bn.shown.value = any ? 1 - share : 0;
+      const ju = jointUniforms(jointMesh);
+      ju.shown.value = any ? share : 0;
+      if (any && share > 0) {
+        ju.pxPer.value = 1 / px;
+        ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * risen.current;
+        // (in front of where the sticks meet: past the sticks' own round ends)
+        ju.lift.value = bondR * 1.2;
+        const js = (jointScratch.current ??= { shown: new Float32Array(n), at: new THREE.Matrix4() });
+        if (js.shown.length !== n) js.shown = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          js.shown[i] = sc.now[4 * i + 3];
+          jointMesh.setMatrixAt(i, js.at.makeTranslation(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
+        }
+        jointMesh.instanceMatrix.needsUpdate = true;
+        setJointAttributes(jointMesh, numbersNow.current.length === n ? numbersNow.current : new Float32Array(n), js.shown, atomCols.current && atomCols.current.length === 3 * n ? atomCols.current : new Float32Array(3 * n));
+      }
       bn.pxPer.value = 1 / px;
       bn.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
       if (any) {
@@ -1590,6 +1618,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           <sphereGeometry args={[1, segments, segments]} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
+        {/* atom numbers where the sticks meet, where there are no balls to carry them (utils/jointNumbers) */}
+        <primitive object={jointMesh} renderOrder={OVER_PAGE + 1} />
         {/* the style's line round every ball (utils/outlineMaterial) */}
         <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
           <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
