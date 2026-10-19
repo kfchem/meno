@@ -157,7 +157,13 @@ they hang from.
   corner points out, inside it where the corner points in, which is why a
   macrolide is drawn with groups inside its ring. The atoms carrying the
   larger groups take the corners pointing out, and the shape is chosen,
-  among the few that lie well, for the room it leaves inside. A ring fused
+  among the few that lie well, for the room it leaves inside. How large a
+  group is can be weighed two ways - by the group, a methyl as much as a
+  short chain and a little more for each atom on, or by the atom, a chain
+  by its length - and where the two set the ring's atoms on a shape
+  otherwise, each is grown and the drawing that reads best kept:
+  tacrolimus's allyl, weighed by the group, went in for its C=O and a
+  methyl, and ran across the ring's inside by its methyl's hashes. A ring fused
   on its side sits where the shape turns (both ends of that side corners
   pointing out), a ring it runs through at three atoms stands outside a
   corner pointing in, and every double bond in it keeps its cis or trans:
@@ -589,8 +595,14 @@ bond, as tetrodotoxin's guanidine NH; nearer even, it stays stacked. On
 the row so, it goes on the row's clearer side - a borate's BH- with a
 bond straight right is written HB- - and, the two sides alike, after the
 symbol: NH. lib/layout/names `rowClearer`, `clearRowSide`, which the
-drawing and the engine share). Where it - or its count, NH2's 2 after it
-and set lower - would run into another label, an atom or a bond, the
+drawing and the engine share). Written before its symbol with a count -
+H2N - the count comes between the two, and the H stands a count's width
+further out (`hydrogenWritten`): taken as beside the N, cephalosporin C's
+H2N ran into the O of the C=O a bond to its left unseen. Beside another
+label's symbol, on its row, an H wants a word's space: 0.8 of a bond
+between the H and that symbol's middle, or OH N reads as one word
+(tacrolimus's hemiketal OH, 0.69 short of its piperidine's N). Where it - or
+its count, NH2's 2 after it and set lower - would run into another label, an atom or a bond, the
 bond to the atom is turned a little or drawn a little longer or shorter -
 an OH, an SH - or the same is done to what it runs into, a C=O's O or a
 small branch (taxol's benzoate, clear of its C1 OH). The H is never moved
@@ -665,7 +677,11 @@ quarter of a bond: with less, taxol's AcO sat on its OBz.
   clear of atoms, bonds and names' letters and crossing none (taxol's C3
   H once stood on the A of its C4 AcO, which reaches a bond's length from
   its atom); its wedge says the same
-  whichever way it points. It goes into one of its own rings only as a
+  whichever way it points. Its room from a label is taken half by the
+  distance between the two and half by the paper between their letters'
+  ink, as two labels' ink is measured: an H a bond off an O diagonally
+  sits on the corner of its letter, which the distance alone took as room
+  enough (ivermectin's H over its OH, vancomycin's and tacrolimus's). It goes into one of its own rings only as a
   steroid's does: straight up or down, into a ring with no double bond of
   its own (one no other ring shares, whose second line is drawn inside
   it). Aslant into a ring, or into lovastatin's ring with its double bond,

@@ -3,7 +3,7 @@ import { layout2D } from "./engine";
 import { insidePolygon } from "./geometry";
 import type { LayoutInput } from "./perceive";
 import { drawnVolume, placeStereo } from "./stereo";
-import { perceive } from "./perceive";
+import { key, perceive } from "./perceive";
 import { fromSmiles } from "./testdata/fromSmiles";
 
 /** Reads a centre's configuration back off the drawing, the way the drawing shows it. */
@@ -238,5 +238,40 @@ describe("a wedge that says nothing for sure", () => {
       });
     expect(drawnVolume({ x: 0, y: 0 }, drawn(0, -1), lift)).toBe(1);
     for (const which of [0, 1, 2]) for (const turn of [-12, 12]) expect(drawnVolume({ x: 0, y: 0 }, drawn(turn, which), lift)).toBe(1);
+  });
+});
+
+describe("an H drawn by a label", () => {
+  // a centre with its three bonds in the lower half, so its H goes up; an
+  // ether O a bond off straight up from it, as far across as up: the H's
+  // letter and the O's a little over a bond apart, corner to corner
+  const at = (deg: number) => ({ x: Math.cos((deg * Math.PI) / 180), y: Math.sin((deg * Math.PI) / 180) });
+  const input: LayoutInput = {
+    atoms: [{ el: "C", tetra: { neighbours: [1, 2, 3, -1], volume: 1 } }, { el: "C" }, { el: "C" }, { el: "C" }, { el: "O" }, { el: "C" }, { el: "C" }],
+    bonds: [
+      { a: 0, b: 1, order: 1 },
+      { a: 0, b: 2, order: 1 },
+      { a: 0, b: 3, order: 1 },
+      { a: 4, b: 5, order: 1 },
+      { a: 4, b: 6, order: 1 },
+    ],
+  };
+  const mol = perceive(input);
+  const pos = new Map([
+    [0, { x: 0, y: 0 }],
+    [1, at(210)],
+    [2, at(330)],
+    [3, at(270)],
+    [4, { x: 0.8, y: 1.75 }],
+    [5, { x: 1.8, y: 1.75 }],
+    [6, { x: 1.3, y: 2.62 }],
+  ]);
+
+  it("is not set on the corner of the label's letter, but where its ink has paper round it", () => {
+    // (its three bonds taken by other centres' wedges: its H shows it)
+    const h = placeStereo(mol, pos, mol.tetra, new Set([key(0, 1), key(0, 2), key(0, 3)])).hydrogens.find((x) => x.on === 0)!.at;
+    // (straight up, the two letters' ink would come within 0.3 of a bond across and 0.25 up)
+    expect(Math.hypot(h.x, h.y - 1)).toBeGreaterThan(0.1);
+    expect(h.x).toBeLessThan(0);
   });
 });

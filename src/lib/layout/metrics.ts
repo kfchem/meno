@@ -491,16 +491,35 @@ function labelInk(el: string, hs: number, ways: readonly { x: number; y: number 
 }
 
 /**
+ * Where a label's H is written, from its atom in bond lengths (`h`, from
+ * hydrogenSpot), and whether its count follows it (`count`): written after
+ * the symbol or under it, its count after it; written before the symbol
+ * with a count (H2N), the count between the two, so the H a count's width
+ * further out - it was taken as beside the symbol, and H2N's H ran into an
+ * O a bond to the left of the N unseen (cephalosporin C's).
+ */
+export function hydrogenWritten(h: { x: number; y: number }, hs: number): { x: number; y: number; count: boolean } {
+  if (hs > 1 && h.x < 0) return { x: h.x - HYDROGEN_COUNT, y: h.y, count: true };
+  return { x: h.x, y: h.y, count: hs > 1 && h.x >= 0 };
+}
+
+/** How wide an H's count (the 2 of NH2) is, in bond lengths. */
+export const HYDROGEN_COUNT = 0.3;
+
+/**
  * Whether an atom `d` off a label's H (in bond lengths, y up) is where the
  * H's ink runs into it - its own ink, a label's (`labelled`) or a bare
  * vertex's: an H's ink is 0.4 of a bond across and half a bond high, an O's
- * a little more; side by side they want a space between them, or OH O reads
- * as one word, one over the other a sliver of paper. Its count (`count`),
+ * a little more; side by side they want a word's space between them, or
+ * OH O reads as one word - 0.8 of a bond between the H and the other
+ * symbol's middle (at 0.65, tacrolimus's OH ended 0.69 short of its
+ * piperidine's N and read OHN) - one over the other a sliver of paper.
+ * Its count (`count`),
  * written after it and set lower, reaches as far again to the right and a
  * little further down (NH2's 2 above an O under it).
  */
 export function hydrogenRunsInto(d: { x: number; y: number }, labelled: boolean, count: boolean): boolean {
-  const [w, t] = labelled ? [0.65, 0.58] : [0.33, 0.33];
+  const [w, t] = labelled ? [0.8, 0.58] : [0.33, 0.33];
   const right = count ? w + 0.3 : w;
   const down = count ? t + 0.1 : t;
   return d.x > -w && d.x < right && d.y > -down && d.y < t;
@@ -1069,7 +1088,8 @@ export function layoutMetrics(g: Geometry): LayoutMetrics {
           return { x: (x[b] - x[a]) / d, y: (y[b] - y[a]) / d };
         }),
       );
-      spots.push({ a, x: x[a] + h.x * L, y: y[a] + h.y * L, count: g.hydrogens[a] > 1 && h.x >= 0 });
+      const w = hydrogenWritten(h, g.hydrogens[a]);
+      spots.push({ a, x: x[a] + w.x * L, y: y[a] + w.y * L, count: w.count });
     }
     for (const [i, h] of spots.entries()) {
       let crowded = false;
