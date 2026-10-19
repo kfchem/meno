@@ -14,6 +14,7 @@ import { style3dOf } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
+import { viewToShow } from "../utils/viewShow";
 import { opensWith } from "./openingFit";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { pdfRoom } from "../../../../lib/pdf/layout";
@@ -235,5 +236,18 @@ export default function FitToContent2D({
     autoFitSuspended,
     store,
   ]);
+  // What was just put down, shown: the view eased along to take it in, or
+  // out as little as needed, in what the column leaves (utils/viewShow)
+  const showRequest = useEditor((s) => s.showRequest);
+  const shown = useRef(showRequest?.n ?? 0);
+  useEffect(() => {
+    if (!showRequest || showRequest.n === shown.current) return;
+    shown.current = showRequest.n;
+    const cam = camera as THREE.OrthographicCamera;
+    const to = viewToShow({ x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 }, { w: size.width, h: size.height, cover: store.getState().cover }, showRequest.box, paddingPx);
+    if (!to) return;
+    setViewGoal(cam, { zoom: to.zoom, x: to.x, y: to.y });
+    invalidate();
+  }, [showRequest, camera, size.width, size.height, store, paddingPx, invalidate]);
   return null;
 }

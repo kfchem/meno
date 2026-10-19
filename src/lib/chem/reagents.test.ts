@@ -16,6 +16,11 @@ const centres = (s: GroupStructure) => s.atoms.filter((a) => a.tetra).map((a) =>
 describe("the reagents", () => {
   // each one's molecular formula, as its name gives it
   const formulas: Record<string, string> = {
+    // (fluorination and the AZADO family: the formulas PubChem gives the records their structures were checked against)
+    TASF: "C9H27F2N3SSi", TBAT: "C34H51F2NSi", "XtalFluor-E": "C4H10BF6NS", "XtalFluor-M": "C4H8BF6NOS", PyFluor: "C5H4FNO2S",
+    PhenoFluor: "C27H36F2N2", AlkylFluor: "C27H36BF5N2", Fluolead: "C12H17F3S", "Umemoto Reagent I": "C13H8BF7S",
+    "N-fluoropyridinium triflate": "C6H5F4NO3S", "Hu reagent": "C6H5F2NO2S", PhSO2CF2H: "C7H6F2O2S",
+    "1-Me-AZADO": "C10H16NO", "Nor-AZADO": "C8H12NO", ABNO: "C8H14NO", "keto-ABNO": "C8H12NO2", AZADOL: "C9H15NO",
     // (bases and coupling reagents: the formulas PubChem gives the records their structures were checked against)
     MTBD: "C8H15N3", BEMP: "C13H31N4P", "P4-tBu": "C22H63N13P4", BTMG: "C9H21N3",
     PyAOP: "C17H27F6N7OP2", TCFH: "C5H12ClF6N2P", DEPBT: "C11H14N3O5P", EEDQ: "C14H17NO3", "BOP-Cl": "C6H8ClN2O5P",
@@ -86,6 +91,9 @@ describe("the reagents", () => {
     // a dash and an apostrophe, as typed or as set
     expect(abbreviationOf("Hoveyda-Grubbs II")?.label).toBe("HG-II");
     expect(abbreviationOf("Comins’ reagent")?.label).toBe("Comins' reagent");
+    // a name sold for several numbered reagents is no one of them
+    expect(abbreviationOf("Umemoto's reagent")).toBeUndefined();
+    expect(abbreviationOf("Umemoto's reagent I")?.label).toBe("Umemoto Reagent I");
     // a name is one unit of a label, its digits not counts; a formula's are
     expect(labelUnits("T3P")).toEqual(["T3P"]);
     expect(labelRuns("NaBH4").some((r) => r.sub && r.text === "4")).toBe(true);

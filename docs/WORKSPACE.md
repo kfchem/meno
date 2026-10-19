@@ -915,6 +915,24 @@ molecules in 3D.
   only. The fallback that let a workspace without a style follow Settings
   as it changed (`docStyle ?? drawingStyle`) goes: `style` is always set,
   in the document, the store and the saved file.
+- **Settings changed while it is open: asked** (the maintainer,
+  2026-10-19). A drawing style changed in Settings - another preset, or
+  any value of it - or the 3D styles in their roles, while a workspace is
+  open and not drawn in them, is offered to it by a question over its
+  canvas, *Settings has a new style*, naming what differs: "Drawing: this
+  workspace is drawn in ACS 1996; Settings now has RSC", "3D: this
+  workspace shows Ball and stick and Space-filling; Settings now has …".
+  *Apply to this workspace* (the default, Enter) takes them as one step to
+  undo - the drawing style as a preset chosen in its card is, its bond
+  eased in; its two looks as a slot's style is, its molecules eased over,
+  its light its own; *Keep its style* - and Escape, or a press elsewhere -
+  leaves it as it is. Asked in each workspace open, each its own answer,
+  when it is in front - never in Settings itself, and never over a talk:
+  it waits for the workspace to be in front after it. Asked once a
+  change: kept, it is not asked again until Settings' styles change
+  again. A workspace opened in a style of its own - someone else's, or
+  saved in another - is never asked for that alone: only a change made in
+  Settings while it is open asks (`styleOffer.ts`, `SettingsStyleAsk`).
 - **A change of style is one command,** from the canvas's Drawing style
   card. It sets the style and converts the page with it, so that every
   object on the page keeps its printed size and its place, and only the
@@ -1847,3 +1865,17 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   instanced from the start.
 - **Testing.** The GUI harness sees a WebGL canvas only while its window
   is on screen.
+
+## Putting things down
+
+What is put on the page - a structure read from a figure, one opened or
+dropped onto a page with something on it, molecules in 3D, a formula drawn
+from one - is selected, and shown (utils/viewShow, `requestShow`): where it
+is not seen whole, the view eases to it, as Fit eases. What can be seen is
+the canvas the column beside it leaves: what lies under the column is not
+in view. The view goes along first, as little as takes it in with a
+margin; only where that is not enough, out as little as needed, it in the
+middle of what can be seen - never in. What is seen whole already leaves
+the view as it is. Opened onto an empty page, it is fitted, as a canvas
+opens. Quick Add and a paste put what they make where the pointer is, in
+view already (the maintainer, 2026-10-18).

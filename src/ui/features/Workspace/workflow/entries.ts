@@ -8,7 +8,7 @@
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import { geometryKey, type Entry, type EntryAtom, type Property } from "../../../../lib/entry";
 import { speciesOf } from "../../../../lib/io/writers";
-import type { Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
 type Pt = { x: number; y: number };
@@ -86,8 +86,60 @@ function drawnIn(model: Model): { ids: number[]; at: Pt }[] {
 /** Whether `p` lies before `q`: higher on the page, or - about level, within half a bond's height - to its left. */
 const before = (p: Pt, q: Pt) => (Math.abs(p.y - q.y) > 0.9 ? q.y - p.y : p.x - q.x);
 
+/** The structures drawn, by the id of each atom: its structure's place in `drawnIn`'s list. */
+const componentAt = new WeakMap<Model, Map<number, number>>();
+function componentsByAtom(model: Model): Map<number, number> {
+  let found = componentAt.get(model);
+  if (!found) {
+    found = new Map();
+    drawnIn(model).forEach((s, k) => s.ids.forEach((id) => found!.set(id, k)));
+    componentAt.set(model, found);
+  }
+  return found;
+}
+
+/** What a set holds: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) - its members, in their order, where it has them; else what lies inside its frame (`lyingIn`). A member gone from the page is left out; a structure member is the structures drawn now that hold any of its atoms. */
+export function setMembers(page: Page, set: Frame & { members?: readonly Member[] }): { structures: number[][]; molecules: number[]; pictures: number[] } {
+  if (!set.members) return lyingIn(page, set);
+  const drawn = drawnIn(page.model);
+  const byAtom = componentsByAtom(page.model);
+  const molecules = new Set((page.molecules3d ?? []).map((m) => m.id));
+  const pictures = new Set((page.pictures ?? []).map((p) => p.id));
+  const out = { structures: [] as number[][], molecules: [] as number[], pictures: [] as number[] };
+  const taken = new Set<number>();
+  for (const m of set.members) {
+    if ("structure" in m) {
+      for (const id of m.structure) {
+        const k = byAtom.get(id);
+        if (k == null || taken.has(k)) continue;
+        taken.add(k);
+        out.structures.push(drawn[k].ids);
+      }
+    } else if ("molecule" in m) {
+      if (molecules.has(m.molecule) && !out.molecules.includes(m.molecule)) out.molecules.push(m.molecule);
+    } else if (pictures.has(m.picture) && !out.pictures.includes(m.picture)) out.pictures.push(m.picture);
+  }
+  return out;
+}
+
+/** What `setMembers` found, as members: in its order, structures first, then molecules, then pictures. */
+export function membersOf(found: { structures: readonly (readonly number[])[]; molecules: readonly number[]; pictures: readonly number[] }): Member[] {
+  return [...found.structures.map((ids) => ({ structure: [...ids] })), ...found.molecules.map((molecule) => ({ molecule })), ...found.pictures.map((picture) => ({ picture }))];
+}
+
+/** Where each of a page's structures, molecules and pictures is: what a set's gestures read (workflow/model `membersSettled`). */
+export function placesOf(page: Page): { structures: { ids: number[]; at: Pt }[]; molecules: Map<number, Pt>; pictures: Map<number, Pt> } {
+  return {
+    structures: drawnIn(page.model),
+    molecules: new Map((page.molecules3d ?? []).map((m) => [m.id, m.at])),
+    pictures: new Map((page.pictures ?? []).map((p) => [p.id, { x: p.x, y: p.y }])),
+  };
+}
+
+export { before as readingOrder };
+
 /** What lies inside a frame: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) whose middles are inside it, each in the order they lie. */
-export function setMembers(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
+export function lyingIn(page: Page, set: Frame): { structures: number[][]; molecules: number[]; pictures: number[] } {
   const structures = drawnIn(page.model)
     .filter((s) => inside(set, s.at))
     .sort((p, q) => before(p.at, q.at))
@@ -252,4 +304,41 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     properties,
     status: "done",
   };
+}
+
+/**
+ * A set's collection's hash (docs/WORKFLOWS-FOUNDATION.md, *Sets and
+ * collections*): of its members, in order - each structure's atoms and
+ * bonds, each molecule's atoms and every frame's places (lib/entry
+ * `geometryKey`), each picture's image - so that what a set holds is told
+ * apart by it, and the same again by the same. FNV-1a, twice over, 64 bits
+ * as hex.
+ */
+export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & { members?: readonly Member[] }): string {
+  const { structures, molecules, pictures } = setMembers(page, set);
+  const atoms = new Map(page.model.atoms.map((a) => [a.id, a]));
+  const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
+  const shown = new Map((page.pictures ?? []).map((p) => [p.id, p as Partial<Pick<PictureItem, "sha256">>]));
+  const parts: string[] = [];
+  for (const ids of structures) {
+    const inIt = new Set(ids);
+    const els = ids.map((id) => `${atoms.get(id)!.el}${atoms.get(id)!.charge ?? ""}`).join(",");
+    const bonds = page.model.bonds.filter((b) => inIt.has(b.a) && inIt.has(b.b)).map((b) => `${ids.indexOf(b.a)}-${ids.indexOf(b.b)}:${b.order}`).join(",");
+    parts.push(`s|${els}|${bonds}`);
+  }
+  for (const id of molecules) {
+    const m = byId.get(id)!;
+    const frames = Array.from({ length: framesOf(m) }, (_, f) => geometryKey(frameXyz(m, f))).join(",");
+    parts.push(`m|${m.atoms.map((a) => a.el).join(",")}|${frames}`);
+  }
+  for (const id of pictures) parts.push(`p|${shown.get(id)?.sha256 ?? id}`);
+  const text = parts.join("\n");
+  let a = 0x811c9dc5;
+  let b = 0x01000193;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
 }

@@ -3,14 +3,15 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as THREE from "three";
 import { COLORS } from "../../../theme/colors";
-import { TAU } from "../../../theme/motion";
+import { DURATION, TAU } from "../../../theme/motion";
+import { usePresence } from "../../../theme/presence";
 import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -27,6 +28,7 @@ import PointedCard3D, { type CardGroups } from "./PointedCard3D";
 import Surface3D from "./Surface3D";
 import { frameCentre } from "../utils/surfaceMesh";
 import { ballLinesOf, ballNumbersOf, byAtomOf, fadeOf, teachBent, useShading3d } from "./shading3d";
+import { JOINT_NUMBER_A, jointNumbersMesh, jointShare, jointUniforms, setJointAttributes } from "../utils/jointNumbers";
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, numberHeight, numberPlaces, numbersShownOn, setBallNumberPlaces, setBallNumbers, type AtomNumberKind, type AtomNumbersShown } from "../utils/atomNumbers";
 import { outlineMaterial } from "../utils/outlineMaterial";
 import type { Grid } from "../../../../lib/calc/results";
@@ -99,6 +101,10 @@ const LINES_COARSE = 16;
 const PILL_TAU = 0.12;
 /** How quickly a stereo label goes round its atom to the way it stands best, as the molecule turns, in seconds: as `TAU.move`. */
 const STEREO_TAU = 0.07;
+/** How long a stereo label takes to come into view, and to go out of it, in seconds: as the drawing's (CSS's `meno-fade-in` and `meno-fade-out`). */
+const STEREO_FADE = DURATION.quick;
+/** How many frames labels shown together wait at the most for all of them to be there, before those there fade in. */
+const STEREO_WAIT_FRAMES = 30;
 /** How far above the molecule the mark of hydrogens left out stands, in pixels. */
 const MARK_GAP_PX = 8;
 /** A turn this small is followed at once - a drag's, or a turn on its own; a larger one is gone over to. */
@@ -287,6 +293,14 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // (how many digits each atom's number has; and, worked out each frame they are shown, where each goes)
   const numberDigits = useRef<Uint8Array>(new Uint8Array(0));
   const numbersWanted = useRef<Uint8Array>(new Uint8Array(0));
+  // (and where an atom has no ball to carry its number - Sticks - drawn where the sticks meet: utils/jointNumbers)
+  const numbersNow = useRef<Float32Array>(new Float32Array(0));
+  const jointMesh = useMemo(() => jointNumbersMesh(n), [n]);
+  useEffect(() => () => {
+    jointMesh.geometry.dispose();
+    (jointMesh.material as THREE.Material).dispose();
+  }, [jointMesh]);
+  const jointScratch = useRef<{ shown: Float32Array; at: THREE.Matrix4 } | null>(null);
   const numbersPlaced = useRef(false);
   const numbersAt = useRef("");
   const numberScratch = useRef<{ centres: Float32Array; radii: Float32Array; heights: Float32Array; digits: Uint8Array; places: Float32Array; was: Float32Array; now: Float32Array } | null>(null);
@@ -498,6 +512,15 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     }
     return out;
   }, [m.stereo, m.bonds, props.stereoShown]);
+  // (and each hidden kept a while as it fades out - longer than its fade,
+  // which counts the frames drawn rather than the time)
+  const stereoPresent = usePresence(stereoMarks, (mark) => mark.key, 2 * STEREO_FADE * 1000);
+  const stereoNow = useRef(stereoPresent);
+  stereoNow.current = stereoPresent;
+  // (how far each is in view, and its fade: fadeStep)
+  const stereoFades = useRef(new Map<string, LabelFade>());
+  // (frames waited for the labels shown together to be there)
+  const stereoWaited = useRef(0);
   const stereoAnchors = useRef(new Map<string, { anchor: THREE.Group | null; el: HTMLDivElement | null }>());
   // (where each stereo label stands about its atom as last drawn, which it glides on from: spotFollowed)
   const stereoSpots = useRef(new Map<string, SpotAbout>());
@@ -537,6 +560,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     // (each atom's number, of the kind shown - or that last shown, as it fades out - and which are to be shown)
     if (props.atomNumbers) numbersKind.current = props.atomNumbers.kind;
     const nums = atomNumbersOf(m, numbersKind.current);
+    numbersNow.current = nums;
     setBallNumbers(atoms.current.geometry, nums);
     numberDigits.current = Uint8Array.from(nums, digitsOf);
     numbersWanted.current = numbersShownOn({ atoms: m.atoms, atomNumbers: props.atomNumbers ?? undefined });
@@ -1136,7 +1160,25 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       }
       let any = false;
       for (let i = 0; i < n && !any; i++) any = want[i] === 1 || sc.now[4 * i + 3] > 0;
-      bn.shown.value = any ? 1 : 0;
+      // (on the balls, or where the sticks meet - gone over from one to the other as the look is)
+      const share = jointShare(style.primary.atoms === "sticks", style.secondary.atoms === "sticks", fill.current);
+      bn.shown.value = any ? 1 - share : 0;
+      const ju = jointUniforms(jointMesh);
+      ju.shown.value = any ? share : 0;
+      if (any && share > 0) {
+        ju.pxPer.value = 1 / px;
+        ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM * risen.current;
+        // (in front of where the sticks meet: past the sticks' own round ends)
+        ju.lift.value = bondR * 1.2;
+        const js = (jointScratch.current ??= { shown: new Float32Array(n), at: new THREE.Matrix4() });
+        if (js.shown.length !== n) js.shown = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          js.shown[i] = sc.now[4 * i + 3];
+          jointMesh.setMatrixAt(i, js.at.makeTranslation(p[3 * i], p[3 * i + 1], p[3 * i + 2]));
+        }
+        jointMesh.instanceMatrix.needsUpdate = true;
+        setJointAttributes(jointMesh, numbersNow.current.length === n ? numbersNow.current : new Float32Array(n), js.shown, atomCols.current && atomCols.current.length === 3 * n ? atomCols.current : new Float32Array(3 * n));
+      }
       bn.pxPer.value = 1 / px;
       bn.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
       if (any) {
@@ -1377,7 +1419,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     // nearest way that keeps clear of the other atoms, the bonds, the
     // measurements' values and the labels already placed - and as large as
     // the drawing's letters
-    if (stereoMarks.length) {
+    if (stereoNow.current.length) {
       const g = Math.max(grown.current.v, 1e-3);
       const font = Math.max(MARK_MIN_PX, props.stereoFont.units === "px" ? props.stereoFont.size : props.stereoFont.size / px);
       const v = new THREE.Vector3();
@@ -1390,7 +1432,17 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       // bond as drawn - none when space-filling)
       let balls: { x: number; y: number; r: number }[] | null = null;
       const sticks: Stick[] = [];
-      for (const mark of stereoMarks) {
+      // (those shown together fade in together, the molecule moving or not:
+      // none starts before every one of them is there to be seen - each
+      // label's element is made a frame or so after the label is asked for)
+      const allThere = stereoNow.current.every(({ item }) => {
+        const l = stereoAnchors.current.get(item.key);
+        return !!l?.anchor?.parent && !!l.el;
+      });
+      if (allThere) stereoWaited.current = 0;
+      else if (stereoWaited.current++ < STEREO_WAIT_FRAMES) moving = true;
+      const goIn = allThere || stereoWaited.current > STEREO_WAIT_FRAMES;
+      for (const { item: mark, leaving } of stereoNow.current) {
         const l = stereoAnchors.current.get(mark.key);
         if (!l?.anchor) continue;
         const at = l.anchor.position.set(0, 0, 0);
@@ -1398,7 +1450,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         at.divideScalar(mark.atoms.length);
         const parent = l.anchor.parent;
         if (!l.el || !parent) continue;
-        if (reshaped || dirty.current) l.el.style.opacity = String(risen.current);
+        // (faded in, or out - in the same time either way, eased)
+        let fade = stereoFades.current.get(mark.key);
+        if (!fade) stereoFades.current.set(mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
+        if (fadeStep(fade, leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
+        l.el.style.opacity = String(risen.current * fade.v);
         parent.updateWorldMatrix(true, false);
         if (!balls) {
           balls = [];
@@ -1434,6 +1490,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         l.el.style.transform = `translate(${(spot.x - o.x).toFixed(1)}px, ${(spot.y - o.y).toFixed(1)}px)`;
         l.el.style.fontSize = `${font.toFixed(1)}px`;
       }
+    }
+    // (the fades of those gone, forgotten)
+    if (stereoFades.current.size > stereoNow.current.length) {
+      const here = new Set(stereoNow.current.map((e) => e.key));
+      for (const key of stereoFades.current.keys()) if (!here.has(key)) stereoFades.current.delete(key);
     }
     dirty.current = false;
     // how far an atom reaches as drawn - its ball, or, where its chain is a
@@ -1590,6 +1651,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           <sphereGeometry args={[1, segments, segments]} />
           <meshStandardMaterial ref={atomsMat} transparent opacity={1} />
         </instancedMesh>
+        {/* atom numbers where the sticks meet, where there are no balls to carry them (utils/jointNumbers) */}
+        <primitive object={jointMesh} renderOrder={OVER_PAGE + 1} />
         {/* the style's line round every ball (utils/outlineMaterial) */}
         <instancedMesh ref={atomLines} args={[undefined, outlines.atoms.material, n]} renderOrder={OVER_PAGE} frustumCulled={false} visible={false} raycast={() => {}}>
           <sphereGeometry args={[1, n > LINES_FINE_MOST ? LINES_COARSE : style.ballSegments, n > LINES_FINE_MOST ? LINES_COARSE / 2 : style.ballSegments]} />
@@ -1861,7 +1924,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           colour={props.surfaceColour ?? null}
           renderOrder={OVER_PAGE + 2}
         />
-        {stereoMarks.map((mark) => (
+        {stereoPresent.map(({ item: mark }) => (
           <group
             key={mark.key}
             ref={(g) => {

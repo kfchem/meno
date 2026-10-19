@@ -82,6 +82,19 @@ describe("Settings' widths", () => {
     }
   });
 
+  it("give the style editors two columns, the settings and the preview - no list of their groups beside them", () => {
+    for (const id of ["style", "style3d"] as SettingsSection[]) {
+      const html = drawn(id);
+      // (a list beside the settings left them too narrow to read in the section's width: the maintainer, 2026-10-18)
+      expect(html, id).not.toContain("<nav");
+      expect(classesOf(html).some((c) => c.includes("w-44")), id).toBe(false);
+      // (the preview's column, beside the settings - the rest of the width theirs)
+      expect(html, id).toContain("w-[26rem] shrink-0");
+    }
+    // (the groups headed in the settings' own column, in order)
+    expect(drawn("style")).toMatch(/<section id="style-size"[^>]*>.*<section id="style-lines"/);
+  });
+
   it("let the Dictionary's search and its cards run the section's width", () => {
     const html = drawn("abbreviations");
     expect(html).toMatch(/aria-label="Find a label"[^>]*class="[^"]*\bw-full\b/);
