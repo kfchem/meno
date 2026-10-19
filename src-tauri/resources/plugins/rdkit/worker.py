@@ -379,6 +379,18 @@ RING_CONFORMERS = 200
 BY_TURNS = ((7, 50), (12, 200), (None, 300))
 #: Conformers closer than this, in angstroms over their heavy atoms, are one.
 SAME_SHAPE = 0.5
+#: How many ways a molecule maps onto itself are tried when telling two of its shapes apart - a tert-butyl's
+#: three methyls, a phenyl flipped, an eta ring turned - and the most that are looked for at all. Past this
+#: the shapes are told apart atom against atom, as they were before, and a list may hold the same shape twice:
+#: trying every way of a Pd(PPh3)4, whose four phosphines and twelve phenyls map onto each other every way
+#: round, took 2.1 s for a single pair of conformers here, where 1000 ways took 0.002 s.
+ALIKE_WAYS = 1000
+#: How near in energy, in kcal/mol, two conformers must be before a swap of equivalent atoms may make them
+#: one. A shape and the same shape relabelled have the one energy exactly: over 4000 such pairs here the
+#: largest gap the optimisation left was 0.000001 kcal/mol. Further apart than this and they are two shapes,
+#: however near their atoms fall once swapped - phenylcyclohexane's twist-boat, 6 kcal/mol above its chair,
+#: falls within 0.4 angstroms of it that way.
+SAME_ENERGY = 0.01
 # conformers' random seed, and how many steps an optimisation may take, unless asked
 SEED = 0x4D45
 STEPS = 2000
@@ -1374,6 +1386,17 @@ def sought(mol):
     return many
 
 
+def swappable(mol):
+    """Its heavy atoms alone, to tell two of its shapes apart over the ways it maps onto itself - the same
+    shape with a tert-butyl's methyls swapped round, or a phenyl flipped, is the same conformer, which atom
+    against atom cannot see, every atom of it being somewhere else. None where it maps onto itself in the one
+    way only, nothing being swappable, or in more ways than ALIKE_WAYS, where trying them is the
+    combinatorial explosion RDKit warns of: those shapes are told apart atom against atom, as before."""
+    plain = Chem.RemoveHs(mol, sanitize=False)
+    ways = len(plain.GetSubstructMatches(plain, uniquify=False, useQueryQueryMatches=True, maxMatches=ALIKE_WAYS + 1))
+    return plain if 1 < ways <= ALIKE_WAYS else None
+
+
 def conformers_of(iso, how, made):
     """A stereoisomer's conformers. Of two enantiomers, the one whose SMILES
     comes first is made, and the other is its mirror image: the same shapes
@@ -1463,21 +1486,24 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", same=SAME_SHAPE, iter
             c = conf.GetPositions()[atoms].mean(axis=0)
             conf.SetAtomPosition(star, Point3D(float(c[0]), float(c[1]), float(c[2])))
     heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
-    # (an eta system's ring turns freely under the holds, its atoms alike: two shapes that are one turned by
-    # the ring's symmetry are the same one, as its best RMSD over the molecule's symmetries says)
-    plain = Chem.RemoveHs(mol, sanitize=False) if eta else None
+    plain = swappable(mol)
     kept = []
     for cid in sorted(ids, key=lambda c: energy[c]) if energy else ids:
         if kept:
             # (laid over the lowest, which keeps it so for the overlay)
             rms = rdMolAlign.AlignMol(mol, mol, prbCid=cid, refCid=kept[0], atomMap=[(i, i) for i in heavy])
-            if plain is not None and any(
-                rdMolAlign.GetBestRMS(plain, plain, prbId=cid, refId=k, maxMatches=1000) < same for k in kept
-            ):
-                continue
             if rms < same or any(
                 rdMolAlign.CalcRMS(mol, mol, prbId=cid, refId=k, map=[[(i, i) for i in heavy]]) < same
                 for k in kept[1:]
+            ):
+                continue
+            # (and the same shape with equivalent atoms swapped - a tert-butyl's methyls turned round, an eta
+            #  system's ring turned on its metal - which atom against atom cannot see. Only where the two sit
+            #  at the one energy, which a shape and the same shape relabelled do and two shapes do not)
+            if plain is not None and any(
+                (energy is None or abs(energy[cid] - energy[k]) < SAME_ENERGY)
+                and rdMolAlign.GetBestRMS(plain, plain, prbId=cid, refId=k, maxMatches=ALIKE_WAYS) < same
+                for k in kept
             ):
                 continue
         kept.append(cid)

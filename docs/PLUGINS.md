@@ -436,6 +436,28 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,
     adamantane).
+- **The same shape with equivalent atoms swapped is the one conformer**
+  (2026-10-20): a tert-butyl's three methyls turned round, or a phenyl
+  flipped, leaves every atom of it somewhere else, so comparing atom
+  against atom counted such a shape again and again - a
+  tert-butylcyclohexane came back as 26 conformers that were 5, an
+  adamantane as 15 that were 1, an ibuprofen as 28 that were 9. Shapes are
+  now compared over the ways the molecule maps onto itself as well
+  (RDKit's `GetBestRMS`, within the same 0.5 Å over heavy atoms), as an
+  eta system's rings already were. Two things hold it back, both measured:
+  - **only where the two sit at the one energy.** A shape and the same
+    shape relabelled have the one energy exactly - over 4000 such pairs
+    here the largest gap the optimisation left was 0.000001 kcal/mol -
+    while two different shapes can fall within half an angstrom of each
+    other once relabelled: phenylcyclohexane's twist-boat lands 0.40 Å
+    from its chair that way and sits 6.1 kcal/mol above it. Without this,
+    every twist-boat of it was swallowed by a chair.
+  - **only where there are few enough ways to try.** A
+    tetrakis(triphenylphosphine)palladium maps onto itself millions of
+    ways, and trying them took 2.1 s for a single pair of conformers
+    against 0.002 s for a thousand of them. Past a thousand ways its
+    shapes are told apart atom against atom, as before, and its list may
+    hold the same shape twice.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown

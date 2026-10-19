@@ -532,6 +532,52 @@ class HowManySought(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
+class SwappedAtoms(unittest.TestCase):
+    """The same shape with equivalent atoms swapped - a tert-butyl's three methyls turned round, a phenyl
+    flipped - is the one conformer. Told apart atom against atom, every atom of it was somewhere else, so it
+    was kept again and again: a tert-butylcyclohexane came back as 26 conformers which were 5."""
+
+    #: A tetrakis(triphenylphosphine)palladium: its four phosphines and twelve phenyls map onto each other more
+    #: ways than there is any trying - millions - which is the case the prune must not set about.
+    MANY_WAYS = "[Pd](P(c1ccccc1)(c1ccccc1)c1ccccc1)(P(c1ccccc1)(c1ccccc1)c1ccccc1)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1"
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles):
+        mb = self.worker.op_from_smiles({"smiles": smiles})["molblock"]
+        entry = self.worker.op_conformers({"molblock": mb})["isomers"][0]
+        lowest = min(entry["energies"])
+        return entry, [(e - lowest) * 627.5094740631 for e in entry["energies"]]
+
+    def test_counts_a_tert_butyls_methyls_turned_round_as_the_one_shape(self):
+        entry, kcal = self.made("CC(C)(C)C1CCCCC1")
+        # (its two chairs and a few twist-boats - not two dozen of those with the methyls turned round)
+        self.assertLess(len(entry["frames"]), 12, kcal)
+        self.assertGreater(len(entry["frames"]), 1, kcal)
+
+    def test_keeps_two_shapes_that_only_fall_together_once_swapped(self):
+        # (a twist-boat of it falls within 0.44 A of its chair once the methyls are swapped round, and sits 6
+        #  kcal/mol above it: two shapes, which their energies say and their atoms, swapped, do not)
+        _, kcal = self.made("CC(C)(C)C1CCCCC1")
+        self.assertTrue(any(k > 4.0 for k in kcal), kcal)
+
+    def test_leaves_a_molecule_whose_atoms_cannot_swap_alone(self):
+        # (a sugar: every atom of it is its own, so there is nothing to swap and nothing to look for)
+        glucose = Chem.MolFromSmiles("C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O")
+        self.assertIsNone(self.worker.swappable(Chem.AddHs(glucose)))
+
+    def test_leaves_a_molecule_with_more_ways_than_can_be_tried_as_it_was(self):
+        # (trying every way of this one took 2.1 s for a single pair of conformers, and there are thousands of pairs)
+        self.assertIsNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles(self.MANY_WAYS))))
+        # (where there are few enough, they are tried: a tert-butyl's methyls, a ring read round either way)
+        self.assertIsNotNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))))
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
 class EtaBound(unittest.TestCase):
     """A ring bound to a metal through all its atoms, written as the CTfile's multi-centre bond (a bond to a star
     at its centre, ENDPTS its atoms, ATTACH=ALL): held over its metal, its star at its centre, its cyclopentadienide
