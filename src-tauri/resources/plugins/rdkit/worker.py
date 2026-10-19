@@ -1486,7 +1486,11 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", same=SAME_SHAPE, iter
             c = conf.GetPositions()[atoms].mean(axis=0)
             conf.SetAtomPosition(star, Point3D(float(c[0]), float(c[1]), float(c[2])))
     heavy = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() > 1]
-    plain = swappable(mol)
+    # (shapes are swapped onto each other only where it can be shown that the two are the one shape, which is
+    #  their being at the one energy: where nothing could be optimised, there are no energies to show it with,
+    #  so they are told apart atom against atom, as they were. An eta system never has energies and is as it
+    #  was too: its rings turning is the swap it was given this comparison for)
+    plain = swappable(mol) if energy is not None or eta else None
     kept = []
     for cid in sorted(ids, key=lambda c: energy[c]) if energy else ids:
         if kept:
@@ -1499,7 +1503,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", same=SAME_SHAPE, iter
                 continue
             # (and the same shape with equivalent atoms swapped - a tert-butyl's methyls turned round, an eta
             #  system's ring turned on its metal - which atom against atom cannot see. Only where the two sit
-            #  at the one energy, which a shape and the same shape relabelled do and two shapes do not)
+            #  at the one energy, which a shape and the same shape relabelled do and two shapes do not; an eta
+            #  system, which has none, is compared as it was before there were any such comparisons elsewhere)
             if plain is not None and any(
                 (energy is None or abs(energy[cid] - energy[k]) < SAME_ENERGY)
                 and rdMolAlign.GetBestRMS(plain, plain, prbId=cid, refId=k, maxMatches=ALIKE_WAYS) < same

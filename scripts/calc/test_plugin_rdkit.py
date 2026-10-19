@@ -570,6 +570,24 @@ class SwappedAtoms(unittest.TestCase):
         glucose = Chem.MolFromSmiles("C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O")
         self.assertIsNone(self.worker.swappable(Chem.AddHs(glucose)))
 
+    def test_will_not_swap_where_there_are_no_energies_to_show_it_is_the_one_shape(self):
+        # (an osmium of eight bonds: no force field here has parameters for it, so nothing is optimised and no
+        #  energies come back - and without them there is no showing that a swap left the shape as it was,
+        #  which is the whole of what makes two shapes one. Its halides do swap, 576 ways, and are not tried)
+        mol = Chem.MolFromSmiles("Cl[Os](Cl)(Cl)(Cl)(Br)(Br)(Br)Br")
+        if mol is None:
+            self.skipTest("RDKit read no eight-bonded osmium here")
+        swappable = self.worker.swappable
+        self.assertIsNotNone(swappable(Chem.AddHs(Chem.Mol(mol))), "this molecule's atoms must be ones that swap")
+        asked = []
+        self.worker.swappable = lambda m: asked.append(m) or swappable(m)
+        try:
+            entry = self.worker.conformers(mol, count=30)
+        finally:
+            self.worker.swappable = swappable
+        self.assertNotIn("energies", entry)
+        self.assertEqual(asked, [])
+
     def test_leaves_a_molecule_with_more_ways_than_can_be_tried_as_it_was(self):
         # (trying every way of this one took 2.1 s for a single pair of conformers, and there are thousands of pairs)
         self.assertIsNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles(self.MANY_WAYS))))

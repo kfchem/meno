@@ -451,7 +451,12 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     while two different shapes can fall within half an angstrom of each
     other once relabelled: phenylcyclohexane's twist-boat lands 0.40 Å
     from its chair that way and sits 6.1 kcal/mol above it. Without this,
-    every twist-boat of it was swallowed by a chair.
+    every twist-boat of it was swallowed by a chair. Where nothing could
+    be optimised and no energies came back - no force field here having
+    parameters for it - there is nothing to show it with, so those shapes
+    are told apart atom against atom, as they were; an eta system, which
+    never has energies, keeps the comparison it was given in the first
+    place, its rings turning on their metal being the swap it is for.
   - **only where there are few enough ways to try.** A
     tetrakis(triphenylphosphine)palladium maps onto itself millions of
     ways, and trying them took 2.1 s for a single pair of conformers
