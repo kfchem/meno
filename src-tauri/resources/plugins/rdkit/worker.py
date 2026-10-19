@@ -390,8 +390,9 @@ def options_of(m):
     """How conformers are to be made, as the request's options say - those
     the manifest declares for the role (roleOptions), each kept to what it
     may be - else as before: `count` alone, as older requests give it. How
-    many are sought is `count` where a number is asked for (`sought`), and
-    none where the molecule is to say it (`sought`)."""
+    many are sought is the `count` asked for where the options ask for a
+    number of their own (`sought`: "fixed"), and none where the molecule is
+    to say how many it needs, which `sought` below works out."""
     o = m.get("options") or {}
 
     def number(key, default, low, high, kind=int):
