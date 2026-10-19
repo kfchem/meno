@@ -596,7 +596,8 @@ A PDF is a file from anywhere, and is treated as such.
   and Meno runs no form, action or launch a PDF holds.
 - **Nothing a PDF names is fetched.** Its fonts and images are its own,
   read from the file, or the system's; there is no remote content. A
-  web link opens in the system's browser only when it is clicked.
+  web link opens in the system's browser only when it is ⌘-clicked
+  (Ctrl+clicked on Windows).
 - **PDFium runs apart** (*Where it runs*, above), so a PDF made to break
   it takes nothing else with it.
 - **Its text and pictures go no further than the page, the column and
@@ -745,6 +746,7 @@ Built:
   - A page under the pointer in the column lights the stack, as the stack is lit when hovered on the page.
 - **The page number** (*3 / 12*) shows at the column's foot as it moves, and while the pointer is over it. A click asks for a page to go to; a double-click makes the pages as wide as the column again.
 - **Links.**
+  - A link is followed only by ⌘-click on a Mac, Ctrl+click on Windows, as the system's own are (the maintainer, 2026-10-18: a link opened at a plain click was a surprise). A plain click does what it does anywhere else on the page: the caret, a word, a box. Over a link, a hint says what ⌘-click does - *⌘-click to open* the address, *⌘-click to go to page 3* - and the pointer is the system's hand only while ⌘ (Ctrl) is held (`followsLink`, `linkHint`).
   - A link to a place in the PDF goes there: in the column where the column shows the PDF, else on the stack, its page turned.
   - Back returns to where it was: ⌘[ on a Mac, Alt+← on Windows, or the mouse's back button.
   - A link to a web page opens in the system's browser.
@@ -763,7 +765,7 @@ Decided while building it, for the maintainer to confirm:
 - **Reading is not a step to undo**, as where a text is scrolled to is not. The page the column brings on top of the stack is not one either. Turns made on the stack still are, and undoing them goes back past the column's pages, not through them.
 - **Closing a PDF in the column** forgets where it was read; read again, it opens at its page on top.
 - **Only the web's and mail's links open** (`http`, `https`, `mailto`). Any other a PDF holds (a file, a script, another program) is not followed.
-- **Links on the stack** are followed by a click that does not move it; the pointer is the system's hand over them.
+- **Links on the stack** are followed by a ⌘-click (Ctrl+click on Windows) that does not move it; a plain click on one selects the PDF, as anywhere else on it. Over a link, a hint says what ⌘-click does; the pointer is the system's hand only while ⌘ (Ctrl) is held.
 - **An icon at first** (the maintainer chose it, the full-size page being too large to put down among the drawing), its size set by its name's type (the maintainer suggested the labels' size). An icon gathers a PDF's pages first; it shows its top page's small picture alone (no tiles), and its corners do not turn. A full-size stack's name stays as small on the screen as before.
 - **The look:** the column's pages on Meno's pale grey, 12-pixel margins and 10-pixel gaps; the page number a chip at the foot of the column.
 
@@ -855,7 +857,7 @@ Built:
   - Words over a figure or within 6 points of it, each narrower than six tenths of it, are its labels, and its box takes them in. A short word under a figure or over it, such as a compound's number, can be up to 14 points off. The words over and under an arrow, its conditions, can be up to 24 points off, a line or two of them. A counter-ion - a short word with its charge drawn by it, a "+" or "-" in a ring or set high, as Na+ or Br- beside a structure - can be up to 30 points off, or as far from the ion before it in a row of them (three K+); a short word with no charge by it is not taken so far. Its caption is not a label, nor is a column's line beside it: no line wider than three tenths of the page (and than 150 points) is ever one.
   - A page's figures are worked out once, when its words are first wanted: as it comes into the column, or onto the screen at a size its words can be read.
 - **A box, in the column.** A press in a figure, or where no word is near, begins a box.
-  - Let go where it was pressed, in a figure, it is that figure's box, labels and all. On a link, the link is followed instead.
+  - Let go where it was pressed, in a figure, it is that figure's box, labels and all - on a link too; with ⌘ (Ctrl) held, the link is followed instead.
   - Dragged, the box is drawn by hand from the press to the pointer, on that page. The column moves on as the pointer nears its top or foot.
   - Two clicks and three still select a word and a line.
 - **A box, on a stack at full size.** A drag there moves the view, so a box begins with a long press - in a figure, or where no word is near - with the same ring spreading as words are selected with. In a figure, the figure's box comes at once; dragged on, a box is drawn by hand.
@@ -980,7 +982,7 @@ Not yet, and where it comes:
 ### With the rest of the page (2026-10-11)
 
 Built (lane L9, the maintainer's choice of the *Not yet* items):
-- **A PDF is selected as a picture is.** A click on it selects it alone - on a link, the link is followed instead; Ctrl/Cmd and a click adds it to the selection or takes it out; a box or a lasso takes it by the middle of what it covers; *Select all* takes it. A PDF spread is selected whole, its pages with it; a page is still moved alone by a long press on its rim. Selected, it is framed in the selection's colour, round each of its pages where they are spread.
+- **A PDF is selected as a picture is.** A click on it selects it alone - on a link too; ⌘-click (Ctrl+click on Windows) on a link follows it; Ctrl/Cmd and a click adds it to the selection or takes it out; a box or a lasso takes it by the middle of what it covers; *Select all* takes it. A PDF spread is selected whole, its pages with it; a page is still moved alone by a long press on its rim. Selected, it is framed in the selection's colour, round each of its pages where they are spread.
 - **Selected, it goes with the rest.** A drag on it moves the whole selection - the view no longer - and a press held still on it does what it does on any PDF (words selected, a box drawn, a page or the stack taken hold of). Delete, Cut, Copy and Paste take it with the rest, each as one step. The selection's handle carries it round, upright, by its place. Selecting words in a PDF, or drawing a box on one, lets the PDFs selected go, and selecting a PDF lets them go: one selection.
 - **Copied**, a PDF goes in Meno's record by its file's SHA-256, as it lies - full size or an icon, spread, its pages' own places - but not where it was read; it is pasted from Meno's cache, where every PDF opened is kept, in any tab. Export is not offered for PDFs and texts' sheets alone, which it does not write.
 - **Texts' sheets too**: copied and pasted with the selection - each text whole, a sheet of its own where it is pasted, not read in the column; a sheet alone also goes to other programs as its words - and carried round by the selection's handle, upright.
