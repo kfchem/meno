@@ -196,15 +196,20 @@ function withBallNumbers(shader: THREE.WebGLProgramParametersWithUniforms): void
         float x = p.x / ( h * ${DIGIT_CELL.toFixed(3)} ) + digits * 0.5;
         // (the digits' picture is the right way up: its rows from the bottom)
         float y = 0.5 + p.y / h;
-        if ( x < 0.0 || x >= digits || y < 0.0 || y > 1.0 ) return 0.0;
-        float d = floor( x );
+        // (read at every point of the ball, the point held within the cells, and what lies outside them let go after:
+        // where the digits' picture is read only inside them, some graphics read it amiss at their edge - a line
+        // a pixel wide along it, seen on an AMD Radeon through Direct3D 11, fainter on a Mac)
+        float inside = x >= 0.0 && x < digits && y >= 0.0 && y <= 1.0 ? 1.0 : 0.0;
+        float xc = clamp( x, 0.0, digits - 1e-4 );
+        float yc = clamp( y, 0.0, 1.0 );
+        float d = floor( xc );
         // (its place's power of ten, multiplied out: exact, as pow is not)
         float place = 1.0;
         for ( int k = 0; k < ${NUMBER_DIGITS_MOST - 1}; k++ ) if ( float( k ) < digits - 1.0 - d ) place *= 10.0;
         float value = mod( floor( num / place + 1e-4 ), 10.0 );
-        vec2 uv = vec2( ( value + fract( x ) ) / 10.0, y );
+        vec2 uv = vec2( ( value + fract( xc ) ) / 10.0, yc );
         vec2 per = vec2( 1.0 / ( 10.0 * h * ${DIGIT_CELL.toFixed(3)} ), 1.0 / h );
-        return textureGrad( numbersAtlas, uv, dx * per, dy * per ).a * shown;
+        return textureGrad( numbersAtlas, uv, dx * per, dy * per ).a * shown * inside;
       }`,
     )
     .replace(
