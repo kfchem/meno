@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { followLink, goBack, isBackKey, readerOf } from "./pdfColumnReader";
+import { followLink, followsLink, goBack, isBackKey, linkHint, readerOf } from "./pdfColumnReader";
 import { pointOn } from "../../../../lib/pdf/column";
 
 vi.mock("@tauri-apps/plugin-opener", () => ({ openUrl: vi.fn(() => Promise.resolve()) }));
@@ -152,5 +152,23 @@ describe("the column's reader", () => {
     expect(isBackKey(key({ altKey: true, key: "ArrowLeft" }))).toBe(true);
     expect(isBackKey(key({ key: "ArrowLeft" }))).toBe(false);
     expect(isBackKey(key({ ctrlKey: true, key: "[" }))).toBe(false);
+  });
+});
+
+describe("a PDF's links", () => {
+  it("are followed only by ⌘-click on a Mac, Ctrl+click elsewhere - a plain click is a click on the page", () => {
+    const plain = { metaKey: false, ctrlKey: false };
+    expect(followsLink(plain, true)).toBe(false);
+    expect(followsLink(plain, false)).toBe(false);
+    expect(followsLink({ metaKey: true, ctrlKey: false }, true)).toBe(true);
+    expect(followsLink({ metaKey: false, ctrlKey: true }, true)).toBe(false);
+    expect(followsLink({ metaKey: false, ctrlKey: true }, false)).toBe(true);
+    expect(followsLink({ metaKey: true, ctrlKey: false }, false)).toBe(false);
+  });
+
+  it("say over them what that click does", () => {
+    expect(linkHint({ rect: [0, 0, 1, 1], uri: " https://example.com/ " }, true)).toBe("\u2318-click to open https://example.com/");
+    expect(linkHint({ rect: [0, 0, 1, 1], page: 2 }, false)).toBe("Ctrl+click to go to page 3");
+    expect(linkHint({ rect: [0, 0, 1, 1] }, true)).toBe("");
   });
 });

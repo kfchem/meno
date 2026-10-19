@@ -10,6 +10,30 @@
 import { IS_MAC } from "../../../../lib/doc/shortcuts";
 import { hasEditContext, typingField, type FieldHost, type TypingField } from "../../TextEditor/typingField";
 
+/**
+ * Whether a key is Enter, no composition under way: as the browser names
+ * it - or, where an input method is on, by the key pressed. A Japanese
+ * input method on Windows gives every key as "Process" (keyCode 229), an
+ * Enter with nothing being composed too, which was taken for another key:
+ * Enter kept no label, and Enter straight after one kept drew nothing out.
+ */
+export function enterKey(e: Pick<KeyboardEvent, "key" | "code" | "keyCode" | "isComposing">, composing = false): boolean {
+  if (e.isComposing || composing) return false;
+  if (e.key === "Enter") return true;
+  return (e.key === "Process" || e.keyCode === 229) && (e.code === "Enter" || e.code === "NumpadEnter");
+}
+
+/**
+ * What a key straight after a label kept by Enter is to it (LabelTyping2D):
+ * an Enter, plain - an input method's too - draws it out (`true`); any
+ * other key lets it be (`false`); a key repeated or composed is none of
+ * them (`null`).
+ */
+export function keyAfterKept(e: Pick<KeyboardEvent, "key" | "code" | "keyCode" | "isComposing" | "repeat" | "shiftKey" | "altKey" | "ctrlKey" | "metaKey">): boolean | null {
+  if (e.repeat || e.isComposing) return null;
+  return enterKey(e) && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+}
+
 /** What an editor of words on the page does besides what a field gives it: undo and redo its own. */
 export type PageWords = FieldHost & { undo(): void; redo(): void };
 
@@ -57,7 +81,9 @@ export function pageField(
   let field: TypingField | null = null;
   // (Enter, Escape and undo the words' own - before the field takes the keys)
   const onKey = (e: KeyboardEvent) => {
-    if (e.isComposing || e.keyCode === 229 || ed.composing) return;
+    // (an Enter, an input method on but nothing composed: Enter all the same)
+    const enter = enterKey(e, !!ed.composing);
+    if (!enter && (e.isComposing || e.keyCode === 229 || ed.composing)) return;
     const mod = IS_MAC ? e.metaKey : e.ctrlKey;
     const key = e.key.toLowerCase();
     const stop = () => {
@@ -67,7 +93,7 @@ export function pageField(
     if (o.key?.(e)) {
       stop();
       field?.sync();
-    } else if (e.key === "Enter" && (!e.shiftKey || !o.lines) && !e.altKey && !e.ctrlKey && !e.metaKey) {
+    } else if (enter && (!e.shiftKey || !o.lines) && !e.altKey && !e.ctrlKey && !e.metaKey) {
       stop();
       o.keep(true);
     } else if (e.key === "Escape") {

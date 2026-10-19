@@ -115,8 +115,9 @@ export function createUiSlice(
         labelEnd: labelEdit.n != null ? { n: labelEdit.n, atomId: id, how: changed ? "kept" : "same" } : prev.labelEnd,
         // (written anew: drawn as written until the drawing's own label is)
         labelLeft: changed && labelEdit.n != null ? { atomId: id, n: labelEdit.n, text: value } : prev.labelLeft,
-        // (kept by Enter: an Enter straight after draws it out - the drawing and its selection as they are now, to tell nothing came between)
-        labelKept: changed && byEnter ? { atomId: id, model: prev.model, sel: prev.sel } : null,
+        // (kept by Enter - changed or as it was: a label typed over one that already said it, as a structure read from a
+        // figure has its groups - an Enter straight after draws it out; the drawing and its selection as they are now, to tell nothing came between)
+        labelKept: byEnter && atom ? { atomId: id, model: prev.model, sel: prev.sel } : null,
       }));
     },
 
