@@ -100,7 +100,7 @@ const SIDECAR_SCRIPTS: &[&str] = &["resources/plugins"];
 
 /// Parse `p` as a path relative to some base directory, rejecting anything
 /// that could escape it: absolute paths, drive/UNC prefixes, `.` and `..`.
-fn safe_relative(p: &str) -> Result<PathBuf, String> {
+pub(crate) fn safe_relative(p: &str) -> Result<PathBuf, String> {
     if p.is_empty() {
         return Err("empty path".into());
     }
@@ -522,7 +522,8 @@ async fn py_env_setup_pixi(app: AppHandle, payload: PyEnvInfo, net: State<'_, ne
     }
     let activation = pixienv::read_activation(&String::from_utf8_lossy(&out.stdout))?;
     let text = serde_json::to_string_pretty(&activation).map_err(|e| e.to_string())?;
-    std::fs::write(pixienv::activation_path(&dir), text).map_err(|e| format!("keeping the activation: {e}"))?;
+    // (whole or not at all: one cut short would be taken for an environment made, and its worker run unactivated)
+    savefile::write_whole(&pixienv::activation_path(&dir), text.as_bytes()).map_err(|e| format!("keeping the activation: {e}"))?;
     task.finish(true);
     Ok(())
 }
@@ -1007,6 +1008,8 @@ pub fn run() {
             pdf::pdf_figure,
             // a chemist's documents written where they chose, whole or not at all
             savefile::write_document,
+            // Meno's own files - its settings - written whole or not at all, in its folders alone
+            savefile::write_app_file,
             // a workspace file's one true path, however it was written
             truepath::true_path_of,
             // the system clipboard, for structures
