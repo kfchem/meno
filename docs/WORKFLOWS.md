@@ -486,6 +486,17 @@ of the step, wired from it (decided):
 They are calculation results as Meno knows them: the frames chip,
 pointing at atoms, the lists. The set's port feeds the next step.
 
+**A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
+set shows*): up to 50 entries are laid out on the page, as above. A step
+that gives more - a search's 1,000 conformers - puts none of them on the
+page: its result set holds them itself, in the step's order, and its frame
+says what it holds ("400 conformers of 2 compounds"). The steps after it
+take them from there, a run kept keeps them, and the workspace's file
+keeps them - or, with *Don't keep in the file*, only their count and
+hash. They are opened as a table in the column, and put on the page from
+there, in the steps that follow (6b), and summed up in the frame with a
+sample of their structures and histograms (6c).
+
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
 so it works in turns that let the page go on. Its card says it is
