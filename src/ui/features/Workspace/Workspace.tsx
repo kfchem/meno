@@ -1831,11 +1831,15 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {askDeleteSet != null && setsNow.some((b) => b.id === askDeleteSet) && (
+        {askDeleteSet != null && askDeleteSet.every((id) => setsNow.some((b) => b.id === id)) && (
           <ConfirmDiscard
-            title={`Delete the set and the ${heldOwn(store.getState(), setsNow.find((b) => b.id === askDeleteSet)!) ?? "molecules"} it holds?`}
-            message="They are on no page: they go with the set. Undo brings them back until the workspace is closed."
-            discardLabel="Delete set"
+            title={
+              askDeleteSet.length === 1
+                ? `Delete the set and the ${heldOwn(store.getState(), setsNow.find((b) => b.id === askDeleteSet[0])!) ?? "molecules"} it holds?`
+                : `Delete ${askDeleteSet.length} sets and the molecules they hold?`
+            }
+            message={`They are on no page: they go with ${askDeleteSet.length === 1 ? "the set" : "the sets"}. Undo brings them back until the workspace is closed.`}
+            discardLabel={askDeleteSet.length === 1 ? "Delete set" : "Delete sets"}
             onCancel={() => store.getState().setWorkflowView({ askDeleteSet: null })}
             onDiscard={() => store.getState().removeSet(askDeleteSet, true)}
           />

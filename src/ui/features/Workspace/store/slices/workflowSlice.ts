@@ -67,15 +67,16 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) =>
       doc.edit("size set", (d) => wf.resizeSet(d, id, frame), coalesce("set-size", id, gesture)),
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
-    removeSet: (id: number, asked = false) => {
+    removeSet: (id: number | readonly number[], asked = false) => {
+      const ids = typeof id === "number" ? [id] : [...id];
       // (one that holds its molecules itself, on no page, is asked about first: they go with it)
-      if (!asked && doc.getState().sets?.find((b) => b.id === id)?.collection?.length) return set({ askDeleteSet: id });
-      if (doc.edit("delete set", (d) => wf.removeSet(d, id)))
+      if (!asked && ids.some((x) => doc.getState().sets?.find((b) => b.id === x)?.collection?.length)) return set({ askDeleteSet: ids });
+      if (doc.edit(ids.length > 1 ? "delete sets" : "delete set", (d) => ids.reduce((n, x) => wf.removeSet(n, x), d)))
         set((prev: EditorState) => ({
           ...prev,
           askDeleteSet: null,
-          hoveredSet: prev.hoveredSet === id ? null : prev.hoveredSet,
-          chosenSet: prev.chosenSet === id ? null : prev.chosenSet,
+          hoveredSet: prev.hoveredSet != null && ids.includes(prev.hoveredSet) ? null : prev.hoveredSet,
+          chosenSet: prev.chosenSet != null && ids.includes(prev.chosenSet) ? null : prev.chosenSet,
         }));
     },
     addStep: (kind: StepKind, by: string, x: number, y: number) => {

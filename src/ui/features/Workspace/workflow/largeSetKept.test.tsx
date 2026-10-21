@@ -12,6 +12,7 @@ import { addSet, addStep, connect, keepSet, membersSettled, removeStep } from ".
 import { partsOf } from "./parts";
 import { placeResults, type RunWith } from "./run";
 import StepCard from "./StepCard";
+import { leftByCut } from "../clipboardActions";
 
 /** A water, its oxygen moved along by `k` hundredths of an ångström: each one told apart. */
 const water = (k = 0, extra: Partial<Molecule3D> = {}): Omit<Molecule3D, "id" | "at"> => ({
@@ -85,12 +86,22 @@ describe("a large set its step leaves", () => {
     page.edit("run", () => doc);
     const kept = st.getState().sets.find((b) => b.made?.exit === "out")!.id;
     st.getState().removeSet(rest);
-    expect([st.getState().askDeleteSet, st.getState().sets.some((b) => b.id === rest)]).toEqual([rest, true]);
+    expect([st.getState().askDeleteSet, st.getState().sets.some((b) => b.id === rest)]).toEqual([[rest], true]);
     st.getState().setWorkflowView({ askDeleteSet: null });
-    // (a selection holding it: the rest goes, it stays)
+    // (a selection holding it alone: asked, not nothing)
+    st.setState({ selFlow: { sets: new Set([rest]), steps: new Set() } });
+    st.getState().deleteSelection();
+    expect([st.getState().askDeleteSet, st.getState().sets.some((b) => b.id === rest)]).toEqual([[rest], true]);
+    st.getState().setWorkflowView({ askDeleteSet: null });
+    // (a selection holding it and more: the rest goes, it stays, asked about)
     st.setState({ selFlow: { sets: new Set([rest, kept]), steps: new Set() } });
     st.getState().deleteSelection();
-    expect([st.getState().sets.some((b) => b.id === rest), st.getState().sets.some((b) => b.id === kept)]).toEqual([true, false]);
+    expect([st.getState().sets.some((b) => b.id === rest), st.getState().sets.some((b) => b.id === kept), st.getState().askDeleteSet]).toEqual([true, false, [rest]]);
+    // (cut, as a cut deletes what it copied: left, and how many said back)
+    const flow = { sets: [st.getState().sets.find((b) => b.id === rest)!], steps: [], wires: [] };
+    expect(st.getState().deleteDrawn({ atoms: [], bonds: [], flow } as unknown as Parameters<ReturnType<typeof st.getState>["deleteDrawn"]>[0])).toBe(1);
+    expect(st.getState().sets.some((b) => b.id === rest)).toBe(true);
+    expect(leftByCut(1)).toBe("A set that holds its molecules itself was left in place: a copy does not carry them. Delete it on its own.");
     // (asked, or by its menu: gone, its molecules with it)
     st.getState().removeSet(rest, true);
     expect([st.getState().sets.some((b) => b.id === rest), st.getState().askDeleteSet]).toEqual([false, null]);

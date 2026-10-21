@@ -526,8 +526,10 @@ each exit's set once it is shown again. Its molecules are on no page,
 so deleting the set deletes them: its frame says so ("On no page:
 deleting the set deletes them"), and so does its menu, in words, last ("Delete
 set and the 118 molecules it holds"), before it happens (2026-10-22).
-Deleted by the Delete key it is asked about first, as a step running is;
-a selection deleted or cut leaves it, to be deleted on its own. They are opened as a table in the column, and put on the page from
+Deleted by the Delete key it is asked about first, as a step running is
+- and so it is in a selection deleted: the rest goes, and it is asked
+about. A cut leaves it in place, since a copy does not carry its
+molecules, and says so. They are opened as a table in the column, and put on the page from
 there, in the steps that follow (6b), and summed up in the frame with a
 sample of their structures and histograms (6c).
 

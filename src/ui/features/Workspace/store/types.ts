@@ -1357,10 +1357,10 @@ export type EditorState = {
   /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */
   resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
-  /** A set deleted - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
-  removeSet: (id: number, asked?: boolean) => void;
-  /** A set that holds its molecules itself asked to be deleted: the question asked (Workspace). */
-  askDeleteSet: number | null;
+  /** A set deleted, or several in one step - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
+  removeSet: (id: number | readonly number[], asked?: boolean) => void;
+  /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */
+  askDeleteSet: number[] | null;
   /** A step of `kind`, done by `by` - Meno, or a plugin - put down, its card's top left at (x, y), with the defaults Settings has for its kind done by it; its id. */
   addStep: (kind: StepKind, by: string, x: number, y: number) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
@@ -1761,7 +1761,8 @@ export type EditorState = {
   removePlus: (id: number) => void;
   /** What a cut takes, gone as one undo step: atoms, bonds, arrows and pluses. */
   /** What a cut took, gone: the drawn part, and the molecules in 3D by id, in one step. */
-  deleteDrawn: (part: Drawn, molecules3d?: number[]) => void;
+  /** `part` deleted, as a cut deletes what it copied; how many sets among it that hold their molecules themselves were left, which a copy does not carry. */
+  deleteDrawn: (part: Drawn, molecules3d?: number[]) => number;
   /** An abbreviation drawn out as the atoms it stands for, as one undo step. */
   expandAbbreviation: (id: number) => void;
   /** A group of atoms shown as one atom labelled `label`, holding them, as one undo step. */
