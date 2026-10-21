@@ -137,7 +137,8 @@ export function workedOutAs(p: Property): [string, string][] {
   return [
     ["temperature", p.at?.kelvin != null ? `${p.at.kelvin} K` : "not stated"],
     ["pressure", p.at?.atm != null ? `${p.at.atm} atm` : "not stated"],
-    ["solvent", p.at?.solvent ?? "none (gas phase)"],
+    // (the solvent as the program named it with its model, "ALPB(acetone)"; "none", the gas phase, as stated; absent, not stated - which never matches a stated one)
+    ["solvent", p.at?.solvent == null ? "not stated" : p.at.solvent === "none" ? "none (gas phase)" : p.at.solvent],
     ["program", by.program ?? "not stated"],
     ["method", by.method ?? "not stated"],
     ["basis", by.basis ?? "not stated"],

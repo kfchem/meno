@@ -71,7 +71,9 @@ describe("Populations", () => {
     const why = (o: ReturnType<typeof two>) => (o.ok ? o.exits.failed.map((e) => (e.status as { failed: string }).failed) : [o.said]);
     expect(why(two(g(0), g(0, { kelvin: 310 })))).toEqual(["another in its group could not be weighted (q: its free energy is at 310 K, not 298.15 K)", "its free energy is at 310 K, not 298.15 K"]);
     expect(why(two(g(0), g(0, { kelvin: 298.15 }))).every((w) => w.includes("pressure: 1 atm (p) and not stated (q)"))).toBe(true);
-    expect(why(two(g(0), g(0, { kelvin: 298.15, atm: 1, solvent: "S(water)" }))).every((w) => w.includes("solvent: none (gas phase) (p) and S(water) (q)"))).toBe(true);
+    expect(why(two(g(0, { kelvin: 298.15, atm: 1, solvent: "none" }), g(0, { kelvin: 298.15, atm: 1, solvent: "S(water)" }))).every((w) => w.includes("solvent: none (gas phase) (p) and S(water) (q)"))).toBe(true);
+    // (the gas phase stated never goes with a solvent not stated: absent is not the gas phase)
+    expect(why(two(g(0, { kelvin: 298.15, atm: 1, solvent: "none" }), g(0))).every((w) => w.includes("solvent: none (gas phase) (p) and not stated (q)"))).toBe(true);
     expect(why(two(g(0), g(0, undefined, { ...by, method: "N" }))).every((w) => w.includes("method: M (p) and N (q)"))).toBe(true);
     // (a free energy whose thermal treatment is unknown never goes with one whose is known)
     const { treatment: _, ...unknown } = by;
