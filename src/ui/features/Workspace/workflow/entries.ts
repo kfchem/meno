@@ -7,7 +7,7 @@
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
-import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
+import { FREQUENCY, geometryKey, type At, type By, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
@@ -403,6 +403,94 @@ export function compoundLetter(i: number): string {
  * degeneracy, its compound as its group, its number, its name - and the
  * molecule it was a frame of as its lineage.
  */
+/**
+ * The thermochemistry an entry's calculation read, that become its
+ * properties (docs/WORKFLOWS-FOUNDATION.md, *The entry*): the total free
+ * energy, the total enthalpy, the zero-point energy alone (not E + ZPE), and
+ * the correction to the free energy (G - E) - each in hartrees, by the
+ * reading's id, the one name every plugin that reads them gives them
+ * (agreed with Populations, which reads `thermo.free-energy`).
+ */
+export const THERMO_PROPERTIES = ["thermo.free-energy", "thermo.enthalpy", "thermo.zpve", "thermo.g-correction"] as const;
+
+/**
+ * What an entry's calculation was, for its properties (lib/entry `By`): the
+ * plugin that read it, the program, method and basis - and, for a thermal
+ * quantity, the treatment of its vibrations as the program said it.
+ */
+function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
+  if (!calc) return undefined;
+  const plugin = calc.readers[0]?.split(" ")[0];
+  const by: By = {
+    ...(plugin ? { plugin } : {}),
+    ...(calc.program ? { program: calc.program } : {}),
+    ...(calc.method ? { method: calc.method } : {}),
+    ...(calc.basis ? { basis: calc.basis } : {}),
+    ...(treatment ? { treatment } : {}),
+  };
+  return Object.keys(by).length ? by : undefined;
+}
+
+/** A reading of the molecule's as its calculation gave it: its value, where it is a number or a text. */
+function readingOf(calc: SetEntry["calc"], id: string): number | string | undefined {
+  const r = calc?.results?.find((x) => x.on === "molecule" && x.id === id);
+  return r && r.on === "molecule" && (typeof r.value === "number" || typeof r.value === "string") ? r.value : undefined;
+}
+
+/**
+ * Its calculation's thermochemistry as properties (THERMO_PROPERTIES), each
+ * worked out where the program said: the geometry, the temperature and
+ * pressure it said it used, never a step's asking, and the solvation as
+ * it said it ("none", the gas phase stated; unsaid, not stated). Only an
+ * energy in hartrees is taken.
+ */
+function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
+  const calc = e.calc;
+  if (!calc?.results?.length) return {};
+  const kelvin = readingOf(calc, "thermo.temperature");
+  const atm = readingOf(calc, "thermo.pressure");
+  const treatment = readingOf(calc, "thermo.treatment");
+  const at: At = {
+    geometry,
+    ...(typeof kelvin === "number" ? { kelvin } : {}),
+    ...(typeof atm === "number" ? { atm } : {}),
+    ...(calc.solvation ? { solvent: calc.solvation } : {}),
+  };
+  const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
+  const out: Record<string, Property> = {};
+  for (const id of THERMO_PROPERTIES) {
+    const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
+    if (!r || r.on !== "molecule" || typeof r.value !== "number" || !Number.isFinite(r.value) || r.quantity !== "energy") continue;
+    out[id] = { value: r.value, unit: "Eh", at, ...(by ? { by } : {}), status: "computed" };
+  }
+  return out;
+}
+
+/**
+ * Its calculation's vibrations as properties (lib/entry `FREQUENCY`): the
+ * table `vibrations`, each row a vibration's frequency in cm-1 (an imaginary
+ * one negative), read from the list whose column is a wavenumber - and the
+ * property `modes`, in the same order, where every row gives its atoms'
+ * displacements. What else the list has stays among its readings: the
+ * entry's columns take only units Meno's table has.
+ */
+function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
+  const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
+  if (!list || list.on !== "list") return {};
+  const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
+  if (k < 0) return {};
+  const freqs = list.rows.map((r) => r.cells[k]);
+  if (!freqs.length || !freqs.every((f): f is number => typeof f === "number" && Number.isFinite(f))) return {};
+  const by = byOf(e.calc);
+  const n = 3 * e.atoms.length;
+  const moves = list.rows.map((r) => r.move);
+  const modes = moves.every((m): m is number[] => Array.isArray(m) && m.length === n && m.every(Number.isFinite)) ? moves : undefined;
+  return {
+    vibrations: { value: { table: { columns: [FREQUENCY], rows: freqs.map((f) => [f]) } }, unit: "none", at, ...(by ? { by } : {}), status: "computed" },
+    ...(modes ? { modes: { value: { modes }, unit: "none" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+  };
+}
+
 export function entryOfSet(e: SetEntry, id: string): Entry {
   const atoms: EntryAtom[] = e.atoms.map((a) => ({
     el: a.el,
@@ -410,11 +498,15 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
   }));
-  const at = { geometry: geometryKey(e.xyz) };
+  // (the energy where its calculation was worked out - in the solvation it said - and by what)
+  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
+  const by = byOf(e.calc);
   const properties: Record<string, Property> = {
     group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
     number: { value: e.number, unit: "none", status: "computed" },
-    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, status: "computed" as const } } : {}),
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+    ...thermoOf(e, at.geometry),
+    ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
   };
