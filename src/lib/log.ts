@@ -48,11 +48,22 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
 
 const cut = (s: string, most: number) => (s.length > most ? `${s.slice(0, most)}…` : s);
 
+/**
+ * What a message quotes in single quotes: from a quote with no letter or
+ * digit before it to the first with none after it (reading 'foo'), so that
+ * the apostrophe of can't or Meno's neither begins nor ends one, and one
+ * inside what is quoted ('O'Brien's') does not end it early.
+ */
+const SINGLE_QUOTED = /(?<![\p{L}\p{N}])'[\s\S]*?'(?![\p{L}\p{N}])/gu;
+
+/** A message with what it quotes left out, in double quotes and in single (`SINGLE_QUOTED`): "foo" cannot be parsed as a URL, Failed to execute 'foo' on 'Document'. */
+const unquoted = (s: string) => s.replace(/"[^"]*"/g, '"…"').replace(SINGLE_QUOTED, "'…'");
+
 /** One thing logged, as the log has it. */
 function partOf(a: unknown): string {
   if (a instanceof Error) {
-    // (of a message kept, what it quotes in double quotes left out: "foo" cannot be parsed as a URL)
-    const head = CODE_ERRORS.has(a.name) ? `${a.name}: ${cut(a.message.replace(/"[^"]*"/g, '"…"'), 300)}` : a.name;
+    // (of a message kept, what it quotes left out)
+    const head = CODE_ERRORS.has(a.name) ? `${a.name}: ${cut(unquoted(a.message), 300)}` : a.name;
     // (a stack that begins with the error's name and message, as some engines
     // write it, without them - a message of several lines whole - and then
     // only its frames: at f (app.js:1:2), f@app.js:1:2)

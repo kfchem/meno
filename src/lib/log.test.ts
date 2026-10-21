@@ -9,7 +9,7 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     const e = new TypeError("undefined is not an object (evaluating 'state.model')");
     e.stack = "draw@app.js:10:4\nrender@app.js:20:8";
     expect(logText(["Meno: the canvas stopped working.", e, 3, null])).toBe(
-      "Meno: the canvas stopped working. TypeError: undefined is not an object (evaluating 'state.model')\ndraw@app.js:10:4\nrender@app.js:20:8 3 null",
+      "Meno: the canvas stopped working. TypeError: undefined is not an object (evaluating '…')\ndraw@app.js:10:4\nrender@app.js:20:8 3 null",
     );
     // (a stack that begins with the error's name and message: not said again)
     const v = new RangeError("Invalid array length");
@@ -45,6 +45,21 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     expect(text).toContain("Error\nat readFile (app.js:3:1)");
     expect(text).toContain('TypeError: "…" cannot be parsed as a URL.');
     expect(text).toContain('[text] Meno: the tab "…" stopped working. [text] [Object] [Map] [Array]');
+  });
+
+  it("of a code error's message, what it quotes in single quotes left out too - an apostrophe in a word kept", () => {
+    // (the message's line only, without the frames)
+    const head = (e: Error) => logText([e]).split("\n")[0];
+    const read = new TypeError(`Cannot read properties of undefined (reading '${FILE}')`);
+    expect.soft(head(read)).toBe("TypeError: Cannot read properties of undefined (reading '…')");
+    const twice = new TypeError("Failed to execute 'querySelector' on 'Document'");
+    expect.soft(head(twice)).toBe("TypeError: Failed to execute '…' on '…'");
+    // (a contraction and a possessive are not quotes: only the quoted span between them is left out)
+    const words = new TypeError(`can't take '${SMILES}' from Meno's model`);
+    expect.soft(head(words)).toBe("TypeError: can't take '…' from Meno's model");
+    // (an apostrophe inside what is quoted does not end it early)
+    const name = new RangeError("no room for 'O'Brien's compound.mol' in the users' list");
+    expect.soft(head(name)).toBe("RangeError: no room for '…' in the users' list");
   });
 
   it("sends at most a hundred lines a minute, and says how many it left out", () => {
