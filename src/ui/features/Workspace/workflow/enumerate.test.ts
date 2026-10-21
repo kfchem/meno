@@ -6,7 +6,7 @@ import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { enumerated, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
 import { measured } from "../../../../testing/timeouts";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
-import { countOf, numberedOn } from "./entries";
+import { countOf, numberedOn, setMembers } from "./entries";
 import { canWire, resultOf } from "./flow";
 import { addSet, addStep, connect } from "./model";
 import { runStep, showRun, type RunWith } from "./run";
@@ -217,6 +217,24 @@ describe("Enumerate as a step", () => {
     expect(shown.map((n) => n.entry.number)).toEqual([1, 2, 4, 3]);
     const out = resultOf(ran, step, "out")!;
     for (const n of shown.slice(0, 3)) expect(n.x > out.x0 && n.x < out.x1 && n.y > out.y0 && n.y < out.y1).toBe(true);
+  });
+
+  it("gives its sets the core every product shares, by its atoms' places - kept in the file", () => {
+    const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
+    const ran = runStep(doc, step, W);
+    const out = resultOf(ran, step, "out")!;
+    // (the template: R1 first, then the ring - its R2 the sixth atom)
+    expect(out.core).toEqual({ atoms: [1, 2, 3, 4, 6, 7], bonds: expect.any(Array), attach: { R1: [0], R2: [5] } });
+    expect(out.core!.bonds).toHaveLength(6);
+    // (in every product, at the core's places, the ring's carbons; at each R's place, its group's attach atom)
+    for (const ids of setMembers(ran, out).structures) {
+      const product = new Map(ran.model.atoms.map((a) => [a.id, a]));
+      const ordered = ran.model.atoms.filter((a) => ids.includes(a.id));
+      expect(out.core!.atoms.map((k) => ordered[k].el)).toEqual(["C", "C", "C", "C", "C", "C"]);
+      expect(["C", "Cl"]).toContain(product.get(ordered[out.core!.attach.R1[0]].id)!.el);
+    }
+    const read = readWorkflow(JSON.parse(JSON.stringify({ sets: ran.sets, steps: ran.steps, wires: ran.wires })))!;
+    expect(read.sets.find((b) => b.id === out.id)!.core).toEqual(out.core);
   });
 
   it("says why it cannot run, before anything is made, on the card", () => {

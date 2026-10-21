@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { DrawnKept, EntryNote, Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnKept, EntryNote, Member, Model, Molecule3D, SeriesCore, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -26,6 +26,16 @@ const isName = (v: unknown): v is string => typeof v === "string" && /^[a-z][a-z
  * puts them back as the ids they are given when it opens). What does not
  * read is left out.
  */
+/** The core a series shares, as a file keeps it: atoms' places, bonds between them, and each R's attach places. None where it does not read. */
+function coreIn(v: unknown): SeriesCore | undefined {
+  const c = v as { atoms?: unknown; bonds?: unknown; attach?: unknown } | null;
+  const place = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 0;
+  if (!c || !Array.isArray(c.atoms) || !c.atoms.every(place) || !Array.isArray(c.bonds) || !c.attach || typeof c.attach !== "object") return undefined;
+  const bonds = c.bonds.filter((b): b is [number, number] => Array.isArray(b) && b.length === 2 && place(b[0]) && place(b[1]));
+  const attach = Object.fromEntries(Object.entries(c.attach as Record<string, unknown>).filter(([k, v]) => /^R\d+$/.test(k) && Array.isArray(v) && v.length > 0 && v.every(place))) as Record<string, number[]>;
+  return bonds.length === c.bonds.length && Object.keys(attach).length ? { atoms: c.atoms as number[], bonds, attach } : undefined;
+}
+
 /** What a step said of a structure it made, as a file keeps it: its number, how it was made and, where set aside, why. None where it does not read. */
 function entryIn(v: unknown): EntryNote | undefined {
   const e = v as { number?: unknown; how?: unknown; why?: unknown } | null;
@@ -65,6 +75,11 @@ function readSet(v: unknown): WorkflowSet | null {
     ...(() => {
       const members = membersIn(b.members);
       return members ? { members } : {};
+    })(),
+    // (the core its series shares, by its atoms' places: a result set's alone)
+    ...(() => {
+      const core = made ? coreIn(b.core) : undefined;
+      return core ? { core } : {};
     })(),
     // (the atoms its step put on the page, by id, as members' are: a result set's alone)
     ...(made && Array.isArray(b.put) && b.put.length && b.put.every((id) => isId(id)) ? { put: b.put as number[] } : {}),
@@ -151,13 +166,14 @@ function readKept(v: unknown): StepRunKept | null {
       return { models, unread: given.length - models.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
     };
     const made = drawn(res?.drawn?.made, res?.unread);
+    const core = coreIn((res?.drawn as { core?: unknown } | undefined)?.core);
     const aside = drawn(res?.drawn?.rest, res?.restUnread);
     return {
       ...ran,
       kind: r!.kind as StepKind,
       ...(Object.keys(options).length ? { options } : {}),
       ...(made.models.length || made.unread || aside.models.length || aside.unread
-        ? { results: { molecules: [], rest: [], holds, drawn: { made: made.models, rest: aside.models }, ...(made.unread ? { unread: made.unread } : {}), ...(aside.unread ? { restUnread: aside.unread } : {}) } }
+        ? { results: { molecules: [], rest: [], holds, drawn: { made: made.models, rest: aside.models, ...(core ? { core } : {}) }, ...(made.unread ? { unread: made.unread } : {}), ...(aside.unread ? { restUnread: aside.unread } : {}) } }
         : {}),
     };
   }

@@ -6,7 +6,7 @@
  * takes the run's results away.
  */
 import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
-import type { DrawnKept, Member, Model, Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnKept, Member, Model, Molecule3D, SeriesCore, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
 import { partOf } from "../chem/cleanUp";
 import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
@@ -130,7 +130,7 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
         return entry ? { ...e.drawn, entry } : e.drawn;
       });
     };
-    return { molecules: [], rest: [], holds: "structures", drawn: { made: drawn(set), rest: second ? drawn(resultOf(doc, step.id, second.id)) : [] } };
+    return { molecules: [], rest: [], holds: "structures", drawn: { made: drawn(set), rest: second ? drawn(resultOf(doc, step.id, second.id)) : [], ...(set.core ? { core: set.core } : {}) } };
   }
   // (each exit's set: its collection, where it holds one, else its molecules on the page)
   const held = (b: WorkflowSet | undefined) => (b ? (b.collection ?? setMolecules(doc, b).map(({ id: _id, at: _at, ...m }) => m)) : []);
@@ -237,7 +237,7 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   // (structures drawn, each as the step gave it: what it set aside too, in its second exit's set)
   if (outcome.holds === "structures") {
     const kept = (e: DrawnEntry): DrawnKept => (e.entry ? { ...e.drawn, entry: e.entry } : e.drawn);
-    return { molecules: [], rest: [], holds: "structures", drawn: { made: outcome.kept.map(kept), rest: outcome.aside.map(kept) } };
+    return { molecules: [], rest: [], holds: "structures", drawn: { made: outcome.kept.map(kept), rest: outcome.aside.map(kept), ...(outcome.core ? { core: outcome.core } : {}) } };
   }
   // (what it set aside is molecules as what it kept is: its second exit's set holds them, in plain view)
   // (of molecules in 3D, molecules in 3D: no kind's second exit gives structures drawn of them)
@@ -310,8 +310,8 @@ export function placeResults(
   const { molecules: made, rest, holds, unread, restUnread } = results;
   const exits = exitsOf(step.kind);
   if (holds === "structures") {
-    doc = fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? []);
-    return exits[1] ? fillDrawn(doc, step, exits[1].id, results.drawn?.rest ?? []) : doc;
+    doc = fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? [], results.drawn?.core);
+    return exits[1] ? fillDrawn(doc, step, exits[1].id, results.drawn?.rest ?? [], results.drawn?.core) : doc;
   }
   doc = fillExit(doc, step, exits[0].id, made, holds, unread, w, turns);
   // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
@@ -356,12 +356,12 @@ function fillExit(
  * numbered afresh, as a paste is; and the set keeps which atoms they are
  * (`WorkflowSet.put`), for the next run to take away those alone.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnKept[]): WorkspaceDocument {
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnKept[], core?: SeriesCore): WorkspaceDocument {
   // (each about the middle of its box)
   const boxes = made.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
   const rooms = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: 0 }));
-  return filled(doc, step, { exit, holds: "structures" }, rooms, (d, at) => {
+  return filled(doc, step, { exit, holds: "structures", ...(core ? { core } : {}) }, rooms, (d, at) => {
     // (all put on the page at once, as one model - one at a time copied the page's drawing again for each - their ids made apart first: two given in one numbering, as a template's products are, would be one structure)
     const apart = numberedApart(made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y)));
     const there = new Set(d.model.atoms.map((a) => a.id));
@@ -388,7 +388,7 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
 function filled(
   doc: WorkspaceDocument,
   step: WorkflowStep,
-  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]> },
+  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; core?: SeriesCore },
   rooms: readonly (Frame & { chip: number })[],
   place: (doc: WorkspaceDocument, at: readonly { x: number; y: number }[]) => { doc: WorkspaceDocument; members: Member[]; put?: number[] },
 ): WorkspaceDocument {
@@ -412,7 +412,8 @@ function filled(
   doc = put.doc;
   const id = was ? was.id : (doc.nextWorkflowId ?? 1);
   doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
-  return heldPut(holdMembers(doc, id, put.members, of.unread), id, put.put ?? []);
+  // (and the core its series shares, where it is one: none kept from a run before)
+  return withCore(heldPut(holdMembers(doc, id, put.members, of.unread), id, put.put ?? []), id, of.core);
 }
 
 /**
@@ -427,6 +428,11 @@ function filled(
 function emptied(doc: WorkspaceDocument, set: WorkflowSet): WorkspaceDocument {
   doc = removeMolecules3d(doc, setMembers(doc, set).molecules);
   return set.put?.length ? heldPut(withoutAtoms(doc, set.put), set.id, []) : doc;
+}
+
+/** `doc` with a result set holding the core its series shares (`WorkflowSet.core`) - or none. */
+function withCore(doc: WorkspaceDocument, id: number, core: SeriesCore | undefined): WorkspaceDocument {
+  return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id !== id ? b : core ? { ...b, core } : (({ core: _was, ...rest }) => rest)(b))) };
 }
 
 /** A structure drawn moved whole by (dx, dy): its atoms, and the marks put by hand that go with them. */

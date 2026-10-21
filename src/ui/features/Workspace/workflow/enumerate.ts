@@ -25,7 +25,7 @@ import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
 import { identityInputOf } from "../chem/identityOf";
 import { degrees, narrowEnd } from "../chem/drawing";
-import type { Model } from "../store/types";
+import type { Model, SeriesCore } from "../store/types";
 import { labelReading, readLabel } from "../utils/labelTyping";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
@@ -199,7 +199,7 @@ export type Made = { number: number; drawn: Model; how: string };
 
 /** What Enumerate gives: the structures made, those set aside - each with why - and what it says of the whole; or why it cannot run. */
 export type Enumerated =
-  | { ok: true; made: Made[]; aside: (Made & { why: string })[]; said: string[] }
+  | { ok: true; made: Made[]; aside: (Made & { why: string })[]; said: string[]; core: SeriesCore }
   | { ok: false; problems: string[] };
 
 /**
@@ -248,8 +248,17 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
       choice[k] = 0;
     }
   }
+  // (the core every product shares, by its atoms' places: the template's first in each, each R's place its group's attach atom)
+  const place = new Map(template.atoms.map((a, i) => [a.id, i]));
+  const isR = new Set([...rs.values()].flat());
+  const core: SeriesCore = {
+    atoms: template.atoms.flatMap((a, i) => (isR.has(a.id) ? [] : [i])),
+    bonds: template.bonds.flatMap((b): [number, number][] => (isR.has(b.a) || isR.has(b.b) ? [] : [[place.get(b.a)!, place.get(b.b)!]])),
+    attach: Object.fromEntries(numbers.map((n) => [`R${n}`, rs.get(n)!.map((id) => place.get(id)!)])),
+  };
   return {
     ok: true,
+    core,
     made,
     aside,
     said: [

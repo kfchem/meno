@@ -615,6 +615,8 @@ export type WorkflowSet = {
    * atoms.
    */
   put?: number[];
+  /** A result set of a series made from one template: the core its structures share, by their atoms' places (`SeriesCore`). */
+  core?: SeriesCore;
   /**
    * A result set of more entries than are laid out on the page
    * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
@@ -639,6 +641,14 @@ export type Member = { structure: number[]; entry?: EntryNote } | { molecule: nu
  * R2 = OMe"), and, where it was set aside, why ("Same as 2").
  */
 export type EntryNote = { number: number; how: string; why?: string };
+/**
+ * The core a series of structures drawn shares (Enumerate's: docs/WORKFLOWS-FOUNDATION.md,
+ * *R groups*, "the set carries its core"): its template's atoms but its R atoms,
+ * the bonds between them, and where each R group is attached - each by its
+ * place in a product's atoms, the same in every product - so that what
+ * comes after can line them up exactly.
+ */
+export type SeriesCore = { atoms: number[]; bonds: [number, number][]; attach: Record<string, number[]> };
 /** A structure drawn a run gave, as a run kept keeps it: as drawn, with what its step said of it. */
 export type DrawnKept = Model & { entry?: EntryNote };
 /**
@@ -669,7 +679,7 @@ export type RunKeptResults = {
   holds: SetKind;
   unread?: number;
   restUnread?: number;
-  drawn?: { made: DrawnKept[]; rest: DrawnKept[] };
+  drawn?: { made: DrawnKept[]; rest: DrawnKept[]; core?: SeriesCore };
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by

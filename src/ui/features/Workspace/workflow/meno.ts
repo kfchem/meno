@@ -10,6 +10,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type DrawnEntry, type SetEntry } from "./entries";
 import { enumerated } from "./enumerate";
 import type { StyleChoice } from "../../../../lib/chem/style";
+import type { SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
@@ -26,7 +27,7 @@ export type Outcome3D =
   | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
   | { ok: false; said: string };
 /** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
-export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string } | { ok: false; said: string };
+export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string; core?: SeriesCore } | { ok: false; said: string };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
@@ -68,7 +69,7 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
       const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, entry: { number: m.number, how: m.how, ...(why ? { why } : {}) } });
       // (its valence as it was checked before it ran, where it was: never claimed where it was not)
       const valence = said.length ? said : ["Valence not checked"];
-      return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 ") };
+      return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 "), core: r.core };
     }
     default:
       return { ok: false, said: "Meno does not do this itself on structures drawn" };
