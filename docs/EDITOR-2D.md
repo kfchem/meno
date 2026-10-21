@@ -717,7 +717,8 @@ All hover-based, as above.
     each, so that the letters stay where they are. Kept, it is kept
     without those at its ends: nothing drawn moves.
   - Begun by a letter typed over an atom - O, then the pointer moved on,
-    is O - or from the atom's menu, *Edit label*, holding what it says,
+    is O - or from the atom's menu, *Edit label* (on the selection's menu
+    too, where the atom is selected alone: 2026-10-21), holding what it says,
     the caret at its end; a carbon drawn as a corner opens with a C,
     selected, to be typed over. A click on an atom no longer begins one.
   - Nothing jumps (the maintainer, 2026-10-18). Begun by a letter, the
@@ -937,6 +938,13 @@ All hover-based, as above.
     after (`shownMarks`); never a few at once and the rest a moment later.
     On a molecule in 3D, none starts before every one of them is there to
     be seen, the molecule still or turning (`fadeStep`).
+  - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
+    and floated round a structure a few pixels across). Their letters keep
+    to 9 px at the least; past that they fade as the view goes out, eased
+    with the zoom, and are gone where 9 px is twice the size they would be
+    (`marksSeenAt`). On a drawing and on a molecule in 3D alike; atom
+    numbers on a molecule in 3D fade below their own least size the same
+    way.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

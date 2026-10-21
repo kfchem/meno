@@ -45,6 +45,20 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(renderToString(<FramesChip count={3} frame={0} energies={energies} open onFrame={none} made={made} about="a calculation" />)).not.toContain("Energies from");
   });
 
+  it("shows a conformer set of one as a set: its one bar, 1 / 1 with its energy and share, and what its energies are from (the maintainer, 2026-10-21)", () => {
+    const made = { how: [], energies: "Field X" };
+    const one = (conformers?: boolean) =>
+      renderToString(<FramesChip count={1} frame={0} energies={[-100]} populations={[1]} open={false} onFrame={none} made={made} conformers={conformers} />);
+    const html = one(true);
+    expect(html).toContain("1<!-- --> / <!-- -->1");
+    expect(html).toContain("0.00 kcal/mol");
+    expect(html).toContain("100%");
+    expect(html).toContain("Energies from <!-- -->Field X");
+    expect(html).toContain('aria-label="Energy of each frame"');
+    // (a single geometry read from a file, no conformer set, says none of it)
+    expect(one(false)).not.toContain("1<!-- --> / <!-- -->1");
+  });
+
   it("writes a conformer's energy and share by what they round to: 10.0 kcal/mol, not 10.00; >99%, not 100%, beside another", () => {
     const kcal = (e: number) => e / 627.509474;
     const at = (frame: number, energies: number[], populations: number[]) =>

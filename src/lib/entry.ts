@@ -128,29 +128,34 @@ export type Property = {
 };
 
 /**
- * A stereogenic element of an entry - a centre, a double bond, an axis, a
- * cumulene - by its atoms in the fixed numbering; specified where its
- * configuration is known (from 3D, every element the geometry fixes is),
- * unspecified where a 2D drawing leaves it open.
+ * An element of an entry that could be stereogenic: a centre (its atom), a
+ * double bond, an axis or a cumulene (its two atoms), or another kind (a
+ * metal's centre), by atom number from 0; and whether its configuration is
+ * given - from a geometry in 3D, every element it fixes.
  */
 export type StereoElement = { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean };
 
 /**
- * An entry's configuration, as a plugin perceived it: its stereogenic
- * elements and a key of their configuration, and what perceived them - "no
- * stereo" is perceived, with no elements; or why it was not perceived.
+ * Which stereoisomer an entry is, as the plugin that perceives
+ * configurations found it from the entry's own geometry: its elements that
+ * could be stereogenic - none, for a molecule with no stereo - and a key,
+ * the same for two entries exactly when they are one stereoisomer, as that
+ * plugin's version makes it. Or not perceived, and why: no plugin to
+ * perceive it, or one that could not read the molecule. Not perceived is
+ * neither "no stereo" nor "unspecified".
  */
 export type EntryStereo = { perceived: true; elements: StereoElement[]; key: string; by: By } | { perceived: false; why: string };
 
 /**
- * An entry's configuration as one text, to compare two entries by: what
- * perceived it (its plugin and version - keys of different versions never
- * compare equal) and its key. None where it was not perceived, or where any
- * element is unspecified: such an entry's configuration is not known.
+ * Which stereoisomer an entry is, as one text that two entries share
+ * exactly when they are one: the key, with the plugin and version that made
+ * it - keys of two versions are not compared. None where it is not known:
+ * not perceived, or an element left unspecified, which matches nothing -
+ * not even another unspecified one. CIP labels are never in it.
  */
 export function stereoIdentity(stereo: EntryStereo | undefined): string | null {
-  if (!stereo || !stereo.perceived || stereo.elements.some((e) => !e.specified)) return null;
-  return `${stereo.by.plugin}@${stereo.by.version}:${stereo.key}`;
+  if (!stereo?.perceived || stereo.elements.some((e) => !e.specified)) return null;
+  return `${stereo.by.plugin ?? "?"}@${stereo.by.version ?? "?"}:${stereo.key}`;
 }
 
 /** An entry's status: done, failed (why), or set aside (why). */
@@ -165,9 +170,9 @@ export type Entry = {
   geometry: Geometry;
   species: Species;
   properties: Record<string, Property>;
-  status: EntryStatus;
-  /** Its configuration, once perceived (`EntryStereo`); absent until then. */
+  /** Which stereoisomer it is; absent until perceived. */
   stereo?: EntryStereo;
+  status: EntryStatus;
 };
 
 /**

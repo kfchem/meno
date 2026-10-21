@@ -220,6 +220,25 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   `utils/xyzEnergies.ts`). A one-frame file's energy is written but, as for
   any one-frame XYZ, not read.
 
+### The settings file
+
+Meno's settings are kept in `settings.json` in its data folder. Since
+2026-10-21 it holds only what the user changed - what differs from the
+defaults - and not every setting (the maintainer: so that a default changed
+later reaches everyone who never touched it).
+- Within a setting, only the part changed is written: one plugin's role,
+  not the plugins' other settings.
+- A drawing style chosen, and a 3D style chosen, are written whole where any
+  part changed. A preset and its changes are read only together; a 3D
+  style's two looks are never the same.
+- What the file does not hold is the default as it is then. A file written
+  before holds every setting; it is read as it is, and written back with
+  only what differs from the defaults now. A value it held that is no
+  longer the default - 2x drawing resolution, say - stays as it was.
+- A value the user sets that is the default as it is then is not written:
+  it is the default, and follows it if the default changes later. Only a
+  value that differs from the default is kept as the user's own.
+
 ## What is unclear today
 
 Each point is resolved by the plan below (see *Every point resolved*).
@@ -753,6 +772,34 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
   the document's icon, carried as `icons\document\meno-document.ico`
   (`windows/hooks.nsh`). Uninstalling takes the ProgID away, and gives
   `.meno` back what it was associated with before.
+- **Offered for the files it reads, never their default** (the
+  maintainer, 2026-10-19): Meno is in the system's Open With for the
+  structure files and PDFs it reads - `.mol`, `.sdf`, `.rxn`, `.xyz`,
+  `.pdb`, `.cube`, `.cub`, `.pdf` (`OPENED_WITH` in `opened.rs`; not
+  calculations' outputs, `.out` and `.log`, which other programs use too) -
+  and whatever opens them still does - on macOS. A test holds the list and
+  `Info.plist` alike.
+  - macOS (`Info.plist`): a document type for the structure files and one
+    for PDF, each with `LSHandlerRank` Alternate - "a secondary viewer of
+    files of this type", ranked after Owner and Default (Apple, Information
+    Property List Key Reference) - and role Viewer. PDF by the system's
+    type, `com.adobe.pdf`. The structure files by their extensions
+    (`CFBundleTypeExtensions`), with no type of Meno's own declared: where
+    another app declares a type for one of them, the system gives the file
+    that type, and a claim on a type of Meno's would not reach it.
+  - Not on Windows (2026-10-21). Registering Meno there - its ProgID in
+    each extension's `OpenWithProgids`, its `Applications` entry and
+    `SupportedTypes` - was built and tried on a real machine, and Windows
+    then gave Meno the double-click for extensions that belonged to other
+    programs: where a type has no choice of the user's, Windows takes the
+    most recently used registered program, and registering Meno made the
+    times it had been chosen before count. Microsoft's own pages say as
+    much ("available as default ... apps for the file type"; ownership
+    information in HKCU "used only when the application that it references
+    is registered"). So nothing is registered for them; Windows is to let
+    the user choose Meno as a default from Meno's own Settings instead,
+    registering only when asked. A file opened with Meno by the user's own
+    choice is taken as on macOS.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -

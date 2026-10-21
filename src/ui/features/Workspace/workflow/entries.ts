@@ -6,7 +6,8 @@
  * it.
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
-import { geometryKey, type Entry, type EntryAtom, type Property } from "../../../../lib/entry";
+import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
+import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { groupLetter } from "../../../../lib/nodes/base";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
@@ -174,7 +175,8 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.confor
  * 3D.
  */
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
-  if (set.made) return set.made.holds;
+  // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
+  if (set.made?.holds) return set.made.holds;
   const { structures, molecules } = setMembers(page, set);
   if (structures.length) return "structures";
   const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
@@ -217,6 +219,8 @@ export type SetEntry = {
   multiplicity?: number;
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
+  /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
+  stereo?: EntryStereo;
   name?: string;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
@@ -249,12 +253,15 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
+      const xyz = frameXyz(m, f);
+      const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });
       out.push({
         compound: holds === "conformers" ? i : out.length,
         number: holds === "conformers" ? (m.numbers?.[f] ?? f + 1) : 1,
         atoms: m.atoms,
         bonds: m.bonds,
-        xyz: frameXyz(m, f),
+        xyz,
+        ...(stereo ? { stereo } : {}),
         ...(energies ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
@@ -302,6 +309,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     geometry: { kind: "3d", xyz: [...e.xyz] },
     species: speciesOf(written, e),
     properties,
+    ...(e.stereo ? { stereo: e.stereo } : {}),
     status: "done",
   };
 }

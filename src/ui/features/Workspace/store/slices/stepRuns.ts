@@ -19,7 +19,7 @@ import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
-import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
+import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
@@ -27,6 +27,8 @@ import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoInTurns } from "../../workflow/meno";
+import { perceiveStereo } from "../../workflow/configurations";
+import { askerFor } from "../../workflow/configurationsAsker";
 import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, finishEntry } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
@@ -96,7 +98,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** The step before a step, where one gives what comes into it. */
   const before = (d: WorkspaceDocument, id: number) => {
     const from = wireInto(d, id)?.from;
-    const prior = from ? ("step" in from ? from.step : findSet(d, from.set)?.made?.step) : undefined;
+    const prior = from ? findSet(d, from.set)?.made?.step : undefined;
     return prior != null ? stepOf(d, prior) : undefined;
   };
 
@@ -133,6 +135,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const key = inputKey(d, step, by);
     const why = whyNot(d, step, by);
     if (why) return void fail(id, why, at, key);
+    // (which stereoisomer each entry is, where the kind needs it known: asked first, every entry its own)
+    if (by === "meno" && kindInfo(step.kind).perceives === "configurations") {
+      const input = inputOf(d, id);
+      if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
+    }
     if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
@@ -197,7 +204,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return g === "same" || g === "pictures" ? holds : g;
   };
 
-  /** The results of a step put in, as one edit - with the entries it set aside - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */
+  /** The results of a step put in, as one edit - what it set aside in its second exit's set - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */
   function bringIn(id: number, worked: Worked[], holds: SetKind, ran: StepRan, aside: SetEntry[] = []) {
     const d = doc.getState();
     const step = stepOf(d, id);
@@ -206,7 +213,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what it did before kept among its runs)
     if (!worked.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
     const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said };
-    const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome));
+    const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
     doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
     atTheirEnds(before);
     turnNew(before, turns);
@@ -254,14 +261,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const queue = [id];
     while (queue.length) {
       const at = queue.shift()!;
-      const made = resultOf(d, at)?.id;
+      // (every exit's set: what any of them gives comes down to the steps wired from it)
+      const made = new Set((d.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
       for (const wire of d.wires ?? []) {
-        const from = wire.from;
-        const fromIt = "step" in from ? from.step === at : made != null && from.set === made;
-        if (fromIt && !seen.has(wire.to)) {
-          seen.add(wire.to);
-          out.push(wire.to);
-          queue.push(wire.to);
+        if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
+          seen.add(wire.to.step);
+          out.push(wire.to.step);
+          queue.push(wire.to.step);
         }
       }
     }

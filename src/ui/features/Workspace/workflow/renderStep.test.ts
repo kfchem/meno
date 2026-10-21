@@ -36,9 +36,10 @@ describe("Render as a step", () => {
     d = addStep(d, "render", 10, 4, {}, "blender");
     d = connect(d, { set: 1 }, 2);
     d = addStep(d, "energy", 40, 4, {}, "xtb");
+    const energy = d.steps![d.steps!.length - 1].id;
     d = placePictures(d, d.steps!.find((s) => s.kind === "render")!, [rendered(4, 2, 1), rendered(6, 3, 2)]);
     const set = resultOf(d, 2)!;
-    expect(set.made).toEqual({ step: 2, holds: "pictures" });
+    expect(set.made).toEqual({ step: 2, exit: "out", holds: "pictures" });
     expect(set.x0).toBeGreaterThan(10 + CARD_W);
     // (inside it, in a row, left to right)
     const inside = setMembers(d, set).pictures;
@@ -49,10 +50,9 @@ describe("Render as a step", () => {
     expect(a.y + a.h / 2).toBeCloseTo(b.y + b.h / 2);
     expect(countOf(d, set)).toEqual({ holds: "pictures", entries: 2, compounds: 2 });
     // (nothing is wired from it: no step takes pictures, and none comes into one from them)
-    expect(givesOf(d, { step: 2 })).toBe("pictures");
-    expect(canWire(d, { step: 2 }, 3)).toBe(false);
-    expect(canWire(d, { set: set.id }, 3)).toBe(false);
-    expect(inputOf(connect(d, { set: set.id }, 3), 3)).toBeNull();
+    expect(givesOf(d, { set: set.id })).toBe("pictures");
+    expect(canWire(d, { set: set.id }, energy)).toBe(false);
+    expect(inputOf(connect(d, { set: set.id }, energy), energy)).toBeNull();
   });
 
   it("run again, puts its new pictures in the same set in place of those it held - and leaves the page's other pictures be", () => {
