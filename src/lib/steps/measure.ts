@@ -80,7 +80,7 @@ export function measured(e: Entry, measurements: readonly (readonly number[])[],
     }
     const g = e.geometry;
     if (g.kind === "3d") properties[name] = { value: valueAt(g.xyz, atoms), unit, at: { geometry: geometryKey(g.xyz) }, status: "computed", by };
-    else if (g.kind === "frames") properties[name] = { value: { list: g.frames.map((f) => valueAt(f, atoms)) }, unit, status: "computed", by };
+    else if (g.kind === "frames") properties[name] = { value: { list: g.frames.map((f) => valueAt(f, atoms)), per: "frame" }, unit, status: "computed", by };
     else properties[name] = { value: "", unit, status: { notApplicable: g.kind === "2d" ? "The entry is drawn, not in 3D." : "The entry has no places." }, by };
   }
   return { ...e, properties };

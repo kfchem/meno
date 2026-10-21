@@ -141,7 +141,7 @@ describe("Measure", () => {
     const one = measured(water(), [[1, 0, 2]]);
     expect(one.properties["angle 2-1-3"].at?.geometry).toMatch(/^[0-9a-f]{8}$/);
     const frames = { ...water(), geometry: { kind: "frames" as const, frames: [[0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 0, 0, 2, 0, 0, 0, 2, 0]] } };
-    expect(measured(frames, [[0, 1]]).properties["distance 1-2"].value).toEqual({ list: [1, 2] });
+    expect(measured(frames, [[0, 1]]).properties["distance 1-2"].value).toEqual({ list: [1, 2], per: "frame" });
   });
 
   it("leaves nothing out: no 3D places, not applicable; an atom it has not, failed - each with the reason", () => {
