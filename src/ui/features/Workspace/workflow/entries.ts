@@ -174,19 +174,18 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) 
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
   if (set.made?.holds) return set.made.holds;
-  const { structures, molecules } = setMembers(page, set);
+  const { structures } = setMembers(page, set);
   if (structures.length) return "structures";
-  const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
-  return molecules.some((id) => conformersOfOne(byId.get(id)!)) ? "conformers" : "molecules";
+  return setMolecules(page, set).some(conformersOfOne) ? "conformers" : "molecules";
 }
 
 /** How many entries a set holds, of what kind of set: a structure each, a frame each of a molecule in 3D - one for a path to its last - or a picture each. */
 export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entries: number; compounds: number } {
   const holds = holdsOf(page, set);
-  const { structures, molecules, pictures } = setMembers(page, set);
+  const { structures, pictures } = setMembers(page, set);
   if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
-  const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
-  const frames = molecules.reduce((n, id) => n + entriesIn(byId.get(id)!), 0);
+  const molecules = setMolecules(page, set);
+  const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
   const entries = structures.length + frames;
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
@@ -195,7 +194,31 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
 
 /** How many entries a molecule in 3D is: a frame each - but one, its last, where its frames are a path to it. */
-const entriesIn = (m: Pick<Molecule3D, "frames" | "path">) => (m.path ? 1 : framesOf(m));
+export const entriesIn = (m: Pick<Molecule3D, "frames" | "path">) => (m.path ? 1 : framesOf(m));
+
+/**
+ * The most entries a result set lays out on the page (docs/WORKFLOWS-FOUNDATION.md,
+ * *What a set shows*: up to 50, on the page): one with more holds them
+ * itself (`WorkflowSet.collection`), summed up in its frame.
+ */
+export const LARGE_SET = 50;
+
+/** A collection's molecules as steps take them, each given an id of its own within the set - not one of the page's, which they are not on - kept while the collection is the same. */
+const asMolecules = new WeakMap<readonly Omit<Molecule3D, "id" | "at">[], Molecule3D[]>();
+
+/** The molecules in 3D a set holds, in order: its collection's, where it holds one (each its id from -1 down, within the set), else those of the page among its members. */
+export function setMolecules(page: Page, set: Frame & Pick<WorkflowSet, "members" | "collection">): Molecule3D[] {
+  if (set.collection) {
+    let ms = asMolecules.get(set.collection);
+    if (!ms) {
+      ms = set.collection.map((m, k) => ({ ...m, id: -(k + 1), at: { x: 0, y: 0 } }));
+      asMolecules.set(set.collection, ms);
+    }
+    return ms;
+  }
+  const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
+  return setMembers(page, set).molecules.map((id) => byId.get(id)!);
+}
 
 /** One entry of a set of molecules in 3D, as a step takes it: its compound by its place among the set's, its number among that compound's conformers, its atoms and bonds, its geometry, its energy. */
 export type SetEntry = {
@@ -322,10 +345,9 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
  * apart by it, and the same again by the same. FNV-1a, twice over, 64 bits
  * as hex.
  */
-export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & { members?: readonly Member[] }): string {
-  const { structures, molecules, pictures } = setMembers(page, set);
+export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & Pick<WorkflowSet, "members" | "collection">): string {
+  const { structures, pictures } = setMembers(page, set);
   const atoms = new Map(page.model.atoms.map((a) => [a.id, a]));
-  const byId = new Map((page.molecules3d ?? []).map((m) => [m.id, m]));
   const shown = new Map((page.pictures ?? []).map((p) => [p.id, p as Partial<Pick<PictureItem, "sha256">>]));
   const parts: string[] = [];
   for (const ids of structures) {
@@ -334,8 +356,7 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
     const bonds = page.model.bonds.filter((b) => inIt.has(b.a) && inIt.has(b.b)).map((b) => `${ids.indexOf(b.a)}-${ids.indexOf(b.b)}:${b.order}`).join(",");
     parts.push(`s|${els}|${bonds}`);
   }
-  for (const id of molecules) {
-    const m = byId.get(id)!;
+  for (const m of setMolecules(page, set)) {
     const frames = Array.from({ length: framesOf(m) }, (_, f) => geometryKey(frameXyz(m, f))).join(",");
     parts.push(`m|${m.atoms.map((a) => a.el).join(",")}|${frames}`);
   }
