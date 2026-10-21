@@ -14,6 +14,5 @@
 #   MACOSX_DEPLOYMENT_TARGET=14.0 uv pip compile --no-sources --python-version 3.12 \
 #     --python-platform aarch64-apple-darwin --generate-hashes requirements.in -o requirements.lock
 reinvent @ https://github.com/MolecularAI/REINVENT4/archive/80a8d21aefd9c0d3ec806377522effb30cfca12a.tar.gz
-# imported by REINVENT 4 itself (reinvent/runmodes/utils/plot.py) and not among
-# the dependencies it declares: without it, sampling stops on its import
+# imported by REINVENT 4 (reinvent/runmodes/utils/plot.py), and added for it
 scipy

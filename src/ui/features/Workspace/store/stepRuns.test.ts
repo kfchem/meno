@@ -899,6 +899,7 @@ describe("Generate: a step that takes nothing in", () => {
         method: "sampled from reinvent_pubchem.prior, seed 7, on the CPU; one geometry, ETKDG v3 + MMFF94",
         atoms: ["C", "O"],
         charges: [0, 0],
+        isotopes: [13, 0],
         bonds: [{ a1: 0, a2: 1, order: 1 }],
         frames: [[0, 0, 0, 1.43, 0, 0]],
         results: [{ id: "nll", on: "molecule", group: "Generated", label: "NLL under reinvent_pubchem.prior", value: 21.5, digits: 2, rank: 1 }],
@@ -934,7 +935,7 @@ describe("Generate: a step that takes nothing in", () => {
     const out = resultOf(st(), step)!;
     expect(out.made!.holds).toBe("molecules");
     const made = setMembers(st(), out).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
-    expect(made.map((m) => m.atoms.map((a) => `${a.el}${a.charge ?? ""}`).join(" "))).toEqual(["C O", "N1"]);
+    expect(made.map((m) => m.atoms.map((a) => `${a.isotope ?? ""}${a.el}${a.charge ?? ""}`).join(" "))).toEqual(["13C O", "N1"]);
     expect(made[0].bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
     expect(made[0].calc).toMatchObject({ program: "REINVENT 4", method: generated.outputs[0].method });
     expect(made[0].calc?.results?.find((r) => r.id === "nll")).toMatchObject({ value: 21.5, label: "NLL under reinvent_pubchem.prior" });
@@ -953,6 +954,9 @@ describe("Generate: a step that takes nothing in", () => {
     worker.run.mockImplementationOnce(async () => ({ outputs: [{ ...generated.outputs[0], bonds: [{ a1: 0, a2: 5, order: 1 }] }] }) as never);
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Molecule 1's bonds are not between its atoms" });
+    worker.run.mockImplementationOnce(async () => ({ outputs: [{ ...generated.outputs[0], isotopes: [13] }] }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Molecule 1's isotopes are not its atoms'" });
   });
 });
 

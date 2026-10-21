@@ -61,7 +61,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
-| Workflows | new molecules from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set, so that the same asking gives the same molecules |
+| Workflows | new molecules from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set, so that the same asking gives the same molecules; a radical sampled is not made - its spin is not handed on - and each isotope is kept |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
@@ -743,7 +743,8 @@ each molecule it made as an output - the form a reader's is in
 (`src/lib/calc/output.ts`): `atoms` its elements, `frames` one geometry,
 `method` how it was made, `results` what it found (the SMILES sampled, its
 likelihood) - with what that form has no place for beside: its `bonds`,
-`{a1, a2, order}` with orders 1 to 3, and its atoms' `charges`; and
+`{a1, a2, order}` with orders 1 to 3, its atoms' `charges`, and their
+`isotopes` (mass numbers; 0, natural abundance) where any is one; and
 `said`, the run in a line, counting what it gave and what it could not
 make a molecule, with why:
 
@@ -754,7 +755,7 @@ make a molecule, with why:
 
 Each becomes a compound of its own in the step's result set, numbered as
 it came. Meno checks each - its elements, a geometry for every atom, its
-bonds between its atoms, whole charges - and takes none of the run where
+bonds between its atoms, whole charges, whole mass numbers - and takes none of the run where
 any is not a molecule, saying which: no run is taken in part. At most a
 thousand from one run (`GENERATED_MOST`). The step is ready as it is put
 down, and changed when its options or who does it change

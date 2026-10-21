@@ -91,6 +91,14 @@ class Generate(unittest.TestCase):
         nll = next(r for r in out["results"] if r["id"] == "nll")
         self.assertEqual(nll["label"], "NLL under reinvent_pubchem.prior")
 
+    def test_makes_no_radical_and_keeps_each_isotope(self):
+        # (a radical's spin is not handed on, so it is not made - fails closed - and an isotope a SMILES gives is kept)
+        for smiles in ("C[CH2]", "[O]", "[CH3]"):
+            self.assertEqual(self.worker.molecule_of(smiles, 7), "a radical, with unpaired electrons this plugin does not hand on")
+        made = self.worker.molecule_of("[13CH3][2H]", 7)
+        self.assertEqual([(a["el"], a["isotope"]) for a in made["atoms"]][:2], [("C", 13), ("H", 2)])
+        self.assertEqual(self.worker.molecule_of("CCO", 7)["atoms"][0]["isotope"], 0)
+
     def test_keeps_how_many_to_what_it_may_be(self):
         made = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 0, "seed": 7}})
         self.assertTrue(made["said"].startswith("1 sampled"), made["said"])

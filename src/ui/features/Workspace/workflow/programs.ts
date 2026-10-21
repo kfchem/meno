@@ -305,8 +305,8 @@ export const GENERATED_MOST = 1000;
  * What a plugin made from nothing (Generate, `run` with no entries): each
  * molecule as an output (lib/calc/output) - its atoms, one geometry, what
  * the run says of it (its method, its results: the SMILES it was sampled
- * as, its likelihood) - with what an output carries no form for, its bonds
- * and its atoms' charges, beside; and what the plugin says of the run, its
+ * as, its likelihood) - with what an output carries no form for, its bonds,
+ * its atoms' charges and their isotopes where any is one, beside; and what the plugin says of the run, its
  * counts (`said`). Each a compound of its own, numbered as it came. Why not,
  * where any of it is not a molecule Meno can take: nothing is taken in part.
  */
@@ -315,7 +315,7 @@ export function readGenerated(raw: unknown, readers: readonly string[]): { made:
   if (!Array.isArray(r?.outputs)) return "It said nothing Meno can take";
   if (r.outputs.length > GENERATED_MOST) return `It made more than ${GENERATED_MOST}`;
   const made: Worked[] = [];
-  for (const [i, x] of (r.outputs as (ReaderOutput & { bonds?: unknown; charges?: unknown })[]).entries()) {
+  for (const [i, x] of (r.outputs as (ReaderOutput & { bonds?: unknown; charges?: unknown; isotopes?: unknown })[]).entries()) {
     if (x?.schema != null && x.schema !== OUTPUT_SCHEMA) return "It made them in a form this Meno does not read";
     const atoms = Array.isArray(x?.atoms) && x.atoms.every((el) => typeof el === "string" && elementOf(el)) ? x.atoms : null;
     const xyz = Array.isArray(x?.frames) && Array.isArray(x.frames[0]) ? x.frames[0] : null;
@@ -323,6 +323,9 @@ export function readGenerated(raw: unknown, readers: readonly string[]): { made:
     const n = atoms.length;
     const charges = x.charges === undefined ? atoms.map(() => 0) : x.charges;
     if (!Array.isArray(charges) || charges.length !== n || !charges.every((c) => Number.isInteger(c) && Math.abs(c) <= 8)) return `Molecule ${i + 1}'s charges are not its atoms'`;
+    // (each atom's mass number, where it is one isotope in particular; 0, natural abundance)
+    const isotopes = x.isotopes === undefined ? atoms.map(() => 0) : x.isotopes;
+    if (!Array.isArray(isotopes) || isotopes.length !== n || !isotopes.every((v) => Number.isInteger(v) && v >= 0 && v <= 300)) return `Molecule ${i + 1}'s isotopes are not its atoms'`;
     const bonds = Array.isArray(x.bonds) ? (x.bonds as { a1?: unknown; a2?: unknown; order?: unknown }[]) : null;
     const index = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
     if (!bonds || !bonds.every((b) => index(b?.a1) && index(b?.a2) && b.a1 !== b.a2 && [1, 2, 3].includes(b.order as number)))
@@ -330,7 +333,7 @@ export function readGenerated(raw: unknown, readers: readonly string[]): { made:
     made.push({
       compound: i,
       number: 1,
-      atoms: atoms.map((el, k) => ({ el, ...(charges[k] ? { charge: charges[k] } : {}), x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
+      atoms: atoms.map((el, k) => ({ el, ...(charges[k] ? { charge: charges[k] } : {}), ...(isotopes[k] ? { isotope: isotopes[k] } : {}), x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
       bonds: bonds.map((b) => ({ a1: b.a1 as number, a2: b.a2 as number, order: b.order as number })),
       xyz: [...xyz],
       calc: calcOf(x, readers),

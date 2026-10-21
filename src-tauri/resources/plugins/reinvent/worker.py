@@ -21,7 +21,9 @@ README *Running*; measured here, the same seed gave the same SMILES twice
 over). Each SMILES RDKit reads is made a molecule in 3D - its hydrogens
 added, one geometry embedded (ETKDG v3, the same seed) and tidied by MMFF94,
 or UFF where MMFF94 has no parameters for it - for steps that need
-coordinates; what it could not make of one is counted, with why. Each
+coordinates; what it could not make of one is counted, with why - a
+radical among them, whose spin it does not hand on - and each isotope a
+SMILES gives is kept. Each
 molecule goes back as an output (lib/calc/output): its atoms, the geometry,
 its bonds and its atoms' charges beside, how it was made (`method`: the
 prior, the seed, the CPU, the force field), and its results - the SMILES as
@@ -37,9 +39,10 @@ import os
 import subprocess
 import sys
 import tempfile
+import time
 
 from rdkit import Chem, RDLogger, rdBase
-from rdkit.Chem import rdDistGeom, rdForceFieldHelpers
+from rdkit.Chem import Descriptors, rdDistGeom, rdForceFieldHelpers
 
 # RDKit's own complaints go nowhere: what it could not make of a SMILES is counted, with why.
 RDLogger.DisableLog("rdApp.*")
@@ -57,6 +60,10 @@ MOST = 200
 SEED = 1
 #: The most steps a force field may take tidying one embedded geometry.
 STEPS = 2000
+#: The longest one molecule's geometry may take to embed (seconds; RDKit's own `timeout`), and the longest a run
+#: may make molecules for before the rest are counted as not made: a request has two minutes in all.
+EMBED_SECONDS = 10
+MAKING_SECONDS = 90
 #: Bond orders as Meno's outputs give them, Kekulé.
 ORDERS = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3}
 
@@ -104,11 +111,17 @@ def molecule_of(smiles, seed):
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return "not a SMILES RDKit reads"
+    # (a radical's spin is not handed on with it: made, it would reach a calculation closed-shell, its
+    #  multiplicity taken from its electrons' parity - so it is not made)
+    if Descriptors.NumRadicalElectrons(mol):
+        return "a radical, with unpaired electrons this plugin does not hand on"
     mol = Chem.AddHs(mol)
     params = rdDistGeom.ETKDGv3()
     params.randomSeed = int(seed)
+    params.timeout = EMBED_SECONDS
+    began = time.monotonic()
     if rdDistGeom.EmbedMolecule(mol, params) != 0:
-        return "no 3D structure could be embedded"
+        return f"no 3D structure embedded in {EMBED_SECONDS} s" if time.monotonic() - began >= EMBED_SECONDS else "no 3D structure could be embedded"
     if rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
         rdForceFieldHelpers.MMFFOptimizeMolecule(mol, maxIters=STEPS)
         field = "MMFF94"
@@ -121,7 +134,8 @@ def molecule_of(smiles, seed):
     if any(b.GetBondType() not in ORDERS for b in mol.GetBonds()):
         return "a bond neither single, double nor triple"
     return {
-        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge()} for a in mol.GetAtoms()],
+        # (each atom's isotope too, its mass number, where the SMILES gives one: 13C, 2H)
+        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge(), "isotope": a.GetIsotope()} for a in mol.GetAtoms()],
         "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": ORDERS[b.GetBondType()]} for b in mol.GetBonds()],
         "xyz": [round(v, 4) for p in mol.GetConformer().GetPositions() for v in p],
         "field": field,
@@ -150,8 +164,9 @@ def op_run(m):
         rows = sampled(count, seed, folder)
     method = f"sampled from {PRIOR_SAID}, seed {seed}, on the CPU"
     outputs, why = [], {}
+    began = time.monotonic()
     for smiles, nll in rows:
-        made = molecule_of(smiles, seed)
+        made = molecule_of(smiles, seed) if time.monotonic() - began < MAKING_SECONDS else f"the run's {MAKING_SECONDS} s for making molecules were up"
         if isinstance(made, str):
             why[made] = why.get(made, 0) + 1
             continue
@@ -162,6 +177,7 @@ def op_run(m):
             "method": method + f"; one geometry, ETKDG v3 + {made['field'] or 'no force field'}",
             "atoms": [a["el"] for a in made["atoms"]],
             "charges": [a["charge"] for a in made["atoms"]],
+            **({"isotopes": [a["isotope"] for a in made["atoms"]]} if any(a["isotope"] for a in made["atoms"]) else {}),
             "bonds": made["bonds"],
             "frames": [made["xyz"]],
             "results": [
