@@ -42,8 +42,8 @@ describe("Compare bonding", () => {
   });
 
   it("passes over the atoms, elements or bonds listed", () => {
-    expect(comparedBonding(entryOf(reactant, "r"), entryOf(product, "ref"), { passOver: { atoms: [1, 4] } })).toEqual({ same: true, differences: [] });
-    expect(comparedBonding(entryOf(reactant, "r"), entryOf(product, "ref"), { passOver: { bonds: [[1, 11], [4, 12]] } })).toMatchObject({ same: true });
+    expect(comparedBonding(entryOf(reactant, "r"), entryOf(product, "ref"), { passOver: { atoms: [0, 3] } })).toEqual({ same: true, differences: [] });
+    expect(comparedBonding(entryOf(reactant, "r"), entryOf(product, "ref"), { passOver: { bonds: [[0, 10], [3, 11]] } })).toMatchObject({ same: true });
     expect(comparedBonding(entryOf(reactant, "r"), entryOf(product, "ref"), { passOver: { elements: ["C"] } })).toMatchObject({ same: true });
   });
 

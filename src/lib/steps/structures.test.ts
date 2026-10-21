@@ -110,7 +110,7 @@ describe("Combine", () => {
 describe("Measure", () => {
   it("measures distances and angles set by construction: a 3-4-5 right triangle", () => {
     const t = entry("t", ["C", "C", "C"], [0, 0, 0, 3, 0, 0, 0, 4, 0]);
-    const m = measured(t, [[1, 2], [2, 3], [2, 1, 3]]);
+    const m = measured(t, [[0, 1], [1, 2], [1, 0, 2]]);
     expect(m.properties["distance 1-2"]).toMatchObject({ value: 3, unit: "Å", status: "computed" });
     expect(m.properties["distance 2-3"].value).toBeCloseTo(5, 12);
     expect(m.properties["angle 2-1-3"]).toMatchObject({ unit: "°", status: "computed" });
@@ -138,16 +138,16 @@ describe("Measure", () => {
   });
 
   it("gives one value per frame for an entry with frames, each measurement saying its geometry", () => {
-    const one = measured(water(), [[2, 1, 3]]);
+    const one = measured(water(), [[1, 0, 2]]);
     expect(one.properties["angle 2-1-3"].at?.geometry).toMatch(/^[0-9a-f]{8}$/);
     const frames = { ...water(), geometry: { kind: "frames" as const, frames: [[0, 0, 0, 1, 0, 0, 0, 1, 0], [0, 0, 0, 2, 0, 0, 0, 2, 0]] } };
-    expect(measured(frames, [[1, 2]]).properties["distance 1-2"].value).toEqual({ list: [1, 2] });
+    expect(measured(frames, [[0, 1]]).properties["distance 1-2"].value).toEqual({ list: [1, 2] });
   });
 
   it("leaves nothing out: no 3D places, not applicable; an atom it has not, failed - each with the reason", () => {
     const flat = { ...water(), geometry: { kind: "2d" as const, xy: [0, 0, 1, 0, 0, 1] } };
-    expect(measured(flat, [[1, 2]]).properties["distance 1-2"].status).toEqual({ notApplicable: "The entry is drawn, not in 3D." });
-    const m = measured(water(), [[1, 9], [1, 1], [1]]);
+    expect(measured(flat, [[0, 1]]).properties["distance 1-2"].status).toEqual({ notApplicable: "The entry is drawn, not in 3D." });
+    const m = measured(water(), [[0, 8], [0, 0], [0]]);
     expect(m.properties["distance 1-9"].status).toEqual({ failed: "The entry has no atom 9: its atoms are 1 to 3." });
     expect(m.properties["distance 1-1"].status).toEqual({ failed: expect.stringMatching(/named twice/) });
     expect(m.properties["measurement 1"].status).toEqual({ failed: expect.stringMatching(/two, three or four/) });

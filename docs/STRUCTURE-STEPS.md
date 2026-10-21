@@ -52,9 +52,10 @@ The entries that come in, as one entry holding them all: a complex
 
 Each entry the same, with a property for each measurement asked for
 (`measured`): the distance between two atoms, the angle at the middle of
-three, or the dihedral of four. Atoms are numbered from 1 in the entry's
-numbering. A measurement is named for what it is and its atoms: `distance
-3-7`, `angle 1-2-3`, `dihedral 1-2-3-4`.
+three, or the dihedral of four. Atoms are given by the entry's numbering,
+from 0, as its bonds have them. A measurement is named for what it is and
+its atoms, said from 1 as a chemist numbers them: `distance 3-7`, `angle
+1-2-3`, `dihedral 1-2-3-4`.
 
 - **Units.**
   - Distances are in ångströms.
@@ -128,8 +129,9 @@ references, the first it is bonded as (`matchingReference`).
   neighbours (by number) at its two ends stand: the dihedral between them
   under or over 90 degrees. Each end must have one other neighbour, or two
   that are not alike.
-- **Passed over:** atoms, elements and bonds the chemist lists, such as a
-  metal's coordination, in both the bonds and the configurations.
+- **Passed over:** atoms (from 0, as the entry numbers them), elements and
+  bonds the chemist lists, such as a metal's coordination, in both the
+  bonds and the configurations.
 - **Every difference is said:** which bond, how far apart its atoms stand,
   and against what distance; which centre; which double bond. An entry with
   frames, entries in different numberings, or configurations asked of a
@@ -141,3 +143,11 @@ Checked:
 - CHFClBr and its mirror image differ where R or S is asked; CH2FCl with
   its hydrogens swapped does not.
 - cis- and trans-2-butene differ where E or Z is asked.
+
+## Numbering
+
+Atoms in the entry record are numbered from 0, as its bonds are: every
+atom a step takes or gives as data (a measurement's atoms, atoms passed
+over, a bond change's atoms, a restraint's) is from 0. What is said to a
+chemist (a property's name, a reason) numbers them from 1, as a card shows
+them.

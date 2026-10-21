@@ -21,7 +21,8 @@
  *   no difference. Which double bonds can be cis or trans: one whose ends
  *   each have one other neighbour, or two not alike. Three-coordinate
  *   centres (amines, phosphines, sulfoxides) are not compared.
- * - **Passed over**: atoms, elements and bonds the chemist lists - a metal's
+ * - **Passed over**: atoms (from 0, as the entry numbers them), elements and
+ *   bonds the chemist lists - a metal's
  *   coordination, say - in the bonds and in the configurations.
  * - Every difference is said: which bond, where it is read, at what
  *   distance; which centre or double bond.
@@ -64,9 +65,9 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
   if (bad >= 0) return { failed: `Atom ${bad + 1} is ${atoms[bad].el} here and ${ref[bad].el} in the reference: both must hold the same atoms in one numbering.` };
   const xyz = e.geometry.xyz;
   const els = atoms.map((a) => a.el);
-  const skipAtom = new Set((o.passOver?.atoms ?? []).map((n) => n - 1));
+  const skipAtom = new Set(o.passOver?.atoms ?? []);
   const skipEl = new Set(o.passOver?.elements ?? []);
-  const skipBond = new Set((o.passOver?.bonds ?? []).map(([p, q]) => key(p - 1, q - 1)));
+  const skipBond = new Set((o.passOver?.bonds ?? []).map(([p, q]) => key(p, q)));
   const passed = (p: number, q: number) => skipAtom.has(p) || skipAtom.has(q) || skipEl.has(els[p]) || skipEl.has(els[q]) || skipBond.has(key(p, q));
 
   const radii = bondRadii(els);

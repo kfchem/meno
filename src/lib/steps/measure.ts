@@ -2,7 +2,9 @@
  * *Measure* (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures):
  * each entry the same, with a property for each measurement asked for -
  * a distance between two atoms, an angle at the middle of three, or the
- * dihedral of four - the atoms numbered from 1 in the entry's numbering.
+ * dihedral of four - the atoms by the entry's numbering, from 0, as its
+ * bonds have them; a measurement's name says them from 1, as a chemist
+ * numbers them.
  *
  * - Distances in ångströms; angles from 0 to 180 degrees; dihedrals from
  *   -180 to 180 degrees, signed as IUPAC defines the torsion angle: positive
@@ -47,17 +49,17 @@ export function dihedral(a: V, b: V, c: V, d: V): number {
   return Math.atan2(norm(b2) * dot(b1, n2), dot(n1, n2)) * DEG;
 }
 
-/** A measurement's name, as its property is called: `distance 3-7`, `angle 1-2-3`, `dihedral 1-2-3-4`. */
+/** A measurement's name, as its property is called, its atoms (from 0) said from 1: `distance 3-7`, `angle 1-2-3`, `dihedral 1-2-3-4`. */
 export function measurementName(atoms: readonly number[]): string {
-  return `${["distance", "angle", "dihedral"][atoms.length - 2]} ${atoms.join("-")}`;
+  return `${["distance", "angle", "dihedral"][atoms.length - 2]} ${atoms.map((a) => a + 1).join("-")}`;
 }
 
 function valueAt(xyz: readonly number[], atoms: readonly number[]): number {
-  const p = atoms.map((n) => at(xyz, n - 1));
+  const p = atoms.map((n) => at(xyz, n));
   return atoms.length === 2 ? distance(p[0], p[1]) : atoms.length === 3 ? angle(p[0], p[1], p[2]) : dihedral(p[0], p[1], p[2], p[3]);
 }
 
-/** The entry with each measurement (two, three or four atom numbers, from 1) as a property. */
+/** The entry with each measurement (two, three or four atoms, from 0) as a property. */
 export function measured(e: Entry, measurements: readonly (readonly number[])[], by?: Property["by"]): Entry {
   const n = e.structure.atoms.length;
   const properties = { ...e.properties };
@@ -67,13 +69,13 @@ export function measured(e: Entry, measurements: readonly (readonly number[])[],
     const wrong =
       atoms.length < 2 || atoms.length > 4
         ? `A measurement takes two, three or four atoms, not ${atoms.length}.`
-        : atoms.find((a) => !Number.isInteger(a) || a < 1 || a > n) !== undefined
-          ? `The entry has no atom ${atoms.find((a) => !Number.isInteger(a) || a < 1 || a > n)}: its atoms are 1 to ${n}.`
+        : atoms.find((a) => !Number.isInteger(a) || a < 0 || a >= n) !== undefined
+          ? `The entry has no atom ${atoms.find((a) => !Number.isInteger(a) || a < 0 || a >= n)! + 1}: its atoms are 1 to ${n}.`
           : new Set(atoms).size !== atoms.length
-            ? `An atom is named twice in ${atoms.join("-")}.`
+            ? `An atom is named twice in ${atoms.map((a) => a + 1).join("-")}.`
             : null;
     if (wrong) {
-      properties[wrong.startsWith("A measurement") ? `measurement ${atoms.join("-")}` : name] = { value: "", unit, status: { failed: wrong }, by };
+      properties[wrong.startsWith("A measurement") ? `measurement ${atoms.map((a) => a + 1).join("-")}` : name] = { value: "", unit, status: { failed: wrong }, by };
       continue;
     }
     const g = e.geometry;
