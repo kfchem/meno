@@ -158,6 +158,13 @@ describe("what several readers found in one output", () => {
     ],
   };
 
+  it("keeps which geometries the run converged on, as the reader that read them marked them (2026-10-22: found in the app, left out here)", () => {
+    const marks = water.frames.map((_, i) => i === water.frames.length - 1);
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: marks } }, { from: "nbo", version: "7", output: nbo }]).output.converged).toEqual(marks);
+    // (marks of other geometries than these: none)
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: [true] } }]).output.converged).toBeUndefined();
+  });
+
   it("keeps, of a file of several jobs, its jobs as its reader read them", () => {
     const sp: ReaderOutput = { ...water, job: { number: 2, of: 2, kind: "Single point" } };
     const opt: ReaderOutput = { ...water, job: { number: 1, of: 2, kind: "Optimisation" } };

@@ -110,6 +110,8 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       atoms,
       frames,
       energies: first((o) => (sameFrames(o) && o.energies?.length === frames.length ? o.energies : null)),
+      // (which geometries an optimisation or a scan converged on, by the reader that read them as these)
+      converged: first((o) => (sameFrames(o) && o.converged?.length === frames.length ? o.converged : null)),
       results,
       // (of a file of several jobs, its jobs as its reader read them: each opens as a molecule of its own)
       ...(base.output.job ? { job: base.output.job } : {}),
