@@ -290,12 +290,20 @@ describe("a molecule in 3D drawn as a formula", () => {
     const chem = { request: async (_op: string, args: { perceive?: boolean; molblock?: string }) => (asked.push(args), { molblock: ethane, perceived }) } as unknown as ChemClient;
     return { chem, asked };
   };
-  /** A chain of carbons, every bond single, as a file of coordinates gives it. */
+  /** A chain of carbons, every bond single, as a file of coordinates gives it - said whole without hydrogens, so that these tests are of how a formula is drawn (a skeleton is not: below). */
   const chain = (n: number) => ({
     id: 1,
     atoms: Array.from({ length: n }, (_, i) => ({ el: "C", x: 1.5 * i, y: 0, z: 0 })),
     bonds: Array.from({ length: n - 1 }, (_, i) => ({ a1: i, a2: i + 1, order: 1 })),
     at: { x: 0, y: 0 },
+    wholeWithoutH: true as const,
+  });
+
+  it("is not drawn of a skeleton - its hydrogens not there - and nothing is asked", async () => {
+    const asked = worker(true);
+    const { wholeWithoutH: _said, ...skeleton } = chain(2);
+    await expect(formulaOf(asked.chem, skeleton, 0)).rejects.toThrow(/no hydrogens, so its charge and spin are not known/);
+    expect(asked.asked).toEqual([]);
   });
 
   it("has its bond orders sought where its file gave none - and says where they are still unknown", async () => {

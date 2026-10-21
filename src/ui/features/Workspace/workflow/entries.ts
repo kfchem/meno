@@ -8,8 +8,10 @@
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import { geometryKey, type Entry, type EntryAtom, type Property } from "../../../../lib/entry";
 import { speciesOf } from "../../../../lib/io/writers";
+import { isSkeleton } from "../utils/completeness";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
-import type { SetHolds } from "./kinds";
+import { kindInfo, type SetHolds, type StepKind } from "./kinds";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
@@ -215,11 +217,33 @@ export type SetEntry = {
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
   name?: string;
+  /** Its hydrogens not there, and not said to be whole without any (lib/chem/skeleton): given no charge or spin, and no calculation run on it. */
+  skeleton?: true;
+  /** Its bonds' orders, where its molecule's file gave none (Molecule3D `bondOrders`); and whether the chemist said it is whole without hydrogens: kept by what a step gives back. */
+  bondOrders?: Molecule3D["bondOrders"];
+  wholeWithoutH?: true;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
   last?: boolean;
 };
+
+/**
+ * Why a step of `kind` is not run on `entries`, where its plugin needs whole
+ * molecules (KindInfo `whole`) and some came in as skeletons - their
+ * hydrogens not there (lib/chem/skeleton): counted by molecule, and said
+ * before anything is sent. None, where it may run.
+ */
+export function skeletonsRefused(kind: StepKind, entries: readonly SetEntry[]): string | null {
+  if (!kindInfo(kind).whole) return null;
+  const skeletons = new Set(entries.flatMap((e, i) => (e.skeleton ? [e.from ?? `#${i}`] : [])));
+  return skeletons.size ? skeletonWhy(skeletons.size) : null;
+}
+
+/** What an entry's molecule knew of its bonds' orders and its hydrogens, as a molecule a step gives back keeps it: "Bond orders unknown" stays said over it. */
+export function keptKnown(e: Pick<SetEntry, "bondOrders" | "wholeWithoutH">): Pick<Molecule3D, "bondOrders" | "wholeWithoutH"> {
+  return { ...(e.bondOrders ? { bondOrders: e.bondOrders } : {}), ...(e.wholeWithoutH ? { wholeWithoutH: true as const } : {}) };
+}
 
 /** A molecule's frame `f`: its atoms' x, y and z in turn. */
 export function frameXyz(m: Pick<Molecule3D, "atoms" | "frames">, f: number): number[] {
@@ -244,6 +268,12 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    // (a skeleton, its hydrogens not there: each frame of it one; and what it knows of its orders, kept with it)
+    const whole = {
+      ...(isSkeleton(m) ? { skeleton: true as const } : {}),
+      ...(m.bondOrders ? { bondOrders: m.bondOrders } : {}),
+      ...(m.wholeWithoutH ? { wholeWithoutH: true as const } : {}),
+    };
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       out.push({
@@ -255,6 +285,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(energies ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
+        ...whole,
         ...(m.name ? { name: m.name } : {}),
         from: m.id,
         frame: f,
@@ -294,7 +325,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
   };
-  const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
+  const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [], ...(e.skeleton ? { skeleton: true } : {}) };
   return {
     id,
     from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],

@@ -22,6 +22,8 @@ import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
 import { carriedOf, isWorkspaceFile, workspaceFile } from "./utils/workspace";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
+import { isSkeleton } from "./utils/completeness";
+import { skeletonWhy } from "../../../lib/chem/skeleton";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE } from "./chem/marks";
 import { style3dOf } from "./style3d";
@@ -162,11 +164,14 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
       const energy = m.energies?.[i];
       return energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "";
     };
-    if (options.frames !== "all") return [writeMolfile3d(frameAtoms(m, m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
+    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
+    const skeleton = isSkeleton(m);
+    const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
+    if (options.frames !== "all") return [writeMolfile3d(atomsOf(m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
     return Array.from({ length: frames }, (_, i) => {
       // (each frame with the bonds it has, where they go frame by frame)
-      return writeMolfile3d(frameAtoms(m, i), bondsAt(m, i), { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
+      return writeMolfile3d(atomsOf(i), bondsAt(m, i), { title: `${name} ${i + 1}`, version }) + data(i) + "$$$$\n";
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
@@ -552,6 +557,9 @@ export function useFileActions(nameTab?: (label: string) => void) {
           if (!plugin) throw new Error(`${writer.name} is written by a plugin Meno does not know of.`);
           const chosen = carriedOf(state).filter((_, i) => molecules.includes(state.molecules3d[i].id));
           if (!chosen.length) throw new Error(`There is no molecule in 3D to write as ${writer.name}.`);
+          // (a plugin's writer is given the molecule with its charge and spin: a skeleton, which has none, is not given it - lib/chem/skeleton)
+          const skeletons = chosen.filter(isSkeleton).length;
+          if (skeletons) throw new Error(skeletonWhy(skeletons));
           const text = await (await readerClient(plugin)).write(writer.id, fileNameOf(path), [writtenOf(chosen, style3dOf(state))], options);
           await writeTextFile(path, text);
           return;

@@ -144,7 +144,8 @@ export type WrittenAtom = { el: string; x: number; y: number; z: number; charge?
  * data - its atoms, its bonds between them by index with their orders, and
  * its name - whoever writes it.
  */
-export type WrittenMolecule = { name?: string; atoms: WrittenAtom[]; bonds: { a1: number; a2: number; order: number }[] };
+/** A molecule a writer is given. `skeleton`: its hydrogens not there (lib/chem/skeleton) - it has no charge or spin to give. */
+export type WrittenMolecule = { name?: string; atoms: WrittenAtom[]; bonds: { a1: number; a2: number; order: number }[]; skeleton?: boolean };
 
 const NUMBERS = new Map(ELEMENTS.map((e) => [e.symbol, e.number]));
 const UNPAIRED: Record<Radical, number> = { singlet: 0, doublet: 1, triplet: 2 };
@@ -171,10 +172,13 @@ export type Species = { charge: number; multiplicity: number; from: { charge: "g
  * A molecule's charge and spin multiplicity by Meno's one rule
  * (docs/WORKFLOWS-FOUNDATION.md, *The entry*): what it was given, where it
  * was given one - a whole charge, a multiplicity of one or more - else what
- * its atoms say (`knownOf`). Every place that tells a program, a writer or
- * a step a molecule's charge and spin asks here.
+ * its atoms say (`knownOf`). None for a skeleton: its hydrogens not there,
+ * its atoms do not say how it is protonated, and so neither its charge nor
+ * its spin (lib/chem/skeleton). Every place that tells a program, a writer
+ * or a step a molecule's charge and spin asks here.
  */
-export function speciesOf(m: WrittenMolecule, given?: { charge?: number | null; multiplicity?: number | null }): Species {
+export function speciesOf(m: WrittenMolecule, given?: { charge?: number | null; multiplicity?: number | null }): Species | null {
+  if (m.skeleton) return null;
   const known = knownOf(m);
   const charge = Number.isInteger(given?.charge) ? given!.charge! : null;
   const multiplicity = Number.isInteger(given?.multiplicity) && given!.multiplicity! > 0 ? given!.multiplicity! : null;

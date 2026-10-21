@@ -430,6 +430,8 @@ export type Molecule3D = {
    * them (utils/completeness).
    */
   bondOrders?: "unknown" | "perceived" | "assigned" | "dictionary" | "estimated";
+  /** Whole without hydrogens, as the chemist has said of a molecule Meno took for a skeleton (lib/chem/skeleton): it has none to add. */
+  wholeWithoutH?: true;
   /** The atoms of a PDB entry's ligands whose bonds' orders are still unknown, where others' were found. */
   unknownOrders?: number[];
   /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */

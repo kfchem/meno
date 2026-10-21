@@ -18,7 +18,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, setEntries, skeletonsRefused, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
@@ -442,6 +442,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = setEntries(input.molecules, input.holds as "molecules" | "conformers");
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
+    const refused = skeletonsRefused(step.kind, entries);
+    if (refused) return void fail(id, refused, at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
     try {
@@ -471,6 +474,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = jobEntries(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
+    const refused = skeletonsRefused(step.kind, entries);
+    if (refused) return void fail(id, refused, at, key);
     taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { slots, cores } = runningOf(useAppSettings.getState().calculations);

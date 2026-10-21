@@ -25,7 +25,7 @@ describe("the entry record", () => {
       from: [],
       structure: { atoms: [{ el: "O" }, { el: "H" }, { el: "H" }], bonds: [] },
       geometry: { kind: "3d", xyz: water() },
-      species: speciesOf({ atoms: [], bonds: [] }),
+      species: speciesOf({ atoms: [], bonds: [] })!,
       properties: { energy, start: tag },
       status: "done",
     };
@@ -97,6 +97,6 @@ describe("a molecule's species, by Meno's one rule", () => {
   it("is what its atoms say where it was given none, or none that makes sense", () => {
     expect(speciesOf(anion)).toEqual({ charge: -1, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } });
     expect(speciesOf(anion, { charge: 0.5, multiplicity: 0 })).toEqual({ charge: -1, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } });
-    expect(speciesOf(anion, { multiplicity: 3 }).from).toEqual({ charge: "atoms", multiplicity: "given" });
+    expect(speciesOf(anion, { multiplicity: 3 })!.from).toEqual({ charge: "atoms", multiplicity: "given" });
   });
 });

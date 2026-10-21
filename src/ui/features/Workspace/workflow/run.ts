@@ -10,7 +10,7 @@ import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
+import { setMembers, inside, setEntries, frameXyz, framesOf, keptKnown, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
@@ -473,6 +473,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        ...keptKnown(e),
         ...e.keep,
       };
     });
@@ -498,6 +499,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
+      ...keptKnown(first),
       ...(first as Worked).keep,
     };
   });

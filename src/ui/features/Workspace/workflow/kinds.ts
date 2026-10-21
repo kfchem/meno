@@ -36,15 +36,17 @@ export type KindInfo = {
   made: string;
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
+  /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
+  whole?: true;
 };
 
 export const KINDS: readonly KindInfo[] = [
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers" },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies" },
+  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true },
+  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true },
+  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions" },
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
@@ -60,6 +62,8 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "duplicates",
     name: "Duplicates",
+    // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
+    whole: true,
     icon: "twins",
     takes: ["molecules", "conformers"],
     gives: "same",

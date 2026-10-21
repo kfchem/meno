@@ -9,6 +9,7 @@ import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA } from "../../../../lib/entry";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
@@ -68,7 +69,10 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     return mass != null ? { ...a, mass } : a;
   });
   // (a molecule read from a calculation: the state it was in there; else what its atoms say - Meno's one rule)
-  const { charge, multiplicity } = speciesOf(molecule, e);
+  const species = speciesOf({ ...molecule, ...(e.skeleton ? { skeleton: true } : {}) }, e);
+  // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
+  if (!species) throw new Error(skeletonWhy());
+  const { charge, multiplicity } = species;
   return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity };
 }
 

@@ -33,6 +33,7 @@ import { pdfBounds, POINT, pointFor } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { magnificationWithin } from "./magnified";
+import { isSkeleton } from "./completeness";
 import type { Style3D } from "../../../../lib/chem/style3d";
 
 type Pt = { x: number; y: number };
@@ -138,7 +139,8 @@ export function clipItems(part: Drawn): ClipItem[] {
     // (a workflow's parts, pictures, PDFs, texts' sheets or slides, alone: Meno's record, which no other program reads)
     if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length || part.cycles?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
-    const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
+    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
+    const seen = ms.map((m) => (isSkeleton(m) ? asSeen(m, m.turn, m.frame, placed).map((a) => ({ ...a, noImplicitH: true })) : asSeen(m, m.turn, m.frame, placed)));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
     return [
       { flavor: "meno", text: recordText(part) },
@@ -673,6 +675,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(biopolymer ? { biopolymer } : {}),
     ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" || m.bondOrders === "estimated" ? { bondOrders: m.bondOrders } : {}),
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
+    ...(m.wholeWithoutH === true ? { wholeWithoutH: true as const } : {}),
     ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
