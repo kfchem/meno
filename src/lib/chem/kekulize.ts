@@ -118,11 +118,12 @@ export function kekuleOrders(
   // Aromaticity Model", rdkit.org/docs/RDKit_Book.html, the 2026.09.1
   // documentation, read 2026-10-21): c 1, n 1, an n with a third neighbour
   // or its H 2, o, s, se, te 2, a ring atom's exocyclic double bond to O or
-  // N 0 (it "steals" the electron). Where this counts otherwise: an
-  // exocyclic C=S or C=Se 0 too, as the book's reason has it of
-  // electronegative atoms though its table names only O and N; a charged
-  // carbon, which the table does not list, 0 as a cation and 2 as an anion
-  // (the tropylium's, the cyclopentadienide's). After E. Hückel, Z. Phys.
+  // N 0 (it "steals" the electron). Beyond the table's examples: an
+  // exocyclic C=S, C=Se, C=P or C=As 0 too, as RDKit counts them (measured:
+  // a 2-pyridone's ring is aromatic in RDKit with each of these on its
+  // carbon, and not with C=C); a charged carbon, which the table does not
+  // list, 0 as a cation and 2 as an anion (the tropylium's, the
+  // cyclopentadienide's). After E. Hückel, Z. Phys.
   // 70, 204 (1931) and its sequels, Z. Phys. 72, 310 (1931) and 76, 628
   // (1932) - not opened here. Of the ways to give the double bonds, those
   // whose every system holding an atom that may take one counts 4N + 2 come
@@ -156,11 +157,11 @@ export function kekuleOrders(
     const el = canonical(atoms[i]?.el ?? "");
     const charge = atoms[i]?.charge ?? 0;
     if (hasMultiple[i]) {
-      // (its double bond made already: in the ring, one; out of it to an electronegative atom - a C=O, a C=N, a
-      // C=S - none, the bond taking its electron; out of it to a carbon, one)
+      // (its double bond made already: in the ring, one; out of it - a C=O, C=N, C=S, C=Se, C=P, C=As - none, the
+      // bond taking its electron, as RDKit counts it; out of it to a carbon, one)
       const out = bonds.find((b) => (b.order === 2 || b.order === 3) && (b.a1 === i || b.a2 === i) && !inRing(b.a1, b.a2));
       if (!out) return 1;
-      return ["O", "N", "S", "Se", "Te"].includes(canonical(atoms[out.a1 === i ? out.a2 : out.a1]?.el ?? "")) ? 0 : 1;
+      return ["O", "N", "S", "Se", "Te", "P", "As"].includes(canonical(atoms[out.a1 === i ? out.a2 : out.a1]?.el ?? "")) ? 0 : 1;
     }
     if (matched) return 1;
     if (QUERY_ATOMS.has(atoms[i]?.el ?? "")) return null;
