@@ -1061,7 +1061,9 @@ pub fn run() {
             jobs::job_folder,
             jobs::job_stop,
             jobs::job_remove,
-            jobs::jobs_clear_finished
+            jobs::jobs_clear_finished,
+            jobs::job_trim,
+            jobs::jobs_finished_bytes
         ])
         .build(context)
         .expect("error while building tauri application")

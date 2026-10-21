@@ -190,6 +190,10 @@ class Collect(unittest.TestCase):
         for log in (raised + tail, raised + tail + leak):
             said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="failed")
             self.assertEqual(said["result"], {"why": "TypeError: 'NoneType' object is not subscriptable"})
+        # (a message of several lines, all of it, as one; an exception raised while another was handled, the last)
+        many = "Traceback (most recent call last):\nKeyError: 'col'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\nValueError: the scene's molecule has no atoms\nsee its entry: entries[0]\n"
+        said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=many + tail + leak, ended="failed")
+        self.assertEqual(said["result"], {"why": "ValueError: the scene's molecule has no atoms see its entry: entries[0]"})
         # (Blender's own error, where Python raised none: said; its last words alone, said as they are)
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log="Error: Cannot read file 'scene.gltf'\n" + tail + leak, ended="failed")
         self.assertEqual(said["result"], {"why": "Error: Cannot read file 'scene.gltf'"})

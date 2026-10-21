@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { clearFinishedJobs, computerCores, finished, listJobs, runningOf } from "../../../lib/jobs";
+import { clearFinishedJobs, computerCores, finished, finishedJobsBytes, keptText, listJobs, runningOf } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
 import { JOBS_AT_ONCE_MOST, useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
@@ -8,7 +8,7 @@ import OptionRows from "../../options/OptionRows";
 /**
  * Jobs in Settings, *Calculations* (docs/WORKFLOWS.md, *Several at once*):
  * how many run at once on this computer, how many cores each may use, and
- * the files of those finished, cleared.
+ * the files of those finished - how many, and how much they hold - cleared.
  */
 export default function JobSettings() {
   const calculations = useAppSettings((s) => s.calculations);
@@ -29,8 +29,9 @@ export default function JobSettings() {
     setCalculations({ ...rest, ...(atOnce !== 1 ? { atOnce } : {}), ...(chosen != null ? { cores: chosen } : {}) });
   };
 
-  // the finished jobs whose files are kept
+  // the finished jobs whose files are kept, and the bytes they hold
   const [kept, setKept] = useState<number | null>(null);
+  const [bytes, setBytes] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
   const count = useCallback(() => {
     if (!isTauri()) return;
@@ -38,6 +39,7 @@ export default function JobSettings() {
       (jobs) => setKept(jobs.filter((j) => finished(j.state)).length),
       () => setKept(null),
     );
+    finishedJobsBytes().then(setBytes, () => setBytes(null));
   }, []);
   useEffect(count, [count]);
   const clear = () => {
@@ -57,7 +59,7 @@ export default function JobSettings() {
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
           <span className="min-w-0 flex-1 text-sm text-gh-black">Finished jobs' files</span>
           <span className="text-xs text-gh-gray tabular-nums">
-            {kept === 0 ? "None" : kept === 1 ? "1 job" : `${kept} jobs`}
+            {keptText(kept, bytes)}
           </span>
           <button
             onClick={clear}

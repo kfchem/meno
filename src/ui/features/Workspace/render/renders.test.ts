@@ -3,7 +3,7 @@ import type { Job, JobAsk } from "../../../../lib/jobs";
 
 /** The jobs, as the test has them: each one's record and its log; and what was asked of them. */
 const jobs = new Map<string, Job & { log: string }>();
-const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[], looked: [] as string[] };
+const asked = { started: [] as JobAsk[], stopped: [] as string[], removed: [] as string[], looked: [] as string[], trimmed: [] as string[] };
 let nextJob = 1;
 /** Where set, what a job's beginning waits on. */
 let beginning: Promise<void> | null = null;
@@ -28,6 +28,7 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   },
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
+  trimJob: async (id: string) => (asked.trimmed.push(id), 0),
   jobFolder: async (id: string) => `/jobs/${id}`,
 }));
 
@@ -131,7 +132,7 @@ describe("a workspace closing", () => {
     madeFiles.clear();
     nextJob = 1;
     beginning = null;
-    Object.assign(asked, { started: [], stopped: [], removed: [], looked: [] });
+    Object.assign(asked, { started: [], stopped: [], removed: [], looked: [], trimmed: [] });
     worker.collect.mockClear();
     useReaders.setState({ state: { blender: "added" }, problem: {} });
   });
@@ -213,6 +214,8 @@ describe("a workspace closing", () => {
     await ran;
     const [r] = rendersOf(one.store).getState().list;
     expect(r).toMatchObject({ state: "failed", why: "TypeError: a stand-in" });
+    // (what it made taken out of its folder: its log and what it was given kept)
+    expect(asked.trimmed).toEqual([job]);
     stopRender(one.store, r.key);
     expect(rendersOf(one.store).getState().list).toEqual([]);
     // (another failed, then its workspace closed: its folder kept as well)
@@ -226,6 +229,7 @@ describe("a workspace closing", () => {
     await stopRenders(one.store);
     expect(asked.removed).toEqual([]);
     expect(asked.stopped).toEqual([]);
+    expect(asked.trimmed).toEqual([job, job2]);
   });
 });
 
@@ -250,7 +254,7 @@ describe("where a render lands", () => {
     madeFiles.clear();
     nextJob = 1;
     beginning = null;
-    Object.assign(asked, { started: [], stopped: [], removed: [], looked: [] });
+    Object.assign(asked, { started: [], stopped: [], removed: [], looked: [], trimmed: [] });
     useReaders.setState({ state: { blender: "added" }, problem: {} });
   });
   afterEach(() => vi.useRealTimers());

@@ -233,9 +233,11 @@ them in too. What
 it makes lands just there, in the frame's place; meanwhile the frame is
 kept clear, as all on the page is, by what is put there - a file opened,
 a set placed - so that nothing comes under where it lands.
-Where it fails, the frame says why; the button puts it away, its job's
-folder kept - its log, all the renderer said - until Settings,
-*Calculations*, *Jobs*, clears it, as a closed tab's are. The view
+Where it fails, the frame says why; the button puts it away. Its job's
+folder is kept until Settings, *Calculations*, *Jobs*, clears it, as a
+closed tab's are - its log, all the renderer said, and what it was
+given - but what it made is taken out as it fails: a film's frames, which
+it can make again. The view
 eases to the frame and the molecules once, as the render is begun, where
 they are not all in view; what it makes lands as the view then is, never
 moving it again (the maintainer, 2026-10-11).
@@ -396,7 +398,7 @@ uv, no package), and the script Blender runs, `render.py`.
   *Rendering 37%...*.
 - **Why one failed** is what the render script said as it stopped
   (`render.py: ...`) or what Python raised, as its traceback ends
-  (`TypeError: ...`); else Blender's last line that says error; else its
+  (`TypeError: ...`) - all of it, a message of several lines as one; else Blender's last line that says error; else its
   last. Never Blender's own last words, which say only that a script
   failed or what memory it did not free as it quit (`worker.py` `why_of`).
 - The first render on a computer can take a few minutes while Blender

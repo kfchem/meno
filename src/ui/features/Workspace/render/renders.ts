@@ -20,7 +20,7 @@ import { pluginsFilling, type PythonPlugin } from "../../../../lib/calc/catalog"
 import { pluginClient, useReaders } from "../../../../lib/calc/workers";
 import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
-import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob } from "../../../../lib/jobs";
+import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob, trimJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
 import { finishEntry, motionEntry } from "./renderOptions";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
@@ -283,11 +283,17 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     void removeJob(job).catch(() => {});
     return;
   }
+  // (its job failed: what it made - a film's frames, which it can make again - taken out of its folder, its log and what it
+  // was given kept, to be read. One that made what cannot be shown keeps it, to be looked at)
+  const failed = (why: string) => {
+    void trimJob(job).catch(() => {});
+    return fail(why);
+  };
   try {
     const client = await pluginClient(plugin);
     const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) };
     const said = (await client.collect("render", [entry], options, {}, log, state)) as { why?: unknown; made?: unknown };
-    if (typeof said?.why === "string") return fail(said.why.trim().slice(0, 300) || "It did not say why");
+    if (typeof said?.why === "string") return failed(said.why.trim().slice(0, 300) || "It did not say why");
     const made = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;
     const file = typeof made?.file === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(made.file) ? made.file : null;
     if (!file || (made?.media !== "image/png" && made?.media !== "video/mp4")) return fail("It said it made nothing Meno can show");
