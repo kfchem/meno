@@ -20,7 +20,7 @@ import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/mole
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import type { PictureMedia } from "../../../../lib/picture/image";
-import type { JobState } from "../../../../lib/jobs";
+import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), where it is, and more. */
@@ -632,7 +632,25 @@ export type Member = { structure: number[] } | { molecule: number } | { picture:
  * its jobs, by id, whose logs and files are kept until the step is deleted;
  * and the kind and options it ran with.
  */
-export type StepRan = { at: number; ok: boolean; said: string; input: string; stopped?: true; took?: number; jobs?: string[]; kind?: StepKind; options?: OptionValues };
+export type StepRan = {
+  at: number;
+  ok: boolean;
+  said: string;
+  input: string;
+  stopped?: true;
+  took?: number;
+  jobs?: string[];
+  kind?: StepKind;
+  options?: OptionValues;
+  /** What a workspace's file kept of each of its jobs, as it was opened (workflow/keptJobs): written afresh each save from the jobs' folders where they are on this computer. */
+  kept?: KeptJob[];
+};
+/** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
+export type KeptJobEntry = { name: string; sha256: string; size: number; role: KeptRole };
+/** A job's file a workspace's file does not keep - its step keeps no raw outputs, or it was not to be had - by its name and size. */
+export type LeftJobEntry = { name: string; size: number; why: "raw" | "not had" };
+/** What a workspace's file keeps of one of a step's jobs, and what it left out: nothing left out unsaid. */
+export type KeptJob = { job: string; files: KeptJobEntry[]; left?: LeftJobEntry[] };
 /**
  * An earlier run a step keeps (docs/WORKFLOWS.md, *Results*): what it did
  * then - its kind and options as they were - and what it gave, as its
@@ -672,6 +690,8 @@ export type WorkflowStep = {
   /** Its earlier runs, newest first. */
   runs?: StepRunKept[];
   running?: StepRunning;
+  /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
+  keepRaw?: false;
 };
 /** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
 export type WireEnd = { set: number };
@@ -1349,6 +1369,8 @@ export type EditorState = {
   renameSet: (id: number, name: string) => void;
   /** A step's result set kept in the workspace's file, or not: one step. */
   keepSet: (id: number, keep: boolean) => void;
+  /** A step's jobs' raw outputs kept in the workspace's file, or not (*Don't keep raw outputs*): an edit. */
+  keepRawOutputs: (id: number, keep: boolean) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;

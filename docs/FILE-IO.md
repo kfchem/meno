@@ -613,7 +613,8 @@ work.meno (zip)
   mimetype          first, stored: application/vnd.kfchem.meno+zip
   workspace.json    stored: the workspace, the JSON `.meno` was before
   files.json        stored: each file kept - name, kind, media type, size
-  files/<sha256>    each file kept, as it was: text deflated, the rest stored
+  files/<sha256>    each file kept, as it was: text and a step's jobs' files
+                    deflated, the rest stored
 ```
 
 - **The workspace stays JSON, uncompressed.** Measured in Node before the
@@ -686,9 +687,11 @@ work.meno (zip)
 - **Written off the page.** The files kept are compressed in a worker of
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.
-- **Nothing is unpacked to the disk.** What the file says of its sizes is
-  held to limits before anything is inflated (`lib/doc/menoFile.ts`): its
-  workspace at most 256 MB, any one file kept 1 GB, and 10,000 files.
+- **Nothing is unpacked to the disk** - but a step's jobs' files, written
+  back out when *Show files* asks for them (*A step's jobs*, below). What
+  the file says of its sizes is held to limits before anything is inflated
+  (`lib/doc/menoFile.ts`): its workspace at most 256 MB, any one file kept
+  1 GB, and 10,000 files.
 - **Nothing is taken for more, or other, than the file says.** What it
   says of a part's size is not trusted to set room aside by - a few bytes
   may say a gigabyte: each part is inflated a little at a time, stopped as
@@ -706,6 +709,63 @@ work.meno (zip)
   nothing was added for it, and it is saved as a zip.
 - **The clipboard and Office keep the record**, JSON as before: a copy
   carries no file.
+
+### A step's jobs
+
+Decided by the maintainer (docs/WORKFLOWS-FOUNDATION.md, *Keeping*): the
+`.meno` is the whole record, raw outputs included, with a way not to keep
+them. A step's runs, the current one and those it keeps, keep their jobs'
+files in the `.meno`: the files the job was given, what its program wrote,
+and its logs. A set's *Don't keep in the file* leaves out what the set held
+(only how many, and their hash, are kept), never its step's job files. A
+step's *Don't keep raw outputs* leaves out what its program wrote, except
+the files Meno read back and the logs; each job's record names what was
+left out, with its size.
+
+- **What a job's files are.** Each job runs in a folder of its own in
+  Meno's local data folder (`jobs/<id>/`, `src-tauri/src/jobs.rs`). Kept
+  are its work folder (`work/...`: its input, as Meno wrote it, and all its
+  program wrote) and its logs (`log.txt`, what its program said;
+  `after.txt`, what the programs run after it said). Never kept: its
+  `job.json`, which holds its program's path and environment on this
+  computer, and `state.json`, Meno's own record of it. As a job is made,
+  Meno writes beside it which files it was given and which its plugin
+  reads back (`kept.json`, `src-tauri/src/keptjobs.rs`); a job made by an
+  earlier Meno has none, and all its work folder counts as raw output.
+- **Kept as they are, by their SHA-256**, each once however many jobs
+  hold it, deflated, as `files/<sha256>` with the rest. A run's record in
+  `workspace.json` lists, for each of its jobs (`steps[].ran.kept`, and
+  `steps[].runs[].kept`), every file kept - its name in the job's folder,
+  its SHA-256, size and what it is to the job (`input`, `read`, `log` or
+  `raw`) - and every file left out, with its name, its size and why (`raw`,
+  under *Don't keep raw outputs*; `not had`, where a job's folder is not on
+  this computer and the file it was opened from did not hold it).
+- **Written from the disk, not through the page.** A study's outputs come
+  to hundreds of megabytes. The page writes the workspace and lists the
+  jobs' files in `files.json`; Meno then adds their bytes from the jobs'
+  folders, each checked against its SHA-256 as it is read, to the file
+  being written, before it takes the place of the one saved before. A file
+  changed since it was listed fails the save, and the file saved before
+  stays as it was.
+- **Raw outputs can name this computer.** A program's output and its logs
+  often hold the user's name, the folders it ran in and the computer's
+  name: Gaussian and ORCA print the host they ran on, for one. Meno never
+  alters what a program wrote. *Don't keep raw outputs* leaves the raw
+  outputs out; the files a job was given, what Meno read back and the logs
+  are still kept.
+- **A size warning, not a choice made for you.** When a save would take a
+  workspace past a size (Settings, General: 500 MB unless changed) - it
+  was not past it before, or it is new - Meno says about how large it will
+  be, names its largest steps by what their jobs add, says that raw
+  outputs can name this computer, and offers *Don't keep their raw
+  outputs* for those steps, or *Save it all*. Meno never leaves anything
+  out on its own.
+- **Opened on another computer**, a workspace holds its jobs' files for
+  the session, each read from it only when wanted. *Show files* on a step
+  whose job's folder is not there writes the files kept of it back out, in
+  Meno's local data folder (`jobs-kept/<id>/`), and shows them. Saved
+  again there, the workspace keeps them again from the file it was opened
+  from.
 
 ### What a .meno holds
 

@@ -451,6 +451,7 @@ Conformers go through a workflow as any set does (decided):
 | | *Run from here* - this step and every step after it |
 | | *Stop* - while it is waiting or running |
 | | *Show log*, *Show files*, *Options…*, *Delete step* |
+| | *Don't keep raw outputs* - a step a plugin does: its jobs' files kept in the workspace's file are what they were given, what Meno read back and their logs (docs/FILE-IO.md, *A step's jobs*) |
 | The menu on empty space | *Run all* - every step on the page that is not done - not run, changed, failed or stopped - and every step after one, in order |
 | | *Stop all* - while any runs |
 
@@ -696,6 +697,9 @@ states an undo goes back to as well.
   opens it. Its outputs are kept in the workspace when they come in; the
   folder goes when its step is deleted, or by *Settings, Calculations,
   Clear finished jobs' files*.
+- **A saved workspace keeps its jobs' files**, raw outputs included,
+  unless the step says *Don't keep raw outputs*; opened elsewhere, *Show
+  files* writes them back out (docs/FILE-IO.md, *A step's jobs*).
 
 ## Licences
 

@@ -4,6 +4,7 @@ import { opensAsText } from "../features/Workspace/utils/io";
 import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
+import { holdJobFilesOf } from "../features/Workspace/workflow/keptJobs";
 import { isMenoFile, menoKindOf, NotMenoFile, readMenoFile, readStyleFile } from "../../lib/doc/menoFile";
 import { readStyleFileText, type StyleFile } from "../../lib/chem/styleFile";
 import { useNotices } from "../notices";
@@ -72,6 +73,8 @@ export function workspaceOfFile(bytes: Uint8Array): string | null {
   // (a PDF it keeps that cannot be held would be blank: said, by its name)
   holdPdfsOf(file, (name, why) => useNotices.getState().show({ id: `pdf-not-held:${name}`, title: "A PDF could not be opened", text: `${name}, in this workspace: ${why}.` }));
   holdPicturesOf(file);
+  // (its steps' jobs' files: written back out only when wanted, where their folders are not on this computer)
+  holdJobFilesOf(file);
   return file.workspace;
 }
 

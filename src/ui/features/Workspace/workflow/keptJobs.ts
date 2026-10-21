@@ -1,0 +1,134 @@
+/**
+ * A step's jobs as a workspace's file keeps them (docs/FILE-IO.md, *A
+ * step's jobs*): every job of its run and of the runs it keeps - what it
+ * was given, what its program wrote, and its logs - by their SHA-256, as
+ * the workspace is saved. Where a job's folder is on this computer, its
+ * files are listed from it (src-tauri keptjobs.rs) and added to the file
+ * from the disk as it is written (`appended`); where it is not - the
+ * workspace opened from a file made elsewhere - they are kept again from
+ * that file (`carried`). A step's *Don't keep raw outputs* keeps only what
+ * a job was given, what was read back of it, and its logs; what it leaves
+ * out, or what is not to be had, each job's record names, with its size.
+ */
+import { jobKept, type KeptJobFile } from "../../../../lib/jobs";
+import { JOB_FILE_MEDIA, type KeptData, type KeptFile, type MenoFile } from "../../../../lib/doc/menoFile";
+import type { KeptJob, KeptJobEntry, LeftJobEntry, StepRan, WorkflowStep } from "../store/types";
+
+/** A job's file to be added to a workspace's file from the disk (src-tauri keptjobs.rs `Appended`). */
+export type Appended = { sha256: string; job: string; name: string };
+
+/** What a save keeps of the steps' jobs. */
+export type JobsKept = {
+  /** Each job's record, by its id: what is kept of it, and what is not. */
+  records: Map<string, KeptJob>;
+  /** The files to be added from the disk, listed with the workspace's files as it is written (`files.json`). */
+  listed: KeptFile[];
+  appended: Appended[];
+  /** The files of jobs not on this computer, kept again from the file the workspace was opened from. */
+  carried: KeptData[];
+  /** About how much each step's jobs add to the file, deflated, largest first. */
+  steps: { step: number; bytes: number }[];
+  /** About how much they all add. */
+  bytes: number;
+};
+
+/** A step's jobs, of its run and the runs it keeps, each once. */
+export const jobsOfStep = (s: WorkflowStep): string[] => [...new Set([s.ran, ...(s.runs ?? [])].flatMap((r) => r?.jobs ?? []))];
+
+/** What the file a workspace was opened from kept of a job. */
+const recordOf = (s: WorkflowStep, job: string): KeptJob | undefined => [s.ran, ...(s.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
+
+/** The bytes of job files the workspace files opened this session keep, by SHA-256: read only when wanted. */
+const held = new Map<string, () => Uint8Array | null>();
+
+/** Holds the job files a workspace's file keeps, as it is opened: each read from it only when wanted. */
+export function holdJobFilesOf(file: MenoFile): void {
+  for (const f of file.files) if (f.media === JOB_FILE_MEDIA && !held.has(f.sha256)) held.set(f.sha256, () => file.data(f.sha256));
+}
+
+/** A job file a workspace's file opened this session keeps, as its bytes; none where none is held, or it does not read. */
+export const heldJobFile = (sha256: string): Uint8Array | null => held.get(sha256)?.() ?? null;
+
+/**
+ * What a save keeps of `steps`' jobs: each job's files listed from its
+ * folder (`read`) where it is on this computer, or else as the file it was
+ * opened from kept them (`bytesOf`). A job with neither - its folder gone,
+ * and never kept - has nothing to keep and no record.
+ */
+export async function jobsToKeep(
+  steps: readonly WorkflowStep[],
+  read: (job: string) => Promise<KeptJobFile[] | null> = jobKept,
+  bytesOf: (sha256: string) => Uint8Array | null = heldJobFile,
+): Promise<JobsKept> {
+  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0 };
+  const seen = new Set<string>();
+  for (const step of steps) {
+    const raw = step.keepRaw !== false;
+    let bytes = 0;
+    for (const job of jobsOfStep(step)) {
+      if (out.records.has(job)) continue;
+      const files: KeptJobEntry[] = [];
+      const left: LeftJobEntry[] = [];
+      const here = await read(job).catch(() => null);
+      if (here) {
+        for (const f of here) {
+          if (!raw && f.role === "raw") {
+            left.push({ name: f.name, size: f.size, why: "raw" });
+            continue;
+          }
+          files.push({ name: f.name, sha256: f.sha256, size: f.size, role: f.role });
+          if (seen.has(f.sha256)) continue;
+          seen.add(f.sha256);
+          out.listed.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, size: f.size });
+          out.appended.push({ sha256: f.sha256, job, name: f.name });
+          bytes += f.deflated;
+        }
+      } else {
+        const was = recordOf(step, job);
+        if (!was) continue;
+        for (const f of was.files) {
+          if (!raw && f.role === "raw") {
+            left.push({ name: f.name, size: f.size, why: "raw" });
+            continue;
+          }
+          const data = seen.has(f.sha256) ? null : bytesOf(f.sha256);
+          if (!seen.has(f.sha256) && !data) {
+            left.push({ name: f.name, size: f.size, why: "not had" });
+            continue;
+          }
+          files.push(f);
+          if (!data) continue;
+          seen.add(f.sha256);
+          out.carried.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, data });
+          bytes += data.length;
+        }
+        // (what that file had left out, still left out - and said)
+        left.push(...(was.left ?? []).filter((l) => !left.some((x) => x.name === l.name)));
+      }
+      out.records.set(job, { job, files, ...(left.length ? { left } : {}) });
+    }
+    if (bytes) out.steps.push({ step: step.id, bytes });
+    out.bytes += bytes;
+  }
+  out.steps.sort((a, b) => b.bytes - a.bytes);
+  return out;
+}
+
+/** `steps` as a file writes them: each run's jobs with what is kept of them (`records`), and nothing else said of what was kept. */
+export function withKeptJobs(steps: readonly WorkflowStep[], records: ReadonlyMap<string, KeptJob>): WorkflowStep[] {
+  const ran = <R extends StepRan>(r: R): R => {
+    const { kept: _, ...rest } = r;
+    const kept = (r.jobs ?? []).flatMap((j) => records.get(j) ?? []);
+    return (kept.length ? { ...rest, kept } : rest) as R;
+  };
+  return steps.map((s) => ({ ...s, ...(s.ran ? { ran: ran(s.ran) } : {}), ...(s.runs ? { runs: s.runs.map(ran) } : {}) }));
+}
+
+/** The size a save past which says the workspace is large, by default (docs/WORKFLOWS-FOUNDATION.md, answer Q), in MB. */
+export const LARGE_WORKSPACE_MB = 500;
+
+/** Whether a save of `bytes` takes the workspace past `threshold`: over it, where the file it replaces - `before`, none where there is none - was not. */
+export const takesPast = (bytes: number, before: number | null, threshold: number): boolean => bytes > threshold && (before == null || before <= threshold);
+
+/** A size in bytes as Meno says it of a workspace: whole megabytes, or gigabytes to a tenth from one up. */
+export const megabytes = (n: number) => (n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 2 ** 20))} MB`);

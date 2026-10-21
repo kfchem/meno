@@ -72,6 +72,8 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { atOnce: 0, cores: 2.5 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { atOnce: 65, cores: "8" } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { atOnce: 3, cores: 16 } }).calculations).toEqual({ atOnce: 3, cores: 16 });
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 0 } }).calculations).toEqual({});
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({ largeWorkspaceMB: 2048 });
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
@@ -160,6 +162,7 @@ describe("the settings file holds only what the user changed (the maintainer, 20
     ["labels as typed", { labels: { smart: false } }],
     ["words as typed", { words: { smart: false } }],
     ["jobs at once", { calculations: { atOnce: 2 } }],
+    ["a larger workspace before a save says so", { calculations: { largeWorkspaceMB: 800 } }],
     ["pictures at another resolution", { pictures: { dpi: 300 } }],
   ];
 

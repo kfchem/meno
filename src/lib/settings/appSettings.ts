@@ -72,11 +72,15 @@ export type CalculationSettings = {
   atOnce?: number;
   /** How many cores each job may use; unset, the computer's shared among those at once (lib/jobs `runningOf`). */
   cores?: number;
+  /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
+  largeWorkspaceMB?: number;
 };
 
 /** The most jobs at once, and cores for each, Settings takes. */
 export const JOBS_AT_ONCE_MOST = 64;
 export const CORES_MOST = 1024;
+/** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this. */
+export const LARGE_WORKSPACE_MOST = 1_000_000;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
@@ -210,11 +214,12 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: how many at once, and cores for each, whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { atOnce?: unknown; cores?: unknown } | null;
+  const r = raw as { atOnce?: unknown; cores?: unknown; largeWorkspaceMB?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const atOnce = whole(r?.atOnce, JOBS_AT_ONCE_MOST);
   const cores = whole(r?.cores, CORES_MOST);
-  return { ...(atOnce ? { atOnce } : {}), ...(cores ? { cores } : {}) };
+  const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
+  return { ...(atOnce ? { atOnce } : {}), ...(cores ? { cores } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */

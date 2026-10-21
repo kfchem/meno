@@ -1741,7 +1741,7 @@ fn jobs_in(data: &Path) -> PathBuf {
     data.join("jobs")
 }
 
-fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
+pub(crate) fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
     let root = jobs_in(&crate::local_data_dir(app)?);
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
@@ -1750,6 +1750,11 @@ fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
 /// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
 pub fn job_id_ok(id: &str) -> bool {
     uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+}
+
+/// Whether `dir` is a job's folder: one whose spec has been written (`make_job` writes it last).
+pub fn is_job(dir: &Path) -> bool {
+    dir.join(SPEC).is_file()
 }
 
 /// A job's folder, by its id - which is only ever one Meno made.
@@ -1785,7 +1790,9 @@ pub struct JobAsk {
     pub path: Option<String>,
     /// Programs installed beside its own to run after it (`JobSpec::then`), by their names there.
     #[serde(default)]
-    pub then: Vec<ThenAsk>,
+    pub then: Vec<ThenAsk>,    /// The files of its work folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (keptjobs.rs).
+    #[serde(default)]
+    pub reads: Vec<String>,
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -1838,6 +1845,12 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         then,
     };
     let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
+    // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
+    let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
+    let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
+    if let Err(e) = crate::keptjobs::write_roles(&dir, inputs, reads) {
+        crate::logfile::line("meno", &format!("a job's kept.json could not be written: {e}"));
+    }
     let started = std::env::current_exe().and_then(|exe| start_runner(&exe, &dir));
     if let Err(e) = started {
         let why = format!("its runner could not be started: {e}");

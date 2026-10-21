@@ -45,6 +45,8 @@ export type JobAsk = {
   path?: string;
   /** Programs installed beside its own to run after it, by their names in its manifest (`installed[].beside`), with their arguments. */
   then?: { program: string; args: string[] }[];
+  /** The files of its folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (lib/doc/keptJobs). */
+  reads?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */
@@ -62,6 +64,15 @@ export const jobFiles = (id: string) => invoke<string[]>("job_files", { id });
 export const readJobFile = (id: string, name: string) => invoke<string>("job_read", { id, name });
 /** Where a job's files are, for *Show files*. */
 export const jobFolder = (id: string) => invoke<string>("job_folder", { id });
+
+/** What a job's file is to it, kept in a workspace (src-tauri keptjobs.rs): given it, read back of it, what its programs said, or anything else it wrote. */
+export type KeptRole = "input" | "read" | "log" | "raw";
+/** A job's file a workspace may keep: its name in the job's folder (`work/...`, `log.txt`, `after.txt`), size, SHA-256, about how much it comes to deflated, and what it is to the job - `unsure` where the job never said (made by an older Meno). */
+export type KeptJobFile = { name: string; size: number; sha256: string; deflated: number; role: KeptRole; unsure?: true };
+/** A job's files a workspace may keep, where its folder is on this computer; null where it is not. */
+export const jobKept = (id: string) => invoke<KeptJobFile[] | null>("job_kept", { id });
+/** Writes a file a workspace kept of a job back out, where the job's folder is not on this computer; where its work folder now is. */
+export const writeJobBack = (id: string, name: string, bytes: Uint8Array) => invoke<string>("job_write_back", bytes, { headers: { job: id, name } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => invoke<void>("job_stop", { id });
 /** A finished job's folder taken away. */

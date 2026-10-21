@@ -18,6 +18,7 @@ mod fonts;
 #[cfg(windows)]
 mod drop;
 mod jobs;
+mod keptjobs;
 mod logfile;
 mod pdf;
 mod pdfmake;
@@ -1061,7 +1062,9 @@ pub fn run() {
             jobs::job_folder,
             jobs::job_stop,
             jobs::job_remove,
-            jobs::jobs_clear_finished
+            jobs::jobs_clear_finished,
+            keptjobs::job_kept,
+            keptjobs::job_write_back
         ])
         .build(context)
         .expect("error while building tauri application")

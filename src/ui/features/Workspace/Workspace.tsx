@@ -200,7 +200,7 @@ import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
-import { missingFor } from "./workflow/doers";
+import { byOf, MENO, missingFor } from "./workflow/doers";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -1966,6 +1966,8 @@ function WorkspaceContent({
               // (its jobs under way, or Meno's own working in turns: Stop)
               ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
+              // (a step a plugin does runs jobs, whose files the workspace's file keeps: workflow/keptJobs)
+              ...(byOf(s) !== MENO.id ? { keepRaw: { kept: s.keepRaw !== false, set: (keep: boolean) => st.keepRawOutputs(s.id, keep) } } : {}),
             };
           })()}
           onStepOptions={() => {
