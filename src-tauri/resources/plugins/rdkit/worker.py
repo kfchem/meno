@@ -423,7 +423,9 @@ def options_of(m):
         "same": number("same", SAME_SHAPE, 0.05, 5.0, float),
         "iters": number("iters", STEPS, 10, 100000),
     }
-#: Kilocalories per mole in a hartree: energies go back in hartrees.
+#: Kilocalories per mole in a hartree: energies go back in hartrees. The hartree (4.3597447222071e-18 J,
+#: CODATA 2018) times the Avogadro constant (6.02214076e23 per mole, exact, SI 2019), over the
+#: thermochemical calorie (4.184 J, exact).
 KCAL_PER_HARTREE = 627.509474
 
 
