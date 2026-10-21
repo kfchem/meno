@@ -54,6 +54,8 @@ libc = "0.2"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.1", default-features = false, features = ["std", "NSApplication", "NSColor", "NSGraphics", "NSPasteboard", "NSPasteboardItem", "NSResponder", "NSRunningApplication", "NSScreen", "NSView", "NSWindow"] }
 objc2-foundation = { version = "0.3.1", default-features = false, features = ["std", "NSArray", "NSData", "NSGeometry", "NSString", "NSURL"] }
+# (and src/defaults.rs: the block the system answers a change of default app with)
+block2 = "0.6"
 
 [target.'cfg(windows)'.dependencies]
 # (and jobs.rs: a job's program, and what it starts, in a job object)
