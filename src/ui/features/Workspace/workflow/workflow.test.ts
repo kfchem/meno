@@ -1,4 +1,11 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// (the plugin that perceives configurations, as the test has it: every molecule here - water, sulfane, their
+//  like - has no stereo, which a run asks before As conformers and Populations; workflow/configurations)
+vi.mock("./configurations", async (actual) => ({
+  ...(await actual<typeof import("./configurations")>()),
+  stereoKnown: () => ({ perceived: true, elements: [], key: "none", by: { plugin: "rdkit", version: "0.1.7" } }),
+}));
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { connectStoreToDocument, createEditorStore } from "../store";
@@ -661,6 +668,12 @@ describe("what a step on entries alone gives back", () => {
     const out = runMeno("as-conformers", all.map((e, i) => ({ ...e, stereo: isomer(i % 2 ? "S" : "R") })), "molecules");
     expect(out.ok && out.kept.map((e) => [e.compound, e.number, e.energy])).toEqual([[0, 1, -76.001], [0, 2, -76.003], [1, 1, -76.002], [1, 2, -76.004]]);
     expect(out.said).toBe("2 compounds · 4");
+  });
+
+  it("will not make a compound of entries none of which was asked which stereoisomer it is", () => {
+    // (constitution alone would sum diastereomers: not asked is not known, and it fails closed)
+    const all = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3])].map((e) => ({ ...e, stereo: undefined }));
+    expect(runMeno("as-conformers", all, "molecules")).toEqual({ ok: false, said: "Which stereoisomer entry 1 is is not known: it has not been asked" });
   });
 
   it("will not make a compound of an entry whose stereoisomer is not known", () => {
