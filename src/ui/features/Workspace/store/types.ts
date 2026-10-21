@@ -769,6 +769,18 @@ export type EditorState = {
   setPdfColumnWidth: (px: number) => void;
   /** The PDF the column shows, among those read there; none, it shows the text it shows (docs/PDF.md, *In the column*). */
   pdfShown: number | null;
+  /**
+   * The sets read as tables in the column, by id, in the order they were
+   * opened (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*); and the one it
+   * shows - over a text or a PDF - or none. The view's, never saved.
+   */
+  setsRead: number[];
+  setTableShown: number | null;
+  /** A set opened as a table in the column, and shown there. */
+  readSetTable: (id: number) => void;
+  showSetTable: (id: number) => void;
+  /** A set's table closed in the column. */
+  stopReadingSetTable: (id: number) => void;
   /** The PDF a page of in the column is under the pointer: it is lit on the page, as one hovered there is. */
   litPdf: number | null;
   setLitPdf: (id: number | null) => void;

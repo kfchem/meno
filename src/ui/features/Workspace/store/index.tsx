@@ -279,6 +279,8 @@ export function createEditorStore(
     columnFilled: false,
     pdfColumnWidth: null,
     pdfShown: null,
+    setsRead: [],
+    setTableShown: null,
     litPdf: null,
     pdfFlight: null,
     pdfSel: null,
