@@ -101,6 +101,10 @@ src-tauri/
                           Meno names none of them (docs/PLUGINS.md). uv and pixi are not
                           bundled but fetched the first time an environment needs one,
                           pinned by version and SHA-256 (src/tools.rs)
+  resources/licenses/     the licences of what Meno is built with and carries, shown in Settings (General,
+                          Licences): THIRD-PARTY-NOTICES.txt, every npm package and crate built in, written
+                          by scripts/licenses/notices.mjs (docs/RELEASING.md, *Third-party notices*); and
+                          PDFium's, pdfium-render's, the typefaces' and ACCeL's, each in a file of its own
 site/                     the website, kfchem.github.io/meno: plain HTML, CSS and JS, no build. The
                           Pages workflow (.github/workflows/pages.yml) writes the latest release
                           into it (scripts/site/release.mjs); scripts/site/wordmark.mjs draws the
