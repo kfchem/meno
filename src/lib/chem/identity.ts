@@ -56,7 +56,10 @@ const AROMATIC = 4;
  * want it. A bond so made one order says no cis or trans of its own: it is
  * single in some of the structure's Kekulé structures, so a drawing's side
  * on it - a cyclooctatetraene's ring bonds, drawn cis - is dropped with its
- * order.
+ * order. That holds for a real trans bond too: in a large annulene (a
+ * [14]- or [18]annulene, with E bonds in its ring), configurational
+ * isomers that differ by such a bond are one structure, as the rule
+ * states.
  */
 export function aromaticForm(input: LayoutInput): LayoutInput {
   const n = input.atoms.length;
@@ -185,9 +188,10 @@ export function hydrogensFolded(input: IdentityInput): IdentityInput {
     return left[0];
   };
   const atoms = kept.map((i) => {
-    const { tetra, ...a } = input.atoms[i];
+    const { tetra, pi, ...a } = input.atoms[i];
     const t = tetra && centre(tetra);
-    return { ...a, ...(extra[i] ? { hs: (a.hs ?? 0) + extra[i] } : {}), ...(t ? { tetra: t } : {}) };
+    // (a star's pi system by its atoms' new places, as every other reference is: none of them is folded)
+    return { ...a, ...(extra[i] ? { hs: (a.hs ?? 0) + extra[i] } : {}), ...(t ? { tetra: t } : {}), ...(pi ? { pi: pi.map((m) => at.get(m)!) } : {}) };
   });
   const bonds = input.bonds.flatMap((b): LayoutBond[] => {
     if (folded[b.a] || folded[b.b]) return [];
@@ -248,7 +252,12 @@ export function identity(input: IdentityInput): { text: string; complete: boolea
   return canonicalWritten(compared(input));
 }
 
-/** The structure written in its own order (`identity`): the same text for the same structure, whatever order its atoms are in. */
+/**
+ * The structure written in its own order (`identity`): the same text for the
+ * same structure, whatever order its atoms are in. It does not say whether
+ * the search that wrote it was complete: a caller that judges duplicates by
+ * it, and must say where a duplicate may have been missed, uses `identity`.
+ */
 export function identityText(input: IdentityInput): string {
   return identity(input).text;
 }
@@ -257,7 +266,8 @@ export function identityText(input: IdentityInput): string {
  * A structure's identity as a short key: its identity text hashed (FNV-1a,
  * twice over, 64 bits as hex). Two structures with the same key are the
  * same structure but by a collision far less likely than a typo; where it
- * matters, the texts are compared.
+ * matters, the texts are compared. Like `identityText`, it does not say
+ * whether the search was complete; `identity` does.
  */
 export function identityKey(input: IdentityInput): string {
   const text = identityText(input);

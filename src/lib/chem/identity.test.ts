@@ -191,6 +191,14 @@ describe("a structure's orbits and automorphisms", () => {
   });
 });
 
+/** Ethylene bound to platinum through a star, an H drawn on its first carbon. */
+function cpLike(): IdentityInput {
+  return {
+    atoms: [{ el: "C", hs: 1 }, { el: "C", hs: 2 }, { el: "*", hs: 0, pi: [0, 1] }, { el: "Pt", hs: 0 }, { el: "H", hs: 0 }],
+    bonds: [{ a: 0, b: 1, order: 2 }, { a: 2, b: 3, order: 1 }, { a: 0, b: 4, order: 1 }],
+  };
+}
+
 /** `smiles` read, the atoms at the places given changed as said: a mass number, unpaired electrons, a mapping. */
 function marked(smiles: string, at: Record<number, Partial<IdentityAtom>> = {}): IdentityInput {
   const g = fromSmiles(smiles);
@@ -262,7 +270,54 @@ describe("a plain hydrogen atom, in a structure's identity", () => {
   });
 });
 
+describe("a plain hydrogen folded in beside a pi system bound to a metal", () => {
+  /** A cyclopentadienyl ring, one H drawn on its first carbon, its star bound to Fe: the H at `hAt` among the atoms. */
+  function cp(hAt: "first" | "last"): IdentityInput {
+    // (ring c0..c4, the star, Fe - and the H on c0, first or last)
+    const ring = [0, 1, 2, 3, 4];
+    const off = hAt === "first" ? 1 : 0;
+    const h = hAt === "first" ? 0 : 7;
+    const atoms: IdentityAtom[] = [];
+    if (hAt === "first") atoms.push({ el: "H", hs: 0 });
+    for (const k of ring) atoms.push({ el: "C", hs: k === 0 ? 0 : 1 });
+    atoms.push({ el: "*", hs: 0, pi: ring.map((k) => k + off) });
+    atoms.push({ el: "Fe", hs: 0 });
+    if (hAt === "last") atoms.push({ el: "H", hs: 0 });
+    const bonds = [
+      ...ring.map((k) => ({ a: k + off, b: ((k + 1) % 5) + off, order: k % 2 ? 1 : k === 4 ? 1 : 2 })),
+      { a: 5 + off, b: 6 + off, order: 1 },
+      { a: off, b: h, order: 1 },
+    ];
+    return { atoms, bonds };
+  }
+
+  it("keeps the pi system on its own atoms: the same structure whatever the order of its atoms", () => {
+    const first = hydrogensFolded(cp("first"));
+    expect(first.atoms.find((a) => a.el === "*")!.pi).toEqual([0, 1, 2, 3, 4]);
+    expect(identityText(cp("first"))).toBe(identityText(cp("last")));
+    for (const seed of SHUFFLE_SEEDS) expect(identityText(shuffled(cp("first"), seed) as IdentityInput)).toBe(identityText(cp("last")));
+  });
+});
+
 describe("a hydrogen atom kept an atom in a structure's identity", () => {
+  it("one of a pi system bound to a metal", () => {
+    const g: IdentityInput = { atoms: [{ el: "H", hs: 0 }, { el: "H", hs: 0 }, { el: "*", hs: 0, pi: [0, 1] }, { el: "Pt", hs: 0 }], bonds: [{ a: 0, b: 1, order: 1 }, { a: 2, b: 3, order: 1 }] };
+    expect(hydrogensFolded(g).atoms).toHaveLength(4);
+    // (and one plain H bonded to an atom of a pi system, not in it: folded)
+    const ring = cpLike();
+    expect(hydrogensFolded(ring).atoms.filter((a) => a.el === "H")).toHaveLength(0);
+  });
+
+  it("bonded by anything but one single bond, or to nothing", () => {
+    // (an H drawn with a double bond to its carbon: not a plain H)
+    expect(hydrogensFolded({ atoms: [{ el: "H", hs: 0 }, { el: "C", hs: 2 }], bonds: [{ a: 0, b: 1, order: 2 }] }).atoms).toHaveLength(2);
+    // (a lone H atom, bonded to nothing)
+    const lone = { atoms: [{ el: "H", hs: 0 }, { el: "C", hs: 4 }], bonds: [] };
+    expect(hydrogensFolded(lone).atoms).toHaveLength(2);
+    expect(identityText(lone)).not.toBe(identityText(fromSmiles("C")));
+  });
+
+
   // (each beside the structure folding it would make, its identity apart from that one)
   it("one isotope in particular: CH3D is not methane, CH3T not CH3D", () => {
     const d = marked("[H]C", { 0: { isotope: 2 } });
