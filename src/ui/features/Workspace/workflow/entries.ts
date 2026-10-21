@@ -6,6 +6,7 @@
  * it.
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
+import type { CalcInfo } from "../../../../lib/calc/output";
 import { geometryKey, type Entry, type EntryAtom, type Property } from "../../../../lib/entry";
 import { speciesOf } from "../../../../lib/io/writers";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
@@ -215,6 +216,16 @@ export type SetEntry = {
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
   name?: string;
+  /**
+   * What the calculation it was read from says - the program, the method
+   * its energy is of - and what its molecule keeps besides (`keptOf`): the
+   * drawing it was made from, its stereo labels, how it was made and what
+   * its energies are from. A step that works on entries alone, changing
+   * none of them, gives them back with these as they were; a program that
+   * works them out anew gives its own.
+   */
+  calc?: CalcInfo;
+  keep?: Kept;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -233,6 +244,24 @@ export function frameXyz(m: Pick<Molecule3D, "atoms" | "frames">, f: number): nu
  * (docs/WORKFLOWS.md, *Compound sets and conformer sets*); in a conformer
  * set each molecule is a compound, its frames its conformers.
  */
+/** What a molecule in 3D keeps besides its atoms, bonds and places that an entry of it carries (`SetEntry.keep`). */
+export type Kept = Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
+
+/**
+ * What a molecule keeps besides its atoms, bonds and places: the drawing it
+ * was made from, its stereo labels, how it was made, and its bonds to ring
+ * centres (eta) - its atoms in the same order, as its entries keep them.
+ */
+export function keptOf(m: Kept): Kept {
+  return {
+    drawnFrom: m.drawnFrom,
+    drawnAs: m.drawnAs,
+    ...(m.stereo ? { stereo: m.stereo } : {}),
+    ...(m.made ? { made: m.made } : {}),
+    ...(m.centres?.length ? { centres: m.centres } : {}),
+  };
+}
+
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
@@ -244,6 +273,9 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    const keep = keptOf(m);
+    // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
+    const calcBefore = m.calc ? (({ results: _r, ...rest }) => rest)(m.calc) : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       out.push({
@@ -256,6 +288,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        keep,
         from: m.id,
         frame: f,
         last: f === n - 1,

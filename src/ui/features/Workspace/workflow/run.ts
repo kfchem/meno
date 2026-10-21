@@ -7,10 +7,9 @@
  */
 import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "../store/types";
-import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
+import { setMembers, inside, setEntries, frameXyz, framesOf, keptOf, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
@@ -173,28 +172,12 @@ export const LEAST_W = 120 * PX;
 export type Worked = SetEntry & {
   path?: number[][];
   pathEnergies?: number[];
-  calc?: CalcInfo;
-  /** What the molecule made keeps besides: the drawing it was made from, its stereo labels, how it was made, its sticks to ring centres. */
-  keep?: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
 
-/**
- * What a molecule made in 3D for a step keeps besides its atoms, bonds and
- * places (`Worked.keep`): the drawing it was made from, its stereo labels,
- * how it was made, and its bonds to ring centres (eta) - its atoms in the
- * same order, as the step's entries keep them.
- */
-export function keptOf(m: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">): NonNullable<Worked["keep"]> {
-  return {
-    drawnFrom: m.drawnFrom,
-    drawnAs: m.drawnAs,
-    ...(m.stereo ? { stereo: m.stereo } : {}),
-    ...(m.made ? { made: m.made } : {}),
-    ...(m.centres?.length ? { centres: m.centres } : {}),
-  };
-}
+/** What a molecule made in 3D for a step keeps besides its atoms, bonds and places (entries `keptOf`). */
+export { keptOf };
 
 /** What a step gave, as its result set is to hold it: its molecules in 3D, those it set aside, and what kind of set they make. */
 export function resultsOf(outcome: Extract<Outcome, { ok: true }>): RunResults {

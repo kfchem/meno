@@ -492,6 +492,40 @@ describe("running", () => {
   });
 });
 
+describe("what a step on entries alone gives back", () => {
+  /** One compound's five conformers, made by a conformer search: what it was made by, what its energies are from, its stereo labels - the first conformer 4 kcal/mol up. */
+  function made(): WorkspaceDocument {
+    const m = {
+      ...bent({ x: 0, y: 0 }, 5, [4, 0, 0.5, 2, 0.5].map((k) => -76 + kcal(k))),
+      conformerSet: true as const,
+      numbers: [1, 2, 3, 4, 5],
+      calc: { readers: [], program: "RDKit", method: "MMFF94", results: [{ id: "x", on: "molecule" as const, group: "G", label: "Last", value: 1 }] },
+      made: { method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" },
+      stereo: { atoms: { 0: "R" }, bonds: {} },
+    };
+    return addSet(addMolecule3d(emptyWorkspaceDocument(), m), { x0: -3, y0: -3, x1: 3, y1: 3 });
+  }
+
+  it("keeps what its energies are from and how they were made - the first conformer gone or not", () => {
+    let doc = addStep(made(), "energy-window", 5, 0, { window: 1 });
+    doc = connect(doc, { set: 1 }, 2);
+    doc = runStep(doc, 2, W);
+    const out = resultOf(doc, 2)!;
+    const m = doc.molecules3d!.find((x) => setMembers(doc, out).molecules.includes(x.id))!;
+    // (conformers 2, 3 and 5 within the window - 1, which carried them before, not among them)
+    expect(m.numbers).toEqual([2, 3, 5]);
+    expect(m.made).toEqual({ method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
+    expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
+    expect(m.stereo).toEqual({ atoms: { 0: "R" }, bonds: {} });
+  });
+
+  it("gives what a calculation read of one geometry only to that geometry: the last frame's", () => {
+    const entries = setEntries(made().molecules3d!, "conformers");
+    expect(entries.map((e) => e.calc?.results?.length ?? 0)).toEqual([0, 0, 0, 0, 1]);
+    expect(entries.every((e) => e.calc?.method === "MMFF94")).toBe(true);
+  });
+});
+
 describe("a step's key, on structures drawn", () => {
   type Drawn = { id: number; el: string; x: number; y: number; r: number };
   const atom = (id: number, el: string, x: number, y: number): Drawn => ({ id, el, x, y, r: 0.9 });
