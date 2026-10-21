@@ -768,10 +768,11 @@ export default function PartMenu({
         ]
       : target.kind === "set"
       ? [
-          // (a set that holds its molecules itself, on no page: they go with it, said before it is deleted)
-          del(setHoldsOwn ? `Delete set and the ${setHoldsOwn} it holds` : "Delete set"),
+          ...(setHoldsOwn ? [] : [del("Delete set")]),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : []),
           ...(keepInFile ? [{ name: "Don't keep in the file", keys: "", run: () => keepInFile.set(!keepInFile.kept), checked: !keepInFile.kept, divider: true }] : []),
+          // (a set that holds its molecules itself, on no page: they go with it - said in words, listed last, not as an icon alone, before it is deleted)
+          ...(setHoldsOwn ? [{ name: `Delete set and the ${setHoldsOwn} it holds`, keys: deleteKey, run: onDelete, del: true, divider: true }] : []),
         ]
       : target.kind === "step"
       ? [
