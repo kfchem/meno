@@ -149,7 +149,7 @@ equivalent atoms - may come in the other order. The rounded scores
 
 ### Where Meno departs from ACCeL
 
-Meno departs from the original in nine places. The port keeps them as
+Meno departs from the original in eleven places. The port keeps them as
 ACCeL has them (`ACCEL_EXACT`, which the checks below run); Meno maps with
 the departures (`MENO_DEPARTURES`), each marked `[Meno departure: ...]`
 where it is in `accelMapper.ts` and tested beside what ACCeL does with the
@@ -208,6 +208,42 @@ maps as ACCeL does.
   counts that first; between maps that change as many bonds, ACCeL's order
   stands. Like ACCeL's own scores, it orders only the maps the search
   builds.
+
+- **The hydrogen in line goes** (`transferAlignedH`). Where a map moves a
+  hydrogen from one atom (the donor, D) to another (the acceptor, A) and
+  the donor holds other hydrogens like it, ACCeL's choice of which one goes
+  follows from how it placed the group, not from where A stands; in
+  hydrogen abstraction from methane by a chlorine atom lying in line with
+  one C-H, ACCeL can give the chlorine another. A hydrogen is passed along
+  the line D-H...A, so Meno, after ACCeL's ordering, has the one already
+  nearest that line go, and puts it in the place on A in line with D where
+  A holds hydrogens of its own. "Nearest the line" is the turn, about the
+  bond to the atom's one other heavy neighbour, between the hydrogen and the
+  partner (D or A), where there is one such neighbour (a methyl); otherwise
+  the angle at the hydrogen, atom-H...partner, short of 180°. Meno takes
+  another hydrogen over ACCeL's only when it is nearer by more than 60°
+  (`TRANSFER_MARGIN`): a methyl's hydrogens stand 120° apart about its
+  axis, so nearer by more than half that is not the same hydrogen reached
+  by turning the other way. Nearer by less, the geometry cannot tell them
+  apart, and ACCeL's choice stands. Only which of an atom's like hydrogens
+  is which changes; each map keeps its bond changes.
+- **Hydrogens held in a frame keep their places** (`localLeastTurn`). Like
+  hydrogens that stay on one atom are placed by ACCeL by chirality or a
+  torsion. Where the atom has two or more heavy neighbours, Meno, after
+  `transferAlignedH`, lays the atom and those neighbours on one side over
+  the same atoms on the other and gives each hydrogen the one nearest it:
+  such a group cannot turn freely, so its hydrogens keep their places about
+  their atom through a step. In an SN2 at a CH2, the centre inverts as an
+  umbrella folding over; ACCeL reads it as kept and swaps the two
+  hydrogens. A methyl, or an atom with no heavy neighbour, has no frame to
+  lay over and is left as ACCeL placed it, as is a group a hydrogen comes
+  to or goes from.
+
+  With either of these two, maps the search built apart can become the
+  same once their hydrogens are placed; each is then kept once, the first
+  in ACCeL's order, so there can be fewer maps than the search built (for
+  the Diels-Alder in the tests, 4 rather than 64, which differed only in
+  the ring CH2s' hydrogens).
 
 - **The same rounding elsewhere** (`clampEzCosine`, `clampFaceCosine`).
   `_det_ez` reads an exactly anti torsion as not E, its `arccos` not a
