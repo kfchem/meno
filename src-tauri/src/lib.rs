@@ -30,6 +30,7 @@ mod present;
 mod roaming;
 mod savefile;
 mod tools;
+mod truepath;
 mod update;
 mod windowstate;
 #[cfg(windows)]
@@ -1006,6 +1007,8 @@ pub fn run() {
             pdf::pdf_figure,
             // a chemist's documents written where they chose, whole or not at all
             savefile::write_document,
+            // a workspace file's one true path, however it was written
+            truepath::true_path_of,
             // the system clipboard, for structures
             clipboard::clipboard_write,
             clipboard::clipboard_read,
