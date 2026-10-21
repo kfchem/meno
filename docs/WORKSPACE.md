@@ -1861,16 +1861,23 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   none of its atoms - a ligand's, a PDB entry's chains' - is a hydrogen,
   and some would carry one. Its orders known, an atom whose valence leaves
   room for one would. Its orders unknown, a carbon whose neighbours leave
-  room would (none, or one but for the end of a C≡O or C≡N; two not in a
-  line; three whose angles at it sum to less than 338° - halfway between
-  a tetrahedron's corner, 328.4°, and C60's carbons, 348°); and where no
+  room would (none, or one, whatever it is bound to - hydrogen cyanide's
+  heavy atoms are a cyanide ion's too; two not in a line; three whose
+  angles at it sum to less than 350° with each bond a single bond's
+  length: measured over 1,454 molecules laid out by ETKDG and MMFF, the
+  833 such carbons with a hydrogen sum to 347.3° at most and have no bond
+  shorter than order 1.28 by its length, the 4,005 without one sum to
+  358.9° at least, and C60's - 348° - have a bond of order 1.63); and where no
   carbon says so but another atom could carry one - an oxygen with one
   bond, a nitrogen with two - the orders are estimated from the distances
   (above) and an atom other than carbon they leave room on would: a
   carboxylate's oxygen, an amine's nitrogen. Where they cannot be
   estimated, it cannot be told that none is missing: a skeleton. Carbon
-  dioxide, SF6, CCl4, C60 and a metal's carbonyls are whole by
-  themselves; any other that is whole without hydrogens is said so by the
+  dioxide, SF6, CCl4, C60, N2 and a metal's carbonyls are whole by
+  themselves. Some whole ones are taken for skeletons, the safe way: carbon
+  monoxide and an isocyanide's end (one neighbour, as a cyanide's), ozone,
+  SO2, SO3 and NO2 (their oxygens' orders not estimated as they are);
+  these, and any other that is whole without hydrogens, are said so by the
   chemist - *Complete without hydrogens* on its menu (`wholeWithoutH`,
   one undo step; never a PDB entry's). A skeleton is given no charge or
   spin (`lib/io/writers` `speciesOf` gives none: before, H-less

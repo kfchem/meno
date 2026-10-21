@@ -81,13 +81,13 @@ describe("what a molecule's file leaves out", () => {
         const a = (k * Math.PI) / 3;
         return [{ el, x: r * Math.cos(a), y: r * Math.sin(a), z: 0 }, ...(out ? [{ el: out, x: ro * Math.cos(a), y: ro * Math.sin(a), z: 0 }] : [])];
       }).flat();
-    // (none wanted: two in a line, four, three in a plane, the end of a triple bond)
+    // (none wanted: two in a line, four, three in a plane)
     expect(of([{ el: "O", x: -1.16, y: 0, z: 0 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.16, y: 0, z: 0 }])).toBe(false);
     expect(of([{ el: "C", x: 0, y: 0, z: 0 }, ...[[1, 1, 1], [1, -1, -1], [-1, 1, -1], [-1, -1, 1]].map(([x, y, z]) => ({ el: "Cl", x: x * t, y: y * t, z: z * t }))])).toBe(false);
     expect(of(ring("C", 1.39, "Cl", 1.39 + 1.73))).toBe(false);
     expect(of([{ el: "Fe", x: 0, y: 0, z: 0 }, { el: "C", x: 1.8, y: 0, z: 0 }, { el: "O", x: 2.95, y: 0, z: 0 }, { el: "C", x: -1.8, y: 0, z: 0 }, { el: "O", x: -2.95, y: 0, z: 0 }])).toBe(false);
-    expect(of([{ el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.13, y: 0, z: 0 }])).toBe(false);
-    // (wanted: an end, two bent, three in a pyramid, a C=O's carbon with nothing else, a lone carbon)
+    // (wanted: an end - carbon monoxide's too, whose heavy atoms are a formyl's: the chemist marks it whole - two bent, three in a pyramid, a C=O's carbon with nothing else, a lone carbon)
+    expect(of([{ el: "C", x: 0, y: 0, z: 0 }, { el: "O", x: 1.13, y: 0, z: 0 }])).toBe(true);
     expect(of([{ el: "C", x: 0, y: 0, z: 0 }, { el: "C", x: 1.54, y: 0, z: 0 }])).toBe(true);
     expect(of(ring("C", 1.39, null, 0))).toBe(true);
     // (chloroform's carbon, its three chlorines in a pyramid about it, wants one; three in a plane, none)

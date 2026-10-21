@@ -12,7 +12,7 @@
  * and bonds.
  */
 import { implicitHydrogens, type Radical } from "./molecule";
-import { ordersFromGeometry } from "./ordersFromGeometry";
+import { orderFromLength, ordersFromGeometry } from "./ordersFromGeometry";
 
 export type SkeletonAtom = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical };
 export type SkeletonBond = { a1: number; a2: number; order: number };
@@ -32,23 +32,36 @@ export function skeletonWhy(count = 1): string {
 /** Two of a carbon's neighbours further round it than this, in degrees, stand in a line with it. */
 const IN_A_LINE = 165;
 /**
- * Three of its neighbours whose angles at it come to this, in degrees, or
- * more leave it no room for a hydrogen: halfway between a tetrahedron's
- * corner (328.4, three angles of 109.47) and C60's carbons (348: a
- * pentagon's 108 and two hexagons' 120 - a truncated icosahedron's faces
- * are flat) - a carbon with no hydrogen of its own that is not flat.
+ * A carbon with three neighbours carries a hydrogen where their angles at
+ * it sum to less than this, in degrees, and each of its three bonds is as
+ * long as a single bond (`SINGLE_MOST`). Neither alone tells it: measured
+ * (2026-10-21) over 1,454 molecules - RDKit's NCI sample (the first 1,500
+ * of Data/NCI/first_5K.smi), strained cages (cubane, bicyclo[1.1.1]pentane,
+ * norbornane, adamantane, triquinacene) and crowded methines (CHI3, CHCl3,
+ * CHBr3, HC(CCl3)3, HC(C6F5)3, triphenyl- and tri-tert-butylmethane,
+ * diphenylacetonitrile, diphenylacetic acid) - laid out by ETKDG and MMFF:
+ * the 833 such carbons with a hydrogen sum to 347.3° at most (tri-tert-
+ * butylmethane), above a tetrahedron's corner, 328.4°, by far; the 4,005
+ * without one to 358.9° at least - but C60's carbons to 348° (a pentagon's
+ * 108° and two hexagons' 120°: a truncated icosahedron's faces are flat).
+ * Their bonds tell C60 apart: none of a carbon with a hydrogen reads above
+ * order 1.28 by its length (a CH beside a CF2), none without one has all
+ * three below 1.44, and C60's 1.40 Å reads 1.63.
  */
-const IN_A_PLANE = 338;
-/** The end of a triple bond from a carbon to oxygen or nitrogen, in ångströms, at most: carbon monoxide's 1.13, an isocyanide's 1.17 (a C=O or C=N is 1.2 or more). */
-const TRIPLE_END = 1.18;
+const IN_A_PLANE = 350;
+/** A bond as long as a single bond, as `orderFromLength` reads it: below this - between the 1.28 and 1.44 above. */
+const SINGLE_MOST = 1.36;
 
 /**
  * Whether a carbon, its bond orders unknown, would carry hydrogens, by
- * where its neighbours stand (`near`): with none, or one - but for the end
- * of a C≡O or C≡N, carbon monoxide's or an isocyanide's; two, not in a
- * line; three, short of `IN_A_PLANE`. With four, two in a line (carbon
- * dioxide, a nitrile, a metal's carbonyl, an alkyne's middle) or three
- * about it (C60, a ring carbon with no hydrogen of its own) it has room for
+ * where its neighbours stand (`near`): with none, or one - whatever it is
+ * bound to: hydrogen cyanide's heavy atoms are a cyanide ion's, and a
+ * cyano radical's, so carbon monoxide and an isocyanide's end are taken
+ * for skeletons too, to be marked whole by the chemist; two, not in a
+ * line; three, short of flat and each bond single (`IN_A_PLANE`). With
+ * four, two in a line (carbon dioxide, a nitrile, a metal's carbonyl or
+ * cyanide, an alkyne's middle) or three flat or with a bond shorter than
+ * single (C60, a ring carbon with no hydrogen of its own) it has room for
  * none.
  */
 function wantsHydrogens(atoms: readonly SkeletonAtom[], i: number, near: readonly number[]): boolean {
@@ -59,13 +72,12 @@ function wantsHydrogens(atoms: readonly SkeletonAtom[], i: number, near: readonl
     const dot = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
     return (Math.acos(Math.max(-1, Math.min(1, dot / (Math.hypot(...u) * Math.hypot(...v))))) * 180) / Math.PI;
   };
-  if (near.length === 0) return true;
-  if (near.length === 1) {
-    const o = atoms[near[0]];
-    return !((o.el === "O" || o.el === "N") && Math.hypot(...way(near[0])) <= TRIPLE_END);
-  }
+  if (near.length <= 1) return true;
   if (near.length === 2) return angle(near[0], near[1]) < IN_A_LINE;
-  if (near.length === 3) return angle(near[0], near[1]) + angle(near[0], near[2]) + angle(near[1], near[2]) < IN_A_PLANE;
+  if (near.length === 3) {
+    if (angle(near[0], near[1]) + angle(near[0], near[2]) + angle(near[1], near[2]) >= IN_A_PLANE) return false;
+    return near.every((j) => (orderFromLength(c.el, atoms[j].el, Math.hypot(...way(j))) ?? 1) < SINGLE_MOST);
+  }
   return false;
 }
 
@@ -84,8 +96,10 @@ const roomFor = (atoms: readonly SkeletonAtom[], among: readonly number[], sum: 
  * stand (./ordersFromGeometry) and an atom they leave room on does - a
  * carboxylate's oxygen, an amine's nitrogen. Where they cannot be
  * estimated, it cannot be told that none is missing: a skeleton. Carbon
- * dioxide, sulfur hexafluoride, carbon tetrachloride, C60 and a metal's
- * carbonyls are whole without any.
+ * dioxide, sulfur hexafluoride, carbon tetrachloride, C60, N2 and a
+ * metal's carbonyls are whole without any. Some whole ones are taken for
+ * skeletons - the safe way, for the chemist to mark whole: carbon monoxide
+ * and an isocyanide's end, ozone, SO2, SO3 and NO2.
  */
 export function lacksHydrogens(
   atoms: readonly SkeletonAtom[],
