@@ -110,6 +110,17 @@ export type SaveWays = {
 };
 
 /**
+ * Whether the file at a one true path (`real`), there now, is to be kept
+ * beside a workspace's new one: the file it was last saved to, or opened
+ * from (`savedPath`), where it still holds something of a file the new one
+ * cannot keep (`lastHolds`), or - the first time it is saved over - what
+ * could not be read as it opened (`leftOnOpen`): its only copy.
+ */
+export function keepsOld(real: string, savedPath: string | null, lastHolds: boolean, leftOnOpen: EditorState["leftOnOpen"]): boolean {
+  return (lastHolds || (!!leftOnOpen && !leftOnOpen.kept)) && real === savedPath;
+}
+
+/**
  * A workspace's file written to `path`, as Save or Save As has it; where it
  * now is: its one true path (lib/io/truePath), asked once it is there - a
  * new file's name as it is kept, a file reached through a link the file it
@@ -563,7 +574,7 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         // (never a file another tab saves to)
         heldBy: (real) => heldElsewhere(real, tabId),
         // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
-        keepOld: (real) => (lastHolds || (!!leftOnOpen && !leftOnOpen.kept)) && real === savedPath,
+        keepOld: (real) => keepsOld(real, savedPath, lastHolds, leftOnOpen),
       });
       store.getState().markSavedAs(kept, written);
       store.getState().markLeftKept();
