@@ -603,6 +603,14 @@ export type WorkflowSet = {
    * order. None yet: what lies inside it, as a set was before.
    */
   members?: Member[];
+  /**
+   * A result set of more entries than are laid out on the page
+   * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
+   * `LARGE_SET`): what the step gave, held in the set itself, in the step's
+   * order - each a molecule in 3D as it would be on the page, but on none.
+   * Its frame shows them summed up; the steps after it take them from here.
+   */
+  collection?: Omit<Molecule3D, "id" | "at">[];
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */

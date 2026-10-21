@@ -27,6 +27,8 @@ export type SetFrameProps = {
   onHover: (on: boolean) => void;
   /** A chemist's set: its name changed - two clicks on it, Enter to keep it, Escape to leave it as it was. */
   onRename?: (name: string) => void;
+  /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame, where its molecules would lie. */
+  summary?: { count: string; nouns: string };
 };
 
 const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -100,6 +102,15 @@ export default function SetFrame(p: SetFrameProps) {
           <span className="text-gh-gray">{p.count}</span>
         </span>
       </div>
+      {p.summary && (
+        <div
+          className={clsx("absolute flex flex-col items-center justify-center text-center transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
+          style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
+        >
+          <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
+          <span className="text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+        </div>
+      )}
       <Port look={p.give} label={`Out of ${p.name}`} data={{ "data-give-set": String(p.set.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: h / 2 }} />
       {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} />}
     </div>

@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { AsideEntry, Member, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { AsideEntry, Member, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -59,6 +59,11 @@ function readSet(v: unknown): WorkflowSet | null {
       const members = membersIn(b.members);
       return members ? { members } : {};
     })(),
+    // (a large result set's collection, each molecule read as the page's are)
+    ...(() => {
+      const collection = Array.isArray(b.collection) && made ? b.collection.flatMap((m) => carriedMolecule(m)) : [];
+      return collection.length ? { collection } : {};
+    })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
     ...(() => {
@@ -99,6 +104,14 @@ function readRan(v: unknown): StepRan | undefined {
   };
 }
 
+/** A molecule in 3D a set or a run keeps, read as the page's are; none where it does not read. */
+function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
+  const read = readCarried3D({ ...(m as object), at: { x: 0, y: 0 } });
+  if (!read) return [];
+  const { at: _at, turn: _turn, frame: _frame, list: _list, shown: _shown, ...molecule } = read;
+  return [molecule];
+}
+
 /** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
@@ -106,14 +119,7 @@ function readKept(v: unknown): StepRunKept | null {
   if (!ran || !KINDS.some((k) => k.kind === r?.kind)) return null;
   const options = optionsIn(r?.options);
   const res = r?.results;
-  const molecules = Array.isArray(res?.molecules)
-    ? res.molecules.flatMap((m) => {
-        const read = readCarried3D({ ...(m as object), at: { x: 0, y: 0 } });
-        if (!read) return [];
-        const { at: _at, turn: _turn, frame: _frame, list: _list, ...molecule } = read;
-        return [molecule];
-      })
-    : [];
+  const molecules = Array.isArray(res?.molecules) ? res.molecules.flatMap(carriedMolecule) : [];
   const holds = SETS.includes(res?.holds as SetKind) ? (res!.holds as SetKind) : undefined;
   return {
     ...ran,

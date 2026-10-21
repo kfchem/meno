@@ -10,14 +10,14 @@ import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, LARGE_SET, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
+import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -108,11 +108,7 @@ export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; aside: As
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
   if (!set?.made || set.made.holds === "pictures") return undefined;
-  const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
-  const molecules = setMembers(doc, set).molecules.map((id) => {
-    const { id: _id, at: _at, ...m } = byId.get(id)!;
-    return m;
-  });
+  const molecules = set.collection ?? setMolecules(doc, set).map(({ id: _id, at: _at, ...m }) => m);
   return { molecules, aside: set.aside ?? [], holds: set.made.holds };
 }
 
@@ -163,6 +159,9 @@ export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({
 export const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
+/** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
+export const SUMMARY_W = 320 * PX;
+export const SUMMARY_H = SET_TOP + 120 * PX;
 
 /**
  * What a step gave as an entry, where a program worked it out: besides its
@@ -264,16 +263,23 @@ export function placeResults(
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
   const { molecules: made, aside, holds } = results;
-  const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
   const was = resultOf(doc, step.id);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const madeBy = { step: step.id, holds };
+  // (more than are laid out on the page: held in the set, its frame summing them up - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
+  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET) {
+    const frame = was ? frameAt(was.x0, was.y1, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    if (was) return holdCollection(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, [...made]);
+    const id = doc.nextWorkflowId ?? 1;
+    return holdCollection(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, [...made]);
+  }
+  const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
   const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
   // (all put on the page at once: one at a time copied the page's molecules again for each)
   const there = new Set((doc.molecules3d ?? []).map((m) => m.id));
   doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
   // (the set holds what the step made, in the step's order)
   const members = (doc.molecules3d ?? []).filter((m) => !there.has(m.id)).map((m) => ({ molecule: m.id }));
-  const madeBy = { step: step.id, holds };
   if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, members);
   const id = doc.nextWorkflowId ?? 1;
   return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, members);

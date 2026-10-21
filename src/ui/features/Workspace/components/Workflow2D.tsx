@@ -602,7 +602,14 @@ export default function Workflow2D() {
                 : count.holds === "molecules"
                   ? `${plural(count.compounds, "compound")}${aside ? ` · ${count.entries} of ${count.entries + aside}` : ""}`
                   : `${plural(count.compounds, "compound")} · ${aside ? `${count.entries} of ${count.entries + aside}` : count.entries}`;
-          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: b.keep === false && count.entries ? `${counted} · not kept` : counted }];
+          // (a large result set: what it holds, said large in its frame)
+          const summary = b.collection
+            ? {
+                count: count.entries.toLocaleString("en-US"),
+                nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
+              }
+            : undefined;
+          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: b.keep === false && count.entries ? `${counted} · not kept` : counted, summary }];
         }),
       ),
     [flow, sets, steps],
@@ -661,6 +668,7 @@ export default function Workflow2D() {
             set={{ ...b, ...f }}
             name={info.name}
             count={info.count}
+            {...(info.summary ? { summary: info.summary } : {})}
             hovered={hoveredSet === b.id}
             chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
