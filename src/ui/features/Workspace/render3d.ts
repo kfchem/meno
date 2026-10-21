@@ -12,6 +12,7 @@ import type { Carried3D, Molecule3D } from "./store/types";
 import { backToFront } from "./utils/backToFront";
 import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
 import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersShownOn } from "./utils/atomNumbers";
+import { JOINT_NUMBER_A, jointNumbersMesh, jointUniforms, setJointAttributes } from "./utils/jointNumbers";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
 import { watchShaderErrors } from "./utils/menoShader";
@@ -227,8 +228,28 @@ export function rendered3d(
       }
       atomsMesh.castShadow = atomsMesh.receiveShadow = true;
       group.add(atomsMesh);
-      // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above)
-      if (m.atomNumbers) {
+      // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above;
+      // Sticks, where the sticks meet: utils/jointNumbers)
+      if (m.atomNumbers && drawn.atoms === "sticks") {
+        const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
+        const on = numbersShownOn(molecule);
+        const joints = jointNumbersMesh(m.atoms.length);
+        const inks = new Float32Array(3 * m.atoms.length);
+        m.atoms.forEach((a, i) => {
+          joints.setMatrixAt(i, mtx.makeTranslation(places[3 * i], places[3 * i + 1], places[3 * i + 2]));
+          colour.set(atomColour(a.el, drawn)).toArray(inks, 3 * i);
+        });
+        joints.instanceMatrix.needsUpdate = true;
+        setJointAttributes(joints, nums, Float32Array.from(m.atoms, (_, i) => (on[i] && !left[i] ? 1 : 0)), inks);
+        const ju = jointUniforms(joints);
+        ju.pxPer.value = pxPerWorld;
+        ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM;
+        // (in front of where the sticks meet, as on the canvas: past the sticks' own round ends)
+        ju.lift.value = bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * 1.2;
+        ju.shown.value = 1;
+        made.push(joints.geometry, joints.material as THREE.Material);
+        group.add(joints);
+      } else if (m.atomNumbers) {
         const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
         const on = numbersShownOn(molecule);
         const digits = Uint8Array.from(nums, (v, i) => (on[i] ? digitsOf(v) : 0));
@@ -249,7 +270,8 @@ export function rendered3d(
         ball.setAttribute("ballNumberPlace", new THREE.InstancedBufferAttribute(Float32Array.from({ length: 4 * m.atoms.length }, (_, k) => (k % 4 === 3 ? on[k >> 2] : at[3 * (k >> 2) + (k % 4)])), 4));
         ao.numbers.shown.value = 1;
         ao.numbers.pxPer.value = pxPerWorld;
-        ao.numbers.least.value = NUMBER_LEAST_PX * cssPx;
+        // (the least in the picture's own pixels, not the canvas's: drawn at its size in print, as the Sticks' are - a number is left out only where it would be too small to read in the picture itself)
+        ao.numbers.least.value = NUMBER_LEAST_PX;
         ao.numbers.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
       }
       // the style's line round every ball and stick, and its depth fade (utils/outlineMaterial, occlusionMaterial)
