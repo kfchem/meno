@@ -298,6 +298,32 @@ also gives each atom's symmetry class. It is order-free, and never replaces
 the numbering. It is worked out once per structure and kept with the
 collection.
 
+What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
+- each atom's element, charge, mass number and unpaired electrons, and the
+  bonds between them;
+- each stereocentre's, double bond's and axis's configuration as drawn;
+- aromatic rings as one form: a structure's Kekulé structures, and
+  bond-shift isomers, are one structure. A bond made one order there keeps
+  no cis or trans of its own;
+- a plain hydrogen atom as one of its neighbour's hydrogens, with its
+  configuration carried to the atom it is on (`hydrogensFolded`). A
+  hydrogen stays an atom where it is charged, has an unpaired electron, is
+  one isotope in particular, is mapped to a reaction's atom, is bonded to
+  another hydrogen, bridges two atoms, is on a metal, or is in a pi system
+  bound to one.
+
+The texts are compared, not their keys. `identity` also says whether the
+canonical search was complete: where it ran out of steps (`settleBudget`),
+one structure may be written two ways, so a duplicate can be missed, but two
+different structures are never written the same. A drawing's structures are
+read for it by `chem/identityOf.ts`, which also names any atom whose wedges
+it could not read. The rule is checked against RDKit's canonical isomeric
+SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
+made by `scripts/identity/rdkit.py`, with RDKit's version and the commands
+that made it). The fixture holds each molfile by its SHA-256: the test
+writes the molfiles again and checks them against it. The bond-shift
+isomers, which RDKit keeps apart, are listed by name.
+
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
 one whose geometry it took and the one whose bonding it took. Lineage is a
