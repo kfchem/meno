@@ -210,8 +210,13 @@ RAISED = re.compile(r"^[A-Za-z_][\w.]*(Error|Exception|Exit)\b: ")
 
 
 # (where what was raised has been said in full: Blender's own words after it - its last, its version as it quits, "Blender
-# quit" - or a line of progress)
-SAID_AFTER = re.compile(r"^(Error: (script failed|Not freed memory blocks)|Blender |progress \d+/\d+$|Traceback )", re.I)
+# quit" - or a line of its progress as it renders - "Fra:", "Saved:", "Time:", a line it stamps with the time, info and
+# warnings - or of render.py's own: "progress 3/100", "Rendering on ...", "Making the film", "Rendered ...")
+SAID_AFTER = re.compile(
+    r"^(Error: (script failed|Not freed memory blocks)|Blender |Traceback |progress \d+/\d+$|Fra:|Saved:|Time:|Info:|Warning:"
+    r"|\d+:\d+(\.\d+)?\s|Rendering |Making the film|Rendered )",
+    re.I,
+)
 
 
 def why_of(log):

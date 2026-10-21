@@ -398,7 +398,8 @@ uv, no package), and the script Blender runs, `render.py`.
   *Rendering 37%...*.
 - **Why one failed** is what the render script said as it stopped
   (`render.py: ...`) or what Python raised, as its traceback ends
-  (`TypeError: ...`) - all of it, a message of several lines as one; else Blender's last line that says error; else its
+  (`TypeError: ...`) - all of it, a message of several lines as one, up
+  to what Blender says next (its progress, its own last words); else Blender's last line that says error; else its
   last. Never Blender's own last words, which say only that a script
   failed or what memory it did not free as it quit (`worker.py` `why_of`).
 - The first render on a computer can take a few minutes while Blender

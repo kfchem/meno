@@ -194,6 +194,15 @@ class Collect(unittest.TestCase):
         many = "Traceback (most recent call last):\nKeyError: 'col'\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\nValueError: the scene's molecule has no atoms\nsee its entry: entries[0]\n"
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=many + tail + leak, ended="failed")
         self.assertEqual(said["result"], {"why": "ValueError: the scene's molecule has no atoms see its entry: entries[0]"})
+        # (the desk's probe: Blender's progress after what was raised is not part of it)
+        probe = ("Traceback (most recent call last):\nRuntimeError: a stand-in\n"
+                 "Fra:1 Mem:120.5M (Peak 140.2M) | Time:00:01.20 | Rendering 1 / 128 samples\n"
+                 "Saved: '/Users/someone/Meno/jobs/x/work/frames/frame_0001.png'\n"
+                 "Time: 00:01.84 (Saving: 00:00.03)\n"
+                 "03:30.912  render           | Saved: 'frame_0002.png'\n"
+                 "Info: Saved \"frame_0002.png\"\nWarning: a stand-in\nprogress 4/100\nRendering on the processor\n")
+        said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=probe + tail + leak, ended="failed")
+        self.assertEqual(said["result"], {"why": "RuntimeError: a stand-in"})
         # (Blender's own error, where Python raised none: said; its last words alone, said as they are)
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log="Error: Cannot read file 'scene.gltf'\n" + tail + leak, ended="failed")
         self.assertEqual(said["result"], {"why": "Error: Cannot read file 'scene.gltf'"})
