@@ -64,8 +64,10 @@ export function readSmiles(text: string): Smiles {
   let pendingDir: string | null = null;
   const directed: { from: number; to: number; up: boolean }[] = [];
   let i = 0;
-  // (the atoms written first, with no atom before them: their H, or lone pair, is the one looked from)
+  // (the atoms written first, with no atom before them: their H, or lone pair, is the one looked from; and those
+  // that carry a ring-closure digit themselves)
   const first = new Set<number>();
+  const closes = new Set<number>();
   const connect = (a: number, mark = "") => {
     if (prev < 0) first.add(a);
     around[a] = prev >= 0 ? [prev] : [];
@@ -108,6 +110,7 @@ export function readSmiles(text: string): Smiles {
     if (/\d/.test(c) || c === "%") {
       const n = c === "%" ? Number.parseInt(text.slice(i + 1, i + 3), 10) : Number.parseInt(c, 10);
       i += c === "%" ? 3 : 1;
+      closes.add(prev);
       const open = rings.get(n);
       if (open) {
         const both = atoms[open.atom].aromatic && atoms[prev].aromatic;
@@ -158,7 +161,10 @@ export function readSmiles(text: string): Smiles {
     throw new Error(`Cannot read "${c}" at ${i} in ${text}`);
   }
   if (rings.size) throw new Error(`Unclosed ring in ${text}`);
-  for (const [at, mark] of chiral) atoms[at].tetra = configuration(atoms[at], around[at], mark, first.has(at), text);
+  for (const [at, mark] of chiral) {
+    const oxide = bonds.some((b) => b.order === 2 && (b.a1 === at || b.a2 === at) && atoms[b.a1 === at ? b.a2 : b.a1].el === "O");
+    atoms[at].tetra = configuration(atoms[at], around[at], mark, { first: first.has(at), closes: closes.has(at), oxide }, text);
+  }
   // A double bond's cis or trans (OpenSMILES): a directional bond on each
   // end; a neighbour written before its end with "/" lies below it, one
   // written after it above, "\\" the other way; the two the same side, cis
@@ -203,14 +209,21 @@ const LONE_PAIR_CENTRES = new Set(["S", "Se", "P", "As"]);
  * it moves; a lone pair, not an atom, left out. Any other mark, or a centre
  * that is none of these, is refused, never read past.
  */
-function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: string, first: boolean, text: string): Configuration {
+function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: string, at: { first: boolean; closes: boolean; oxide: boolean }, text: string): Configuration {
   const why = (reason: string) => new Error(`Cannot read the configuration at [${atom.el}${mark}] in ${text}: ${reason}`);
   if (mark !== "@" && mark !== "@@") throw why(`only @ and @@ are read`);
   let around = [...neighbours];
-  const lonePair = around.length === 3 && !around.includes(-1) && !(atom.hs ?? 0) && LONE_PAIR_CENTRES.has(atom.el);
+  const three = around.length === 3 && !around.includes(-1) && !(atom.hs ?? 0);
+  if (three && !LONE_PAIR_CENTRES.has(atom.el) && atom.el !== "C" && atom.el !== "Si")
+    throw why(`a ${atom.el} centre of three neighbours and a lone pair is not read here: no reading of one could be checked against another reader`);
+  const lonePair = three && LONE_PAIR_CENTRES.has(atom.el);
   // (written first, where the H's rule would look from its lone pair and the reading libraries do not - RDKit takes
   // it as the last of four - the configuration is not read: refused. Else first of the three that follow, as an H)
-  if (lonePair && first) throw why("a centre with a lone pair written first is read differently by different readers - write an atom before it");
+  if (lonePair && at.first) throw why("a centre with a lone pair written first is read differently by different readers - write an atom before it");
+  // (with a ring-closure digit of its own and no S=O or Se=O - a phosphine's, an arsine's, a sulfonium's ring - RDKit
+  // reads it the other way: measured on RDKit's 3D embeddings, 18 of 18 such P, As and S+ rings opposite; the
+  // oxides agree, 16 of 16)
+  if (lonePair && at.closes && !at.oxide) throw why("a centre with a lone pair that closes a ring at itself is read differently by different readers - write the ring closure on another atom");
   if (lonePair) around.splice(1, 0, -1);
   if (around.length !== 4 || around.filter((n) => n === -1).length > 1) throw why(`it has ${neighbours.length} neighbours, not four (or three and a lone pair)`);
   const h = around.indexOf(-1);

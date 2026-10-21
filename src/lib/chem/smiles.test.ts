@@ -50,9 +50,25 @@ describe("a double bond's cis or trans, read from SMILES", () => {
     // (a lone pair's centre written first: the H's rule and RDKit's reading disagree)
     expect(() => readSmiles("[S@](C)(=O)c1ccc(C)cc1")).toThrow(/lone pair written first/);
     // (an amine's nitrogen; a mark other than @ and @@; a carbon of three)
-    expect(() => readSmiles("C[N@]1CC1C")).toThrow(/not four/);
+    expect(() => readSmiles("C[N@]1CC1C")).toThrow(/N centre of three neighbours and a lone pair is not read here/);
+    expect(() => readSmiles("C[Te@](=O)CC")).toThrow(/Te centre of three neighbours and a lone pair is not read here/);
     expect(() => readSmiles("F[C@@@](Cl)(Br)I")).toThrow(/only @ and @@ are read/);
     expect(() => readSmiles("C[C@](=C)C")).toThrow(/not four/);
+  });
+
+  it("refuses a phosphine's, an arsine's or a sulfonium's centre that closes a ring at itself, and reads a sulfoxide's", () => {
+    // (RDKit reads such a P, As or S+ ring the other way from the H's rule: measured on its 3D embeddings - so not
+    // read here; a sulfoxide's or a selenoxide's ring, closed at its centre, agrees, and is read)
+    for (const x of ["P@", "P@@", "As@", "As@@", "S@+", "S@@+"]) {
+      for (const smiles of [`C[${x}]1CCCC1C`, `CC1CCC[${x}]1C`, `c1ccccc1[${x}]1CCC1C`]) {
+        expect(() => readSmiles(smiles)).toThrow(/closes a ring at itself/);
+      }
+    }
+    for (const x of ["S@", "S@@", "Se@", "Se@@"]) {
+      for (const smiles of [`C[${x}]1(=O)CCCC1C`, `CC1CCC[${x}]1=O`, `c1ccccc1[${x}]1(=O)CCC1C`]) {
+        expect(readSmiles(smiles).atoms.filter((a) => a.tetra)).toHaveLength(1);
+      }
+    }
   });
 });
 
