@@ -495,7 +495,7 @@ Taken on 2026-10-13:
   metal of its group stands in for its shape while its bonds are held at
   their own lengths, and no energies are given: the chip says so, and the
   conformers are not weighted. They are ordered by the stand-in's energies,
-  as the chip says. Before, UFF without terms for a
+  as the line that says how they were made says. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
   asked about as the CTfile's multi-centre bond - a bond from the metal to a

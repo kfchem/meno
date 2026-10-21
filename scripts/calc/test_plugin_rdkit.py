@@ -732,8 +732,9 @@ class MetalFloor(unittest.TestCase):
         rows = {r["label"]: r["text"] for r in entry["how"]}
         self.assertEqual(rows["Dropped"], "1: two ligands at Os closer than the 75\u00b0 floor held (narrowest 62\u00b0)")
         self.assertEqual(rows["Kept"], "1 of 10 embedded (10 sought), 8 the same as one kept")
-        self.assertEqual(rows["Order"], "by UFF's energies, Fe standing in for Os")
-        self.assertIn("ordered by the stand-in field, Fe for Os", entry["method"])
+        # (the order said once, in the line that says how they were made - not again in a row)
+        self.assertTrue(entry["method"].endswith("; ordered by the stand-in field, Fe for Os"), entry["method"])
+        self.assertNotIn("Order", rows)
         self.assertNotIn("energies", entry)
 
     def test_puts_the_trans_isomer_of_an_osmium_bisphosphine_first(self):
@@ -788,6 +789,34 @@ class MetalFloor(unittest.TestCase):
             self.assertTrue(80 < math.degrees(math.acos(float(u @ v / np.linalg.norm(u) / np.linalg.norm(v)))) < 115)
         rows = {r["label"]: r["text"] for r in entry["how"]}
         self.assertNotIn("Dropped", rows)
+
+    def test_orders_an_eta_complex_by_the_model_it_was_optimised_in(self):
+        # (Cp2ZrCl2, Ti standing in for Zr, its rings held; ferrocene, its rings held: lowest of that model first)
+        energies, kept = [], []
+        optimised, settled = self.worker.uff_with_metals, self.worker.settle_equivalents
+
+        def optimise(mol, ids, iters, **kw):
+            out = optimised(mol, ids, iters, **kw)
+            energies.append({cid: e for cid, (_, e) in zip(ids, out)})
+            return out
+
+        def settle(mol, cids):
+            kept.append(list(cids))
+            return settled(mol, cids)
+
+        self.worker.uff_with_metals, self.worker.settle_equivalents = optimise, settle
+        try:
+            zr = self.worker.op_conformers({"molblock": EtaBound.zirconocene_dichloride()})["isomers"][0]
+            fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene()})["isomers"][0]
+        finally:
+            self.worker.uff_with_metals, self.worker.settle_equivalents = optimised, settled
+        self.assertTrue(zr["method"].endswith("; ordered by the stand-in field, Ti for Zr, the \u03b7 rings held"), zr["method"])
+        self.assertTrue(fe["method"].endswith("; ordered by UFF's energies, the \u03b7 rings held"), fe["method"])
+        self.assertNotIn("energies", zr)
+        self.assertNotIn("Order", {r["label"] for r in zr["how"]})
+        for order, cids in zip(energies, kept):
+            self.assertGreater(len(cids), 1)
+            self.assertEqual(cids, sorted(cids, key=order.get))
 
     def test_holds_nothing_at_a_metal_with_an_eta2_ligand(self):
         # (Zeise's anion: the alkene's carbon and the cis Cl come near 71 degrees in real structures)

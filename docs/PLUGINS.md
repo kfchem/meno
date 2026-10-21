@@ -516,15 +516,17 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   had no reason to: a Zeise-type complex's alkene carbon and cis Cl, and a
   cis dihydride's hydrides, though there the force field's own angles
   stayed above it (77° and 88° here, as now).
-- **Where a lighter metal stands in, its energies order the conformers.**
-  Where UFF has no type for a metal and a lighter one of its group stands
-  in, UFF's energies of that model are not the molecule's, so none are
-  given and no populations come of them; but they are what the shapes were
-  optimised in, and they order them, lowest first, said so on the chip
-  (*Order*, "by UFF's energies, Fe standing in for Os") and in the line
-  that says how they were made ("ordered by the stand-in field, Fe for
-  Os"). Before, the embedding order stood, and [OsCl6]2-'s first conformer
-  was its distorted one.
+- **Where a lighter metal stands in, or eta rings are held, that model's
+  energies order the conformers.** Where UFF has no type for a metal and a
+  lighter one of its group stands in, or a ring bound through its atoms is
+  held over its metal, UFF's energies of that model are not the
+  molecule's, so none are given and no populations come of them; but they
+  are what the shapes were optimised in, and they order them, lowest
+  first, said once in the line that says how they were made ("ordered by
+  the stand-in field, Fe for Os"; "ordered by the stand-in field, Ti for
+  Zr, the η rings held"; "ordered by UFF's energies, the η rings held").
+  Before, the embedding order stood, and [OsCl6]2-'s first conformer was
+  its distorted one.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown

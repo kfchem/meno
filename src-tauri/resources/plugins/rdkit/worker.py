@@ -1700,7 +1700,8 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
     if eta:
         # (the stars and the systems' bonds are not UFF's: held, as uff_stood_in holds them, with no energies)
         field, results = None, None
-        stood_in = uff_stood_in(mol, ids, iters, eta) is not None
+        stood = uff_stood_in(mol, ids, iters, eta)
+        stood_in = stood is not None
         untyped = sorted({el for el, digit in metals if digit is None and el in STAND_IN})
     elif field in ("MMFF94", "MMFF94s") and rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
         stood_in = False
@@ -1715,12 +1716,14 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
         stood = uff_stood_in(mol, ids, iters)
         stood_in = stood is not None
     energy = {cid: e for cid, (_, e) in zip(ids, results)} if results else None
-    # (what orders them: their energies, else the stand-in's - shapes of the metal as a lighter one of its group
-    # makes them, so their order is that model's, and said to be - else the order they were embedded in)
+    # (what orders them: their energies, else those of the model they were optimised in - a lighter metal of
+    # the group standing in, eta rings held - whose energies are not the molecule's, so none are given, but
+    # whose order is said, once, in the line that says how they were made - else the order they were embedded in)
     order = energy or ({cid: e for cid, (_, e) in zip(ids, stood)} if stood else None)
     method = method_of(mol, ids, field, stood_in, metals, eta)
     if stood:
-        method += "; ordered by the stand-in field, " + ", ".join(f"{STAND_IN[el]} for {el}" for el in untyped)
+        model = [f"{STAND_IN[el]} for {el}" for el in untyped] + (["the \u03b7 rings held"] if eta else [])
+        method += "; ordered by " + ("the stand-in field, " if untyped else "UFF's energies, ") + ", ".join(model)
     for _, star, atoms in eta:
         for cid in ids:
             conf = mol.GetConformer(cid)
@@ -1787,7 +1790,6 @@ def conformers(mol, count=None, seed=SEED, field="MMFF94", iters=STEPS):
                else f"bonds at covalent lengths, {GEOMETRY_WORDS[d]} in UFF" if d and field == "UFF" else "bonds at covalent lengths")
                + floor_words(mol, el, floor)}
               for el, d in sorted(set(metals), key=lambda x: (x[0], x[1] or ""))],
-            *([{"label": "Order", "text": "by UFF's energies, " + ", ".join(f"{STAND_IN[el]} standing in for {el}" for el in untyped)}] if stood else []),
             *([{"label": "Dropped", "text": f"{len(dropped)}: " + "; ".join(
                 f"two ligands at {mol.GetAtomWithIdx(m).GetSymbol()} closer than the {angle:g}\u00b0 floor held"
                 f" (narrowest {angle + min(u for u, mm, _ in dropped.values() if mm == m):.0f}\u00b0)"
