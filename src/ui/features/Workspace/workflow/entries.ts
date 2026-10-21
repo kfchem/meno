@@ -8,6 +8,7 @@
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import { geometryKey, type Entry, type EntryAtom, type Property } from "../../../../lib/entry";
 import { speciesOf } from "../../../../lib/io/writers";
+import { groupLetter } from "../../../../lib/nodes/base";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
@@ -265,11 +266,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   return out;
 }
 
-/** A compound's letter, by its place among a set's: a to z, then aa, ab... */
-export function compoundLetter(i: number): string {
-  const a = "abcdefghijklmnopqrstuvwxyz";
-  return i < 26 ? a[i] : compoundLetter(Math.floor(i / 26) - 1) + a[i % 26];
-}
+/** A compound's letter, by its place among a set's: a to z, then aa, ab... (lib/nodes `groupLetter`, one rule for both). */
+export const compoundLetter = groupLetter;
 
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of

@@ -511,9 +511,9 @@ on question 16. Each has one role, and they are meant to be combined.
 | Node | Takes | Gives |
 |---|---|---|
 | **Filter** | molecules | *kept* and *rest*, by conditions on properties picked as rows (a property, a comparison, a value with its unit; all of them, or any). An entry with no value goes to *rest*, counted |
-| **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all |
-| **Group** | molecules | the same, each entry's *group* set: by compound (its identity with its species), by a property's value, or none |
-| **Merge** | molecules, two or more | one set, in the inputs' order; or one entry of each identity |
+| **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all; values worked out differently never ranked together, those with none to *rest*, each saying its place or why |
+| **Group** | molecules | the same, each entry's *group* set: by constitution (its identity with its species; the entry holds no configuration of its stereocentres, so stereoisomers are one group, and the option says so), by a property's value, or all together; those with nothing to group by to *rest* |
+| **Merge** | molecules, two or more | one set, in the inputs' order; or one entry for each value of a property (an ID from *Tag*), the others to *rest* naming the one kept |
 | **Tag** | molecules | the same, with a new property: an ID for each entry, under the name given |
 | **Join** | molecules, and molecules or a table | the first, with the second's properties put on by a property both carry (an ID from *Tag*), by identity, or by drawn atom; what did not match is said |
 | **Duplicates** | molecules | *kept* and *rest*: one of each identity, or by RMSD in each group, as Meno does today; with the molecule's symmetry where chosen (equivalent groups turned, equivalent atoms swapped) |
@@ -524,9 +524,9 @@ on question 16. Each has one role, and they are meant to be combined.
 |---|---|---|
 | **Number** | nothing | a number with its unit, typed by the chemist |
 | **Add** | molecules, and numbers | the same, with a new property: the sum of the properties and numbers chosen, at one geometry |
-| **Relative** | molecules, and a reference where wanted | the same, with a new property: one minus the lowest in its group, or minus the reference |
+| **Relative** | molecules, and a reference where wanted | the same, with a new property: one minus the lowest in its group, or minus the reference; values worked out differently (conditions, program, method, basis, thermal treatment) never taken from one another |
 | **Linear** | molecules | the same, with *a* × a property + *b* (for a per-atom list, *a* and *b* by element) |
-| **Populations** | molecules | the same, with shares from an energy, in each group, at a temperature, degeneracies counted |
+| **Populations** | molecules | the same, with shares from the free energy G (`thermo.free-energy`), in each group, at a temperature, degeneracies counted where every one in the group has one; an entry with no G - only an electronic energy - goes to *failed* with its group, never weighted by E; a group whose G were worked out differently (temperature, pressure, solvent, program, method, basis, thermal treatment) too |
 | **Ensemble energy** | molecules | one entry per group, with −RT ln Σ exp(−E/RT) of an energy at a temperature, degeneracies counted |
 | **Average** | molecules | one entry per group, each property chosen averaged, weighted by a property (shares) or evenly: numbers, per-atom lists and curves alike |
 | **Equivalent atoms** | molecules | the same, a per-atom property averaged over each symmetry class (from Meno's canonical numbering) |

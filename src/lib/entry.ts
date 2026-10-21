@@ -46,8 +46,14 @@ export type PropertyValue =
 /** Where a property was worked out: the geometry (its key, `geometryKey`), and the conditions, where they apply. */
 export type At = { geometry: string; kelvin?: number; atm?: number; solvent?: string };
 
-/** What worked a property out: the step and its run; the plugin and its version; the program, method and basis, or the model and its version. */
-export type By = { step?: string; run?: string; plugin?: string; version?: string; program?: string; method?: string; basis?: string; model?: string };
+/**
+ * What worked a property out: the step and its run; the plugin and its
+ * version; the program, method and basis, or the model and its version; and,
+ * for a thermal quantity (a free energy), its thermal treatment as the
+ * program states it - two programs' free energies differ in how they treat
+ * low vibrations, even of one geometry at one temperature.
+ */
+export type By = { step?: string; run?: string; plugin?: string; version?: string; program?: string; method?: string; basis?: string; model?: string; treatment?: string };
 
 /** Whether a property was worked out: computed, failed (why), or not applicable (why). */
 export type PropertyStatus = "computed" | { failed: string } | { notApplicable: string };
