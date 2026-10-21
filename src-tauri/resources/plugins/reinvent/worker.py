@@ -120,10 +120,11 @@ def stereoisomers_of(mol, every):
     bond it leaves unspecified, where `every`, each of them its own - what it does specify kept as given - in the
     one order every run gives them (by their isomeric SMILES); the molecule alone where it leaves none open. Else
     why not: a string. Never one stereoisomer chosen for it: that would pass as specified what was not."""
-    # (an allene's axis is no E/Z bond, and no enumeration here sets one: unspecified where it could be stereogenic,
-    #  the SMILES is not made - made, its geometry would be one of two, unsaid)
-    if unspecified_axis(mol):
-        return "an allene axis of unspecified stereo"
+    # (cumulated double bonds - an allene's axis, a butatriene's E or Z - no enumeration here sets: unspecified
+    #  where they could be stereogenic, the SMILES is not made)
+    cumulene = unspecified_cumulene(mol)
+    if cumulene:
+        return cumulene
     cumulated = {a.GetIdx() for a in mol.GetAtoms() if sum(b.GetBondType() == Chem.BondType.DOUBLE for b in a.GetBonds()) > 1}
     open_ = [
         si for si in Chem.FindPotentialStereo(Chem.Mol(mol))
@@ -147,27 +148,36 @@ def stereoisomers_of(mol, every):
     return sorted(found, key=lambda m: Chem.MolToSmiles(m))
 
 
-def unspecified_axis(mol):
-    """Whether a molecule has an allene axis (C=C=C) of no given stereo that could be stereogenic: each end carrying
-    two different groups, as RDKit ranks its atoms. CC=C=CC has one; CC(C)=C=CC, whose one end carries two methyls,
-    has none."""
+def unspecified_cumulene(mol):
+    """Why a molecule's cumulated double bonds could be stereogenic and are not given, or None: a chain of them
+    (C=C=C, C=C=C=C, ...) whose two ends each carry two different groups, as RDKit ranks its atoms - an even
+    number of double bonds an axis (an allene), an odd number E or Z (a butatriene). No enumeration here sets
+    either: made, its geometry would be one of two, unsaid. CC=C=CC has one; CC(C)=C=CC, one end carrying two
+    methyls, none."""
     hs = Chem.AddHs(mol)
     ranks = list(Chem.CanonicalRankAtoms(hs, breakTies=False))
-    for c in hs.GetAtoms():
-        doubles = [b for b in c.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE]
-        if len(doubles) != 2 or c.GetDegree() != 2:
+
+    def doubles(atom):
+        return [b for b in atom.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE]
+
+    def two_kinds(end, inner):
+        others = [n.GetIdx() for n in end.GetNeighbors() if n.GetIdx() != inner]
+        return len(others) == 2 and ranks[others[0]] != ranks[others[1]]
+
+    for end in hs.GetAtoms():
+        ds = doubles(end)
+        if len(ds) != 1:
             continue
-        ends = [b.GetOtherAtom(c) for b in doubles]
-        two_kinds = 0
-        for end in ends:
-            if sum(b.GetBondType() == Chem.BondType.DOUBLE for b in end.GetBonds()) != 1:
-                break
-            others = [n.GetIdx() for n in end.GetNeighbors() if n.GetIdx() != c.GetIdx()]
-            if len(others) == 2 and ranks[others[0]] != ranks[others[1]]:
-                two_kinds += 1
-        if two_kinds == 2:
-            return True
-    return False
+        # (along the chain while each next atom has two double bonds: the other end where one has one)
+        prev, here, n = end, ds[0].GetOtherAtom(end), 1
+        while len(doubles(here)) == 2 and here.GetDegree() == 2:
+            nxt = next(b.GetOtherAtom(here) for b in doubles(here) if b.GetOtherAtom(here).GetIdx() != prev.GetIdx())
+            prev, here, n = here, nxt, n + 1
+        if n < 2 or end.GetIdx() > here.GetIdx() or len(doubles(here)) != 1:
+            continue
+        if two_kinds(end, ds[0].GetOtherAtom(end).GetIdx()) and two_kinds(here, prev.GetIdx()):
+            return "an allene axis of unspecified stereo" if n % 2 == 0 else "a cumulene's E or Z, unspecified"
+    return None
 
 
 def made_of(mol, seed):

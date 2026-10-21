@@ -169,6 +169,10 @@ class Generate(unittest.TestCase):
 
     def test_refuses_an_allene_axis_left_unspecified_and_names_an_invertible_nitrogen(self):
         self.assertEqual(self.worker.molecules_of("CC=C=CC", 7), "an allene axis of unspecified stereo")
+        # (cumulenes of any length: an even number of double bonds an axis, an odd number E or Z)
+        self.assertEqual(self.worker.molecules_of("CC=C=C=CC", 7), "a cumulene's E or Z, unspecified")
+        self.assertEqual(self.worker.molecules_of("CC=C=C=C=CC", 7), "an allene axis of unspecified stereo")
+        self.assertNotIsInstance(self.worker.molecules_of("CC(C)=C=C=CC", 7), str)
         # (one end carrying two of the same: no axis to specify)
         self.assertEqual(len(self.worker.molecules_of("CC(C)=C=CC", 7)["made"]), 1)
         # (an aziridine's nitrogen: where its geometry did not hold its configuration, said so - not "another stereoisomer")

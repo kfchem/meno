@@ -170,7 +170,7 @@ export class ReaderClient implements Reader {
 
   private request(question: Record<string, unknown>, what: string, ms = this.timeoutMs): Promise<unknown> {
     // (its worker stopped unused: asked of the one started in its place)
-    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(question, what));
+    if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(question, what, ms));
     // (its worker gone: asked of no one, so failing at once - not after its time, nor stopping the worker that runs now)
     if (this.closed !== null) return Promise.reject(new Error(this.closed));
     const id = this.ids();
