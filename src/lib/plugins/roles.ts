@@ -20,6 +20,7 @@ export const ROLES = {
   checks: { name: "Hydrogens, valence, aromatic rings, R and S, E and Z", where: "chemistry" },
   pictures: { name: "Structures read from pictures", where: "chemistry" },
   stereoisomers: { name: "Stereoisomers of what is drawn without a configuration", where: "molecules3d" },
+  configurations: { name: "Which stereoisomer each molecule in 3D is", where: "molecules3d" },
   conformers: { name: "Structures in 3D, and their conformers", where: "molecules3d", options: true },
   drawing: { name: "A molecule in 3D drawn as a formula", where: "molecules3d" },
   render: { name: "Pictures and films of molecules in 3D, rendered", where: "molecules3d", options: true },
