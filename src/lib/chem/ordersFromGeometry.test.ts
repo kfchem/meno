@@ -45,12 +45,14 @@ describe("bond orders estimated from where atoms stand", () => {
     expect(r.charges.reduce((s, c) => s + c, 0)).toBe(0);
   });
 
-  it("gives an azide, its hydrogens not there, N=N+=N- - neutral, as phenyl azide and zidovudine are", () => {
+  it("gives an azide, its hydrogens not there, N=N+=N- - neutral, as phenyl azide and zidovudine are; and a diazo group C=N+=N-", () => {
     // (laid out by RDKit's ETKDG and MMFF, hydrogens taken away; azides are neutral, R-N=N+=N-: the
     // terminal nitrogen carries the charge back - left without it, it reads as R-N=N+=NH, a cation)
     const phenylAzide: Fixture = { atoms: [["N", 3.631, 0.136, 0.99], ["N", 2.906, -0.075, 0.135], ["N", 2.125, -0.31, -0.808], ["C", 0.784, -0.152, -0.433], ["C", 0.055, -1.239, 0.061], ["C", -1.286, -1.087, 0.421], ["C", -1.909, 0.152, 0.277], ["C", -1.195, 1.237, -0.231], ["C", 0.145, 1.083, -0.59]], bonds: [[0, 1, 2], [1, 2, 2], [2, 3, 1], [3, 4, 1], [4, 5, 2], [5, 6, 1], [6, 7, 2], [7, 8, 1], [8, 3, 2]] };
     const zidovudine: Fixture = { atoms: [["C", 3.531, -1.629, -1.15], ["C", 2.841, -0.482, -0.487], ["C", 1.559, -0.49, -0.103], ["N", 0.959, 0.592, 0.513], ["C", -0.447, 0.577, 0.903], ["C", -1.337, 1.38, -0.038], ["C", -2.671, 0.676, 0.078], ["N", -3.456, 1.273, 1.186], ["N", -3.371, 0.798, 2.333], ["N", -3.294, 0.368, 3.385], ["C", -2.257, -0.784, 0.284], ["C", -2.11, -1.552, -1.037], ["O", -3.358, -1.639, -1.71], ["O", -0.973, -0.764, 0.94], ["C", 1.663, 1.762, 0.768], ["O", 1.171, 2.76, 1.289], ["N", 2.978, 1.76, 0.389], ["C", 3.635, 0.743, -0.239], ["O", 4.808, 0.837, -0.582]], bonds: [[0, 1, 1], [1, 2, 2], [2, 3, 1], [3, 4, 1], [4, 5, 1], [5, 6, 1], [6, 7, 1], [7, 8, 2], [8, 9, 2], [6, 10, 1], [10, 11, 1], [11, 12, 1], [10, 13, 1], [3, 14, 1], [14, 15, 2], [14, 16, 1], [16, 17, 1], [17, 18, 2], [17, 1, 1], [13, 4, 1]] };
-    for (const [f, [inner, middle, end]] of [[phenylAzide, [2, 1, 0]], [zidovudine, [7, 8, 9]]] as [Fixture, number[]][]) {
+    // (and a diazo group, C=N+=N-, as ethyl diazoacetate's: its C-N 1.31 A, N-N 1.14 A)
+    const ethylDiazoacetate: Fixture = { atoms: [["C", -2.134, 0.594, 0.039], ["C", -1.275, -0.657, 0.048], ["O", 0.025, -0.36, 0.577], ["C", 0.924, 0.069, -0.323], ["O", 0.802, 0.265, -1.514], ["C", 2.19, 0.328, 0.389], ["N", 3.173, -0.459, 0.03], ["N", 4.039, -1.142, -0.261]], bonds: [[0, 1, 1], [1, 2, 1], [2, 3, 1], [3, 4, 2], [3, 5, 1], [5, 6, 2], [6, 7, 2]] };
+    for (const [f, [inner, middle, end]] of [[phenylAzide, [2, 1, 0]], [zidovudine, [7, 8, 9]], [ethylDiazoacetate, [5, 6, 7]]] as [Fixture, number[]][]) {
       const r = ordersFromGeometry(atomsOf(f), bondsOf(f));
       expect(r.decided).toBe(true);
       expect(doubles(f, r.orders)).toEqual(doubles(f, f.bonds.map((b) => b[2])));
