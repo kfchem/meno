@@ -1517,7 +1517,8 @@ to be able to work with nothing going out at all.
   consent named". Each connection - host, bytes each way, times, outcome -
   goes to the window as it happens (`net:connection`, every half second
   while open) and to `network-log.jsonl` in the app's data folder when it
-  ends. A child that may not use the network - a plugin's worker, a job -
+  ends; like Meno's log, it is kept under 5 MB, begun again past that with
+  the one before kept as `network-log.jsonl.1`, one only. A child that may not use the network - a plugin's worker, a job -
   is pointed at the proxy with no task, so whatever it reaches for is
   refused and on the record. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an

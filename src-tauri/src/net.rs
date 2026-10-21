@@ -203,13 +203,7 @@ impl Net {
         // the whole line in one write, one writer at a time
         let line = format!("{entry}\n");
         let _one = self.0.log_lock.lock().unwrap_or_else(|e| e.into_inner());
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path)
-        {
-            let _ = file.write_all(line.as_bytes());
-        }
+        append(path, &line, crate::logfile::MOST);
     }
 
     /// Keeps a connection's latest state among the recent ones and tells the
@@ -687,6 +681,18 @@ pub fn net_note_blocked(net: tauri::State<'_, Net>, host: String, reason: String
     net.note_blocked(&host, Some("web-view"), &reason);
 }
 
+/// `line` added to the record at `path`, kept under `most` bytes as Meno's
+/// log is (logfile.rs): past that it is begun again, the one before kept as
+/// network-log.jsonl.1, one only.
+fn append(path: &Path, line: &str, most: u64) {
+    // (where it can be neither begun again nor emptied, added to all the same:
+    // a connection is not left off the record while it can be written)
+    let _ = crate::logfile::room_for(path, line.len() as u64, most);
+    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(path) {
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -750,6 +756,33 @@ mod tests {
             let entry: serde_json::Value = serde_json::from_str(line).expect(line);
             assert_eq!(entry["connection"]["outcome"], "blocked");
         }
+    }
+
+    #[test]
+    fn the_record_is_begun_again_past_its_size_the_one_before_kept() {
+        let dir = std::env::temp_dir().join(format!("meno-net-log-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("network-log.jsonl");
+        let before = dir.join("network-log.jsonl.1");
+        let entry = |i: usize| format!("{}\n", serde_json::json!({ "connection": { "host": format!("host-{i}.example") } }));
+        let line = entry(0);
+        let n = line.len() as u64;
+        // (room for two lines and not three)
+        let most = 2 * n + n / 2;
+        append(&path, &entry(1), most);
+        append(&path, &entry(2), most);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), entry(1) + &entry(2));
+        // (a third would pass it: the two before go to network-log.jsonl.1)
+        append(&path, &entry(3), most);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), entry(3));
+        assert_eq!(std::fs::read_to_string(&before).unwrap(), entry(1) + &entry(2));
+        // (and again: the oldest gone, one before kept)
+        append(&path, &entry(4), most);
+        append(&path, &entry(5), most);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), entry(5));
+        assert_eq!(std::fs::read_to_string(&before).unwrap(), entry(3) + &entry(4));
+        assert!(!dir.join("network-log.jsonl.2").exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// Hosts, as a task's consent names them.

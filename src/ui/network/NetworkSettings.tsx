@@ -20,8 +20,8 @@ const time = (ms: number) =>
 /**
  * The network in Settings: offline mode, what has been allowed to use the
  * network, and the record of every connection since the app started - the
- * full record, across sessions, is network-log.jsonl in the app's data
- * folder.
+ * record across sessions is network-log.jsonl in the app's data folder, up
+ * to 5 MB, and what came before that network-log.jsonl.1.
  */
 export default function NetworkSettings() {
   const available = useNetwork((s) => s.available);
@@ -99,8 +99,9 @@ export default function NetworkSettings() {
           Connections since Meno started
         </h3>
         <p className="mt-1 text-xs text-gh-gray max-w-2xl">
-          The whole record, from every session, is kept in network-log.jsonl in
-          Meno's data folder.
+          The record from earlier sessions too is kept in network-log.jsonl in
+          Meno's data folder, up to 5 MB, and what came before that in
+          network-log.jsonl.1.
         </p>
         <div className="mt-2 rounded-lg border border-gh-line bg-white overflow-hidden">
           {!available ? (
