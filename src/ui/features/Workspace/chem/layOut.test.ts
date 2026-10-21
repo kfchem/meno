@@ -15,7 +15,7 @@ describe("many structures laid out off the drawing's thread", () => {
       // (the drawing for the structure in its place: the same as laying that one out alone)
       expect(l.layout!.x).toEqual(laidOutChecked(inputs[i]).layout!.x);
     });
-    expect(told.at(-1)).toBe(inputs.length);
+    expect(told[told.length - 1]).toBe(inputs.length);
     expect(new Set(inputs.map(identityText)).size).toBe(inputs.length);
   });
 
