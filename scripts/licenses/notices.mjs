@@ -361,8 +361,19 @@ const NOTES = {
   "@react-three/fiber":
     "Its build carries React's reconciler (react-reconciler), copyright Meta Platforms, Inc. and affiliates, under the MIT License: the text given for react in Part 1.",
   "webview2-com-sys":
-    "On Windows it links into Meno's program the WebView2 loader (WebView2LoaderStatic.lib) from Microsoft's WebView2 SDK, which comes with the crate; the SDK's own licence does not.",
+    "On Windows it links into Meno's program the WebView2 loader (WebView2LoaderStatic.lib) from Microsoft's WebView2 SDK, which comes with the crate; the SDK's own licence does not, and is given below as Microsoft publishes it.",
 };
+
+/**
+ * Licence texts read from their published pages, for crates that ship none
+ * (upstream.json, upstream/): each at the commit its version was published
+ * from, with where it was read and when - and what else it carries whose
+ * licence it does not ship.
+ */
+const UPSTREAM = join(ROOT, "scripts", "licenses", "upstream.json");
+const upstream = existsSync(UPSTREAM) ? JSON.parse(readFileSync(UPSTREAM, "utf8")) : { texts: [] };
+const upstreamText = (file) => cleanText(readFileSync(join(ROOT, "scripts", "licenses", "upstream", file), "utf8"));
+const upstreamOf = (p) => upstream.texts.find((t) => t.for === p.name && t.version === p.version);
 
 const RULE = "=".repeat(80);
 const THIN = "-".repeat(80);
@@ -389,7 +400,16 @@ export function compose(npm, { crates, leftOut }) {
     if (NOTES[p.name]) lines.push(NOTES[p.name], "");
     const own = `${p.name} ${p.version}`;
     let files = p.files;
-    if (!files.length) {
+    const read = !files.length && kind === "crate" ? upstreamOf(p) : null;
+    if (read) {
+      // (no licence file comes with it: the text its repository holds at the commit it was published from, read from its page)
+      lines.push(`No licence file comes with this crate. Its licence's text is given as its repository holds it at the commit ${read.version} was published from (${read.commit}), read on ${upstream.read}: ${read.source}`);
+      files = [{ name: read.file, text: upstreamText(read.file) }];
+      for (const a of read.also ?? []) {
+        lines.push("", `${a.what} Read on ${upstream.read}: ${a.source}`);
+        files.push({ name: a.file, text: upstreamText(a.file) });
+      }
+    } else if (!files.length) {
       // (the standard text stands for the whole licence only where the crate may be taken under it alone)
       const alone = !/\bAND\b/.test(p.license ?? "");
       const fallback = kind === "crate" && alone ? [...standard.values()].find((s) => new RegExp(`\\b${s.id.replace(/[.]/g, "\\.")}\\b`).test(p.license ?? "")) : null;

@@ -138,9 +138,17 @@ cssparser, selectors and others) also says where: its repository, and its
 version on crates.io. A crate with no licence file of its own is given its
 licence's standard text only where it comes with another crate here and
 names no one (the Apache License 2.0's, the MPL 2.0's), and says where it
-was taken from; one under a licence whose text carries its authors' own
-copyright line (MIT, BSD) is named as having none. The script lists both
-as it runs, with every licence that asks more than a notice.
+was taken from. One under a licence whose text carries its authors' own
+copyright line (MIT, BSD) is given the text its repository holds, read
+from its published page at the commit its version was published from (the
+crate's `.cargo_vcs_info.json`) - a text read as documentation is, never a
+package or archive fetched - kept in `scripts/licenses/upstream/` and named,
+with where and when it was read, in `scripts/licenses/upstream.json`; so is
+the licence of what such a crate carries without its licence (Microsoft's
+WebView2 SDK, whose loader webview2-com-sys links in on Windows). The
+script lists what it gave as it runs, with every licence that asks more
+than a notice; the test fails while any crate has no text, or a text read
+is for a version no longer built in.
 
 Run it when a dependency changes, and before each release. Beside the
 notices it writes `scripts/licenses/bundled.json` - each package's name,

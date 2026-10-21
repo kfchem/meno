@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { measured } from "../../src/testing/timeouts";
@@ -44,6 +44,16 @@ describe("the third-party notices", () => {
     }
     const entries = notices.split(`${RULE}\n`).filter((e) => /^\S+ \S+\nLicense: /.test(e));
     expect(entries.length).toBe(manifest.npm.length + manifest.crates.length);
+  });
+
+  it("give every crate a licence text: its own, a standard one, or one read from its repository", () => {
+    expect(notices, "a crate with no licence text: read its licence from its repository into upstream.json").not.toContain("Its Cargo.toml gives its licence as");
+    // (each text read from a repository is for a crate built in, at its version: one for a version no longer built in is stale)
+    const upstream = JSON.parse(readFileSync(join(ROOT, "scripts", "licenses", "upstream.json"), "utf8"));
+    for (const t of upstream.texts) {
+      expect(manifest.crates.map(named), `upstream.json: ${t.for}@${t.version} is not built into Meno`).toContain(`${t.for}@${t.version}`);
+      for (const f of [t.file, ...(t.also ?? []).map((a) => a.file)]) expect(existsSync(join(ROOT, "scripts", "licenses", "upstream", f)), f).toBe(true);
+    }
   });
 
   it("are plain text with LF line ends, and name the notices beside them", () => {
