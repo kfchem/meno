@@ -12,7 +12,7 @@ import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
-import { MARK_MIN_PX, MARK_SCALE, stereoTextEms } from "../chem/marks";
+import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
 import { eyeOf, FRAME_ORDER, seenAt } from "../utils/page";
@@ -1421,7 +1421,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
     // the drawing's letters
     if (stereoNow.current.length) {
       const g = Math.max(grown.current.v, 1e-3);
-      const font = Math.max(MARK_MIN_PX, props.stereoFont.units === "px" ? props.stereoFont.size : props.stereoFont.size / px);
+      const natural = props.stereoFont.units === "px" ? props.stereoFont.size : props.stereoFont.size / px;
+      const font = Math.max(MARK_MIN_PX, natural);
+      // (the view far out: faded as the drawing's are, marksSeenAt)
+      const seenAtZoom = marksSeenAt(natural);
       const v = new THREE.Vector3();
       const onScreen = (parent: THREE.Object3D, x: number, y: number, z: number) => {
         parent.localToWorld(v.set(x, y, z)).project(camera);
@@ -1454,7 +1457,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
         let fade = stereoFades.current.get(mark.key);
         if (!fade) stereoFades.current.set(mark.key, (fade = { v: 0, from: 0, to: 0, t: 0 }));
         if (fadeStep(fade, leaving ? 0 : 1, goIn, step, STEREO_FADE)) moving = true;
-        l.el.style.opacity = String(risen.current * fade.v);
+        l.el.style.opacity = String(risen.current * fade.v * seenAtZoom);
         parent.updateWorldMatrix(true, false);
         if (!balls) {
           balls = [];

@@ -101,7 +101,7 @@ describe("a set's members", () => {
   it("of a step's result set take nothing in: what it holds is its step's", () => {
     let doc = addMolecule3d(addMolecule3d(emptyWorkspaceDocument(), water({ x: 0, y: 0 })), water({ x: 30, y: 0 }));
     doc = addSet(doc, { x0: -2, y0: -2, x1: 10, y1: 2 });
-    doc = markMade(doc, 1, { step: 7, holds: "molecules" as never }, undefined);
+    doc = markMade(doc, 1, { step: 7, exit: "out", holds: "molecules" });
     const dropped = settled(movedTo(doc, 2, { x: 4, y: 0 }), doc);
     expect(membersOfSet(dropped)).toEqual([{ molecule: 1 }]);
   });

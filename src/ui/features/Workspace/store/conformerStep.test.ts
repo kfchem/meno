@@ -111,7 +111,8 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
   const run = st().runStep(step);
   await meanwhile?.(st, step);
   await run;
-  return { step: st().steps.find((s) => s.id === step)!, sets: st().sets.length };
+  // (the sets that hold what was put in: the one that came in, and its exit's once it has run)
+  return { step: st().steps.find((s) => s.id === step)!, sets: st().sets.filter((b) => !b.made || b.made.holds).length };
 }
 
 describe("RDKit's conformer search as a step, on structures drawn", () => {

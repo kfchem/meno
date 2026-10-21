@@ -31,7 +31,7 @@ const waters = (n: number) => Array.from({ length: n }, (_, k) => water(k));
 
 /** A step, and its result set holding `molecules` - a set of `holds`. */
 function ran(molecules: Omit<Molecule3D, "id" | "at">[], holds: "molecules" | "conformers" = "molecules", doc = addStep(emptyWorkspaceDocument(), "optimise", 0, 0, {}, "xtb")): WorkspaceDocument {
-  return placeResults(doc, doc.steps![0], { molecules, aside: [], holds }, { extentOf });
+  return placeResults(doc, doc.steps![0], { molecules, rest: [], holds }, { extentOf });
 }
 
 describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)", () => {
@@ -67,7 +67,7 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     let d = ran(waters(60));
     d = addStep(d, "energy", 20, 0, {}, "xtb");
     const set = resultOf(d, d.steps![0].id)!;
-    d = { ...d, wires: [{ id: 99, from: { set: set.id }, to: d.steps![1].id }] };
+    d = { ...d, wires: [{ id: 99, from: { set: set.id }, to: { step: d.steps![1].id, port: "in" } }] };
     const input = inputOf(d, d.steps![1].id)!;
     expect(input.molecules).toHaveLength(60);
     expect(input.molecules.slice(0, 3).map((m) => m.id)).toEqual([-1, -2, -3]);
@@ -210,5 +210,35 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(back.steps![0].runs!.find((r) => r.at === 2)!.results!.unread).toBe(1);
     const none = showRun(doc, doc.steps[0].id, 1, { extentOf });
     expect([setMembers(none, none.sets![0]).molecules.length, none.sets![0].unread]).toEqual([0, 3]);
+  });
+
+  it("holds what a step set aside as its first exit's are held - more than 50 in its second exit's set - and counts, there too, those of a run kept that do not read", () => {
+    // (Duplicates: 2 kept, 60 alike set aside)
+    let d = addStep(emptyWorkspaceDocument(), "duplicates", 0, 0, {});
+    d = placeResults(d, d.steps![0], { molecules: waters(2), rest: waters(60), holds: "molecules" }, { extentOf });
+    const step = d.steps![0];
+    const kept = resultOf(d, step.id)!;
+    const rest = resultOf(d, step.id, "rest")!;
+    expect([setMembers(d, kept).molecules.length, kept.collection]).toEqual([2, undefined]);
+    expect([rest.collection?.length, rest.members]).toEqual([60, []]);
+    expect(resultsNow(d, step)!.rest).toHaveLength(60);
+    // (kept, saved, and three of what it set aside spoilt)
+    d = setRan(d, step.id, { at: 1, ok: true, said: "2 kept", input: "a" });
+    d = keepRun(d, d.steps![0]);
+    const page = createWorkspaceDocument();
+    const store = createEditorStore(page);
+    connectStoreToDocument(store, page);
+    page.edit("run", () => d);
+    const saved = JSON.parse(workspaceText(store.getState()));
+    const r = saved.steps[0].runs[0].results;
+    expect([r.molecules.length, r.rest.length]).toEqual([2, 60]);
+    r.rest[0] = r.rest[1] = r.rest[2] = null;
+    const read = readWorkspace(JSON.stringify(saved))!.workflow!.steps[0].runs![0].results!;
+    expect([read.molecules.length, read.unread, read.rest.length, read.restUnread]).toEqual([2, undefined, 57, 3]);
+    // (shown again, the second exit's set says it, and only that one)
+    const doc = { ...d, steps: d.steps!.map((s) => ({ ...s, runs: [{ ...s.runs![0], results: read }] })) };
+    const shown = showRun(doc, doc.steps[0].id, 0, { extentOf });
+    expect([resultOf(shown, step.id)!.unread, resultOf(shown, step.id, "rest")!.unread]).toEqual([undefined, 3]);
+    expect(resultOf(shown, step.id, "rest")!.collection).toHaveLength(57);
   });
 });

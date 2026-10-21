@@ -93,7 +93,8 @@ describe("Meno's Duplicates, run from the page", () => {
     const after = st().steps.find((s) => s.id === step)!;
     expect(after.ran).toMatchObject({ ok: false, stopped: true, said: expect.stringMatching(/^Stopped after \d+:\d\d$/) });
     expect(stateOf(doc.getState(), after, "meno")).toBe("stopped");
-    expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(0);
+    // (its exits' sets as they were: not run)
+    expect(st().sets.filter((b) => b.made?.step === step && b.made.holds)).toHaveLength(0);
   });
 
   it("puts in what it worked out of what came in when it started, where that changed while it worked - and is changed", async () => {
@@ -110,7 +111,8 @@ describe("Meno's Duplicates, run from the page", () => {
     const after = st().steps.find((s) => s.id === step)!;
     expect(after.ran).toMatchObject({ ok: true });
     expect(stateOf(doc.getState(), after, "meno")).toBe("changed");
-    expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(1);
+    // (both its exits' sets filled: what it kept, and what it set aside)
+    expect(st().sets.filter((b) => b.made?.step === step && b.made.holds)).toHaveLength(2);
   });
 
   it("puts in nothing where it was deleted while it worked", async () => {
@@ -139,7 +141,7 @@ describe("Meno's Duplicates, run from the page", () => {
     expect(st().menoWorking[step]).toBeUndefined();
     const after = st().steps.find((s) => s.id === step)!;
     expect(after.ran).toMatchObject({ ok: true, said: "0:00 \u00b7 2 of 3 kept" });
-    expect(st().sets.filter((b) => b.made?.step === step)).toHaveLength(1);
+    expect(st().sets.filter((b) => b.made?.step === step && b.made.holds)).toHaveLength(2);
     expect(doc.history().undoLabel).toBe("run");
   });
 });

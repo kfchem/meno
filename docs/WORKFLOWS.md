@@ -118,18 +118,24 @@ built*).
   is made by the chemist round what is there; a *result* set is made by
   a step, round what it gave.
 - **Entry** - one structure in a set: a drawing, or a molecule in 3D,
-  with what has been found of it (its energy, its population...), and in
-  play or set aside.
+  with what has been found of it (its energy, its population...).
 - **Compound set** - a set whose entries are each a compound of its own:
   what a set the chemist makes holds.
 - **Conformer set** - a set whose entries are conformers, grouped by the
   compound each is of (*a*, *b*...): what the flow makes, and only it.
 - **Step** - one kind of calculation done to a set's entries, of a kind
   Meno defines (*Kinds of step*), filled by a plugin or by Meno.
+- **Input** - where a step takes a set: a port on its card's left edge,
+  one for each input its kind declares, named where there is more than
+  one (*start*, *end*).
+- **Exit** - what a step gives: a result set of its own, made with the
+  step and standing to the right of its card, empty and *Not run yet*
+  until the step runs. Every step has its first exit; a step that can set
+  entries aside has a second, under it (*Outside it*, *Alike*, *The
+  rest*). A step has no port that gives of its own: its exits' sets give.
 - **Port** - where a wire starts or ends: a set gives from its right
-  edge; a step takes on its left edge and gives on its right; a result
-  set takes on its left edge.
-- **Wire** - a line from a port that gives to a port that takes.
+  edge; a step's input takes on its card's left edge.
+- **Wire** - a line from a set to a step's input.
 - **Run** - one time a step was carried out, and what it gave; a step
   keeps its runs.
 - **Job** - a program running for a run, on this computer, in a folder
@@ -216,7 +222,7 @@ pointer does; put back by an undo, they glide back.
    *Input* set; a wire follows the pointer.
    - Let go on empty space: Quick Add opens there, at the kinds of step
      that take what the set gives. A step chosen is put down there, wired.
-   - Let go on a step's port: wired to it.
+   - Let go on one of a step's inputs: wired to it.
    - Let go where nothing takes it, or Escape: the wire goes, and the set
      stays.
 4. **Or from the menu**: right-click the selection, *Use as input*.
@@ -267,11 +273,11 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Frequencies | a signal | molecules in 3D | each with its vibrations and thermal corrections - the same kind of set |
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
-| Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest set aside |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest set aside - the same kind of set. Entries of different charge or spin are never alike |
+| Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
+| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
-| Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest set aside |
+| Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 
 The first six run a program; the last five work on a set's entries
 alone (*Who does a step*). A step that keeps a set keeps its kind: a
@@ -329,17 +335,20 @@ one of the kinds of calculation it does (decided: 16):
 
 ### Wires
 
-- **Drawn** from a port that gives to one that takes, or the other way: a
-  press on a port and a drag. While it is drawn, the ports that would
-  take it are lit in the base colour; the others stay as they are.
-- **What may join**: what a port gives to a port that takes it (*Kinds of
+- **Drawn** from a set's port to a step's input, or the other way: a
+  press on a port and a drag. While it is drawn, the inputs that would
+  take it are lit in the base colour; the others stay as they are. A
+  step's exit is a set: a wire is drawn on from it before the step has
+  run, what it will give being what the step's kind makes of what comes
+  in.
+- **What may join**: what a set gives to an input that takes it (*Kinds of
   step*). Nothing is converted on the way: a set of structures does not
   go into *Optimise* - *Conformers* and *Choose one* go between, on the
   page;
   a compound set does not go into *Populations* - *As conformers* goes
   between, or a *Conformers* step.
-- **One port may feed several steps**; a port that takes, one wire. A
-  wire drawn to a port that has one replaces it.
+- **One set may feed several steps**; an input takes one wire. A wire
+  drawn to an input that has one replaces it.
 - **Deleted** by Delete or Backspace with the pointer on it, or its menu;
   dragging its end off a port and letting go on nothing deletes it too.
 
@@ -400,21 +409,25 @@ Conformers go through a workflow as any set does (decided):
 - **Steps work entry by entry**, or compound by compound where the kind
   says so: *Optimise* each entry; *Energy window* and *Populations*
   within each compound of a conformer set.
-- **What a step sets aside is kept** with its set, not deleted, so that a
-  window made wider brings it back on the next run; the set's count says
-  how many of how many it holds (*23 of 81*).
+- **What a step sets aside goes out of its second exit**, a set of its
+  own under the first, in plain view - never dropped, and never hidden:
+  its count says how many it holds, and it can be wired on like any set.
+  What the two exits hold adds up to what came in. A window made wider
+  brings entries back from it on the next run. Its entries are the kind
+  of set the exit says: *Choose one*'s rest, the conformers not chosen,
+  is a conformer set still.
 - **On the page**, a conformer set's compound is shown as one molecule in
   3D with its conformers as frames - the conformer set Meno draws today,
   its chip saying the entry, its energy and population; entries set aside
-  are not among its frames. A compound set's entries are separate
+  are not among its frames - they are in the second exit's set. A compound set's entries are separate
   molecules, each its own.
 - **A set's count says what it holds**: a compound set of molecules in
   3D, its compounds (*2 compounds*); a conformer set, its compounds and
-  its conformers (*2 compounds · 81*); either, where some are set aside,
-  how many of how many (*2 compounds · 23 of 81*); structures drawn, or a
+  its conformers (*2 compounds · 81*); structures drawn, or a
   Render step's pictures, how many (*3 structures*, *9 pictures*); a set
-  with nothing in it, *Empty*. Its name is *Input* where the chemist made
-  it, else what its step made, as its kind says it - an option's value in
+  with nothing in it, *Empty*; a step's exit whose step has not run, *Not
+  run yet*. Its name is *Input* where the chemist made it, a second exit's
+  its own (*Alike*), else what its step made, as its kind says it - an option's value in
   it where the kind says one (*Within 3 kcal/mol*, *Populations at
   298.15 K*). Structures placed from coordinates in a text make a set named
   for where they came from - the PDF's name and its page or pages
@@ -479,17 +492,18 @@ of the step, wired from it (decided):
   entries (*Compound sets and conformer sets*);
 - **Energy**, **Frequencies**: the entries, each with its energy, or its
   vibrations and thermal corrections;
-- **Energy window**, **Duplicates**, **Populations**: the same entries,
-  some set aside, or with their populations;
+- **Energy window**, **Duplicates**: the entries kept out of the first
+  exit, the rest out of the second;
+- **Populations**: the same entries, with their populations;
 - **As conformers**: the same entries, as a conformer set.
 
 They are calculation results as Meno knows them: the frames chip,
-pointing at atoms, the lists. The set's port feeds the next step.
+pointing at atoms, the lists. Each exit's set feeds the next step.
 
 **A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
-set shows*): up to 50 entries are laid out on the page, as above. A step
-that gives more - a search's 1,000 conformers - puts none of them on the
-page: its result set holds them itself, in the step's order, and its frame
+set shows*): up to 50 entries are laid out on the page, as above. An exit
+that gives more - a search's 1,000 conformers, or what Duplicates set aside -
+puts none of them on the page: its set holds them itself, in the step's order, and its frame
 says what it holds ("400 conformers of 2 compounds"). The steps after it
 take them from there, a run kept keeps them, and the workspace's file
 keeps them, with the outputs they were read from - or, with *Don't keep
@@ -497,8 +511,8 @@ in the file*, only their count and hash. Opened from a file, a molecule
 of theirs that does not read is left out and counted, and the frame says
 how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
-file, on its row of the step's card, and in the set once it is shown
-again. They are opened as a table in the column, and put on the page from
+file, on its row of the step's card - what both its exits held - and in
+each exit's set once it is shown again. They are opened as a table in the column, and put on the page from
 there, in the steps that follow (6b), and summed up in the frame with a
 sample of their structures and histograms (6c).
 
@@ -1316,6 +1330,42 @@ Then, of the leftovers the maintainer chose:
 
 Not backward compatible: a workspace or procedure saved with a *3D
 structure* step opens without that step (no shim before 1.0).
+
+### Ports and exits (2026-10-21)
+
+Foundation PR 5 (WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*):
+
+- **A kind declares its inputs and its exits** (`workflow/kinds.ts`:
+  `inputsOf`, `exitsOf`). A kind that takes one set has the one input
+  `in`; a kind's first exit is the set its kind names (`made`), and a
+  kind that sets entries aside declares a second: *Energy window*,
+  *Outside it*; *Duplicates*, *Alike*; *Choose one*, *The rest* - a
+  conformer set, as the conformers not chosen are.
+- **A wire ends at a step's input** (`{ step, port }`) **and starts at a
+  set**; a step's card has no port that gives. A wire drawn into a step
+  without naming an input goes to the first input that takes it.
+- **Every exit is a set, made with its step**, to the right of the card,
+  the second under the first and half as high, holding nothing and saying
+  *Not run yet* until the step runs - so that a chain is wired up before
+  anything has run. A step put down without a set for one of its exits
+  (pasted alone, say) is given one. Deleted, a step takes with it the
+  exits' sets that never held anything, and the wires out of them; one
+  that holds something stays, a set like any the chemist drew.
+- **What a step sets aside is molecules in its second exit's set**, in
+  plain view, counted; it was a list kept with the first set, shown struck
+  through under its tab. What the exits hold adds up to what came in -
+  held by a test on each of Meno's steps that sets entries aside, against
+  answers worked out by hand.
+- **A procedure keeps its steps' exits** as empty frames, the wires
+  leading on from them.
+
+Not read from a workspace saved before this: a wire into a step by its
+number alone, or out of a step, and a result set that does not say which
+exit made it (pre-alpha: no reading of older files - the chemist draws
+them again). Not yet: a kind with two or three inputs, and matching them
+on a property - none of Meno's kinds takes two yet; the first come with
+the structure steps and *Path search*. *Tag*, which writes the property
+they match on, comes with Meno's own nodes.
 
 ## Questions
 
