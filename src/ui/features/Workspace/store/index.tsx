@@ -143,9 +143,9 @@ const NO_LOOKS: Readonly<Record<number, Look>> = {};
  * moved nothing else says so: its light would stay where it was, and a key
  * - a letter, Delete - act on what is gone.
  */
-/** Whether what a wire comes out of - a set, a step - is still in the workflow. */
-function wireEndThere(end: WireEnd, sets: readonly { id: number }[], steps: readonly { id: number }[]): boolean {
-  return "set" in end ? sets.some((b) => b.id === end.set) : steps.some((x) => x.id === end.step);
+/** Whether the set a wire comes out of is still in the workflow. */
+function wireEndThere(end: WireEnd, sets: readonly { id: number }[]): boolean {
+  return sets.some((b) => b.id === end.set);
 }
 
 function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>, travelled: boolean) {
@@ -227,7 +227,7 @@ export function connectStoreToDocument(
         openStep: prev.openStep != null && !mirrored.steps.some((x) => x.id === prev.openStep) ? null : prev.openStep,
         chosenSet: prev.chosenSet != null && !mirrored.sets.some((x) => x.id === prev.chosenSet) ? null : prev.chosenSet,
         // (Quick Add opened by a wire from a set or a step an undo took away: shut, its calculations being for nothing)
-        quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets, mirrored.steps) ? null : prev.quickAdd,
+        quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets) ? null : prev.quickAdd,
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),

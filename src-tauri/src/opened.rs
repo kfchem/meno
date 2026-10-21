@@ -1,4 +1,5 @@
-//! Workspace files (.meno) opened from outside Meno - double-clicked, or
+//! Files opened from outside Meno - a workspace file (.meno) double-clicked,
+//! one Meno reads opened with it from the system's Open With, or either
 //! dropped on its icon (docs/FILE-IO.md, *Opening a workspace file from the
 //! system*): on macOS the system tells the running Meno (`RunEvent::Opened`,
 //! at its start as at any time after); on Windows each file comes as an
@@ -9,9 +10,12 @@
 //! Each is kept here until the page takes it (`opened_files`), so that one
 //! opened as Meno starts - before the page is there to hear of it - is not
 //! lost; the page is told there are some (`opened-files`) and takes them,
-//! each in a tab, as Open opens a file - the page let read and write each,
-//! as Open's dialog lets it a file picked there. Only workspace files: Meno
-//! is the app for .meno alone.
+//! as Open opens a file - a workspace file in a tab, anything else into the
+//! workspace in front - the page let read and write each, as Open's dialog
+//! lets it a file picked there. Only workspace files and those of
+//! `OPENED_WITH`: Meno is the app for .meno alone, and offered for these on
+//! macOS (Info.plist), never their default; on Windows one opened with Meno
+//! by the user's own choice comes the same way.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -42,7 +46,12 @@ pub fn hide_instance_window(identifier: &str) {
     }
 }
 
-/// The workspace files opened from outside and not yet taken by the page.
+/// What Meno is offered for in the system's Open With, beside its own .meno: the structure
+/// files and PDFs it reads - as Info.plist lists them, the two kept alike (a test holds them
+/// so).
+pub const OPENED_WITH: [&str; 8] = ["mol", "sdf", "rxn", "xyz", "pdb", "cube", "cub", "pdf"];
+
+/// The files opened from outside and not yet taken by the page.
 #[derive(Default)]
 pub struct Opened(Mutex<Vec<String>>);
 
@@ -51,34 +60,40 @@ pub(crate) fn is_workspace(path: &Path) -> bool {
     path.extension().is_some_and(|e| e.eq_ignore_ascii_case("meno")) && path.is_file()
 }
 
-/// The workspace files among a program's arguments: each a path to one - the
+/// Whether `path` is a file Meno takes from outside: a workspace file, or one of `OPENED_WITH`,
+/// in any case, a file there.
+pub(crate) fn is_opened(path: &Path) -> bool {
+    path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("meno") || OPENED_WITH.iter().any(|x| e.eq_ignore_ascii_case(x))) && path.is_file()
+}
+
+/// The files Meno takes among a program's arguments: each a path to one - the
 /// program's own path, and options, aside.
 #[cfg(any(windows, test))]
-pub fn workspaces_in<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
+pub fn opened_in<I: IntoIterator<Item = String>>(args: I) -> Vec<String> {
     args.into_iter()
         .skip(1)
         .filter(|a| !a.starts_with('-'))
         .map(std::path::PathBuf::from)
-        .filter(|p| p.is_absolute() && is_workspace(p))
+        .filter(|p| p.is_absolute() && is_opened(p))
         .map(|p| p.to_string_lossy().into_owned())
         .collect()
 }
 
-/// The workspace files among what the system asks Meno to open (macOS): each
+/// The files Meno takes among what the system asks it to open (macOS): each
 /// a file's URL.
 #[cfg(any(target_os = "macos", test))]
-pub fn workspaces_of(urls: &[tauri::Url]) -> Vec<String> {
+pub fn opened_of(urls: &[tauri::Url]) -> Vec<String> {
     urls.iter()
         .filter_map(|u| u.to_file_path().ok())
-        .filter(|p| is_workspace(p))
+        .filter(|p| is_opened(p))
         .map(|p| p.to_string_lossy().into_owned())
         .collect()
 }
 
-/// Workspace files to open: each by its one true path (truepath.rs), so that
-/// one already open in a tab - however its path was written here - brings
-/// that tab forward; the page let read and write each - as Open's dialog
-/// lets it a file picked there - kept, and the page told.
+/// Files to open: each by its one true path (truepath.rs), so that one
+/// already open in a tab - however its path was written here - brings that
+/// tab forward; the page let read and write each - as Open's dialog lets it
+/// a file picked there - kept, and the page told.
 pub fn open(app: &AppHandle, paths: Vec<String>) {
     if paths.is_empty() {
         return;
@@ -106,7 +121,7 @@ pub fn show(app: &AppHandle) {
     }
 }
 
-/// The workspace files opened from outside that the page has not taken yet: taken.
+/// The files opened from outside that the page has not taken yet: taken.
 #[tauri::command]
 pub fn opened_files(state: tauri::State<'_, Opened>) -> Vec<String> {
     state.0.lock().map(|mut kept| std::mem::take(&mut *kept)).unwrap_or_default()
@@ -125,29 +140,80 @@ mod tests {
     }
 
     #[test]
-    fn takes_only_workspace_files_among_a_program_s_arguments() {
+    fn takes_workspace_files_and_those_offered_for_among_a_program_s_arguments() {
         let dir = scratch();
         let file = |name: &str| {
             let p = dir.join(name);
             fs::write(&p, b"PK").unwrap();
             p.to_string_lossy().into_owned()
         };
-        let (one, two, other) = (file("a.meno"), file("B.MENO"), file("c.mol"));
+        let (one, two, mol, pdf) = (file("a.meno"), file("B.MENO"), file("c.mol"), file("d.PDF"));
+        let other = file("e.log");
         let missing = dir.join("gone.meno").to_string_lossy().into_owned();
-        let args = ["Meno.exe".into(), one.clone(), "-Embedding".into(), other, missing, "relative.meno".into(), two.clone()];
-        assert_eq!(workspaces_in(args), vec![one, two]);
+        let args = ["Meno.exe".into(), one.clone(), "-Embedding".into(), mol.clone(), other, missing, "relative.meno".into(), two.clone(), pdf.clone()];
+        assert_eq!(opened_in(args), vec![one, mol, two, pdf]);
         // (the program's own path is never taken, even where it is one)
-        assert_eq!(workspaces_in([file("Meno.meno")]), Vec::<String>::new());
+        assert_eq!(opened_in([file("Meno.meno")]), Vec::<String>::new());
         let _ = fs::remove_dir_all(dir);
     }
 
     #[test]
-    fn takes_only_workspace_files_the_system_asks_to_open() {
+    fn takes_workspace_files_and_those_offered_for_the_system_asks_to_open() {
         let dir = scratch();
         let p = dir.join("w s.meno");
         fs::write(&p, b"PK").unwrap();
-        let urls = [tauri::Url::from_file_path(&p).unwrap(), tauri::Url::parse("https://example.org/x.meno").unwrap(), tauri::Url::from_file_path(dir.join("x.sdf")).unwrap()];
-        assert_eq!(workspaces_of(&urls), vec![p.to_string_lossy().into_owned()]);
+        let sdf = dir.join("x.sdf");
+        fs::write(&sdf, b"x").unwrap();
+        let out = dir.join("y.out");
+        fs::write(&out, b"x").unwrap();
+        let urls = [
+            tauri::Url::from_file_path(&p).unwrap(),
+            tauri::Url::parse("https://example.org/x.meno").unwrap(),
+            tauri::Url::from_file_path(&sdf).unwrap(),
+            tauri::Url::from_file_path(&out).unwrap(),
+            tauri::Url::from_file_path(dir.join("gone.pdb")).unwrap(),
+        ];
+        assert_eq!(opened_of(&urls), vec![p.to_string_lossy().into_owned(), sdf.to_string_lossy().into_owned()]);
         let _ = fs::remove_dir_all(dir);
+    }
+
+    /// Info.plist's document types, as the extensions Meno takes: the two alike - and Meno the
+    /// owner of .meno alone, an Alternate for all the rest.
+    #[test]
+    fn offers_itself_where_info_plist_says() {
+        let plist = include_str!("../Info.plist");
+        // (the strings of an array under `key` in a document type, in order)
+        fn strings(t: &str, key: &str) -> Vec<String> {
+            let Some(at) = t.find(&format!("<key>{key}</key>")) else { return vec![] };
+            let rest = &t[at..];
+            let array = &rest[..rest.find("</array>").unwrap_or(rest.len())];
+            array.split("<string>").skip(1).filter_map(|s| s.split("</string>").next()).map(str::to_string).collect()
+        }
+        fn string(t: &str, key: &str) -> Option<String> {
+            let at = t.find(&format!("<key>{key}</key>"))?;
+            let rest = &t[at..];
+            rest.split("<string>").nth(1)?.split("</string>").next().map(str::to_string)
+        }
+        let types = &plist[plist.find("<key>CFBundleDocumentTypes</key>").unwrap()..plist.find("<key>UTExportedTypeDeclarations</key>").unwrap()];
+        let docs: Vec<&str> = types.split("<dict>").skip(1).collect();
+        let mut owners = 0;
+        let mut extensions: Vec<String> = Vec::new();
+        let mut uti: Vec<String> = Vec::new();
+        for d in &docs {
+            let rank = string(d, "LSHandlerRank").expect("each document type ranks itself");
+            let utis = strings(d, "LSItemContentTypes");
+            if utis == ["dev.kfchem.meno.workspace"] {
+                assert_eq!(rank, "Owner", "the workspace's own type");
+                owners += 1;
+                continue;
+            }
+            assert_eq!(rank, "Alternate", "every type but the workspace's: {d}");
+            extensions.extend(strings(d, "CFBundleTypeExtensions"));
+            uti.extend(utis);
+        }
+        assert_eq!(owners, 1);
+        let want: Vec<&str> = OPENED_WITH.iter().copied().filter(|e| *e != "pdf").collect();
+        assert_eq!(extensions, want, "Info.plist's extensions");
+        assert_eq!(uti, ["com.adobe.pdf"], "Info.plist's other types");
     }
 }

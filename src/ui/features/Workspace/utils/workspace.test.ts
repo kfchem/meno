@@ -294,7 +294,10 @@ describe("a workspace with what is no entry in its lists", () => {
     pluses: [{ id: 1, x: -3, y: 0 }],
     captions: [{ id: 1, x: 6, y: 1, text: "heat", marks: [{ from: 0, to: 2, bold: true }] }],
     molecules3d: [{ ...molecule, at: { x: 10, y: 0 } }],
-    sets: [{ id: 1, x0: 0, y0: -9, x1: 4, y1: -5, aside: [{ compound: 0, number: 1 }] }],
+    sets: [
+      { id: 1, x0: 0, y0: -9, x1: 4, y1: -5 },
+      { id: 4, x0: 9, y0: -9, x1: 13, y1: -5, made: { step: 2, exit: "out", holds: "molecules" } },
+    ],
     steps: [
       {
         id: 2,
@@ -302,11 +305,11 @@ describe("a workspace with what is no entry in its lists", () => {
         x: 8,
         y: -7,
         ran: { at: 1, ok: true, said: "done", input: "in", jobs: [job] },
-        runs: [{ at: 1, ok: true, said: "done", input: "in", kind: "optimise", results: { molecules: [molecule], aside: [{ compound: 0, number: 1 }], holds: "molecules" } }],
+        runs: [{ at: 1, ok: true, said: "done", input: "in", kind: "optimise", results: { molecules: [molecule], rest: [molecule], holds: "molecules" } }],
         running: { at: 2, input: "in", jobs: [{ id: job, entries: [0], reads: ["run.out"] }] },
       },
     ],
-    wires: [{ id: 3, from: { set: 1 }, to: 2 }],
+    wires: [{ id: 3, from: { set: 1 }, to: { step: 2, port: "in" } }],
     texts: [{ name: "notes.txt", sha256: "c".repeat(64), at: { x: 0, y: 9 } }],
     pdfs: [{ name: "paper.pdf", sha256: "b".repeat(64), pages: [[612, 792]], x: 20, y: 0, placed: [{ page: 0, x: 30, y: 0 }], inks: [{ ...ink, page: 0 }] }],
     pictures: [{ id: 1, name: "a.png", sha256: "a".repeat(64), media: "image/png", px: [10, 10], x: 0, y: 20, w: 1, h: 1 }],
@@ -343,7 +346,8 @@ describe("a workspace with what is no entry in its lists", () => {
     expect([d.molecules3d, d.molecules3d![0].measures, d.molecules3d![0].made?.how, d.pictures, d.slides, d.shapes, d.inks].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
     expect(d.ringFills).toEqual({ "1-2-3": "#ff0000" });
     const { sets, steps, wires } = ws.workflow!;
-    expect([sets, sets[0].aside, wires, steps[0].ran?.jobs, steps[0].runs, steps[0].runs?.[0].results?.molecules, steps[0].running?.jobs].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(sets[1].made).toEqual({ step: 2, exit: "out", holds: "molecules" });
+    expect([sets, wires, steps[0].ran?.jobs, steps[0].runs, steps[0].runs?.[0].results?.molecules, steps[0].runs?.[0].results?.rest, steps[0].running?.jobs].map((l) => l?.length)).toEqual([2, 1, 1, 1, 1, 1, 1]);
     expect([ws.texts, ws.pdfs, ws.pdfs[0].placed, ws.pdfs[0].inks].map((l) => l?.length)).toEqual([1, 1, 1, 1]);
   });
 
@@ -424,7 +428,7 @@ describe("a workspace's sets, saved (version 2)", () => {
       let next = addSet(d, { x0: -1, y0: -1, x1: 3, y1: 2 });
       next = { ...next, sets: next.sets!.map((b) => ({ ...b, members: [...b.members!, { molecule: 2 }] })) };
       next = addSet(next, { x0: 9, y0: -1, x1: 11, y1: 1 });
-      return { ...next, sets: next.sets!.map((b) => (b.id === 2 ? { ...b, made: { step: 9, holds: "molecules" as never }, ...(keep === false ? { keep } : {}) } : b)) };
+      return { ...next, sets: next.sets!.map((b) => (b.id === 2 ? { ...b, made: { step: 9, exit: "out", holds: "molecules" as const }, ...(keep === false ? { keep } : {}) } : b)) };
     });
     return { doc, st };
   }

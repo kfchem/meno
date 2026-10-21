@@ -933,7 +933,7 @@ pub fn run() {
     #[cfg(windows)]
     if !ole::started_for_office() {
         builder = builder.plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            opened::open(app, opened::workspaces_in(args));
+            opened::open(app, opened::opened_in(args));
             opened::show(app);
         }));
     }
@@ -972,9 +972,9 @@ pub fn run() {
                 logfile::start(&data.join("logs"), &app.package_info().version.to_string());
             }
             net::start(app.handle());
-            // a workspace file Windows started Meno to open (opened.rs)
+            // a file Windows started Meno to open (opened.rs)
             #[cfg(windows)]
-            opened::open(app.handle(), opened::workspaces_in(std::env::args()));
+            opened::open(app.handle(), opened::opened_in(std::env::args()));
             // (the single-instance plugin's window, made visible by it, hidden: opened.rs)
             #[cfg(windows)]
             if !ole::started_for_office() {
@@ -1075,10 +1075,10 @@ pub fn run() {
         .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
-            // a workspace file macOS asks Meno to open, as it starts or after (opened.rs)
+            // a file macOS asks Meno to open, as it starts or after (opened.rs)
             #[cfg(target_os = "macos")]
             if let RunEvent::Opened { urls } = &event {
-                opened::open(app, opened::workspaces_of(urls));
+                opened::open(app, opened::opened_of(urls));
             }
             // Don't leave Python sidecars running after the window closes.
             if let RunEvent::Exit = event {
