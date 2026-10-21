@@ -196,6 +196,11 @@ describe("molecules in 3D on the clipboard", () => {
     };
     const back = readRecord(recordText({ atoms: [], bonds: [], molecules3d: [made] }));
     expect(back?.molecules3d).toEqual([made]);
+    // (a part of a search's conformers says so, as a conformer set; of what is none, it means nothing)
+    const part = { ...made, partOf: true as const };
+    expect(readRecord(recordText({ atoms: [], bonds: [], molecules3d: [part] }))?.molecules3d).toEqual([part]);
+    const { conformerSet: _c, ...plain } = part;
+    expect(readRecord(recordText({ atoms: [], bonds: [], molecules3d: [plain] }))?.molecules3d?.[0].partOf).toBeUndefined();
   });
 
   it("keep how many atoms their file left out, where it is some", () => {

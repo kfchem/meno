@@ -6,6 +6,8 @@ import type { Molecule3D } from "../store/types";
 import { addStep } from "./model";
 import { placeResults, type RunWith } from "./run";
 import SetTableBody from "./SetTableBody";
+import { chosenMolecules, tableRows } from "./setTable";
+import { countOf, setMolecules } from "./entries";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer
 // draws the table, and what it shows is read off that.
@@ -78,6 +80,10 @@ describe("a set's table in the column", () => {
     expect(made.name).toBe("From Conformers");
     expect(made.made).toBeUndefined();
     expect(store.getState().molecules3d.length).toBe(before + 1);
+    // (a compound's conformers, chosen, one compound: 2 of 60 said "1 compound · 2", as a conformer set's)
+    const two = chosenMolecules(tableRows(setMolecules(store.getState(), set), "conformers"), new Set([3, 7]));
+    const both = store.getState().placeAsSet(two, { x: set.x1, y: set.y1 }, "From Conformers")!;
+    expect(countOf(store.getState(), store.getState().sets.find((b) => b.id === both)!)).toEqual({ holds: "conformers", entries: 2, compounds: 1 });
     // (none to put: no set made)
     expect(store.getState().placeAsSet([], { x: 0, y: 0 })).toBeUndefined();
   });

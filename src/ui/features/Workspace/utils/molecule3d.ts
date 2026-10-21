@@ -246,6 +246,19 @@ export function populations(energies: readonly number[], degeneracies?: readonly
   return boltzmann(energies, ROOM_TEMPERATURE, degeneracies);
 }
 
+/**
+ * The shares a conformer set's chip shows, a frame each: as a *Populations*
+ * step found them, or else by Boltzmann at room temperature (`populations`)
+ * - none of only a part of a search's conformers (`partOf`), whose shares
+ * of these alone would not be the compound's, nor where its energies are
+ * not each frame's.
+ */
+export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies">): number[] | undefined {
+  const n = 1 + (m.frames?.length ?? 0);
+  if (m.shares?.length === n) return m.shares;
+  return m.conformerSet && !m.partOf && m.energies?.length === n ? populations(m.energies, m.degeneracies) : undefined;
+}
+
 /** How a molecule in 3D is drawn: in the 3D style's primary look, or its secondary. */
 export type Look = Role3D;
 

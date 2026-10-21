@@ -205,5 +205,9 @@ describe("a result set of molecules narrower than their frames chips", () => {
     const four = { ...one, frames: [xyz, xyz, xyz] };
     expect(chipWide({ ...four, energies: [-1, -1, -1, -1] })).toBeGreaterThan(chipWide(four));
     expect(chipWide({ ...four, energies: [-1, -1, -1, -1], shares: [0.25, 0.25, 0.25, 0.25] })).toBeGreaterThan(chipWide({ ...four, energies: [-1, -1, -1, -1] }));
+    // (a conformer set's shares by Boltzmann given room - but none of a part of a search's conformers, which shows none)
+    const set = { ...four, energies: [-1, -1, -1, -1], conformerSet: true };
+    expect(chipWide(set)).toBeGreaterThan(chipWide({ ...four, energies: [-1, -1, -1, -1] }));
+    expect(chipWide({ ...set, partOf: true })).toBe(chipWide({ ...four, energies: [-1, -1, -1, -1] }));
   });
 });

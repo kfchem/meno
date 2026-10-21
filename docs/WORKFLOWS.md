@@ -531,8 +531,16 @@ set is (2026-10-21):
   Shift for those between, as sorted). *Put on the page* puts those chosen
   beside the set as a set of their own, "From" the set's name, in the
   set's order: each one geometry with its energy and what worked it out,
-  and of its calculation only what is of that frame. They are not a
-  conformer set there, since the rest are not with them.
+  and of its calculation only what is of that frame. A compound's
+  conformers chosen stay one conformer set, so that the new set counts
+  them as the step's did ("2 compounds · 5"). Where some of the
+  compound's conformers are left out, the set is marked a part of one
+  (`partOf`, decided 2026-10-21): its chip shows no shares, and the table
+  no energy above the compound's lowest, since shares worked out again
+  over a part are not the compound's populations and its lowest may not
+  be among them. A *Populations* step on them works shares out, and says
+  at what temperature and of what. All of a compound's conformers chosen
+  are the whole set, its shares with it.
 - The tab closes as a text's does, and goes when its set is deleted. It
   is the view's, not saved with the workspace.
 

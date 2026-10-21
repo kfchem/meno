@@ -473,6 +473,13 @@ export type Molecule3D = {
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
   /**
+   * A conformer set that is only some of a search's conformers - those
+   * chosen from its set's table: no share is shown of them, for shares of
+   * these alone would not be the compound's populations. A *Populations*
+   * step on them works shares out, and says of what.
+   */
+  partOf?: true;
+  /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
    * its energies are (`energies`), where it gave them: the force field's

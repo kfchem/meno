@@ -23,7 +23,7 @@ export type TableRow = {
   /** Its energy, in hartrees, where it has one - and what worked it out, in the words of what did. */
   energy?: number;
   from: string;
-  /** In a conformer set: its energy above its compound's lowest, in kcal/mol - only among energies worked out the same way. */
+  /** In a conformer set: its energy above its compound's lowest, in kcal/mol - only among energies worked out the same way, and none where the set holds only a part of the compound's conformers (`partOf`). */
   above?: number;
   /** How many forms of it a conformer search found alike, where it said. */
   degeneracy?: number;
@@ -49,7 +49,8 @@ export function tableRows(molecules: readonly Molecule3D[], holds: "molecules" |
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     const from = energiesFrom(m);
     // (above its compound's lowest: a conformer set's molecule is one compound, its energies all worked out alike)
-    const lowest = holds === "conformers" && energies ? Math.min(...energies) : undefined;
+    // (none of only a part of a compound's conformers: its lowest may not be among them)
+    const lowest = holds === "conformers" && energies && !m.partOf ? Math.min(...energies) : undefined;
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       rows.push({
         at: rows.length,
@@ -130,8 +131,11 @@ export function rowMolecule(row: TableRow): Omit<Molecule3D, "id" | "at"> {
  * Some of a molecule's frames as a molecule of their own: their geometries,
  * the first its atoms'; each one's energy, number among its compound's
  * conformers, and degeneracy, where it had them; and what worked them out,
- * its name, its stereo. Not a conformer set, nor a path, nor its shares:
- * what they were of is not with them.
+ * its name, its stereo. Of a conformer set, a conformer set still - one
+ * compound - its shares kept where all its frames are, and where some are
+ * left out, only a part of it (`partOf`): its shares, which were of all of
+ * them, not kept, nor worked out anew of these alone. Not a path: what it
+ * led to is not with it.
  */
 export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<Molecule3D, "id" | "at"> {
   const n = framesOf(m);
@@ -140,6 +144,7 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
   const energies = each(m.energies);
   const numbers = each(m.numbers) ?? (m.conformerSet ? frames.map((f) => f + 1) : undefined);
   const degeneracies = each(m.degeneracies);
+  const part = m.partOf || frames.length < n;
   return {
     atoms: m.atoms.map((a, k) => ({ ...a, x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
     bonds: m.bonds,
@@ -148,6 +153,8 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(energies ? { energies } : {}),
     ...(numbers ? { numbers } : {}),
     ...(degeneracies ? { degeneracies } : {}),
+    ...(m.conformerSet ? { conformerSet: true, ...(part ? { partOf: true as const } : {}) } : {}),
+    ...(m.conformerSet && !part && each(m.shares) ? { shares: each(m.shares) } : {}),
     ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n) } : {}),
     ...(m.made ? { made: m.made } : {}),
     ...(m.name ? { name: m.name } : {}),
