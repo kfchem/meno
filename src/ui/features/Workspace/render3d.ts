@@ -11,7 +11,8 @@ import { ribbonMesh } from "./utils/ribbon";
 import type { Carried3D, Molecule3D } from "./store/types";
 import { backToFront } from "./utils/backToFront";
 import { colourSurface, pictureSurface, SURFACE_OPACITY, surfaceGeometry, surfaceMaterial, surfaceOpacity } from "./utils/surfaceMesh";
-import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersShownOn } from "./utils/atomNumbers";
+import { atomNumbersOf, digitsOf, NUMBER_HEIGHT_MOST_A, NUMBER_LEAST_PX, numberHeight, numberPlaces, numbersLeftOut as numbersLeftOutOf, numbersShownOn } from "./utils/atomNumbers";
+import { JOINT_NUMBER_A, jointNumbersMesh, jointUniforms, setJointAttributes } from "./utils/jointNumbers";
 import { OCCLUSION_DIRECT, occludedMaterial, setAtomOcclusion, setBondOcclusion } from "./utils/occlusionMaterial";
 import { occlusionNow, packLines } from "./utils/occlusions";
 import { watchShaderErrors } from "./utils/menoShader";
@@ -106,7 +107,7 @@ export function rendered3d(
   // (a renderer to draw with, kept by whoever gives it - many small pictures one after another, say: each a context of
   // its own, the browser takes the oldest live ones away; else one made for this picture and let go after it)
   using?: THREE.WebGLRenderer,
-): { canvas: HTMLCanvasElement; bounds: Bounds } | null {
+): { canvas: HTMLCanvasElement; bounds: Bounds; numbersLeftOut: number } | null {
   if (typeof document === "undefined" || !ms.length) return null;
   const eyeOver = (m: Carried3D) => (eyeHeight == null ? undefined : { x: m.at.x, y: m.at.y, z: eyeHeight });
   // (each as far as it reaches: its atoms, and the surface it shows)
@@ -168,6 +169,8 @@ export function rendered3d(
   const up = new THREE.Vector3(0, 1, 0);
   const mtx = new THREE.Matrix4();
   const colour = new THREE.Color();
+  // (the atom numbers shown that this picture leaves out, too small in it to read, or with no room on their balls: said, never dropped unsaid)
+  let numbersLeftOut = 0;
   try {
     for (const { m, surface, bounds: b } of each) {
       const w = Math.max(1, Math.round((b.max.x - b.min.x) * pxPerWorld));
@@ -227,8 +230,30 @@ export function rendered3d(
       }
       atomsMesh.castShadow = atomsMesh.receiveShadow = true;
       group.add(atomsMesh);
-      // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above)
-      if (m.atomNumbers) {
+      // (the numbers shown on its atoms, as the canvas draws them - utils/atomNumbers - each in the part of its ball seen from above;
+      // Sticks, where the sticks meet: utils/jointNumbers)
+      if (m.atomNumbers && drawn.atoms === "sticks") {
+        const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
+        const on = numbersShownOn(molecule);
+        const joints = jointNumbersMesh(m.atoms.length);
+        const inks = new Float32Array(3 * m.atoms.length);
+        m.atoms.forEach((a, i) => {
+          joints.setMatrixAt(i, mtx.makeTranslation(places[3 * i], places[3 * i + 1], places[3 * i + 2]));
+          colour.set(atomColour(a.el, drawn)).toArray(inks, 3 * i);
+        });
+        joints.instanceMatrix.needsUpdate = true;
+        setJointAttributes(joints, nums, Float32Array.from(m.atoms, (_, i) => (on[i] && !left[i] ? 1 : 0)), inks);
+        const ju = jointUniforms(joints);
+        ju.pxPer.value = pxPerWorld;
+        ju.height.value = JOINT_NUMBER_A * WORLD_PER_ANGSTROM;
+        // (as the shader leaves them out: under three quarters of the least, in the picture's pixels, nothing is drawn)
+        if (JOINT_NUMBER_A * WORLD_PER_ANGSTROM * mag * pxPerWorld * 0.7 < NUMBER_LEAST_PX * 0.75) numbersLeftOut += m.atoms.filter((_, i) => on[i] && !left[i] && digitsOf(nums[i]) > 0).length;
+        // (in front of where the sticks meet, as on the canvas: past the sticks' own round ends)
+        ju.lift.value = bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * 1.2;
+        ju.shown.value = 1;
+        made.push(joints.geometry, joints.material as THREE.Material);
+        group.add(joints);
+      } else if (m.atomNumbers) {
         const nums = atomNumbersOf(molecule, m.atomNumbers.kind);
         const on = numbersShownOn(molecule);
         const digits = Uint8Array.from(nums, (v, i) => (on[i] ? digitsOf(v) : 0));
@@ -245,11 +270,14 @@ export function rendered3d(
         // (where they stand as the picture shows them: magnified as the molecule is - utils/molecule3d `magnifiedOf`)
         const seen = rs.map((r) => r * mag);
         numberPlaces(centres, seen, heights, digits, at, lines.length ? { bonds, r: bondRadiusOf(drawn) * WORLD_PER_ANGSTROM * mag } : null);
+        // (those the shader leaves out, counted: utils/atomNumbers numbersLeftOut)
+        numbersLeftOut += numbersLeftOutOf(heights, Float32Array.from(m.atoms, (_, i) => at[3 * i + 2]), Float32Array.from(seen, (r) => r * pxPerWorld), digits, NUMBER_LEAST_PX);
         ball.setAttribute("ballNumber", new THREE.InstancedBufferAttribute(nums, 1));
         ball.setAttribute("ballNumberPlace", new THREE.InstancedBufferAttribute(Float32Array.from({ length: 4 * m.atoms.length }, (_, k) => (k % 4 === 3 ? on[k >> 2] : at[3 * (k >> 2) + (k % 4)])), 4));
         ao.numbers.shown.value = 1;
         ao.numbers.pxPer.value = pxPerWorld;
-        ao.numbers.least.value = NUMBER_LEAST_PX * cssPx;
+        // (the least in the picture's own pixels, not the canvas's: drawn at its size in print, as the Sticks' are - a number is left out only where it would be too small to read in the picture itself)
+        ao.numbers.least.value = NUMBER_LEAST_PX;
         ao.numbers.most.value = NUMBER_HEIGHT_MOST_A * WORLD_PER_ANGSTROM;
       }
       // the style's line round every ball and stick, and its depth fade (utils/outlineMaterial, occlusionMaterial)
@@ -457,7 +485,7 @@ export function rendered3d(
       renderer.forceContextLoss();
     }
   }
-  return { canvas: out, bounds };
+  return { canvas: out, bounds, numbersLeftOut };
 }
 
 /**
@@ -488,6 +516,8 @@ export function withSolidsImage(
   const scale = Math.min(dpi / 96, Math.sqrt(PICTURE_MOST_PIXELS / area));
   const drawn = rendered3d(ms, style, zoom * scale, undefined, TILE, scale);
   if (!drawn) return null;
+  // (atom numbers too small in the picture to read, or with no room on their balls, are left out of it: how many, said in Meno's log)
+  if (drawn.numbersLeftOut > 0) console.warn(`Meno: a picture of molecules in 3D left out ${drawn.numbersLeftOut} of their atom numbers, too small to read in it or with no room on their balls.`);
   const { canvas, bounds } = drawn;
   const href = canvas.toDataURL("image/png");
   const binary = atob(href.slice(href.indexOf(",") + 1));

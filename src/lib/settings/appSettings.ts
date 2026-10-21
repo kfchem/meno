@@ -80,8 +80,8 @@ export const CORES_MOST = 1024;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
- * twice as finely as its size on the screen - the sharpest, and as before -
- * as finely as the screen itself shows things, or once. Pictures made of it
+ * twice as finely as its size on the screen - the sharpest - as finely as
+ * the screen itself shows things (the default), or once. Pictures made of it
  * are drawn at their own sizes, whichever is chosen.
  */
 export type CanvasSettings = { resolution: 2 | "display" | 1 };
@@ -171,7 +171,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   plugins: { removed: [], roles: {}, programs: {}, guided: [] },
   pictures: { dpi: 600 },
   pointer: { wheelUp: "in" },
-  canvas: { resolution: 2 },
+  canvas: { resolution: "display" },
   labels: { smart: true },
   words: { smart: true },
   calculations: {},
@@ -233,10 +233,15 @@ function acceptProcedures(raw: unknown): SavedProcedure[] {
   });
 }
 
-/** How finely the canvas is drawn, as the file holds it; what does not read - a file from before there was a choice - twice. */
+/**
+ * How finely the canvas is drawn, as the file holds it: a choice saved is
+ * kept, whichever it is; none saved - a file from before there was a choice
+ * - or one that does not read, the default, as the screen shows things (the
+ * maintainer, 2026-10-21: the default changed, no one's saved choice).
+ */
 function acceptCanvas(raw: unknown): CanvasSettings {
   const r = (raw as { resolution?: unknown } | null)?.resolution;
-  return { resolution: r === 1 || r === "display" ? r : 2 };
+  return { resolution: r === 1 || r === 2 ? r : "display" };
 }
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */
@@ -364,8 +369,60 @@ function acceptNetwork(raw: unknown): NetworkSettings {
   };
 }
 
+/**
+ * The settings as the file holds them: only what differs from the defaults
+ * - what the user changed - so that a default changed later reaches everyone
+ * who never touched it (the maintainer, 2026-10-21). Read back, what is not
+ * there is the default (`acceptAppSettings`).
+ */
 export function settingsFileText(settings: AppSettings): string {
-  return JSON.stringify({ format: FORMAT, ...settings }, null, 2) + "\n";
+  const changed: Record<string, unknown> = {};
+  for (const k of Object.keys(settings) as (keyof AppSettings)[]) {
+    const d = WHOLE.has(k) ? (sameValue(settings[k], DEFAULT_APP_SETTINGS[k]) ? undefined : settings[k]) : changedFrom(settings[k], DEFAULT_APP_SETTINGS[k]);
+    if (d !== undefined) changed[k] = d;
+  }
+  return JSON.stringify({ format: FORMAT, ...changed }, null, 2) + "\n";
+}
+
+/**
+ * The settings written whole where any part of them was changed: a drawing
+ * style chosen is its preset and the changes made to it, read only together;
+ * a 3D style chosen, its primary and secondary looks, which are never the
+ * same - one of them kept and the other a later default could be.
+ */
+const WHOLE: ReadonlySet<keyof AppSettings> = new Set(["drawingStyle", "style3d"]);
+
+/**
+ * What of `value` differs from `given`: nothing where they are the same;
+ * of two objects, each field that differs, and only those, worked out the
+ * same way within it; anything else - a list, a number, a text, an object
+ * against something else - whole.
+ */
+export function changedFrom(value: unknown, given: unknown): unknown {
+  if (sameValue(value, given)) return undefined;
+  if (!isRecord(value) || !isRecord(given)) return value;
+  // (a field of the defaults it no longer has - taken away, not changed: the whole of it, which says so)
+  if (Object.keys(given).some((k) => given[k] !== undefined && value[k] === undefined)) return value;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(value)) {
+    const d = k in given ? changedFrom(v, given[k]) : v;
+    if (d !== undefined) out[k] = d;
+  }
+  return out;
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** Whether two values a settings file holds are the same: the same numbers, texts and true/false, in lists of the same order and objects of the same fields. */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (Array.isArray(a) && Array.isArray(b)) return a.length === b.length && a.every((v, i) => sameValue(v, b[i]));
+  if (isRecord(a) && isRecord(b)) {
+    const ka = Object.keys(a).filter((k) => a[k] !== undefined);
+    const kb = Object.keys(b).filter((k) => b[k] !== undefined);
+    return ka.length === kb.length && ka.every((k) => k in b && sameValue(a[k], b[k]));
+  }
+  return false;
 }
 
 const FILE = "settings.json";

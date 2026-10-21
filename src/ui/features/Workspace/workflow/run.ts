@@ -7,6 +7,7 @@
  */
 import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
+import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, inside, setEntries, frameXyz, framesOf, keptOf, keptAlike, unlikeMade, type Frame, type SetEntry } from "./entries";
@@ -91,13 +92,13 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
 
 /**
  * What the energies of molecules in 3D are, where a calculation worked them
- * out: its program and method, as the first that says says them -
- * "RDKit · ETKDG v3, MMFF94", "xtb · GFN2-xTB". None, where none says.
+ * out: its program and level (lib/calc `levelOf`), as the first that says them -
+ * "RDKit · ETKDG v3, MMFF94", "xtb · GFN2-xTB · gas phase". None, where none says.
  */
 export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energies">[]): string | undefined {
   const c = molecules.find((m) => m.energies?.length && (m.calc?.program || m.calc?.method))?.calc;
   if (!c) return undefined;
-  return [c.program, [c.method, c.basis].filter(Boolean).join("/")].filter(Boolean).join(" \u00b7 ");
+  return [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ");
 }
 
 /** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make. */
