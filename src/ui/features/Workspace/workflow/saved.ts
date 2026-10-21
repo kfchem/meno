@@ -117,17 +117,21 @@ function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
 /** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
-  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; aside?: unknown; holds?: unknown } } | null;
+  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; aside?: unknown; holds?: unknown; unread?: unknown } } | null;
   if (!ran || !KINDS.some((k) => k.kind === r?.kind)) return null;
   const options = optionsIn(r?.options);
   const res = r?.results;
-  const molecules = Array.isArray(res?.molecules) ? res.molecules.flatMap(carriedMolecule) : [];
+  const given: unknown[] = Array.isArray(res?.molecules) ? res.molecules : [];
+  const molecules = given.flatMap(carriedMolecule);
   const holds = SETS.includes(res?.holds as SetKind) ? (res!.holds as SetKind) : undefined;
+  // (those that do not read counted, with those its file already said had not - never left out unsaid)
+  const was = res?.unread;
+  const unread = given.length - molecules.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0);
   return {
     ...ran,
     kind: r!.kind as StepKind,
     ...(Object.keys(options).length ? { options } : {}),
-    ...(holds && molecules.length ? { results: { molecules, aside: asideIn(res!.aside), holds } } : {}),
+    ...(holds && (molecules.length || unread) ? { results: { molecules, aside: asideIn(res!.aside), holds, ...(unread ? { unread } : {}) } } : {}),
   };
 }
 

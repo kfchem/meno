@@ -210,7 +210,8 @@ function runRows(s: WorkflowStep): RunRow[] {
     [kind !== s.kind ? kindInfo(kind).name : "", howOf(optionsFor(kind, by), options, by === "meno" ? kindInfo(kind).how : undefined)].filter(Boolean).join(" \u00b7 ");
   return [
     ...(s.ran ? [{ at: s.ran.at, said: s.ran.said, how: how(s.ran.kind ?? s.kind, s.ran.options ?? s.options), shown: true }] : []),
-    ...(s.runs ?? []).map((r) => ({ at: r.at, said: r.said, how: how(r.kind, r.options), shown: false })),
+    // (an earlier run's molecules that did not read from its file: said with what it said)
+    ...(s.runs ?? []).map((r) => ({ at: r.at, said: r.results?.unread ? `${r.said} · ${r.results.unread.toLocaleString("en-US")} not read` : r.said, how: how(r.kind, r.options), shown: false })),
   ];
 }
 
