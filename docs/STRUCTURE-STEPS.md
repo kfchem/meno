@@ -79,3 +79,29 @@ numbering. A measurement is named for what it is and its atoms: `distance
     sign taken from the definition;
   - the dihedral, distance and angle the tests' own geometry builder
     places by.
+
+## Re-bond
+
+One entry's geometry with another's bonds and charges (`rebonded`): for
+example, a conformer of the reactant given the product's bonding, as the
+start of a restrained minimisation towards the product.
+
+- **One numbering.** The two must hold the same atoms in one numbering, atom
+  by atom; a *Reaction* step writes its products in the reactants'. Where
+  they do not, nothing is made, and the first atom that differs is said.
+- **What comes from each.**
+  - The structure and species are the bonding entry's: its atoms' charges,
+    radicals and isotopes, its bonds, and its charge and multiplicity.
+  - The geometry is the geometry entry's, as it is: one 3D structure.
+    Frames are taken one at a time first (*Take frames*).
+- **Properties.** Both entries' properties are kept, the geometry entry's
+  where both have one of the same name, and each still says the geometry
+  it was worked out at.
+- **Group and lineage.** The group is *a → b*: the geometry entry's group,
+  then the bonding entry's (each entry's own id where it has none). Both
+  entries are its lineage.
+
+Checked: a Diels-Alder reactant re-bonded to its product. The product's
+bonds come in in the reactants' numbering, and the two new ring bonds stand
+long in the reactant's geometry. The product as drawn, not renumbered, is
+refused at its first atom.
