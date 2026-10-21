@@ -23,6 +23,13 @@ export type ChemRequests = {
    */
   open_stereo: { args: { molblock: string; like?: Like }; result: OpenStereo };
   /**
+   * Which stereoisomer each molecule in 3D is, read from its own geometry:
+   * its elements that could be stereogenic and a key that two molecules
+   * share exactly when they are one stereoisomer - or, for one it could not
+   * read, why (lib/entry `EntryStereo`).
+   */
+  configurations: { args: { molblocks: string[] }; result: { molecules: Configured[] } };
+  /**
    * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of the first
    * of its stereoisomers, or of each, where some of its stereo is left open
    * - and `like` does not give it. Of two enantiomers, one is made as the
@@ -72,6 +79,9 @@ export type PictureRead = {
 };
 
 export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number };
+
+/** One molecule's configuration, as the plugin answers it: its elements and key, or why it has none. */
+export type Configured = { elements: { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean }[]; key: string } | { error: string };
 
 /**
  * Some of a block's atoms, by index, where a molecule in 3D made from it

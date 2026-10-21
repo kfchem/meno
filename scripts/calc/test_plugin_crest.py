@@ -42,6 +42,15 @@ METHANOL = {
 SODIUM = {"name": "sodium", "atoms": [{"el": "Na", "x": 1.0, "y": 2.0, "z": 3.0}], "bonds": [], "charge": 1, "multiplicity": 1}
 
 # (after "Coordinate Files", ensemble files: Xmol frames in angstroms, each comment line an energy in hartrees, lowest first)
+# (after "Command Line Keywords": CREST echoing the options it was given as it starts)
+ECHO_THF = """ Command line input:
+ > crest input.xyz --gfn2 --chrg 0 --uhf 0 --alpb thf --ewin 6 --T 4
+
+  -gfn2 : Use of GFN2-xTB requested.
+  --alpb thf : implicit solvation
+  --ewin 6
+"""
+
 ENSEMBLE = """6
        -11.39270131
 C         -0.0100000000        0.0000000000        0.0000000000
@@ -168,13 +177,28 @@ class Prepare(unittest.TestCase):
 class Collect(unittest.TestCase):
     def test_the_conformers_lowest_first_with_their_energies(self):
         out = ask("collect", step="conformers", entries=[METHANOL], options={"method": "gfn2", "solvent": "thf"},
-                  files={"crest_conformers.xyz": ENSEMBLE}, log=" Version 2.12,   Thu 19. Mai\n", ended="done")["outputs"][0]
+                  files={"crest_conformers.xyz": ENSEMBLE}, log=" Version 2.12,   Thu 19. Mai\n" + ECHO_THF, ended="done")["outputs"][0]
         self.assertEqual(out["atoms"], ["C", "O", "H", "H", "H", "H"])
         self.assertEqual(len(out["frames"]), 2)
         self.assertAlmostEqual(out["frames"][0][0], -0.01)
         self.assertAlmostEqual(out["frames"][1][7], -0.9)
         self.assertEqual(out["energies"], [-11.39270131, -11.391])
-        self.assertEqual((out["program"], out["version"], out["method"]), ("CREST", "2.12", "iMTD-GC, GFN2-xTB (ALPB, thf)"))
+        self.assertEqual((out["program"], out["version"], out["method"]), ("CREST", "2.12", "iMTD-GC, GFN2-xTB"))
+        # (the solvation as CREST echoed its options: no more than it says)
+        self.assertEqual(out["solvation"], "ALPB(thf)")
+
+    def test_the_solvation_as_the_run_said_it(self):
+        self.assertEqual(worker.solvation_of(ECHO_THF), "ALPB(thf)")
+        self.assertEqual(worker.solvation_of(ECHO_THF.replace(" --alpb thf", "").replace("  --alpb thf : implicit solvation\n", "")), "none")
+        self.assertIsNone(worker.solvation_of(""))
+        # (a lone atom's: as its xtb printed it in its setup)
+        xtb = "      * Solvation model:               ALPB\n        Solvent                        water\n        Reference state                gsolv [1 M gas/solution]\n"
+        self.assertEqual(worker.solvation_of(xtb), "ALPB(water), reference state gsolv [1 M gas/solution]")
+        # (not what was asked: refused)
+        for asked in ("none", "water"):
+            said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "conformers", "entries": [METHANOL], "options": {"solvent": asked}, "files": {"crest_conformers.xyz": ENSEMBLE}, "log": ECHO_THF, "ended": "done"}))
+            self.assertFalse(said["ok"], asked)
+            self.assertIn("not as asked", said["error"])
 
     def test_each_conformers_population_as_cregen_gives_it(self):
         # (after "Metadynamics-based Conformational Sampling": CREGEN's table, the row that begins each set of rotamers giving the set's weight)
@@ -206,7 +230,7 @@ T /K                                  :   298.15
     def test_a_lone_atom_comes_back_where_it_was_with_xtb_s_energy(self):
         dump = json.dumps({"total energy": 0.195485566667, "xtb version": "6.7.1 (abc)"})
         out = ask("collect", step="conformers", entries=[SODIUM], options={"method": "gfn2//gfnff", "solvent": "water"}, files={"xtbout.json": dump}, log="", ended="done")["outputs"][0]
-        self.assertEqual((out["program"], out["version"], out["method"]), ("xtb", "6.7.1", "GFN2-xTB (ALPB, water)"))
+        self.assertEqual((out["program"], out["version"], out["method"]), ("xtb", "6.7.1", "GFN2-xTB"))
         self.assertEqual((out["atoms"], out["frames"], out["energies"], out["populations"]), (["Na"], [[1.0, 2.0, 3.0]], [0.195485566667], [1.0]))
         self.assertEqual((out["charge"], out["multiplicity"]), (1, 1))
         # (each atom of an ensemble where it was, with the one energy)

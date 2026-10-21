@@ -28,7 +28,7 @@ export default function Renders2D() {
     if (!added.length) return;
     seen.current = Math.max(...added.map((r) => r.key));
     // (where what it makes will lie, with its words where they are below it, and what it renders)
-    const boxes = added.flatMap((r) => [withWords(r.at), r.around]);
+    const boxes = added.flatMap((r) => [withWords(r.at, !!r.note), r.around]);
     const x0 = Math.min(...boxes.map((b) => b.x0));
     const x1 = Math.max(...boxes.map((b) => b.x1));
     const y0 = Math.min(...boxes.map((b) => b.y0));
@@ -72,7 +72,7 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
   const failed = r.state === "failed";
   const share = r.total ? Math.min(1, (r.done ?? 0) / r.total) : null;
   // (where its words go and how large, set by all it may say as it runs, or by why it failed: frameWords)
-  const fw = failed ? frameWords(w, h, [said(r)], true) : frameWords(w, h);
+  const fw = failed ? frameWords(w, h, [said(r)], true) : frameWords(w, h, undefined, false, !!r.note);
   const inside = fw.place === "inside";
   const words = (
     <span
@@ -117,13 +117,15 @@ function Placeholder({ r, onStop }: { r: Rendering; onStop: () => void }) {
           {r.line}
         </span>
       )}
+      {/* (what is worth saying of what it makes: its ribbons moving only every so many frames) */}
+      {inside && !failed && r.note && <span className="max-w-full truncate text-[11px] leading-4 text-gh-gray">{r.note}</span>}
       {inside && stop}
       {/* (a small frame's words, just below it, with its button: as wide as two lines of them need, or as the frame) */}
       {fw.place === "below" && (
         <div
           className="absolute left-1/2 top-full mt-1.5 flex -translate-x-1/2 items-center gap-1 rounded-md bg-white/80 pl-2 text-center"
           style={{ width: fw.width }}
-          title={failed ? undefined : r.line}
+          title={failed ? undefined : [r.note, r.line].filter(Boolean).join("\n") || undefined}
         >
           {words}
           {stop}

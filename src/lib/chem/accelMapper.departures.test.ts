@@ -1,7 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { ACCEL_EXACT, Atom, Atoms, BondType, _det_ez, acosOf, getMaps, kabsch, type Departures } from "./accelMapper";
+import { ACCEL_EXACT, Atom, Atoms, BondType, MENO_DEPARTURES, _det_ez, acosOf, getMaps, kabsch, type Departures } from "./accelMapper";
 import type { Molecule } from "./molecule";
-import { ETHANE_BONDS, chlorineShift, ethaneAtoms, molecule, moved, oxaElectrocyclisation, sn2, trueMap, turnedMethyl } from "./reactionMap.fixtures";
+import {
+  ETHANE_BONDS,
+  acetoneEnol,
+  chlorineShift,
+  ethaneAtoms,
+  ethylSn2,
+  methaneChlorine,
+  molecule,
+  moved,
+  oxaElectrocyclisation,
+  sn2,
+  trueMap,
+  turnedMethyl,
+} from "./reactionMap.fixtures";
 
 /**
  * Meno's departures from ACCeL, each beside what ACCeL itself does
@@ -165,5 +178,62 @@ describe("fewestBondChanges", () => {
   it("Meno puts first the map with the fewest bonds made or broken: the chlorine and a hydrogen trade places", () => {
     const map = firstMap(product, reactant, only({ fewestBondChanges: true }));
     expect(changes(map)).toEqual(["C1-Cl", "C1-H1", "C2-Cl", "C2-H1"]);
+  });
+});
+
+describe("transferAlignedH", () => {
+  describe("CH4 + Cl -> CH3 + HCl, the chlorine in line with H2", () => {
+    const { reactant, product, productOrder } = methaneChlorine();
+    const names = ["C", "H0", "H1", "H2", "H3", "Cl"];
+    const taken = (departures: Departures) => names[firstMap(product, reactant, departures)[productOrder.indexOf("H2")]];
+
+    it("ACCeL has the chlorine take H1, which points away from it", () => {
+      expect(taken(ACCEL_EXACT)).toBe("H1");
+    });
+
+    it("Meno has it take H2, the hydrogen already on the line C-H...Cl", () => {
+      expect(taken(only({ transferAlignedH: true }))).toBe("H2");
+    });
+  });
+
+  describe("acetone -> its enol, Hm0 eclipsing the C=O", () => {
+    const names = ["C1", "C2", "C3", "O", "Hm0", "Hm1", "Hm2", "Hn0", "Hn1", "Hn2"];
+    const onOxygen = (torsions: [number, number, number] | undefined, departures: Departures) => {
+      const { reactant, product, productOrder } = acetoneEnol(torsions);
+      return names[firstMap(product, reactant, departures)[productOrder.indexOf("Hm0")]];
+    };
+    const without = { ...MENO_DEPARTURES, transferAlignedH: false, localLeastTurn: false };
+
+    it("without it, the hydrogen that moves to the oxygen is Hm2, 120 degrees round from the C=O", () => {
+      expect(onOxygen(undefined, without)).toBe("Hm2");
+    });
+
+    it("with it, the one that moves is Hm0, in line with the C=O, as a 1,3-shift passes it", () => {
+      expect(onOxygen(undefined, { ...without, transferAlignedH: true })).toBe("Hm0");
+    });
+
+    it("leaves ACCeL's choice where the nearest is nearer by under 60 degrees (Hm0 50 degrees round, Hm2 70): too close to tell", () => {
+      const ties: [number, number, number] = [50, 170, -70];
+      expect(onOxygen(ties, without)).toBe("Hm2");
+      expect(onOxygen(ties, { ...without, transferAlignedH: true })).toBe("Hm2");
+    });
+  });
+});
+
+describe("localLeastTurn", () => {
+  const { reactant, product, productOrder } = ethylSn2();
+  const names = ["C", "Br", "Cl", "Cm", "Ha", "Hb", "Hm0", "Hm1", "Hm2"];
+  const ch2 = (departures: Departures) => {
+    const map = firstMap(product, reactant, departures);
+    return ["Ha", "Hb"].map((h) => names[map[productOrder.indexOf(h)]]);
+  };
+
+  it("ACCeL swaps an SN2's CH2 hydrogens, reading the inverted centre as kept", () => {
+    expect(ch2(ACCEL_EXACT)).toEqual(["Hb", "Ha"]);
+  });
+
+  it("Meno keeps each where it stood about the C-C and the axis of attack, as the umbrella folds", () => {
+    expect(ch2(only({ localLeastTurn: true }))).toEqual(["Ha", "Hb"]);
+    expect(ch2(MENO_DEPARTURES)).toEqual(["Ha", "Hb"]);
   });
 });

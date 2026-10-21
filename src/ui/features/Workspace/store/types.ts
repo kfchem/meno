@@ -1,4 +1,5 @@
 import type { ShowBox } from "../utils/viewShow";
+import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -614,6 +615,16 @@ export type WorkflowSet = {
    * atoms.
    */
   put?: number[];
+  /**
+   * A result set of more entries than are laid out on the page
+   * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
+   * `LARGE_SET`): what the step gave, held in the set itself, in the step's
+   * order - each a molecule in 3D as it would be on the page, but on none.
+   * Its frame shows them summed up; the steps after it take them from here.
+   */
+  collection?: Omit<Molecule3D, "id" | "at">[];
+  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules did not read, and were left out - said with its count until the step runs again. */
+  unread?: number;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
@@ -634,16 +645,23 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  * then - its kind and options as they were - and what it gave, as its
  * result set held it, so that it can be shown again.
  */
-export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunResults };
+export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunKeptResults };
 /**
- * What a run gave, exit by exit, as its result sets hold it and a run kept
- * keeps it: the molecules in 3D its first exit holds and those its second
- * holds - what it set aside - and what kind of set they make. Where they
- * are structures drawn, `drawn` holds them instead, each as drawn - its
- * atoms, its bonds and where they lie - and the two lists of molecules are
- * empty.
+ * What a run gave, as its exits' sets hold it and an earlier run kept
+ * keeps it: the molecules its first exit held, those its second held, and
+ * what kind of set they make - with how many of each did not read from a
+ * file, and were left out (`unread`, `restUnread`). Where they are
+ * structures drawn, `drawn` holds them instead, each as drawn - its atoms,
+ * its bonds and where they lie - and the two lists of molecules are empty.
  */
-export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind; drawn?: { made: Model[]; rest: Model[] } };
+export type RunKeptResults = {
+  molecules: Omit<Molecule3D, "id" | "at">[];
+  rest: Omit<Molecule3D, "id" | "at">[];
+  holds: SetKind;
+  unread?: number;
+  restUnread?: number;
+  drawn?: { made: Model[]; rest: Model[] };
+};
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its
@@ -763,6 +781,13 @@ export type EditorState = {
    */
   cover: number;
   setCover: (px: number) => void;
+  /**
+   * The marks the canvas shows on the drawing this moment (chem/useChemMarks),
+   * for a picture made of it to show R, S, E and Z as the canvas does
+   * (chem/marks `stereoPictureItems`): neither saved nor undone.
+   */
+  shownMarks: ChemMarks | null;
+  setShownMarks: (marks: ChemMarks | null) => void;
   /** How wide the column is when it is open, in CSS pixels, as its edge was dragged: what it shows is laid out at that width as it slides. */
   columnWidth: number;
   setColumnWidth: (px: number) => void;

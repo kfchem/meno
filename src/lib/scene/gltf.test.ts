@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { writeGltf, type GltfScene } from "./gltf";
-import { unitCylinder, unitSphere } from "./shapes";
+import { unitCylinder, unitRing, unitSphere } from "./shapes";
 
 /**
  * The glTF 2.0 Meno writes, checked against Khronos's specification
@@ -183,6 +183,24 @@ describe("the shapes atoms and bonds are made of", () => {
         const m = [(a[0] + b[0] + c[0]) / 3, (a[1] + b[1] + c[1]) / 3, (a[2] + b[2] + c[2]) / 3];
         expect(n[0] * m[0] + n[1] * m[1] + n[2] * m[2]).toBeGreaterThan(0);
       }
+    }
+  });
+
+  it("make a ring round +Y of radius 1, its tube as thick as asked, each triangle facing as its corners' normals do", () => {
+    const r = unitRing(0.05, 32, 8);
+    for (let i = 0; i < r.positions.length; i += 3) {
+      const out = Math.hypot(r.positions[i], r.positions[i + 2]);
+      expect(Math.hypot(out - 1, r.positions[i + 1])).toBeCloseTo(0.05, 5);
+    }
+    const p = (i: number) => [r.positions[3 * i], r.positions[3 * i + 1], r.positions[3 * i + 2]];
+    const nn = (i: number) => [r.normals[3 * i], r.normals[3 * i + 1], r.normals[3 * i + 2]];
+    for (let t = 0; t < r.indices.length; t += 3) {
+      const [a, b, c] = [p(r.indices[t]), p(r.indices[t + 1]), p(r.indices[t + 2])];
+      const u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+      const v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+      const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const m = nn(r.indices[t]);
+      expect(n[0] * m[0] + n[1] * m[1] + n[2] * m[2]).toBeGreaterThan(0);
     }
   });
 });

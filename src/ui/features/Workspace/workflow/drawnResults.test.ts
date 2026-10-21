@@ -204,7 +204,7 @@ describe("structures drawn, given by a step", () => {
     expect(doc.model.atoms).toHaveLength(2 + 4 + 3);
   });
 
-  it("are read back from a file with the run that gave them - a structure that does not read left out, as a molecule is", () => {
+  it("are read back from a file with the run that gave them - a structure that does not read left out and counted, as a molecule is", () => {
     const saved = readWorkflow({
       steps: [
         {
@@ -220,6 +220,9 @@ describe("structures drawn, given by a step", () => {
     expect(results.holds).toBe("structures");
     expect(results.drawn!.made.map(shapeOf)).toEqual([shapeOf(chiral())]);
     expect(results.drawn!.rest.map(shapeOf)).toEqual([shapeOf(chloroethane())]);
+    // (never left out unsaid: how many of the first exit's did not read)
+    expect(results.unread).toBe(1);
+    expect(results.restUnread).toBeUndefined();
   });
 });
 

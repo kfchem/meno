@@ -4,7 +4,7 @@ import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
 import { usePresentingWindow } from "../../presenting";
 import { Canvas } from "@react-three/fiber";
 import { useEditor, useEditorStore, EditorProvider } from "./store";
-import { selectedOf } from "./store/slices/selectionSlice";
+import { selectedOf, selectionIsAtom } from "./store/slices/selectionSlice";
 import { useStructureEvents } from "./hooks/useStructureEvents";
 import { useCanvasSetup } from "./hooks/useCanvasSetup";
 import {
@@ -367,6 +367,8 @@ function WorkspaceContent({
   }, [store, sources]);
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
+  // (for pictures made of the drawing: R, S, E and Z as the canvas shows them)
+  useEffect(() => store.getState().setShownMarks(marks), [marks, store]);
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
@@ -2265,6 +2267,8 @@ function WorkspaceContent({
           onEditLabel={(() => {
             const a = menu.kind === "atom" && menu.id != null ? model.atoms.find((x) => x.id === menu.id) : undefined;
             if (!a) return undefined;
+            // (on the selection's menu: where the selection is that atom alone)
+            if (menu.selection === "here" && !selectionIsAtom(store.getState(), a.id)) return undefined;
             // (a carbon drawn as a corner: a C, selected, to be typed over)
             const bare = labelTextOf(a) === "";
             return () => store.getState().beginLabelEdit(a.id, bare ? "C" : "", { select: bare });

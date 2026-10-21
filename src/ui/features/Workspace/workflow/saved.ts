@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { Member, Model, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -58,6 +58,13 @@ function readSet(v: unknown): WorkflowSet | null {
     })(),
     // (the atoms its step put on the page, by id, as members' are: a result set's alone)
     ...(made && Array.isArray(b.put) && b.put.length && b.put.every((id) => isId(id)) ? { put: b.put as number[] } : {}),
+    // (a large result set's collection, each molecule read as the page's are - those that do not read counted, with those its file already said had not)
+    ...(() => {
+      if (!Array.isArray(b.collection) || !made) return {};
+      const collection = b.collection.flatMap((m) => carriedMolecule(m));
+      const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
+      return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
+    })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
     ...(() => {
@@ -98,46 +105,58 @@ function readRan(v: unknown): StepRan | undefined {
   };
 }
 
+/** A molecule in 3D a set or a run keeps, read as the page's are; none where it does not read. */
+function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
+  const read = readCarried3D({ ...(m as object), at: { x: 0, y: 0 } });
+  if (!read) return [];
+  const { at: _at, turn: _turn, frame: _frame, list: _list, shown: _shown, ...molecule } = read;
+  return [molecule];
+}
+
 /** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are, each structure drawn as the page's drawing is. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
-  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; rest?: unknown; holds?: unknown; drawn?: { made?: unknown; rest?: unknown } } } | null;
+  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; rest?: unknown; holds?: unknown; unread?: unknown; restUnread?: unknown; drawn?: { made?: unknown; rest?: unknown } } } | null;
   if (!ran || !KINDS.some((k) => k.kind === r?.kind)) return null;
   const options = optionsIn(r?.options);
   const res = r?.results;
-  const read = (list: unknown) =>
-    Array.isArray(list)
-      ? list.flatMap((m) => {
-          const got = readCarried3D({ ...(m as object), at: { x: 0, y: 0 } });
-          if (!got) return [];
-          const { at: _at, turn: _turn, frame: _frame, list: _list, ...molecule } = got;
-          return [molecule];
-        })
-      : [];
-  const molecules = read(res?.molecules);
+  // (each exit's molecules read as the page's are - those that do not read counted, with those its file already said had not: never left out unsaid)
+  const read = (list: unknown, was: unknown) => {
+    const given: unknown[] = Array.isArray(list) ? list : [];
+    const molecules = given.flatMap(carriedMolecule);
+    return { molecules, unread: given.length - molecules.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
+  };
+  const { molecules, unread } = read(res?.molecules, res?.unread);
+  const rest = read(res?.rest, res?.restUnread);
   const holds = SETS.includes(res?.holds as SetKind) ? (res!.holds as SetKind) : undefined;
-  // (a structure that does not read is left out, as a molecule that does not is)
-  const drawn = (list: unknown): Model[] =>
-    Array.isArray(list)
-      ? list.flatMap((m) => {
-          const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
-          return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds }] : [];
-        })
-      : [];
-  const made = holds === "structures" ? drawn(res?.drawn?.made) : [];
-  const results =
-    holds === "structures"
-      ? made.length
-        ? { molecules: [], rest: [], holds, drawn: { made, rest: drawn(res!.drawn!.rest) } }
-        : undefined
-      : holds && molecules.length
-        ? { molecules, rest: read(res!.rest), holds }
-        : undefined;
+  if (holds === "structures") {
+    // (each structure read as the page's drawing is - those that do not read counted, as molecules are)
+    const drawn = (list: unknown, was: unknown) => {
+      const given: unknown[] = Array.isArray(list) ? list : [];
+      const models = given.flatMap((m): Model[] => {
+        const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
+        return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds }] : [];
+      });
+      return { models, unread: given.length - models.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
+    };
+    const made = drawn(res?.drawn?.made, res?.unread);
+    const aside = drawn(res?.drawn?.rest, res?.restUnread);
+    return {
+      ...ran,
+      kind: r!.kind as StepKind,
+      ...(Object.keys(options).length ? { options } : {}),
+      ...(made.models.length || made.unread || aside.models.length || aside.unread
+        ? { results: { molecules: [], rest: [], holds, drawn: { made: made.models, rest: aside.models }, ...(made.unread ? { unread: made.unread } : {}), ...(aside.unread ? { restUnread: aside.unread } : {}) } }
+        : {}),
+    };
+  }
   return {
     ...ran,
     kind: r!.kind as StepKind,
     ...(Object.keys(options).length ? { options } : {}),
-    ...(results ? { results } : {}),
+    ...(holds && (molecules.length || unread || rest.molecules.length || rest.unread)
+      ? { results: { molecules, rest: rest.molecules, holds, ...(unread ? { unread } : {}), ...(rest.unread ? { restUnread: rest.unread } : {}) } }
+      : {}),
   };
 }
 
