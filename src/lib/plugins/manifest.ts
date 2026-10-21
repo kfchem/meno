@@ -260,6 +260,8 @@ export type Manifest = {
   homepage: string;
   /** What makes its environment; none, where it runs nothing. */
   environment?: Maker;
+  /** About how much room its environment takes once set up, in bytes, as measured - said as asking to set it up says what it fetches; unsaid, where none was measured. */
+  setUpBytes?: number;
   /** Every kind of file it knows. */
   kinds: KindDecl[];
   /** The kinds it reads, by id: its own (`kinds`), or Meno's. */
@@ -742,6 +744,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     licence: text(m.licence, 60) ?? "",
     homepage: text(m.homepage, 200) ?? "",
     ...(environment ? { environment } : {}),
+    ...(Number.isInteger(m.setUpBytes) && (m.setUpBytes as number) > 0 && (m.setUpBytes as number) <= DOWNLOAD_MOST ? { setUpBytes: m.setUpBytes as number } : {}),
     kinds,
     reads: readable,
     writes,

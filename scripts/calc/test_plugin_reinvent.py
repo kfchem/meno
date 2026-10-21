@@ -1,0 +1,102 @@
+"""Tests for the REINVENT 4 plugin's worker (src-tauri/resources/plugins/reinvent/worker.py).
+
+The worker needs REINVENT 4 and its prior: these run in the plugin's own
+environment, installed from its lock, with the prior in the folder the app
+keeps the plugin's files in (or the one MENO_REINVENT_FILES names):
+
+    <the REINVENT 4 plugin's Python> -m unittest scripts/calc/test_plugin_reinvent.py
+
+(The app's environment for it, under its data folder at
+uv/plugin-reinvent/venv, will do.) Elsewhere they are skipped: the
+environment is about a gigabyte, too much for every push.
+"""
+
+import importlib.util
+import json
+import os
+import pathlib
+import sys
+import unittest
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+WORKER = ROOT / "src-tauri/resources/plugins/reinvent/worker.py"
+#: Where the app keeps the plugin's files on a Mac, as Meno sets it up (src-tauri/src/plugfiles.rs).
+APP_FILES = pathlib.Path.home() / "Library/Application Support/Meno/uv/plugin-reinvent/files"
+FILES = pathlib.Path(os.environ.get("MENO_REINVENT_FILES") or APP_FILES)
+
+try:
+    importlib.import_module("reinvent")
+    HERE = (FILES / "reinvent_pubchem.prior").exists()
+except ImportError:  # (CI's Python, or another plugin's)
+    HERE = False
+
+
+def load():
+    """The worker, as Meno starts it: the files' folder its one argument."""
+    sys.argv = [str(WORKER), str(FILES)]
+    spec = importlib.util.spec_from_file_location("plugin_reinvent", WORKER)
+    worker = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(worker)
+    return worker
+
+
+@unittest.skipUnless(HERE, "REINVENT 4 and its prior are not here")
+class Generate(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.worker = load()
+        cls.made = cls.worker.op_run({"step": "generate", "entries": [], "options": {"count": 20, "seed": 7}})
+
+    def test_gives_the_same_molecules_for_the_same_seed(self):
+        # (the known answer, measured here twice, in two environments installed apart: REINVENT 4.8.24, the prior
+        #  of Zenodo record 20701824, seed 7, on the CPU)
+        self.assertEqual(
+            self.made["said"],
+            "20 sampled from reinvent_pubchem.prior, seed 7, CPU: 18 made, 2 not "
+            "(1: no 3D structure could be embedded; 1: not a SMILES RDKit reads)",
+        )
+        first = {r["id"]: r["value"] for r in self.made["outputs"][0]["results"]}
+        self.assertEqual(first["smiles"], "O=C(c1ccc(CN2C(=O)SC(=Cc3ccccc3)C2=O)cc1)N1CCN(CCOc2ccccc2)CC1")
+        self.assertEqual(first["nll"], 36.9)
+        again = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 20, "seed": 7}})
+        self.assertEqual(json.dumps(again, sort_keys=True), json.dumps(self.made, sort_keys=True))
+
+    def test_counts_every_smiles_sampled_as_made_or_not_with_why(self):
+        # (kept and dropped add up to what was asked for, and the line says each reason)
+        self.assertEqual(len(self.made["outputs"]), 18)
+        self.assertIn("18 made, 2 not", self.made["said"])
+
+    def test_gives_each_a_molecule_its_smiles_says(self):
+        from rdkit import Chem
+
+        for out in self.made["outputs"]:
+            smiles = next(r["value"] for r in out["results"] if r["id"] == "smiles")
+            rw = Chem.RWMol()
+            for el, q in zip(out["atoms"], out["charges"]):
+                a = Chem.Atom(el)
+                a.SetFormalCharge(q)
+                a.SetNoImplicit(True)
+                rw.AddAtom(a)
+            for b in out["bonds"]:
+                rw.AddBond(b["a1"], b["a2"], {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE, 3: Chem.BondType.TRIPLE}[b["order"]])
+            mol = rw.GetMol()
+            Chem.SanitizeMol(mol)
+            self.assertEqual(Chem.MolToSmiles(Chem.RemoveHs(mol)), Chem.MolToSmiles(Chem.MolFromSmiles(smiles)))
+            self.assertEqual(len(out["frames"][0]), 3 * len(out["atoms"]))
+
+    def test_says_how_each_was_made_and_what_its_likelihood_is_under(self):
+        out = self.made["outputs"][0]
+        self.assertTrue(out["method"].startswith("sampled from reinvent_pubchem.prior (REINVENT 4 priors v2, Zenodo 10.5281/zenodo.20701824"), out["method"])
+        self.assertIn("seed 7, on the CPU", out["method"])
+        nll = next(r for r in out["results"] if r["id"] == "nll")
+        self.assertEqual(nll["label"], "NLL under reinvent_pubchem.prior")
+
+    def test_keeps_how_many_to_what_it_may_be(self):
+        made = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 0, "seed": 7}})
+        self.assertTrue(made["said"].startswith("1 sampled"), made["said"])
+        with self.assertRaises(ValueError):
+            self.worker.op_run({"step": "optimise", "entries": [], "options": {}})
+
+
+if __name__ == "__main__":
+    unittest.main()

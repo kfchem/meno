@@ -20,9 +20,9 @@ import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
-import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
+import { kindInfo, optionsOf, takesNothing, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readGenerated, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -137,6 +137,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
+    if (takesNothing(step.kind)) return runGenerate(id, plugin, at);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
     if (step.kind === "render") return renderEach(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
@@ -431,6 +432,25 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       kind: step.kind,
       ...(step.options ? { options: step.options } : {}),
     });
+  }
+
+  /** A step that takes nothing in, a plugin's at once (`run`, with no entries: Generate's): what it made, each a compound of its own, and what it says of the run. */
+  async function runGenerate(id: number, plugin: PythonPlugin, at: number): Promise<void> {
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, plugin.id);
+    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    let read;
+    try {
+      const client = await pluginClient(plugin);
+      read = readGenerated(await client.run(step.kind, [], options, "molecules"), [`${plugin.id} ${client.version || plugin.version}`]);
+    } catch (e) {
+      return void fail(id, message(e), at, key);
+    }
+    if (typeof read === "string") return void fail(id, read, at, key);
+    if (!read.made.length) return void fail(id, read.said, at, key);
+    const ran = { at, ok: true, said: read.said, input: key, took: Date.now() - at, kind: step.kind, ...(step.options ? { options: step.options } : {}) };
+    bringIn(id, read.made, givesFor(step.kind, "molecules"), ran);
   }
 
   /** A step a plugin does at once on the entries that came in (`run`): those it keeps, the rest set aside. */

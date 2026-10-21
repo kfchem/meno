@@ -7,7 +7,7 @@ import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers } from "./entries";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takesNothing, type SetHolds, type SetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
@@ -63,7 +63,8 @@ export function stepsBefore(doc: Flow, step: number): number[] {
 /** Whether a wire may go from `from` into the step `to`: the step - done by whom it is - takes what it gives, or what that is is not known yet; and no loop is made. */
 export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): boolean {
   const step = stepOf(doc, to);
-  if (!step) return false;
+  // (a step that takes nothing in has nothing to wire to)
+  if (!step || takesNothing(step.kind)) return false;
   const set = findSet(doc, from.set);
   if (!set || set.made?.step === to) return false;
   // (nothing it gives may come back round to it)
@@ -177,6 +178,8 @@ function drawnKey(model: Model, ids: readonly number[]): string {
 
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
+  // (a step that takes nothing in runs on its options alone, and who does it)
+  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
   const input = inputOf(doc, step.id);
   if (!input) return "";
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
@@ -198,7 +201,8 @@ export type StepState = "no-input" | "ready" | "waiting" | "running" | "done" | 
 export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   // (its jobs under way: the card says which, as they were last looked at)
   if (step.running) return "running";
-  const into = wireInto(doc, step.id);
+  // (a step that takes nothing in is ready as it is)
+  const into = takesNothing(step.kind) || !!wireInto(doc, step.id);
   if (!step.ran) return into ? "ready" : "no-input";
   // (what comes from a step not run yet, or run since, has changed)
   if (!into) return "changed";

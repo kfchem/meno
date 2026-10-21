@@ -15,8 +15,8 @@ export type { SetKind, StepKind };
 /** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
 export type SetHolds = SetKind | "pictures";
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -65,6 +65,8 @@ export type KindInfo = {
 };
 
 export const KINDS: readonly KindInfo[] = [
+  // (new molecules from nothing that comes in: a generative model's, as its plugin asks it - no input, so no port)
+  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "molecules", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers" },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
@@ -203,6 +205,9 @@ export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
 }
 
 /** The input of `kind` named `port`, or its first where `port` is not one of its own. */
+/** Whether a kind takes nothing in: no input, nothing wired to it (Generate's). */
+export const takesNothing = (kind: StepKind): boolean => inputsOf(kind).length === 0;
+
 export function portOf(kind: StepKind, port: string): StepPort {
   const inputs = inputsOf(kind);
   return inputs.find((p) => p.id === port) ?? inputs[0];

@@ -9,6 +9,7 @@ import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA } from "../../../../lib/entry";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { elementOf } from "../../../../lib/chem/elements";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
@@ -295,6 +296,47 @@ export function readKept(raw: unknown, count: number): number[] | string {
   const kept = (raw as { kept?: unknown } | null)?.kept;
   if (!Array.isArray(kept) || !kept.every((i) => Number.isInteger(i) && i >= 0 && i < count)) return "It said nothing Meno can take";
   return [...new Set(kept as number[])].sort((a, b) => a - b);
+}
+
+/** The most molecules a step that makes them (Generate) brings in from one run. */
+export const GENERATED_MOST = 1000;
+
+/**
+ * What a plugin made from nothing (Generate, `run` with no entries): each
+ * molecule as an output (lib/calc/output) - its atoms, one geometry, what
+ * the run says of it (its method, its results: the SMILES it was sampled
+ * as, its likelihood) - with what an output carries no form for, its bonds
+ * and its atoms' charges, beside; and what the plugin says of the run, its
+ * counts (`said`). Each a compound of its own, numbered as it came. Why not,
+ * where any of it is not a molecule Meno can take: nothing is taken in part.
+ */
+export function readGenerated(raw: unknown, readers: readonly string[]): { made: Worked[]; said: string } | string {
+  const r = raw as { outputs?: unknown; said?: unknown } | null;
+  if (!Array.isArray(r?.outputs)) return "It said nothing Meno can take";
+  if (r.outputs.length > GENERATED_MOST) return `It made more than ${GENERATED_MOST}`;
+  const made: Worked[] = [];
+  for (const [i, x] of (r.outputs as (ReaderOutput & { bonds?: unknown; charges?: unknown })[]).entries()) {
+    if (x?.schema != null && x.schema !== OUTPUT_SCHEMA) return "It made them in a form this Meno does not read";
+    const atoms = Array.isArray(x?.atoms) && x.atoms.every((el) => typeof el === "string" && elementOf(el)) ? x.atoms : null;
+    const xyz = Array.isArray(x?.frames) && Array.isArray(x.frames[0]) ? x.frames[0] : null;
+    if (!atoms?.length || !xyz || xyz.length !== 3 * atoms.length || !xyz.every((v) => typeof v === "number" && Number.isFinite(v))) return `Molecule ${i + 1} has no geometry Meno can read`;
+    const n = atoms.length;
+    const charges = x.charges === undefined ? atoms.map(() => 0) : x.charges;
+    if (!Array.isArray(charges) || charges.length !== n || !charges.every((c) => Number.isInteger(c) && Math.abs(c) <= 8)) return `Molecule ${i + 1}'s charges are not its atoms'`;
+    const bonds = Array.isArray(x.bonds) ? (x.bonds as { a1?: unknown; a2?: unknown; order?: unknown }[]) : null;
+    const index = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
+    if (!bonds || !bonds.every((b) => index(b?.a1) && index(b?.a2) && b.a1 !== b.a2 && [1, 2, 3].includes(b.order as number)))
+      return `Molecule ${i + 1}'s bonds are not between its atoms`;
+    made.push({
+      compound: i,
+      number: 1,
+      atoms: atoms.map((el, k) => ({ el, ...(charges[k] ? { charge: charges[k] } : {}), x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
+      bonds: bonds.map((b) => ({ a1: b.a1 as number, a2: b.a2 as number, order: b.order as number })),
+      xyz: [...xyz],
+      calc: calcOf(x, readers),
+    });
+  }
+  return { made, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
 }
 
 /** What a step says of a program installed separately that is found nowhere: where to say where it is. */
