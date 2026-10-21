@@ -66,7 +66,9 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
       const r = enumerated(entries[0].drawn, String(options.lists ?? ""), style);
       if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
       const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, entry: { number: m.number, how: m.how, ...(why ? { why } : {}) } });
-      return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...said].join(" \u00b7 ") };
+      // (its valence as it was checked before it ran, where it was: never claimed where it was not)
+      const valence = said.length ? said : ["Valence not checked"];
+      return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 ") };
     }
     default:
       return { ok: false, said: "Meno does not do this itself on structures drawn" };

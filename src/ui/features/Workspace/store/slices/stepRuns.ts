@@ -12,7 +12,7 @@ import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
-import { pluginWorker } from "../../../../../lib/roles/worker";
+import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
@@ -25,8 +25,9 @@ import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
-import { runMenoInTurns } from "../../workflow/meno";
+import { drawnEntries, energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
+import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
 import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
@@ -144,6 +145,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }
     if (by === "meno" && step.kind === "duplicates") return menoInTurns(id, at);
+    if (by === "meno" && step.kind === "enumerate") return enumerateChecked(id, at);
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
@@ -151,6 +153,42 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (step.kind === "render") return renderEach(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
     return runAtOnce(id, plugin, at);
+  }
+
+  /**
+   * Enumerate, its template and each of its options asked of the plugin
+   * that does the checks first, where one is at hand without setting one up
+   * (workflow/enumerateChecks): anything flagged stops it, in the checks'
+   * words; else it runs as Meno's own steps do, in one edit, saying whether
+   * its valence was checked and by what - never claiming a check not made.
+   */
+  async function enumerateChecked(id: number, at: number): Promise<void> {
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, "meno");
+    const input = inputOf(d, id)!;
+    if (input.holds !== "structures") return void fail(id, ON_DRAWN, at, key);
+    // (what came in when it was asked to run: checked and run on that, as Meno's steps in turns are)
+    const entries = drawnEntries(d.model, input.structures);
+    const lists = String(optionsOf(kindInfo("enumerate").options ?? [], step.options).lists ?? "");
+    let checked: string;
+    const by = rolePlugin("checks");
+    if (entries.length === 1 && by && (await chemAtHand("checks"))) {
+      let flagged: string[] | null;
+      try {
+        const chem = await chemWorker("checks");
+        flagged = await valenceFlagged(entries[0].drawn, lists, (molblock) => chem.request("analyse", { molblock }));
+      } catch {
+        flagged = null;
+      }
+      if (flagged?.length) return void fail(id, flagged.join(" \u00b7 "), at, key);
+      checked = flagged ? `Valence checked by ${by.name}` : `Valence not checked: ${by.name} could not be asked`;
+    } else checked = "Valence not checked: no plugin does the checks";
+    const now = doc.getState();
+    const still = stepOf(now, id);
+    if (!still) return;
+    const outcome = runMenoDrawn("enumerate", entries, still.options, now.style, [checked]);
+    doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
   }
 
   /** Meno's steps working in turns asked to stop: given up at their next turn. */

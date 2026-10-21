@@ -270,7 +270,7 @@ const label = (o: OptionRead) => (o.as === "element" ? o.formula : o.label);
  * template's order, so that the groups' atoms come in that order after the
  * template's.
  */
-function joined(template: Model, choices: readonly (readonly [number, readonly number[], OptionRead])[], style?: StyleChoice): Model {
+export function joined(template: Model, choices: readonly (readonly [number, readonly number[], OptionRead])[], style?: StyleChoice): Model {
   let doc = { ...emptyWorkspaceDocument(style), model: template, nextId: Math.max(0, ...template.atoms.map((a) => a.id), ...template.bonds.map((b) => b.id)) + 1 };
   for (const [, atoms, option] of choices) {
     for (const id of atoms) {
