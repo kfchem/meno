@@ -98,10 +98,15 @@ export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames
  * order).
  */
 export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(), texts: readonly string[] = []): string {
-  // (a result set kept out of the file: its molecules not written, only how many it held and their hash - *Don't keep in the file*)
+  // (a result set kept out of the file: its molecules and its structures drawn not written, only how many it held and their hash - *Don't keep in the file*)
   const page = { model: given.model, molecules3d: given.molecules3d, pictures: given.pictures };
-  const notKept = new Set((given.sets ?? []).filter((b) => b.keep === false && b.made).flatMap((b) => setMembers(page, b).molecules));
-  const state = notKept.size ? { ...given, molecules3d: given.molecules3d.filter((m) => !notKept.has(m.id)) } : given;
+  const unkept = (given.sets ?? []).filter((b) => b.keep === false && b.made).map((b) => setMembers(page, b));
+  const notKept = new Set(unkept.flatMap((m) => m.molecules));
+  // (each structure whole, its bonds with it: a structure is its atoms bonded together, so none of its bonds goes to an atom kept)
+  const atomsNotKept = new Set(unkept.flatMap((m) => m.structures.flat()));
+  const kept3d = notKept.size ? { ...given, molecules3d: given.molecules3d.filter((m) => !notKept.has(m.id)) } : given;
+  const without = <M extends Pick<Drawn, "atoms" | "bonds">>(m: M): M => ({ ...m, atoms: m.atoms.filter((a) => !atomsNotKept.has(a.id)), bonds: m.bonds.filter((b) => !atomsNotKept.has(b.a)) });
+  const state = atomsNotKept.size ? { ...kept3d, model: without(given.model), ...(given.fullModel ? { fullModel: without(given.fullModel) } : {}) } : kept3d;
   const moleculeAt = new Map(state.molecules3d.map((m, i) => [m.id, i]));
   const pictureAt = new Map((state.pictures ?? []).map((p, i) => [p.id, i]));
   // (each set's members by what a file can say them by: a structure by its atoms' ids, kept; a molecule or a picture by its place in its list)

@@ -12,6 +12,9 @@ import { renderOptions } from "../render/renderOptions";
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind };
 
+/** The kinds of set whose entries are molecules in 3D: all but structures drawn. */
+export type Holds3D = Exclude<SetKind, "structures">;
+
 /** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
 export type SetHolds = SetKind | "pictures";
 

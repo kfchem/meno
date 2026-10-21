@@ -4,8 +4,8 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { Member, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
-import { readCarried3D } from "../utils/copyPaste";
+import type { Member, Model, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
@@ -96,10 +96,10 @@ function readRan(v: unknown): StepRan | undefined {
   };
 }
 
-/** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are. */
+/** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are, each structure drawn as the page's drawing is. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
-  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; rest?: unknown; holds?: unknown } } | null;
+  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; rest?: unknown; holds?: unknown; drawn?: { made?: unknown; rest?: unknown } } } | null;
   if (!ran || !KINDS.some((k) => k.kind === r?.kind)) return null;
   const options = optionsIn(r?.options);
   const res = r?.results;
@@ -114,11 +114,28 @@ function readKept(v: unknown): StepRunKept | null {
       : [];
   const molecules = read(res?.molecules);
   const holds = SETS.includes(res?.holds as SetKind) ? (res!.holds as SetKind) : undefined;
+  // (a structure that does not read is left out, as a molecule that does not is)
+  const drawn = (list: unknown): Model[] =>
+    Array.isArray(list)
+      ? list.flatMap((m) => {
+          const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
+          return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds }] : [];
+        })
+      : [];
+  const made = holds === "structures" ? drawn(res?.drawn?.made) : [];
+  const results =
+    holds === "structures"
+      ? made.length
+        ? { molecules: [], rest: [], holds, drawn: { made, rest: drawn(res!.drawn!.rest) } }
+        : undefined
+      : holds && molecules.length
+        ? { molecules, rest: read(res!.rest), holds }
+        : undefined;
   return {
     ...ran,
     kind: r!.kind as StepKind,
     ...(Object.keys(options).length ? { options } : {}),
-    ...(holds && molecules.length ? { results: { molecules, rest: read(res!.rest), holds } } : {}),
+    ...(results ? { results } : {}),
   };
 }
 
