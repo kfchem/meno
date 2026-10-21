@@ -216,7 +216,8 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
 /** One output's - or one job's - molecule in 3D; none, where it gives no geometry. Named after the file, and its job where it is one of several. */
 function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): Omit<Molecule3D, "id" | "at"> | null {
   const n = out.atoms?.length ?? 0;
-  const [f0, ...rest] = (out.frames ?? []).filter((f) => f.length === 3 * n);
+  const given = out.frames ?? [];
+  const [f0, ...rest] = given.filter((f) => f.length === 3 * n);
   if (!n || !f0) return null;
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
@@ -226,6 +227,10 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
   const calc = calcOf(out, readers, source);
   const name = filename && calc.job ? `${filename}, job ${calc.job.number}` : filename;
+  // (of an optimisation or a relaxed scan, the geometries it converged on are its entries - the rest steps on the
+  // way; none converged, its last, said not to have - where the reader marks every geometry it gave)
+  const marks = Array.isArray(out.converged) && out.converged.length === given.length && given.length === 1 + frames.length && out.converged.every((c) => typeof c === "boolean") ? out.converged : undefined;
+  const entryFrames = marks ? (marks.some(Boolean) ? marks.flatMap((ok, i) => (ok ? [i] : [])) : [frames.length]) : undefined;
   return {
     atoms: first.atoms,
     bonds: first.bonds,
@@ -235,6 +240,8 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
     ...(energies ? { energies } : {}),
     ...(name ? { name } : {}),
     ...(together ? { together } : {}),
+    ...(entryFrames && entryFrames.length < 1 + frames.length ? { entryFrames } : {}),
+    ...(marks && !marks.some(Boolean) ? { notConverged: true as const } : {}),
     calc,
   };
 }

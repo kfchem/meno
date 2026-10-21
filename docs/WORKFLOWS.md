@@ -411,6 +411,16 @@ Conformers go through a workflow as any set does (decided):
     it is, as it says it is; a set the chemist draws round one is a
     conformer set, each molecule in it a compound, its frames its
     conformers. A file's many geometries are still many compounds.
+  - **but an optimisation's or a relaxed scan's steps are no entries**
+    (2026-10-22). Of a calculation's output that optimised, only the
+    geometries the run converged on are entries: an optimisation's last,
+    a relaxed scan's each point - as the program marks them, read by its
+    plugin (cclib's `optstatus`). The steps on the way stay frames, to be
+    looked at, never entries: before, a scan of 3 points opened as 21
+    compounds, each with an energy, and a conformer set weighted geometries
+    that were no minimum of anything. An optimisation that never converged
+    gives its last geometry as its entry, and says *Not converged* over it.
+    (A step's own optimisation was already one entry, its path: *Results*.)
 - **Steps work entry by entry**, or compound by compound where the kind
   says so: *Optimise* each entry; *Energy window* and *Populations*
   within each compound of a conformer set.

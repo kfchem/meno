@@ -8,6 +8,11 @@ import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
 import samplePdb from "../../../../samples/cholesterol.pdb?raw";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import type { Molecule3D } from "../store/types";
+import { entriesIn, setEntries } from "../workflow/entries";
+import { notesOf, solidOf } from "./molecule3d";
+import { readCarried3D } from "./copyPaste";
+import { STYLE_3D } from "../../../../lib/chem/style3d";
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
 beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
@@ -255,6 +260,63 @@ describe("a calculation's output, as a reader read it", () => {
     // (a job that gives no geometry stands as none; a file of one job, as before)
     expect(calcResult({ ...sp, jobs: [{ ...opt, frames: [] }, sp] }, ["cclib"], "x.log").molecules3d).toHaveLength(1);
     expect(calcResult(out, ["cclib"], "one.out").molecules3d![0].name).toBe("one.out");
+  });
+
+  describe("of an optimisation or a relaxed scan, the geometries it converged on are its entries", () => {
+    // (methanol, HF/STO-3G, Gaussian 16: its H-C-O-H dihedral scanned over three points - 21 geometries, the
+    // four it converged on marked as cclib marks them; their energies as the output's scan summary gives them)
+    const SCAN = [
+      -113.543862, -113.545317, -113.545941, -113.545976, -113.545985, -113.493398, -113.535107, -113.548734, -113.549175, -113.54919, -113.549191,
+      -113.488332, -113.529495, -113.545796, -113.545969, -113.545986, -113.484845, -113.533240, -113.548998, -113.549185, -113.549193,
+    ];
+    const methanol = (k: number) => [0, 0, 0, 0, 0, 1.42, 1.03, 0, -0.36, -0.515, 0.892, -0.36, -0.515, -0.892, -0.36, 0.93 - 0.01 * k, 0.01 * k, 1.74];
+    const output = (n: number, converged: boolean[], energies = SCAN.slice(0, n)) => ({
+      program: "Gaussian",
+      method: "HF",
+      atoms: ["C", "O", "H", "H", "H", "H"],
+      frames: Array.from({ length: n }, (_, k) => methanol(k)),
+      energies,
+      converged,
+    });
+    const entries = (m: Omit<Molecule3D, "id" | "at">) => setEntries([{ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D], "conformers");
+
+    it("a relaxed scan: its four points, each with the energy it converged at - not its 21 steps", () => {
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      expect(m.frames).toHaveLength(20);
+      expect(m.entryFrames).toEqual([4, 10, 15, 20]);
+      expect(entriesIn(m)).toBe(4);
+      expect(entries(m).map((e) => e.energy)).toEqual([-113.545985, -113.549191, -113.545986, -113.549193]);
+      expect(m.notConverged).toBeUndefined();
+    });
+
+    it("an optimisation: its last geometry alone", () => {
+      const [m] = calcResult(output(5, [false, false, false, false, true]), ["cclib"], "opt.log").molecules3d!;
+      expect(entries(m).map((e) => [e.frame, e.energy])).toEqual([[4, SCAN[4]]]);
+    });
+
+    it("one that never converged: its last geometry, said not to have", () => {
+      const [m] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      expect(m.notConverged).toBe(true);
+      expect(entries(m).map((e) => e.frame)).toEqual([1]);
+      expect(notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary")).toContain("Not converged");
+    });
+
+    it("every geometry, where the reader marks none - and where its marks are not one a geometry", () => {
+      const [plain] = calcResult({ ...output(3, []), converged: undefined }, ["cclib"], "x.out").molecules3d!;
+      expect(entriesIn(plain)).toBe(3);
+      const [odd] = calcResult(output(3, [false, true]), ["cclib"], "x.out").molecules3d!;
+      expect(odd.entryFrames).toBeUndefined();
+    });
+
+    it("kept as the workspace is saved and opened again", () => {
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, at: { x: 0, y: 0 } })))!;
+      expect(back.entryFrames).toEqual([4, 10, 15, 20]);
+      const [n] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      expect(readCarried3D(JSON.parse(JSON.stringify({ ...n, at: { x: 0, y: 0 } })))!.notConverged).toBe(true);
+    });
   });
 
   it("keeps no energies that are not one a frame", () => {

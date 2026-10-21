@@ -18,6 +18,7 @@ import importlib.util
 import json
 import math
 import pathlib
+import types
 import unittest
 from unittest import mock
 
@@ -171,6 +172,78 @@ class Json(unittest.TestCase):
             said = worker.answer(json.dumps({"id": 3, "op": "read"}))
         self.assertEqual(said["result"], {"energies": [None, -1.5], "x": {"y": [None]}})
         json.loads(json.dumps(said), parse_constant=lambda c: self.fail(f"{c} in the answer"))
+
+
+class Converged(unittest.TestCase):
+    """Which of an optimisation's or a relaxed scan's geometries the run found converged, as cclib marks them
+    (`optstatus`: 1 new, 4 done) - the patterns of Gaussian 16 and ORCA 6.1.1 outputs of methanol, HF/STO-3G,
+    its H-C-O-H dihedral scanned over three points."""
+
+    @staticmethod
+    def data(status, scan=None):
+        return types.SimpleNamespace(optstatus=status, OPT_DONE=4, scanenergies=scan)
+
+    def test_gaussian_an_optimisation_and_a_relaxed_scan(self):
+        self.assertEqual(worker.converged_of(self.data([1, 0, 0, 0, 4]), "", 5), [False] * 4 + [True])
+        status = [1, 0, 0, 0, 4, 1, 0, 0, 0, 0, 4, 1, 0, 0, 0, 4, 1, 0, 0, 0, 4]
+        marked = worker.converged_of(self.data(status, scan=[-113.546, -113.549, -113.546, -113.549]), "", 21)
+        self.assertEqual([i for i, ok in enumerate(marked) if ok], [4, 10, 15, 20])
+
+    def test_orca_its_last_evaluation_at_each_point_converged_on(self):
+        # (ORCA works each converged point's energy out once more, at a geometry cclib does not mark: that one)
+        self.assertEqual(worker.converged_of(self.data([1, 0, 0, 4]), "", 5), [False] * 4 + [True])
+        status = [1, 0, 0, 0, 0, 0, 0, 4] * 3
+        marked = worker.converged_of(self.data(status, scan=[-113.549, -113.546, -113.549]), "", 27)
+        self.assertEqual([i for i, ok in enumerate(marked) if ok], [8, 17, 26])
+        # (and where the geometries over are not one a point, which is which is not known: none said)
+        self.assertIsNone(worker.converged_of(self.data([1, 0, 0, 4]), "", 7))
+
+    def test_an_optimisation_that_did_not_converge_marks_none(self):
+        self.assertEqual(worker.converged_of(self.data([1, 0]), "", 2), [False, False])
+
+    def test_none_where_nothing_was_optimised(self):
+        self.assertIsNone(worker.converged_of(self.data(None), "", 1))
+        self.assertIsNone(worker.converged_of(self.data([1]), "", 1))
+        # (a rigid scan: one geometry a point)
+        self.assertIsNone(worker.converged_of(self.data([1, 1, 1], scan=[-1.0, -1.1, -1.2]), "", 3))
+        # (a reaction path: its points are the path)
+        self.assertIsNone(worker.converged_of(self.data([1, 4, 4]), " #p HF/STO-3G IRC(maxpoints=2)\n -----\n", 3))
+
+
+class StateOfTheDensity(unittest.TestCase):
+    """Of a job with excited states, which state its dipole, charges and orbitals are of - as Gaussian 16 and
+    ORCA 6.1.1 say it of formaldehyde's TD/HF/STO-3G optimisation: Gaussian's population analysis the SCF
+    density's (1.6162 D), ORCA's last dipole and charges its first root's relaxed density (0.4338 D)."""
+
+    excited = types.SimpleNamespace(etenergies=[3.9])
+
+    def test_gaussian_says_the_scf_density(self):
+        text = " Population analysis using the SCF Density.\n"
+        self.assertEqual(worker.density_states(self.excited, text, "gaussian"), ("ground state", "ground state", "ground state"))
+        # (another density - a root's, asked with Density=Current - its root not said: left out)
+        self.assertEqual(worker.density_states(self.excited, " Population analysis using the CI density.\n", "gaussian")[:2], ("", ""))
+
+    def test_orca_says_each_block_s_state(self):
+        text = (
+            "DIPOLE MOMENT\n-------------\n\nMethod             : SCF\nTotal Dipole Moment    :  0 0 -0.635\n"
+            "ORCA POPULATION ANALYSIS\nMULLIKEN ATOMIC CHARGES\n"
+            "                  RELAXED CIS/TDA DENSITY POPULATION ANALYSIS\n                                   IROOT 1\n"
+            "                           ORCA POPULATION ANALYSIS\nMULLIKEN ATOMIC CHARGES\n"
+            "DIPOLE MOMENT\n-------------\n\nMethod             : TDA/CIS\nLevel              : Relaxed density\n"
+            "State              :   1\nTotal Dipole Moment    :  0 0 -0.171\n"
+        )
+        self.assertEqual(worker.density_states(self.excited, text, "orca"), ("excited state 1", "excited state 1", "ground state"))
+        ground = "DIPOLE MOMENT\n-------------\nMethod             : SCF\nTotal Dipole Moment : 0 0 1\nORCA POPULATION ANALYSIS\nMULLIKEN ATOMIC CHARGES\n"
+        self.assertEqual(worker.density_states(self.excited, ground, "orca"), ("ground state", "ground state", "ground state"))
+
+    def test_labels_said_so_or_left_out_and_a_job_without_excited_states_as_ever(self):
+        dipole = [{"id": "dipole", "label": "Dipole moment", "value": 1.6}]
+        self.assertEqual(worker.of_state(dipole, "ground state")[0]["label"], "Dipole moment, ground state")
+        self.assertEqual(worker.of_state(dipole, ""), [])
+        self.assertEqual(worker.of_state(dipole, None), dipole)
+        orbitals = [{"id": "orbitals", "label": "Molecular orbitals"}, {"id": "homo-lumo-gap", "label": "HOMO\u2013LUMO gap"}]
+        self.assertEqual([r["label"] for r in worker.of_state(orbitals, "ground state", only="homo-lumo-gap")], ["Molecular orbitals", "HOMO\u2013LUMO gap, ground state"])
+        self.assertEqual(worker.density_states(types.SimpleNamespace(etenergies=None), "", "gaussian"), (None, None, None))
 
 
 if __name__ == "__main__":

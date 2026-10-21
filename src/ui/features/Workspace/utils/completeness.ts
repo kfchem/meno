@@ -22,6 +22,8 @@ export const ORDERS_MARK = "Bond orders unknown";
 export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? "" : "s"} left out`;
 /** What a molecule says where atoms of it stood in one place as it was read: a damaged file, or none of a molecule's. */
 export const TOGETHER_MARK = "Atoms in one place";
+/** What an opened optimisation says that never converged: its last geometry is no optimum (the words a step's failure uses for it). */
+export const NOT_CONVERGED_MARK = "Not converged";
 /** What a molecule says of the atoms its file has and it leaves out, their element not read: "1 atom left out", "3 atoms left out". */
 export const atomsLeftOutMark = (n: number) => `${n.toLocaleString("en")} ${n === 1 ? "atom" : "atoms"} left out`;
 

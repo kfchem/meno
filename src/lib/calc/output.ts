@@ -51,6 +51,8 @@ export type ReaderOutput = {
   degeneracies?: number[] | null;
   /** Whether an optimisation came to an end, where it was one. */
   optimised?: boolean | null;
+  /** Of an optimisation's or a relaxed scan's geometries, each one's being one the run found converged; none where it optimised nothing. */
+  converged?: boolean[] | null;
   /** Everything else it found, in the general form (results.ts) - read, and those that do not read as results left out. */
   results?: unknown[];
   /** What a structure's file holds - its drawing, and its molecules in 3D - where the reader read one (lib/io/structures); checked as the page takes it. */
