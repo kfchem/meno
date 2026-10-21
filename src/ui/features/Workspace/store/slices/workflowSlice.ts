@@ -149,9 +149,9 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         selFlow: { sets: new Set(added.sets), steps: new Set(added.steps) },
       }));
     },
-    connect: (from: Parameters<typeof wf.connect>[1], to: number) => {
+    connect: (from: Parameters<typeof wf.connect>[1], to: number, port?: string) => {
       const was = doc.getState();
-      doc.edit("wire", (d) => wf.connect(d, from, to));
+      doc.edit("wire", (d) => wf.connect(d, from, to, port));
       return doc.getState() !== was;
     },
     removeWire: (id: number) => {

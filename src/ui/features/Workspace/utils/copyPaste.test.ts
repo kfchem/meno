@@ -348,7 +348,7 @@ describe("a record with what is no entry in its lists", () => {
     flow: {
       sets: [{ id: 1, x0: 0, y0: -9, x1: 4, y1: -5 }],
       steps: [{ id: 2, kind: "optimise", x: 8, y: -7 }],
-      wires: [{ id: 3, from: { set: 1 }, to: 2 }],
+      wires: [{ id: 3, from: { set: 1 }, to: { step: 2, port: "in" } }],
     },
     pdfs: [{ name: "paper.pdf", sha256: "b".repeat(64), pages: [[612, 792]], x: 20, y: 0, placed: [{ page: 0, x: 30, y: 0 }], inks: [{ ...ink, page: 0 }] }],
     sheets: [{ name: "notes.txt", text: "a note", at: { x: 0, y: 9 } }],

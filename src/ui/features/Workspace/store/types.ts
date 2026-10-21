@@ -578,8 +578,8 @@ export type TextOf = { step: number } | { molecule: number };
 /**
  * A set on the page (docs/WORKFLOWS.md): its frame, in world units, x0 to
  * x1 and y0 (its foot) to y1 (its top) - what lies inside it its entries.
- * Made by a step: the step, the kind of set it holds - a Render step's,
- * pictures - and the entries the step set aside, listed struck through.
+ * Made by a step: the step and which of its exits, and - once it has run -
+ * the kind of set it holds (a Render step's, pictures).
  * Made by the chemist, a set is a compound set - named where it was given
  * a name (`name`: where its structures came from, or the chemist's own),
  * *Input* where not.
@@ -590,8 +590,12 @@ export type WorkflowSet = {
   y0: number;
   x1: number;
   y1: number;
-  /** The step and exit that made it, and what it holds: every exit has a set of its own, made with the step and empty until it runs. */
-  made?: { step: number; exit: string; holds: SetHolds };
+  /**
+   * The step and exit that made it: every exit has a set of its own, made
+   * with the step and empty until it runs - and what it holds, once it has
+   * run. Not run yet, it says nothing it does not know (flow `givesOf`).
+   */
+  made?: { step: number; exit: string; holds?: SetHolds };
   name?: string;
   /**
    * What it holds, in order (docs/WORKFLOWS-FOUNDATION.md, *Members are
@@ -1300,7 +1304,7 @@ export type EditorState = {
    * from a step that takes (`to`); picked up off the step it went into,
    * the wire it was (`was`).
    */
-  wireDrag: { from?: WireEnd; to?: number; at: { x: number; y: number }; was?: number } | null;
+  wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
   /**
    * The result sets whose molecules no longer fit them, as the 3D look in
@@ -1347,8 +1351,8 @@ export type EditorState = {
   letUndo: (go: boolean) => void;
   /** An undo or a redo held, that would take away running steps (`holdUndo`). */
   askUndo: { direction: "undo" | "redo"; steps: number } | null;
-  /** A wire from what gives into a step, where it may go (workflow/flow `canWire`); whether it went. */
-  connect: (from: WireEnd, to: number) => boolean;
+  /** A wire from a set into a step's input - the first that takes it, where none is named - where it may go (workflow/flow `canWire`); whether it went. */
+  connect: (from: WireEnd, to: number, port?: string) => boolean;
   removeWire: (id: number) => void;
   /**
    * A step run, and first the steps before it that need it - each step's
@@ -1377,7 +1381,7 @@ export type EditorState = {
   /** Meno's steps working in turns (Duplicates, `runMenoInTurns`), by step: since when, and how many of their entries they have been through. Not the document's: gone once each is done. */
   menoWorking: Record<number, { since: number; done: number; total: number }>;
   /** A wire picked up off its step and let go on another's port: into that one instead, as one step. */
-  rewire: (id: number, to: number) => void;
+  rewire: (id: number, to: number, port?: string) => void;
   hoverPulse: { id: number | null; nonce: number; until: number };
   arrows: Arrow[];
   pluses: Plus[];

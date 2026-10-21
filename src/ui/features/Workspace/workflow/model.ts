@@ -10,7 +10,7 @@ import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structu
 import { drawnBox } from "../../../../utils/importers";
 import { SET_PAD, SET_TOP } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
-import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
+import { exitsOf, inputsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
@@ -89,17 +89,31 @@ export function removeSet(doc: WorkspaceDocument, id: number): WorkspaceDocument
 export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: number, options?: OptionValues, by?: string): WorkspaceDocument {
   const id = idOf(doc);
   const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}) };
-  let next: WorkspaceDocument = { ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] };
-  // (every exit a result set of its own, made with the step and empty until it runs, to the right of its card:
-  // so that what a step will give can be wired on before it has run - docs/WORKFLOWS-FOUNDATION.md)
-  let top = y + CARD_H / 2;
-  for (const exit of exitsOf(kind)) {
+  return withExits({ ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] }, id);
+}
+
+/**
+ * `doc` with a set for each of a step's exits it has none for: every exit is
+ * a result set of its own, made with the step and empty until it runs, so
+ * that what a step will give can be wired on before it has run
+ * (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*). Each stands to
+ * the right of the card, the first level with its top and a second under
+ * it, half as high.
+ */
+export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocument {
+  const step = doc.steps?.find((s) => s.id === stepId);
+  if (!step) return doc;
+  let next = doc;
+  let top = step.y;
+  for (const exit of exitsOf(step.kind)) {
     const high = exit.of ? CARD_H / 2 : CARD_H;
-    const frame = { x0: x + CARD_W / 2 + GAP, y0: top - high, x1: x + CARD_W / 2 + GAP + CARD_W, y1: top };
-    const setId = next.nextWorkflowId ?? 1;
-    next = addSet(next, frame, { step: id, exit: exit.id, holds: "molecules" });
-    next = withSet(next, setId, (b) => ({ ...b, made: { step: id, exit: exit.id, holds: "molecules" } }));
-    top = frame.y0 - BETWEEN;
+    const was = resultOf(next, step.id, exit.id);
+    // (holding nothing yet: what lies under a new frame is not what its step made)
+    if (!was) {
+      const setId = next.nextWorkflowId ?? 1;
+      next = holdMembers(addSet(next, { x0: step.x + CARD_W + GAP, y0: top - high, x1: step.x + CARD_W + GAP + CARD_W, y1: top }, { step: step.id, exit: exit.id }), setId, []);
+    }
+    top = (was ? was.y0 : top - high) - BETWEEN;
   }
   return next;
 }
@@ -158,20 +172,32 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
   return (now.steps ?? []).filter((s) => s.running && !(then.steps ?? []).some((x) => x.id === s.id));
 }
 
-/** `doc` without a step and the wires into it and out of it. The set it made stays, with what it holds - a set like any the chemist drew (of conformers, where its molecules' frames are a conformer search's: entries `holdsOf`). */
+/**
+ * `doc` without a step and the wires into it. A set its exits made that
+ * holds something stays, with what it holds - a set like any the chemist
+ * drew (of conformers, where its molecules' frames are a conformer search's:
+ * entries `holdsOf`) - and the wires out of it with it; one that holds
+ * nothing - its step never ran, or gave nothing there - goes with the step,
+ * and the wires out of it: an empty frame the chemist never drew is not
+ * left behind.
+ */
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
   if (steps.length === (doc.steps ?? []).length) return doc;
+  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length).map((b) => b.id));
   return {
     ...doc,
     steps,
-    wires: (doc.wires ?? []).filter((w) => w.to.step !== id),
-    sets: (doc.sets ?? []).map((b) => (b.made?.step === id ? (({ made: _m, ...rest }) => rest)(b) : b)),
+    wires: (doc.wires ?? []).filter((w) => w.to.step !== id && !empty.has(w.from.set)),
+    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, ...rest }) => rest)(b) : b)),
   };
 }
 
 /** `doc` with a wire from `from` into the step `to` - in place of one it had - where it may go there (flow `canWire`). */
-export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, port: string = ONE_INPUT): WorkspaceDocument {
+export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
+  // (no input named: the first of the step's that takes what comes)
+  const kind = doc.steps?.find((s) => s.id === to)?.kind;
+  const port = into ?? (kind ? (inputsOf(kind).find((p) => canWire(doc, from, to, p.id))?.id ?? inputsOf(kind)[0].id) : ONE_INPUT);
   if (!canWire(doc, from, to, port)) return doc;
   const was = wireInto(doc, to, port);
   if (was && JSON.stringify(was.from) === JSON.stringify(from)) return doc;
@@ -290,11 +316,8 @@ export function markMade(doc: WorkspaceDocument, id: number, made: NonNullable<W
 
 /** The set a step's exit made, or - where the exit has none, a step read from a file written before its kind had it - one made now. */
 export function setForExit(doc: WorkspaceDocument, step: WorkflowStep, exit: string): { doc: WorkspaceDocument; id: number } {
-  const was = resultOf(doc, step.id, exit);
-  if (was) return { doc, id: was.id };
-  const id = doc.nextWorkflowId ?? 1;
-  const frame = { x0: step.x + CARD_W / 2 + GAP, y0: step.y - CARD_H / 2, x1: step.x + CARD_W / 2 + GAP + CARD_W, y1: step.y + CARD_H / 2 };
-  return { doc: addSet(doc, frame, { step: step.id, exit, holds: "molecules" }), id };
+  const next = withExits(doc, step.id);
+  return { doc: next, id: resultOf(next, step.id, exit)!.id };
 }
 
 /**

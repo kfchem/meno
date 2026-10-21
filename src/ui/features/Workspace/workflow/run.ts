@@ -13,7 +13,7 @@ import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { exitsOf, kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
@@ -107,7 +107,7 @@ export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omi
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
-  if (!set?.made || set.made.holds === "pictures") return undefined;
+  if (!set?.made?.holds || set.made.holds === "pictures") return undefined;
   const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
   const held = (b: WorkflowSet | undefined) =>
     b
@@ -200,10 +200,16 @@ export function keptOf(m: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | 
   };
 }
 
-/** What a step gave, as its result set is to hold it: its molecules in 3D, those it set aside, and what kind of set they make. */
-export function resultsOf(outcome: Extract<Outcome, { ok: true }>): RunResults {
+/**
+ * What a step of `kind` gave, as its exits' sets are to hold it: its
+ * molecules in 3D, those it set aside - made into the kind of set its
+ * second exit holds (Choose one's, the conformers not chosen, a conformer
+ * set still) - and what kind of set the first make.
+ */
+export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKind): RunResults {
   // (what it set aside is molecules as what it kept is: its second exit's set holds them, in plain view)
-  const rest = outcome.aside.length ? moleculesOf({ ...outcome, kept: outcome.aside, shares: undefined }) : [];
+  const asideHolds = restHolds(kind, outcome.holds) ?? outcome.holds;
+  const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
   return { molecules: moleculesOf(outcome), rest, holds: outcome.holds };
 }
 
@@ -215,7 +221,7 @@ export function withResults(
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
-  return placeResults(doc, step, resultsOf(outcome), w, turns);
+  return placeResults(doc, step, resultsOf(outcome, step.kind), w, turns);
 }
 
 /** The kinds of step whose results are what came in, worked out: each laid over what it was worked out from as it is put down (`laidOver`). */
@@ -272,7 +278,7 @@ export function placeResults(
   const exits = exitsOf(step.kind);
   doc = fillExit(doc, step, exits[0].id, made, holds, w, turns);
   // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
-  if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, holds, w);
+  if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, w);
   return doc;
 }
 

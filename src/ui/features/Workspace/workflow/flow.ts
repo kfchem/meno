@@ -33,28 +33,18 @@ export const resultsOf = (doc: Flow, step: number): WorkflowSet[] => (doc.sets ?
 export function givesOf(doc: Flow, end: WireEnd, seen: ReadonlySet<number> = new Set()): SetHolds | null {
   const given = findSet(doc, end.set);
   if (!given) return null;
-  // (a set a step made, not run yet: what its exit will give of what comes into that step)
+  // (a chemist's set: what lies in it; a step's exit, run: what it made)
   if (!given.made) return holdsOf(doc, given);
+  if (given.made.holds) return given.made.holds;
+  // (not run yet: what that exit will give of what comes into its step)
   const step = stepOf(doc, given.made.step);
-  if (!step || seen.has(step.id)) return holdsOf(doc, given);
+  if (!step || seen.has(step.id)) return null;
   const g = exitOf(step.kind, given.made.exit).gives;
   if (g !== "same") return g;
   const into = wireInto(doc, step.id);
-  const up = into ? givesOf(doc, into.from, new Set([...seen, step.id])) : null;
-  return up ?? holdsOf(doc, given);
+  return into ? givesOf(doc, into.from, new Set([...seen, step.id])) : null;
 }
 
-/** What a step's exit gives: what it made, or - not run - what it will make of what comes into it. Null where that is not known yet. */
-export function exitGives(doc: Flow, step: number, exit: string): SetHolds | null {
-  const s = stepOf(doc, step);
-  if (!s) return null;
-  const made = resultOf(doc, step, exit);
-  if (made?.made) return made.made.holds;
-  const g = exitOf(s.kind, exit).gives;
-  if (g !== "same") return g;
-  const into = wireInto(doc, step);
-  return into ? givesOf(doc, into.from) : null;
-}
 
 /** The steps before a step, nearest first, as its wires lead back. */
 export function stepsBefore(doc: Flow, step: number): number[] {

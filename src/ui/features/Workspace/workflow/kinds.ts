@@ -191,6 +191,17 @@ export function exitsOf(kind: StepKind): readonly StepExit[] {
   return info.second ? [first, info.second] : [first];
 }
 
+/**
+ * What a kind's second exit holds, its first holding `first`: the kind of
+ * set it declares, or - `same` - what came in, which a kind whose second
+ * exit says `same` gives from its first too. None where it has no second.
+ */
+export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
+  const second = exitsOf(kind)[1];
+  if (!second) return undefined;
+  return second.gives === "same" || second.gives === "pictures" ? first : second.gives;
+}
+
 /** The input of `kind` named `port`, or its first where `port` is not one of its own. */
 export function portOf(kind: StepKind, port: string): StepPort {
   const inputs = inputsOf(kind);
