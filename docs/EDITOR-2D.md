@@ -945,7 +945,18 @@ All hover-based, as above.
     there, at the size the canvas draws them at - the labels' size times
     0.6 - but without the 9-pixel least, which is for the screen zoomed
     out and means nothing at a picture's size in print. A picture takes them
-    as they stand: all shown, none fading. On a molecule in 3D, not yet.
+    as they stand: all shown, none fading. A picture of a part of a drawing -
+    a selection copied or exported - has its atoms' and bonds' descriptors
+    in the molecule as drawn, not worked out again for the part on its own:
+    an atom that is R in the molecule is R in the picture, though the part
+    alone might make it another or none. On a molecule in 3D, not yet.
+  - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
+    and floated round a structure a few pixels across). Their letters keep
+    to 9 px at the least; past that they fade as the view goes out, eased
+    with the zoom, and are gone where 9 px is twice the size they would be
+    (`marksSeenAt`). On a drawing and on a molecule in 3D alike; atom
+    numbers on a molecule in 3D fade below their own least size the same
+    way.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

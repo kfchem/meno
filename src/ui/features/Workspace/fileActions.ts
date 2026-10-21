@@ -251,6 +251,13 @@ export function exportPxPerWorld(style: DrawingStyle): number {
 }
 
 /**
+ * What a picture of a drawing takes from its page: its aromatic circles, its
+ * styles in 3D (none, a page no workspace's: Meno's own), and the R, S, E and
+ * Z its canvas shows (none, a picture without them).
+ */
+export type PictureState = Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d" | "shownMarks">>;
+
+/**
  * The drawing exactly as the canvas lays it out, at the style's own size,
  * for a picture made of it - its reaction arrows, "+" signs and words with it.
  * Lines keep their true width however thin - the canvas's on-screen minimum
@@ -258,7 +265,7 @@ export function exportPxPerWorld(style: DrawingStyle): number {
  */
 export function drawingLayout(
   model: Drawn,
-  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d" | "shownMarks">>,
+  aromatic: PictureState,
   style: DrawingStyle,
 ): { layout: Layout; opts: LayoutOptions } {
   const atoms = model.atoms.map((a) => ({
@@ -456,7 +463,7 @@ export function drawingLayout(
  */
 export function drawingSvg(
   model: Drawn,
-  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>,
+  aromatic: PictureState,
   style: DrawingStyle,
   seen = false,
 ): string {

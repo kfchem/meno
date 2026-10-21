@@ -16,6 +16,7 @@ import {
   MARK_SCALE,
   MARKS_APART,
   STEREO_GAP,
+  marksSeenAt,
   stereoPlaces,
   stereoTextEms,
   valenceMessage,
@@ -119,6 +120,8 @@ export default function ChemMarks2D({
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
   const fontPx = Math.max(MARK_MIN_PX, labelFont * MARK_SCALE * z);
+  // (and, the view far out, how far they are still seen: marksSeenAt)
+  const seenAtZoom = marksSeenAt(labelFont * MARK_SCALE * z);
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
   const gap = opts.stereoGap ?? STEREO_GAP;
@@ -301,7 +304,8 @@ export default function ChemMarks2D({
       {/* each R, S, E and Z taken hold of on its letters, and moved by hand */}
       {stereoShown.map(({ key, item: m, leaving }) => {
         const base = from.get(key);
-        if (leaving || !base) return null;
+        // (none to take hold of where it is mostly faded with the zoom)
+        if (leaving || !base || seenAtZoom < 0.5) return null;
         const id = Number(key.slice(key.indexOf("-") + 1));
         return (
           <MarkHold
@@ -344,7 +348,7 @@ export default function ChemMarks2D({
                 // a root of its own, after this one's effects have run)
                 placeOne(el, m);
               }}
-              style={{ position: "absolute", top: 0, left: 0, transform: "translate3d(-50%,-50%,0)" }}
+              style={{ position: "absolute", top: 0, left: 0, transform: "translate3d(-50%,-50%,0)", opacity: seenAtZoom }}
             >
               <div className={leaving ? "meno-fade-out" : "meno-fade-in"}>
                 <StereoMark text={m.text} fontPx={fontPx} parentheses={parentheses} {...writing} />
