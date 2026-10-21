@@ -680,7 +680,7 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "workflowMenu" | "askDeleteStep";
+export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -1330,6 +1330,8 @@ export type EditorState = {
    * the wire it was (`was`).
    */
   wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
+  /** A wire let go on a step's input that does not take it: the step, and why (flow `wireRefusal`) - said on its card until a wire is drawn again. */
+  wireRefused: { step: number; said: string } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
   /**
    * The result sets whose molecules no longer fit them, as the 3D look in

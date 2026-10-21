@@ -201,6 +201,7 @@ import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
+import { heldOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -1977,6 +1978,12 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          setHoldsOwn={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const st = store.getState();
+            const set = st.sets.find((b) => b.id === menu.id);
+            return set?.collection?.length ? heldOwn(st, set) : undefined;
+          })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const set = store.getState().sets.find((b) => b.id === menu.id);

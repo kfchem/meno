@@ -371,3 +371,11 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
   }
   return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
 }
+
+/** What a set holds itself, on no page (`collection`), said - "118 molecules", "400 conformers" - for what goes with it when it is deleted; none where it holds none. */
+export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
+  if (!set.collection?.length) return undefined;
+  const { holds, entries } = countOf(page, set);
+  const noun = holds === "conformers" ? "conformer" : "molecule";
+  return `${entries.toLocaleString("en-US")} ${entries === 1 ? noun : `${noun}s`}`;
+}

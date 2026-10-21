@@ -179,9 +179,10 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
 
 /**
  * `doc` without a step and the wires into it. A set its exits made that
- * holds something stays, with what it holds - a set like any the chemist
+ * holds something - molecules on the page, or a large set's own
+ * (`collection`) - stays, with what it holds: a set like any the chemist
  * drew (of conformers, where its molecules' frames are a conformer search's:
- * entries `holdsOf`) - and the wires out of it with it; one that holds
+ * entries `holdsOf`), and the wires out of it with it; one that holds
  * nothing - its step never ran, or gave nothing there - goes with the step,
  * and the wires out of it: an empty frame the chemist never drew is not
  * left behind.
@@ -189,7 +190,7 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
   if (steps.length === (doc.steps ?? []).length) return doc;
-  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length).map((b) => b.id));
+  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length && !b.collection?.length && !b.unread).map((b) => b.id));
   return {
     ...doc,
     steps,
@@ -281,8 +282,8 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     list.sort((p, q) => keyOf(p.member) - keyOf(q.member));
     // what the edit took out
     let kept = prior ? list.filter((p) => !(p.wasIn && !inside(set, p.at))) : list;
-    // what the edit brought into a chemist's set, each at its place in reading order
-    if (!set.made && prior) {
+    // what the edit brought into a chemist's set, each at its place in reading order - but one that holds its molecules itself (a large set its step left), which takes in nothing
+    if (!set.made && !set.collection && prior) {
       const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));
       const heldAtoms = new Set(held.structures.flat());
       const add = (member: Member, at: { x: number; y: number }, w: { x: number; y: number } | null | undefined) => {

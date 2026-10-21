@@ -56,9 +56,10 @@ function readSet(v: unknown): WorkflowSet | null {
       const members = membersIn(b.members);
       return members ? { members } : {};
     })(),
-    // (a large result set's collection, each molecule read as the page's are - those that do not read counted, with those its file already said had not)
+    // (a large set's collection, each molecule read as the page's are - those that do not read counted, with those its file already said had not)
     ...(() => {
-      if (!Array.isArray(b.collection) || !made) return {};
+      // (a set whose step was deleted holds its collection still: a chemist's set now, made by none)
+      if (!Array.isArray(b.collection)) return {};
       const collection = b.collection.flatMap((m) => carriedMolecule(m));
       const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};

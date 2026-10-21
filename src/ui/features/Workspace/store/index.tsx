@@ -358,6 +358,7 @@ export function createEditorStore(
     hoveredWire: null,
     openStep: null,
     wireDrag: null,
+    wireRefused: null,
     workflowMenu: null,
     askDeleteStep: null,
     askUndo: null,

@@ -334,6 +334,11 @@ one of the kinds of calculation it does (decided: 16):
   conversion taken on purpose.
 - **Only what is added is there.** With no plugin added, the panel shows
   Meno's line alone; nothing is shown of plugins not added.
+- **A wire let go on an input that does not take it** is not made, and
+  the step's card says why where its state is: "It takes a conformer set,
+  not molecules in 3D" - or, for conformer sets of one conformer each,
+  "each compound here has one conformer, so they are molecules in 3D"
+  (2026-10-22). It says so until a wire is drawn again.
 - **A wire let go on empty space** opens Quick Add already at
   *Calculations*, showing only the kinds that take what the wire
   carries - and a plugin only where it does one of them.
@@ -517,7 +522,10 @@ of theirs that does not read is left out and counted, and the frame says
 how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
-each exit's set once it is shown again. They are opened as a table in the column, and put on the page from
+each exit's set once it is shown again. Its molecules are on no page,
+so deleting the set deletes them: its frame says so ("On no page:
+deleting the set deletes them"), and so does its menu ("Delete set and
+the 118 molecules it holds"), before it happens (2026-10-22). They are opened as a table in the column, and put on the page from
 there, in the steps that follow (6b), and summed up in the frame with a
 sample of their structures and histograms (6c).
 
@@ -787,7 +795,9 @@ Decided while building it, for the maintainer to confirm:
   the same order: a structure there twice is the same structure. In a
   conformer set, within each compound, lowest energy first.
 - **Deleting a step keeps the set it made**, with what it holds - a set
-  like any the chemist made, so a compound set.
+  like any the chemist made, so a compound set. A large set it made keeps
+  the molecules it holds itself (2026-10-22): they are on no page, and
+  the set takes in nothing dropped into its frame.
 - **The look, after review** (2026-10-08): frames, tabs, cards and ports
   in Meno's palette and its cards' hairline borders, a hair on the screen
   at any zoom; wires a hair and a quarter; Heroicons' outline icons for
@@ -1250,6 +1260,9 @@ Decided while building it, for the maintainer to confirm:
   kind, who does it, its options - and has not run (its runs and their
   jobs are the step's own). A result set copied with the step that made
   it is that step's still; copied without it, it is a set like any other.
+  Either way it goes without the molecules a large set holds itself -
+  with its step, it is empty until the step runs again; alone, an empty
+  frame - so they are never copied twice (2026-10-22).
 - **A running step is left out** when a selection is deleted or cut; it
   is asked about on its own, as before.
 - **A procedure keeps the sets the chemist drew**, as empty frames for

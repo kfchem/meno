@@ -109,6 +109,8 @@ export default function SetFrame(p: SetFrameProps) {
         >
           <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
           <span className="text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+          {/* (held in the set alone: deleting it deletes them - said before it happens) */}
+          <span className="mt-1 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
         </div>
       )}
       <Port look={p.give} label={`Out of ${p.name}`} data={{ "data-give-set": String(p.set.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: h / 2 }} />

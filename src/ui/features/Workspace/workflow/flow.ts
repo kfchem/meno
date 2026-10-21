@@ -60,22 +60,39 @@ export function stepsBefore(doc: Flow, step: number): number[] {
   return out;
 }
 
-/** Whether a wire may go from `from` into the step `to`: the step - done by whom it is - takes what it gives, or what that is is not known yet; and no loop is made. */
+/** Whether a wire may go from `from` into the step `to` (`wireRefusal`: none). */
 export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): boolean {
+  return wireRefusal(doc, from, to, port) == null;
+}
+
+/** A kind of set, as a step's card says what it takes and what came. */
+const SET_WORDS: Record<SetKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "a conformer set" };
+
+/**
+ * Why a wire may not go from `from` into the step `to`, in plain words;
+ * none where it may: the step - done by whom it is - takes what it gives,
+ * or what that is is not known yet; and no loop is made.
+ */
+export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): string | null {
   const step = stepOf(doc, to);
-  if (!step) return false;
   const set = findSet(doc, from.set);
-  if (!set || set.made?.step === to) return false;
+  if (!step || !set) return "It is not there";
+  if (set.made?.step === to) return "It is what this step gives";
   // (nothing it gives may come back round to it)
   const madeBy = set.made?.step;
-  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return false;
+  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
   const holds = givesOf(doc, from);
   // (pictures - a Render step's - no step takes)
-  if (holds === "pictures") return false;
+  if (holds === "pictures") return "Pictures go into no step";
+  if (holds == null) return null;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
-  const takes = portOf(step.kind, port).takes;
-  if (holds == null) return true;
-  return inputsOf(step.kind).length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
+  const several = inputsOf(step.kind).length > 1;
+  const takes = portOf(step.kind, port).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
+  if (takes.includes(holds)) return null;
+  const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
+  // (conformer sets of one conformer each are molecules to a step: one conformer has nothing to be weighed or windowed against)
+  const ones = holds === "molecules" && takes.includes("conformers") && setMolecules(doc, set).some((m) => m.conformerSet === true && !m.frames?.length);
+  return ones ? `It takes ${wants} - each compound here has one conformer, so they are molecules in 3D` : `It takes ${wants}, not ${SET_WORDS[holds]}`;
 }
 
 /** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */

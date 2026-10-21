@@ -259,3 +259,12 @@ describe("a menu's rules", () => {
     expect(listed3.slice(0, first)).not.toContain('role="separator"');
   });
 });
+
+describe("a set's menu", () => {
+  it("says what goes with a set that holds its molecules itself, before it is deleted", () => {
+    const set = target({ kind: "set", id: 7 });
+    expect(menu(set, { setHoldsOwn: "118 molecules" }).html).toContain("Delete set and the 118 molecules it holds");
+    expect(menu(set).html).toContain("Delete set");
+    expect(menu(set).html).not.toContain("it holds");
+  });
+});
