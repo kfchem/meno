@@ -228,9 +228,15 @@ describe("a save that cannot keep a file the workspace has", () => {
     expect(isNotHad(sha(whole))).toBe(true);
   });
 
-  it("is said in plain words, each named", () => {
+  it("is said in plain words, each named - and the copy kept of the file saved over, where one was", () => {
     expect(notKeptSaid([])).toBeNull();
     expect(notKeptSaid(["a.png", "b.pdf"])).toBe("Saved, but a.png and b.pdf are not in the file: they could not be read.");
+    expect(notKeptSaid(["a.png", "b.pdf"], "x.meno.bak")).toBe(
+      "Saved, but a.png and b.pdf are not in the file: they could not be read. The file as it was is kept beside it as x.meno.bak.",
+    );
+    expect(notKeptSaid(["a.png"], "x.meno.1.bak")).toBe("Saved, but a.png is not in the file: it could not be read. The file as it was is kept beside it as x.meno.1.bak.");
+    expect(notKeptSaid(["a.png"], null)).toBe("Saved, but a.png is not in the file: it could not be read.");
+    expect(notKeptSaid([], "x.meno.bak")).toBeNull();
   });
 });
 
@@ -288,6 +294,28 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
     const file = readMenoFile(saved.bytes);
     expect(file.files.map((f) => f.name).sort()).toEqual(["locked.pdf", "run.log"]);
     expect(file.data(sha(w.picture))).toBeNull();
+  });
+
+  it("says the file it was saved to may still hold what it cannot keep only where it has it in it damaged, or does not read - once, not at every save", async () => {
+    const w = savedBefore("last holds", "/work/last.meno");
+    // (all of it whole there: all kept, nothing to keep the file for)
+    expect(await workspaceFile(w.st())).toMatchObject({ notKept: [], lastHolds: false });
+    const at = Buffer.from(w.before).indexOf(Buffer.from(w.picture.subarray(300, 340)));
+    const damaged = w.before.slice();
+    damaged[at + 3] ^= 0x10;
+    disk.set("/work/last.meno", damaged);
+    const first = await workspaceFile(w.st());
+    expect(first).toMatchObject({ notKept: ["figure.png"], lastHolds: true });
+    // (saved so: the file saved over now holds nothing of it - the next save keeps nothing beside it)
+    disk.set("/work/last.meno", first.bytes);
+    expect(await workspaceFile(w.st())).toMatchObject({ notKept: ["figure.png"], lastHolds: false });
+    // (a file there that does not read as a workspace at all: what it holds is not known)
+    disk.set("/work/last.meno", damaged.slice(0, 200));
+    expect(await workspaceFile(w.st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: true });
+    // (saved nowhere before, or that file gone: none to keep)
+    expect(await workspaceFile(savedBefore("last nowhere", null).st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: false });
+    disk.delete("/work/last.meno");
+    expect(await workspaceFile(w.st())).toMatchObject({ notKept: ["run.log", "locked.pdf", "figure.png"], lastHolds: false });
   });
 
   it("saved nowhere before, or that file gone, names each as before", async () => {

@@ -2609,7 +2609,7 @@ function TabFiles({
   children: (files: FileActions) => ReactNode;
 }) {
   // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
-  const files = useFileActions(nameTab);
+  const files = useFileActions(nameTab, tabId);
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);

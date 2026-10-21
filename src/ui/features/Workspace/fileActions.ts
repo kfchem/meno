@@ -6,6 +6,7 @@ import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
+import { heldElsewhere } from "../../../lib/doc/savers";
 import { mapStanding, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -95,22 +96,38 @@ function withExtension(path: string, ext: string): string {
   return `${path.replace(/\.[^.\\/]*$/, "")}.${ext}`;
 }
 
+/** How a workspace's file is written, each part given apart where tests give their own (`writtenWhere`). */
+export type SaveWays = {
+  /** Writes the file, keeping the one there beside it where asked; where it was kept. */
+  write?: (path: string, bytes: Uint8Array, keepOld: boolean) => Promise<string | null>;
+  /** A file's one true path (lib/io/truePath). */
+  truePathOf?: (path: string) => Promise<string>;
+  /** The label of the tab - another than the one saving - that holds the file at a one true path (lib/doc/savers `heldElsewhere`). */
+  heldBy?: (path: string) => string | undefined;
+  /** Whether the file at a one true path, there now, is to be kept beside the new one: the file last saved to, still holding something the new one cannot keep (`SavedFile`'s `lastHolds`). */
+  keepOld?: (path: string) => boolean;
+};
+
 /**
  * A workspace's file written to `path`, as Save or Save As has it; where it
  * now is: its one true path (lib/io/truePath), asked once it is there - a
  * new file's name as it is kept, a file reached through a link the file it
  * points at - so that the workspace's tab holds the path every other way
- * of reaching that file comes to (lib/doc/savers, `tabHolding`).
+ * of reaching that file comes to (lib/doc/savers, `tabHolding`); and where
+ * the file it was saved over was kept, where it was (`keepOld`).
+ *
+ * Never a file another tab holds (`heldBy`): written, that tab's next save
+ * would overwrite it unseen. Refused, as a save's failure is said, naming
+ * the tab; nothing is written.
  */
-export async function writtenWhere(
-  path: string,
-  bytes: Uint8Array,
-  write: (path: string, bytes: Uint8Array) => Promise<void> = writeDocument,
-  truePathOf: (path: string) => Promise<string> = truePath,
-): Promise<string> {
+export async function writtenWhere(path: string, bytes: Uint8Array, ways: SaveWays = {}): Promise<{ kept: string; old: string | null }> {
+  const { write = writeDocument, truePathOf = truePath, heldBy = () => undefined, keepOld = () => false } = ways;
+  const before = await truePathOf(path);
+  const holder = heldBy(before);
+  if (holder !== undefined) throw new Error(`that file is open in the tab "${holder}"; save there, or close it first.`);
   // (written where the dialog said - where it let the page write - before its one true path is asked)
-  await write(path, bytes);
-  return truePathOf(path);
+  const old = await write(path, bytes, keepOld(before));
+  return { kept: await truePathOf(path), old };
 }
 
 /**
@@ -497,7 +514,7 @@ export function drawingSvg(
  * workspace at a time: Save or Save As asked for while one is under way
  * waits for it, and runs once (lib/doc/saveTurns).
  */
-export function useFileActions(nameTab?: (label: string) => void) {
+export function useFileActions(nameTab?: (label: string) => void, tabId?: string) {
   const store = useEditorStore();
   const [error, setError] = useState<string | null>(null);
   // (the tab is named for the file it is saved to, as for one opened in it)
@@ -520,14 +537,20 @@ export function useFileActions(nameTab?: (label: string) => void) {
       // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
       const written = store.getState().writing();
       // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
-      const { bytes, notKept } = await workspaceFile(store.getState());
-      const kept = await writtenWhere(path, bytes);
+      const { savedPath } = store.getState();
+      const { bytes, notKept, lastHolds } = await workspaceFile(store.getState());
+      const { kept, old } = await writtenWhere(path, bytes, {
+        // (never a file another tab saves to)
+        heldBy: (real) => heldElsewhere(real, tabId),
+        // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
+        keepOld: (real) => lastHolds && real === savedPath,
+      });
       store.getState().markSavedAs(kept, written);
       naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed)
-      setError(notKeptSaid(notKept));
+      setError(notKeptSaid(notKept, old && fileNameOf(old)));
     },
-    [store],
+    [store, tabId],
   );
 
   /** The canvas saved as a workspace, where the chemist says; whether it was. */

@@ -29,7 +29,7 @@ import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
-import { openEachOnce, saverOf } from "./lib/doc/savers";
+import { openEachOnce, saverOf, setTabsListed } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
 import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
@@ -147,6 +147,17 @@ export default function App() {
       unwatch();
     };
   }, []);
+
+  // The tabs, each with the path it was opened from and its label as the
+  // tab bar shows it: a save sees whether another tab holds the file it is
+  // to write (lib/doc/savers `heldElsewhere`).
+  useEffect(
+    () =>
+      setTabsListed(() =>
+        Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path, label: t.meta.label })),
+      ),
+    [],
+  );
 
   // Undo/redo belong to the active tab, not to the app as a whole.
   const activeIdRef = useRef(state.activeId);

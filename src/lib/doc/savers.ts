@@ -57,6 +57,32 @@ export function tabHolding(path: string, tabs: readonly { id: string; openedFrom
   return tabs.find((t) => (paths.has(t.id) ? paths.get(t.id)!() : t.openedFrom) === path)?.id;
 }
 
+/** A tab as the window lists it: its id, the path it was opened from, and its label, as the tab bar shows it. */
+export type ListedTab = { id: string; openedFrom?: string; label: string };
+
+/** The window's tabs, as they are when asked: set by the window (App), none till it is there. */
+let listed: () => readonly ListedTab[] = () => [];
+
+/** Sets what lists the window's tabs; the function returned takes it away again. */
+export function setTabsListed(list: () => readonly ListedTab[]): () => void {
+  listed = list;
+  return () => {
+    if (listed === list) listed = () => [];
+  };
+}
+
+/**
+ * The label of the tab - other than `own`, the tab asking - that holds the
+ * workspace saved at `path`, a file's one true path (`tabHolding`), if one
+ * does: a Save As there would write the file that tab saves to, and its
+ * next save would overwrite it unseen (fileActions, `writtenWhere`).
+ */
+export function heldElsewhere(path: string, own: string | undefined, tabs: readonly ListedTab[] = listed()): string | undefined {
+  const others = tabs.filter((t) => t.id !== own);
+  const held = tabHolding(path, others);
+  return held === undefined ? undefined : others.find((t) => t.id === held)?.label;
+}
+
 /**
  * Workspace files found to open, each in a tab of its own, by its one true
  * path (`truePathOf`): one a tab already holds - however its path was

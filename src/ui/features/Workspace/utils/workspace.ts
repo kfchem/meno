@@ -178,8 +178,14 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   );
 }
 
-/** A workspace's file as Save writes it: its bytes, and the files it has that could not be had to keep - each by its name. */
-export type SavedFile = { bytes: Uint8Array; notKept: string[] };
+/**
+ * A workspace's file as Save writes it: its bytes, and the files it has
+ * that could not be had to keep - each by its name; and whether the file it
+ * was last saved to may hold something of those still (`lastHolds`): it has
+ * one of them in it, damaged, or it does not read as a workspace at all -
+ * so that, saved over, it is kept beside the new one (fileActions).
+ */
+export type SavedFile = { bytes: Uint8Array; notKept: string[]; lastHolds: boolean };
 
 /**
  * The canvas as its workspace file: its JSON, every output its molecules
@@ -209,7 +215,7 @@ export async function workspaceFile(state: Saved & { savedPath?: string | null }
     ...pdfs.notKept,
     ...pictures.notKept,
   ];
-  const carried = wanting.length ? await carriedFrom(state.savedPath ?? null, wanting) : [];
+  const { carried, holds } = wanting.length ? await carriedFrom(state.savedPath ?? null, wanting) : { carried: [], holds: false };
   const had = new Set(carried.map((c) => c.sha256));
   // (an output kept, carried or held, is said to be nowhere else)
   const keptOutputs = new Set([...outputs.kept.map((k) => k.sha256), ...outputs.notKept.map((s) => s.sha256).filter((h) => had.has(h))]);
@@ -217,7 +223,8 @@ export async function workspaceFile(state: Saved & { savedPath?: string | null }
     workspaceText(state, keptOutputs, texts.map((t) => t.sha256)),
     [...outputs.kept, ...texts, ...lost.kept, ...pdfs.kept, ...pictures.kept, ...carried],
   );
-  return { bytes, notKept: wanting.filter((w) => !had.has(w.sha256)).map((w) => w.name) };
+  const notKept = wanting.filter((w) => !had.has(w.sha256));
+  return { bytes, notKept: notKept.map((w) => w.name), lastHolds: notKept.length > 0 && holds };
 }
 
 /**
@@ -227,30 +234,46 @@ export async function workspaceFile(state: Saved & { savedPath?: string | null }
  * its CRC-32 and its SHA-256 say), kept as it is known here; none where
  * there is no such file, or it is not one that reads. It is read as the
  * canvas reads and writes it - within the files Meno may reach, as Open or
- * Save gave them.
+ * Save gave them. And whether that file may still hold something of one
+ * it does not hold whole (`holds`): it has it in it, damaged; or it is
+ * there but does not read as a workspace.
  */
-async function carriedFrom(path: string | null, wanting: readonly KeptName[]): Promise<KeptData[]> {
-  if (!path || !isWorkspaceFile(path)) return [];
+async function carriedFrom(path: string | null, wanting: readonly KeptName[]): Promise<{ carried: KeptData[]; holds: boolean }> {
+  if (!path || !isWorkspaceFile(path)) return { carried: [], holds: false };
+  let bytes: Uint8Array;
+  try {
+    bytes = await readFile(path);
+  } catch {
+    // (not there, or not to be read: nothing of it to keep)
+    return { carried: [], holds: false };
+  }
   let file: MenoFile;
   try {
-    file = readMenoFile(await readFile(path));
+    file = readMenoFile(bytes);
   } catch {
-    return [];
+    return { carried: [], holds: true };
   }
-  return wanting.flatMap((w) => {
+  const carried: KeptData[] = [];
+  let holds = false;
+  for (const w of wanting) {
     const data = file.data(w.sha256);
-    return data ? [{ ...w, data }] : [];
-  });
+    if (data) carried.push({ ...w, data });
+    else if (file.holds(w.sha256)) holds = true;
+  }
+  return { carried, holds };
 }
 
 /**
  * What Save says of the files a workspace has that it could not keep, each
- * named (`workspaceFile`'s `notKept`) - none where it kept them all.
+ * named (`workspaceFile`'s `notKept`) - none where it kept them all; and,
+ * where the file saved over was kept beside the new one, as what (`kept`,
+ * its name).
  */
-export function notKeptSaid(names: readonly string[]): string | null {
+export function notKeptSaid(names: readonly string[], kept?: string | null): string | null {
   if (!names.length) return null;
   const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-  return names.length === 1 ? `Saved, but ${listed} is not in the file: it could not be read.` : `Saved, but ${listed} are not in the file: they could not be read.`;
+  const said = names.length === 1 ? `Saved, but ${listed} is not in the file: it could not be read.` : `Saved, but ${listed} are not in the file: they could not be read.`;
+  return kept ? `${said} The file as it was is kept beside it as ${kept}.` : said;
 }
 
 /** The pictures as a workspace's file keeps them: each image as it is, once - those held this session (lib/picture/held); and those not. */

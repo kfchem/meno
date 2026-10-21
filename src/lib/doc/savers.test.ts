@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-const { openEachOnce, setSavedPathOf, tabHolding } = await import("./savers");
+const { heldElsewhere, openEachOnce, setSavedPathOf, setTabsListed, tabHolding } = await import("./savers");
 const { truePath } = await import("../io/truePath");
 
 describe("the tab that holds a workspace's file", () => {
@@ -42,6 +42,35 @@ describe("the tab that holds a workspace's file", () => {
     expect(tabHolding(again, [{ id: "t1", openedFrom: once }])).toBe("t1");
     // (where the app has none to give - no such file, or outside the app - the path as given)
     expect(await truePath("/Users/Chem/gone.meno")).toBe("/Users/Chem/gone.meno");
+  });
+});
+
+describe("a file another tab holds", () => {
+  it("is named by that tab's label, as the tab bar shows it - never the tab asking, nor a file no tab holds", () => {
+    const tabs = [
+      { id: "t1", openedFrom: "/w/a.meno", label: "a.meno" },
+      { id: "t2", openedFrom: "/w/b.meno", label: "b.meno" },
+      { id: "t3", label: "Workspace 3" },
+    ];
+    expect(heldElsewhere("/w/b.meno", "t1", tabs)).toBe("b.meno");
+    expect(heldElsewhere("/w/a.meno", "t1", tabs)).toBeUndefined();
+    expect(heldElsewhere("/w/c.meno", "t1", tabs)).toBeUndefined();
+    // (where a tab's view says it is saved now: a workspace saved as c.meno in tab 3)
+    const away = setSavedPathOf("t3", () => "/w/c.meno");
+    expect(heldElsewhere("/w/c.meno", "t1", tabs)).toBe("Workspace 3");
+    expect(heldElsewhere("/w/c.meno", "t3", tabs)).toBeUndefined();
+    away();
+  });
+
+  it("is looked for among the window's tabs as they are when asked", () => {
+    let tabs = [{ id: "t1", openedFrom: "/w/a.meno", label: "a.meno" }];
+    const away = setTabsListed(() => tabs);
+    expect(heldElsewhere("/w/a.meno", "t2")).toBe("a.meno");
+    tabs = [];
+    expect(heldElsewhere("/w/a.meno", "t2")).toBeUndefined();
+    away();
+    tabs = [{ id: "t1", openedFrom: "/w/a.meno", label: "a.meno" }];
+    expect(heldElsewhere("/w/a.meno", "t2")).toBeUndefined();
   });
 });
 
