@@ -80,8 +80,8 @@ export const CORES_MOST = 1024;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
- * twice as finely as its size on the screen - the sharpest, and as before -
- * as finely as the screen itself shows things, or once. Pictures made of it
+ * twice as finely as its size on the screen - the sharpest - as finely as
+ * the screen itself shows things (the default), or once. Pictures made of it
  * are drawn at their own sizes, whichever is chosen.
  */
 export type CanvasSettings = { resolution: 2 | "display" | 1 };
@@ -171,7 +171,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   plugins: { removed: [], roles: {}, programs: {}, guided: [] },
   pictures: { dpi: 600 },
   pointer: { wheelUp: "in" },
-  canvas: { resolution: 2 },
+  canvas: { resolution: "display" },
   labels: { smart: true },
   words: { smart: true },
   calculations: {},
@@ -233,10 +233,15 @@ function acceptProcedures(raw: unknown): SavedProcedure[] {
   });
 }
 
-/** How finely the canvas is drawn, as the file holds it; what does not read - a file from before there was a choice - twice. */
+/**
+ * How finely the canvas is drawn, as the file holds it: a choice saved is
+ * kept, whichever it is; none saved - a file from before there was a choice
+ * - or one that does not read, the default, as the screen shows things (the
+ * maintainer, 2026-10-21: the default changed, no one's saved choice).
+ */
 function acceptCanvas(raw: unknown): CanvasSettings {
   const r = (raw as { resolution?: unknown } | null)?.resolution;
-  return { resolution: r === 1 || r === "display" ? r : 2 };
+  return { resolution: r === 1 || r === 2 ? r : "display" };
 }
 
 /** How the pointer works, as the file holds it; what does not read, as it is by default. */

@@ -10,13 +10,14 @@ import { BALL_AND_STICK } from "../chem/style3d";
 import { STYLE_PRESETS } from "../chem/style";
 
 describe("how finely the canvas is drawn, as the settings file holds it", () => {
-  it("is twice, from a file from before there was a choice, or one that does not read", () => {
-    expect(acceptAppSettings({}).canvas).toEqual({ resolution: 2 });
-    expect(acceptAppSettings({ canvas: { resolution: 3 } }).canvas).toEqual({ resolution: 2 });
-    expect(acceptAppSettings({ canvas: "fine" }).canvas).toEqual({ resolution: 2 });
+  it("is as the screen shows things, by default: from a file from before there was a choice, or one that does not read", () => {
+    expect(acceptAppSettings({}).canvas).toEqual({ resolution: "display" });
+    expect(acceptAppSettings({ canvas: { resolution: 3 } }).canvas).toEqual({ resolution: "display" });
+    expect(acceptAppSettings({ canvas: "fine" }).canvas).toEqual({ resolution: "display" });
   });
 
-  it("is as the screen shows things, or once, where it says so", () => {
+  it("keeps a choice saved, whichever it is - twice, the default before, included", () => {
+    expect(acceptAppSettings({ canvas: { resolution: 2 } }).canvas).toEqual({ resolution: 2 });
     expect(acceptAppSettings({ canvas: { resolution: "display" } }).canvas).toEqual({ resolution: "display" });
     expect(acceptAppSettings({ canvas: { resolution: 1 } }).canvas).toEqual({ resolution: 1 });
   });

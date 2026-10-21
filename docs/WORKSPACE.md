@@ -1128,11 +1128,11 @@ size in structure files, the shown size in pictures, undo.
 How finely the canvas is drawn: Settings, General, *Drawing resolution*
 (the maintainer, 2026-10-17, from a comparison of the choices on 100 % and
 150 % screens).
-- **2×** (the default, as before there was a choice): twice as many pixels
-  each way as the canvas's size on the page, whatever the screen. The
-  sharpest; on a screen that shows things once (100 %) the graphics card
-  draws four times the screen's pixels.
-- **Matching the screen**: as finely as the screen itself shows things -
+- **2×**: twice as many pixels each way as the canvas's size on the page,
+  whatever the screen. The sharpest; on a screen that shows things once
+  (100 %) the graphics card draws four times the screen's pixels.
+- **Matching the screen** (the default since 2026-10-21, the maintainer; a
+  choice saved before is kept, whichever it is): as finely as the screen itself shows things -
   once at 100 %, 1.25 at 125 %, 1.5 at 150 %, twice on a Retina screen -
   never finer than twice. Nothing is scaled between the canvas and the
   screen, so thin lines do not shimmer as the view moves; followed as the
