@@ -26,9 +26,10 @@
  */
 import { ELEMENTS } from "../chem/elements";
 import { bondsByDistance } from "../../utils/structureParsers";
+import { BOHR_ANGSTROM } from "../units";
 
-/** One bohr, in ångströms (CODATA 2018). */
-export const BOHR = 0.529177210903;
+/** One bohr, in ångströms (Meno's units table, CODATA 2018). */
+export const BOHR = BOHR_ANGSTROM;
 
 export type CoordinateAtom = { el: string; x: number; y: number; z: number };
 
