@@ -239,6 +239,8 @@ export type SetEntry = {
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
   name?: string;
+  /** It is one of only a part of its compound's conformers that came from a search (`Molecule3D.partOf`): what a step makes of it is a part too. */
+  partOf?: true;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -280,6 +282,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(m.partOf ? { partOf: true as const } : {}),
         from: m.id,
         frame: f,
         last: f === n - 1,

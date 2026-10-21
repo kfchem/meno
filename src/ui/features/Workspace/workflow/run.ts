@@ -524,6 +524,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        ...(e.partOf ? { partOf: true as const } : {}),
         ...e.keep,
       };
     });
@@ -548,6 +549,8 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(degeneracies ? { degeneracies } : {}),
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
+      // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
+      ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
       ...(first as Worked).keep,
     };

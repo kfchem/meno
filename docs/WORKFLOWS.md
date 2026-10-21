@@ -534,15 +534,35 @@ set is (2026-10-21):
   and of its calculation only what is of that frame. A compound's
   conformers chosen stay one conformer set, so that the new set counts
   them as the step's did ("2 compounds · 5"). Where some of the
-  compound's conformers are left out, the set is marked a part of one
-  (`partOf`, decided 2026-10-21): its chip shows no shares, and the table
-  no energy above the compound's lowest, since shares worked out again
-  over a part are not the compound's populations and its lowest may not
-  be among them. A *Populations* step on them works shares out, and says
-  at what temperature and of what. All of a compound's conformers chosen
-  are the whole set, its shares with it.
+  compound's conformers are left out, the set is a part of a search
+  (below), and the table shows no energy above the compound's lowest,
+  which may not be among them. All of a compound's conformers chosen are
+  the whole set, its shares with it.
 - The tab closes as a text's does, and goes when its set is deleted. It
   is the view's, not saved with the workspace.
+
+**A part of a search** (decided 2026-10-21): a conformer set's chip shows
+each conformer's share of its compound - as a *Populations* step worked
+it out, or else by Boltzmann at room temperature over its frames. Over
+only some of a search's conformers, such shares would be worked out again
+over those alone, and are not the compound's populations. So a molecule
+that is only a part of a search's conformers, or one of them, is marked
+so (`partOf`), and its chip shows no shares:
+- those chosen from a set's table, some of a compound's left out;
+- what an *Energy window* splits from a compound, in either exit (a
+  compound all within it is whole);
+- what *Choose one* chooses from several conformers, and the rest;
+- the copies *Duplicates* takes out (*Alike*). What it keeps is the
+  compound as it came, its copies merged into those kept - whole, unless
+  what came in was a part;
+- whatever any step makes of a part: an optimisation of it, a step of
+  Meno's on it, *As conformers* grouping it with others.
+
+A conformer search run from one of them finds the compound's conformers
+anew, whole. Shares a *Populations* step worked out are always shown: it
+says at what temperature, and they are of what it was given. (Until
+2026-10-21 Meno showed shares worked out again over what these steps
+kept.)
 
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,

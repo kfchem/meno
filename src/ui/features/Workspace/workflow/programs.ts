@@ -260,7 +260,9 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
 /**
  * An entry's conformers, as a conformer search worked them out: each
  * geometry it gave a conformer of the entry's compound, numbered in order,
- * with its energy - what the calculation was kept with the first.
+ * with its energy - what the calculation was kept with the first. They
+ * are the compound's conformers as that search found them, whole, not a
+ * part of another's (`partOf`).
  */
 export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | string {
   const n = entry.atoms.length;
@@ -272,8 +274,10 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
   const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
   const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
   const calc = calcOf(out, readers, source);
+  // (a search of its own: all the conformers it found, whole - whatever the entry it began from was a part of)
+  const { partOf: _part, ...from } = entry;
   return frames.map((f, k) => ({
-    ...entry,
+    ...from,
     number: k + 1,
     xyz: [...f],
     ...(energies ? { energy: energies[k] } : {}),

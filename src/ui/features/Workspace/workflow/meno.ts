@@ -170,14 +170,24 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
 
 const NO_ENERGY: Outcome = { ok: false, said: "Not every entry has an energy" };
 
-/** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
+/** Entries as a part of their compound's conformers (`SetEntry.partOf`). */
+const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? e : { ...e, partOf: true as const }));
+
+/**
+ * Each compound's conformers within `kcal` of its lowest; the rest set
+ * aside. A compound split between the two, a part of it in each
+ * (`partOf`); one all within, whole as it came.
+ */
 function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
     const lowest = least(g.map((e) => e.energy!));
-    for (const e of g) ((e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9 ? kept : aside).push(e);
+    const within = g.filter((e) => (e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9);
+    const out = g.filter((e) => !within.includes(e));
+    kept.push(...(out.length ? asPart(within) : within));
+    aside.push(...asPart(out));
   }
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept` };
 }
@@ -190,6 +200,8 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
  * with those of the same atoms in the same order - a structure there
  * twice is the same structure, not two compounds. Never two of different
  * charge or spin: they are different species, however alike in shape.
+ * Those set aside are a part of their compound (`partOf`); those kept, the
+ * compound as it came, its copies merged.
  */
 function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, due: () => boolean): Generator<number, Outcome> {
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
@@ -209,9 +221,9 @@ function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number,
     }
     before += g.length;
   }
-  // (in the order they came)
+  // (in the order they came: those kept, the compound as it was, its copies merged into them; those alike, the copies taken out - a part of it)
   const kept = entries.filter((e) => keptSet.has(e));
-  const aside = entries.filter((e) => !keptSet.has(e));
+  const aside = asPart(entries.filter((e) => !keptSet.has(e)));
   return { ok: true, holds, kept, aside, said: `${kept.length} of ${entries.length} kept` };
 }
 
@@ -323,7 +335,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
 /**
  * One conformer of each compound, chosen on purpose (docs/WORKFLOWS.md,
  * *Kinds of step*): its lowest in energy - or, given `number`, the one of
- * that number - as a compound of its own; the rest set aside. What it says
+ * that number - as a compound of its own; the rest set aside, each a part
+ * of its compound's conformers where it had more than one. What it says
  * names the one chosen, of how many, and what the energies it was ranked
  * by are (`by`: the program and method that worked them out).
  */
@@ -335,8 +348,9 @@ function chooseOne(entries: readonly SetEntry[], number: number | null, by?: str
   for (const g of groups) {
     const chosen = number == null ? g.reduce((a, b) => (b.energy! < a.energy! ? b : a)) : g.find((e) => e.number === number);
     if (!chosen) return { ok: false, said: `${compoundLetter(g[0].compound)} has no conformer ${number}` };
-    kept.push({ ...chosen, compound: kept.length });
-    aside.push(...g.filter((e) => e !== chosen));
+    // (one of several, and the others: each a part of the compound's conformers)
+    kept.push({ ...chosen, compound: kept.length, ...(g.length > 1 ? { partOf: true as const } : {}) });
+    aside.push(...asPart(g.filter((e) => e !== chosen)));
   }
   const which = number == null ? "lowest" : "chosen";
   const said =
