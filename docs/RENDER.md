@@ -79,6 +79,28 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   (3.7.4). Atoms the look leaves out - hydrogens on carbon, where it hides
   them - are left out, and their bonds; a render does not carry the mark
   the canvas puts by such a molecule (the maintainer, 2026-10-10).
+  Where the look colours a bond by its atoms (`bondColouring: "byAtom"`),
+  each line is two sticks, its halves, each in its atom's colour, as the
+  canvas splits it at its middle.
+- **Its chains as ribbons**, where its look draws them so: one mesh, made
+  as the canvas makes it (`utils/ribbon.ts`), each point in the ribbon's
+  colour (`COLOR_0` over a white material, as an NCI surface's below) and
+  in the look's finish - clay and white one colour - and the chain atoms
+  the ribbon stands for left out, as the canvas leaves them. Its triangles
+  face as their normals do (anticlockwise seen from outside, 3.7.2.1): a
+  renderer that takes a face's front by its turn, as Cycles does, lights
+  it. A film that moves its atoms has the ribbon of each moment, shown
+  only then (a scale key of `STEP`, 3.11) - every so many moments where a
+  large protein's ribbons, all told, would weigh too much.
+- **Lines on its balls**, where its look draws them (`ballLines`): great
+  circles about the molecule's own axes - x and y, or all three - each a
+  thin ring (`lib/scene/shapes.ts` `unitRing`) lying on its ball, as wide
+  as the look has them in ångströms, in their colour.
+- **Its measurements**, as the canvas draws them: a distance's dashed
+  line, an angle's or a torsion's arc and faint fan, in the canvas's blue
+  and not lit (`KHR_materials_unlit`): marks, not things. None runs to an
+  atom the look leaves out. Their values are words, which the scene does
+  not carry yet (*Not yet*).
 - **Materials** in the metallic-roughness model (3.9.2), colours linear:
   the look's finish, or as asked - glossy, a clear coat
   (`KHR_materials_clearcoat`); metal; glass, clear and tinted through its
@@ -287,7 +309,11 @@ uv, no package), and the script Blender runs, `render.py`.
   material of Blender's own shader nodes, put on the molecules by their
   shapes' names (`ball #909090`, `stick #000000`: the element's colour is
   read from the name, so each element keeps its own, a shared material
-  being the one thing the colours must not come to), and brings **its own
+  being the one thing the colours must not come to). A ribbon, one mesh
+  whose points carry their colours, is first cut into a shape of each
+  colour it has (`ribbon #c84a5e`), so that the look colours its parts as
+  the canvas does; the lines on balls and a measurement's marks keep their
+  own. Each look brings **its own
   lighting world**, which the camera never sees. The metals and the bubble
   reflect, so they have a studio: a world that is dim above and a darker
   band below, and three soft rectangular light panels (one wide at the
@@ -410,8 +436,9 @@ By the maintainer, 2026-10-10 to 2026-10-12:
    own options, from Meno's defaults.
 
 ## Not yet
-- What the canvas draws besides molecules: measurements' lines, labels,
-  R and S, PDB ribbons (lane L5) - none is in the scene yet.
+- The words the canvas puts on molecules in 3D - atom numbers, R and S,
+  E and Z, a measurement's value - are not in the scene yet: they are
+  words, which glTF has no word for, so they would be written as shapes.
 - Films with a transparent background (a video kind that keeps it, which
   every system's web view plays, is wanted first).
 - A render is not picked up again as a workflow's job is: its workspace's

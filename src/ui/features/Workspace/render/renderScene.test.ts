@@ -4,7 +4,8 @@ import { parseXYZ } from "../../../../utils/structureParsers";
 import { WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD } from "../utils/vibration3d";
 import type { Carried3D } from "../store/types";
-import { renderScene, type RenderAsk } from "./renderScene";
+import * as THREE from "three";
+import { halvesOf, renderScene, type RenderAsk } from "./renderScene";
 
 type Json = Record<string, any>;
 
@@ -21,6 +22,23 @@ H 0.000 -0.923 -1.238
 `)[0];
   m.bonds = m.bonds.map((b) => (b.a1 < 2 && b.a2 < 2 ? { ...b, order: 2 } : b));
   return { ...m, name: "ethene", at: { x: 10, y: 20 }, ...over } as Carried3D;
+}
+
+/** Five residues of a chain, an alpha carbon each, 3.8 A apart: a helix, then a coil. */
+function chain(over: Partial<Carried3D> = {}): Carried3D {
+  return {
+    name: "chain",
+    atoms: [0, 1, 2, 3, 4].map((i) => ({ el: "C", x: 3.8 * i, y: 0, z: 0 })),
+    bonds: [],
+    at: { x: 0, y: 0 },
+    biopolymer: {
+      names: ["CA", "CA", "CA", "CA", "CA"],
+      residueOf: [0, 1, 2, 3, 4],
+      residues: [1, 2, 3, 4, 5].map((seq) => ({ name: "ALA", chain: "A", seq, iCode: "", standard: true })),
+      structure: ["helix", "helix", "helix", null, null],
+    },
+    ...over,
+  } as Carried3D;
 }
 
 const PICTURE: RenderAsk = { kind: "picture", width: 1000, shape: "fit" };
@@ -159,6 +177,113 @@ describe("molecules in 3D written as a scene to render", () => {
     expect(parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf).scenes[0].extras.meno.molecules).toBeUndefined();
     const turned = renderScene([{ m: ethene() }], STYLE_3D, { kind: "film", width: 640, shape: "16:9", motion: "turn", seconds: 1, fps: 10 });
     expect(parse(turned.gltf).scenes[0].extras.meno.molecules).toBeUndefined();
+  });
+
+  describe("what the canvas draws besides balls and sticks", () => {
+    const meshNamed = (g: Json, start: string) => g.meshes.filter((m: Json) => m.name.startsWith(start));
+
+    it("draws a chain as its ribbon - its atoms the ribbon stands for left out - each point in the ribbon's colour", () => {
+      const r = renderScene([{ m: chain() }], STYLE_3D, PICTURE);
+      const g = parse(r.gltf);
+      expect(meshNamed(g, "ball")).toHaveLength(0);
+      const ribbons = meshNamed(g, "ribbon");
+      expect(ribbons).toHaveLength(1);
+      const prim = ribbons[0].primitives[0];
+      expect(g.accessors[prim.attributes.POSITION].count).toBeGreaterThan(20);
+      expect(g.accessors[prim.attributes.COLOR_0]).toMatchObject({ type: "VEC4" });
+      // (white beneath its colours, in the look's finish)
+      expect(g.materials[prim.material].pbrMetallicRoughness.baseColorFactor).toEqual([1, 1, 1, 1]);
+      // (framed as far as the ribbon reaches: along the chain, 15.2 A and more)
+      expect((r.page.maxX - r.page.minX) / k).toBeGreaterThan(15.2);
+    });
+
+    it("makes a ribbon of clay one colour, and draws none where the look draws its chains as atoms", () => {
+      const clay = parse(renderScene([{ m: chain() }], STYLE_3D, { ...PICTURE, molecules: "clay" }).gltf);
+      expect(meshNamed(clay, "ribbon")[0].primitives[0].attributes.COLOR_0).toBeUndefined();
+      const atoms: Style3D = { ...STYLE_3D, primary: { ...STYLE_3D.primary, biopolymers: "atoms" } };
+      const g = parse(renderScene([{ m: chain() }], atoms, PICTURE).gltf);
+      expect(meshNamed(g, "ribbon")).toHaveLength(0);
+      expect(g.nodes[g.scenes[0].nodes[0]].children.length).toBe(5);
+    });
+
+    it("writes a moving chain's ribbon for each moment, each shown only then", () => {
+      const move = Array.from({ length: 15 }, (_, i) => (i % 3 === 2 ? 0.3 : 0));
+      const r = renderScene([{ m: chain(), move }], STYLE_3D, { kind: "film", width: 320, shape: "16:9", motion: "vibration", seconds: 1.2, fps: 10 });
+      const g = parse(r.gltf);
+      expect(meshNamed(g, "ribbon")).toHaveLength(r.frames);
+      const steps = g.animations[0].samplers.filter((x: Json) => x.interpolation === "STEP");
+      expect(steps).toHaveLength(r.frames);
+      // (at each moment, one ribbon of its own at full size, the others at none)
+      const scales = steps.map((x: Json) => g.accessors[x.output]);
+      expect(scales.every((a: Json) => a.count === r.frames)).toBe(true);
+    });
+
+    it("colours each half of a stick as its atom, where the look colours bonds by atom", () => {
+      const byAtom: Style3D = { ...STYLE_3D, primary: { ...STYLE_3D.primary, bondColouring: "byAtom" } };
+      const g = parse(renderScene([{ m: ethene() }], byAtom, PICTURE).gltf);
+      const root = g.nodes[g.scenes[0].nodes[0]];
+      const sticks = root.children.map((i: number) => g.nodes[i]).filter((n: Json) => g.meshes[n.mesh].name.startsWith("stick"));
+      // (six lines, two halves each, each half as long as the line's half)
+      expect(sticks).toHaveLength(12);
+      const colours = new Set(sticks.map((n: Json) => g.meshes[n.mesh].primitives[0].material));
+      expect(colours.size).toBe(2);
+      const ballColours = new Set(root.children.map((i: number) => g.nodes[i]).filter((n: Json) => g.meshes[n.mesh].name.startsWith("ball")).map((n: Json) => g.meshes[n.mesh].primitives[0].material));
+      expect(colours).toEqual(ballColours);
+      // (one colour for every stick where it does not)
+      const single = parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf);
+      expect(new Set(single.meshes.filter((m: Json) => m.name.startsWith("stick")).map((m: Json) => m.primitives[0].material)).size).toBe(1);
+    });
+
+    it("draws the lines on its balls as rings lying on them, about the molecule's axes, on the balls its look lines", () => {
+      const lined: Style3D = { ...STYLE_3D, primary: { ...STYLE_3D.primary, ballLines: "three", ballLinesOn: "carbon" } };
+      const g = parse(renderScene([{ m: ethene() }], lined, PICTURE).gltf);
+      const root = g.nodes[g.scenes[0].nodes[0]];
+      const rings = root.children.map((i: number) => g.nodes[i]).filter((n: Json) => g.meshes[n.mesh].name.startsWith("line"));
+      // (two carbons, three circles each, each as large as its ball)
+      expect(rings).toHaveLength(6);
+      const balls = root.children.map((i: number) => g.nodes[i]).filter((n: Json) => g.meshes[n.mesh].name.startsWith("ball"));
+      // (each on a carbon's ball, as large as it: ethene's carbons on its axis, x = y = 0)
+      for (const r of rings) {
+        const ball = balls.find((b: Json) => JSON.stringify(b.translation) === JSON.stringify(r.translation));
+        expect(ball.translation.slice(0, 2)).toEqual([0, 0]);
+        expect(r.scale[0]).toBe(ball.scale[0]);
+      }
+      expect(new Set(rings.map((r: Json) => JSON.stringify(r.rotation ?? [0, 0, 0, 1]))).size).toBe(3);
+      // (none where it draws none)
+      expect(meshNamed(parse(renderScene([{ m: ethene() }], STYLE_3D, PICTURE).gltf), "line")).toHaveLength(0);
+    });
+
+    it("draws its measurements - a distance's dashes, an angle's arc and fan - unlit, and none to an atom left out", () => {
+      const measures = [
+        { id: 1, atoms: [0, 1] },
+        { id: 2, atoms: [2, 0, 1] },
+      ];
+      const g = parse(renderScene([{ m: ethene({ measures }) }], STYLE_3D, PICTURE).gltf);
+      const lines = meshNamed(g, "measure line");
+      const fans = meshNamed(g, "measure fan");
+      expect(lines).toHaveLength(1);
+      expect(fans).toHaveLength(1);
+      expect(g.materials[lines[0].primitives[0].material].extensions).toEqual({ KHR_materials_unlit: {} });
+      expect(g.materials[fans[0].primitives[0].material]).toMatchObject({ alphaMode: "BLEND", doubleSided: true });
+      const hiding: Style3D = { ...STYLE_3D, primary: { ...STYLE_3D.primary, hydrogens: "carbonHidden" } };
+      const h = parse(renderScene([{ m: ethene({ measures }) }], hiding, PICTURE).gltf);
+      // (the angle runs to a hidden hydrogen: the distance alone, no fan)
+      expect(meshNamed(h, "measure line")).toHaveLength(1);
+      expect(meshNamed(h, "measure fan")).toHaveLength(0);
+    });
+
+    it("halves a line's pieces at the middle of their length", () => {
+      const v = (x: number) => new THREE.Vector3(x, 0, 0);
+      const [one, two] = halvesOf([
+        { a: v(0), b: v(1), r: 0.1 },
+        { a: v(1), b: v(4), r: 0.1 },
+      ]);
+      expect(one.map((p) => [p.a.x, p.b.x])).toEqual([
+        [0, 1],
+        [1, 2],
+      ]);
+      expect(two.map((p) => [p.a.x, p.b.x])).toEqual([[2, 4]]);
+    });
   });
 
   it("says there is nothing to render where nothing is drawn", () => {
