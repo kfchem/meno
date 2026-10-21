@@ -68,10 +68,11 @@ describe("what a set holds", () => {
     let file = addMolecule3d(emptyWorkspaceDocument(), bent({ x: 0, y: 0 }, 6));
     file = addSet(file, { x0: -2, y0: -2, x1: 2, y1: 2 });
     expect(countOf(file, file.sets![0])).toEqual({ holds: "molecules", entries: 6, compounds: 6 });
-    // (one conformer alone says nothing of a set)
+    // (one conformer found is a conformer set all the same: the maintainer, 2026-10-21)
     let one = addMolecule3d(emptyWorkspaceDocument(), { ...bent({ x: 0, y: 0 }, 1), conformerSet: true });
     one = addSet(one, { x0: -2, y0: -2, x1: 2, y1: 2 });
-    expect(holdsOf(one, one.sets![0])).toBe("molecules");
+    expect(holdsOf(one, one.sets![0])).toBe("conformers");
+    expect(countOf(one, one.sets![0])).toEqual({ holds: "conformers", entries: 1, compounds: 1 });
   });
 
   it("is a set of structures where any is drawn in it", () => {

@@ -159,10 +159,12 @@ export function lyingIn(page: Page, set: Frame): { structures: number[][]; molec
 /**
  * Whether a molecule's frames are one compound's conformers wherever it
  * is: those a conformer search made - Meno's own (*3D structures*), or a
- * workflow's - which say so (`conformerSet`), where it has more than one
- * (the maintainer, 2026-10-08). A file's many geometries are not.
+ * workflow's - which say so (`conformerSet`) (the maintainer, 2026-10-08):
+ * one conformer found included, a set in which one happened to be found,
+ * not another kind of thing (the maintainer, 2026-10-21). A file's many
+ * geometries are not.
  */
-export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) => m.conformerSet === true && framesOf(m) > 1;
+export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.conformerSet === true;
 
 /**
  * What a set holds: what made it says - a Render step's, pictures; made by
