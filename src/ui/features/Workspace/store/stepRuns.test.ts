@@ -672,7 +672,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps).toHaveLength(0);
   });
 
-  it("brings in what the jobs done gave where another went without finishing - that one said failed", async () => {
+  it("brings in what the jobs done gave where another went without finishing - that one out of its Failed exit, with why", async () => {
     const { st, step } = waters(3);
     const ran = st().runStep(step);
     await settle();
@@ -683,8 +683,13 @@ describe("a step that runs a plugin's program", () => {
     end(3);
     await st().lookAtJobs();
     await ran;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "1 of 3 failed \u00b7 It stopped without finishing" });
-    expect(st().molecules3d).toHaveLength(3 + 2);
+    // (done, on what was done - what follows runs on it - the one that failed counted by why)
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: stopped before it finished)" });
+    expect(st().molecules3d).toHaveLength(3 + 2 + 1);
+    // (it, as it came in, in the step's Failed exit's set, saying why)
+    const failedSet = resultOf(st(), step, "failed")!;
+    const failedOnes = setMembers(st(), failedSet).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "stopped", why: "It stopped without finishing" }]]);
   });
 
   it("counts a job that failed as each entry it was for - and says why in its runner's words, where the runner said", async () => {
@@ -698,8 +703,8 @@ describe("a step that runs a plugin's program", () => {
     end(2);
     await st().lookAtJobs();
     await ran;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 xtb could not be started" });
-    expect(st().molecules3d).toHaveLength(3 + 1);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: not started)" });
+    expect(st().molecules3d).toHaveLength(3 + 1 + 2);
     // (where it did not: the plugin's, for each entry of the job)
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1], ...two }, { entries: [2], ...two }] }) as never);
     const again = st().runStep(step);
@@ -709,7 +714,7 @@ describe("a step that runs a plugin's program", () => {
     end(4);
     await st().lookAtJobs();
     await again;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 Some atoms are very close" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
   });
 
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {

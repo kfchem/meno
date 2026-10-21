@@ -13,6 +13,7 @@ import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../..
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
 import type { Worked } from "./run";
+import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
 import type { StepKind } from "./kinds";
 
 /**
@@ -193,10 +194,14 @@ function surfacesOf(v: unknown): ToSurfaces | null {
  * Meno's own form - or, for each, an output for Meno's readers to read
  * (ORCA's, Gaussian's: a program installed separately), or surfaces in
  * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
+ * An output may be why that entry alone failed (`{why, kind}`: its kind
+ * one of core's, else `failed` - its words kept), the rest of the job's
+ * taken as they are.
  */
-export function readCollected(raw: unknown, count: number): ReaderOutput[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string } {
+export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind } {
   const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown } | null;
-  if (typeof r?.why === "string") return { why: r.why.trim().slice(0, 300) || "It did not say why" };
+  // (the job as a whole did not give what it was for: its program's words, as its plugin read them)
+  if (typeof r?.why === "string") return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error" };
   if (r?.surfaces !== undefined) {
     if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
     const surfaces = r.surfaces.map(surfacesOf);
@@ -222,12 +227,20 @@ export function readCollected(raw: unknown, count: number): ReaderOutput[] | { r
     return { read };
   }
   if (!Array.isArray(r?.outputs) || r.outputs.length !== count) return { why: "It read back nothing for it" };
-  const outs = r.outputs as ReaderOutput[];
-  for (const o of outs) {
-    if (o?.schema != null && o.schema !== OUTPUT_SCHEMA) return { why: "It read it back in a form this Meno does not read" };
-    if (!Array.isArray(o?.atoms) || !Array.isArray(o.frames) || !o.frames.some((f) => Array.isArray(f) && f.length === 3 * o.atoms.length)) return { why: "It read back no geometry" };
+  const outs: (ReaderOutput | Failure)[] = [];
+  for (const o of r.outputs as ReaderOutput[]) {
+    // (that entry alone failed, saying why)
+    const why = (o as { why?: unknown } | null)?.why;
+    if (typeof why === "string") {
+      outs.push({ kind: failureKindOf((o as { kind?: unknown }).kind), why: why.trim().slice(0, WORDS_MOST) || "It did not say why" });
+      continue;
+    }
+    // (an output Meno cannot take fails its entry alone)
+    if (o?.schema != null && o.schema !== OUTPUT_SCHEMA) outs.push({ kind: "failed", why: "It read it back in a form this Meno does not read" });
+    else if (!Array.isArray(o?.atoms) || !Array.isArray(o.frames) || !o.frames.some((f) => Array.isArray(f) && f.length === 3 * o.atoms.length)) outs.push({ kind: "no-geometry", why: "It read back no geometry" });
     // (every frame a list: one it could not read, given as null, is not taken)
-    if (!o.frames.every(Array.isArray)) return { why: "It read back a geometry Meno cannot read" };
+    else if (!o.frames.every(Array.isArray)) outs.push({ kind: "no-geometry", why: "It read back a geometry Meno cannot read" });
+    else outs.push(o);
   }
   return outs;
 }
@@ -245,13 +258,16 @@ const anew = ({ calc: _calc, keep: _keep, ...entry }: SetEntry): SetEntry => ent
  * energy - an optimisation's path before it, kept where the step is
  * *Optimise* - and what the calculation says of it, read by `readers` from
  * the output kept as `source`. Why not, where what came back is not the
- * molecule that went.
+ * molecule that went, or no geometry came back. An optimisation the output
+ * says did not converge (`optimised: false`) is not done: its last
+ * geometry, as far as it came, is the entry of the step's Failed exit -
+ * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | string {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | Failure {
   const n = entry.atoms.length;
-  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return "What came back is not the molecule that went";
+  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return "It read back no geometry";
+  if (!frames.length) return { kind: "no-geometry", why: "It read back no geometry" };
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
   const last = frames[frames.length - 1];
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
@@ -262,6 +278,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
+    ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
   };
 }
 
@@ -272,11 +289,11 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
  * found besides (its results) with the first alone: the conformers of one
  * compound are of one calculation (entries `unlikeMade`).
  */
-export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | string {
+export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | Failure {
   const n = entry.atoms.length;
-  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return "What came back is not the molecule that went";
+  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return "It found no conformer";
+  if (!frames.length) return { kind: "no-geometry", why: "It found no conformer" };
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
   // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
   const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
@@ -327,3 +344,7 @@ export function doneSaid(worked: readonly Worked[], total: number, took: number)
   if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · E ${hartrees(worked[0].energy)}`;
   return `${clock(took)} · ${worked.length} of ${total}`;
 }
+
+/** Whether what a job gave for an entry is why it failed, not what it made. */
+export const isFailure = (x: unknown): x is Failure =>
+  typeof (x as Failure)?.why === "string" && typeof (x as Failure)?.kind === "string" && !("xyz" in (x as object)) && !("atoms" in (x as object));

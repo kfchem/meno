@@ -6,6 +6,7 @@
  * one's energy, what the calculation was - and everything else as results,
  * in the one general form (results.ts).
  */
+import { warningsOf, type Warning } from "./warnings";
 import { readResults, type Result } from "./results";
 import { readerIdOfLine } from "./catalog";
 import type { StructureRead } from "../io/structures";
@@ -29,6 +30,8 @@ export type ReaderOutput = {
    * it does not say (docs/PLUGINS.md, *The contract*).
    */
   solvation?: string | null;
+  /** What it warns of, each with its kind (./warnings `WARNING_KINDS`; any other, `other`) and the program's own words. */
+  warnings?: { kind?: string; text: string }[];
   charge?: number | null;
   multiplicity?: number | null;
   /** Its atoms' elements, in the file's order. */
@@ -99,6 +102,8 @@ export type CalcInfo = {
   wavefunction?: CalcSource;
   /** The readers chosen to read it as well that could not, each by id, and why (lib/calc/read). */
   unread?: { from: string; why: string }[];
+  /** What the calculation warned of, each a kind core knows with the program's own words (./warnings): none moves its entry. */
+  warnings?: Warning[];
 };
 
 /**
@@ -151,6 +156,7 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
       ? { source: { name: source.name, sha256: source.sha256, ...(source.kind ? { kind: source.kind } : {}), ...(source.path ? { path: source.path } : {}) } }
       : {}),
     ...(unread?.length ? { unread: unread.map((u) => ({ from: u.from, why: u.why })) } : {}),
+    ...(warningsOf(out.warnings).length ? { warnings: warningsOf(out.warnings) } : {}),
   };
 }
 

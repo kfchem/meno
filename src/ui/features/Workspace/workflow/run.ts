@@ -507,6 +507,8 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        // (why a program step could not do it, where one could not: its Failed exit's)
+        ...(e.failed ? { failed: [e.failed] } : {}),
         ...e.keep,
       };
     });
@@ -536,6 +538,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
+      ...(g.some((e) => e.failed) ? { failed: g.map((e) => e.failed ?? null) } : {}),
       ...(alike ? keptAlike(g) : {}),
     };
   });

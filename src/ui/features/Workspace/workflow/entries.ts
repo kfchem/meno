@@ -5,6 +5,7 @@
  * set that is; and its entries, each a structure with what has been found of
  * it.
  */
+import type { Failure } from "./failures";
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
@@ -242,6 +243,8 @@ export type SetEntry = {
   degeneracy?: number;
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
+  /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
+  failed?: Failure;
   name?: string;
   /**
    * What the calculation it was read from says - the program, the method
@@ -379,6 +382,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         keep,
         from: m.id,
         frame: f,
@@ -427,7 +431,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     species: speciesOf(written, e),
     properties,
     ...(e.stereo ? { stereo: e.stereo } : {}),
-    status: "done",
+    status: e.failed ? { failed: e.failed.why } : "done",
   };
 }
 

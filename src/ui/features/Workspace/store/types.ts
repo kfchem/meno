@@ -1,3 +1,4 @@
+import type { Failure } from "../workflow/failures";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
@@ -409,6 +410,12 @@ export type Molecule3D = {
   at: { x: number; y: number; z?: number };
   /** The rest of a file's frames (a trajectory, conformers): x, y, z of every atom, frame by frame. */
   frames?: number[][];
+  /**
+   * Why a program step could not do it, frame by frame (null, a frame it
+   * did): what a step's Failed exit holds (workflow/failures) - kept with
+   * it, its chip saying it in plain words.
+   */
+  failed?: (Failure | null)[];
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
