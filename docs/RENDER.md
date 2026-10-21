@@ -91,7 +91,9 @@ down -Z (3.4). Built by `render/renderScene.ts`:
   renderer that takes a face's front by its turn, as Cycles does, lights
   it. A film that moves its atoms has the ribbon of each moment, shown
   only then (a scale key of `STEP`, 3.11) - every so many moments where a
-  large protein's ribbons, all told, would weigh too much.
+  large protein's ribbons, all told, would weigh too much (1.5 million
+  points), each held till the next; the render's frame on the page then
+  says so ("Ribbons move every 4th frame").
 - **Lines on its balls**, where its look draws them (`ballLines`): great
   circles about the molecule's own axes - x and y, or all three - each a
   thin ring (`lib/scene/shapes.ts` `unitRing`) lying on its ball, as wide

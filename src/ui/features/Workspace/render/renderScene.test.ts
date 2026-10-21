@@ -5,7 +5,7 @@ import { WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD } from "../utils/vibration3d";
 import type { Carried3D } from "../store/types";
 import * as THREE from "three";
-import { halvesOf, renderScene, type RenderAsk } from "./renderScene";
+import { halvesOf, ordinal, renderScene, RIBBON_FILM_MOST_POINTS, type RenderAsk } from "./renderScene";
 
 type Json = Record<string, any>;
 
@@ -216,6 +216,37 @@ describe("molecules in 3D written as a scene to render", () => {
       // (at each moment, one ribbon of its own at full size, the others at none)
       const scales = steps.map((x: Json) => g.accessors[x.output]);
       expect(scales.every((a: Json) => a.count === r.frames)).toBe(true);
+    });
+
+    it("writes a large moving ribbon every so many frames, each held till the next, and says so", () => {
+      // (240 residues along a line, swinging: their ribbons, every frame, would come to more than a film's ribbons may weigh)
+      const n = 240;
+      const big = chain({
+        atoms: Array.from({ length: n }, (_, i) => ({ el: "C", x: 3.8 * i, y: 0, z: 0 })),
+        biopolymer: {
+          names: Array<string>(n).fill("CA"),
+          residueOf: Array.from({ length: n }, (_, i) => i),
+          residues: Array.from({ length: n }, (_, i) => ({ name: "ALA", chain: "A", seq: i + 1, iCode: "", standard: true })),
+          structure: Array<null>(n).fill(null),
+        },
+      });
+      const move = Array.from({ length: 3 * n }, (_, i) => (i % 3 === 2 ? 0.2 : 0));
+      const ask: RenderAsk = { kind: "film", width: 320, shape: "16:9", motion: "vibration", seconds: 3.6, fps: 30 };
+      const r = renderScene([{ m: big, move }], STYLE_3D, ask);
+      const g = parse(r.gltf);
+      const ribbons = meshNamed(g, "ribbon");
+      const points = g.accessors[ribbons[0].primitives[0].attributes.POSITION].count;
+      const every = Math.ceil((points * r.frames) / RIBBON_FILM_MOST_POINTS);
+      expect(every).toBeGreaterThan(1);
+      expect(ribbons).toHaveLength(Math.ceil(r.frames / every));
+      expect(r.note).toBe(`Ribbons move every ${ordinal(every)} frame`);
+      // (a small one, every frame, and nothing said)
+      expect(renderScene([{ m: chain(), move: move.slice(0, 15) }], STYLE_3D, ask).note).toBeUndefined();
+      // (a large scene to write: given the time it takes)
+    }, 30_000);
+
+    it("writes a number as an ordinal", () => {
+      expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "101st", "111th"]);
     });
 
     it("colours each half of a stick as its atom, where the look colours bonds by atom", () => {

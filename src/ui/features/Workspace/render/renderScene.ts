@@ -80,6 +80,8 @@ export type Rendered = {
   frames: number;
   fps: number;
   page: { minX: number; maxX: number; minY: number; maxY: number };
+  /** What is worth saying of the film it makes, where anything is: its ribbons moving only every so many frames. */
+  note?: string;
 };
 
 /** A measurement's stick: thin, so coarser. */
@@ -93,7 +95,7 @@ const MARGIN = 0.06;
 const SURFACE_OPACITY = 0.6;
 const SURFACE_ROUGHNESS = 0.55;
 /** The most points a film's ribbons come to, all its moments told: past it, a moving ribbon is written every so many frames. */
-const RIBBON_FILM_MOST_POINTS = 1_500_000;
+export const RIBBON_FILM_MOST_POINTS = 1_500_000;
 /** The most frames a film may have: a minute at 60 a second. */
 export const FILM_MOST_FRAMES = 3600;
 
@@ -222,6 +224,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
 
   const made: { atoms: { el: string; p: Vec3 }[]; bonds: { a: number; b: number; order: number }[] }[] = [];
   const ownMotion = film && !!motion && !(MENO_MOTIONS as readonly string[]).includes(motion);
+  // (the fewest frames a moving ribbon is written at: every one, or every so many)
+  let ribbonEvery = 1;
   for (const { m, surfaces, move } of shown) {
     const molecule = { ...m, id: 0 } as Molecule3D;
     const solid = solidOf(molecule, style);
@@ -486,6 +490,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         // every so many moments, each held till the next)
         const first = ribbonOf(samples[0]);
         const every = Math.max(1, Math.ceil((first.points * count) / RIBBON_FILM_MOST_POINTS));
+        ribbonEvery = Math.max(ribbonEvery, every);
         const keys = Array.from({ length: Math.ceil(count / every) }, (_, j) => j * every);
         keys.forEach((s0, j) => {
           const mesh = j ? ribbonOf(samples[s0]).mesh : first.mesh;
@@ -619,6 +624,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     frames: count,
     fps,
     page: { minX: (cx - w / 2) * k, maxX: (cx + w / 2) * k, minY: (cy - h / 2) * k, maxY: (cy + h / 2) * k },
+    ...(ribbonEvery > 1 ? { note: `Ribbons move every ${ordinal(ribbonEvery)} frame` } : {}),
   };
 }
 
@@ -777,4 +783,11 @@ function fanOf(points: readonly THREE.Vector3[]): Solid {
     }
   }
   return { positions, normals, indices: Uint32Array.from({ length: points.length - (points.length % 3) }, (_, i) => i) };
+}
+
+/** 2nd, 3rd, 4th, 11th, 21st: a number as an ordinal. */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
 }
