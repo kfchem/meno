@@ -494,10 +494,22 @@ pub fn defaults_state() -> DefaultsState {
     DefaultsState { can: "none", own_page: false, formats: vec![] }
 }
 
+/// What `defaults_use` says where the app it is asked to make the default is no longer where
+/// it was - moved to the Trash since, say (lib/defaultApps `APP_GONE`).
+pub const APP_GONE: &str = "app-gone";
+
+/// Whether the app at `app` is gone from where it was; none asked for (Meno itself) is not.
+pub fn app_gone(app: Option<&str>) -> bool {
+    app.is_some_and(|p| !std::path::Path::new(p).exists())
+}
+
 /// macOS: makes Meno - or the app at `app`, the one it replaced - the default for `ext`.
 #[tauri::command]
 pub async fn defaults_use(ext: String, app: Option<String>) -> Result<(), String> {
     known(&ext)?;
+    if app_gone(app.as_deref()) {
+        return Err(APP_GONE.into());
+    }
     #[cfg(target_os = "macos")]
     {
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -560,6 +572,14 @@ mod tests {
         let mut e = registration(r"C:\Users\someone\AppData\Local\Meno\Meno.exe");
         e.extend(extensions().map(claim));
         e
+    }
+
+    #[test]
+    fn says_an_app_asked_for_is_gone_only_where_nothing_is_there_now() {
+        let here = std::env::temp_dir();
+        assert!(!app_gone(None));
+        assert!(!app_gone(here.to_str()));
+        assert!(app_gone(here.join("Meno test: no such app.app").to_str()));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { defaultsNote, defaultsState, offerMeno, openDefaultApps, rowFor, makeDefault, withdrawMeno, type DefaultsState, type FormatDefault } from "../../../lib/defaultApps";
+import { defaultsNote, defaultsState, offerMeno, openDefaultApps, rowFor, makeDefault, makeDefaultAgain, withdrawMeno, type DefaultsState, type FormatDefault } from "../../../lib/defaultApps";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 
 /**
@@ -13,6 +13,7 @@ export default function DefaultAppSettings() {
   const [state, setState] = useState<DefaultsState | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [said, setSaid] = useState<string | null>(null);
   const files = useAppSettings((s) => s.files);
   const setFiles = useAppSettings((s) => s.setFiles);
 
@@ -28,6 +29,7 @@ export default function DefaultAppSettings() {
   const act = async (f: FormatDefault, id: string) => {
     setBusy(f.ext);
     setError(null);
+    setSaid(null);
     try {
       if (id === "use") {
         // (the app it opened with before, kept to be offered back)
@@ -35,10 +37,9 @@ export default function DefaultAppSettings() {
         await makeDefault(f.ext);
         setFiles({ ...files, ...(before ? { before } : {}) });
       } else if (id === "back") {
-        const was = files.before?.[f.ext];
-        if (was) await makeDefault(f.ext, was.path);
-        const { [f.ext]: _gone, ...rest } = files.before ?? {};
-        setFiles({ ...files, before: rest });
+        const again = await makeDefaultAgain(f.ext, files.before);
+        setFiles({ ...files, before: again.before });
+        if (again.said) setSaid(again.said);
       } else if (id === "offer") await offerMeno(f.ext);
       else if (id === "settings") await openDefaultApps();
       else if (id === "withdraw") await withdrawMeno(f.ext);
@@ -51,12 +52,14 @@ export default function DefaultAppSettings() {
   };
 
   if (!state) return null;
+  // (Windows: whether a format is the last Meno is offered for - stopping then takes Meno out of Default apps)
+  const lastOffered = state.formats.filter((f) => f.offered).length === 1;
   return (
     <div>
       {state.formats.length > 0 && (
         <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line">
           {state.formats.map((f) => {
-            const row = rowFor(state.can, f, files.before?.[f.ext]);
+            const row = rowFor(state.can, f, files.before?.[f.ext], lastOffered);
             return (
               <div key={f.ext} className="px-4 py-2">
                 <div className="grid grid-cols-[5rem_minmax(8rem,1fr)_auto] gap-4 items-center">
@@ -83,6 +86,7 @@ export default function DefaultAppSettings() {
         </div>
       )}
       <p className="mt-2 text-xs text-gh-gray">{defaultsNote(state)}</p>
+      {said && <p className="mt-1 text-xs text-gh-gray">{said}</p>}
       {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
     </div>
   );

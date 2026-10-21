@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultsNote, rowFor, type FormatDefault } from "./defaultApps";
+import { APP_GONE, defaultsNote, makeDefaultAgain, rowFor, type FormatDefault } from "./defaultApps";
 import { acceptAppSettings } from "./settings/appSettings";
 
 const format = (f: Partial<FormatDefault>): FormatDefault => ({ ext: "sdf", app: null, path: null, meno: false, offered: false, ...f });
@@ -42,6 +42,41 @@ describe("a format's row on Windows, where Windows' Settings chooses", () => {
     expect(r.opens).toBe("Opens with Meno");
     expect(ids(r)).toEqual(["withdraw"]);
     expect(r.note).toBeUndefined();
+  });
+
+  it("says, of the last format Meno is offered for, that stopping takes Meno out and Windows asks next time", () => {
+    const last = rowFor("system", format({ app: "Meno", meno: true, offered: true }), undefined, true);
+    expect(ids(last)).toEqual(["withdraw"]);
+    expect(last.note).toBe("This is the last format Meno is offered for. Stopping takes Meno out of Windows' Default apps, so Windows asks which app to use the next time a .sdf file is opened.");
+  });
+});
+
+describe("the app a format opened with before, made the default again (macOS)", () => {
+  const before = { sdf: { name: "Some Viewer", path: "/Applications/Some Viewer.app" }, pdb: { name: "Other App", path: "/Applications/Other App.app" } };
+
+  it("is made the default by its path, and its record goes", async () => {
+    const asked: [string, string | undefined][] = [];
+    const got = await makeDefaultAgain("sdf", before, async (ext, app) => void asked.push([ext, app]));
+    expect(asked).toEqual([["sdf", "/Applications/Some Viewer.app"]]);
+    expect(got).toEqual({ before: { pdb: before.pdb } });
+  });
+
+  it("no longer there: its record goes all the same, and it is said - the button does not stay to fail again", async () => {
+    const got = await makeDefaultAgain("sdf", before, async () => {
+      throw APP_GONE;
+    });
+    expect(got.before).toEqual({ pdb: before.pdb });
+    expect(got.said).toBe("Some Viewer is no longer on this Mac, so .sdf still opens with Meno.");
+    // (its row then offers nothing back)
+    expect(rowFor("here", format({ app: "Meno", meno: true }), got.before.sdf).actions).toEqual([]);
+  });
+
+  it("refused for another reason, keeps its record, to be pressed again", async () => {
+    await expect(makeDefaultAgain("sdf", before, async () => Promise.reject(new Error("The system said no.")))).rejects.toThrow("The system said no.");
+    // (nothing recorded: nothing asked)
+    let called = false;
+    expect(await makeDefaultAgain("xyz", before, async () => void (called = true))).toEqual({ before });
+    expect(called).toBe(false);
   });
 });
 

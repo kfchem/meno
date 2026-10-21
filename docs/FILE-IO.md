@@ -791,7 +791,9 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     completionHandler:`, macOS 12; "If a change requires user consent, the
     system asks the user for consent", Apple's page for it). The app it
     replaced is kept by name and path (`files.before` in the settings), and
-    offered back: *Use Some Viewer again*. Before macOS 12 there is no such
+    offered back: *Use Some Viewer again*. Where that app is no longer
+    there (moved to the Trash since), its record goes and the page says so;
+    the format still opens with Meno. Before macOS 12 there is no such
     call, so the page says to choose in the Finder instead (Get Info, Open
     with, Change All); Meno's minimum stays 10.13. Only an installed Meno
     can be made the default, not one run from a build folder.
@@ -820,7 +822,11 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     the rest goes too: the ProgID, the Capabilities, the value in
     `RegisteredApplications` (never the key), and `Software\Meno` where
     nothing is left in it. The uninstaller does the same with whatever is
-    left (`--unregister-defaults`, `windows/hooks.nsh`).
+    left (`--unregister-defaults`, `windows/hooks.nsh`). On the last
+    format, where Meno is the default, the row says that stopping takes
+    Meno out of Default apps, so Windows asks which app to use the next
+    time such a file is opened: the choice it kept names the ProgID taken
+    out.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -
