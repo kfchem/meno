@@ -997,3 +997,70 @@ class HalideBridged(unittest.TestCase):
         for m, ring in ((0, (1, 2, 3)), (6, (7, 8, 9))):
             for c in ring:
                 self.assertAlmostEqual(float(np.linalg.norm(P[m] - P[c])), 2.1, delta=0.15)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class Configurations(unittest.TestCase):
+    """Which stereoisomer each molecule in 3D is, read from its own geometry - held on cases whose answers are
+    known, since RDKit marks FindPotentialStereo experimental: a change in a new RDKit is caught here, not
+    inherited (docs/PLUGINS.md, *Configurations*)."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles, seed=11):
+        """A MOL block of `smiles` in 3D, its configuration as the SMILES gives it."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        params = AllChem.ETKDGv3()
+        params.randomSeed = seed
+        self.assertEqual(AllChem.EmbedMolecule(mol, params), 0)
+        return Chem.MolToMolBlock(mol)
+
+    def configured(self, smiles):
+        return self.worker.op_configurations({"molblocks": [self.made(smiles)]})["molecules"][0]
+
+    def test_finds_the_elements_that_can_be_stereogenic_and_no_others(self):
+        # (each case's answer by hand: how many centres and double bonds could be stereogenic)
+        known = {
+            "C[C@H]1CC[C@@H](C)CC1": ("trans-1,4-dimethylcyclohexane: each ring carbon carries cis/trans", 2, 0),
+            "C[C@H]1CC[C@H](C)CC1": ("cis-1,4-dimethylcyclohexane", 2, 0),
+            "C[C@H]1CCC[C@@H](C)C1": ("cis-1,3-dimethylcyclohexane", 2, 0),
+            "CC1CCCCC1": ("methylcyclohexane: C1's two ring paths alike", 0, 0),
+            "CC1(C)CCCCC1": ("1,1-dimethylcyclohexane", 0, 0),
+            "CC=C": ("propene", 0, 0),
+            "Clc1ccc(Cl)cc1": ("1,4-dichlorobenzene", 0, 0),
+            "C[C@@H](O)[C@H](C)O": ("meso-2,3-butanediol: two centres, the molecule achiral", 2, 0),
+            "C/C=C/C": ("(E)-2-butene", 0, 1),
+        }
+        for smiles, (what, centres, doubles) in known.items():
+            got = self.configured(smiles)
+            kinds = [e["kind"] for e in got["elements"]]
+            self.assertEqual((kinds.count("centre"), kinds.count("double")), (centres, doubles), what)
+            # (from 3D, every element the geometry fixes is given)
+            self.assertTrue(all(e["specified"] for e in got["elements"]), what)
+
+    def test_keys_two_molecules_alike_exactly_when_they_are_one_stereoisomer(self):
+        def key(smiles, seed=11):
+            return self.worker.op_configurations({"molblocks": [self.made(smiles, seed)]})["molecules"][0]["key"]
+
+        # (one stereoisomer, two different geometries: one key)
+        self.assertEqual(key("C[C@H]1CC[C@@H](C)CC1", 11), key("C[C@H]1CC[C@@H](C)CC1", 23))
+        # (cis and trans; R and S; E and Z; meso and R,R: each pair two keys)
+        for a, b in [
+            ("C[C@H]1CC[C@H](C)CC1", "C[C@H]1CC[C@@H](C)CC1"),
+            ("C[C@@H](O)CC", "C[C@H](O)CC"),
+            ("C/C=C/C", "C/C=C\\C"),
+            ("C[C@@H](O)[C@H](C)O", "C[C@@H](O)[C@@H](C)O"),
+        ]:
+            self.assertNotEqual(key(a), key(b), (a, b))
+
+    def test_says_why_for_a_molecule_it_cannot_read_and_answers_the_rest(self):
+        good = self.made("CC(O)CC")
+        out = self.worker.op_configurations({"molblocks": ["not a MOL block", good]})["molecules"]
+        self.assertIn("error", out[0])
+        self.assertIn("key", out[1])

@@ -38,7 +38,8 @@ logging.disable(logging.CRITICAL)
 import cclib  # noqa: E402
 from cclib.parser.utils import PeriodicTable, convertor  # noqa: E402
 
-# calories per mole in a hartree, for an entropy
+# calories per mole in a hartree, for an entropy: the hartree (4.3597447222071e-18 J, CODATA 2018) times the
+# Avogadro constant (6.02214076e23 per mole, exact, SI 2019), over the thermochemical calorie (4.184 J, exact)
 CAL_PER_HARTREE = 627509.474
 # debye in an elementary charge times an angstrom, and the bohr in angstroms (CODATA 2018)
 DEBYE_PER_E_ANGSTROM = 4.803204712570263

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcLine, calcOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
+import { calcLine, calcOf, levelOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
 import { combine, whoReads, checked } from "./read";
 import { READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { kindById, registered } from "../io/kinds";
@@ -97,6 +97,18 @@ describe("what a reader hands back", () => {
     expect(calcLine(calcOf(water, ["cclib"]))).toBe("ORCA 6.0.1 · B3LYP/def2-SVP · charge 0, singlet");
     expect(calcLine({ readers: ["cclib"], program: "xTB", method: "GFN2-xTB", charge: -1, multiplicity: 2 })).toBe("xTB · GFN2-xTB · charge \u22121, doublet");
     expect(calcLine({ readers: ["cclib"], charge: 2 })).toBe("charge +2");
+  });
+
+  it("says the solvation the output says, after the method, and gas phase where it says none", () => {
+    const solvated = calcOf({ ...water, program: "xtb", version: "6.7.1", method: "GFN2-xTB", basis: null, solvation: "ALPB(water), reference state gsolv [1 M gas/solution]" }, ["xtb 0.1.0"]);
+    expect(solvated.solvation).toBe("ALPB(water), reference state gsolv [1 M gas/solution]");
+    expect(calcLine(solvated)).toBe("xtb 6.7.1 · GFN2-xTB · ALPB(water), reference state gsolv [1 M gas/solution] · charge 0, singlet");
+    expect(levelOf({ method: "GFN2-xTB", solvation: "none" })).toBe("GFN2-xTB · gas phase");
+    // (unsaid: nothing said of it)
+    expect(levelOf({ method: "B3LYP", basis: "def2-SVP" })).toBe("B3LYP/def2-SVP");
+    // (kept in the file, and read back)
+    expect(readCalc(JSON.parse(JSON.stringify(solvated)), 3, 2)?.solvation).toBe(solvated.solvation);
+    expect(calcOf({ ...water, solvation: "  " }, ["cclib"]).solvation).toBeUndefined();
     expect(multiplicityName(7)).toBe("multiplicity 7");
   });
 });

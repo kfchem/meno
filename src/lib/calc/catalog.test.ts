@@ -54,7 +54,7 @@ describe("the readers Meno knows of", () => {
     expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
-    expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "conformers", "drawing"]);
+    expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
     expect(READER_PLUGINS.map((p) => p.id)).toEqual(["cclib", "pyscf", "wfx"]);
     expect(pluginsFilling("smiles").map((p) => p.id)).toEqual(["rdkit"]);
     expect(pluginsFilling("conformers").map((p) => p.id)).toEqual(["rdkit"]);

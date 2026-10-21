@@ -11,6 +11,7 @@
     {"role": "smiles"},
     {"role": "checks"},
     {"role": "stereoisomers"},
+    {"role": "configurations"},
     {
       "role": "conformers",
       "options": [
