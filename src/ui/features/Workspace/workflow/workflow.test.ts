@@ -724,7 +724,7 @@ describe("Quick Add's calculations", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "choose"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "choose", "enumerate"]]]);
     // a compound set's wire: what takes it, then the conversion
     expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "as-conformers"]]]);
     // a conformer set's
@@ -734,7 +734,7 @@ describe("Quick Add's calculations", () => {
     expect(offered(doc)).toEqual([
       ["RDKit", ["conformers", "duplicates"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "choose"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "choose", "enumerate"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
       ["RDKit", ["conformers", "duplicates"]],
@@ -745,7 +745,10 @@ describe("Quick Add's calculations", () => {
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
     useReaders.setState({ state: { rdkit: "added", crest: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers"]]]);
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([
+      ["RDKit", ["conformers"]],
+      ["Meno", ["enumerate"]],
+    ]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies"]]);

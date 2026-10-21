@@ -8,6 +8,8 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, type DrawnEntry, type SetEntry } from "./entries";
+import { enumerated } from "./enumerate";
+import type { StyleChoice } from "../../../../lib/chem/style";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
@@ -49,14 +51,23 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
 }
 
 /**
- * A Meno step of `kind` on structures drawn, each as drawn: what it keeps,
- * and what it sets aside, as structures drawn. None of Meno's steps works
- * on structures drawn yet; *Enumerate* is the first (docs/WORKFLOWS-FOUNDATION.md,
- * *Enumerate*, P3).
+ * A Meno step of `kind` on structures drawn, each as drawn, with its
+ * options (over its kind's defaults) - laid out in the workspace's `style`
+ * where it draws anything: what it keeps, and what it sets aside, as
+ * structures drawn, each with what the step says of it. *Enumerate*
+ * (workflow/enumerate) is the one that does.
  */
-export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[]): DrawnOutcome {
+export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own?: OptionValues, style?: StyleChoice, said: readonly string[] = []): DrawnOutcome {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   switch (kind) {
+    case "enumerate": {
+      if (entries.length > 1) return { ok: false, said: `Enumerate takes one structure drawn, its template: ${entries.length} came in` };
+      const options = optionsOf(kindInfo(kind).options ?? [], own);
+      const r = enumerated(entries[0].drawn, String(options.lists ?? ""), style);
+      if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
+      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, entry: { number: m.number, how: m.how, ...(why ? { why } : {}) } });
+      return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...said].join(" \u00b7 ") };
+    }
     default:
       return { ok: false, said: "Meno does not do this itself on structures drawn" };
   }

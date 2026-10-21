@@ -630,8 +630,17 @@ export type WorkflowSet = {
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
   notKept?: { count: number; hash: string };
 };
-/** One of a set's members: a structure drawn, by its atoms' ids; a molecule in 3D, or a picture, by id. */
-export type Member = { structure: number[] } | { molecule: number } | { picture: number };
+/** One of a set's members: a structure drawn, by its atoms' ids - with what its step says of it, where one made it; a molecule in 3D, or a picture, by id. */
+export type Member = { structure: number[]; entry?: EntryNote } | { molecule: number } | { picture: number };
+/**
+ * What a step says of a structure drawn it made (Enumerate's, docs/WORKFLOWS-FOUNDATION.md,
+ * *R groups*): its number - its combination's place in the step's order, from 1,
+ * kept whether it was made or set aside - how it was made, in words ("R1 = Me,
+ * R2 = OMe"), and, where it was set aside, why ("Same as 2").
+ */
+export type EntryNote = { number: number; how: string; why?: string };
+/** A structure drawn a run gave, as a run kept keeps it: as drawn, with what its step said of it. */
+export type DrawnKept = Model & { entry?: EntryNote };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -660,7 +669,7 @@ export type RunKeptResults = {
   holds: SetKind;
   unread?: number;
   restUnread?: number;
-  drawn?: { made: Model[]; rest: Model[] };
+  drawn?: { made: DrawnKept[]; rest: DrawnKept[] };
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by

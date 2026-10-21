@@ -261,11 +261,14 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     const held = setMembers(doc, set);
     type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean };
     const nowAt = new Map(now.structures.map((s) => [s.ids[0], s]));
+    // (what a step said of a structure it made - its number, how it was made - kept with it, by any of its atoms, however it is edited)
+    const said = new Map(set.members.flatMap((m) => ("structure" in m && m.entry ? m.structure.map((id) => [id, m.entry!] as const) : [])));
     const list: Placed[] = [
       ...held.structures.map((ids) => {
         const at = nowAt.get(ids[0])!.at;
         const w = wasMiddle(ids);
-        return { member: { structure: ids } as Member, at, wasIn: !!(prior && w && inside(prior, w)) };
+        const entry = said.size ? ids.map((id) => said.get(id)).find((e) => e) : undefined;
+        return { member: (entry ? { structure: ids, entry } : { structure: ids }) as Member, at, wasIn: !!(prior && w && inside(prior, w)) };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);

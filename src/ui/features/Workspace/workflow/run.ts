@@ -6,7 +6,7 @@
  * takes the run's results away.
  */
 import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
-import type { Member, Model, Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnKept, Member, Model, Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
 import { partOf } from "../chem/cleanUp";
 import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
@@ -59,7 +59,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (!input) return fail("Nothing comes into it");
   const outcome =
     input.holds === "structures"
-      ? runMenoDrawn(step.kind, drawnEntries(doc.model, input.structures))
+      ? runMenoDrawn(step.kind, drawnEntries(doc.model, input.structures), step.options, doc.style)
       : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
@@ -121,7 +121,15 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
   const second = exitsOf(step.kind)[1];
   if (set.made.holds === "structures") {
     // (each structure as it is drawn now: moved, or an atom changed by hand since, as it is)
-    const drawn = (b: WorkflowSet | undefined) => (b ? drawnEntries(doc.model, setMembers(doc, b).structures).map((e) => e.drawn) : []);
+    const drawn = (b: WorkflowSet | undefined): DrawnKept[] => {
+      if (!b) return [];
+      // (with what its step said of each, by any of its atoms: a member joined to the chemist's still says it)
+      const said = new Map((b.members ?? []).flatMap((m) => ("structure" in m && m.entry ? m.structure.map((id) => [id, m.entry!] as const) : [])));
+      return drawnEntries(doc.model, setMembers(doc, b).structures).map((e) => {
+        const entry = e.drawn.atoms.map((a) => said.get(a.id)).find((x) => x);
+        return entry ? { ...e.drawn, entry } : e.drawn;
+      });
+    };
     return { molecules: [], rest: [], holds: "structures", drawn: { made: drawn(set), rest: second ? drawn(resultOf(doc, step.id, second.id)) : [] } };
   }
   // (each exit's set: its collection, where it holds one, else its molecules on the page)
@@ -227,7 +235,10 @@ export function keptOf(m: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | 
  */
 export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKind): RunResults {
   // (structures drawn, each as the step gave it: what it set aside too, in its second exit's set)
-  if (outcome.holds === "structures") return { molecules: [], rest: [], holds: "structures", drawn: { made: outcome.kept.map((e) => e.drawn), rest: outcome.aside.map((e) => e.drawn) } };
+  if (outcome.holds === "structures") {
+    const kept = (e: DrawnEntry): DrawnKept => (e.entry ? { ...e.drawn, entry: e.entry } : e.drawn);
+    return { molecules: [], rest: [], holds: "structures", drawn: { made: outcome.kept.map(kept), rest: outcome.aside.map(kept) } };
+  }
   // (what it set aside is molecules as what it kept is: its second exit's set holds them, in plain view)
   // (of molecules in 3D, molecules in 3D: no kind's second exit gives structures drawn of them)
   const asideHolds = (restHolds(kind, outcome.holds) ?? outcome.holds) as Holds3D;
@@ -345,7 +356,7 @@ function fillExit(
  * numbered afresh, as a paste is; and the set keeps which atoms they are
  * (`WorkflowSet.put`), for the next run to take away those alone.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly Model[]): WorkspaceDocument {
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnKept[]): WorkspaceDocument {
   // (each about the middle of its box)
   const boxes = made.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
@@ -358,7 +369,8 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
     // (each structure's atoms, as many as it brought)
     const added = d.model.atoms.filter((a) => !there.has(a.id)).map((a) => a.id);
     let from = 0;
-    return { doc: d, members: made.map((m) => ({ structure: added.slice(from, (from += m.atoms.length)) })), put: added };
+    // (and what its step said of each - its number, how it was made - with it)
+    return { doc: d, members: made.map((m) => ({ structure: added.slice(from, (from += m.atoms.length)), ...(m.entry ? { entry: m.entry } : {}) })), put: added };
   });
 }
 

@@ -21,6 +21,7 @@ import { readSmiles } from "../../../../lib/chem/smiles";
 import { keptLabel } from "../../../../lib/chem/smartLabel";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
+import type { LineRead } from "../../../../lib/options";
 import { emptyWorkspaceDocument, expandAbbreviation, setAtomChemistry } from "../document";
 import { identityInputOf } from "../chem/identityOf";
 import { degrees, narrowEnd } from "../chem/drawing";
@@ -82,6 +83,28 @@ export function readOption(typed: string): OptionRead | OptionProblem {
   if (group.lends?.[0]) return { typed, problem: `${label} is a ligand, bound by a pair it lends: an R group is bonded by one single bond` };
   if (group.haptic?.length) return { typed, problem: `${label} is bound through a pi system: an R group is bonded by one single bond` };
   return { typed, as: "label", label, group, formula: groupFormula(group) };
+}
+
+/**
+ * What each line of the step's text was read as, line for line, as the
+ * step shows it beside the lines (`LinesOption.readAs`): an R number's
+ * start, an option's reading and formula ("OTBS · C6H15OSi"), or why it
+ * cannot be read - blank for a blank line.
+ */
+export function listsReadAs(text: string): LineRead[] {
+  let started = false;
+  return text.split(/\r?\n/).map((raw): LineRead => {
+    const line = raw.normalize("NFKC").trim();
+    if (!line) return { said: "" };
+    const head = /^R(\d+)\s*:\s*(.*)$/.exec(line);
+    const option = head ? head[2].trim() : line;
+    if (head) started = true;
+    else if (!started) return { said: "Start with an R number, as R1:", problem: true };
+    if (!option) return { said: `R${head![1]}` };
+    const read = readOption(option);
+    if ("problem" in read) return { said: read.problem, problem: true };
+    return { said: read.as === "element" ? read.formula : `${read.label} \u00b7 ${read.formula}` };
+  });
 }
 
 /** The lists typed on the step, by R number, each line read - and what could not be, by its R number and line. */

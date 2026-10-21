@@ -5,6 +5,12 @@ import { identityOfDrawn } from "../chem/identityOf";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { enumerated, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
 import { measured } from "../../../../testing/timeouts";
+import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
+import { countOf } from "./entries";
+import { canWire, resultOf } from "./flow";
+import { addSet, addStep, connect } from "./model";
+import { runStep, showRun, type RunWith } from "./run";
+import { readWorkflow } from "./saved";
 
 /** A template drawn by Meno's engine from a SMILES, each "*" an R atom, numbered in order - or as `numbers` gives them. */
 function template(smiles: string, numbers?: number[][]): Model {
@@ -174,3 +180,64 @@ describe("what stops Enumerate before it runs, each said", () => {
     expect([...templateRs(t).rs.keys()]).toEqual([2, 1]);
   });
 });
+
+describe("Enumerate as a step", () => {
+  const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
+  /** A para-disubstituted benzene drawn, R1 and R2, in a set; an Enumerate step wired from it, its lists `lists`. */
+  function page(lists: string): { doc: WorkspaceDocument; step: number } {
+    const t = template("*c1ccc(*)cc1");
+    let doc: WorkspaceDocument = { ...emptyWorkspaceDocument(), model: t, nextId: 5000 };
+    doc = addSet(doc, { x0: -10, y0: -10, x1: 10, y1: 10 });
+    doc = addStep(doc, "enumerate", 20, 0, { lists });
+    const step = doc.steps![0].id;
+    return { doc: connect(doc, { set: 1 }, step), step };
+  }
+  const entries = (doc: WorkspaceDocument, step: number, exit: string) => (resultOf(doc, step, exit)!.members ?? []).map((m) => ("structure" in m ? m.entry : undefined));
+
+  it("is wired from a set of structures drawn, and makes its products into its sets - each with its number and how it was made, those aside with why", () => {
+    const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
+    expect(canWire(doc, { set: 1 }, step)).toBe(true);
+    const ran = runStep(doc, step, W);
+    expect(ran.steps![0].ran).toMatchObject({ ok: true, said: expect.stringMatching(/^3 made · 1 aside · Duplicates judged by Meno's identity/) });
+    expect(entries(ran, step, "out")).toEqual([
+      { number: 1, how: "R1 = Me, R2 = Me" },
+      { number: 2, how: "R1 = Me, R2 = Cl" },
+      { number: 4, how: "R1 = Cl, R2 = Cl" },
+    ]);
+    expect(entries(ran, step, "rest")).toEqual([{ number: 3, how: "R1 = Cl, R2 = Me", why: "Same as 2" }]);
+    expect(countOf(ran, resultOf(ran, step, "out")!)).toMatchObject({ holds: "structures", entries: 3 });
+    // (the template untouched, where it was)
+    expect(ran.model.atoms.filter((a) => t0(doc).has(a.id)).map((a) => [a.id, a.el, a.x, a.y])).toEqual(doc.model.atoms.map((a) => [a.id, a.el, a.x, a.y]));
+  });
+
+  it("says why it cannot run, before anything is made, on the card", () => {
+    const { doc, step } = page("R1: Me");
+    const ran = runStep(doc, step, W);
+    expect(ran.steps![0].ran).toMatchObject({ ok: false, said: "R2 is in the drawing but has no list" });
+    expect(ran.model.atoms).toHaveLength(doc.model.atoms.length);
+  });
+
+  it("run again, its products replaced; kept with the run that made them, and shown again with their numbers", () => {
+    const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
+    const first = runStep(doc, step, W);
+    const changed = { ...first, steps: first.steps!.map((s) => ({ ...s, options: { lists: "R1: F\nR2: F" } })) };
+    const second = runStep(changed, step, W);
+    expect(entries(second, step, "out")).toEqual([{ number: 1, how: "R1 = F, R2 = F" }]);
+    expect(entries(second, step, "rest")).toEqual([]);
+    expect(second.steps![0].runs![0].results!.drawn!.made.map((m) => m.entry?.number)).toEqual([1, 2, 4]);
+    const shown = showRun(second, step, 0, W);
+    expect(entries(shown, step, "out").map((e) => e?.number)).toEqual([1, 2, 4]);
+    expect(entries(shown, step, "rest")).toEqual([{ number: 3, how: "R1 = Cl, R2 = Me", why: "Same as 2" }]);
+  });
+
+  it("keeps each product's number in the file, with the set's members", () => {
+    const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
+    const ran = runStep(doc, step, W);
+    const read = readWorkflow(JSON.parse(JSON.stringify({ sets: ran.sets, steps: ran.steps, wires: ran.wires })))!;
+    const out = read.sets.find((b) => b.id === resultOf(ran, step, "out")!.id)!;
+    expect(out.members!.map((m) => ("structure" in m ? m.entry?.number : null))).toEqual([1, 2, 4]);
+  });
+});
+
+/** The template's atoms, by id. */
+const t0 = (doc: WorkspaceDocument) => new Set(doc.model.atoms.map((a) => a.id));

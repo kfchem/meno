@@ -28,7 +28,7 @@
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, SET_KINDS, type SetKind, type StepKind } from "./steps";
+import { isStepKind, MENO_ONLY, SET_KINDS, type SetKind, type StepKind } from "./steps";
 import { GUIDE_EVENTS, GUIDE_PLACES, type GuideStep, type Suggestion } from "./guide";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
@@ -452,7 +452,7 @@ const PROGRAM = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$/;
 /** The kinds of step a manifest's step says - each one Meno defines - with what they share. */
 function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const s = v as Record<string, unknown> | null;
-  const kinds = list(s?.kinds).filter((k): k is StepKind => typeof k === "string" && isStepKind(k));
+  const kinds = list(s?.kinds).filter((k): k is StepKind => typeof k === "string" && isStepKind(k) && !MENO_ONLY.includes(k));
   const programs = [...new Set(list(s?.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
   const takes = Array.isArray(s?.takes) ? SET_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];

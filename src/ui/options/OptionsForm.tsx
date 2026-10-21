@@ -1,9 +1,39 @@
-import { MANY_CHOICES, shownOptions, type Option, type OptionValues } from "../../lib/options";
+import { MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+
+/** Lines of text, each with what it was read as beside it, on the same line (`LinesOption.readAs`). */
+function LinesField({ option, value, onChange }: { option: LinesOption; value: string; onChange: (v: string) => void }) {
+  const read = option.readAs?.(value) ?? [];
+  const rows = Math.max(option.rows ?? 4, value.split(/\r?\n/).length);
+  return (
+    <label className="block">
+      <span className="block text-xs text-gh-gray mb-1">{option.label}</span>
+      <span className="flex gap-2">
+        <textarea
+          value={value}
+          rows={rows}
+          spellCheck={false}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-40 shrink-0 resize-none rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
+        />
+        {read.length > 0 && (
+          <span aria-label="Read as" className="min-w-0 flex-1 py-1 text-xs leading-5">
+            {read.map((r, k) => (
+              <span key={k} className={`block truncate ${r.problem ? "text-red-700" : "text-gh-gray"}`} title={r.said}>
+                {r.said || "\u00a0"}
+              </span>
+            ))}
+          </span>
+        )}
+      </span>
+    </label>
+  );
+}
 
 /**
  * A role's options, drawn from their general form (lib/options): a choice
  * as its choices, each to pick - or, of many, a list to pick from; a number
- * with its unit; a text; a switch.
+ * with its unit; a text; a switch; lines of text, each with what it was
+ * read as beside it, where the kind says.
  * Whoever fills the role declares them - Meno, or a plugin - and this draws
  * any of them alike.
  */
@@ -57,6 +87,8 @@ export default function OptionsForm({
                 ))}
               </div>
             </fieldset>
+          ) : o.type === "lines" ? (
+            <LinesField option={o} value={String(values[o.id] ?? "")} onChange={(v) => set(o.id, v)} />
           ) : o.type === "switch" ? (
             <label className="flex items-center gap-2 text-sm text-gh-black">
               <input type="checkbox" checked={values[o.id] === true} onChange={(e) => set(o.id, e.target.checked)} />

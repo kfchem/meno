@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnKept, EntryNote, Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -26,10 +26,20 @@ const isName = (v: unknown): v is string => typeof v === "string" && /^[a-z][a-z
  * puts them back as the ids they are given when it opens). What does not
  * read is left out.
  */
+/** What a step said of a structure it made, as a file keeps it: its number, how it was made and, where set aside, why. None where it does not read. */
+function entryIn(v: unknown): EntryNote | undefined {
+  const e = v as { number?: unknown; how?: unknown; why?: unknown } | null;
+  if (!e || !Number.isInteger(e.number) || (e.number as number) < 1 || typeof e.how !== "string") return undefined;
+  return { number: e.number as number, how: e.how, ...(typeof e.why === "string" && e.why ? { why: e.why } : {}) };
+}
+
 function membersIn(v: unknown): Member[] | undefined {
   if (!Array.isArray(v)) return undefined;
   return v.flatMap((m: { structure?: unknown; molecule?: unknown; picture?: unknown }): Member[] => {
-    if (Array.isArray(m?.structure) && m.structure.length && m.structure.every((id) => isId(id))) return [{ structure: m.structure as number[] }];
+    if (Array.isArray(m?.structure) && m.structure.length && m.structure.every((id) => isId(id))) {
+      const entry = entryIn((m as { entry?: unknown }).entry);
+      return [{ structure: m.structure as number[], ...(entry ? { entry } : {}) }];
+    }
     if (Number.isInteger(m?.molecule) && (m.molecule as number) >= 0) return [{ molecule: m.molecule as number }];
     if (Number.isInteger(m?.picture) && (m.picture as number) >= 0) return [{ picture: m.picture as number }];
     return [];
@@ -133,9 +143,10 @@ function readKept(v: unknown): StepRunKept | null {
     // (each structure read as the page's drawing is - those that do not read counted, as molecules are)
     const drawn = (list: unknown, was: unknown) => {
       const given: unknown[] = Array.isArray(list) ? list : [];
-      const models = given.flatMap((m): Model[] => {
+      const models = given.flatMap((m): DrawnKept[] => {
         const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
-        return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds }] : [];
+        const entry = entryIn((m as { entry?: unknown } | null)?.entry);
+        return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds, ...(entry ? { entry } : {}) }] : [];
       });
       return { models, unread: given.length - models.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
     };

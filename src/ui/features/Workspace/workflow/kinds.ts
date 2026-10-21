@@ -8,6 +8,7 @@ import { numberText } from "../../../../lib/calc/results";
 import type { Option } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
+import { listsReadAs, readLists } from "./enumerate";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind };
@@ -135,6 +136,33 @@ export const KINDS: readonly KindInfo[] = [
       { id: "number", label: "Its number", type: "number", default: 1, min: 1, step: 1 },
     ],
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
+  },
+  // (structures made from one drawing by rule, its R groups each given a list - Meno's own: docs/WORKFLOWS-FOUNDATION.md, *Enumerate*)
+  {
+    kind: "enumerate",
+    name: "Enumerate",
+    icon: "grouped",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "entries",
+    made: "Made",
+    inputs: [{ id: ONE_INPUT, name: "Template", takes: ["structures"] }],
+    second: { id: "rest", name: "Aside", gives: "same", of: "rest" },
+    options: [
+      {
+        id: "lists",
+        label: "R groups, one to a line",
+        type: "lines",
+        default: "R1:\n",
+        rows: 6,
+        // (read as the step runs them, beside each line - asked when shown: the reader is the canvas's)
+        readAs: (text) => listsReadAs(text),
+      },
+    ],
+    how: (v) => {
+      const { lists } = readLists(String(v.lists ?? ""));
+      return lists.size ? [...lists].map(([n, o]) => `R${n} \u00b7 ${o.length}`).join(", ") : "No lists yet";
+    },
   },
 ];
 

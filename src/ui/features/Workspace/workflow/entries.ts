@@ -9,7 +9,7 @@ import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
-import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import type { EntryNote, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
 type Pt = { x: number; y: number };
@@ -227,7 +227,7 @@ export function setMolecules(page: Page, set: Frame & Pick<WorkflowSet, "members
  * where they lie on the page, its wedges, labels and all - in 2D. Never
  * made 3D here: a step after it does that, as everywhere else.
  */
-export type DrawnEntry = { place: number; drawn: Model };
+export type DrawnEntry = { place: number; drawn: Model; entry?: EntryNote };
 
 /** One entry of a set of molecules in 3D, as a step takes it: its compound by its place among the set's, its number among that compound's conformers, its atoms and bonds, its geometry, its energy. */
 export type SetEntry = {
