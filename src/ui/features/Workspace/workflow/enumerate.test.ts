@@ -6,7 +6,7 @@ import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { enumerated, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
 import { measured } from "../../../../testing/timeouts";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
-import { countOf } from "./entries";
+import { countOf, numberedOn } from "./entries";
 import { canWire, resultOf } from "./flow";
 import { addSet, addStep, connect } from "./model";
 import { runStep, showRun, type RunWith } from "./run";
@@ -208,6 +208,15 @@ describe("Enumerate as a step", () => {
     expect(countOf(ran, resultOf(ran, step, "out")!)).toMatchObject({ holds: "structures", entries: 3 });
     // (the template untouched, where it was)
     expect(ran.model.atoms.filter((a) => t0(doc).has(a.id)).map((a) => [a.id, a.el, a.x, a.y])).toEqual(doc.model.atoms.map((a) => [a.id, a.el, a.x, a.y]));
+  });
+
+  it("shows each product's number under it, each where its structure lies in its set", () => {
+    const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
+    const ran = runStep(doc, step, W);
+    const shown = numberedOn(ran, ran.sets!);
+    expect(shown.map((n) => n.entry.number)).toEqual([1, 2, 4, 3]);
+    const out = resultOf(ran, step, "out")!;
+    for (const n of shown.slice(0, 3)) expect(n.x > out.x0 && n.x < out.x1 && n.y > out.y0 && n.y < out.y1).toBe(true);
   });
 
   it("says why it cannot run, before anything is made, on the card", () => {

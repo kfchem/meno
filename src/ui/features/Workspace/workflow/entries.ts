@@ -123,6 +123,25 @@ export function setMembers(page: Page, set: Frame & { members?: readonly Member[
   return out;
 }
 
+/**
+ * Where each structure a step numbered lies on the page, with what the step
+ * said of it (Enumerate's: `EntryNote`): the middle of its atoms across, and
+ * its lowest atom - where its number is shown under it - for each structure
+ * member of the page's sets that has one.
+ */
+export function numberedOn(page: Page, sets: readonly WorkflowSet[]): { key: string; x: number; y: number; entry: EntryNote }[] {
+  const at = new Map(page.model.atoms.map((a) => [a.id, a]));
+  return sets.flatMap((set) =>
+    (set.members ?? []).flatMap((m) => {
+      if (!("structure" in m) || !m.entry) return [];
+      const atoms = m.structure.flatMap((id) => (at.has(id) ? [at.get(id)!] : []));
+      if (!atoms.length) return [];
+      const xs = atoms.map((a) => a.x);
+      return [{ key: `${set.id}:${m.structure[0]}`, x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...atoms.map((a) => a.y)), entry: m.entry }];
+    }),
+  );
+}
+
 /** What `setMembers` found, as members: in its order, structures first, then molecules, then pictures. */
 export function membersOf(found: { structures: readonly (readonly number[])[]; molecules: readonly number[]; pictures: readonly number[] }): Member[] {
   return [...found.structures.map((ids) => ({ structure: [...ids] })), ...found.molecules.map((molecule) => ({ molecule })), ...found.pictures.map((picture) => ({ picture }))];
