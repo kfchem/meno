@@ -22,12 +22,12 @@ import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
 import { canWire, givesOf, stateOf } from "../workflow/flow";
-import { howOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
+import { howOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PX, shuttingCard } from "../workflow/look";
-import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
+import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -589,7 +589,6 @@ export default function Workflow2D() {
       new Map(
         sets.map((b) => {
           const count = countOf(flow, b);
-          const made = b.made ? steps.find((s) => s.id === b.made!.step) : undefined;
           const aside = b.aside?.length ?? 0;
           // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so)
           const counted = b.notKept && !count.entries
@@ -610,7 +609,7 @@ export default function Workflow2D() {
                 nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
               }
             : undefined;
-          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
+          return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
     [flow, sets, steps],
@@ -669,7 +668,7 @@ export default function Workflow2D() {
             set={{ ...b, ...f }}
             name={info.name}
             count={info.count}
-            {...(info.summary ? { summary: info.summary } : {})}
+            {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
             hovered={hoveredSet === b.id}
             chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}

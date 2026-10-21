@@ -13,9 +13,12 @@ export const COLUMN_WIDEST = 0.85;
 /** How much of the canvas it takes as a PDF is read in it, until it is dragged: most of it, a page being for reading. */
 export const PDF_COLUMN_SHARE = 0.75;
 
-/** How wide the column is, on a canvas `room` CSS pixels wide, showing a PDF or a text: as it was dragged, or as it first opens - kept within its least and most. */
-export function columnWidthFor(room: number, pdf: boolean, dragged: number | null): number {
-  const want = dragged ?? (pdf ? Math.round(room * PDF_COLUMN_SHARE) : COLUMN_WIDTH);
+/** How wide it first opens on a set's table (workflow/SetTableBody), in CSS pixels: its columns all seen, a name's and what worked its energy out a little cut. */
+export const TABLE_COLUMN_WIDTH = 680;
+
+/** How wide the column is, on a canvas `room` CSS pixels wide, showing a PDF, a set's table or a text: as it was dragged, or as it first opens - kept within its least and most. */
+export function columnWidthFor(room: number, pdf: boolean | "table", dragged: number | null): number {
+  const want = dragged ?? (pdf === "table" ? TABLE_COLUMN_WIDTH : pdf ? Math.round(room * PDF_COLUMN_SHARE) : COLUMN_WIDTH);
   return Math.min(Math.max(COLUMN_NARROWEST, room * COLUMN_WIDEST), Math.max(COLUMN_NARROWEST, want));
 }
 import { firstFreeBeside } from "../../../../lib/io/beside";

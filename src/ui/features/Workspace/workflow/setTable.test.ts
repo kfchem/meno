@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule3D } from "../store/types";
-import { rowMolecule, sortRows, tableRows } from "./setTable";
+import { chooseRows, chosenMolecules, rowMolecule, sortRows, tableRows } from "./setTable";
 
 /** A water, its oxygen at `x`, with `frames` more geometries - each its oxygen further along - and energies where given. */
 function water(id: number, x: number, more = 0, energies?: number[], extra: Partial<Molecule3D> = {}): Molecule3D {
@@ -82,5 +82,38 @@ describe("a set as a table", () => {
     expect(first.results).toEqual([{ ...calc.results[0], values: [1] }]);
     const last = rowMolecule(rows[2]).calc!;
     expect(last.results).toEqual([{ ...calc.results[0], values: [3] }, calc.results[1]]);
+  });
+
+  it("chooses rows as a list does: one; one added or taken with ⌘ or Ctrl; those between with Shift, as sorted", () => {
+    const sorted = [3, 0, 2, 1, 4].map((at) => ({ at }));
+    let c = chooseRows(sorted, new Set(), null, 0);
+    expect([[...c.chosen], c.anchor]).toEqual([[0], 0]);
+    c = chooseRows(sorted, c.chosen, c.anchor, 1, { range: true });
+    expect([...c.chosen].sort()).toEqual([0, 1, 2]);
+    expect(c.anchor).toBe(0);
+    c = chooseRows(sorted, c.chosen, c.anchor, 2, { add: true });
+    expect([...c.chosen].sort()).toEqual([0, 1]);
+    // (from the one clicked last, 2, to 4 as sorted - 2, 1, 4 - added to those chosen)
+    c = chooseRows(sorted, c.chosen, c.anchor, 4, { add: true, range: true });
+    expect([...c.chosen].sort()).toEqual([0, 1, 2, 4]);
+    // (Shift with none clicked before: it alone)
+    expect([...chooseRows(sorted, new Set(), null, 4, { range: true }).chosen]).toEqual([4]);
+  });
+
+  it("puts those chosen on the page in the set's order, however it is sorted - a compound's conformers together, one compound still", () => {
+    const a = water(1, 0, 3, [-76.001, -76.003, -76.002, -76.004], { conformerSet: true, numbers: [2, 5, 7, 9], degeneracies: [1, 2, 1, 3], shares: [0.1, 0.4, 0.2, 0.3] });
+    const b = water(2, 5, 1, [-80.1, -80.2], { conformerSet: true });
+    const rows = tableRows([a, b], "conformers");
+    const ms = chosenMolecules(sortRows(rows, "energy"), new Set([0, 2, 3, 5]));
+    // (two compounds, as they were: a's frames 1 and 3 and 4 - its 2, 7 and 9 - and b's second)
+    expect(ms).toHaveLength(2);
+    expect(ms[0].energies).toEqual([-76.001, -76.002, -76.004]);
+    expect(ms[0].numbers).toEqual([2, 7, 9]);
+    expect(ms[0].degeneracies).toEqual([1, 1, 3]);
+    expect(ms[0].atoms[0].x).toBeCloseTo(0, 12);
+    expect(ms[0].frames!.map((f) => f[0])).toEqual([0.2, 0.3]);
+    // (no longer a conformer set, nor its shares: the rest are not with them)
+    expect([ms[0].conformerSet, ms[0].shares]).toEqual([undefined, undefined]);
+    expect([ms[1].energies, ms[1].numbers, ms[1].frames]).toEqual([[-80.2], [2], undefined]);
   });
 });

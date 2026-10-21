@@ -83,18 +83,72 @@ export function sortRows(rows: readonly TableRow[], key: SortKey, down = false):
 }
 
 /**
- * An entry as a molecule of its own, to put on the page: its frame's
- * geometry, its energy and what worked it out, its name - one geometry, no
- * conformer set: what it was a share of is not with it.
+ * The rows chosen once `row` is clicked, as in a list - each by its place
+ * in the set (`at`): it alone; with ⌘ or Ctrl (`add`), it added or taken
+ * away; with Shift (`range`), those between it and the one clicked before
+ * (`anchor`) as they are sorted (`sorted`), added to those chosen with ⌘ or
+ * Ctrl too - and the row the next Shift-click goes from.
  */
+export function chooseRows(
+  sorted: readonly Pick<TableRow, "at">[],
+  chosen: ReadonlySet<number>,
+  anchor: number | null,
+  row: number,
+  how: { add?: boolean; range?: boolean } = {},
+): { chosen: Set<number>; anchor: number } {
+  if (how.range && anchor != null) {
+    const a = sorted.findIndex((r) => r.at === anchor);
+    const b = sorted.findIndex((r) => r.at === row);
+    const [lo, hi] = a < 0 ? [b, b] : [Math.min(a, b), Math.max(a, b)];
+    return { chosen: new Set([...(how.add ? chosen : []), ...sorted.slice(lo, hi + 1).map((r) => r.at)]), anchor };
+  }
+  if (!how.add) return { chosen: new Set([row]), anchor: row };
+  const next = new Set(chosen);
+  if (next.has(row)) next.delete(row);
+  else next.add(row);
+  return { chosen: next, anchor: row };
+}
+
+/**
+ * The rows chosen, put on the page, in the set's order - whichever way the
+ * table is sorted: those of one molecule of the set together, as one
+ * molecule of those frames (`framesMolecule`) - a compound's conformers
+ * one compound still, counted as it is.
+ */
+export function chosenMolecules(rows: readonly TableRow[], chosen: ReadonlySet<number>): Omit<Molecule3D, "id" | "at">[] {
+  const of = new Map<Molecule3D, number[]>();
+  for (const r of [...rows].sort((a, b) => a.at - b.at)) if (chosen.has(r.at)) of.set(r.molecule, [...(of.get(r.molecule) ?? []), r.frame]);
+  return [...of].map(([m, frames]) => framesMolecule(m, frames));
+}
+
+/** An entry as a molecule of its own, to put on the page (`framesMolecule`, of its one frame). */
 export function rowMolecule(row: TableRow): Omit<Molecule3D, "id" | "at"> {
-  const m = row.molecule;
-  const xyz = frameXyz(m, row.frame);
+  return framesMolecule(row.molecule, [row.frame]);
+}
+
+/**
+ * Some of a molecule's frames as a molecule of their own: their geometries,
+ * the first its atoms'; each one's energy, number among its compound's
+ * conformers, and degeneracy, where it had them; and what worked them out,
+ * its name, its stereo. Not a conformer set, nor a path, nor its shares:
+ * what they were of is not with them.
+ */
+export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<Molecule3D, "id" | "at"> {
+  const n = framesOf(m);
+  const each = <T>(values: readonly T[] | undefined) => (values?.length === n ? frames.map((f) => values[f]) : undefined);
+  const xyz = frameXyz(m, frames[0]);
+  const energies = each(m.energies);
+  const numbers = each(m.numbers) ?? (m.conformerSet ? frames.map((f) => f + 1) : undefined);
+  const degeneracies = each(m.degeneracies);
   return {
     atoms: m.atoms.map((a, k) => ({ ...a, x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
     bonds: m.bonds,
-    ...(row.energy != null ? { energies: [row.energy] } : {}),
-    ...(m.calc ? { calc: calcOfFrame(m.calc, row.frame, framesOf(m)) } : {}),
+    ...(frames.length > 1 ? { frames: frames.slice(1).map((f) => [...frameXyz(m, f)]) } : {}),
+    ...(m.bondsFrom ? { bondsFrom: m.bondsFrom } : {}),
+    ...(energies ? { energies } : {}),
+    ...(numbers ? { numbers } : {}),
+    ...(degeneracies ? { degeneracies } : {}),
+    ...(m.calc ? { calc: calcOfFrames(m.calc, frames, n) } : {}),
     ...(m.made ? { made: m.made } : {}),
     ...(m.name ? { name: m.name } : {}),
     ...(m.drawnFrom ? { drawnFrom: m.drawnFrom } : {}),
@@ -105,14 +159,14 @@ export function rowMolecule(row: TableRow): Omit<Molecule3D, "id" | "at"> {
 }
 
 /**
- * What a molecule's calculation says, of one of its frames taken alone:
- * what each frame has, that frame's; what is of the molecule as it ended -
+ * What a molecule's calculation says, of some of its frames taken alone:
+ * what each frame has, those frames'; what is of the molecule as it ended -
  * its atoms', its pairs', the whole's - only with its last frame, which it
  * is of; and no lists, whose rows name frames of the molecule it came from.
  */
-function calcOfFrame(calc: CalcInfo, frame: number, frames: number): CalcInfo {
-  if (frames === 1 || !calc.results) return calc;
-  const last = frame === frames - 1;
-  const results = calc.results.flatMap((r): Result[] => (r.on === "frames" ? [{ ...r, values: [r.values[frame]] }] : r.on === "list" || !last ? [] : [r]));
+function calcOfFrames(calc: CalcInfo, frames: readonly number[], n: number): CalcInfo {
+  if ((n === 1 && frames.length === 1) || !calc.results) return calc;
+  const last = frames.includes(n - 1);
+  const results = calc.results.flatMap((r): Result[] => (r.on === "frames" ? [{ ...r, values: frames.map((f) => r.values[f]) }] : r.on === "list" || !last ? [] : [r]));
   return { ...calc, results };
 }

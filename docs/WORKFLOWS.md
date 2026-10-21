@@ -498,9 +498,29 @@ of theirs that does not read is left out and counted, and the frame says
 how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card, and in the set once it is shown
-again. They are opened as a table in the column, and put on the page from
-there, in the steps that follow (6b), and summed up in the frame with a
-sample of their structures and histograms (6c).
+again. They are summed up in the frame with a sample of their
+structures and histograms in the steps that follow (6c).
+
+*Open as a table*, on the set's menu or under its summary, reads them in
+the column beside the texts and PDFs, a tab of their own named as the
+set is (2026-10-21):
+- A row for each entry, in the step's order: its place; in a conformer
+  set its compound's letter and its number among that compound's
+  conformers; its name; its energy in hartrees; in a conformer set its
+  energy above its compound's lowest, in kcal/mol; how many forms of it
+  the search found alike, where it said; and *From*, what worked its
+  energy out ("not stated" where nothing says). No share is shown: a
+  share needs a temperature, and the set does not hold one.
+- Pressing a column's name sorts by it, again the other way; rows with no
+  value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
+- Rows are chosen as in a list (a click; ⌘ or Ctrl to add or take one;
+  Shift for those between, as sorted). *Put on the page* puts those chosen
+  beside the set as a set of their own, "From" the set's name, in the
+  set's order: each one geometry with its energy and what worked it out,
+  and of its calculation only what is of that frame. They are not a
+  conformer set there, since the rest are not with them.
+- The tab closes as a text's does, and goes when its set is deleted. It
+  is the view's, not saved with the workspace.
 
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,

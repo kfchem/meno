@@ -257,8 +257,13 @@ export function connectStoreToDocument(
       // (the text or the PDF its column shows, as they come and go: utils/texts)
       const texts = shownText(prev.texts, mirrored.texts, prev.textShown);
       const pdf = shownPdf(prev.pdfs, mirrored.pdfs, prev.pdfShown, texts);
-      const textsOpen = (texts.shown != null || pdf.shown != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
-      return { ...prev, ...mirrored, ...held, textShown: texts.shown, pdfShown: pdf.shown, textsOpen };
+      // (and the sets read as tables, of those still there holding their own - one shown giving way to a text or a PDF come)
+      const stillRead = prev.setsRead.filter((id) => (mirrored.sets ?? []).some((b) => b.id === id && b.collection));
+      const setsRead = stillRead.length === prev.setsRead.length ? prev.setsRead : stillRead;
+      const setTableShown =
+        texts.open || pdf.open || prev.setTableShown == null ? null : setsRead.includes(prev.setTableShown) ? prev.setTableShown : (setsRead[setsRead.length - 1] ?? null);
+      const textsOpen = (texts.shown != null || pdf.shown != null || setTableShown != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
+      return { ...prev, ...mirrored, ...held, textShown: texts.shown, pdfShown: pdf.shown, setsRead, setTableShown, textsOpen };
     });
   sync();
   return doc.subscribe(sync);

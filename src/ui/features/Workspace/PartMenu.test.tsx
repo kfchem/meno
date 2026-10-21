@@ -251,3 +251,12 @@ describe("a menu's rules", () => {
     expect(listed3.slice(0, first)).not.toContain('role="separator"');
   });
 });
+
+describe("a set's menu", () => {
+  it("opens a large result set as a table in the column, first - and offers it for no other set", () => {
+    const set = target({ kind: "set", id: 4 });
+    const large = menu(set, { onOpenAsTable: none, keepInFile: { kept: true, set: none } }).listed;
+    expect(large[0]).toBe("Open as a table");
+    expect(menu(set, { keepInFile: { kept: true, set: none } }).listed).not.toContain("Open as a table");
+  });
+});
