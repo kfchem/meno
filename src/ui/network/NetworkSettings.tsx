@@ -99,8 +99,8 @@ export default function NetworkSettings() {
           Connections since Meno started
         </h3>
         <p className="mt-1 text-xs text-gh-gray max-w-2xl">
-          The record from earlier sessions too is kept in network-log.jsonl in
-          Meno's data folder, up to 5 MB, and what came before that in
+          Earlier sessions' connections are kept in Meno's data folder: the
+          latest 5 MB in network-log.jsonl, the 5 MB before them in
           network-log.jsonl.1.
         </p>
         <div className="mt-2 rounded-lg border border-gh-line bg-white overflow-hidden">

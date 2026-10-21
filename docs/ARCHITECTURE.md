@@ -275,8 +275,9 @@ went before, to stderr and the page's console.
   about the code that ran - and of that, what it quotes in double or single
   quotes left out (a single quote only with no letter or digit on its outer
   side, so that the apostrophe of can't or Meno's is kept), as any other
-  message may quote what was read (a file's text, a SMILES, a name). Of words logged it has only Meno's own messages (`KNOWN`
-  in `lib/log.ts`, a tab's name in them left out), any others as `[text]`;
+  message may quote what was read (a file's text, a SMILES, a name). Of
+  words logged it has only Meno's own messages (`KNOWN` in `lib/log.ts`, a
+  tab's name in them left out), any others as `[text]`;
   a number as it is; and of any other thing only what it is (`[Object]`,
   `[Map]`). A message newly logged by Meno's code is added to `KNOWN`.
 - **Under 5 MB**: past that the log is begun again, the one before kept as
@@ -1518,8 +1519,9 @@ to be able to work with nothing going out at all.
   goes to the window as it happens (`net:connection`, every half second
   while open) and to `network-log.jsonl` in the app's data folder when it
   ends; like Meno's log, it is kept under 5 MB, begun again past that with
-  the one before kept as `network-log.jsonl.1`, one only. A child that may not use the network - a plugin's worker, a job -
-  is pointed at the proxy with no task, so whatever it reaches for is
+  the one before kept as `network-log.jsonl.1`, one only. A child that may
+  not use the network - a plugin's worker, a job - is pointed at the proxy
+  with no task, so whatever it reaches for is
   refused and on the record. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an
   environment needs one (`tools.rs`), a plugin's downloads as it is set up
