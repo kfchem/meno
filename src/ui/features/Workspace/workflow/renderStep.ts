@@ -2,13 +2,14 @@
  * Render as a step of a workflow (docs/RENDER.md, *Render as a step*): each
  * entry that comes in rendered as a picture of its own by the plugin that
  * does the step, and the pictures put in the step's result set - a set of
- * pictures, wired from the step as any step's result set is; run again,
+ * pictures - its exit's, as any step's result set is; run again,
  * the step makes its pictures anew in the same set.
  */
 import { addPicture, removePictures, type WorkspaceDocument } from "../document";
 import type { Carried3D, Molecule3D, PictureItem, Turn3D, WorkflowStep } from "../store/types";
 import { setMembers, type SetEntry } from "./entries";
 import { resultOf } from "./flow";
+import { ONE_EXIT } from "./kinds";
 import { BETWEEN, SET_PAD, SET_TOP } from "./look";
 import { addSet, holdMembers, markMade, resizeSet } from "./model";
 import { frameAt, LEAST_W, placeFor, ROW_MOST } from "./run";
@@ -73,10 +74,10 @@ export function placePictures(doc: WorkspaceDocument, step: WorkflowStep, made: 
   });
   // (the set holds the pictures the step made, in its order)
   const members = (doc.pictures ?? []).filter((p) => !there.has(p.id)).map((p) => ({ picture: p.id }));
-  const madeBy = { step: step.id, holds: "pictures" as const };
-  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, undefined), was.id, members);
+  const madeBy = { step: step.id, exit: ONE_EXIT, holds: "pictures" as const };
+  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, members);
   const id = doc.nextWorkflowId ?? 1;
-  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy, undefined), id, members);
+  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy), id, members);
 }
 
 /** What a Render step's card says it did: how long it took, and how many pictures it made - of how many, where some failed. */
