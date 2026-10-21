@@ -758,8 +758,8 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
   structure files and PDFs it reads - `.mol`, `.sdf`, `.rxn`, `.xyz`,
   `.pdb`, `.cube`, `.cub`, `.pdf` (`OPENED_WITH` in `opened.rs`; not
   calculations' outputs, `.out` and `.log`, which other programs use too) -
-  and whatever opens them still does. A test holds the three lists below
-  alike.
+  and whatever opens them still does - on macOS. A test holds the list and
+  `Info.plist` alike.
   - macOS (`Info.plist`): a document type for the structure files and one
     for PDF, each with `LSHandlerRank` Alternate - "a secondary viewer of
     files of this type", ranked after Owner and Default (Apple, Information
@@ -768,16 +768,19 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     (`CFBundleTypeExtensions`), with no type of Meno's own declared: where
     another app declares a type for one of them, the system gives the file
     that type, and a claim on a type of Meno's would not reach it.
-  - Windows (`windows/hooks.nsh`, this user's, as the `.meno` association
-    is): each extension's `OpenWithProgids` holds Meno's ProgID,
-    `Meno.OpenWith` - a value beside any other program's, the extension's
-    own default left as it is - and Meno.exe's `Applications` entry lists
-    each among its `SupportedTypes` (Microsoft, "How to Include an
-    Application in the Open With Dialog Box", "Application Registration").
-    Uninstalling takes Meno's value out of each extension's
-    `OpenWithProgids` and nothing else there - the keys stay, as other
-    programs' values and the extension's default are in them - and Meno's
-    ProgID and `Applications` entry whole.
+  - Not on Windows (2026-10-21). Registering Meno there - its ProgID in
+    each extension's `OpenWithProgids`, its `Applications` entry and
+    `SupportedTypes` - was built and tried on a real machine, and Windows
+    then gave Meno the double-click for extensions that belonged to other
+    programs: where a type has no choice of the user's, Windows takes the
+    most recently used registered program, and registering Meno made the
+    times it had been chosen before count. Microsoft's own pages say as
+    much ("available as default ... apps for the file type"; ownership
+    information in HKCU "used only when the application that it references
+    is registered"). So nothing is registered for them; Windows is to let
+    the user choose Meno as a default from Meno's own Settings instead,
+    registering only when asked. A file opened with Meno by the user's own
+    choice is taken as on macOS.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -

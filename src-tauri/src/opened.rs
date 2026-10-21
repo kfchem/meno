@@ -13,8 +13,9 @@
 //! as Open opens a file - a workspace file in a tab, anything else into the
 //! workspace in front - the page let read and write each, as Open's dialog
 //! lets it a file picked there. Only workspace files and those of
-//! `OPENED_WITH`: Meno is the app for .meno alone, and offered for these
-//! (Info.plist, windows/hooks.nsh), never their default.
+//! `OPENED_WITH`: Meno is the app for .meno alone, and offered for these on
+//! macOS (Info.plist), never their default; on Windows one opened with Meno
+//! by the user's own choice comes the same way.
 
 use std::path::Path;
 use std::sync::Mutex;
@@ -46,8 +47,8 @@ pub fn hide_instance_window(identifier: &str) {
 }
 
 /// What Meno is offered for in the system's Open With, beside its own .meno: the structure
-/// files and PDFs it reads - as Info.plist and windows/hooks.nsh list them, the three kept
-/// alike (a test holds them so).
+/// files and PDFs it reads - as Info.plist lists them, the two kept alike (a test holds them
+/// so).
 pub const OPENED_WITH: [&str; 8] = ["mol", "sdf", "rxn", "xyz", "pdb", "cube", "cub", "pdf"];
 
 /// The files opened from outside and not yet taken by the page.
@@ -173,13 +174,11 @@ mod tests {
         let _ = fs::remove_dir_all(dir);
     }
 
-    /// Info.plist's document types and the Windows installer's list, as the extensions Meno
-    /// takes: the three alike - and on macOS Meno the owner of .meno alone, an Alternate for
-    /// all the rest.
+    /// Info.plist's document types, as the extensions Meno takes: the two alike - and Meno the
+    /// owner of .meno alone, an Alternate for all the rest.
     #[test]
-    fn offers_itself_where_info_plist_and_the_installer_say() {
+    fn offers_itself_where_info_plist_says() {
         let plist = include_str!("../Info.plist");
-        let hooks = include_str!("../windows/hooks.nsh");
         // (the strings of an array under `key` in a document type, in order)
         fn strings(t: &str, key: &str) -> Vec<String> {
             let Some(at) = t.find(&format!("<key>{key}</key>")) else { return vec![] };
@@ -213,10 +212,5 @@ mod tests {
         let want: Vec<&str> = OPENED_WITH.iter().copied().filter(|e| *e != "pdf").collect();
         assert_eq!(extensions, want, "Info.plist's extensions");
         assert_eq!(uti, ["com.adobe.pdf"], "Info.plist's other types");
-        let mut in_hooks: Vec<&str> = hooks.lines().filter_map(|l| l.trim().strip_prefix("!insertmacro ${M} \"")).filter_map(|l| l.strip_suffix('"')).collect();
-        in_hooks.sort();
-        let mut all = OPENED_WITH.to_vec();
-        all.sort();
-        assert_eq!(in_hooks, all, "windows/hooks.nsh's extensions");
     }
 }
