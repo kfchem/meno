@@ -73,6 +73,15 @@ describe("a part of a search's conformers", () => {
     expect([parts(ofPart.molecules), parts(ofPart.rest)]).toEqual([[true], [true]]);
   });
 
+  it("is not what Duplicates takes out of a compound set: copies of a structure, of no search", () => {
+    // (three waters alike, each a molecule of its own: one kept, two copies set aside)
+    const water = (id: number) => ({ ...waters([0]), id, conformerSet: false });
+    const out = runMeno("duplicates", setEntries([water(1), water(2), water(3)], "molecules"), "molecules", { rmsd: 0.125 });
+    const got = out.ok ? resultsOf(out, "duplicates") : undefined;
+    expect([got?.molecules.length, got?.rest.length]).toEqual([1, 2]);
+    expect([parts(got!.molecules), parts(got!.rest), got!.rest.map((m) => m.conformerSet)]).toEqual([[false], [false, false], [undefined, undefined]]);
+  });
+
   it("is what any step makes of a part: one Meno's steps keep whole, or a program works out", () => {
     const part = waters([0, 1, 2], { partOf: true });
     expect(setEntries([part], "conformers").every((e) => e.partOf)).toBe(true);

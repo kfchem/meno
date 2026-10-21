@@ -557,9 +557,10 @@ so (`partOf`), and its chip shows no shares:
 - what an *Energy window* splits from a compound, in either exit (a
   compound all within it is whole);
 - what *Choose one* chooses from several conformers, and the rest;
-- the copies *Duplicates* takes out (*Alike*). What it keeps is the
-  compound as it came, its copies merged into those kept - whole, unless
-  what came in was a part;
+- the copies *Duplicates* takes out of a conformer set (*Alike*). What it
+  keeps is the compound as it came, its copies merged into those kept -
+  whole, unless what came in was a part. Out of a compound set, the
+  copies are of a structure there twice, of no search, and not marked;
 - whatever any step makes of a part: an optimisation of it, a step of
   Meno's on it, *As conformers* grouping it with others.
 

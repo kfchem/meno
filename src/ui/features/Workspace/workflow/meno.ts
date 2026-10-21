@@ -200,8 +200,9 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
  * with those of the same atoms in the same order - a structure there
  * twice is the same structure, not two compounds. Never two of different
  * charge or spin: they are different species, however alike in shape.
- * Those set aside are a part of their compound (`partOf`); those kept, the
- * compound as it came, its copies merged.
+ * In a conformer set, those set aside are a part of their compound's
+ * conformers (`partOf`); those kept, the compound as it came, its copies
+ * merged. In a compound set they are copies of a structure, of no search.
  */
 function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, due: () => boolean): Generator<number, Outcome> {
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
@@ -221,9 +222,11 @@ function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number,
     }
     before += g.length;
   }
-  // (in the order they came: those kept, the compound as it was, its copies merged into them; those alike, the copies taken out - a part of it)
+  // (in the order they came: those kept, the compound as it was, its copies merged into them; those alike, the copies taken out - in a
+  // conformer set, a part of its compound's conformers; in a compound set, copies of a structure, of no search, as they came)
   const kept = entries.filter((e) => keptSet.has(e));
-  const aside = asPart(entries.filter((e) => !keptSet.has(e)));
+  const alike = entries.filter((e) => !keptSet.has(e));
+  const aside = holds === "conformers" ? asPart(alike) : alike;
   return { ok: true, holds, kept, aside, said: `${kept.length} of ${entries.length} kept` };
 }
 
