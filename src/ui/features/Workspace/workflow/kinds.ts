@@ -30,6 +30,8 @@ export type KindInfo = {
   runs: "program" | "entries";
   /** Its options, where Meno does it. */
   options?: readonly Option[];
+  /** What must be known of its entries before it runs, where something must: which stereoisomer each is (`configurations`, workflow/configurations) - asked of the plugin that perceives it, every entry its own. */
+  perceives?: "configurations";
   /** Meno's own choices for a kind a plugin does, whoever does it, before the plugin's (Render's: a picture's size and shape, and what its molecules and surfaces are made of). */
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
@@ -75,6 +77,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "conformers",
     runs: "entries",
     made: "Populations at {temperature} K",
+    perceives: "configurations",
     options: [{ id: "temperature", label: "At", type: "number", default: 298.15, min: 1, step: 1, unit: "K" }],
   },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers" },

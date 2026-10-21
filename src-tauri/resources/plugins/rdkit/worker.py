@@ -507,6 +507,60 @@ def op_open_stereo(m):
     return {"atoms": atoms, "bonds": bonds, "isomers": count}
 
 
+# What FindPotentialStereo calls each kind of element, as Meno's configurations name them.
+STEREO_KINDS = {
+    "Atom_Tetrahedral": "centre",
+    "Bond_Double": "double",
+    "Bond_Atropisomer": "axis",
+    "Bond_Cumulene_Even": "cumulene",
+}
+
+
+def configuration_of(molblock):
+    """Which stereoisomer a molecule in 3D is, read from its own geometry:
+    each element that could be stereogenic - a centre, a double bond, an
+    axis - its atoms, and whether its configuration is given (from 3D,
+    every one that the geometry fixes); and a key that is the same for two
+    molecules exactly when they are the same stereoisomer (RDKit's
+    canonical SMILES, its hydrogens taken away after the geometry was read).
+
+    The elements are FindPotentialStereo's, which tells apart what a test of
+    neighbours' ranks alone would not - cis and trans in a 1,4-disubstituted
+    cyclohexane, whose ring carbons each carry the configuration. RDKit
+    marks the function experimental: the tests in scripts/calc hold its
+    answers on a set of known cases, run whenever the plugin's RDKit
+    changes (docs/PLUGINS.md)."""
+    mol = read(molblock)
+    conf = mol.GetConformer()
+    conf.Set3D(True)
+    Chem.AssignStereochemistryFrom3D(mol, confId=conf.GetId(), replaceExistingTags=True)
+    elements = []
+    for s in Chem.FindPotentialStereo(mol, cleanIt=False, flagPossible=True):
+        name = str(s.type).split(".")[-1]
+        kind = STEREO_KINDS.get(name, "other")
+        # (an atom's element is the atom; a bond's, its two atoms)
+        if name.startswith("Atom_"):
+            atoms = [s.centeredOn]
+        else:
+            b = mol.GetBondWithIdx(s.centeredOn)
+            atoms = sorted([b.GetBeginAtomIdx(), b.GetEndAtomIdx()])
+        elements.append({"kind": kind, "atoms": atoms, "specified": s.specified == Chem.StereoSpecified.Specified})
+    return {"elements": elements, "key": Chem.MolToSmiles(Chem.RemoveHs(mol))}
+
+
+def op_configurations(m):
+    """Each molecule's configuration (`configuration_of`), in the order given
+    - or, for one that cannot be read, why, so that the rest are still
+    answered."""
+    out = []
+    for block in m["molblocks"]:
+        try:
+            out.append(configuration_of(block))
+        except Exception as e:  # noqa: BLE001 - one molecule's failure is said, not raised
+            out.append({"error": str(e) or type(e).__name__})
+    return {"molecules": out}
+
+
 def kekule_order(bond):
     # (aromatic rings as alternating bonds: a 3D structure's bonds are drawn
     # as single, double and triple)
@@ -1802,6 +1856,7 @@ OPS = {
     "from_smiles": op_from_smiles,
     "analyse": op_analyse,
     "open_stereo": op_open_stereo,
+    "configurations": op_configurations,
     "conformers": op_conformers,
     "drawing_of": op_drawing_of,
     "orders_from_smiles": op_orders_from_smiles,

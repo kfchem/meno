@@ -218,6 +218,10 @@ Entry
   species     charge and multiplicity, and where each came from: the
               chemist, a calculation it was read from, or its atoms
   properties  name -> Property, an open map
+  stereo      which stereoisomer it is, from its own geometry: its
+              elements that could be stereogenic, and a key two entries
+              share exactly when they are one - or not perceived, and why
+              (PLUGINS.md, *Configurations*)
   status      done, failed or set aside, with the reason
 ```
 

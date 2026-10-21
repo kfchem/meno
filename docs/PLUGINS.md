@@ -63,6 +63,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
+| Molecules in 3D | which stereoisomer each molecule in 3D is (*Configurations*, below) | RDKit (`configurations`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
 | Molecules in 3D | pictures and films of them, rendered (RENDER.md) | Blender (a job: Blender, Meno's own copy, fetched as the plugin is set up) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
@@ -73,6 +74,46 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 Meno defines the roles and their contracts. A plugin says, in its
 manifest, which roles it fills. A new kind of role comes with Meno, and a
 new plugin for an existing role needs no change to Meno.
+
+### Configurations
+
+Which stereoisomer each molecule in 3D is, read from its own geometry -
+asked before a step that needs it runs (*Populations*: a Boltzmann sum
+over two stereoisomers, which do not interconvert, is wrong), and of every
+conformer on its own, so that a set holding two configurations is seen to
+hold two. A conformer search on a structure with a centre left open can
+embed both.
+
+- **Given**: MOL blocks in 3D (`configurations`, `{ molblocks }`), in order.
+- **Gives**, for each: its elements that could be stereogenic - a centre
+  (its atom), a double bond, an axis or a cumulene (its two atoms), by
+  atom number from 0 - and whether each one's configuration is given
+  (from 3D, every one the geometry fixes); and a key that two molecules
+  share exactly when they are one stereoisomer. Or, for one it cannot
+  read, why: the others are still answered.
+- **Core** keeps the answer on the entry (`src/lib/entry.ts`,
+  `EntryStereo`) and compares entries by `stereoIdentity`: the key with
+  the plugin and version that made it, so that keys of two versions are
+  never taken for one another. An element left open, or a molecule not
+  perceived, matches nothing. CIP labels (R and S, E and Z) are the
+  checks' role, for showing, and are never part of it.
+- **Not perceived is not "no stereo".** Where nothing fills the role, or
+  the plugin fails, the entry says so and why; a step that needs it does
+  not go on as if there were none.
+
+RDKit fills it with `FindPotentialStereo`, after its own geometry has
+assigned the configuration (`AssignStereochemistryFrom3D`), and its
+canonical SMILES as the key. RDKit marks `FindPotentialStereo`
+**experimental**: its answers may change in a later RDKit. So its answers
+are held on cases worked out by hand -
+cis- and trans-1,4- and cis-1,3-dimethylcyclohexane (each ring carbon a
+centre), methylcyclohexane, 1,1-dimethylcyclohexane, propene and
+1,4-dichlorobenzene (none), meso-2,3-butanediol (two), (E)-2-butene (one
+double bond) - in `scripts/calc/test_plugin_rdkit.py`, *Configurations*,
+which needs RDKit and is run by hand in the plugin's environment. A test
+in Meno's own suite fails when the plugin's lock moves to another RDKit
+(`workflow/configurations.test.ts`), until those cases have been run with
+it and the version it was checked with is written there.
 
 ## A plugin's folder
 
