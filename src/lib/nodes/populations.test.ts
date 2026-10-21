@@ -81,6 +81,24 @@ describe("Populations", () => {
     expect(why(two(g(0, { atm: 1 }), g(0)))[0]).toBe("its free energy does not say the temperature it was worked out at");
   });
 
+  it("takes a solvent and a thermal treatment as their words are, whole: two free energies alike but for the solvation's reference state, or a frequency scaling, stay apart", () => {
+    const two = (p: ReturnType<typeof g>, q: ReturnType<typeof g>) => populations([entry("p", { [PROPERTY.freeEnergy]: p }, "a"), entry("q", { [PROPERTY.freeEnergy]: q }, "a")], { kelvin: 298.15 });
+    const failed = (o: ReturnType<typeof two>) => (o.ok ? o.exits.failed.map((e) => (e.status as { failed: string }).failed) : [o.said]);
+    const at = (solvent: string) => ({ kelvin: 298.15, atm: 1, solvent });
+    // (the reference states a program prints with its solvation model differ in G by 1.90 kcal/mol: never one sum)
+    const gsolv = "ALPB(water), reference state gsolv [1 M gas/solution]";
+    const bar1M = "ALPB(water), reference state bar1M [1 bar gas/1 M solution]";
+    expect(failed(two(g(0, at(gsolv)), g(0, at(bar1M)))).every((w) => w.includes(`solvent: ${gsolv} (p) and ${bar1M} (q)`))).toBe(true);
+    // (nor with the same model printed with no reference state)
+    expect(failed(two(g(0, at(gsolv)), g(0, at("ALPB(water)")))).every((w) => w.includes(`solvent: ${gsolv} (p) and ALPB(water) (q)`))).toBe(true);
+    // (a thermal treatment with its frequencies scaled is another treatment)
+    const scaled = { ...by, treatment: "T, frequencies scaled by 1.03" };
+    expect(failed(two(g(0), g(0, undefined, scaled))).every((w) => w.includes("thermal treatment: T (p) and T, frequencies scaled by 1.03 (q)"))).toBe(true);
+    // (and the same words, whole, are one sum)
+    const same = two(g(0, at(gsolv)), g(0, at(gsolv)));
+    expect(same.ok && same.exits.done.map(share)).toEqual([0.5, 0.5]);
+  });
+
   it("weights by degeneracy only where every one in a group has one", () => {
     const out = populations([entry("a", { [PROPERTY.freeEnergy]: g(0), [PROPERTY.degeneracy]: quantity(2, "none") }, "a"), entry("b", { [PROPERTY.freeEnergy]: g(0) }, "a")], { kelvin: 298.15 });
     if (!out.ok) throw new Error(out.said);
