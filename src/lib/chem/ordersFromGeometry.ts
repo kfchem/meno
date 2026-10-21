@@ -289,7 +289,9 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
     if (hydrogens && a.el === "O" && valence[i] === 1) return -1;
     return 0;
   });
-  // (an oxygen held singly by a charged nitrogen carries the charge back: a nitro group, an N-oxide)
+  // (an oxygen held singly by a charged nitrogen carries the charge back: a nitro group, an N-oxide; and a
+  // nitrogen held doubly by one, at the end of its chain: an azide's R-N=N+=N-, a diazo group's C=N+=N-.
+  // Left without it, each would read as a cation - R-N=N+=NH - the hydrogens not there to say otherwise)
   // (each atom's first bond, found once: not every bond looked through for each oxygen)
   const firstBond = new Int32Array(atoms.length).fill(-1);
   bonds.forEach((b, k) => {
@@ -297,10 +299,11 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
     if (firstBond[b.a2] < 0) firstBond[b.a2] = k;
   });
   atoms.forEach((a, i) => {
-    if (a.el !== "O" || near[i].length !== 1 || hydrogens) return;
+    if (near[i].length !== 1 || hydrogens) return;
     const k = firstBond[i];
     const other = near[i][0];
-    if (orders[k] === 1 && charges[other] === 1 && atoms[other].el === "N") charges[i] = -1;
+    if (charges[other] !== 1 || atoms[other].el !== "N") return;
+    if ((a.el === "O" && orders[k] === 1) || (a.el === "N" && orders[k] === 2)) charges[i] = -1;
   });
   return { orders, charges, decided };
 }
