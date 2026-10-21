@@ -250,9 +250,11 @@ pointer does; put back by an undo, they glide back.
 - *Delete set* (right-click its tab) takes the frame away and leaves what
   it held; a set left empty stays, empty, until it is deleted;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
-  are not written to the workspace's file - only how many it held and
-  their collection's hash - and opened again, the set says *Not kept*
-  with that count.
+  and structures drawn are not written to the workspace's file - only how
+  many it held and their collection's hash - and opened again, the set
+  says *Not kept* with that count. This covers what the set holds now.
+  The step's earlier runs, kept in the step with what each gave, are
+  written as they are, whatever the set says.
 
 A set's entries are its members, in their order. A set the chemist makes is a
 **compound set**: each entry a compound of its own, however alike two
@@ -1387,8 +1389,15 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
 - **In the file**, a run kept keeps them as the page's drawing is kept,
   and reads them back as it is read (`readDrawn`). A structure that does
   not read is left out, as a molecule is. A result set kept out of the
-  file (*Don't keep in the file*) leaves its structures out as well as its
-  molecules, saying how many it held.
+  file (*Don't keep in the file*) leaves out the structures it holds now,
+  as well as its molecules, saying how many it held. The step's earlier
+  runs are still written with what each gave, structures and molecules
+  alike: the set's choice does not reach them yet.
+- **A molecule in 3D made from one of them** (by *3D structure*, or a
+  *Conformers* step after it) keeps its link to that drawing by its atoms.
+  Where the set was kept out of the file, those atoms are not in it, so
+  the molecule opens with its link to the drawing gone, as when the
+  drawing is deleted.
 
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
