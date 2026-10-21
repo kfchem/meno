@@ -171,7 +171,8 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) 
  * 3D.
  */
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
-  if (set.made) return set.made.holds;
+  // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
+  if (set.made?.holds) return set.made.holds;
   const { structures } = setMembers(page, set);
   if (structures.length) return "structures";
   return setMolecules(page, set).some(conformersOfOne) ? "conformers" : "molecules";

@@ -35,7 +35,7 @@ function large(n: number) {
   connectStoreToDocument(store, doc);
   doc.edit("run", (d) => {
     const s = addStep(d, "conformers", 0, 0, {}, "rdkit");
-    return placeResults(s, s.steps![0], { molecules: [conformers(n)], aside: [], holds: "conformers" }, { extentOf });
+    return placeResults(s, s.steps![0], { molecules: [conformers(n)], rest: [], holds: "conformers" }, { extentOf });
   });
   return { doc, store, set: store.getState().sets[0] };
 }

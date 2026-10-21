@@ -9,8 +9,9 @@ import type { OptionValues } from "../../../../lib/options";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
 import { SET_PAD, SET_TOP } from "./look";
-import { canWire, wireInto } from "./flow";
-import type { StepKind } from "./kinds";
+import { canWire, resultOf, wireInto } from "./flow";
+import { exitsOf, inputsOf, ONE_INPUT, type StepKind } from "./kinds";
+import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -93,7 +94,33 @@ export function removeSet(doc: WorkspaceDocument, id: number): WorkspaceDocument
 export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: number, options?: OptionValues, by?: string): WorkspaceDocument {
   const id = idOf(doc);
   const step: WorkflowStep = { id, kind, x, y, ...(by ? { by } : {}), ...(options && Object.keys(options).length ? { options } : {}) };
-  return { ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] };
+  return withExits({ ...doc, nextWorkflowId: id + 1, steps: [...(doc.steps ?? []), step] }, id);
+}
+
+/**
+ * `doc` with a set for each of a step's exits it has none for: every exit is
+ * a result set of its own, made with the step and empty until it runs, so
+ * that what a step will give can be wired on before it has run
+ * (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*). Each stands to
+ * the right of the card, the first level with its top and a second under
+ * it, half as high.
+ */
+export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocument {
+  const step = doc.steps?.find((s) => s.id === stepId);
+  if (!step) return doc;
+  let next = doc;
+  let top = step.y;
+  for (const exit of exitsOf(step.kind)) {
+    const high = exit.of ? CARD_H / 2 : CARD_H;
+    const was = resultOf(next, step.id, exit.id);
+    // (holding nothing yet: what lies under a new frame is not what its step made)
+    if (!was) {
+      const setId = next.nextWorkflowId ?? 1;
+      next = holdMembers(addSet(next, { x0: step.x + CARD_W + GAP, y0: top - high, x1: step.x + CARD_W + GAP + CARD_W, y1: top }, { step: step.id, exit: exit.id }), setId, []);
+    }
+    top = (was ? was.y0 : top - high) - BETWEEN;
+  }
+  return next;
 }
 
 function withStep(doc: WorkspaceDocument, id: number, change: (s: WorkflowStep) => WorkflowStep): WorkspaceDocument {
@@ -150,25 +177,38 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
   return (now.steps ?? []).filter((s) => s.running && !(then.steps ?? []).some((x) => x.id === s.id));
 }
 
-/** `doc` without a step and the wires into it and out of it. The set it made stays, with what it holds - a set like any the chemist drew (of conformers, where its molecules' frames are a conformer search's: entries `holdsOf`). */
+/**
+ * `doc` without a step and the wires into it. A set its exits made that
+ * holds something stays, with what it holds - a set like any the chemist
+ * drew (of conformers, where its molecules' frames are a conformer search's:
+ * entries `holdsOf`) - and the wires out of it with it; one that holds
+ * nothing - its step never ran, or gave nothing there - goes with the step,
+ * and the wires out of it: an empty frame the chemist never drew is not
+ * left behind.
+ */
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
   if (steps.length === (doc.steps ?? []).length) return doc;
+  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length).map((b) => b.id));
   return {
     ...doc,
     steps,
-    wires: (doc.wires ?? []).filter((w) => w.to !== id && !("step" in w.from && w.from.step === id)),
-    sets: (doc.sets ?? []).map((b) => (b.made?.step === id ? (({ made: _m, aside: _a, ...rest }) => rest)(b) : b)),
+    wires: (doc.wires ?? []).filter((w) => w.to.step !== id && !empty.has(w.from.set)),
+    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, ...rest }) => rest)(b) : b)),
   };
 }
 
 /** `doc` with a wire from `from` into the step `to` - in place of one it had - where it may go there (flow `canWire`). */
-export function connect(doc: WorkspaceDocument, from: WireEnd, to: number): WorkspaceDocument {
-  if (!canWire(doc, from, to)) return doc;
-  const was = wireInto(doc, to);
+export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
+  // (no input named: the first of the step's that takes what comes)
+  const kind = doc.steps?.find((s) => s.id === to)?.kind;
+  const port = into ?? (kind ? (inputsOf(kind).find((p) => canWire(doc, from, to, p.id))?.id ?? inputsOf(kind)[0].id) : ONE_INPUT);
+  if (!canWire(doc, from, to, port)) return doc;
+  const was = wireInto(doc, to, port);
   if (was && JSON.stringify(was.from) === JSON.stringify(from)) return doc;
   const id = idOf(doc);
-  return { ...doc, nextWorkflowId: id + 1, wires: [...(doc.wires ?? []).filter((w) => w.to !== to), { id, from, to }] };
+  // (one wire to an input: a new one takes the place of what was there)
+  return { ...doc, nextWorkflowId: id + 1, wires: [...(doc.wires ?? []).filter((w) => !(w.to.step === to && w.to.port === port)), { id, from, to: { step: to, port } }] };
 }
 
 export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocument {
@@ -274,9 +314,15 @@ function sameMembers(a: readonly Member[], b: readonly Member[]): boolean {
   return a.length === b.length && a.every((m, k) => JSON.stringify(m) === JSON.stringify(b[k]));
 }
 
-/** What made a set, and the entries it set aside, said of it. */
-export function markMade(doc: WorkspaceDocument, id: number, made: NonNullable<WorkflowSet["made"]>, aside: WorkflowSet["aside"]): WorkspaceDocument {
-  return withSet(doc, id, ({ aside: _a, ...b }) => ({ ...b, made, ...(aside?.length ? { aside } : {}) }));
+/** What made a set, said of it: the step, which of its exits, and what it holds. */
+export function markMade(doc: WorkspaceDocument, id: number, made: NonNullable<WorkflowSet["made"]>): WorkspaceDocument {
+  return withSet(doc, id, (b) => ({ ...b, made }));
+}
+
+/** The set a step's exit made, or - where the exit has none, a step read from a file written before its kind had it - one made now. */
+export function setForExit(doc: WorkspaceDocument, step: WorkflowStep, exit: string): { doc: WorkspaceDocument; id: number } {
+  const next = withExits(doc, step.id);
+  return { doc: next, id: resultOf(next, step.id, exit)!.id };
 }
 
 /**
