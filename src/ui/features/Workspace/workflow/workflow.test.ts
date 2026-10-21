@@ -4,6 +4,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
+import type { EntryStereo } from "../../../../lib/entry";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
 import { keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
@@ -646,6 +647,26 @@ describe("what a step on entries alone gives back", () => {
   it("will not make one compound of entries labelled as different stereoisomers", () => {
     const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3], { 0: "R" }), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3], { 0: "S" })], "molecules");
     expect(out).toEqual({ ok: false, said: "Compound a: its entries' stereo labels differ: they may be different stereoisomers" });
+  });
+
+  /** Which stereoisomer an entry is, as the plugin that perceives configurations answers: `key`, or not perceived, and why. */
+  const isomer = (key: string | { why: string }): EntryStereo =>
+    typeof key === "string"
+      ? { perceived: true, elements: [{ kind: "centre", atoms: [0], specified: true }], key, by: { plugin: "rdkit", version: "0.1.7" } }
+      : { perceived: false, why: key.why };
+
+  it("makes a compound of each stereoisomer, read from each entry's own geometry", () => {
+    // (four conformers, two of them R and two S, read so from their geometry: two compounds of two - not one of four)
+    const all = [1, 2, 3, 4].flatMap((id) => water(id, "RDKit", "MMFF94", -76 - id / 1000, [1, 2, 3]));
+    const out = runMeno("as-conformers", all.map((e, i) => ({ ...e, stereo: isomer(i % 2 ? "S" : "R") })), "molecules");
+    expect(out.ok && out.kept.map((e) => [e.compound, e.number, e.energy])).toEqual([[0, 1, -76.001], [0, 2, -76.003], [1, 1, -76.002], [1, 2, -76.004]]);
+    expect(out.said).toBe("2 compounds · 4");
+  });
+
+  it("will not make a compound of an entry whose stereoisomer is not known", () => {
+    const all = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3])];
+    const out = runMeno("as-conformers", [{ ...all[0], stereo: isomer("R") }, { ...all[1], stereo: isomer({ why: "Nothing added tells stereoisomers apart" }) }], "molecules");
+    expect(out).toEqual({ ok: false, said: "Which stereoisomer entry 2 is is not known: Nothing added tells stereoisomers apart" });
   });
 
   it("makes one compound of entries made alike, keeping only what all of them keep", () => {

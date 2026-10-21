@@ -6,6 +6,7 @@
  * it keeps, which it sets aside, and what it found; or why it could not.
  */
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
+import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, unlikeMade, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
@@ -154,15 +155,27 @@ export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]>
 }
 
 /**
- * A compound set as a conformer set: entries of the same constitution as
- * conformers of one compound, numbered in the order they came - where each
- * compound's entries were made alike (entries `unlikeMade`): one
- * calculation's energies in one list, what made them said once. Else not
- * at all, and why.
+ * A compound set as a conformer set: entries of the same constitution and
+ * the same stereoisomer (lib/entry `stereoIdentity`, from each one's own
+ * geometry, asked before it runs: kinds `perceives`) as conformers of one
+ * compound, numbered in the order they came - where each compound's
+ * entries were made alike (entries `unlikeMade`): one calculation's
+ * energies in one list, what made them said once. Else not at all, and
+ * why: an entry whose stereoisomer is not known - not perceived, or a
+ * centre left unspecified - is no conformer of a known compound. Entries
+ * none of which was asked - only where nothing ran first to ask, never in
+ * a run (stepRuns asks every entry) - are grouped by constitution alone.
  */
 function asConformers(entries: readonly SetEntry[]): Outcome {
+  const asked = entries.some((e) => e.stereo != null);
+  const unknown = asked ? entries.findIndex((e) => stereoIdentity(e.stereo) == null) : -1;
+  if (unknown >= 0) {
+    const st = entries[unknown].stereo;
+    const why = !st ? "it has not been asked" : !st.perceived ? st.why : "a centre or double bond of it is left unspecified";
+    return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: ${why}` };
+  }
   const groups = new Map<string, SetEntry[]>();
-  for (const e of entries) pushTo(groups, constitutionOf(e), e);
+  for (const e of entries) pushTo(groups, asked ? `${constitutionOf(e)}|${stereoIdentity(e.stereo)}` : constitutionOf(e), e);
   const unlike = [...groups.values()].map(unlikeMade);
   const first = unlike.findIndex((why) => why != null);
   if (first >= 0) return { ok: false, said: `Compound ${compoundLetter(first)}: ${unlike[first]}` };

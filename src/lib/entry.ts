@@ -149,13 +149,16 @@ export type EntryStereo = { perceived: true; elements: StereoElement[]; key: str
 /**
  * Which stereoisomer an entry is, as one text that two entries share
  * exactly when they are one: the key, with the plugin and version that made
- * it - keys of two versions are not compared. None where it is not known:
- * not perceived, or an element left unspecified, which matches nothing -
- * not even another unspecified one. CIP labels are never in it.
+ * it - keys of two versions are not compared - as a JSON list, so that no
+ * two of them run together into one text. None where it is not known: not
+ * perceived, an element left unspecified, which matches nothing - not even
+ * another unspecified one - or no plugin or version said, for a key no one
+ * vouches for. CIP labels are never in it.
  */
 export function stereoIdentity(stereo: EntryStereo | undefined): string | null {
   if (!stereo?.perceived || stereo.elements.some((e) => !e.specified)) return null;
-  return `${stereo.by.plugin ?? "?"}@${stereo.by.version ?? "?"}:${stereo.key}`;
+  if (!stereo.by.plugin || !stereo.by.version) return null;
+  return JSON.stringify([stereo.by.plugin, stereo.by.version, stereo.key]);
 }
 
 /** An entry's status: done, failed (why), or set aside (why). */
