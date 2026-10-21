@@ -3,9 +3,13 @@
  * makes them: ten cores, each with two places for a group, and a hundred
  * pairs of groups on each. The groups bring what a laid-out drawing must
  * keep as given: stereocentres (a wedge, an H drawn on a ring), E double
- * bonds, charges, rings of their own. Written by hand, each a SMILES any
- * reader reads the same way; the molecule each one is, is its SMILES - the
- * known answer a drawing of it is read back against.
+ * bonds, charges, rings of their own. Each a SMILES as SMILES is written -
+ * one pair of brackets to a branch - and read the same by another reader:
+ * RDKit's reading of each (formula, charge, the centres and double bonds it
+ * gives a configuration) is kept beside it, analogues.facts.json, written
+ * by scripts/layout/analogues.py, and Meno's reading is tested against it.
+ * The molecule each one is, is its SMILES - the known answer a drawing of
+ * it is read back against.
  */
 
 /** The cores, `{1}` and `{2}` where the groups go. */
@@ -70,7 +74,9 @@ export function analogues(): { core: number; groups: [number, number]; smiles: s
         const g2 = (10 + j + 3 * c) % GROUPS.length;
         // (a group's own ring closed by 9, never by a number the core has open where the group goes)
         const group = (g: number) => GROUPS[g].replace(/1/g, "9");
-        out.push({ core: c, groups: [g1, g2], smiles: core.replace("{1}", `(${group(g1)})`).replace("{2}", group(g2)) });
+        // (the first group in one pair of brackets: the core's own where it has them round its place)
+        const first = core.includes("({1})") ? core.replace("({1})", `(${group(g1)})`) : core.replace("{1}", `(${group(g1)})`);
+        out.push({ core: c, groups: [g1, g2], smiles: first.replace("{2}", group(g2)) });
       }
   });
   return out;

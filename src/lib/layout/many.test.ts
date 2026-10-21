@@ -5,6 +5,7 @@ import { arranged, extentOf, gridOf, laidOnto, laidOutChecked } from "./many";
 import { notAsGiven } from "./readBack";
 import { coreMatches, ringScaffold } from "./scaffold";
 import { analogues, CORES, CORE_SMILES } from "./testdata/analogues";
+import facts from "./testdata/analogues.facts.json";
 import { fromSmiles } from "./testdata/fromSmiles";
 
 const laid = (smiles: string) => {
@@ -174,5 +175,44 @@ describe("analogues lined up on their core", () => {
     const atoms = ringScaffold(input);
     expect(atoms.map((a) => input.atoms[a].el).sort().join("")).toBe("CCCCCCCCCCCCNO".split("").sort().join(""));
     expect(ringScaffold(fromSmiles("CCCCO"))).toEqual([]);
+  });
+});
+
+describe("the known-answer analogues themselves", () => {
+  const list = analogues();
+
+  it("are each written as SMILES should be: one pair of brackets to a branch, none empty, every ring closed", () => {
+    for (const { smiles } of list) {
+      expect(smiles, smiles).not.toMatch(/\(\(|\(\)/);
+      let depth = 0;
+      for (const ch of smiles) {
+        depth += ch === "(" ? 1 : ch === ")" ? -1 : 0;
+        expect(depth, smiles).toBeGreaterThanOrEqual(0);
+      }
+      expect(depth, smiles).toBe(0);
+      // (each ring-bond number opened and closed: an even count of each digit outside brackets)
+      const digits = smiles.replace(/\[[^\]]*\]/g, "").replace(/[^0-9]/g, "");
+      for (const d of new Set(digits)) expect(digits.split(d).length % 2, `${smiles}: ring ${d}`).toBe(1);
+    }
+  });
+
+  it("are read by Meno as another reader reads them: each one's formula, charge, stereocentres and double bonds with a configuration (testdata/analogues.facts.json, RDKit's)", () => {
+    expect(facts.analogues.map((f) => f.smiles)).toEqual(list.map((a) => a.smiles));
+    for (const f of facts.analogues) {
+      expect(f.read, f.smiles).toBe(true);
+      const input = fromSmiles(f.smiles);
+      const count = new Map<string, number>();
+      for (const a of input.atoms) {
+        count.set(a.el, (count.get(a.el) ?? 0) + 1);
+        if (a.hs) count.set("H", (count.get("H") ?? 0) + a.hs);
+      }
+      // (Hill's order: C, then H, then the rest by symbol)
+      const order = [...count.keys()].sort((p, q) => (p === "C" ? -1 : q === "C" ? 1 : p === "H" ? -1 : q === "H" ? 1 : p < q ? -1 : 1));
+      const formula = order.map((el) => el + (count.get(el)! > 1 ? count.get(el) : "")).join("");
+      expect(formula, f.smiles).toBe(f.formula);
+      expect(input.atoms.reduce((s, a) => s + (a.charge ?? 0), 0), f.smiles).toBe(f.charge);
+      expect(input.atoms.filter((a) => a.tetra).length, f.smiles).toBe(f.centres);
+      expect(input.bonds.filter((b) => b.stereo).length, f.smiles).toBe(f.doubleBonds);
+    }
   });
 });

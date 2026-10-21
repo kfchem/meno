@@ -7,12 +7,16 @@
  *
  *   npm run layout-many                 # every analogue
  *   npm run layout-many -- --threads 4  # a pool of four
+ *   npm run layout-many -- --smiles     # only writes their SMILES to .layout/analogues.json,
+ *   <chem python> scripts/layout/analogues.py   # for RDKit to read: testdata/analogues.facts.json
  *
  * Time it on a machine with nothing else running: a busy one says more of
  * the machine than of the layout.
  */
 
+import { mkdirSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
+import { dirname, resolve } from "node:path";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import type { LayoutInput } from "../../src/lib/layout/perceive";
@@ -33,6 +37,13 @@ if (!isMainThread) {
   const at = process.argv.indexOf("--threads");
   const threads = at > 0 ? Number(process.argv[at + 1]) : Math.max(1, Math.min(8, availableParallelism() - 1));
   const list = analogues();
+  if (process.argv.includes("--smiles")) {
+    const out = resolve(dirname(fileURLToPath(import.meta.url)), "../../.layout/analogues.json");
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, JSON.stringify({ analogues: list.map((a) => a.smiles) }, null, 1));
+    console.log(`wrote ${list.length} SMILES to ${out}`);
+    process.exit(0);
+  }
   const inputs = list.map((a) => fromSmiles(a.smiles));
   const failed = (laid: readonly LaidOut[]) => laid.filter((l) => l.notAsGiven.length).length;
 
