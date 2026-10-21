@@ -23,7 +23,12 @@ added, one geometry embedded (ETKDG v3, the same seed) and tidied by MMFF94,
 or UFF where MMFF94 has no parameters for it - for steps that need
 coordinates; what it could not make of one is counted, with why - a
 radical among them, whose spin it does not hand on - and each isotope a
-SMILES gives is kept. Each
+SMILES gives is kept. A SMILES that leaves centres or double bonds
+unspecified (the prior's vocabulary has stereo tokens, and leaves them out
+as often) is made as each of their stereoisomers, each its own molecule -
+what it does specify kept as given - in one order every run gives, or not
+at all where the step asks so: never one stereoisomer picked by the seed,
+passed on as if specified. Each
 molecule goes back as an output (lib/calc/output): its atoms, the geometry,
 its bonds and its atoms' charges beside, how it was made (`method`: the
 prior, the seed, the CPU, the force field), and its results - the SMILES as
@@ -42,6 +47,7 @@ import tempfile
 
 from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import Descriptors, rdDistGeom, rdForceFieldHelpers
+from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers, StereoEnumerationOptions
 
 # RDKit's own complaints go nowhere: what it could not make of a SMILES is counted, with why.
 RDLogger.DisableLog("rdApp.*")
@@ -61,9 +67,14 @@ MOST = 100
 SEED = 1
 #: The most steps a force field may take tidying one embedded geometry.
 STEPS = 2000
+#: The most stereoisomers one SMILES with unspecified centres or double bonds is made as, each its own molecule:
+#: past it, not made - a SMILES of 4 open centres gives 16.
+MOST_STEREOISOMERS = 8
+#: The most centres and double bonds of unspecified stereo whose stereoisomers are tried (2^8 = 256 at most).
+MOST_OPEN = 8
 #: How many times ETKDG may try to embed one molecule's geometry (its `maxIterations`) before it is counted as not
 #: made: a number of tries, not a time, so that the same asking makes the same molecules on any computer.
-EMBED_TRIES = 200
+EMBED_TRIES = 50
 #: Bond orders as Meno's outputs give them, Kekulé.
 ORDERS = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3}
 
@@ -104,19 +115,33 @@ def sampled(count, seed, folder):
         return [(row["SMILES"], float(row["NLL"])) for row in csv.DictReader(f)]
 
 
-def molecule_of(smiles, seed):
-    """A SMILES as a molecule in 3D: its atoms - element and charge - its
-    bonds, Kekulé, one geometry, and the force field that tidied it. Else
-    why not: a string."""
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return "not a SMILES RDKit reads"
-    # (a radical's spin is not handed on with it: made, it would reach a calculation closed-shell, its
-    #  multiplicity taken from its electrons' parity - so it is not made)
-    if Descriptors.NumRadicalElectrons(mol):
-        return "a radical, with unpaired electrons this plugin does not hand on"
-    if sum(a.GetAtomicNum() for a in mol.GetAtoms()) - Chem.GetFormalCharge(mol) <= 0:
-        return "no electrons, so nothing to calculate"
+def stereoisomers_of(mol, every):
+    """Each stereoisomer of a molecule read from a SMILES, as a list of molecules: those of every centre and double
+    bond it leaves unspecified, where `every`, each of them its own - what it does specify kept as given - in the
+    one order every run gives them (by their isomeric SMILES); the molecule alone where it leaves none open. Else
+    why not: a string. Never one stereoisomer chosen for it: that would pass as specified what was not."""
+    open_ = [si for si in Chem.FindPotentialStereo(Chem.Mol(mol)) if si.specified == Chem.StereoSpecified.Unspecified]
+    if not open_:
+        return [mol]
+    if not every:
+        return "its stereo is not all specified"
+    # (2 to the power of what is open, before any are found alike: past MOST_OPEN, not tried - a long sugar
+    #  chain sampled would otherwise be thousands of stereoisomers tried before the count was seen)
+    if len(open_) > MOST_OPEN:
+        return f"more than {MOST_OPEN} centres or double bonds of unspecified stereo"
+    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, tryEmbedding=False, maxIsomers=0)
+    found = list(EnumerateStereoisomers(Chem.Mol(mol), options=options))
+    if len(found) <= 1:
+        return [mol]
+    if len(found) > MOST_STEREOISOMERS:
+        return f"more than {MOST_STEREOISOMERS} stereoisomers"
+    return sorted(found, key=lambda m: Chem.MolToSmiles(m))
+
+
+def made_of(mol, seed):
+    """A molecule as one in 3D: its atoms - element, charge, isotope - its bonds, Kekulé, one geometry, and the
+    force field that tidied it. Else why not: a string - one whose geometry came out another stereoisomer too."""
+    want = Chem.MolToSmiles(mol)
     mol = Chem.AddHs(mol)
     params = rdDistGeom.ETKDGv3()
     params.randomSeed = int(seed)
@@ -131,16 +156,48 @@ def molecule_of(smiles, seed):
         field = "UFF"
     else:
         field = None
+    # (the stereoisomer its geometry is, read back from it: the one asked for, or not made)
+    back = Chem.Mol(mol)
+    Chem.AssignStereochemistryFrom3D(back)
+    if Chem.MolToSmiles(Chem.RemoveHs(back)) != want:
+        return "its geometry came out another stereoisomer"
     Chem.Kekulize(mol, clearAromaticFlags=True)
     if any(b.GetBondType() not in ORDERS for b in mol.GetBonds()):
         return "a bond neither single, double nor triple"
     return {
+        "smiles": want,
         # (each atom's isotope too, its mass number, where the SMILES gives one: 13C, 2H)
         "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge(), "isotope": a.GetIsotope()} for a in mol.GetAtoms()],
         "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": ORDERS[b.GetBondType()]} for b in mol.GetBonds()],
         "xyz": [round(v, 4) for p in mol.GetConformer().GetPositions() for v in p],
         "field": field,
     }
+
+
+def molecules_of(smiles, seed, every=True):
+    """A SMILES as molecules in 3D: one, or each stereoisomer of what it leaves unspecified (stereoisomers_of) -
+    a list of what made_of gives, each with how many its SMILES gave (`of`). Else why not: a string."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        return "not a SMILES RDKit reads"
+    # (a radical's spin is not handed on with it: made, it would reach a calculation closed-shell, its
+    #  multiplicity taken from its electrons' parity - so it is not made)
+    if Descriptors.NumRadicalElectrons(mol):
+        return "a radical, with unpaired electrons this plugin does not hand on"
+    if sum(a.GetAtomicNum() for a in mol.GetAtoms()) - Chem.GetFormalCharge(mol) <= 0:
+        return "no electrons, so nothing to calculate"
+    isomers = stereoisomers_of(mol, every)
+    if isinstance(isomers, str):
+        return isomers
+    # (all of a SMILES's stereoisomers, or none of them: never some passed on as if they were all - so the first
+    #  that cannot be made ends it, the rest not tried)
+    made = []
+    for m in isomers:
+        one = made_of(m, seed)
+        if isinstance(one, str):
+            return one
+        made.append(one)
+    return [{**m, "of": len(made)} for m in made]
 
 
 def number(options, key, default, low, high):
@@ -161,33 +218,45 @@ def op_run(m):
         raise ValueError("REINVENT 4's prior is not here: add the plugin again in Settings, Plugins")
     o = m.get("options") or {}
     count, seed = number(o, "count", 20, 1, MOST), number(o, "seed", SEED, 0, 2**31 - 1)
+    every = o.get("stereo", "every") != "skip"
     with tempfile.TemporaryDirectory(prefix="meno-reinvent-") as folder:
         rows = sampled(count, seed, folder)
     method = f"sampled from {PRIOR_SAID}, seed {seed}, on the CPU"
-    outputs, why = [], {}
+    outputs, why, smiles_made = [], {}, 0
     for smiles, nll in rows:
-        made = molecule_of(smiles, seed)
+        made = molecules_of(smiles, seed, every)
+        # (all of a SMILES's stereoisomers within the run's molecules, or none: in the order sampled, never by time)
+        if not isinstance(made, str) and len(outputs) + len(made) > MOST:
+            made = f"past the {MOST} molecules one run makes"
         if isinstance(made, str):
             why[made] = why.get(made, 0) + 1
             continue
-        outputs.append({
-            "schema": 1,
-            "program": "REINVENT 4",
-            "version": VERSION,
-            "method": method + f"; one geometry, ETKDG v3 + {made['field'] or 'no force field'}",
-            "atoms": [a["el"] for a in made["atoms"]],
-            "charges": [a["charge"] for a in made["atoms"]],
-            **({"isotopes": [a["isotope"] for a in made["atoms"]]} if any(a["isotope"] for a in made["atoms"]) else {}),
-            "bonds": made["bonds"],
-            "frames": [made["xyz"]],
-            "results": [
-                {"id": "smiles", "on": "molecule", "group": "Generated", "label": "SMILES as sampled", "value": smiles},
-                {"id": "nll", "on": "molecule", "group": "Generated", "label": f"NLL under {PRIOR}", "value": nll, "digits": 2, "rank": 1},
-            ],
-        })
-    said = f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU: {len(outputs)} made"
+        smiles_made += 1
+        for k, one in enumerate(made):
+            enumerated = one["of"] > 1
+            outputs.append({
+                "schema": 1,
+                "program": "REINVENT 4",
+                "version": VERSION,
+                "method": method
+                + (f"; its stereo, unspecified in the SMILES, one of the {one['of']} stereoisomers enumerated" if enumerated else "")
+                + f"; one geometry, ETKDG v3 + {one['field'] or 'no force field'}",
+                "atoms": [a["el"] for a in one["atoms"]],
+                "charges": [a["charge"] for a in one["atoms"]],
+                **({"isotopes": [a["isotope"] for a in one["atoms"]]} if any(a["isotope"] for a in one["atoms"]) else {}),
+                "bonds": one["bonds"],
+                "frames": [one["xyz"]],
+                "results": [
+                    {"id": "smiles", "on": "molecule", "group": "Generated", "label": "SMILES as sampled", "value": smiles},
+                    *([{"id": "stereoisomer", "on": "molecule", "group": "Generated", "label": f"Stereoisomer {k + 1} of {one['of']} enumerated", "value": one["smiles"]}] if enumerated else []),
+                    {"id": "nll", "on": "molecule", "group": "Generated", "label": f"NLL under {PRIOR}", "value": nll, "digits": 2, "rank": 1},
+                ],
+            })
+    said = f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU: {smiles_made} made"
+    if len(outputs) != smiles_made:
+        said += f" \u2192 {len(outputs)} molecules with every stereoisomer of unspecified centres"
     if why:
-        said += f", {sum(why.values())} not (" + "; ".join(f"{n}: {w}" for w, n in sorted(why.items())) + ")"
+        said += f"; {sum(why.values())} not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(why.items())) + ")"
     return {"outputs": outputs, "said": said}
 
 

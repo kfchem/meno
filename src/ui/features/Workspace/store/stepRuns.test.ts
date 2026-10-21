@@ -953,7 +953,7 @@ describe("Generate: a step that takes nothing in", () => {
     expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("ready");
     worker.run.mockImplementationOnce(async () => generated as never);
     await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith("generate", [], { count: 3, seed: 7 }, "molecules");
+    expect(worker.run).toHaveBeenCalledWith("generate", [], { count: 3, seed: 7, stereo: "every" }, "molecules");
     const ran = st().steps.find((s) => s.id === step)!.ran!;
     expect(ran).toMatchObject({ ok: true, said: generated.said });
     const out = resultOf(st(), step)!;
