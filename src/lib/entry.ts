@@ -65,6 +65,8 @@ export type Property = {
   at?: At;
   by?: By;
   status: PropertyStatus;
+  /** What a reader of the value must know of it that the rest does not say: a limit of how it was worked out, in a line. */
+  note?: string;
 };
 
 /** An entry's status: done, failed (why), or set aside (why). */

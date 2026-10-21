@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { By } from "../entry";
 import { convert } from "../units";
 import { PROPERTY } from "./base";
-import { populations } from "./populations";
+import { CONFIGURATIONS, populations } from "./populations";
 import { entry, quantity } from "./testEntries";
 
 const by = { program: "P", method: "M", basis: "B", treatment: "T" };
@@ -26,7 +26,9 @@ describe("Populations", () => {
     expect(out.exits.failed).toEqual([]);
     // (each share says the temperature, and what worked out the free energies it is of)
     expect(eq.properties[PROPERTY.population]).toMatchObject({ unit: "none", at: { kelvin: 298.15, atm: 1 }, by });
-    expect(out.said).toBe("Shares from free energy at 298.15 K · 2 in 1 group");
+    expect(out.said).toBe(`Shares from free energy at 298.15 K · 2 in 1 group · ${CONFIGURATIONS}`);
+    // (and each share says it: the record holds no configuration yet, so a group may hold two)
+    expect(eq.properties[PROPERTY.population].note).toBe("configurations (R/S, E/Z) not told apart: stereoisomers in one group share one sum");
   });
 
   it("counts each as many times as its degeneracy says: 2 forms 0.5 kcal/mol up against 1, 46.24% at 298.15 K", () => {
@@ -61,7 +63,7 @@ describe("Populations", () => {
       ["e-only", { failed: "it has no free energy (thermo.free-energy), only an electronic energy, which is not weighted in its place" }],
     ]);
     // (counted: 1 + 2 = 3 came in)
-    expect(out.said).toBe("Shares from free energy at 298.15 K · 1 in 1 group · 2 failed");
+    expect(out.said).toBe(`Shares from free energy at 298.15 K · 1 in 1 group · 2 failed · ${CONFIGURATIONS}`);
   });
 
   it("weights a group only where its free energies add up in one sum: one temperature (the node's), pressure, solvent, method and thermal treatment", () => {

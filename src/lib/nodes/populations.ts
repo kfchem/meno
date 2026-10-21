@@ -11,10 +11,20 @@
  * at one pressure, in one solvent, by one program, method, basis and thermal
  * treatment; else the whole group goes out of *failed*, each entry saying
  * why: shares of part of a group would be shares of something else.
+ *
+ * An entry's record holds no configuration of its stereocentres or double
+ * bonds yet, so a group may hold two configurations - a conformer search on
+ * a structure with a centre left open embeds both - and their shares are
+ * then of one Boltzmann sum, which stereoisomers that do not interconvert
+ * are not. Until the record holds configurations (and groups are made by
+ * identity), every share says so (`note`), and so does the node's line.
  */
 import { boltzmann } from "../boltzmann";
 import type { Entry, Property } from "../entry";
 import { failedWith, groups, inGroups, numberIn, PROPERTY, workedOutUnlike, type NodeOutcome } from "./base";
+
+/** What every share says of its group: its entries' configurations are not told apart. */
+export const CONFIGURATIONS = "configurations (R/S, E/Z) not told apart: stereoisomers in one group share one sum";
 
 /** How near a free energy's temperature must be to the node's to be the same, in kelvin. */
 const SAME_KELVIN = 1e-6;
@@ -69,11 +79,11 @@ export function populations(entries: readonly Entry[], options: PopulationsOptio
     const w = boltzmann(energies, kelvin, counted);
     g.forEach((e, i) => {
       const fe = e.properties[PROPERTY.freeEnergy];
-      shares.set(e, { value: w[i], unit: "none", at: { ...fe.at!, kelvin }, ...(fe.by ? { by: { ...fe.by } } : {}), status: "computed" });
+      shares.set(e, { value: w[i], unit: "none", at: { ...fe.at!, kelvin }, ...(fe.by ? { by: { ...fe.by } } : {}), status: "computed", note: CONFIGURATIONS });
     });
   }
   const done = entries.filter((e) => shares.has(e)).map((e) => ({ ...e, properties: { ...e.properties, [PROPERTY.population]: shares.get(e)! } }));
   const out = entries.filter((e) => failed.has(e)).map((e) => failedWith(e, failed.get(e)!));
-  const said = `Shares from free energy at ${kelvin} K · ${done.length} in ${groups(weighted)}${out.length ? ` · ${out.length} failed` : ""}`;
+  const said = `Shares from free energy at ${kelvin} K · ${done.length} in ${groups(weighted)}${out.length ? ` · ${out.length} failed` : ""} · ${CONFIGURATIONS}`;
   return { ok: true, exits: { done, failed: out }, said };
 }
