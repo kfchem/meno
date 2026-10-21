@@ -367,6 +367,8 @@ function WorkspaceContent({
   }, [store, sources]);
   const model = useEditor((s) => s.model);
   const marks = useChemMarks(model, active);
+  // (for pictures made of the drawing: R, S, E and Z as the canvas shows them)
+  useEffect(() => store.getState().setShownMarks(marks), [marks, store]);
   // (what the drawing says of its stereochemistry only by luck, marked - worked out here, by Meno itself)
   const unsureKept = useRef(structureValues<Unsure>());
   const unsure = useMemo(() => unsureOf(model, unsureKept.current), [model]);
