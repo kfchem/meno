@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { AROMATIC_BOND, kekuleOrders, type KekuleBond } from "./kekulize";
+import { readSmiles } from "./smiles";
+import { implicitHydrogens } from "./molecule";
 
 const A = AROMATIC_BOND;
 
@@ -168,6 +170,62 @@ describe("kekuleOrders", () => {
     const { n } = doublesPerAtom(m);
     expect([0, 1, 2, 3, 7, 8].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1]);
     expect([4, 5, 6].filter((i) => n[i] === 0)).toHaveLength(1);
+  });
+
+  // (an aromatic SMILES with no H stated on its nitrogens - as a MOL file of aromatic bonds gives them - read, and
+  // its formula counted with each atom's H by valence; each against RDKit's formula of the molecule's own SMILES)
+  const formulaOf = (smiles: string) => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => {
+      sum[b.a1] += orders[i];
+      sum[b.a2] += orders[i];
+    });
+    const n = new Map<string, number>();
+    s.atoms.forEach((a, i) => {
+      n.set(a.el, (n.get(a.el) ?? 0) + 1);
+      const h = implicitHydrogens(a.el, sum[i], a.charge ?? 0);
+      if (h) n.set("H", (n.get("H") ?? 0) + h);
+    });
+    return ["C", "H", ...[...n.keys()].filter((k) => k !== "C" && k !== "H").sort()].filter((k) => n.has(k)).map((k) => k + (n.get(k)! > 1 ? n.get(k) : "")).join("");
+  };
+
+  it.each([
+    // (a C=O or C=S on the ring takes its carbon's electron: the 4n + 2 a ring system counts asks for the N-H)
+    ["guanine", "Nc1nc2ncnc2c(=O)n1", "C5H5N5O"],
+    ["hypoxanthine", "O=c1ncnc2ncnc12", "C5H4N4O"],
+    ["xanthine", "O=c1nc(=O)c2ncnc2n1", "C5H4N4O2"],
+    ["isoguanine", "Nc1nc(=O)nc2ncnc12", "C5H5N5O"],
+    ["allopurinol", "O=c1ncnc2nncc12", "C5H4N4O"],
+    ["6-mercaptopurine", "S=c1ncnc2ncnc12", "C5H4N4S"],
+    ["thioguanine", "Nc1nc(=S)c2ncnc2n1", "C5H5N5S"],
+    ["urazole", "O=c1nnc(=O)n1", "C2H3N3O2"],
+    ["8-azaguanine", "Nc1nc2nnnc2c(=O)n1", "C4H4N6O"],
+    // (and with none: as many N-H as 4n + 2 asks - porphine's two, a tetrazine's none)
+    ["porphine", "c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3", "C20H14N4"],
+    ["1,2,4,5-tetrazine", "c1nncnn1", "C2H2N4"],
+    ["losartan's tetrazole", "c1ccc(-c2nnnn2)cc1", "C7H6N4"],
+  ])("gives %s its formula, its hydrogens not stated", (_, smiles, formula) => {
+    expect(formulaOf(smiles)).toBe(formula);
+  });
+
+  it("reads one molecule written in two orders as one: its N-H on the same atom, its double bonds the same", () => {
+    // (5-phenyltetrazole, and the same atoms written backwards: the H on the tetrazole's same nitrogen - the one
+    // next to its carbon, 1H - wherever the file put it first)
+    const nhOf = (smiles: string) => {
+      const s = readSmiles(smiles);
+      const orders = kekuleOrders(s.atoms, s.bonds);
+      const sum = s.atoms.map(() => 0);
+      s.bonds.forEach((b, i) => {
+        sum[b.a1] += orders[i];
+        sum[b.a2] += orders[i];
+      });
+      // (each N-H by its neighbours' elements: which nitrogen it is, whatever its number)
+      return s.atoms.flatMap((a, i) => (a.el === "N" && implicitHydrogens("N", sum[i]) ? [s.bonds.filter((b) => b.a1 === i || b.a2 === i).map((b) => s.atoms[b.a1 === i ? b.a2 : b.a1].el).sort().join("")] : []));
+    };
+    expect(nhOf("c1ccc(-c2nnnn2)cc1")).toEqual(nhOf("n1nnc(-c2ccccc2)n1"));
+    expect(nhOf("n1nnc(-c2ccccc2)n1")).toEqual(nhOf("n1c(-c2ccccc2)nnn1"));
   });
 });
 
