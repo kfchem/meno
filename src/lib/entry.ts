@@ -49,6 +49,15 @@ export type ListPer = "atom" | "frame" | "point";
 export type Column = { name: string; unit: Unit | "none" };
 
 /**
+ * A vibration's frequency, the column a table of vibrations (the property
+ * `vibrations`) has first - named once, here, so that a step finds it where
+ * a plugin wrote it: in cm-1, an imaginary one negative, as the programs
+ * print them. A plugin adds after it what else its program gives, each
+ * with its unit; the modes go in the property `modes`, in the same order.
+ */
+export const FREQUENCY: Column = { name: "frequency", unit: "cm-1" };
+
+/**
  * A restraint a step holds a geometry to: a distance between two atoms (in
  * ångströms), a dihedral of four (in degrees), or atoms fixed where they
  * are (no value); atoms by their number, from 0, as a bond's are. Its

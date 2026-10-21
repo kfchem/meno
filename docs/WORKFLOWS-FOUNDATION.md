@@ -250,8 +250,9 @@ its entry):
   atoms, per frame as its frames;
 - **a table's columns carry their units** - a frequency in cm-1 beside a
   symmetry with none - and its rows are as wide as its columns. In a
-  table of vibrations an imaginary frequency is a negative number, as
-  the programs print it;
+  table of vibrations (the property `vibrations`) the first column is
+  `frequency` (`FREQUENCY`), in cm-1, an imaginary one a negative number,
+  as the programs print it;
 - **modes** are as the program gave them, in the vibrations table's row
   order; no step relies on how they are scaled;
 - **a restraint** is a distance between two atoms (Å), a dihedral of four

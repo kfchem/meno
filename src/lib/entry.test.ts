@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atOneGeometry, ENTRY_SCHEMA, frameCount, geometryKey, ridingAlong, valueFault, type Entry, type Property } from "./entry";
+import { atOneGeometry, ENTRY_SCHEMA, FREQUENCY, frameCount, geometryKey, ridingAlong, valueFault, type Entry, type Property } from "./entry";
 import { speciesOf } from "./io/writers";
 
 const water = (dx = 0) => [0 + dx, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
@@ -64,7 +64,7 @@ describe("a property's value, checked against its entry", () => {
 
   it("holds a table's rows to its columns, and each mode to three numbers an atom", () => {
     // (each column with its own unit: a frequency's, and a symmetry's, which has none)
-    const columns = [{ name: "Frequency", unit: "cm-1" as const }, { name: "Symmetry", unit: "none" as const }];
+    const columns = [FREQUENCY, { name: "symmetry", unit: "none" as const }];
     expect(valueFault({ table: { columns, rows: [[1595, "A1"], [3657, "A1"], [3756, "B2"]] } }, water3())).toBeNull();
     expect(valueFault({ table: { columns, rows: [[1595, "A1"], [3657]] } }, water3())).toBe("Row 2 of a table has 1 cells for 2 columns");
     expect(valueFault({ modes: [Array(9).fill(0.1), Array(9).fill(0.2)] }, water3())).toBeNull();
