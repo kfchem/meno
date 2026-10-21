@@ -10,7 +10,7 @@ import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
-import { CARD_H, CARD_W, PORT_DOWN, PX } from "./look";
+import { CARD_H, CARD_W, portDown, PX } from "./look";
 import { clock } from "./programs";
 
 /**
@@ -146,7 +146,8 @@ export type StepCardProps = {
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
-  ports: { take: PortLook; give: PortLook };
+  /** Its inputs, in the kind's order, each lit or not as a wire is drawn: one port each down its left side, named where there is more than one. What it gives is its exits' sets, beside it - it has no port of its own for that. */
+  inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
   /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
@@ -164,8 +165,7 @@ export type StepCardProps = {
   /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
   onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
-  onTakeDown: (e: ReactPointerEvent) => void;
-  onGiveDown: (e: ReactPointerEvent) => void;
+  onTakeDown: (e: ReactPointerEvent, port: string) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
 };
@@ -304,8 +304,27 @@ export default function StepCard(p: StepCardProps) {
         )}
         </AnimatePresence>
       </div>
-      <Port look={p.ports.take} label={`Into ${p.info.name}`} data={{ "data-take": String(p.step.id) }} onPointerDown={p.onTakeDown} style={{ left: 0, top: PORT_DOWN / PX }} />
-      <Port look={p.ports.give} label={`Out of ${p.info.name}`} data={{ "data-give-step": String(p.step.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: PORT_DOWN / PX }} />
+      {p.inputs.map((input, k) => (
+        <Port
+          key={input.id}
+          look={input.look}
+          label={p.inputs.length > 1 ? `${input.name} into ${p.info.name}` : `Into ${p.info.name}`}
+          data={{ "data-take": `${p.step.id}:${input.id}` }}
+          onPointerDown={(e) => p.onTakeDown(e, input.id)}
+          style={{ left: 0, top: portDown(k) / PX }}
+        />
+      ))}
+      {/* (an input's name, where there is more than one: outside the card, level with its port) */}
+      {p.inputs.length > 1 &&
+        p.inputs.map((input, k) => (
+          <div
+            key={`n${input.id}`}
+            className="pointer-events-none absolute select-none whitespace-nowrap text-right text-[10px] leading-none text-gh-gray"
+            style={{ right: `calc(100% + 8px)`, top: portDown(k) / PX, transform: "translateY(-50%)" }}
+          >
+            {input.name}
+          </div>
+        ))}
     </div>
   );
 }

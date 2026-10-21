@@ -9,6 +9,14 @@
   public.content, not to public.zip-archive, though the file is a zip: a
   workspace is a document, not an archive to unpack - and a browser that
   opens "safe" downloads would unpack one that said it was an archive.
+
+  Meno is also offered in the Finder's Open With for the files it reads -
+  structures and PDFs (src/opened.rs, OPENED_WITH) - as an Alternate: a
+  secondary viewer, never chosen to open them unless asked, so whatever
+  opens them still does. PDF by the system's type, com.adobe.pdf. The
+  structure files by their extensions (CFBundleTypeExtensions), declaring
+  no type of Meno's own: where another app declares a type for one, the
+  system takes its, and a claim on a type of Meno's would not be found.
 -->
 <plist version="1.0">
 <dict>
@@ -27,6 +35,36 @@
       </array>
       <key>CFBundleTypeIconFile</key>
       <string>meno-document.icns</string>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>Chemical structure file</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>CFBundleTypeExtensions</key>
+      <array>
+        <string>mol</string>
+        <string>sdf</string>
+        <string>rxn</string>
+        <string>xyz</string>
+        <string>pdb</string>
+        <string>cube</string>
+        <string>cub</string>
+      </array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key>
+      <string>PDF document</string>
+      <key>CFBundleTypeRole</key>
+      <string>Viewer</string>
+      <key>LSHandlerRank</key>
+      <string>Alternate</string>
+      <key>LSItemContentTypes</key>
+      <array>
+        <string>com.adobe.pdf</string>
+      </array>
     </dict>
   </array>
   <key>UTExportedTypeDeclarations</key>

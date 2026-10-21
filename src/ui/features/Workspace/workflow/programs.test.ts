@@ -233,9 +233,9 @@ describe("a conformer search", () => {
     const counted = conformersWorked(WATER, { ...out, degeneracies: [1, 2] }, []);
     if (typeof counted === "string") throw new Error(counted);
     expect(counted.map((w) => w.degeneracy)).toEqual([1, 2]);
-    expect(resultsOf({ ok: true, holds: "conformers", kept: counted, aside: [], said: "" }).molecules[0].degeneracies).toEqual([1, 2]);
+    expect(resultsOf({ ok: true, holds: "conformers", kept: counted, aside: [], said: "" }, "conformers").molecules[0].degeneracies).toEqual([1, 2]);
     // (all one, or not a whole number for each: none kept)
-    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }).molecules[0].degeneracies).toBeUndefined();
+    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "conformers").molecules[0].degeneracies).toBeUndefined();
     const odd = conformersWorked(WATER, { ...out, degeneracies: [1, 1.5] }, []);
     if (typeof odd === "string") throw new Error(odd);
     expect(odd.map((w) => w.degeneracy)).toEqual([undefined, undefined]);
@@ -243,7 +243,7 @@ describe("a conformer search", () => {
     if (typeof without === "string") throw new Error(without);
     expect(without.map((w) => w.share)).toEqual([undefined, undefined]);
     // (as the molecule's own shares, in its conformer set)
-    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }).molecules[0].shares).toEqual([0.7, 0.3]);
+    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "conformers").molecules[0].shares).toEqual([0.7, 0.3]);
   });
 
   it("takes what a plugin kept at once by place - never one it was not given", () => {
