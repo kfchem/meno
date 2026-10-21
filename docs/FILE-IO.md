@@ -235,6 +235,9 @@ later reaches everyone who never touched it).
   before holds every setting; it is read as it is, and written back with
   only what differs from the defaults now. A value it held that is no
   longer the default - 2x drawing resolution, say - stays as it was.
+- A value the user sets that is the default as it is then is not written:
+  it is the default, and follows it if the default changes later. Only a
+  value that differs from the default is kept as the user's own.
 
 ## What is unclear today
 
