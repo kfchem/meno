@@ -312,14 +312,16 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   }
 }
 
-/** A render stopped: its job, where it has one - else it is not started - and its placeholder taken away. One that failed is put away. */
+/**
+ * A render stopped: its job, where it has one - else it is not started - and its placeholder taken away. One that failed
+ * is put away, its job's folder kept - its log, saying all Blender said - until Settings, Calculations, Jobs, clears it.
+ */
 export function stopRender(store: EditorStore, key: number): void {
   const renders = rendersOf(store);
   const r = renders.getState().list.find((x) => x.key === key);
   if (!r) return;
   if (r.state === "failed") {
     renders.setState((s) => ({ list: s.list.filter((x) => x.key !== key) }));
-    if (r.job) void removeJob(r.job).catch(() => {});
     return;
   }
   if (r.job) void stopJob(r.job).catch(() => {});
@@ -329,13 +331,13 @@ export function stopRender(store: EditorStore, key: number): void {
 /**
  * Every render of a workspace stopped: it is closing, and what they make
  * would be lost. Their jobs are stopped as a step's are, their files kept
- * (a failed one's taken away); none is looked at again, nothing goes on
+ * (a failed one's as it ended); none is looked at again, nothing goes on
  * its page, and none begins after. Resolved once each job has been asked.
  */
 export function stopRenders(store: EditorStore): Promise<void> {
   closingOf(store).abort();
   const renders = rendersOf(store);
-  const asked = renders.getState().list.flatMap((r) => (r.job ? [(r.state === "failed" ? removeJob(r.job) : stopJob(r.job)).catch(() => {})] : []));
+  const asked = renders.getState().list.flatMap((r) => (r.job && r.state !== "failed" ? [stopJob(r.job).catch(() => {})] : []));
   renders.setState({ list: [] });
   return Promise.all(asked).then(() => {});
 }

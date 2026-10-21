@@ -57,7 +57,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 }));
 
 import { PX } from "../workflow/look";
-import { boxOf, progressOf, rendersOf, startRender, stopRenders, withWords } from "./renders";
+import { boxOf, progressOf, rendersOf, startRender, stopRender, stopRenders, withWords } from "./renders";
 import { askOf, renderOptions } from "./renderOptions";
 import type { RenderAsk } from "./renderScene";
 import { valuesOf } from "../../../../lib/options";
@@ -201,6 +201,31 @@ describe("a workspace closing", () => {
     await startRender(one.store, [one.id], FILM, {});
     expect(asked.started).toHaveLength(1);
     expect(rendersOf(one.store).getState().list).toEqual([]);
+  });
+  it("says why one failed, and puts it away with its job's folder kept - its log, all Blender said", async () => {
+    const one = workspace();
+    const ran = startRender(one.store, [one.id], FILM, {});
+    await vi.advanceTimersByTimeAsync(0);
+    const job = rendersOf(one.store).getState().list[0].job!;
+    Object.assign(jobs.get(job)!, { state: "failed", ended: Date.now(), log: "TypeError: a stand-in\n" });
+    worker.collect.mockResolvedValueOnce({ why: "TypeError: a stand-in" } as never);
+    await vi.advanceTimersByTimeAsync(LOOK_MS);
+    await ran;
+    const [r] = rendersOf(one.store).getState().list;
+    expect(r).toMatchObject({ state: "failed", why: "TypeError: a stand-in" });
+    stopRender(one.store, r.key);
+    expect(rendersOf(one.store).getState().list).toEqual([]);
+    // (another failed, then its workspace closed: its folder kept as well)
+    const again = startRender(one.store, [one.id], FILM, {});
+    await vi.advanceTimersByTimeAsync(0);
+    const job2 = rendersOf(one.store).getState().list[0].job!;
+    Object.assign(jobs.get(job2)!, { state: "failed", ended: Date.now() });
+    worker.collect.mockResolvedValueOnce({ why: "TypeError: another" } as never);
+    await vi.advanceTimersByTimeAsync(LOOK_MS);
+    await again;
+    await stopRenders(one.store);
+    expect(asked.removed).toEqual([]);
+    expect(asked.stopped).toEqual([]);
   });
 });
 

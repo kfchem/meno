@@ -182,6 +182,20 @@ class Collect(unittest.TestCase):
         said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="failed")
         self.assertEqual(said["result"], {"why": "render.py: the scene has no camera"})
 
+    def test_says_what_python_raised_not_blenders_own_last_words(self):
+        # (as Blender 5.2.2 ends a script that raised, and - after a large render - what it did not free)
+        tail = "Error: script failed, file: 'render.py', exiting.\nBlender 5.2.2 LTS\n\nBlender quit\n"
+        leak = "Error: Not freed memory blocks: 21897, total unfreed memory 8815.848637 MB\n"
+        raised = "Traceback (most recent call last):\n  File \"motion_assemble.py\", line 12, in <module>\nTypeError: 'NoneType' object is not subscriptable\n"
+        for log in (raised + tail, raised + tail + leak):
+            said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=log, ended="failed")
+            self.assertEqual(said["result"], {"why": "TypeError: 'NoneType' object is not subscriptable"})
+        # (Blender's own error, where Python raised none: said; its last words alone, said as they are)
+        said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log="Error: Cannot read file 'scene.gltf'\n" + tail + leak, ended="failed")
+        self.assertEqual(said["result"], {"why": "Error: Cannot read file 'scene.gltf'"})
+        said = ask("collect", step="render", entries=[SCENE], options={}, files={}, log=tail.split("\n")[0], ended="failed")
+        self.assertEqual(said["result"], {"why": "Error: script failed, file: 'render.py', exiting."})
+
 
 class ProgressStatistics(unittest.TestCase):
     """Blender's own time taken and time remaining, read off a statistics line (render.py `Progress.clocks`): the bar's smoothing."""
