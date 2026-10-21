@@ -5,10 +5,10 @@
  * again. Plain data over the document; the store makes each one edit.
  */
 import type { WorkspaceDocument } from "../document";
-import type { Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { Wire, WorkflowSet, WorkflowStep } from "../store/types";
 import { insidePolygon } from "../utils/selection";
 import { CARD_H, CARD_W } from "./look";
-import { removeSet, removeStep } from "./model";
+import { removeSet, removeStep, withExits } from "./model";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 type Pt = { x: number; y: number };
@@ -25,8 +25,7 @@ export type FlowParts = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wir
 export const NO_PARTS: FlowParts = { sets: [], steps: [], wires: [] };
 
 /** Whether a wire's two ends are both among the sets and steps given. */
-const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =>
-  steps.has(w.to) && ("set" in w.from ? sets.has(w.from.set) : steps.has(w.from.step));
+const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) => steps.has(w.to.step) && sets.has(w.from.set);
 
 /**
  * The parts among the sets and steps given: those sets - one made by a step
@@ -39,7 +38,10 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
   return {
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
-      .map(({ members: _m, keep: _k, notKept: _n, ...b }) => (b.made && !steps.has(b.made.step) ? (({ made: _m, aside: _a, ...rest }) => rest)(b) : b)),
+      // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
+      .map(({ members: _m, keep: _k, notKept: _n, ...b }) =>
+        b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b,
+      ),
     steps: (doc.steps ?? [])
       .filter((s) => steps.has(s.id))
       .map(({ ran: _r, runs: _k, running: _g, ...s }) => s),
@@ -53,7 +55,9 @@ export const idsOf = (parts: FlowParts) => ({ sets: new Set(parts.sets.map((b) =
 /**
  * `doc` with `parts` added, moved by (dx, dy), numbered on from its
  * counter - the wires among them, and what made a set, numbered as they
- * are - and the ids the sets and steps were given, in order.
+ * are - and the ids the sets and steps were given, in order. A step put
+ * down without a set for one of its exits is given one (model
+ * `withExits`), so that every step has its exits.
  */
 export function appendParts(doc: WorkspaceDocument, parts: FlowParts, dx = 0, dy = 0): { doc: WorkspaceDocument; sets: number[]; steps: number[] } {
   let next = doc.nextWorkflowId ?? 1;
@@ -61,25 +65,27 @@ export function appendParts(doc: WorkspaceDocument, parts: FlowParts, dx = 0, dy
   const stepId = new Map(parts.steps.map((s) => [s.id, next++]));
   const sets = parts.sets.map((b): WorkflowSet => {
     const step = b.made ? stepId.get(b.made.step) : undefined;
-    const { made: _m, aside: _a, ...rest } = b;
-    return { ...rest, ...(b.made && step != null ? { made: { ...b.made, step }, ...(b.aside ? { aside: b.aside } : {}) } : {}), id: setId.get(b.id)!, x0: b.x0 + dx, x1: b.x1 + dx, y0: b.y0 + dy, y1: b.y1 + dy };
+    const { made: _m, ...rest } = b;
+    return { ...rest, ...(b.made && step != null ? { made: { ...b.made, step } } : {}), id: setId.get(b.id)!, x0: b.x0 + dx, x1: b.x1 + dx, y0: b.y0 + dy, y1: b.y1 + dy };
   });
   const steps = parts.steps.map((s): WorkflowStep => ({ ...s, id: stepId.get(s.id)!, x: s.x + dx, y: s.y + dy }));
-  const endOf = (e: WireEnd): WireEnd | null => ("set" in e ? (setId.has(e.set) ? { set: setId.get(e.set)! } : null) : stepId.has(e.step) ? { step: stepId.get(e.step)! } : null);
   const wires = parts.wires.flatMap((w): Wire[] => {
-    const from = endOf(w.from);
-    const to = stepId.get(w.to);
-    return from && to != null ? [{ id: next++, from, to }] : [];
+    const from = setId.get(w.from.set);
+    const to = stepId.get(w.to.step);
+    return from != null && to != null ? [{ id: next++, from: { set: from }, to: { step: to, port: w.to.port } }] : [];
   });
+  let out: WorkspaceDocument = {
+    ...doc,
+    nextWorkflowId: next,
+    sets: [...(doc.sets ?? []), ...sets],
+    steps: [...(doc.steps ?? []), ...steps],
+    wires: [...(doc.wires ?? []), ...wires],
+  };
+  for (const s of steps) out = withExits(out, s.id);
+  const before = new Set((doc.sets ?? []).map((b) => b.id));
   return {
-    doc: {
-      ...doc,
-      nextWorkflowId: next,
-      sets: [...(doc.sets ?? []), ...sets],
-      steps: [...(doc.steps ?? []), ...steps],
-      wires: [...(doc.wires ?? []), ...wires],
-    },
-    sets: sets.map((b) => b.id),
+    doc: out,
+    sets: (out.sets ?? []).filter((b) => !before.has(b.id)).map((b) => b.id),
     steps: steps.map((s) => s.id),
   };
 }
@@ -147,16 +153,13 @@ export function flowOf(doc: Flow, start: { set: number } | { step: number }): { 
       if (!b) continue;
       sets.add(at.set);
       if (b.made) todo.push({ step: b.made.step });
-      for (const w of doc.wires ?? []) if ("set" in w.from && w.from.set === at.set) todo.push({ step: w.to });
+      for (const w of doc.wires ?? []) if (w.from.set === at.set) todo.push({ step: w.to.step });
     } else {
       if (steps.has(at.step)) continue;
       if (!doc.steps?.some((s) => s.id === at.step)) continue;
       steps.add(at.step);
       for (const b of doc.sets ?? []) if (b.made?.step === at.step) todo.push({ set: b.id });
-      for (const w of doc.wires ?? []) {
-        if (w.to === at.step) todo.push("set" in w.from ? { set: w.from.set } : { step: w.from.step });
-        if ("step" in w.from && w.from.step === at.step) todo.push({ step: w.to });
-      }
+      for (const w of doc.wires ?? []) if (w.to.step === at.step) todo.push({ set: w.from.set });
     }
   }
   return { sets, steps };
@@ -164,24 +167,13 @@ export function flowOf(doc: Flow, start: { set: number } | { step: number }): { 
 
 /**
  * A procedure of a flow (docs/WORKFLOWS.md, *Procedures*): its steps, as
- * they are set, and the wires among them, and the sets the chemist drew
- * into it - empty frames, ready for an input; not the sets its steps made,
- * which are results. Placed from its top left.
+ * they are set, the wires among them, and its sets as empty frames - those
+ * the chemist drew, ready for an input, and its steps' exits, which the
+ * wires lead on from; what any of them held is not kept. Placed from its
+ * top left.
  */
 export function procedureParts(doc: Flow, flow: { sets: ReadonlySet<number>; steps: ReadonlySet<number> }): FlowParts {
-  const inputs = new Set([...flow.sets].filter((id) => !doc.sets?.find((b) => b.id === id)?.made));
-  // (a wire from a result set is from the step that made it, in a procedure)
-  const madeBy = new Map((doc.sets ?? []).flatMap((b) => (b.made && flow.sets.has(b.id) ? [[b.id, b.made.step] as const] : [])));
-  const wires = (doc.wires ?? []).flatMap((w): Wire[] => {
-    if (!flow.steps.has(w.to)) return [];
-    if ("set" in w.from) {
-      if (inputs.has(w.from.set)) return [w];
-      const step = madeBy.get(w.from.set);
-      return step != null ? [{ ...w, from: { step } }] : [];
-    }
-    return flow.steps.has(w.from.step) ? [w] : [];
-  });
-  const parts = { ...partsOf(doc, inputs, flow.steps), wires };
+  const parts = partsOf(doc, flow.sets, flow.steps);
   const at = partsBounds(parts);
   if (!at) return parts;
   return {
