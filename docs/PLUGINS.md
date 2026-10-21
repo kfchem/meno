@@ -110,10 +110,10 @@ cis- and trans-1,4- and cis-1,3-dimethylcyclohexane (each ring carbon a
 centre), methylcyclohexane, 1,1-dimethylcyclohexane, propene and
 1,4-dichlorobenzene (none), meso-2,3-butanediol (two), (E)-2-butene (one
 double bond) - in `scripts/calc/test_plugin_rdkit.py`, *Configurations*,
-which needs RDKit and is run by hand in the plugin's environment. A test
-in Meno's own suite fails when the plugin's lock moves to another RDKit
-(`workflow/configurations.test.ts`), until those cases have been run with
-it and the version it was checked with is written there.
+which CI's plugins job runs on every push, in an environment installed
+from the plugin's lock. A test in Meno's own suite fails when the plugin's
+lock moves to another RDKit (`workflow/configurations.test.ts`), until the
+version those cases passed with is written there.
 
 ## A plugin's folder
 

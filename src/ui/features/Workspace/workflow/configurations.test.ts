@@ -84,8 +84,8 @@ describe("which stereoisomer each entry is", () => {
 
 describe("the RDKit the configurations were checked with", () => {
   it("is the one the plugin's lock fixes: a new one runs the known cases again first (scripts/calc/test_plugin_rdkit.py, Configurations)", () => {
-    // (RDKit marks FindPotentialStereo experimental; its answers on the known cases were checked by hand with this
-    // version - when the lock moves, run those tests in the plugin's environment and then write the new version here)
+    // (RDKit marks FindPotentialStereo experimental; its answers on the known cases passed with this version - when
+    // the lock moves, CI's plugins job runs those tests with the new one: once they pass, write it here)
     const CHECKED_WITH = "2026.3.6";
     const lock = readFileSync(resolve(__dirname, "../../../../../src-tauri/resources/plugins/rdkit/requirements.lock"), "utf8");
     expect(lock.match(/^rdkit==(\S+)/m)?.[1]).toBe(CHECKED_WITH);
