@@ -212,6 +212,98 @@ function renumbered(product: Molecule, map: readonly number[], n: number): Molec
   return { atoms, bonds };
 }
 
+/**
+ * A row of a reaction's table of bond changes: a bond formed, broken or
+ * changed in order, its atoms numbered from 1 in the reactants' numbering
+ * with their elements, and its CTfile bond type before and after (0 where
+ * there is no bond; 4, aromatic). The types are the structures' own, as they
+ * came in: nothing is perceived here.
+ */
+export type BondChangeRow = {
+  atom1: number;
+  atom2: number;
+  element1: string;
+  element2: string;
+  before: number;
+  after: number;
+  change: "formed" | "broken" | "order";
+};
+
+/** One product written in the reactants' numbering by one of its maps, with the bond changes that map makes. */
+export type MappedProduct = {
+  /** Which product, by its place among those given (from 0). */
+  product: number;
+  /** Which of the product's maps, best first (from 0). */
+  map: number;
+  /** The product's atoms and bonds in the reactants' numbering: every atom mapped one to one, hydrogens included. */
+  molecule: Molecule;
+  changes: BondChangeRow[];
+};
+
+/** A product, or one of its maps, that could not be written in the reactants' numbering, and why. */
+export type ProductNotMapped = { product: number; map?: number; reason: string };
+
+/** A map's bond changes as table rows: formed, then broken, then changed in order, each by its atoms. */
+export function bondChangeRows(reactant: Molecule, product: Molecule, map: readonly number[]): BondChangeRow[] {
+  const c = bondChanges(reactant, product, map);
+  const row = (b: BondChange, change: BondChangeRow["change"]): BondChangeRow => ({
+    atom1: b.a1 + 1,
+    atom2: b.a2 + 1,
+    element1: reactant.atoms[b.a1].el,
+    element2: reactant.atoms[b.a2].el,
+    before: b.before,
+    after: b.after,
+    change,
+  });
+  return [...c.formed.map((b) => row(b, "formed")), ...c.broken.map((b) => row(b, "broken")), ...c.orderChanged.map((b) => row(b, "order"))];
+}
+
+/**
+ * What the *Reaction* step does (docs/WORKFLOWS-FOUNDATION.md, *Atom
+ * mapping, and what Meno does itself*): each product mapped onto the one
+ * reactant structure (a complex where there are several, made beforehand),
+ * in 3D with every hydrogen, and written in the reactants' numbering - by its
+ * first map, or by `every` map - with the bonds that map forms, breaks or
+ * changes. A product that cannot be mapped one to one, atom for atom, is
+ * said with the reason, never passed on in part.
+ */
+export function mapProducts(
+  reactant: Molecule,
+  products: readonly Molecule[],
+  o: { every?: boolean; accelExact?: boolean } = {},
+): { mapped: MappedProduct[]; notMapped: ProductNotMapped[] } {
+  const mapped: MappedProduct[] = [];
+  const notMapped: ProductNotMapped[] = [];
+  products.forEach((p, product) => {
+    if (p.atoms.length !== reactant.atoms.length) {
+      notMapped.push({
+        product,
+        reason: `The product has ${p.atoms.length} atoms and the reactants ${reactant.atoms.length}: every atom must map one to one, hydrogens included.`,
+      });
+      return;
+    }
+    const result = mapReaction({ reactants: [reactant], products: [p], accelExact: o.accelExact });
+    if ("error" in result) {
+      notMapped.push({ product, reason: result.message });
+      return;
+    }
+    if (!result.maps.length) {
+      notMapped.push({ product, reason: "No map was found." });
+      return;
+    }
+    const which = o.every ? result.maps.map((_, i) => i) : [0];
+    for (const k of which) {
+      if (!result.complete[k]) {
+        notMapped.push({ product, map: k, reason: "The map leaves atoms of one side unpaired." });
+        continue;
+      }
+      const m = result.maps[k];
+      mapped.push({ product, map: k, molecule: renumbered(result.product, m, reactant.atoms.length), changes: bondChangeRows(result.reactant, result.product, m) });
+    }
+  });
+  return { mapped, notMapped };
+}
+
 /** A full map's pairs between heavy atoms only - for showing on a drawing: (reactant atom, product atom). */
 export function heavyAtomPairs(result: ReactionMap, mapIndex = 0): [number, number][] {
   const map = result.maps[mapIndex] ?? [];
