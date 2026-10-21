@@ -25,6 +25,7 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
+import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE, stereoPictureItems } from "./chem/marks";
@@ -556,16 +557,21 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
       // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
       const { savedPath } = store.getState();
       const { bytes, notKept, lastHolds } = await workspaceFile(store.getState());
+      // (what its file held that could not be read as it opened: not in this one - so the file it was opened from, the first time it is saved over, kept beside it)
+      const { leftOnOpen } = store.getState();
       const { kept, old } = await writtenWhere(path, bytes, {
         // (never a file another tab saves to)
         heldBy: (real) => heldElsewhere(real, tabId),
         // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
-        keepOld: (real) => lastHolds && real === savedPath,
+        keepOld: (real) => (lastHolds || (!!leftOnOpen && !leftOnOpen.kept)) && real === savedPath,
       });
       store.getState().markSavedAs(kept, written);
+      store.getState().markLeftKept();
       naming.current?.(fileNameOf(kept));
-      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed)
-      setError(notKeptSaid(notKept, old && fileNameOf(old)));
+      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
+      const keptAs = old && fileNameOf(old);
+      const said = [notKeptSaid(notKept, keptAs), leftOutSavedSaid(leftOnOpen?.left, notKept.length ? null : keptAs)].filter(Boolean);
+      setError(said.length ? said.join(" ") : null);
     },
     [store, tabId],
   );

@@ -19,7 +19,8 @@ import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/worksp
 import type { Carried3D, Drawn, EditorState, LostText, Member, Molecule3D, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
 import { collectionHash, setMembers } from "../workflow/entries";
 import { pdfBytes } from "../../../../lib/pdf/reader";
-import { readPdfs } from "./pdfItems";
+import { readPdfsAt } from "./pdfItems";
+import { anyLeftOut, leftOut, noting, type LeftOut } from "./readNotes";
 import { pictureBytes } from "../../../../lib/picture/held";
 import { placesRead, readDrawn } from "./copyPaste";
 import { calcShowing, heldOutput, outputsToKeep, sha256Of } from "../../../../lib/calc/asks";
@@ -56,6 +57,8 @@ export type Workspace = {
   pdfs: Omit<PdfItem, "id">[];
   /** Which of them its column showed, by its place among them - a text, or none, if it showed none of them. */
   pdfShown?: number;
+  /** What its file held that could not be read, and was left out (utils/readNotes); none where it read whole. */
+  leftOut?: LeftOut;
 };
 
 /** A text as a workspace's file keeps it: its name, and the file kept with its words, by SHA-256 - and where its sheet lies on the page, whether it is made an icon, and whether it is read in the column; and what it is the text of - a step, by its id, or a molecule, by its place among `molecules3d`. */
@@ -404,6 +407,11 @@ function textOfRead(v: unknown): { of?: TextOf } {
 }
 
 export function readWorkspace(text: string): Workspace | null {
+  const { value, left } = noting(() => readWorkspaceNoting(text));
+  return value && anyLeftOut(left) ? { ...value, leftOut: left } : value;
+}
+
+function readWorkspaceNoting(text: string): Workspace | null {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -436,23 +444,37 @@ export function readWorkspace(text: string): Workspace | null {
   const places = placesRead(data);
   const asOpened = (m: Member): Member[] => {
     if ("structure" in m) return [m];
+    // (one of a molecule or a picture not read is left out with it, and said)
     if ("molecule" in m) {
       const k = places.molecules3d.indexOf(m.molecule);
-      return k < 0 ? [] : [{ molecule: k + 1 }];
+      return k < 0 ? (leftOut("member"), []) : [{ molecule: k + 1 }];
     }
     const k = places.pictures.indexOf(m.picture);
-    return k < 0 ? [] : [{ picture: k + 1 }];
+    return k < 0 ? (leftOut("member"), []) : [{ picture: k + 1 }];
   };
   const workflow = read && r.version === 2 ? { ...read, sets: read.sets.map((b) => (b.members ? { ...b, members: b.members.flatMap(asOpened) } : b)) } : read;
   const texts: SavedText[] = [];
-  for (const t of Array.isArray(r.texts) ? (r.texts as Partial<SavedText>[]) : []) {
-    if (typeof t?.name !== "string" || typeof t.sha256 !== "string" || !SHA.test(t.sha256)) continue;
+  // (each text by its place in the file's list: the one shown is said by it - never another's, where one before it does not read)
+  const textAt = new Map<number, number>();
+  for (const [i, t] of (Array.isArray(r.texts) ? (r.texts as Partial<SavedText>[]) : []).entries()) {
+    if (typeof t?.name !== "string" || typeof t.sha256 !== "string" || !SHA.test(t.sha256)) {
+      leftOut("text");
+      continue;
+    }
     const at = t.at && Number.isFinite(t.at.x) && Number.isFinite(t.at.y) ? { at: { x: t.at.x, y: t.at.y } } : {};
-    texts.push({ name: t.name.slice(0, 260), sha256: t.sha256, ...at, ...(typeof t.point === "number" && t.point > 0 && Number.isFinite(t.point) ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon === true && at.at ? { icon: true as const } : {}), ...textOfRead(t.of) });
+    // (a molecule it is of, by its place in the file's list - as the molecules that read are placed; one that did not, of none, and said)
+    const of = textOfRead(t.of).of;
+    const ofMolecule = of && "molecule" in of ? places.molecules3d.indexOf(of.molecule) : null;
+    if (t.of != null && (!of || ofMolecule === -1)) leftOut("textOf");
+    const ofRead = of && ofMolecule == null ? { of } : ofMolecule != null && ofMolecule >= 0 ? { of: { molecule: ofMolecule } } : {};
+    textAt.set(i, texts.length);
+    texts.push({ name: t.name.slice(0, 260), sha256: t.sha256, ...at, ...(typeof t.point === "number" && t.point > 0 && Number.isFinite(t.point) ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon === true && at.at ? { icon: true as const } : {}), ...ofRead });
   }
-  const shown = typeof r.textShown === "number" && Number.isInteger(r.textShown) && r.textShown >= 0 && r.textShown < texts.length;
-  const pdfs = readPdfs(r.pdfs);
-  const pdfShown = typeof r.pdfShown === "number" && Number.isInteger(r.pdfShown) && !!pdfs[r.pdfShown]?.reading;
+  const textShown = Number.isInteger(r.textShown) ? textAt.get(r.textShown as number) : undefined;
+  const pdfsAt = readPdfsAt(r.pdfs);
+  const pdfs = pdfsAt.map(({ pdf }) => pdf);
+  const pdfShownAt = Number.isInteger(r.pdfShown) ? pdfsAt.findIndex(({ at }) => at === r.pdfShown) : -1;
+  const pdfShown = pdfShownAt >= 0 && !!pdfs[pdfShownAt].reading;
   return {
     drawn,
     ...(workflow ? { workflow } : {}),
@@ -461,9 +483,9 @@ export function readWorkspace(text: string): Workspace | null {
     aromaticEnabled: r.aromaticEnabled === true,
     aromaticRings: rings,
     texts,
-    ...(shown ? { textShown: r.textShown as number } : {}),
+    ...(textShown != null ? { textShown } : {}),
     pdfs,
-    ...(pdfShown ? { pdfShown: r.pdfShown as number } : {}),
+    ...(pdfShown ? { pdfShown: pdfShownAt } : {}),
   };
 }
 

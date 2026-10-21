@@ -384,7 +384,8 @@ describe("a workspace with what is no entry in its lists", () => {
             expect(holder[counter], `${path.join(".")} holding ${JSON.stringify(stray)}`).toBe(1);
             delete holder[counter];
           }
-          expect(read, `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+          // (what it left out said apart: utils/readNotes)
+          expect(read && (({ leftOut: _, ...rest }) => rest)(read), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected && (({ leftOut: _, ...rest }) => rest)(expected));
           expect(workspaceProblem(text)).toBe(expected ? null : "it is not a workspace Meno reads");
         }
     }

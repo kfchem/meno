@@ -880,6 +880,48 @@ work.meno (zip)
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.
+- **What does not read is left out, counted and said - never silently.**
+  A workspace's file, or Meno's own record of a copy, can hold something
+  that does not read: damaged, or written by hand. Only an atom or a bond
+  of the drawing keeps the whole file from opening (and that is said).
+  Everything else that does not read is left out alone, and each kind is
+  counted as it is read (`utils/readNotes`). Opening says so with the
+  texts and pictures that could not be had: "1 picture, 1 step and 1 wire
+  in the file could not be read and were left out." A paste says the same
+  of the copy.
+  - **What is counted.** Whole records: arrows, plus signs, shapes, words,
+    electron-pushing arrows, molecules in 3D and their measurements,
+    pictures, slides, catalytic cycles, handwriting and its strokes, texts,
+    PDFs, their pages laid apart and the writing on them, sets, steps, wires,
+    a step's earlier runs and jobs under way. Ties whose other end is not
+    there: a set's member, a result set's step, a text's molecule and words
+    tied to an arrow. Within a molecule in 3D: a calculation's record, its
+    results and its notes of what could not be read.
+  - **Nothing more is left out than what does not read.** A conformer or
+    frame that does not read is left out with its own energy, number, share
+    and degeneracy. Every other frame keeps its own, and its results of
+    frames stay its own; a row of a list of a frame left out is of none.
+    It is counted with the frames its file left out (`framesLeftOut`). An
+    R/S or E/Z label of an atom or bond the molecule does not have is
+    left out alone, and so is a ligand atom of unknown orders that is not
+    one of its own. Before 2026-10-22, one damaged frame lost every
+    conformer's energy, and one label out of range lost every label.
+    The shares are kept as they were saved, of the whole ensemble.
+  - **What a file says by place is never taken for another.** A text's
+    molecule and a set's members are matched to the molecules that read by
+    their places in the file. The text and the PDF its column showed are
+    matched by their places among those listed. One that did not read is of
+    none, or shown none, and that is said. A PDF one of whose pages' sizes
+    does not read is left out whole, because every page after it would
+    otherwise be a place wrong.
+  - **Presentation is put right silently.** A colour, a width or an angle
+    out of range is read as its default, as before, and not counted.
+  - **Save says it, every time.** None of what was left out is in a file
+    saved since: "Saved, but 1 picture and 1 wire that could not be read
+    when it opened are not in the file." The first save over the file it
+    was opened from first keeps that file beside it, as above: "... The
+    file as it was is kept beside it as aspirin.meno.bak." It is the only
+    copy of what was left out.
 - **Saved within the same limits.** A workspace that would come to more
   than a workspace file is read with is not written: Save says so, with
   the sizes, rather than leave a file that would not open again.
