@@ -1,3 +1,4 @@
+import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
@@ -1409,12 +1410,12 @@ function WorkspaceContent({
     });
   };
 
-  const alert = importError?.text ?? files.error ?? chemError;
-  const dismissAlert = importError
-    ? dismissImportError
-    : files.error
-      ? files.dismissError
-      : () => setChemError(null);
+  // (each in a line of its own, dismissed by itself: utils/alerts)
+  const alerts = canvasAlerts({
+    import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
+    files: { text: files.error, dismiss: files.dismissError },
+    chem: { text: chemError, dismiss: () => setChemError(null) },
+  });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
@@ -1543,31 +1544,34 @@ function WorkspaceContent({
       onPointerUpCapture={onRightUp}
     >
       {/* Import error */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex flex-col items-center gap-2 pointer-events-none">
       <AnimatePresence>
-      {alert && (
+      {alerts.map((a) => (
         <motion.div
-          key="alert"
+          key={a.key}
+          layout
           {...RISE}
           role="alert"
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
+          className="pointer-events-auto flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
-          <span className="break-words">{alert}</span>
-          {importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          <span className="break-words">{a.text}</span>
+          {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
           <button
             aria-label="Dismiss"
             title="Dismiss"
             onClick={(e) => {
               e.stopPropagation();
-              dismissAlert();
+              a.dismiss();
             }}
             className="h-4 w-4 shrink-0 rounded-full hover:bg-gh-line"
           >
             <XMarkIcon className="h-4 w-4" />
           </button>
         </motion.div>
-      )}
+      ))}
       </AnimatePresence>
+      </div>
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
