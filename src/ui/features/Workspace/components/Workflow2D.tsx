@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as Reac
 import { useFrame, useThree } from "@react-three/fiber";
 import PageHtml from "./PageHtml";
 import { useEditor, useEditorStore } from "../store";
-import type { EditorState, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { EditorState, StepRunKept, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { pageAt } from "../utils/page";
 import { COLORS } from "../../../theme/colors";
 import { MOV_PX } from "../constants";
@@ -203,6 +203,9 @@ function WireLine({ p, q, color, zoom, onHover, leaving = false }: { p: Pt; q: P
   );
 }
 
+/** How many of an earlier run's molecules did not read from its file, of both its exits. */
+const notRead = (r: StepRunKept) => (r.results?.unread ?? 0) + (r.results?.restUnread ?? 0);
+
 /** A step's runs as its card lists them: the one shown, then those it keeps, each with how it was set - its kind, where it was another. */
 function runRows(s: WorkflowStep): RunRow[] {
   const by = byOf(s);
@@ -210,7 +213,8 @@ function runRows(s: WorkflowStep): RunRow[] {
     [kind !== s.kind ? kindInfo(kind).name : "", howOf(optionsFor(kind, by), options, by === "meno" ? kindInfo(kind).how : undefined)].filter(Boolean).join(" \u00b7 ");
   return [
     ...(s.ran ? [{ at: s.ran.at, said: s.ran.said, how: how(s.ran.kind ?? s.kind, s.ran.options ?? s.options), shown: true }] : []),
-    ...(s.runs ?? []).map((r) => ({ at: r.at, said: r.said, how: how(r.kind, r.options), shown: false })),
+    // (an earlier run's molecules that did not read from its file: said with what it said)
+    ...(s.runs ?? []).map((r) => ({ at: r.at, said: notRead(r) ? `${r.said} · ${notRead(r).toLocaleString("en-US")} not read` : r.said, how: how(r.kind, r.options), shown: false })),
   ];
 }
 
@@ -602,10 +606,17 @@ export default function Workflow2D() {
                 : count.holds === "molecules"
                   ? plural(count.compounds, "compound")
                   : `${plural(count.compounds, "compound")} · ${count.entries}`;
+          // (a large result set: what it holds, said large in its frame)
+          const summary = b.collection
+            ? {
+                count: count.entries.toLocaleString("en-US"),
+                nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
+              }
+            : undefined;
           // (its name: a step's first exit is named as the kind names what it makes; another exit, by its own name)
           const exit = made && b.made ? exitOf(made.kind, b.made.exit) : undefined;
           const name = made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (b.name ?? "Input");
-          return [b.id, { name, count: b.keep === false && count.entries ? `${counted} · not kept` : counted }];
+          return [b.id, { name, count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
     [flow, sets, steps],
@@ -664,6 +675,7 @@ export default function Workflow2D() {
             set={{ ...b, ...f }}
             name={info.name}
             count={info.count}
+            {...(info.summary ? { summary: info.summary } : {})}
             hovered={hoveredSet === b.id}
             chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
