@@ -141,3 +141,49 @@ describe("the settings file", () => {
     });
   });
 });
+
+describe("the settings file holds only what the user changed (the maintainer, 2026-10-21)", () => {
+  const read = (text: string) => acceptAppSettings(JSON.parse(text));
+  const variants: [string, Record<string, unknown>][] = [
+    ["another drawing style", { drawingStyle: { preset: STYLE_PRESETS[1].id, changes: {} } }],
+    ["a change of the drawing style", { drawingStyle: { preset: STYLE_PRESETS[0].id, changes: { bondLengthPt: 21 } } }],
+    ["the 3D looks the other way round", { style3d: { ...DEFAULT_APP_SETTINGS.style3d, primary: "space", secondary: "balls" } }],
+    ["offline", { network: { offline: true, granted: [] } }],
+    ["a network grant", { network: { offline: false, granted: ["updates"] } }],
+    ["valence warnings off", { chemistry: { valenceWarnings: false } }],
+    ["asked about updates", { updates: { asked: true } }],
+    ["a plugin's role", { plugins: { ...DEFAULT_APP_SETTINGS.plugins, roles: { conformers: "some-plugin" } } }],
+    ["a plugin removed", { plugins: { ...DEFAULT_APP_SETTINGS.plugins, removed: ["some-plugin"] } }],
+    ["the wheel zooming out", { pointer: { wheelUp: "out" } }],
+    ["once", { canvas: { resolution: 1 } }],
+    ["labels as typed", { labels: { smart: false } }],
+    ["words as typed", { words: { smart: false } }],
+    ["jobs at once", { calculations: { atOnce: 2 } }],
+    ["pictures at another resolution", { pictures: { dpi: 300 } }],
+  ];
+
+  it("writes nothing but its format where nothing was changed", () => {
+    expect(JSON.parse(settingsFileText(DEFAULT_APP_SETTINGS))).toEqual({ format: 1 });
+  });
+
+  it("writes only what was changed, and reads back as it was - each setting alike", () => {
+    for (const [what, change] of variants) {
+      const settings = acceptAppSettings({ ...change });
+      // (a change the settings take: else the test would prove nothing)
+      expect(settings, what).not.toEqual(DEFAULT_APP_SETTINGS);
+      const text = settingsFileText(settings);
+      expect(Object.keys(JSON.parse(text)), what).toEqual(["format", Object.keys(change)[0]]);
+      expect(read(text), what).toEqual(settings);
+    }
+    // (within a setting, only what changed: a plugin's role, not the other parts of the plugins' settings)
+    expect(JSON.parse(settingsFileText(acceptAppSettings({ plugins: { ...DEFAULT_APP_SETTINGS.plugins, roles: { conformers: "some-plugin" } } }))).plugins).toEqual({ roles: { conformers: "some-plugin" } });
+    // (but a drawing style chosen whole: its preset and its changes are read only together)
+    expect(JSON.parse(settingsFileText(acceptAppSettings({ drawingStyle: { preset: STYLE_PRESETS[0].id, changes: { bondLengthPt: 21 } } }))).drawingStyle).toEqual({ preset: STYLE_PRESETS[0].id, changes: { bondLengthPt: 21 } });
+  });
+
+  it("reads a file that holds every setting - as Meno wrote them before - and writes back only what differs from the defaults now", () => {
+    const old = JSON.parse(JSON.stringify({ format: 1, ...DEFAULT_APP_SETTINGS, pointer: { wheelUp: "out" } }));
+    const settings = read(JSON.stringify(old));
+    expect(JSON.parse(settingsFileText(settings))).toEqual({ format: 1, pointer: { wheelUp: "out" } });
+  });
+});
