@@ -738,12 +738,20 @@ work.meno (zip)
   list of the files it keeps is damaged, and its files were opened without
   it). A file the list leaves out is had the same way. A broken list alone
   never keeps a workspace from opening.
-- **Save names what it could not keep.** A file the workspace has that
-  cannot be had - damaged in the file it came in, held nowhere, an output
-  neither held nor where it was - does not keep the workspace from being
-  saved, which would put new work at risk: it is saved without it, and
-  Save says so, where its failures are said, until dismissed: "Saved, but
-  figure.png is not in the file: it could not be read." Its place in the
+- **Save never drops a file still to be had, and names what it could not
+  keep.** A file the workspace has that is held nowhere this session - a
+  PDF Meno could not open (one locked with a password), a picture or an
+  output held nowhere, an output not where it was - is taken from the
+  workspace file the canvas was last saved to, or opened from, where that
+  holds it whole (its CRC-32 and its SHA-256 as they should be): read
+  before the new file takes its place - by Save As too, which reads the
+  file saved to before - and only where something would else be left
+  out, through the same reach Open and Save gave Meno to that file. One to
+  be had from nowhere - damaged there too, not in it, or there being no
+  such file - does not keep the workspace from being saved, which would
+  put new work at risk: it is saved without it, and Save says so, where
+  its failures are said, until dismissed: "Saved, but figure.png is not in
+  the file: it could not be read." Its place in the
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.

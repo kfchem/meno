@@ -112,17 +112,16 @@ export async function outputOf(source: CalcSource, read: ReadAt = readAt): Promi
 /**
  * The outputs a workspace's molecules were read from, as its file keeps
  * them: each once, as text - held this session, or read again where it was
- * (`outputOf`) - and, by name, each that could be had neither way
- * (`notKept`), its file to say nothing of it.
+ * (`outputOf`) - and each that could be had neither way (`notKept`).
  */
-export async function outputsToKeep(sources: readonly CalcSource[], read: ReadAt = readAt): Promise<{ kept: KeptData[]; notKept: string[] }> {
+export async function outputsToKeep(sources: readonly CalcSource[], read: ReadAt = readAt): Promise<{ kept: KeptData[]; notKept: CalcSource[] }> {
   const encoder = new TextEncoder();
   const kept: KeptData[] = [];
-  const notKept: string[] = [];
+  const notKept: CalcSource[] = [];
   for (const s of new Map(sources.map((x) => [x.sha256, x])).values()) {
     const had = await outputOf(s, read);
     if (had) kept.push({ sha256: s.sha256, name: had.name, ...(s.kind ? { kind: s.kind } : {}), media: "text/plain", data: encoder.encode(had.text) });
-    else notKept.push(s.name);
+    else notKept.push(s);
   }
   return { kept, notKept };
 }

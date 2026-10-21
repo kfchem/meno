@@ -500,6 +500,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
     async (path: string) => {
       // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
       const written = store.getState().writing();
+      // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
       const { bytes, notKept } = await workspaceFile(store.getState());
       await writeDocument(path, bytes);
       store.getState().markSavedAs(path, written);

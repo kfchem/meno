@@ -11,6 +11,11 @@ vi.mock("@tauri-apps/api/core", () => ({
     return bytes ? Promise.resolve(bytes.slice().buffer) : Promise.reject(new Error("it is no longer held"));
   },
 }));
+// (the files on the disk Meno may read: the workspace file a canvas was saved to, among them)
+const disk = new Map<string, Uint8Array>();
+vi.mock("@tauri-apps/plugin-fs", () => ({
+  readFile: (path: string) => (disk.has(path) ? Promise.resolve(disk.get(path)!.slice()) : Promise.reject(new Error("no such file"))),
+}));
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
@@ -212,5 +217,83 @@ describe("a save that cannot keep a file the workspace has", () => {
   it("is said in plain words, each named", () => {
     expect(notKeptSaid([])).toBeNull();
     expect(notKeptSaid(["a.png", "b.pdf"])).toBe("Saved, but a.png and b.pdf are not in the file: they could not be read.");
+  });
+});
+
+describe("a save of a file the workspace has but holds nowhere this session", () => {
+  /**
+   * A canvas with a PDF Meno could not open, a picture and an output held
+   * nowhere - `seed`'s own - saved before to `path`, whose file holds each
+   * whole (as Save wrote it: what each is known by, its name and kind).
+   */
+  function savedBefore(seed: string, path: string | null) {
+    const pdf = strToU8(`%PDF-1.7\n% ${seed}\n%%EOF\n`);
+    const picture = png(`saved before ${seed}`);
+    const log = strToU8(` Entering Gaussian System, saved before ${seed}\n`.repeat(100));
+    const { st } = editor();
+    st().addPdfs([{ name: "locked.pdf", sha256: sha(pdf), pages: [[595, 842]] }], { x: 0, y: 40 });
+    st().putPicture({ name: "figure.png", sha256: sha(picture), media: "image/png", px: [64, 32], x: 0, y: 0, w: 4, h: 2 });
+    st().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 20, y: 0 }, calc: { readers: ["meno"], source: { name: "run.log", sha256: sha(log), kind: "gaussian" } } as never }] });
+    const kept: KeptData[] = [
+      { sha256: sha(log), name: "run.log", kind: "gaussian", media: "text/plain", data: log },
+      { sha256: sha(pdf), name: "locked.pdf", media: "application/pdf", data: pdf },
+      { sha256: sha(picture), name: "figure.png", media: "image/png", data: picture },
+    ];
+    const before = menoFileBytes(workspaceText(st(), new Set([sha(log)])), kept);
+    if (path) {
+      disk.set(path, before);
+      st().markSavedAs(path);
+    }
+    return { st, kept, before, pdf, picture, log };
+  }
+
+  it("takes each - a PDF, a picture, an output - from the file it was saved to, whole, as it was there, and names none", async () => {
+    const w = savedBefore("carried", "/work/carried.meno");
+    const saved = await workspaceFile(w.st());
+    expect(saved.notKept).toEqual([]);
+    const file = readMenoFile(saved.bytes);
+    expect(file.listDamaged).toBe(false);
+    expect(file.files).toEqual(
+      expect.arrayContaining([
+        { sha256: sha(w.log), name: "run.log", kind: "gaussian", media: "text/plain", size: w.log.length },
+        { sha256: sha(w.pdf), name: "locked.pdf", media: "application/pdf", size: w.pdf.length },
+        { sha256: sha(w.picture), name: "figure.png", media: "image/png", size: w.picture.length },
+      ]),
+    );
+    for (const k of w.kept) expect(file.data(k.sha256)).toEqual(k.data);
+  });
+
+  it("damaged in that file too, still names it - and writes it in no file", async () => {
+    const w = savedBefore("damaged there", "/work/damaged.meno");
+    const at = Buffer.from(w.before).indexOf(Buffer.from(w.picture.subarray(300, 340)));
+    const damaged = w.before.slice();
+    damaged[at + 3] ^= 0x10;
+    disk.set("/work/damaged.meno", damaged);
+    const saved = await workspaceFile(w.st());
+    expect(saved.notKept).toEqual(["figure.png"]);
+    const file = readMenoFile(saved.bytes);
+    expect(file.files.map((f) => f.name).sort()).toEqual(["locked.pdf", "run.log"]);
+    expect(file.data(sha(w.picture))).toBeNull();
+  });
+
+  it("saved nowhere before, or that file gone, names each as before", async () => {
+    expect((await workspaceFile(savedBefore("nowhere", null).st())).notKept).toEqual(["run.log", "locked.pdf", "figure.png"]);
+    const gone = savedBefore("gone", "/work/gone.meno");
+    disk.delete("/work/gone.meno");
+    expect((await workspaceFile(gone.st())).notKept).toEqual(["run.log", "locked.pdf", "figure.png"]);
+  });
+
+  it("Save As to a new file takes them from the file it was saved to before - and the next save from the new one", async () => {
+    const w = savedBefore("save as", "/work/before.meno");
+    // (Save As: written to a new file, read from the one it was saved to)
+    const first = await workspaceFile(w.st());
+    expect(first.notKept).toEqual([]);
+    disk.set("/work/after.meno", first.bytes);
+    w.st().markSavedAs("/work/after.meno");
+    disk.delete("/work/before.meno");
+    const again = await workspaceFile(w.st());
+    expect(again.notKept).toEqual([]);
+    const file = readMenoFile(again.bytes);
+    for (const k of w.kept) expect(file.data(k.sha256)).toEqual(k.data);
   });
 });
