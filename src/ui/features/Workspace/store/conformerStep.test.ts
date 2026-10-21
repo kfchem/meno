@@ -161,7 +161,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     // (offered on the step's card as its own, those chosen in Settings its defaults - how many sought among
     //  them: as many as the molecule needs, or a number, which is shown only when a number is asked for)
     const offered = optionsFor("conformers", "rdkit");
-    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "same", "seed"]);
+    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
   });
 

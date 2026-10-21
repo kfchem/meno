@@ -408,8 +408,9 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   with each request for the role (`options`). RDKit declares its conformer
   search's (0.1.8): how many sought - as many as the molecule needs, or a
   number given - the force field (MMFF94, MMFF94s, UFF), the steps an
-  optimisation may take, the RMSD within which two are the same shape, the
-  random seed - and its *Conformers* step takes the same, said once.
+  optimisation may take, the random seed - and its *Conformers* step takes
+  the same, said once. When two conformers are the same is no option
+  (below).
 - **How many conformers are sought is the molecule's to say**
   (2026-10-20): a fixed number is too few for a molecule with much to
   explore and more than a rigid one has shapes, so the RDKit plugin asks
@@ -436,33 +437,94 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,
     adamantane).
-- **The same shape with equivalent atoms swapped is the one conformer**
-  (2026-10-20): a tert-butyl's three methyls turned round, or a phenyl
-  flipped, leaves every atom of it somewhere else, so comparing atom
-  against atom counted such a shape again and again - a
-  tert-butylcyclohexane came back as 26 conformers that were 5, an
-  adamantane as 15 that were 1, an ibuprofen as 28 that were 9. Shapes are
-  now compared over the ways the molecule maps onto itself as well
-  (RDKit's `GetBestRMS`, within the same 0.5 Å over heavy atoms), as an
-  eta system's rings already were. Two things hold it back, both measured:
-  - **only where the two sit at the one energy.** A shape and the same
-    shape relabelled have the one energy exactly - over 4000 such pairs
-    here the largest gap the optimisation left was 0.000001 kcal/mol -
-    while two different shapes can fall within half an angstrom of each
-    other once relabelled: phenylcyclohexane's twist-boat lands 0.40 Å
-    from its chair that way and sits 6.1 kcal/mol above it. Without this,
-    every twist-boat of it was swallowed by a chair. Where nothing could
-    be optimised and no energies came back - no force field here having
-    parameters for it - there is nothing to show it with, so those shapes
-    are told apart atom against atom, as they were; an eta system, which
-    never has energies, keeps the comparison it was given in the first
-    place, its rings turning on their metal being the swap it is for.
-  - **only where there are few enough ways to try.** A
-    tetrakis(triphenylphosphine)palladium maps onto itself millions of
-    ways, and trying them took 2.1 s for a single pair of conformers
-    against 0.002 s for a thousand of them. Past a thousand ways its
-    shapes are told apart atom against atom, as before, and its list may
-    hold the same shape twice.
+- **The same conformer** (the maintainer, 2026-10-21): two conformers are
+  one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
+  each other, laid over at their best - turned and moved, never reflected
+  - over the ways the molecule maps onto itself. It is the maintainer's
+  standard for structures fed to quantum calculations, one definition for
+  the whole app: it keeps an OH or NH turned the other way as a conformer
+  of its own, and a conformer's mirror image too, whose atoms an average
+  over the conformers needs (a ring's two enantiotopic carbons swap
+  between them). Nothing is made one on any looser measure, nor by energy:
+  before, the RDKit plugin took shapes within 0.5 Å over their heavy atoms
+  as one, and over the molecule's symmetries only where their energies
+  agreed, and its raw embeddings, with no energies, atom against atom.
+  (`SAME_CONFORMER`, `Sameness` in its worker.)
+  - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
+    the one conformer.** Such a shape leaves every atom of it somewhere
+    else, so comparing atom against atom counted it again and again - a
+    tert-butylcyclohexane came back as 26 conformers that were 5. The ways
+    the molecule maps onto itself are tried, at most a thousand of them
+    (`ALIKE_WAYS`): a tetrakis(triphenylphosphine)palladium maps onto
+    itself millions of ways, and trying them took 2.1 s for a single pair
+    of conformers.
+  - **Hydrogens are matched, not tried.** The hydrogens on one atom are
+    each matched to the nearest of those on the atom it is taken to, once
+    the rest are laid over; past a thousand ways, so are atoms at the end
+    of a chain alike on one atom (the four chlorides of
+    OsCl4(PEt3)2, whose ways are 1728, then 72). Past a thousand still,
+    conformers are compared atom against atom. Matching to the nearest, or
+    atom against atom, can only fail to find that two conformers are the
+    same, never make two different ones one: whatever matching is tried,
+    two conformers it lays within 0.01 Å of each other are the same. So the
+    worst it does is keep a conformer twice.
+  - **Most pairs are told apart before they are laid over.** Laid over at
+    their best, two conformers share their centre, so each atom's distance
+    from it moves no more than the atom does: the RMSD of each element's
+    distances from the centre, sorted, is a bound the conformers cannot be
+    under, and each way's own atoms laid over alone is another. Only pairs
+    and ways under 0.01 Å by both are laid over in full.
+- **A metal's ligands are kept apart, where that is sound.** While a
+  metal complex is embedded and optimised, two atoms bonded to its metal,
+  of different ligands, are held at least a floor's angle apart, so that
+  its ligands do not pile up: ETKDG knows no angle at a metal, and without
+  one the seven fluorides of [ZrF7]3- came out 33 degrees apart, the
+  halides of OsCl4Br4 25. The floor goes by how many atoms are bonded to
+  the metal, and its source is geometry - each sits below the narrowest
+  angle between neighbours of the ideal polyhedra it is for:
+
+  | Atoms bonded | Floor | Narrowest ideal polyhedra |
+  |---|---|---|
+  | 2 to 6 | 75° (`NARROWEST_AT_METAL`) | trigonal prism with equal edges, 2 asin(√(3/7)) = 81.8°; octahedron, square plane, trigonal bipyramid, square pyramid, 90° |
+  | 7 to 12 | 60° (`NARROWEST_CROWDED`) | pentagonal bipyramid, 72° (360°/5); icosahedron, 63.4° (arctan 2). No common polyhedron of 10 or 11 points was worked out: there the margin rests on the icosahedron alone, 3.4° |
+  | more | none | |
+
+  Only between point donors:
+  - none at a metal with a ligand bound through atoms side by side (eta),
+    whose atoms spread round where it sits: Cp2TiCl2's Cp carbon and Cl
+    come near 76 degrees, a Zeise-type alkene's carbon and its cis Cl near
+    71. Its own holds keep the other ligands off it (*η*, WORKSPACE.md);
+  - never between two atoms of one ligand, whose own bonds set its bite
+    (en on a lanthanide bites about 65 degrees);
+  - nor for a hydride, which may sit closer to another (cis H-M-H).
+
+  The metal's row on the chip says which floor held, or that none did and
+  why. A conformer that comes out with two ligands closer than its floor
+  by more than five degrees is dropped - the holds give up to two, measured
+  on complexes pressed against the 60° floor - and
+  the chip counts it, naming the metal and the floor: it sat in a well of
+  the force field the hold could not pull it out of. [OsCl6]2-, with Fe
+  standing in, gave one 87.7 kcal/mol above the octahedron with two Cl 62
+  degrees apart.
+
+  Before (RDKit plugin 0.1.4 to 0.1.6, from 2026-10-17), one floor of 75°
+  held at every metal, between every two of its atoms not joined within
+  two bonds otherwise. It held 75° where real structures go under it -
+  seven- to twelve-coordinate metals ([ZrF7]3- came out at 73°, held,
+  where a pentagonal bipyramid's neighbours are 72° apart), and a
+  chelate's ends three bonds apart on a large metal - and it held atoms it
+  had no reason to: a Zeise-type complex's alkene carbon and cis Cl, and a
+  cis dihydride's hydrides, though there the force field's own angles
+  stayed above it (77° and 88° here, as now).
+- **Where a lighter metal stands in, its energies order the conformers.**
+  Where UFF has no type for a metal and a lighter one of its group stands
+  in, UFF's energies of that model are not the molecule's, so none are
+  given and no populations come of them; but they are what the shapes were
+  optimised in, and they order them, lowest first, said so on the chip
+  (*Order*, "by UFF's energies, Fe standing in for Os") and in the line
+  that says how they were made ("ordered by the stand-in field, Fe for
+  Os"). Before, the embedding order stood, and [OsCl6]2-'s first conformer
+  was its distorted one.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
