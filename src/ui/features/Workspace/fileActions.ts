@@ -4,6 +4,7 @@ import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushAr
 import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
+import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { mapStanding, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
@@ -92,6 +93,24 @@ export function exportKinds(what: Holds): WriterId[] {
 /** `path` with the extension `ext` in place of its own. */
 function withExtension(path: string, ext: string): string {
   return `${path.replace(/\.[^.\\/]*$/, "")}.${ext}`;
+}
+
+/**
+ * A workspace's file written to `path`, as Save or Save As has it; where it
+ * now is: its one true path (lib/io/truePath), asked once it is there - a
+ * new file's name as it is kept, a file reached through a link the file it
+ * points at - so that the workspace's tab holds the path every other way
+ * of reaching that file comes to (lib/doc/savers, `tabHolding`).
+ */
+export async function writtenWhere(
+  path: string,
+  bytes: Uint8Array,
+  write: (path: string, bytes: Uint8Array) => Promise<void> = writeDocument,
+  truePathOf: (path: string) => Promise<string> = truePath,
+): Promise<string> {
+  // (written where the dialog said - where it let the page write - before its one true path is asked)
+  await write(path, bytes);
+  return truePathOf(path);
 }
 
 /**
@@ -502,9 +521,9 @@ export function useFileActions(nameTab?: (label: string) => void) {
       const written = store.getState().writing();
       // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
       const { bytes, notKept } = await workspaceFile(store.getState());
-      await writeDocument(path, bytes);
-      store.getState().markSavedAs(path, written);
-      naming.current?.(fileNameOf(path));
+      const kept = await writtenWhere(path, bytes);
+      store.getState().markSavedAs(kept, written);
+      naming.current?.(fileNameOf(kept));
       // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed)
       setError(notKeptSaid(notKept));
     },

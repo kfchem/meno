@@ -46,7 +46,7 @@ built* below.
 | **Office re-edit** (Windows OLE: Word or PowerPoint opens Meno) | always a record; named `office.meno` to reach it (`App.tsx`) | `readRecord` | a tab linked to the object |
 | **Calculation output**, through Open or a drop | `outputKindOf` (`lib/calc/catalog.ts`) - by content only, and only once `detectFormat` has found no structure format | every reader added that reads the kind (`readOutput`, `lib/calc/read.ts`) | a molecule in 3D with what the calculation found |
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
-| **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved, brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
+| **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved - its one true path, however the path it came by was written (*One file, one tab*) - brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
 | **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
 | **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page |
 
@@ -556,6 +556,27 @@ How these behave:
   workspace as it is when it begins; one that fails does not stop the next.
   Ctrl/Cmd+S held down saves once, as it is pressed. What changes while a
   save writes is still unsaved after it, as before.
+- **One file, one tab** (2026-10-21; `true_path`, `src-tauri/src/truepath.rs`,
+  and `lib/io/truePath.ts`). A workspace is known by its file's one true
+  path: the path the file system itself has for it - every link followed,
+  no step up (`..`), each name in the case it is kept in (and, on a Mac, in
+  the form of its accents it is kept in), on Windows a long name for a
+  short 8.3 one, and written plainly (`C:\...`, `\\server\share\...`) where
+  that names the same file. So a file opened again through a path written
+  otherwise - in another case, where the file system takes no notice of
+  case, as Windows' and a Mac's as it comes do; through a link - brings
+  forward the tab that holds it, never a second tab whose saves and the
+  first one's overwrite each other (`tabHolding`, `lib/doc/savers.ts`).
+  - Every way a workspace file comes in is given it: opened from outside
+    Meno, dropped or pasted, in the app (`opened.rs`); picked in Open's
+    dialog, by the page (`openEachOnce`). A save writes where the dialog
+    said, then holds the file's one true path (`writtenWhere`,
+    `fileActions.ts`): a file not there yet has its folder's, with its name
+    as given.
+  - The file system plugin's scope takes the one true path of a file
+    picked, dropped or opened from outside as the file itself: it matches
+    a path by its own one true path, and holds a file allowed by its path
+    as given and by that.
 
 As this part of step 5 was built (#155, from main beside step 3):
 

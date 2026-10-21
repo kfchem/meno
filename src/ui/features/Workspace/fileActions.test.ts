@@ -10,6 +10,7 @@ import {
   structureFileText,
   suggestedExportPath,
   suggestedSavePath,
+  writtenWhere,
 } from "./fileActions";
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -505,5 +506,17 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const back = await processFileContent("d2o.pdb", text);
     expect(back.molecules3d![0].atoms.map((a) => [a.el, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
     expect(back.molecules3d![0].bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 2]]);
+  });
+});
+
+describe("a workspace saved", () => {
+  it("is written where the dialog said, then known by the file's one true path, as an opened one is", async () => {
+    const done: string[] = [];
+    const write = async (path: string) => void done.push(`write ${path}`);
+    // (a file system that takes no notice of case, keeping the name as it was first written)
+    const truePathOf = async (path: string) => (done.push(`true path of ${path}`), "/Users/Chem/Work/Aspirin.meno");
+    expect(await writtenWhere("/users/chem/work/ASPIRIN.meno", new Uint8Array([0x50, 0x4b]), write, truePathOf)).toBe("/Users/Chem/Work/Aspirin.meno");
+    // (asked once the file is there: a new file has no name kept before it is written)
+    expect(done).toEqual(["write /users/chem/work/ASPIRIN.meno", "true path of /users/chem/work/ASPIRIN.meno"]);
   });
 });
