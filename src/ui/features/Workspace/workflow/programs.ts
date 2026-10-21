@@ -233,6 +233,14 @@ export function readCollected(raw: unknown, count: number): ReaderOutput[] | { r
 }
 
 /**
+ * An entry as a program works it out anew: what went in, without the
+ * calculation it came with or what its molecule kept - how it was made,
+ * what its energies were from - none of which is so of what the program
+ * gives back (entries `SetEntry.calc`, `keep`).
+ */
+const anew = ({ calc: _calc, keep: _keep, ...entry }: SetEntry): SetEntry => entry;
+
+/**
  * An entry as a job worked it out (lib/calc/output): its last geometry and
  * energy - an optimisation's path before it, kept where the step is
  * *Optimise* - and what the calculation says of it, read by `readers` from
@@ -249,7 +257,7 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
   return {
-    ...entry,
+    ...anew(entry),
     xyz: [...last],
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
@@ -273,7 +281,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
   const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
   const calc = calcOf(out, readers, source);
   return frames.map((f, k) => ({
-    ...entry,
+    ...anew(entry),
     number: k + 1,
     xyz: [...f],
     ...(energies ? { energy: energies[k] } : {}),
