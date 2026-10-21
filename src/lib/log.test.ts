@@ -17,6 +17,9 @@ describe("a line of the page's for Meno's log (lib/log)", () => {
     expect(logText([v])).toBe("RangeError: Invalid array length\nat f (app.js:1:1)");
     // (where in React's tree, as the boundary logs it)
     expect(logText(["\n    at Workspace (app.js:5:6)\n    at div"])).toBe("at Workspace (app.js:5:6)\n    at div");
+    // (how many atom numbers a picture left out: a count, kept)
+    const left = "Meno: a picture of molecules in 3D left out 12 of their atom numbers, too small to read in it or with no room on their balls.";
+    expect(logText([left])).toBe(left);
   });
 
   it("never what a document holds, nor a file's name - a SMILES and a file's name in a message are left out", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atomNumbersOf, digitsOf, numberHeight, numberPlaces, NUMBER_HEIGHT } from "./atomNumbers";
+import { atomNumbersOf, digitsOf, numberHeight, numberPlaces, numbersLeftOut, NUMBER_HEIGHT, NUMBER_LEAST_PX } from "./atomNumbers";
 
 describe("atom numbers", () => {
   it("are each atom's place, counted from 1, or its atom-map number where it has one", () => {
@@ -45,5 +45,21 @@ describe("a number beside a stick", () => {
     // (a stick from an atom far in front down across the ball's left side)
     numberPlaces([0, 0, 0, -0.4, 0, 3], [1, 0], [0.6, 0.6], [2, 0], out, { bonds: [{ a1: 1, a2: 1 }], r: 0.35 });
     expect(out[0]).toBeGreaterThan(0.1);
+  });
+});
+
+describe("the numbers a picture leaves out", () => {
+  it("counts those the balls' shader leaves out: under three quarters of the least height, or squeezed under 0.4 of their size", () => {
+    // (each at 0.78 of its ball's radius, times the share it has room for, drawn 0.7 of that high, against 0.75 of 6, 4.5:
+    // a ball of 10 pixels, 5.46 - drawn; of 8, 4.37 - left out; squeezed to 0.39 - left out; to 0.6 on a ball of 20, 6.55 - drawn)
+    const h = [0.78, 0.78, 0.78, 0.78, 0.78];
+    const shares = [1, 1, 0.39, 0.6, 1];
+    const radii = [10, 8, 10, 20, 10];
+    const digits = [2, 2, 2, 2, 0];
+    expect(NUMBER_LEAST_PX).toBe(6);
+    // (left out: the small ball's, and the squeezed one's; not the one without a number)
+    expect(numbersLeftOut(h, shares, radii, digits, NUMBER_LEAST_PX)).toBe(2);
+    // (an atom the look leaves out - no ball - is none of them)
+    expect(numbersLeftOut([0.78], [1], [0], [1], NUMBER_LEAST_PX)).toBe(0);
   });
 });
