@@ -483,7 +483,7 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
   const steps: number[] = [];
   chain.forEach(([kind, by], i) => {
     const id = st().addStep(kind, by, 1000 * i, 0);
-    st().connect(i ? { step: steps[i - 1] } : { set }, id);
+    st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });
   await st().runStep(steps[steps.length - 1]);
