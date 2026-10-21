@@ -1876,7 +1876,7 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   dioxide, SF6, CCl4, C60, N2 and a metal's carbonyls are whole by
   themselves. Some whole ones are taken for skeletons, the safe way: carbon
   monoxide and an isocyanide's end (one neighbour, as a cyanide's), ozone,
-  SO2, SO3 and NO2 (their oxygens' orders not estimated as they are);
+  SO2, SO3, NO2 and N2O (their orders not estimated as they are);
   these, and any other that is whole without hydrogens, are said so by the
   chemist - *Complete without hydrogens* on its menu (`wholeWithoutH`,
   one undo step; never a PDB entry's). A skeleton is given no charge or

@@ -99,7 +99,7 @@ const roomFor = (atoms: readonly SkeletonAtom[], among: readonly number[], sum: 
  * dioxide, sulfur hexafluoride, carbon tetrachloride, C60, N2 and a
  * metal's carbonyls are whole without any. Some whole ones are taken for
  * skeletons - the safe way, for the chemist to mark whole: carbon monoxide
- * and an isocyanide's end, ozone, SO2, SO3 and NO2.
+ * and an isocyanide's end, ozone, SO2, SO3, NO2 and N2O.
  */
 export function lacksHydrogens(
   atoms: readonly SkeletonAtom[],
