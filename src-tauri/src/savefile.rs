@@ -860,8 +860,10 @@ mod tests {
         run("xattr", &["-w", "com.apple.metadata:_kMDItemUserTags", tag, at]).unwrap();
         run("xattr", &["-w", "org.example.note", "kept by the chemist", at]).unwrap();
         run("chmod", &["+a", "user:nobody allow read", at]).unwrap();
-        let acl = run("ls", &["-le", at]).unwrap();
-        assert!(acl.contains("user:nobody allow read"), "{acl}");
+        // (the entry as the file system keeps it, by the user's GUID - `-n`: no name looked up, which the directory service may fail to give)
+        let entry = "FFFFEEEE-DDDD-CCCC-BBBB-AAAAFFFFFFFE allow read";
+        let acl = run("ls", &["-len", at]).unwrap();
+        assert!(acl.contains(entry), "{acl}");
         let long_ago = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000_000);
         File::options().write(true).open(&path).unwrap().set_modified(long_ago).unwrap();
 
@@ -869,8 +871,8 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), b"new");
         assert_eq!(run("xattr", &["-p", "com.apple.metadata:_kMDItemUserTags", at]).unwrap().trim_end(), tag);
         assert_eq!(run("xattr", &["-p", "org.example.note", at]).unwrap().trim_end(), "kept by the chemist");
-        let after = run("ls", &["-le", at]).unwrap();
-        assert!(after.contains("user:nobody allow read"), "{after}");
+        let after = run("ls", &["-len", at]).unwrap();
+        assert!(after.contains(entry), "{after}");
         let m = fs::metadata(&path).unwrap();
         // (its permissions as they were; its time of change now, not the old file's)
         assert_eq!(m.permissions().mode() & 0o7777, 0o640);
