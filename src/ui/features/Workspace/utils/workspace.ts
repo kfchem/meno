@@ -27,6 +27,7 @@ import { writeMenoFile } from "../../../../lib/doc/menoFileWriter";
 import { readMenoFile, type KeptData, type KeptName, type MenoFile } from "../../../../lib/doc/menoFile";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { markNotHad } from "../../../../lib/doc/notHad";
+import { sha256Hex } from "../../../../lib/binary/sha256";
 import type { CalcSource } from "../../../../lib/calc/output";
 import { readWorkflow, type SavedWorkflow } from "../workflow/saved";
 
@@ -271,7 +272,13 @@ async function pdfsToKeep(pdfs: readonly PdfItem[]): Promise<{ kept: KeptData[];
   const seen = new Map<string, string>();
   for (const p of pdfs) if (!seen.has(p.sha256)) seen.set(p.sha256, p.name);
   const read = await Promise.all(
-    [...seen].map(async ([sha256, name]) => ({ sha256, name, data: await pdfBytes(sha256).catch(() => null) })),
+    [...seen].map(async ([sha256, name]) => {
+      const data = await pdfBytes(sha256).catch(() => null);
+      // (held where Meno keeps its PDFs, on the disk: kept only if it is still what its SHA-256 says - never a damaged copy saved as fine)
+      if (data && sha256Hex(data) === sha256) return { sha256, name, data };
+      if (data) markNotHad(sha256);
+      return { sha256, name, data: null };
+    }),
   );
   return {
     kept: read.flatMap(({ sha256, name, data }) => (data ? [{ sha256, name, media: "application/pdf", data }] : [])),

@@ -759,7 +759,10 @@ work.meno (zip)
   lay, crossed from corner to corner (`lib/doc/notHad`), until it is had
   again - the same image or PDF put down afresh, or opened in another
   workspace's file - or is taken away: never healed unseen, never let drop
-  unsaid. A save names each of them it could not keep (below); one it
+  unsaid. A PDF Meno holds whole already, where it keeps the PDFs it has
+  opened, is not damaged: it is drawn and saved from there, unmarked. Its
+  copy there is read back and checked by its SHA-256 before a save keeps
+  it, as every file kept is. A save names each of them it could not keep (below); one it
   could - from the file saved to before, or a text's words held after all
   - is in the file saved, and opens as itself from it, the session going
   on with it marked as it was.

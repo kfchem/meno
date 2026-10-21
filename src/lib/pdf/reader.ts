@@ -12,6 +12,7 @@
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { markHad, markNotHad } from "../doc/notHad";
+import { sha256Hex } from "../binary/sha256";
 
 /** A PDF held: what it is known by, its size, and each page's width and height, in points. */
 export type HeldPdf = { sha256: string; size: number; pages: [number, number][] };
@@ -43,18 +44,42 @@ type KeptPdfs = { files: { sha256: string; media: string; name?: string }[]; dat
  * held from elsewhere.
  */
 export function holdPdfsOf(file: KeptPdfs, refused: (name: string, why: string) => void = () => {}): void {
-  if (isTauri()) holdEachKept(file, holdPdfBytes, refused, holding);
+  if (isTauri()) holdEachKept(file, holdPdfBytes, refused, holding, heldWhole);
 }
 
-/** Each PDF `file` keeps held by `hold`, and each that is not - its bytes missing or refused - told to `refused`. */
-export function holdEachKept(file: KeptPdfs, hold: (bytes: Uint8Array) => Promise<unknown>, refused: (name: string, why: string) => void, held: Map<string, Promise<unknown>>): void {
+/** Whether Meno holds the PDF known by `sha256` already, whole: what it holds, read back, is what that SHA-256 says. */
+async function heldWhole(sha256: string): Promise<boolean> {
+  const bytes = await pdfBytes(sha256).catch(() => null);
+  return !!bytes && sha256Hex(bytes) === sha256;
+}
+
+/**
+ * Each PDF `file` keeps held by `hold`, and each that is not - its bytes
+ * missing or refused - told to `refused`: unless Meno holds it whole
+ * already (`heldAlready`), from another file or opened before - then it is
+ * drawn, and saved, as it is, and not marked as damaged.
+ */
+export function holdEachKept(
+  file: KeptPdfs,
+  hold: (bytes: Uint8Array) => Promise<unknown>,
+  refused: (name: string, why: string) => void,
+  held: Map<string, Promise<unknown>>,
+  heldAlready: (sha256: string) => Promise<boolean> = async () => false,
+): void {
   for (const f of file.files) {
     if (f.media !== "application/pdf" || held.has(f.sha256)) continue;
     const name = f.name || "A PDF";
     const bytes = file.data(f.sha256);
     if (!bytes) {
-      markNotHad(f.sha256);
-      refused(name, "the workspace's file does not hold it whole");
+      const sha256 = f.sha256;
+      held.set(
+        sha256,
+        heldAlready(sha256).then((whole) => {
+          if (whole) return markHad(sha256);
+          markNotHad(sha256);
+          refused(name, "the workspace's file does not hold it whole");
+        }),
+      );
       continue;
     }
     held.set(

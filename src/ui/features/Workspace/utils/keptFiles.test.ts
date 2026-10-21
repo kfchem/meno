@@ -215,6 +215,19 @@ describe("a save that cannot keep a file the workspace has", () => {
     expect(ws.drawn.pictures!.map((p) => p.name)).toEqual(["fine.png", "lost.png"]);
   });
 
+  it("never keeps a PDF whose copy where Meno holds it is not what its SHA-256 says: it is named, and marked", async () => {
+    const { st } = editor();
+    const whole = strToU8("%PDF-1.7\n% held, then damaged on the disk\n%%EOF\n");
+    const damaged = whole.slice();
+    damaged[12] ^= 0x01;
+    pdfsHeld.set(sha(whole), damaged);
+    st().addPdfs([{ name: "held.pdf", sha256: sha(whole), pages: [[595, 842]] }], { x: 0, y: 40 });
+    const saved = await workspaceFile(st());
+    expect(saved.notKept).toEqual(["held.pdf"]);
+    expect(readMenoFile(saved.bytes).files).toEqual([]);
+    expect(isNotHad(sha(whole))).toBe(true);
+  });
+
   it("is said in plain words, each named", () => {
     expect(notKeptSaid([])).toBeNull();
     expect(notKeptSaid(["a.png", "b.pdf"])).toBe("Saved, but a.png and b.pdf are not in the file: they could not be read.");

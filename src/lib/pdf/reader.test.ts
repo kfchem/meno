@@ -18,14 +18,16 @@ describe("a workspace's PDFs held as it opens", () => {
     const held = new Map<string, Promise<unknown>>();
     holdEachKept(file, async (b) => (b[0] === 2 ? Promise.reject("it is locked with a password") : "held"), (name, why) => told.push(`${name}: ${why}`), held);
     await Promise.all(held.values());
-    expect([...held.keys()]).toEqual(["a", "b"]);
-    expect(told).toEqual(["lost.pdf: the workspace's file does not hold it whole", "locked.pdf: it is locked with a password"]);
+    expect([...held.keys()]).toEqual(["a", "b", "c"]);
+    expect(told.sort()).toEqual(["locked.pdf: it is locked with a password", "lost.pdf: the workspace's file does not hold it whole"]);
   });
 
   it("marks one the file does not hold whole as damaged, until it is had again - from another file, or opened", async () => {
     const lost = "9".repeat(64);
     const told: string[] = [];
-    holdEachKept({ files: [{ sha256: lost, media: "application/pdf", name: "lost.pdf" }], data: () => null }, async () => "held", (name) => told.push(name), new Map());
+    const first = new Map<string, Promise<unknown>>();
+    holdEachKept({ files: [{ sha256: lost, media: "application/pdf", name: "lost.pdf" }], data: () => null }, async () => "held", (name) => told.push(name), first);
+    await Promise.all(first.values());
     expect(told).toEqual(["lost.pdf"]);
     expect(isNotHad(lost)).toBe(true);
     // (the same PDF, whole, from another workspace's file)
@@ -33,5 +35,21 @@ describe("a workspace's PDFs held as it opens", () => {
     holdEachKept({ files: [{ sha256: lost, media: "application/pdf", name: "found.pdf" }], data: () => new Uint8Array([1]) }, async () => ({ sha256: lost }), () => {}, held);
     await Promise.all(held.values());
     expect(isNotHad(lost)).toBe(false);
+  });
+
+  it("draws one the file does not hold whole, and marks it as nothing damaged, where Meno holds it whole already", async () => {
+    const whole = "8".repeat(64);
+    const told: string[] = [];
+    const held = new Map<string, Promise<unknown>>();
+    holdEachKept(
+      { files: [{ sha256: whole, media: "application/pdf", name: "paper.pdf" }], data: () => null },
+      async () => "held",
+      (name) => told.push(name),
+      held,
+      async (sha) => sha === whole,
+    );
+    await Promise.all(held.values());
+    expect(told).toEqual([]);
+    expect(isNotHad(whole)).toBe(false);
   });
 });
