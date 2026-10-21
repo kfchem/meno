@@ -18,7 +18,8 @@ describe("a workspace's PDFs held as it opens", () => {
     const held = new Map<string, Promise<unknown>>();
     holdEachKept(file, async (b) => (b[0] === 2 ? Promise.reject("it is locked with a password") : "held"), (name, why) => told.push(`${name}: ${why}`), held);
     await Promise.all(held.values());
-    expect([...held.keys()]).toEqual(["a", "b", "c"]);
+    // (those not held are held no more: free to be held from another file)
+    expect([...held.keys()]).toEqual(["a"]);
     expect(told.sort()).toEqual(["locked.pdf: it is locked with a password", "lost.pdf: the workspace's file does not hold it whole"]);
   });
 
@@ -51,5 +52,22 @@ describe("a workspace's PDFs held as it opens", () => {
     await Promise.all(held.values());
     expect(told).toEqual([]);
     expect(isNotHad(whole)).toBe(false);
+  });
+
+  it("holds a PDF one file does not hold whole when the next file opened holds it whole", async () => {
+    const pdf = "7".repeat(64);
+    const told: string[] = [];
+    // (one map, as the app keeps one for the session)
+    const held = new Map<string, Promise<unknown>>();
+    const holds: string[] = [];
+    const hold = async (b: Uint8Array) => (holds.push(String(b[0])), "held");
+    holdEachKept({ files: [{ sha256: pdf, media: "application/pdf", name: "paper.pdf" }], data: () => null }, hold, (name) => told.push(name), held);
+    await Promise.all(held.values());
+    expect(told).toEqual(["paper.pdf"]);
+    expect(isNotHad(pdf)).toBe(true);
+    holdEachKept({ files: [{ sha256: pdf, media: "application/pdf", name: "paper.pdf" }], data: () => new Uint8Array([5]) }, hold, (name) => told.push(name), held);
+    await Promise.all(held.values());
+    expect(holds).toEqual(["5"]);
+    expect(isNotHad(pdf)).toBe(false);
   });
 });

@@ -70,28 +70,26 @@ export function holdEachKept(
     if (f.media !== "application/pdf" || held.has(f.sha256)) continue;
     const name = f.name || "A PDF";
     const bytes = file.data(f.sha256);
-    if (!bytes) {
-      const sha256 = f.sha256;
-      held.set(
-        sha256,
-        heldAlready(sha256).then((whole) => {
+    const sha256 = f.sha256;
+    // (one not held after all is held no more: the same PDF, whole, from another file is held then)
+    const notHeld = () => {
+      if (held.get(sha256) === holding) held.delete(sha256);
+      markNotHad(sha256);
+    };
+    const holding: Promise<unknown> = !bytes
+      ? heldAlready(sha256).then((whole) => {
           if (whole) return markHad(sha256);
-          markNotHad(sha256);
+          notHeld();
           refused(name, "the workspace's file does not hold it whole");
-        }),
-      );
-      continue;
-    }
-    held.set(
-      f.sha256,
-      hold(bytes).then(
-        () => markHad(f.sha256),
-        (e: unknown) => {
-          markNotHad(f.sha256);
-          refused(name, e instanceof Error ? e.message : String(e));
-        },
-      ),
-    );
+        })
+      : hold(bytes).then(
+          () => markHad(sha256),
+          (e: unknown) => {
+            notHeld();
+            refused(name, e instanceof Error ? e.message : String(e));
+          },
+        );
+    held.set(sha256, holding);
   }
 }
 
