@@ -15,14 +15,15 @@ export const SYSTEM_BUTTONS_ROOM = 80;
 
 /** Minimise, maximise and close, drawn by Meno at the title bar's right (not on a Mac). */
 export default function WindowButtons() {
-  const appWindow = useMemo(() => getCurrentWindow(), []);
+  // (none outside Tauri - the browser dev server - where the buttons do nothing)
+  const appWindow = useMemo(() => (isTauri() ? getCurrentWindow() : null), []);
   return (
     <div className="ml-2 h-full flex">
       <button
         aria-label="Minimize"
         title="Minimize"
         onMouseDown={stop}
-        onClick={() => appWindow.minimize()}
+        onClick={() => appWindow?.minimize()}
         className="h-10 w-11 flex items-center justify-center transition-colors duration-150 ease-meno hover:bg-gray-200"
       >
         <MinusIcon className="h-4 w-4" />
@@ -31,7 +32,7 @@ export default function WindowButtons() {
         aria-label="Maximize"
         title="Maximize / Restore"
         onMouseDown={stop}
-        onClick={() => appWindow.toggleMaximize()}
+        onClick={() => appWindow?.toggleMaximize()}
         className="h-10 w-11 flex items-center justify-center transition-colors duration-150 ease-meno hover:bg-gray-200"
       >
         <StopIcon className="h-4 w-4" />
@@ -40,7 +41,7 @@ export default function WindowButtons() {
         aria-label="Close"
         title="Close"
         onMouseDown={stop}
-        onClick={() => appWindow.close()}
+        onClick={() => appWindow?.close()}
         className="h-10 w-11 flex items-center justify-center transition-colors duration-150 ease-meno hover:bg-red-500 hover:text-white"
       >
         <XMarkIcon className="h-4 w-4" />
