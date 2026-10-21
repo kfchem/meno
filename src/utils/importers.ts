@@ -1,5 +1,5 @@
 import { NOMINAL_BOND_LENGTH } from "../lib/chem/acs";
-import { kekuleOrders } from "../lib/chem/kekulize";
+import { kekulized } from "../lib/chem/kekulize";
 import {
   bondChem,
   chemistry,
@@ -33,6 +33,8 @@ export type EditorAtom = AtomChem & {
   x: number;
   y: number;
   r: number;
+  /** An H the file does not state, put on it where another atom of its aromatic ring system could have carried it (lib/chem/kekulize `hChosen`): said where it is shown. */
+  hChosen?: true;
 };
 export type EditorBond = BondChem & {
   id: number;
@@ -549,7 +551,8 @@ export function convertMolToEditorModel(m: ParsedMol, scale: number) {
   }));
   // Assign bond IDs after atom IDs to avoid collisions with atoms
   const bondIdBase = atoms.length;
-  const orders = kekuleOrders(m.atoms, m.bonds);
+  const { orders, hChosen } = kekulized(m.atoms, m.bonds);
+  for (const i of hChosen) atoms[i].hChosen = true;
   const reversed = wedgesNarrowAtFewerBonds(m.bonds);
   const bonds: EditorBond[] = m.bonds.map((b, i) => ({
     id: bondIdBase + i + 1,
@@ -616,7 +619,8 @@ export function moleculesToEditorModel(mols: ParsedMol[]): {
         ...chemistryOf(a),
       });
     }
-    const orders = kekuleOrders(m.atoms, m.bonds);
+    const { orders, hChosen } = kekulized(m.atoms, m.bonds);
+    for (const i of hChosen) atoms[atoms.length - m.atoms.length + i].hChosen = true;
     const reversed = wedgesNarrowAtFewerBonds(m.bonds);
     m.bonds.forEach((b, i) => {
       // Parsed indices are 0-based; our per-molecule atoms were assigned ids base..(base+atoms-1).
