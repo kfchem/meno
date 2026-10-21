@@ -764,6 +764,30 @@ The same for every plugin and for Meno's own parts:
   file says them, its energy with its method and basis, the file and the
   job it came from - is what an entry of the rebuilt workflow is to
   carry.)
+- **What an energy was worked out in, as the output says it**
+  (2026-10-21), so that every number carries its method and its level:
+  - `solvation`: the model, the solvent, and anything else of it that
+    changes the energies, in the program's own words - xtb's
+    `ALPB(water), reference state gsolv [1 M gas/solution]`, its
+    reference state among them, as a free energy differs by state (xtb
+    6.7.1 run here: the bar-gas state's free energy 1.90 kcal/mol above
+    the default's, RT ln 24.5); CREST's `ALPB(water)`, which is all it
+    echoes. `none` where the output says no model was used - xtb's
+    program call, or CREST's echo of its options, holding no option that
+    asks for one, and no model printed. Left out where the output does not
+    say: never filled in from the step's options. A run whose solvation
+    is not what its step asked for is refused, saying both;
+  - the method without it: `GFN2-xTB`, never `GFN2-xTB (ALPB, water)` -
+    one place for each. Meno shows them together (`lib/calc/output.ts`,
+    `levelOf`);
+  - with a frequency job's thermochemistry, as results of their own: the
+    temperature it is at, `thermo.temperature` (K) - of several, the one
+    the program used; the pressure, `thermo.pressure` (atm), only where
+    the program prints one (xtb prints none, and its documentation states
+    none); and how it was worked out, `thermo.treatment`, a text in the
+    program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
+    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03).
+    Two values of one treatment are written alike, so that they compare.
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**

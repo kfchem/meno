@@ -103,6 +103,7 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       version: first((o) => o.version),
       method: first((o) => o.method),
       basis: first((o) => o.basis),
+      solvation: first((o) => o.solvation),
       charge: first((o) => o.charge),
       multiplicity: first((o) => o.multiplicity),
       optimised: first((o) => o.optimised),
