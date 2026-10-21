@@ -1,7 +1,7 @@
 """Tests for the RDKit plugin's worker (src-tauri/resources/plugins/rdkit/worker.py).
 
-The worker needs RDKit, which CI's Python has not: these run in the plugin's
-own environment, and are skipped where RDKit is missing:
+The worker needs RDKit: these run in the plugin's own environment, installed
+from its lock - in CI's job "plugins" on every push, and by hand with
 
     <the RDKit plugin's Python> -m unittest scripts/calc/test_plugin_rdkit.py
 
