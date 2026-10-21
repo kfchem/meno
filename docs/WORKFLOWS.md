@@ -899,6 +899,9 @@ Decided while building it, for the maintainer to confirm:
 - **xTB's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF), a solvent -
   ALPB, any of the 24 its documentation gives for all three methods - and,
   optimising, how far it converges (crude to extreme, normal by default).
+  What it gives back says the solvation as xtb printed it, and a
+  frequency job's thermochemistry how it was worked out (PLUGINS.md,
+  *The contract*).
 
 Changed after review (the maintainer, 2026-10-08; decided: 16): a step
 is its plugin's. Quick Add lists the plugins added, then Meno, each with

@@ -42,6 +42,13 @@ nothing else:
   each structure of the ensemble file given, optimised, written to
   `crest_ensemble.xyz` in the same order, each comment line its energy.
 
+The solvation is as the run said it, never taken from the options: CREST
+echoes each option it was given as it starts ("--alpb water : implicit
+solvation"), and says no more of it - "ALPB(water)"; with none of the
+options that ask for a model, "none". A lone atom's, as its xtb printed it
+in its setup: the model, the solvent and the reference state. Where that
+is not what was asked, the job is refused.
+
 A lone atom - an ion of a salt, say - has no conformers to search for and
 nothing to optimise, and CREST stops with an error when given one. Its
 energy is worked out where it is instead, by the xtb CREST runs, as xtb's
@@ -300,6 +307,38 @@ def version_in(log):
     return m.group(1) if m else VERSION
 
 
+# the options that ask CREST, or xtb, for a solvation model ("Command Line Keywords"; xtb's "Commandline Usage")
+SOLVATION_FLAGS = {"--alpb", "--gbsa", "-g", "--cosmo", "--cpcmx"}
+
+
+def solvation_of(log):
+    """The solvation a run used, as it said it: xtb's setup ("ALPB(water), reference state gsolv [1 M gas/solution]"),
+    else CREST's echo of its options ("ALPB(water)"); "none" where the command it echoes asked for none; otherwise None."""
+    m = re.search(r"^\s*\*\s*Solvation model:\s*(\S.*?)\s*$", log, re.M)
+    if m:
+        block = "\n".join(log[m.end():].splitlines()[1:12])
+        solvent = re.search(r"^\s*Solvent\s+(\S.*?)\s*$", block, re.M)
+        reference = re.search(r"^\s*Reference state\s+(\S.*?)\s*$", block, re.M)
+        return f"{m.group(1)}({solvent.group(1)})" + (f", reference state {reference.group(1)}" if reference else "") if solvent else None
+    echoed = re.search(r"^\s*--(alpb|gbsa)\s+(\S+)\s*:\s*implicit solvation", log, re.M)
+    if echoed:
+        return f"{echoed.group(1).upper()}({echoed.group(2)})"
+    call = re.search(r"^\s*Command line input:\s*\n\s*>\s*(.*)$", log, re.M) or re.search(r"program call\s*:\s*(.*)$", log, re.M)
+    if call and not SOLVATION_FLAGS.intersection(call.group(1).split()):
+        return "none"
+    return None
+
+
+def solvated(out, options, log):
+    """An output with its solvation as the run said it - refused where that is not what was asked."""
+    solvent = options.get("solvent", "none")
+    solvation = solvation_of(log)
+    as_asked = solvation == "none" if solvent == "none" else solvation is not None and f"({solvent})" in solvation
+    if solvation is not None and not as_asked:
+        raise Refused(f"CREST ran with solvation {solvation}, not as asked ({solvent})")
+    return {**out, **({"solvation": solvation} if solvation is not None else {})}
+
+
 def why_of(log):
     """Why CREST stopped, as it says: the first line it marks an error or a failure - not the Fortran
     runtime's own, as it stops, nor its backtrace; else the last warning it gave, with the line after
@@ -362,7 +401,6 @@ def optimised_of(entries, options, files, log):
     if any(els != elements for els, _, _ in found):
         raise Refused("CREST wrote back another molecule")
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
-    solvent = options.get("solvent", "none")
     out = []
     for entry, (_, xyz, comment) in zip(entries, found):
         energy = energy_in(comment)
@@ -370,7 +408,7 @@ def optimised_of(entries, options, files, log):
             "schema": SCHEMA,
             "program": "CREST",
             "version": version_in(log),
-            "method": (method + (f" (ALPB, {solvent})" if solvent != "none" else "")) if method else None,
+            "method": method,
             "charge": whole(entry.get("charge", 0), "The charge"),
             "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
             "atoms": elements,
@@ -391,14 +429,13 @@ def output_of(entry, options, files, log):
         raise Refused("CREST wrote conformers of another molecule")
     energies = [energy_in(c) for _, _, c in found]
     method = METHODS.get(options.get("method", "gfn2"), (None, None))[1]
-    solvent = options.get("solvent", "none")
     populations = populations_in(log)
     degeneracies = degeneracies_in(log)
     return {
         "schema": SCHEMA,
         "program": "CREST",
         "version": version_in(log),
-        "method": f"iMTD-GC, {method}" + (f" (ALPB, {solvent})" if solvent != "none" else "") if method else None,
+        "method": f"iMTD-GC, {method}" if method else None,
         "charge": whole(entry.get("charge", 0), "The charge"),
         "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
         "atoms": elements,
@@ -421,13 +458,12 @@ def lone_of(step, entry, options, files):
     if isinstance(total, bool) or not isinstance(total, (int, float)) or not math.isfinite(total):
         raise Refused("xtb wrote no energy")
     method = XTB_METHODS.get(options.get("method", "gfn2"), (None, None))[1]
-    solvent = options.get("solvent", "none")
     a = entry["atoms"][0]
     return {
         "schema": SCHEMA,
         "program": "xtb",
         "version": str(dump.get("xtb version") or XTB_VERSION).split()[0],
-        "method": (method + (f" (ALPB, {solvent})" if solvent != "none" else "")) if method else None,
+        "method": method,
         "charge": whole(entry.get("charge", 0), "The charge"),
         "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
         "atoms": elements,
@@ -449,11 +485,14 @@ def op_collect(m):
     wrote = XTB_DUMP if alone else ENSEMBLE_OUT if step == "optimise" else CONFORMERS
     if m.get("ended") != "done" or wrote not in files:
         return {"why": why_of(log)}
+    options = m.get("options") or {}
     if alone:
-        return {"outputs": [lone_of(step, e, m.get("options") or {}, files) for e in entries]}
-    if step == "optimise":
-        return {"outputs": optimised_of(entries, m.get("options") or {}, files, log)}
-    return {"outputs": [output_of(e, m.get("options") or {}, files, log) for e in entries]}
+        outputs = [lone_of(step, e, options, files) for e in entries]
+    elif step == "optimise":
+        outputs = optimised_of(entries, options, files, log)
+    else:
+        outputs = [output_of(e, options, files, log) for e in entries]
+    return {"outputs": [solvated(o, options, log) for o in outputs]}
 
 
 OPS = {"prepare": op_prepare, "collect": op_collect}
