@@ -164,7 +164,8 @@ describe("mapProducts (the Reaction step)", () => {
       ["broken", "C", "Br"],
     ]);
     const every = mapProducts(reactant, [da.product], { every: true });
-    expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 64 }, (_, i) => i));
+    // the Diels-Alder's maps, each once (see "maps every atom, hydrogens included, one to one")
+    expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 4 }, (_, i) => i));
   });
 
   it("says why a product that cannot map atom for atom is not passed on, and passes on nothing of it", () => {
