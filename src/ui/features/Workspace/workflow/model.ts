@@ -185,7 +185,10 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
  * entries `holdsOf`), and the wires out of it with it; one that holds
  * nothing - its step never ran, or gave nothing there - goes with the step,
  * and the wires out of it: an empty frame the chemist never drew is not
- * left behind.
+ * left behind. A set that stays and was kept out of the workspace's file
+ * (*Don't keep in the file*) is kept in it in full from then on: the step
+ * that could make its molecules again is gone, and a chemist's set is
+ * always kept.
  */
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
@@ -195,7 +198,8 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
     ...doc,
     steps,
     wires: (doc.wires ?? []).filter((w) => w.to.step !== id && !empty.has(w.from.set)),
-    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, ...rest }) => rest)(b) : b)),
+    // (a set it made, kept, a chemist's - and kept in the file in full, its *Don't keep in the file* gone with the step that could make it again)
+    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, keep: _k, ...rest }) => rest)(b) : b)),
   };
 }
 

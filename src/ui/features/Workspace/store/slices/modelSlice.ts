@@ -250,7 +250,8 @@ export const createModelSlice = (
         ),
         selCycles,
         ),
-        selFlow.sets,
+        // (but a set that holds its molecules itself, on no page: deleted on its own, asked first, as a step running is)
+        [...selFlow.sets].filter((id) => !get().sets.find((b) => b.id === id)?.collection?.length),
         idle,
       ),
     );
@@ -781,7 +782,8 @@ export const createModelSlice = (
         ),
         (part.inks ?? []).map((x) => x.id),
         ),
-        (part.flow?.sets ?? []).map((b) => b.id),
+        // (but a set that holds its molecules itself, on no page, which a copy does not carry: left, to be deleted on its own)
+        (part.flow?.sets ?? []).filter((b) => !get().sets.find((x) => x.id === b.id)?.collection?.length).map((b) => b.id),
         steps.map((s) => s.id),
       ),
     );

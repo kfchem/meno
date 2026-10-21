@@ -525,7 +525,9 @@ file, on its row of the step's card - what both its exits held - and in
 each exit's set once it is shown again. Its molecules are on no page,
 so deleting the set deletes them: its frame says so ("On no page:
 deleting the set deletes them"), and so does its menu, in words, last ("Delete
-set and the 118 molecules it holds"), before it happens (2026-10-22). They are opened as a table in the column, and put on the page from
+set and the 118 molecules it holds"), before it happens (2026-10-22).
+Deleted by the Delete key it is asked about first, as a step running is;
+a selection deleted or cut leaves it, to be deleted on its own. They are opened as a table in the column, and put on the page from
 there, in the steps that follow (6b), and summed up in the frame with a
 sample of their structures and histograms (6c).
 
@@ -797,7 +799,10 @@ Decided while building it, for the maintainer to confirm:
 - **Deleting a step keeps the set it made**, with what it holds - a set
   like any the chemist made, so a compound set. A large set it made keeps
   the molecules it holds itself (2026-10-22): they are on no page, and
-  the set takes in nothing dropped into its frame.
+  the set takes in nothing dropped into its frame. A set kept out of the
+  file (*Don't keep in the file*) is kept in it in full from then on, its
+  molecules with their outputs: the step that could make them again is
+  gone, and a chemist's set is always kept.
 - **The look, after review** (2026-10-08): frames, tabs, cards and ports
   in Meno's palette and its cards' hairline borders, a hair on the screen
   at any zoom; wires a hair and a quarter; Heroicons' outline icons for

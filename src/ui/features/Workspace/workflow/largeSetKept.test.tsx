@@ -8,7 +8,7 @@ import { createWorkspaceDocument } from "../document";
 import { countOf, heldOwn, setMolecules } from "./entries";
 import { canWire, resultOf, wireRefusal } from "./flow";
 import { kindInfo } from "./kinds";
-import { addSet, addStep, connect, membersSettled, removeStep } from "./model";
+import { addSet, addStep, connect, keepSet, membersSettled, removeStep } from "./model";
 import { partsOf } from "./parts";
 import { placeResults, type RunWith } from "./run";
 import StepCard from "./StepCard";
@@ -61,6 +61,39 @@ describe("a large set its step leaves", () => {
     page.edit("delete", () => removeStep(doc, step));
     const read = readWorkspace(workspaceText(st.getState()))!;
     expect(read.workflow!.sets.find((b) => !b.made && b.collection)?.collection).toHaveLength(118);
+  });
+
+  it("kept out of the file, is kept in it in full once its step is gone: nothing could make its molecules again", () => {
+    // (the desk's repro: 118 held, *Don't keep in the file*, the step deleted, saved and read back)
+    const { doc, step, rest } = duplicated();
+    const page = createWorkspaceDocument();
+    const st = createEditorStore(page);
+    connectStoreToDocument(st, page);
+    page.edit("delete", () => removeStep(keepSet(doc, rest, false), step));
+    expect(st.getState().sets.find((b) => b.id === rest)?.keep).toBeUndefined();
+    const saved = JSON.parse(workspaceText(st.getState()));
+    const set = saved.sets.find((b: { id: number }) => b.id === rest);
+    expect([set.collection?.length, set.notKept, set.keep]).toEqual([118, undefined, undefined]);
+    expect(readWorkspace(JSON.stringify(saved))!.workflow!.sets.find((b) => b.id === rest)?.collection).toHaveLength(118);
+  });
+
+  it("is asked about before it is deleted by a key or a selection - not by its menu, which says it in words - and a set on the page is not", () => {
+    const page = createWorkspaceDocument();
+    const st = createEditorStore(page);
+    connectStoreToDocument(st, page);
+    const { doc, rest } = duplicated();
+    page.edit("run", () => doc);
+    const kept = st.getState().sets.find((b) => b.made?.exit === "out")!.id;
+    st.getState().removeSet(rest);
+    expect([st.getState().askDeleteSet, st.getState().sets.some((b) => b.id === rest)]).toEqual([rest, true]);
+    st.getState().setWorkflowView({ askDeleteSet: null });
+    // (a selection holding it: the rest goes, it stays)
+    st.setState({ selFlow: { sets: new Set([rest, kept]), steps: new Set() } });
+    st.getState().deleteSelection();
+    expect([st.getState().sets.some((b) => b.id === rest), st.getState().sets.some((b) => b.id === kept)]).toEqual([true, false]);
+    // (asked, or by its menu: gone, its molecules with it)
+    st.getState().removeSet(rest, true);
+    expect([st.getState().sets.some((b) => b.id === rest), st.getState().askDeleteSet]).toEqual([false, null]);
   });
 
   it("takes in nothing dropped into its frame: what it holds is its own", () => {

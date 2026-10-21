@@ -680,7 +680,7 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep";
+export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -1357,7 +1357,10 @@ export type EditorState = {
   /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */
   resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
-  removeSet: (id: number) => void;
+  /** A set deleted - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
+  removeSet: (id: number, asked?: boolean) => void;
+  /** A set that holds its molecules itself asked to be deleted: the question asked (Workspace). */
+  askDeleteSet: number | null;
   /** A step of `kind`, done by `by` - Meno, or a plugin - put down, its card's top left at (x, y), with the defaults Settings has for its kind done by it; its id. */
   addStep: (kind: StepKind, by: string, x: number, y: number) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
