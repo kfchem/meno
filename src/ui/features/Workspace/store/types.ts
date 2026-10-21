@@ -573,6 +573,15 @@ export type WordsFlight = {
  * (`of`) - what it rises out of into the column, and goes back into.
  */
 export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
+/**
+ * A text its workspace's file was to hold whose words could not be read -
+ * damaged there, or not there (docs/FILE-IO.md, *The workspace file*): kept
+ * as the file named it, by its name and its SHA-256, with where it lay and
+ * what it was the text of, and shown in the column as what it is - never
+ * as a text, having no words: nothing to edit, copy, find or read. It stays
+ * until it is taken away, or a text of the same words comes.
+ */
+export type LostText = Omit<WorkspaceText, "text" | "path"> & { sha256: string };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
 export type TextOf = { step: number } | { molecule: number };
 /**
@@ -732,6 +741,8 @@ export type EditorState = {
   molecules3d: Molecule3D[];
   /** The texts the workspace holds, in their column's order. */
   texts: WorkspaceText[];
+  /** The texts its file was to hold that could not be read, after them in the column (`LostText`). */
+  textsLost: LostText[];
   /** The text its column shows, or showed as it was closed, by id; null, none. */
   textShown: number | null;
   /** Whether the column of texts is open beside the canvas. */
@@ -816,6 +827,8 @@ export type EditorState = {
   editText: (id: number, text: string) => void;
   /** A text taken out of the workspace, as one undo step. */
   removeText: (id: number) => void;
+  /** A text that could not be read taken out of the workspace, as one undo step. */
+  removeLostText: (id: number) => void;
   /** Texts deleted, their sheets with them, as one step. */
   removeTexts: (ids: Iterable<number>) => void;
   /** A text read in the column - its tab there again, where it had none - and shown. */

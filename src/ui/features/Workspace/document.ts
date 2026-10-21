@@ -21,7 +21,8 @@ import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reacti
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
 import { etaHeld } from "./chem/eta";
-import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
+import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
@@ -94,6 +95,8 @@ export type WorkspaceDocument = {
   expanded?: number[];
   /** The texts it holds, read and edited in the column beside the canvas. */
   texts?: WorkspaceText[];
+  /** The texts its file was to hold that could not be read, shown in the column as what they are (store/types `LostText`); their ids the texts'. */
+  textsLost?: LostText[];
   nextTextId?: number;
   /** The PDFs on the page (docs/PDF.md). */
   pdfs?: PdfItem[];
@@ -124,6 +127,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.captions?.length &&
     !doc.molecules3d?.length &&
     !doc.texts?.length &&
+    !doc.textsLost?.length &&
     !doc.pdfs?.length &&
     !doc.pictures?.length &&
     !doc.slides?.length &&
@@ -2503,7 +2507,9 @@ const heldText = (text: string) => text.replace(/\r\n?/g, "\n");
 /**
  * Texts added, each after those it holds, and the id of the last: one it
  * holds already - the same name and text - not added again, its id given;
- * one with no name, a new one, named (utils/texts `newTextName`).
+ * one with no name, a new one, named (utils/texts `newTextName`). One that
+ * could not be read whose words these are - the same SHA-256 - is had
+ * again: it goes, the text come in its place in the column.
  */
 export function addTexts(
   doc: WorkspaceDocument,
@@ -2523,7 +2529,23 @@ export function addTexts(
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
-  return { doc: { ...doc, texts: held, nextTextId: next }, last };
+  const lost = doc.textsLost?.length ? lostNotHad(doc.textsLost, held.slice((doc.texts ?? []).length)) : doc.textsLost;
+  return { doc: { ...doc, texts: held, nextTextId: next, ...(lost !== doc.textsLost ? { textsLost: lost } : {}) }, last };
+}
+
+/** Of the texts that could not be read, those whose words none of `come` is: one it is, had again, gone. */
+function lostNotHad(lost: readonly LostText[], come: readonly WorkspaceText[]): LostText[] {
+  const utf8 = new TextEncoder();
+  // (as a file keeps a text: its words, as they are held, as UTF-8)
+  const had = new Set(come.map((t) => sha256Hex(utf8.encode(t.text))));
+  const left = lost.filter((t) => !had.has(t.sha256));
+  return left.length === lost.length ? (lost as LostText[]) : left;
+}
+
+/** A text that could not be read taken out. */
+export function removeLostText(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+  if (!(doc.textsLost ?? []).some((t) => t.id === id)) return doc;
+  return { ...doc, textsLost: doc.textsLost!.filter((t) => t.id !== id) };
 }
 
 /** A text changed to `text`. */

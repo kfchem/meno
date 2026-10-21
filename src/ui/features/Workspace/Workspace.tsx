@@ -1476,6 +1476,7 @@ function WorkspaceContent({
   // S, its texts, its style, its workflow - on the right-click menu on empty
   // space; the keys say the same. (Save is the title bar's, and Ctrl/Cmd+S.)
   const texts = useEditor((s) => s.texts);
+  const lostTexts = useEditor((s) => s.textsLost.length > 0);
   const steps = useEditor((s) => s.steps);
   const textsOpen = useEditor((s) => s.textsOpen);
   const reading = useEditor((s) => s.pdfs.some((p) => p.reading));
@@ -1495,7 +1496,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    ...(texts.length || reading
+    ...(texts.length || lostTexts || reading
       ? [
           textsOpen
             ? { name: "Hide texts", keys: "", run: () => store.getState().closeTexts() }
@@ -1506,7 +1507,7 @@ function WorkspaceContent({
                   // (the PDF it showed, rising into it again; or the text)
                   const st = store.getState();
                   if (st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown && p.reading)) st.readPdf(st.pdfShown);
-                  else if (st.texts.length) st.showText(st.textShown ?? st.texts[0].id);
+                  else if (st.texts.length || st.textsLost.length) st.showText(st.textShown ?? (st.texts[0] ?? st.textsLost[0]).id);
                   else if (st.pdfs.some((p) => p.reading)) st.readPdf(st.pdfs.find((p) => p.reading)!.id);
                 },
               },

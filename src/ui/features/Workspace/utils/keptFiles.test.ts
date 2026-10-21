@@ -18,7 +18,8 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
 }));
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 import { connectStoreToDocument, createEditorStore } from "../store";
-import { createWorkspaceDocument } from "../document";
+import { createWorkspaceDocument, isBlankDocument } from "../document";
+import { lostSaid } from "./texts";
 import { notKeptSaid, readKept, readWorkspace, workspaceFile, workspaceText } from "./workspace";
 import { menoFileBytes, readMenoFile, type KeptData } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
@@ -295,5 +296,118 @@ describe("a save of a file the workspace has but holds nowhere this session", ()
     expect(again.notKept).toEqual([]);
     const file = readMenoFile(again.bytes);
     for (const k of w.kept) expect(file.data(k.sha256)).toEqual(k.data);
+  });
+});
+
+describe("a text a workspace's file does not hold whole", () => {
+  /**
+   * A workspace's file with two texts - notes, its sheet on the page, and
+   * a log - `seed`'s own, the notes' words changed in the file after it
+   * was saved (its bytes no longer what its SHA-256 says).
+   */
+  function damagedNotes(seed: string) {
+    const notes = `notes, ${seed}\n`;
+    const log = `a log, ${seed}\n`;
+    const { st } = editor();
+    st().addTexts([{ name: "notes.txt", text: notes }], { x: 30, y: 40 });
+    st().addTexts([{ name: "run.log", text: log }]);
+    const at = st().texts[0].at!;
+    const kept: KeptData[] = [
+      { sha256: sha(strToU8(notes)), name: "notes.txt", media: "text/plain", data: strToU8(notes) },
+      { sha256: sha(strToU8(log)), name: "run.log", media: "text/plain", data: strToU8(log) },
+    ];
+    const whole = menoFileBytes(workspaceText(st(), new Set(), kept.map((k) => k.sha256)), kept);
+    const parts = unzipSync(whole);
+    const damaged = zipSync(Object.fromEntries(Object.entries(parts).map(([k, v]) => [k, [k === `files/${kept[0].sha256}` ? strToU8(`motes, ${seed}\n`) : v, { level: 0 }]])));
+    return { notes, log, at, sha: kept[0].sha256, whole, damaged };
+  }
+
+  it("opens as one that could not be read: named, kept where it was - not dropped, not an empty text", async () => {
+    const w = damagedNotes("opens");
+    const { st, missing } = await opened(w.damaged);
+    expect(missing).toEqual(["notes.txt"]);
+    expect(lostSaid("notes.txt")).toBe("notes.txt could not be read from the workspace.");
+    // (the texts - what everything that takes a text reads - hold only the one read)
+    expect(st().texts.map((t) => [t.name, t.text])).toEqual([["run.log", w.log]]);
+    expect(st().textsLost).toMatchObject([{ id: 2, name: "notes.txt", sha256: w.sha, at: w.at }]);
+    expect(st().textsLost.length).toBe(1);
+    expect("text" in st().textsLost[0]).toBe(false);
+    expect(isBlankDocument(st() as never)).toBe(false);
+  });
+
+  it("can be neither written in nor copied - it has no words - nor selected on the page", async () => {
+    const w = damagedNotes("no words");
+    const { st, doc } = await opened(w.damaged);
+    const id = st().textsLost[0].id;
+    st().editText(id, "typed over");
+    st().selectTexts([id]);
+    expect(st().selTexts.size).toBe(0);
+    expect(st().texts.some((t) => t.id === id)).toBe(false);
+    expect(st().textsLost).toMatchObject([{ id, name: "notes.txt", sha256: w.sha, at: w.at }]);
+    expect("text" in st().textsLost[0]).toBe(false);
+    expect(doc.history().undoDepth).toBe(0);
+    // (a copy takes the texts' sheets selected - clipboardActions - and the column's words: it is neither)
+    st().selectAll();
+    expect(st().texts.filter((t) => st().selTexts.has(t.id)).map((t) => t.name)).not.toContain("notes.txt");
+  });
+
+  it("is named by every save, its place kept in the workspace - and opens named again", async () => {
+    const w = damagedNotes("every save");
+    const { st } = await opened(w.damaged);
+    for (let n = 0; n < 2; n++) {
+      const saved = await workspaceFile(st());
+      expect(saved.notKept).toEqual(["notes.txt"]);
+      const file = readMenoFile(saved.bytes);
+      expect(file.files.map((f) => f.name)).toEqual(["run.log"]);
+      expect(file.data(w.sha)).toBeNull();
+      expect(readWorkspace(file.workspace)!.texts.map((t) => ({ name: t.name, sha256: t.sha256, at: t.at }))).toEqual([
+        { name: "run.log", sha256: sha(strToU8(w.log)), at: undefined },
+        { name: "notes.txt", sha256: w.sha, at: w.at },
+      ]);
+      const again = await opened(saved.bytes, "again.meno");
+      expect(again.missing).toEqual(["notes.txt"]);
+      expect(again.st().textsLost.map((t) => [t.name, t.sha256, t.at])).toEqual([["notes.txt", w.sha, w.at]]);
+    }
+  });
+
+  it("taken away by the chemist, is named no more - an undo bringing it back, named again", async () => {
+    const w = damagedNotes("taken away");
+    const { st, doc } = await opened(w.damaged);
+    st().removeLostText(st().textsLost[0].id);
+    expect(st().textsLost).toEqual([]);
+    const saved = await workspaceFile(st());
+    expect(saved.notKept).toEqual([]);
+    expect(readWorkspace(readMenoFile(saved.bytes).workspace)!.texts.map((t) => t.name)).toEqual(["run.log"]);
+    doc.undo();
+    expect((await workspaceFile(st())).notKept).toEqual(["notes.txt"]);
+  });
+
+  it("had again - a text of the same words come - goes, and that text is kept", async () => {
+    const w = damagedNotes("had again");
+    const { st } = await opened(w.damaged);
+    st().addTexts([{ name: "notes again.txt", text: w.notes }]);
+    expect(st().textsLost).toEqual([]);
+    const saved = await workspaceFile(st());
+    expect(saved.notKept).toEqual([]);
+    expect(new TextDecoder().decode(readMenoFile(saved.bytes).data(w.sha)!)).toBe(w.notes);
+  });
+
+  it("held whole by the file it was saved to before, is kept by the save - and opens as a text from it", async () => {
+    const w = damagedNotes("carried");
+    const { st } = await opened(w.damaged);
+    disk.set("/work/whole.meno", w.whole);
+    st().markSavedAs("/work/whole.meno");
+    const saved = await workspaceFile(st());
+    expect(saved.notKept).toEqual([]);
+    const file = readMenoFile(saved.bytes);
+    expect(file.files.find((f) => f.sha256 === w.sha)).toEqual({ sha256: w.sha, name: "notes.txt", media: "text/plain", size: strToU8(w.notes).length });
+    expect(new TextDecoder().decode(file.data(w.sha)!)).toBe(w.notes);
+    const again = await opened(saved.bytes, "carried.meno");
+    expect(again.missing).toEqual([]);
+    expect(again.st().textsLost).toEqual([]);
+    expect(again.st().texts.map((t) => [t.name, t.text, t.at])).toEqual([
+      ["run.log", w.log, undefined],
+      ["notes.txt", w.notes, w.at],
+    ]);
   });
 });

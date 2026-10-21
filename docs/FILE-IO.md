@@ -671,7 +671,8 @@ work.meno (zip)
   place among `molecules3d`;
   docs/PDF.md, step 5) with the one its column showed (`textShown`). Where a
   text was opened from is not saved, as an output kept is not. A text the
-  file does not hold is left out as the workspace opens, and named. A PDF
+  file does not hold whole is named as the workspace opens, and kept as
+  one that could not be read (below, *A file kept, damaged*). A PDF
   read in the column keeps where it was read (`reading`, in its entry in
   `pdfs`), and `pdfShown` names the one the column showed, in place of
   `textShown` (docs/PDF.md, step 2). Words on the page taken out of a PDF
@@ -725,11 +726,22 @@ work.meno (zip)
   opens: a text or a picture in the canvas's alert ("figure.png could not
   be read from the workspace."), a PDF in a notice ("A PDF could not be
   opened"), an output on its molecule when it is asked for. A text that
-  cannot be read is left out, having no words to show; a picture or a PDF
-  stays where it lay, crossed from corner to corner (`lib/doc/notHad`),
-  until it is had again - the same image or PDF put down afresh, or
-  opened in another workspace's file - or is taken away: never healed
-  unseen, never let drop unsaid.
+  cannot be read stays in the workspace, after the texts in the column,
+  as what it is - its tab marked, and shown, "notes.txt could not be read
+  from the workspace." - never as a text: it has no words to edit, copy,
+  export, find or read, and nothing that takes the workspace's texts sees
+  it (`textsLost`, store/types `LostText`). Its sheet is not drawn on the
+  page; where it lay, what it was the text of and its place in the column
+  are kept in the workspace's JSON with its name and SHA-256. It goes when
+  the chemist closes its tab, or when a text of the same words comes (the
+  same SHA-256), which takes its place. A picture or a PDF stays where it
+  lay, crossed from corner to corner (`lib/doc/notHad`), until it is had
+  again - the same image or PDF put down afresh, or opened in another
+  workspace's file - or is taken away: never healed unseen, never let drop
+  unsaid. A save names each of them it could not keep (below); one it
+  could - from the file saved to before, or a text's words held after all
+  - is in the file saved, and opens as itself from it, the session going
+  on with it marked as it was.
 - **A list of the files kept that is damaged, gone or not a list is not
   believed.** The files are had without it, each by its SHA-256 and named
   as the workspace's JSON names it - its molecules' outputs, its texts,
@@ -741,7 +753,8 @@ work.meno (zip)
 - **Save never drops a file still to be had, and names what it could not
   keep.** A file the workspace has that is held nowhere this session - a
   PDF Meno could not open (one locked with a password), a picture or an
-  output held nowhere, an output not where it was - is taken from the
+  output held nowhere, an output not where it was, a text that could not
+  be read - is taken from the
   workspace file the canvas was last saved to, or opened from, where that
   holds it whole (its CRC-32 and its SHA-256 as they should be): read
   before the new file takes its place - by Save As too, which reads the

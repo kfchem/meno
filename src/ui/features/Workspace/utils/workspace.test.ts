@@ -222,7 +222,7 @@ describe("a workspace file", () => {
     expect(closed.textShown).toBeUndefined();
   });
 
-  it("opens without a text its file does not hold, and says which", async () => {
+  it("opens with a text its file does not hold as one that could not be read - shown, if it was - and says which", async () => {
     const saved = readWorkspace(
       JSON.stringify({ format: "meno-workspace", version: 1, atoms: [], bonds: [], texts: [{ name: "lost.txt", sha256: "d".repeat(64) }, { name: "bad", sha256: "x" }], textShown: 0 }),
     )!;
@@ -230,8 +230,14 @@ describe("a workspace file", () => {
     expect(saved.texts).toEqual([{ name: "lost.txt", sha256: "d".repeat(64) }]);
     const { ws, missing } = await readKept(saved);
     expect(missing).toEqual(["lost.txt"]);
-    expect(ws.texts).toEqual([]);
-    expect(ws.textShown).toBeUndefined();
+    expect(ws.texts.map((t) => [t.name, t.text])).toEqual([["lost.txt", undefined]]);
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().openWorkspace(ws, true);
+    expect(store.getState().texts).toEqual([]);
+    expect(store.getState().textsLost).toEqual([{ id: 1, name: "lost.txt", sha256: "d".repeat(64) }]);
+    expect(store.getState()).toMatchObject({ textShown: 1, textsOpen: true });
   });
 
   it("is not read where it is not one, or of a version this one does not read", () => {

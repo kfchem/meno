@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
-import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, ExclamationTriangleIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
@@ -11,8 +11,8 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
-import type { PdfFind, PdfItem, WordPlace, WorkspaceText } from "./store/types";
-import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, textExportPath } from "./utils/texts";
+import type { LostText, PdfFind, PdfItem, WordPlace, WorkspaceText } from "./store/types";
+import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
@@ -65,6 +65,7 @@ const MIN_BOX_PT = 6;
  */
 export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   const texts = useEditor((s) => s.texts);
+  const lost = useEditor((s) => s.textsLost);
   const pdfs = useEditor((s) => s.pdfs);
   const shownId = useEditor((s) => s.textShown);
   const pdfShownId = useEditor((s) => s.pdfShown);
@@ -72,6 +73,8 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   const read = useMemo(() => pdfs.filter((p) => p.reading), [pdfs]);
   const pdf = read.find((p) => p.id === pdfShownId);
   const shown = pdf ? undefined : texts.find((t) => t.id === shownId);
+  // (one that could not be read, shown as what it is: no words, nothing to edit or copy)
+  const lostShown = pdf || shown ? undefined : lost.find((t) => t.id === shownId);
   // as wide as it was dragged - a text's, as it first opened; a PDF's, most of the canvas
   const [room, setRoom] = useState(0);
   const [roomEl, setRoomEl] = useState<HTMLDivElement | null>(null);
@@ -95,7 +98,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   // (how much of the canvas it covers, as it slides and as it is dragged: what is in view is the rest)
   const store = useEditorStore();
   // (the width the canvas lays a PDF out at in it - not changed as it shuts on what it showed)
-  const showing = open && !!(shown || pdf);
+  const showing = open && !!(shown || pdf || lostShown);
   // (going over to filling the workspace, or back: what it shows laid out at its width as it eases there, frame by
   // frame - laid out at once at the width it goes to, a page jumped to its new size first, and the column then eased)
   const easing = useRef(false);
@@ -134,7 +137,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
       {/* (the canvas's width, measured: what the column's share is of) */}
       <div ref={setRoomEl} aria-hidden className="absolute inset-0 pointer-events-none" />
       <AnimatePresence initial={slideIn}>
-        {open && (shown || pdf) && (
+        {open && (shown || pdf || lostShown) && (
           <motion.div
             key="texts"
             ref={setEl}
@@ -151,7 +154,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
             }}
             className={clsx("absolute top-0 right-0 z-20 h-full overflow-hidden", dragging && "select-none")}
           >
-            <Column texts={texts} read={read} shown={shown} pdf={pdf} width={eased ?? width} />
+            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} width={eased ?? width} />
             {!filled && <Edge width={width} widest={widest} setWidth={setWidth} setDragging={setDragging} />}
           </motion.div>
         )}
@@ -160,10 +163,11 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   );
 }
 
-function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; read: PdfItem[]; shown?: WorkspaceText; pdf?: PdfItem; width: number }) {
+function Column({ texts, lost, read, shown, lostShown, pdf, width }: { texts: WorkspaceText[]; lost: LostText[]; read: PdfItem[]; shown?: WorkspaceText; lostShown?: LostText; pdf?: PdfItem; width: number }) {
   const store = useEditorStore();
   const showText = useEditor((s) => s.showText);
   const stopReadingText = useEditor((s) => s.stopReadingText);
+  const removeLostText = useEditor((s) => s.removeLostText);
   const showPdf = useEditor((s) => s.showPdf);
   const stopReadingPdf = useEditor((s) => s.stopReadingPdf);
   const find = useEditor((s) => s.pdfFind);
@@ -197,6 +201,10 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
             .map((t) => (
               <Name key={`text-${t.id}`} name={t.name} title={t.path ?? t.name} chosen={t.id === shown?.id} onShow={() => showText(t.id)} onClose={() => stopReadingText(t.id)} />
             ))}
+          {/* (those that could not be read, after them: named as what they are, and taken away only by the chemist) */}
+          {lost.map((t) => (
+            <Name key={`lost-${t.id}`} name={t.name} title={lostSaid(t.name)} chosen={t.id === lostShown?.id} onShow={() => showText(t.id)} onClose={() => removeLostText(t.id)} unread />
+          ))}
           {read.map((p) => (
             <Name key={`pdf-${p.id}`} name={p.name} title={p.name} chosen={p.id === pdf?.id} onShow={() => showPdf(p.id)} onClose={() => stopReadingPdf(p.id)} />
           ))}
@@ -264,6 +272,12 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
           )}
         </AnimatePresence>
         {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
+        {lostShown && (
+          <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">
+            <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
+            <span className="break-words">{lostSaid(lostShown.name)}</span>
+          </div>
+        )}
         {/* (over the top of what is read: what is read stays where the canvas draws it) */}
         <AnimatePresence initial={false}>{find && <FindRow key="find" />}</AnimatePresence>
         <AnimatePresence initial={false}>{find?.all && find.q.trim() && <FoundList key="found" />}</AnimatePresence>
@@ -414,7 +428,8 @@ const FOUND_LISTED = 50;
 const AROUND = 40;
 
 /** A text's or a PDF's name along the column's top: shown by a click, closed by its cross. */
-function Name({ name, title, chosen, onShow, onClose }: { name: string; title: string; chosen: boolean; onShow: () => void; onClose: () => void }) {
+/** A tab: a text's or a PDF's name, shown when pressed, closed by its cross - one that could not be read (`unread`) marked so. */
+function Name({ name, title, chosen, onShow, onClose, unread = false }: { name: string; title: string; chosen: boolean; onShow: () => void; onClose: () => void; unread?: boolean }) {
   return (
     <div
       role="tab"
@@ -425,8 +440,9 @@ function Name({ name, title, chosen, onShow, onClose }: { name: string; title: s
         chosen ? "bg-gh-base text-gh-black" : "text-gh-gray hover:bg-gh-base hover:text-gh-black",
       )}
     >
-      <button onClick={onShow} className="min-w-0 truncate pl-2 pr-1 h-full">
-        {name}
+      <button onClick={onShow} className="min-w-0 h-full flex items-center gap-1 pl-2 pr-1">
+        {unread && <ExclamationTriangleIcon aria-label="Could not be read" className="h-3.5 w-3.5 shrink-0 text-accel-accent" />}
+        <span className="truncate">{name}</span>
       </button>
       <button
         onClick={onClose}
