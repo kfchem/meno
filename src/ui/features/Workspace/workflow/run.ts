@@ -102,14 +102,14 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
 }
 
 /** What a run gave, as its result set holds it: its molecules in 3D, those it set aside, and what kind of set they make. */
-export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; aside: AsideEntry[]; holds: SetKind };
+export type RunResults = NonNullable<StepRunKept["results"]>;
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
   if (!set?.made || set.made.holds === "pictures") return undefined;
   const molecules = set.collection ?? setMolecules(doc, set).map(({ id: _id, at: _at, ...m }) => m);
-  return { molecules, aside: set.aside ?? [], holds: set.made.holds };
+  return { molecules, aside: set.aside ?? [], holds: set.made.holds, ...(set.unread ? { unread: set.unread } : {}) };
 }
 
 /**
@@ -262,16 +262,16 @@ export function placeResults(
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
-  const { molecules: made, aside, holds } = results;
+  const { molecules: made, aside, holds, unread } = results;
   const was = resultOf(doc, step.id);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
   const madeBy = { step: step.id, holds };
   // (more than are laid out on the page: held in the set, its frame summing them up - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
   if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET) {
     const frame = was ? frameAt(was.x0, was.y1, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
-    if (was) return holdCollection(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, [...made]);
+    if (was) return holdCollection(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, [...made], unread);
     const id = doc.nextWorkflowId ?? 1;
-    return holdCollection(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, [...made]);
+    return holdCollection(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, [...made], unread);
   }
   const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
   const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
@@ -280,9 +280,9 @@ export function placeResults(
   doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
   // (the set holds what the step made, in the step's order)
   const members = (doc.molecules3d ?? []).filter((m) => !there.has(m.id)).map((m) => ({ molecule: m.id }));
-  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, members);
+  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, members, unread);
   const id = doc.nextWorkflowId ?? 1;
-  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, members);
+  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, members, unread);
 }
 
 /**

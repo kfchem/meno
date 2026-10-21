@@ -611,7 +611,7 @@ export type WorkflowSet = {
    * Its frame shows them summed up; the steps after it take them from here.
    */
   collection?: Omit<Molecule3D, "id" | "at">[];
-  /** A large result set opened from a file: how many of its collection's molecules did not read, and were left out - said with its count until the step runs again. */
+  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
@@ -635,7 +635,8 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  * then - its kind and options as they were - and what it gave, as its
  * result set held it, so that it can be shown again.
  */
-export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: { molecules: Omit<Molecule3D, "id" | "at">[]; aside: AsideEntry[]; holds: SetKind } };
+/** An earlier run a step keeps: what it did, its kind and options then, and what it gave - with how many of its molecules did not read from a file, and were left out (`unread`). */
+export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: { molecules: Omit<Molecule3D, "id" | "at">[]; aside: AsideEntry[]; holds: SetKind; unread?: number } };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its

@@ -496,7 +496,9 @@ keeps them, with the outputs they were read from - or, with *Don't keep
 in the file*, only their count and hash. Opened from a file, a molecule
 of theirs that does not read is left out and counted, and the frame says
 how many ("51 compounds · 2 not read") until the step runs again; saved
-again, the file says so too. They are opened as a table in the column, and put on the page from
+again, the file says so too. So does a step's earlier run kept with the
+file, on its row of the step's card, and in the set once it is shown
+again. They are opened as a table in the column, and put on the page from
 there, in the steps that follow (6b), and summed up in the frame with a
 sample of their structures and histograms (6c).
 

@@ -9,7 +9,8 @@ import { workspaceOfFile } from "../../../views/openFile";
 import { collectionHash, countOf, LARGE_SET, setMembers } from "./entries";
 import { inputOf, resultOf } from "./flow";
 import { addStep, keepSet } from "./model";
-import { placeResults, resultsNow, SUMMARY_H, SUMMARY_W, type RunWith } from "./run";
+import { keepRun, placeResults, resultsNow, showRun, SUMMARY_H, SUMMARY_W, type RunWith } from "./run";
+import { setRan } from "./model";
 
 vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 
@@ -173,5 +174,41 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     // (kept out of the file, nor are its outputs)
     doc.edit("keep", (d) => keepSet(d, d.sets![0].id, false));
     expect(readMenoFile(await workspaceFile(store.getState())).files).toEqual([]);
+  });
+
+  it("counts the molecules of an earlier run kept that do not read from a file, says so on the card's row, and in the set once it is shown again", () => {
+    // (a run of 3 on the page and one of 60 held, each kept as the step runs again)
+    let d = ran(waters(3));
+    d = setRan(d, d.steps![0].id, { at: 1, ok: true, said: "3 optimised", input: "a" });
+    d = keepRun(d, d.steps![0]);
+    d = ran(waters(60), "molecules", d);
+    d = setRan(d, d.steps![0].id, { at: 2, ok: true, said: "60 optimised", input: "b" });
+    d = keepRun(d, d.steps![0]);
+    d = setRan(ran(waters(1), "molecules", d), d.steps![0].id, { at: 3, ok: true, said: "1 optimised", input: "c" });
+    const page = createWorkspaceDocument();
+    const store = createEditorStore(page);
+    connectStoreToDocument(store, page);
+    page.edit("run", () => d);
+    const saved = JSON.parse(workspaceText(store.getState()));
+    const runs = saved.steps[0].runs;
+    expect(runs.map((r: { results: { molecules: unknown[] } }) => r.results.molecules.length)).toEqual([60, 3]);
+    runs[0].results.molecules[5] = { atoms: 3 };
+    runs[1].results.molecules = runs[1].results.molecules.map(() => "spoilt");
+    const read = readWorkspace(JSON.stringify(saved))!.workflow!.steps[0].runs!;
+    expect(read.map((r) => [r.results!.molecules.length, r.results!.unread])).toEqual([
+      [59, 1],
+      [0, 3],
+    ]);
+    // (shown again, its result set says it, as one opened does)
+    const doc = { ...d, steps: d.steps!.map((s) => ({ ...s, runs: read })) };
+    const shown = showRun(doc, doc.steps[0].id, 0, { extentOf });
+    expect(shown.sets![0].collection).toHaveLength(59);
+    expect(shown.sets![0].unread).toBe(1);
+    // (and kept again with what it gave, the count with it)
+    expect(shown.steps![0].runs!.find((r) => r.at === 2)).toBeUndefined();
+    const back = showRun(shown, shown.steps![0].id, 0, { extentOf });
+    expect(back.steps![0].runs!.find((r) => r.at === 2)!.results!.unread).toBe(1);
+    const none = showRun(doc, doc.steps[0].id, 1, { extentOf });
+    expect([setMembers(none, none.sets![0]).molecules.length, none.sets![0].unread]).toEqual([0, 3]);
   });
 });
