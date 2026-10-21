@@ -1,12 +1,17 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
-import { readWorkspace, workspaceText } from "../utils/workspace";
+import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace";
+import { rememberOutput } from "../../../../lib/calc/asks";
+import { readMenoFile } from "../../../../lib/doc/menoFile";
+import { workspaceOfFile } from "../../../views/openFile";
 import { collectionHash, countOf, LARGE_SET, setMembers } from "./entries";
 import { inputOf, resultOf } from "./flow";
 import { addStep, keepSet } from "./model";
 import { placeResults, resultsNow, SUMMARY_H, SUMMARY_W, type RunWith } from "./run";
+
+vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.reject(new Error("no workers in tests")) }));
 
 /** A water, its oxygen moved along by `k` hundredths of an ångström: each one told apart. */
 const water = (k = 0): Omit<Molecule3D, "id" | "at"> => ({
@@ -112,5 +117,61 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     const out = JSON.parse(workspaceText(st()));
     expect(out.sets[0].collection).toBeUndefined();
     expect(out.sets[0].notKept).toEqual({ count: 52, hash: collectionHash(st(), st().sets[0]) });
+  });
+
+  it("counts the molecules of its collection that do not read from a file, and says so until the step runs again", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    doc.edit("run", (d) => ran(waters(53), "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    const saved = JSON.parse(workspaceText(store.getState()));
+    // (two of its molecules spoilt: one with no atoms, one not a molecule at all)
+    saved.sets[0].collection[4] = { atoms: "none", bonds: [] };
+    saved.sets[0].collection[9] = 7;
+    const ws = readWorkspace(JSON.stringify(saved))!;
+    expect(ws.workflow!.sets[0].collection).toHaveLength(51);
+    expect(ws.workflow!.sets[0].unread).toBe(2);
+    // (the count said in its frame's, besides what it holds)
+    const again = createWorkspaceDocument();
+    const opened = createEditorStore(again);
+    connectStoreToDocument(opened, again);
+    opened.getState().openWorkspace(ws, true);
+    expect(opened.getState().sets[0].unread).toBe(2);
+    // (saved again, and one more spoilt: the file says what it lost before, and this adds to it)
+    const resaved = JSON.parse(workspaceText(opened.getState()));
+    expect(resaved.sets[0].unread).toBe(2);
+    resaved.sets[0].collection[0] = null;
+    expect(readWorkspace(JSON.stringify(resaved))!.workflow!.sets[0].unread).toBe(3);
+    // (and one none of whose collection reads still says how many it held)
+    resaved.sets[0].collection = resaved.sets[0].collection.map(() => null);
+    const none = readWorkspace(JSON.stringify(resaved))!.workflow!.sets[0];
+    expect([none.collection, none.unread]).toEqual([[], 53]);
+    // (a set none of whose collection was spoilt says none)
+    expect(readWorkspace(workspaceText(store.getState()))!.workflow!.sets[0].unread).toBeUndefined();
+    // (run again, it holds all the step gave: none unread)
+    again.edit("run", (d) => ran(waters(60), "molecules", d));
+    expect(opened.getState().sets[0].unread).toBeUndefined();
+    again.edit("run", (d) => ran(waters(2), "molecules", d));
+    expect(opened.getState().sets[0].unread).toBeUndefined();
+  });
+
+  it("keeps in the workspace's file the outputs its collection's molecules were read from, said to be nowhere else", async () => {
+    const text = "an output's text, opened from /data/large/run.out";
+    const source = await rememberOutput("run.out", text, "orca", "/data/large/run.out");
+    const wavefunction = await rememberOutput("run.molden", "a wavefunction's text", "molden", "/data/large/run.molden");
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const read = waters(51).map((m, k) => (k === 30 ? { ...m, calc: { readers: ["meno"], source, wavefunction } } : m));
+    doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    const bytes = await workspaceFile(store.getState());
+    const file = readMenoFile(bytes);
+    expect(file.files.map((f) => f.name).sort()).toEqual(["run.molden", "run.out"]);
+    expect(file.workspace).not.toContain("/data/large/run.out");
+    const ws = readWorkspace(workspaceOfFile(bytes)!)!;
+    expect(ws.workflow!.sets[0].collection![30].calc!.source).toEqual({ name: "run.out", sha256: source.sha256, kind: "orca" });
+    // (kept out of the file, nor are its outputs)
+    doc.edit("keep", (d) => keepSet(d, d.sets![0].id, false));
+    expect(readMenoFile(await workspaceFile(store.getState())).files).toEqual([]);
   });
 });

@@ -609,7 +609,7 @@ export default function Workflow2D() {
                 nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
               }
             : undefined;
-          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: b.keep === false && count.entries ? `${counted} · not kept` : counted, summary }];
+          return [b.id, { name: made ? madeName(made.kind, stepOptions(made), made.options) : (b.name ?? "Input"), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
     [flow, sets, steps],

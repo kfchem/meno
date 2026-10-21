@@ -611,6 +611,8 @@ export type WorkflowSet = {
    * Its frame shows them summed up; the steps after it take them from here.
    */
   collection?: Omit<Molecule3D, "id" | "at">[];
+  /** A large result set opened from a file: how many of its collection's molecules did not read, and were left out - said with its count until the step runs again. */
+  unread?: number;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
