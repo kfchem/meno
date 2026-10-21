@@ -240,39 +240,34 @@ function styleImports(file, nodeModules, seen = new Set()) {
 // ---------------------------------------------------------------- Rust
 
 /**
- * The crates built into Meno's program: for each system in TARGETS, the
- * graph `cargo metadata --filter-platform` resolves for it, followed from
- * Meno along normal dependencies only (a proc-macro is one), and the
- * systems' crates taken together. Each one's files are read from the folder
- * of its own manifest. Cargo resolves this graph with every feature any of
- * its users asks for, build scripts' among them, so it can hold a crate or
- * two more than a build does - never fewer.
+ * The crates built into Meno's program: for each system in TARGETS, what a
+ * build for it links - `cargo tree -e normal --target`, Meno's normal
+ * dependencies and theirs (a proc-macro is one), their features unified as
+ * a build unifies them - and the systems' crates taken together. Each one's
+ * files are read from the folder of its own manifest, as cargo metadata
+ * gives it.
  */
 export function shippedCrates(root = ROOT) {
   const crates = new Map();
+  const cwd = join(root, "src-tauri");
+  // (every package in the lock, by name and version: where each is kept, and what its manifest says)
+  const meta = JSON.parse(execFileSync("cargo", ["metadata", "--format-version", "1", "--locked", "--offline"], { cwd, maxBuffer: 256 * 1024 * 1024, encoding: "utf8" }));
+  const packages = new Map(meta.packages.map((p) => [`${p.name}@${p.version}`, p]));
   for (const target of TARGETS) {
-    const meta = JSON.parse(
-      execFileSync("cargo", ["metadata", "--format-version", "1", "--locked", "--offline", "--filter-platform", target], {
-        cwd: join(root, "src-tauri"),
-        maxBuffer: 256 * 1024 * 1024,
-        encoding: "utf8",
-      }),
-    );
-    const nodes = new Map(meta.resolve.nodes.map((n) => [n.id, n]));
-    const packages = new Map(meta.packages.map((p) => [p.id, p]));
-    const reached = new Set();
-    const todo = [meta.resolve.root];
-    while (todo.length) {
-      const id = todo.pop();
-      for (const dep of nodes.get(id).deps) {
-        if (dep.dep_kinds.some((k) => k.kind === null) && !reached.has(dep.pkg)) {
-          reached.add(dep.pkg);
-          todo.push(dep.pkg);
-        }
-      }
-    }
-    for (const id of reached) {
-      const p = packages.get(id);
+    // (what a build for `target` links: Cargo's tree along normal dependencies, its features unified as a build unifies
+    // them - cargo metadata's graph turns on every feature any user asks for, build scripts' and tests' among them, and
+    // so holds crates no build links)
+    const tree = execFileSync("cargo", ["tree", "--locked", "--offline", "-e", "normal", "--target", target, "--prefix", "none", "-f", "{p}"], {
+      cwd,
+      maxBuffer: 64 * 1024 * 1024,
+      encoding: "utf8",
+    });
+    for (const line of tree.split(/\r?\n/)) {
+      const m = /^(\S+) v(\S+)/.exec(line);
+      if (!m) continue;
+      const p = packages.get(`${m[1]}@${m[2]}`);
+      if (!p) throw new Error(`cargo tree names ${m[1]} ${m[2]}, which cargo metadata does not know`);
+      if (p.id === meta.resolve.root) continue;
       if (!p.source) throw new Error(`${p.name} ${p.version} is not from a registry (${p.manifest_path}): give its notice by hand`);
       const key = `${p.name}@${p.version}`;
       if (!crates.has(key)) {
@@ -404,6 +399,8 @@ export function compose(npm, { crates, leftOut }) {
     if (read) {
       // (no licence file comes with it: the text its repository holds at the commit it was published from, read from its page)
       lines.push(`No licence file comes with this crate. Its licence's text is given as its repository holds it at the commit ${read.version} was published from (${read.commit}), read on ${upstream.read}: ${read.source}`);
+      // (who it is by, as its own manifest says - and where that names no one, so said: no holder is added that neither gives)
+      lines.push("", p.authors.length ? `Its authors, as its Cargo.toml names them: ${p.authors.join(", ")}.` : "Its Cargo.toml names no authors.");
       files = [{ name: read.file, text: upstreamText(read.file) }];
       for (const a of read.also ?? []) {
         lines.push("", `${a.what} Read on ${upstream.read}: ${a.source}`);

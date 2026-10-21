@@ -120,14 +120,14 @@ computer:
   Vite's and Rolldown's helpers that the build writes in are theirs.
   A package that is installed but not in the output (a type package, a
   build tool, one whose code is shaken out) is not named.
-- **The Rust crates built into Meno's program**: the graph
-  `cargo metadata --offline --filter-platform` resolves for each system
-  Meno is built for (`TARGETS`: the Mac on Apple silicon and Intel, and
-  64-bit Windows), followed from Meno along normal dependencies -
-  proc-macros among them, not build scripts' or tests' - and the systems
-  taken together. Cargo resolves it with every feature any user of a crate
-  asks for, build scripts' among them, so it holds a few crates more than a
-  build does, never fewer.
+- **The Rust crates built into Meno's program**: what a build for each
+  system Meno is built for links (`TARGETS`: the Mac on Apple silicon and
+  Intel, and 64-bit Windows) - `cargo tree --offline -e normal --target`,
+  Meno's normal dependencies and theirs, proc-macros among them, not build
+  scripts' or tests', with features unified as a build unifies them - and
+  the systems taken together. (Not `cargo metadata`'s graph: it turns on
+  every feature any user of a crate asks for, build scripts' and tests'
+  among them, and so names crates no build links.)
 
 For each: its name, version and licence as its manifest gives them, where
 its source is kept, and every licence and notice file at the top of its

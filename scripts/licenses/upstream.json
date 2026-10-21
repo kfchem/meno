@@ -19,7 +19,7 @@
         {
           "file": "opensource.org-MIT.txt",
           "source": "https://opensource.org/license/MIT",
-          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own; its manifest names its author."
+          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own: its authors are as its Cargo.toml names them, above."
         }
       ]
     },
@@ -33,7 +33,7 @@
         {
           "file": "opensource.org-MIT.txt",
           "source": "https://opensource.org/license/MIT",
-          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own; its manifest names its author."
+          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own: its authors are as its Cargo.toml names them, above."
         }
       ]
     },
@@ -47,7 +47,7 @@
         {
           "file": "opensource.org-MIT.txt",
           "source": "https://opensource.org/license/MIT",
-          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own; its manifest names its author."
+          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own: its authors are as its Cargo.toml names them, above."
         }
       ]
     },
@@ -61,7 +61,7 @@
         {
           "file": "opensource.org-MIT.txt",
           "source": "https://opensource.org/license/MIT",
-          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own; its manifest names its author."
+          "what": "The MIT License's terms, as the page its licence file links to gives them. Its repository gives no copyright line of its own: its authors are as its Cargo.toml names them, above."
         }
       ]
     },
