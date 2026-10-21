@@ -2,18 +2,33 @@
  * What the plugin that does the checks says about a structure, as marks on
  * it: atoms with more bonds than they can have, R and S at stereocentres, E
  * and Z at double bonds, Ra and Sa at axes of chirality (BINAP's).
- * Marks are the editor's, not the drawing's: they are never exported.
+ * A ring round an atom with too many bonds is the editor's, never in a
+ * picture of the drawing. R, S, E and Z are shown in pictures as the canvas
+ * shows them - copied, saved and exported (`stereoPictureItems`): the
+ * maintainer's ruling of 2026-10-21, reversing that of 2026-10-10, which
+ * kept them out of every picture.
  */
 import type { Analysis } from "../../../../lib/roles/client";
 import { molIndex } from "../../../../lib/roles/molblock";
 import { ELEMENTS } from "../../../../lib/chem/elements";
 import { isMetal } from "../../../../lib/layout/perceive";
 import type { Model } from "../store/types";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { labelBox, labelSetOf, runsWidth, type LayoutOptions, type TextItem, type TextRun } from "../../../../lib/chem/layout2d";
 
 /** A stereodescriptor's letters, against the labels': on the drawing and on a molecule in 3D alike. */
 export const MARK_SCALE = 0.6;
 /** The smallest a mark's letters get, however far out the view is: on both alike. */
 export const MARK_MIN_PX = 9;
+
+/** Half a capital letter's height, as a share of the labels' size: how far R or S stands off its atom where the style does not say. */
+export const STEREO_GAP = 0.35;
+
+/** Half the height of a mark's letters, in ems of their size: a capital's, and a little round it. */
+export const MARK_HALF_HEIGHT = 0.42;
+
+/** How far apart two of R, S, E and Z keep at the least, in ems of their size. */
+export const MARKS_APART = 0.6;
 
 export type ValenceProblem = { valence: number; most?: number };
 
@@ -559,4 +574,80 @@ export function stereoTextEms(cip: string, parentheses: boolean): number {
   const [letter, axis] = stereoParts(cip);
   const letterEms = letter === letter.toLowerCase() ? 0.5 : 0.68;
   return letterEms + (axis ? 0.38 : 0) + (parentheses ? 0.66 : 0);
+}
+
+/**
+ * R, S, E and Z as a picture of the drawing shows them (2026-10-21): where
+ * the canvas puts them - `stereoPlaces`, kept off the same bonds and labels,
+ * those put by hand where they were put - at the size the canvas draws them
+ * at, the labels' size times `MARK_SCALE`, but without `MARK_MIN_PX`, which
+ * keeps them readable on a screen zoomed out and has no meaning at a
+ * picture's size in print. Written as the canvas writes them: the letter in
+ * italics, an axis's a smaller and lower, in parentheses where the style says
+ * so, in the labels' colour. `atoms` as the layout laid them, in its order
+ * (`texts[].atom` indexes them); `model` the drawing they are of; `marks`
+ * those it shows, by id - any not in it left out.
+ */
+export function stereoPictureItems(o: {
+  atoms: readonly { id: number; x: number; y: number }[];
+  model: Model;
+  marks: Pick<ChemMarks, "centres" | "doubleBonds">;
+  texts: readonly TextItem[];
+  opts: LayoutOptions;
+}): TextItem[] {
+  const { atoms, model, opts } = o;
+  const ids = new Set(model.atoms.map((a) => a.id));
+  const bondIds = new Set(model.bonds.map((b) => b.id));
+  const centres = new Map([...o.marks.centres].filter(([id]) => ids.has(id)));
+  const doubleBonds = new Map([...o.marks.doubleBonds].filter(([id]) => bondIds.has(id)));
+  if (!centres.size && !doubleBonds.size) return [];
+  const set = labelSetOf(opts);
+  const labelFont = opts.fontPx;
+  const size = labelFont * MARK_SCALE;
+  const parentheses = !!opts.stereoParentheses;
+  const gap = opts.stereoGap ?? STEREO_GAP;
+  const laid = new Map(atoms.map((a) => [a.id, a]));
+  const drawn: Model = {
+    atoms: model.atoms.map((a) => {
+      const p = laid.get(a.id);
+      return p ? { ...a, x: p.x, y: p.y } : a;
+    }),
+    bonds: model.bonds,
+  };
+  const boxes = new Map<number, ReturnType<typeof labelBox>>();
+  for (const t of o.texts) {
+    const id = t.atom != null ? atoms[t.atom]?.id : undefined;
+    if (id != null) boxes.set(id, labelBox(t, t.fontPx, set));
+  }
+  // (those put by hand: where they were put, in ems of the labels from their atom or their bond's middle)
+  const fixed = new Map<string, { x: number; y: number }>();
+  const at = (id: number) => laid.get(id) ?? model.atoms.find((a) => a.id === id);
+  for (const a of model.atoms) {
+    const p = at(a.id);
+    if (a.stereoAt && centres.has(a.id) && p) fixed.set(`centre-${a.id}`, { x: p.x + a.stereoAt.x * labelFont, y: p.y + a.stereoAt.y * labelFont });
+  }
+  for (const b of model.bonds) {
+    const p = at(b.a);
+    const q = at(b.b);
+    if (b.stereoAt && doubleBonds.has(b.id) && p && q) fixed.set(`bond-${b.id}`, { x: (p.x + q.x) / 2 + b.stereoAt.x * labelFont, y: (p.y + q.y) / 2 + b.stereoAt.y * labelFont });
+  }
+  const places = stereoPlaces({
+    model: drawn,
+    centres,
+    doubleBonds,
+    boxes,
+    half: (cip) => ({ x: (size * stereoTextEms(cip, parentheses)) / 2, y: size * MARK_HALF_HEIGHT }),
+    apart: MARKS_APART * size,
+    off: gap * labelFont,
+    bond: NOMINAL_BOND_LENGTH,
+    fixed,
+  });
+  return places.map((p) => {
+    const [letter, axis] = stereoParts(p.text);
+    const runs: TextRun[] = [...(parentheses ? [{ text: "(" }] : []), { text: letter, italic: true }, ...(axis ? [{ text: axis, sub: true }] : []), ...(parentheses ? [{ text: ")" }] : [])];
+    // (its middle where the canvas puts it: a text is placed by its first letter's middle)
+    const w = runsWidth(runs, size, set);
+    const first = runsWidth([runs[0]], size, set);
+    return { x: p.x - w / 2 + first / 2, y: p.y, text: runs.map((r) => r.text).join(""), fontPx: size, runs, anchorRun: 0, ownSize: true, ...(opts.labelColor ? { color: opts.labelColor } : {}) };
+  });
 }

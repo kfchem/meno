@@ -937,6 +937,15 @@ All hover-based, as above.
     after (`shownMarks`); never a few at once and the rest a moment later.
     On a molecule in 3D, none starts before every one of them is there to
     be seen, the molecule still or turning (`fadeStep`).
+  - **In pictures, as on the canvas** (the maintainer, 2026-10-21,
+    reversing 2026-10-10's rule that kept them out). A picture of a
+    drawing - copied, as an object in a document, exported - has the R, S,
+    E and Z its canvas shows, where the canvas puts them
+    (chem/marks `stereoPictureItems`, the same `stereoPlaces`), written as
+    there, at the size the canvas draws them at - the labels' size times
+    0.6 - but without the 9-pixel least, which is for the screen zoomed
+    out and means nothing at a picture's size in print. A picture takes them
+    as they stand: all shown, none fading. On a molecule in 3D, not yet.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),
@@ -946,7 +955,9 @@ All hover-based, as above.
   put is kept from its atom - an E or Z from its bond's middle - in ems of
   the labels, so it goes with the atom as the atom moves, is turned and
   turned over with the selection, is saved and copied with the drawing,
-  and a charge so put is in an exported picture (R and S never are). Clean-up puts
+  and a charge so put is in an exported picture, as are R and S, E and Z
+  (the maintainer, 2026-10-21, reversing 2026-10-10's "R and S never
+  are": below). Clean-up puts
   every mark of the structures it cleans back where the drawing puts
   them: they were put for the drawing as it was, and Clean-up draws it
   anew; undo brings them back. A label's charge put by hand leaves the

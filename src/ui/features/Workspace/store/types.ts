@@ -1,4 +1,5 @@
 import type { ShowBox } from "../utils/viewShow";
+import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -743,6 +744,13 @@ export type EditorState = {
    */
   cover: number;
   setCover: (px: number) => void;
+  /**
+   * The marks the canvas shows on the drawing this moment (chem/useChemMarks),
+   * for a picture made of it to show R, S, E and Z as the canvas does
+   * (chem/marks `stereoPictureItems`): neither saved nor undone.
+   */
+  shownMarks: ChemMarks | null;
+  setShownMarks: (marks: ChemMarks | null) => void;
   /** How wide the column is when it is open, in CSS pixels, as its edge was dragged: what it shows is laid out at that width as it slides. */
   columnWidth: number;
   setColumnWidth: (px: number) => void;
