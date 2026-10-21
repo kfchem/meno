@@ -937,6 +937,13 @@ All hover-based, as above.
     after (`shownMarks`); never a few at once and the rest a moment later.
     On a molecule in 3D, none starts before every one of them is there to
     be seen, the molecule still or turning (`fadeStep`).
+  - **Gone at a far zoom** (the maintainer, 2026-10-21: they stayed as large
+    and floated round a structure a few pixels across). Their letters keep
+    to 9 px at the least; past that they fade as the view goes out, eased
+    with the zoom, and are gone where 9 px is twice the size they would be
+    (`marksSeenAt`). On a drawing and on a molecule in 3D alike; atom
+    numbers on a molecule in 3D fade below their own least size the same
+    way.
 - **Charges, R and S put by hand** (the maintainer, 2026-10-10). A charge
   - with its radical's dots - an R or S, and an E or Z are each taken hold
   of on their own ink, and nowhere else (a press beside one is the atom's),

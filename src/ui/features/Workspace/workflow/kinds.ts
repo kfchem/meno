@@ -18,6 +18,28 @@ export type SetHolds = SetKind | "pictures";
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
 export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer";
 
+/**
+ * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
+ * exits*): named, and taking the kinds of set it does. Most kinds take one;
+ * a kind that takes two or three names each - *start* and *end*, *geometry*
+ * and *bonding* - and says on itself which property its entries are matched
+ * on, so that nothing is matched by an implicit rule.
+ */
+export type StepPort = { id: string; name: string; takes: readonly SetKind[] };
+
+/**
+ * An exit a kind gives. Every exit is a result set of its own, made with the
+ * step and empty until it runs. `of` marks a second exit - what a step set
+ * aside or could not do - drawn under the first with its count: nothing is
+ * hidden, and it can be wired on.
+ */
+export type StepExit = { id: string; name: string; gives: SetKind | "same" | "pictures"; of?: "rest" | "failed" };
+
+/** The one input a kind takes where it declares none of its own. */
+export const ONE_INPUT = "in";
+/** The exit a kind gives where it declares none of its own. */
+export const ONE_EXIT = "out";
+
 export type KindInfo = {
   kind: StepKind;
   name: string;
@@ -36,6 +58,10 @@ export type KindInfo = {
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
   made: string;
+  /** Its inputs, where it takes more than one, or names the one it takes otherwise than `ONE_INPUT`. */
+  inputs?: readonly StepPort[];
+  /** Its exits beyond the first, which is `made`: entries it sets aside (*rest*), or could not do (*failed*). */
+  second?: StepExit;
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
 };
@@ -57,6 +83,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "conformers",
     runs: "entries",
     made: "Within {window} kcal/mol",
+    second: { id: "rest", name: "Outside it", gives: "same", of: "rest" },
     options: [{ id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" }],
   },
   {
@@ -67,6 +94,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Unlike",
+    second: { id: "rest", name: "Alike", gives: "same", of: "rest" },
     options: [{ id: "rmsd", label: "Alike within (RMSD)", type: "number", default: 0.125, min: 0, step: 0.025, unit: "Å" }],
   },
   {
@@ -89,6 +117,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "molecules",
     runs: "entries",
     made: "Chosen",
+    second: { id: "rest", name: "The rest", gives: "conformers", of: "rest" },
     options: [
       {
         id: "which",
@@ -144,4 +173,46 @@ export function howOf(
       return v ? [String(v)] : [];
     })
     .join(" · ");
+}
+
+/**
+ * The inputs a kind takes, named: its own where it declares them, else the
+ * one input `ONE_INPUT`, taking what the kind takes.
+ */
+export function inputsOf(kind: StepKind): readonly StepPort[] {
+  const info = kindInfo(kind);
+  return info.inputs ?? [{ id: ONE_INPUT, name: "In", takes: info.takes }];
+}
+
+/**
+ * The exits a kind gives: its first, which `made` names and `gives` fills,
+ * and its second where it has one.
+ */
+export function exitsOf(kind: StepKind): readonly StepExit[] {
+  const info = kindInfo(kind);
+  const first: StepExit = { id: ONE_EXIT, name: info.made, gives: info.gives };
+  return info.second ? [first, info.second] : [first];
+}
+
+/**
+ * What a kind's second exit holds, its first holding `first`: the kind of
+ * set it declares, or - `same` - what came in, which a kind whose second
+ * exit says `same` gives from its first too. None where it has no second.
+ */
+export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
+  const second = exitsOf(kind)[1];
+  if (!second) return undefined;
+  return second.gives === "same" || second.gives === "pictures" ? first : second.gives;
+}
+
+/** The input of `kind` named `port`, or its first where `port` is not one of its own. */
+export function portOf(kind: StepKind, port: string): StepPort {
+  const inputs = inputsOf(kind);
+  return inputs.find((p) => p.id === port) ?? inputs[0];
+}
+
+/** The exit of `kind` named `exit`, or its first where `exit` is not one of its own. */
+export function exitOf(kind: StepKind, exit: string): StepExit {
+  const exits = exitsOf(kind);
+  return exits.find((e) => e.id === exit) ?? exits[0];
 }
