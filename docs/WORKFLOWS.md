@@ -560,7 +560,10 @@ so (`partOf`), and its chip shows no shares:
 
 A conformer search run from one of them finds the compound's conformers
 anew, whole. Shares a *Populations* step worked out are always shown: it
-says at what temperature, and they are of what it was given. (Until
+says at what temperature, and they are of what it was given - given a
+part, it says that too, for they are not the compound's populations ("1
+compound at 298.15 K · shares over the 5 conformers given, part of a
+search"). (Until
 2026-10-21 Meno showed shares worked out again over what these steps
 kept.)
 

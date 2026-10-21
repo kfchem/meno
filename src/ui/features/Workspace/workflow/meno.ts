@@ -310,7 +310,11 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
   return p.length ? Math.sqrt(sum / p.length) : 0;
 }
 
-/** Each conformer's Boltzmann population within its compound at `kelvin`. */
+/**
+ * Each conformer's Boltzmann population within its compound at `kelvin`.
+ * Of a part of a search's conformers (`partOf`), shares over those given,
+ * and it says so: they are not the compound's populations.
+ */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
   // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
@@ -321,14 +325,21 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
     const w = boltzmann(g.map((e) => e.energy!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
     g.forEach((e, i) => shares.set(e, w[i]));
   }
-  const compounds = byCompound(entries).length;
+  const groups = byCompound(entries);
+  // (shares over a part of a search's conformers are not the compound's populations: said so, next to the temperature)
+  const parts = groups.filter((g) => g.some((e) => e.partOf));
+  const over = !parts.length
+    ? ""
+    : groups.length === 1
+      ? ` · shares over the ${plural(entries.length, "conformer")} given, part of a search`
+      : ` · ${parts.length} of them part of a search, shares over the conformers given`;
   return {
     ok: true,
     holds: "conformers",
     kept: [...entries],
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
-    said: `${plural(compounds, "compound")} at ${kelvin} K`,
+    said: `${plural(groups.length, "compound")} at ${kelvin} K${over}`,
   };
 }
 

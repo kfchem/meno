@@ -96,8 +96,16 @@ describe("a part of a search's conformers", () => {
 
   it("shows the shares a Populations step worked out of it, saying at what temperature", () => {
     const out = runMeno("populations", setEntries([waters([0, 0], { partOf: true })], "conformers"), "conformers", { temperature: 298.15 });
-    expect(out.said).toBe("1 compound at 298.15 K");
+    // (said of what they are: shares over the conformers given, not the compound's populations)
+    expect(out.said).toBe("1 compound at 298.15 K · shares over the 2 conformers given, part of a search");
     const [m] = out.ok ? resultsOf(out, "populations").molecules : [];
     expect([m.partOf, sharesOf(m)]).toEqual([true, [0.5, 0.5]]);
+  });
+
+  it("says no more than the temperature of a whole compound's, and of several, how many are parts", () => {
+    const whole = runMeno("populations", setEntries([waters([0, 0, 1])], "conformers"), "conformers", { temperature: 298.15 });
+    expect(whole.said).toBe("1 compound at 298.15 K");
+    const both = runMeno("populations", setEntries([waters([0, 1]), waters([0, 2], { partOf: true }, 2)], "conformers"), "conformers", { temperature: 300 });
+    expect(both.said).toBe("2 compounds at 300 K · 1 of them part of a search, shares over the conformers given");
   });
 });
