@@ -727,11 +727,25 @@ drawn, aromatic rings as one form.* What that means, plainly:
   expanded valence (a nitro group as `*N(=O)=O` or as `*[N+](=O)[O-]`). An
   option's form is its definition's, so this can only split duplicates
   where the chemist's lists mix forms;
-- **a hydrogen atom with one bond, no charge and no isotope** counts as one
-  of its neighbour's hydrogens, its configuration kept. A product with
-  R1 = H is then the same structure as the compound drawn without that H.
-  Deuterium and tritium stay atoms. P3 adds this to the identity rule
-  itself, for every user of identity, with its tests;
+- **a plain hydrogen atom counts as one of its neighbour's hydrogens**. A
+  product with R1 = H is then the same structure as the compound drawn
+  without that H. Only a truly plain one is folded in. A hydrogen stays an
+  atom where it is any of these:
+  - one whose wedge, hash or place sets a stereocentre's or a double
+    bond's configuration, unless that configuration is carried over to the
+    atom it is on (a stereocentre with an implicit hydrogen), and then it
+    is folded in with the configuration kept;
+  - mapped to an atom of a reaction;
+  - charged, with an unpaired electron, or an isotope (deuterium,
+    tritium);
+  - bonded to another hydrogen (H2);
+  - bridging, with more than one bond;
+  - on a metal (a hydride ligand).
+
+  P3 adds this to the identity rule itself, so it changes `identityText`
+  for every user of it. P3 lists every caller of `identityText` and
+  `identityKey`, checks each one against the change, and adds a test
+  where the change matters to it;
 - **the canonical search has a budget** (`settleBudget` in
   `src/lib/layout/canonical.ts`). A very large, very symmetric structure
   that exhausts it can be written two ways, so a duplicate can be missed,
@@ -795,7 +809,10 @@ reader:
 - **a stereocentre drawn next to an R**: the arrangement kept, and R and S
   read from the products by the checks where they are at hand;
 - **R1 = H** next to a wedge: the same identity as the compound drawn
-  without the H;
+  without the H, its configuration carried to the atom it is on;
+- **each kind of hydrogen kept as an atom** in the list above: one test
+  each, showing it is kept, and that H2, a hydride and a deuterium keep
+  identities apart from the structures that would come of folding them;
 - **every reason that stops the step**, one test each, with its words;
 - **the RDKit fixture**, as above.
 
