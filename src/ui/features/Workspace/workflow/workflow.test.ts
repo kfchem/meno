@@ -13,7 +13,7 @@ import { factor } from "../../../../lib/units";
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
-import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
+import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
@@ -619,6 +619,53 @@ describe("what a step on entries alone gives back", () => {
     expect(m.made).toEqual({ method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
     expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
     expect(m.stereo).toEqual({ atoms: { 0: "R" }, bonds: {} });
+  });
+
+  /** A water as a compound set holds it, worked out by `program`'s `method`, at `energy`, its drawing `drawn` and stereo labels `labels`. */
+  const water = (id: number, program: string, method: string, energy: number, drawn: number[], labels: Record<number, string> = {}) =>
+    setEntries(
+      [
+        {
+          ...bent({ x: 0, y: 0 }, 1, [energy]),
+          id,
+          calc: { readers: [], program, method },
+          made: { how: [{ label: "Made", text: "ETKDG v3" }], energies: method },
+          drawnFrom: drawn,
+          stereo: { atoms: labels, bonds: {} },
+        },
+      ],
+      "molecules"
+    ).map((e) => ({ ...e, compound: id }));
+
+  it("will not make one compound of entries worked out by different calculations", () => {
+    // (the desk's case: water by MMFF94 at -76 Eh and by GFN2-xTB at -75.9 - one list of their energies means nothing)
+    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "xtb", "GFN2-xTB", -75.9, [1, 2, 3])], "molecules");
+    expect(out).toEqual({ ok: false, said: "Compound a: its entries come from different calculations (RDKit MMFF94; xtb GFN2-xTB)" });
+  });
+
+  it("will not make one compound of entries labelled as different stereoisomers", () => {
+    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3], { 0: "R" }), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3], { 0: "S" })], "molecules");
+    expect(out).toEqual({ ok: false, said: "Compound a: its entries' stereo labels differ: they may be different stereoisomers" });
+  });
+
+  it("makes one compound of entries made alike, keeping only what all of them keep", () => {
+    // (one calculation and one source of energies, drawn twice: the drawing each was made from is no one's to keep)
+    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [4, 5, 6])], "molecules");
+    expect(out.ok).toBe(true);
+    const [m] = resultsOf(out as Extract<typeof out, { ok: true }>, "as-conformers").molecules;
+    expect(m.energies).toEqual([-76, -76.001]);
+    expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
+    expect(m.made).toEqual({ how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
+    expect(m.drawnFrom).toBeUndefined();
+  });
+
+  it("gives a compound of entries made unlike no calculation, and no energies in one list", () => {
+    // (should a conformer set come with such a compound in it, past As conformers: the first's are not the compound's)
+    const kept = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "xtb", "GFN2-xTB", -75.9, [1, 2, 3])].map((e, i) => ({ ...e, compound: 0, number: i + 1 }));
+    const [m] = resultsOf({ ok: true, holds: "conformers", kept, aside: [], said: "" }, "energy-window").molecules;
+    expect(m.calc).toBeUndefined();
+    expect(m.energies).toBeUndefined();
+    expect(m.made).toBeUndefined();
   });
 
   it("gives what a calculation read of one geometry only to that geometry: the last frame's", () => {

@@ -7,7 +7,7 @@
  */
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, type SetEntry } from "./entries";
+import { compoundLetter, unlikeMade, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
@@ -153,10 +153,19 @@ export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]>
   return groups;
 }
 
-/** A compound set as a conformer set: entries of the same constitution as conformers of one compound, numbered in the order they came. */
+/**
+ * A compound set as a conformer set: entries of the same constitution as
+ * conformers of one compound, numbered in the order they came - where each
+ * compound's entries were made alike (entries `unlikeMade`): one
+ * calculation's energies in one list, what made them said once. Else not
+ * at all, and why.
+ */
 function asConformers(entries: readonly SetEntry[]): Outcome {
   const groups = new Map<string, SetEntry[]>();
   for (const e of entries) pushTo(groups, constitutionOf(e), e);
+  const unlike = [...groups.values()].map(unlikeMade);
+  const first = unlike.findIndex((why) => why != null);
+  if (first >= 0) return { ok: false, said: `Compound ${compoundLetter(first)}: ${unlike[first]}` };
   const kept = [...groups.values()].flatMap((g, compound) => g.map((e, i) => ({ ...e, compound, number: i + 1 })));
   return { ok: true, holds: "conformers", kept, aside: [], said: `${plural(groups.size, "compound")} · ${kept.length}` };
 }

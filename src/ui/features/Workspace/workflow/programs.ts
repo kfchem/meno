@@ -268,7 +268,9 @@ export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, rea
 /**
  * An entry's conformers, as a conformer search worked them out: each
  * geometry it gave a conformer of the entry's compound, numbered in order,
- * with its energy - what the calculation was kept with the first.
+ * with its energy - and what the calculation was, kept with each, what it
+ * found besides (its results) with the first alone: the conformers of one
+ * compound are of one calculation (entries `unlikeMade`).
  */
 export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | string {
   const n = entry.atoms.length;
@@ -287,7 +289,7 @@ export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: re
     ...(energies ? { energy: energies[k] } : {}),
     ...(shares ? { share: shares[k] } : {}),
     ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
-    ...(k === 0 ? { calc } : {}),
+    calc: k === 0 ? calc : { ...calc, results: undefined },
   }));
 }
 

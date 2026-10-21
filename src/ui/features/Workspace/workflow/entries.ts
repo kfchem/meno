@@ -263,6 +263,66 @@ export function keptOf(m: Kept): Kept {
   };
 }
 
+/** `v` as JSON with every object's keys in order: two values equal as data give the one text. */
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+/** What a calculation was, without what is each entry's own: its results, its output, its job among several, its wavefunction, the readers that could not read it. */
+function calcLevel(c: CalcInfo | undefined): string {
+  if (!c) return "";
+  const { results: _results, source: _source, job: _job, wavefunction: _wavefunction, unread: _unread, ...level } = c;
+  return stableJson(level);
+}
+
+/** A calculation, or a way of making, in a few words: its program, method and basis, or what its energies are from. */
+function madeWords(e: SetEntry): string {
+  const c = e.calc;
+  return c ? [c.program, c.method, c.basis].filter(Boolean).join(" ") || "a calculation" : e.keep?.made?.energies ?? "no calculation";
+}
+
+/** An entry's stereo labels, centre by centre and bond by bond - not which are shown - or "" where it has none. */
+function labelsOf(e: SetEntry): string {
+  const st = e.keep?.stereo;
+  if (!st || (!Object.keys(st.atoms ?? {}).length && !Object.keys(st.bonds ?? {}).length)) return "";
+  return stableJson({ atoms: st.atoms, bonds: st.bonds });
+}
+
+/**
+ * Why entries cannot stand as conformers of one compound, or null where they
+ * can: they must come from the one calculation - its program, version,
+ * method, basis, charge and multiplicity, read by the same readers - with
+ * their energies from the one source, for those to stand in one list and
+ * what made them to be said once; and be of the one configuration as their
+ * stereo labels give it, a compound being one stereoisomer.
+ */
+export function unlikeMade(g: readonly SetEntry[]): string | null {
+  const one = (f: (e: SetEntry) => string) => new Set(g.map(f)).size <= 1;
+  if (!one((e) => calcLevel(e.calc))) return `its entries come from different calculations (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (!one((e) => e.keep?.made?.energies ?? "")) return `its entries' energies come from different sources (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (!one(labelsOf)) return "its entries' stereo labels differ: they may be different stereoisomers";
+  return null;
+}
+
+/** What entries all keep alike (`SetEntry.keep`), part by part: a part one of them keeps otherwise - the drawing it was made from, how it was made - is kept by none. */
+export function keptAlike(g: readonly SetEntry[]): Kept {
+  const out: Record<string, unknown> = {};
+  for (const k of ["drawnFrom", "drawnAs", "stereo", "made", "centres"] as const) {
+    const first = g[0]?.keep?.[k];
+    if (first !== undefined && g.every((e) => stableJson(e.keep?.[k]) === stableJson(first))) out[k] = first;
+  }
+  return out as Kept;
+}
+
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {

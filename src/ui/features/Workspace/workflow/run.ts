@@ -9,7 +9,7 @@ import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocum
 import type { Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, inside, setEntries, frameXyz, framesOf, keptOf, type Frame, type SetEntry } from "./entries";
+import { setMembers, inside, setEntries, frameXyz, framesOf, keptOf, keptAlike, unlikeMade, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } from "./kinds";
@@ -501,12 +501,16 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
   for (const e of outcome.kept) pushTo(groups, e.compound, e);
   return [...groups.values()].map((g) => {
     const first = g[0];
-    const energies = g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
-    const shares = g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
+    const alike = unlikeMade(g) == null;
+    const energies = alike && g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
+    const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
-    // (what the calculation was, where a program worked them out: each conformer's results its own, not the compound's)
-    const calc = (first as Worked).calc;
+    // (what the calculation was, where a program worked them out - each conformer's results its own, not the
+    //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
+    //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
+    //  first, saying why)
+    const calc = alike ? (first as Worked).calc : undefined;
     return {
       atoms: atomsAt(first),
       bonds: first.bonds.map((b) => ({ ...b })),
@@ -518,7 +522,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
-      ...(first as Worked).keep,
+      ...(alike ? keptAlike(g) : {}),
     };
   });
 }

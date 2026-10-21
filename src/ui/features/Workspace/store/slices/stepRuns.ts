@@ -395,6 +395,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const m = moleculeOf(made, block);
         // (what worked out their energies, for the steps that rank them: the plugin, and its force field)
         const calc = { readers: [], program: plugin.name, ...(made.field ? { method: made.field } : {}) };
+        // (each conformer with them, and with what the molecule keeps: the conformers of one compound are made alike - entries `unlikeMade`)
+        const keep = keptOf(m);
         for (let f = 0; f < framesOf(m); f++) {
           worked.push({
             compound: compounds,
@@ -403,7 +405,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             bonds: m.bonds,
             xyz: frameXyz(m, f),
             ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
-            ...(f === 0 ? { calc, keep: keptOf(m) } : {}),
+            calc,
+            keep,
           });
         }
         compounds++;
