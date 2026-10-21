@@ -213,7 +213,8 @@ Entry
   id          unique within its collection
   from        the entry or entries it was made from (lineage)
   structure   atoms (element, isotope, formal charge, radical) and bonds
-              (order, stereo), in the entry's fixed numbering
+              (order, stereo, coordination), in the entry's fixed
+              numbering, from 0
   geometry    none (a graph); 2D as drawn; one 3D geometry; or frames
   species     charge and multiplicity, and where each came from: the
               chemist, a calculation it was read from, or its atoms
@@ -223,17 +224,43 @@ Entry
 
 ```
 Property
-  value       a number, a text, true/false, an entry id, a list (one value
-              per atom in the entry's numbering, or a curve's points), a
-              vector (a fingerprint), or a small table (one row per
-              vibration or per excited state)
+  value       a number, a text, true/false, an entry id, a list - which
+              says what it is per: atom, frame or point (a curve's) -
+              a vector (a fingerprint), a small table (one row per
+              vibration or per excited state, each column with its own
+              unit), a vibration's modes (one row per mode, x, y and z
+              by atom), or restraints
   unit        for each number in it, from Meno's units table, or "none"
+              (a table, modes and restraints: "none", their numbers
+              carrying their own)
   at          the geometry it was worked out at (its hash) and, where it
-              applies, the temperature, pressure and solvent
+              applies, the temperature and pressure the program used,
+              and the solvent with its model as the program names them
+              ("ALPB(water)")
   by          the step and run that gave it; the plugin and version; the
-              program, method and basis, or the model and its version
+              program, method and basis, or the model and its version;
+              for a thermal quantity, the treatment of its vibrations
   status      computed, failed (why), or not applicable (why)
 ```
+
+**Shapes a value takes** (`src/lib/entry.ts`, `valueFault` holds each to
+its entry):
+- **a list says what it is per**, always: three numbers are three atoms'
+  or three frames' otherwise. A list per atom is as long as the entry's
+  atoms, per frame as its frames;
+- **a table's columns carry their units** - a frequency in cm-1 beside a
+  symmetry with none - and its rows are as wide as its columns. In a
+  table of vibrations (the property `vibrations`) the first column is
+  `frequency` (`FREQUENCY`), in cm-1, an imaginary one a negative number,
+  as the programs print it;
+- **modes** are as the program gave them, in the vibrations table's row
+  order; no step relies on how they are scaled;
+- **a restraint** is a distance between two atoms (Å), a dihedral of four
+  (°), or atoms fixed; atoms by their number from 0, as a bond's; a
+  strength relative to 1, which each plugin turns into its own force
+  constant and states in PLUGINS.md;
+- **a coordination bond** is marked so, from a drawing or a reader that
+  knows it, so that a restraint keeps it as one.
 
 **Properties instead of fields.** Everything a step finds is a property:
 - an energy, with its kind (electronic, ZPE-corrected, free energy);
