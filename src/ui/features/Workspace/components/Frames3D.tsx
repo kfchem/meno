@@ -101,8 +101,8 @@ export function FramesChip({
   results?: Result[];
   /** The readers chosen to read it as well that could not, and why: said with what it found. */
   unread?: { from: string; why: string }[];
-  /** How it was made, where something made it - its conformers' method and force field: said with the rest, opened. */
-  made?: { method?: string; how: { label: string; text: string }[] };
+  /** How it was made, where something made it - its conformers' method and force field: said with the rest, opened; and what its energies are, under its bars. */
+  made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
   /** What the text it was read from says of it - its charge and multiplicity, its energies: said with the rest, opened. */
   said?: { label: string; text: string }[];
   /** What it keeps within: the canvas. */
@@ -291,6 +291,12 @@ export function FramesChip({
                 {about && !single && (
                   <div className="mb-1 text-center text-[11px] leading-[16px] text-gh-gray tabular-nums">
                     {line(energies?.[told])}
+                  </div>
+                )}
+                {/* (what its energies are, in the words of what made them: the same whichever conformer is shown) */}
+                {!about && !single && above && made?.energies && (
+                  <div className="mb-1 text-center text-[11px] leading-[16px] text-gh-gray" style={{ width }}>
+                    Energies from {made.energies}
                   </div>
                 )}
               </div>

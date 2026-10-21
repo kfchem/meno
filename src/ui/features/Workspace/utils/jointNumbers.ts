@@ -77,14 +77,16 @@ export function jointNumbersMesh(n: number): THREE.InstancedMesh {
       varying vec3 vInk;
       // (how much the digits cover at a point, in their own units: x across all of them, 0 to the count, y up one)
       // (sampled by how fast q moves across the screen, as on a ball - not by the digit's own coordinates, which jump at each digit's edge)
+      // (read wherever it is asked, the point held within the digits and what lies outside them let go after, as on a ball: utils/occlusionMaterial)
       float cover( vec2 q, vec2 dx, vec2 dy ) {
-        if ( q.x < 0.0 || q.x >= vDigits || q.y < 0.0 || q.y > 1.0 ) return 0.0;
-        float d = floor( q.x );
+        float inside = q.x >= 0.0 && q.x < vDigits && q.y >= 0.0 && q.y <= 1.0 ? 1.0 : 0.0;
+        vec2 qc = vec2( clamp( q.x, 0.0, vDigits - 1e-4 ), clamp( q.y, 0.0, 1.0 ) );
+        float d = floor( qc.x );
         float place = 1.0;
         for ( int k = 0; k < ${NUMBER_DIGITS_MOST - 1}; k++ ) if ( float( k ) < vDigits - 1.0 - d ) place *= 10.0;
         float value = mod( floor( vNumber / place + 1e-4 ), 10.0 );
         vec2 per = vec2( 0.1, 1.0 );
-        return textureGrad( atlas, vec2( ( value + fract( q.x ) ) / 10.0, q.y ), dx * per, dy * per ).a;
+        return textureGrad( atlas, vec2( ( value + fract( qc.x ) ) / 10.0, qc.y ), dx * per, dy * per ).a * inside;
       }
       void main() {
         float ring = ${RING.toFixed(3)};

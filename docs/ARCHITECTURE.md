@@ -1010,7 +1010,9 @@ Meno asks about first; `conformers` makes each stereoisomer asked for
 their covalent lengths and the metal typed for UFF, or, where UFF has no
 type for it, a lighter metal of its group standing in and no energies
 given; a ring bound through all its atoms, written as a multi-centre bond
-by `chem/etaBound.ts`, held over its metal; the same shape twice kept once;
+by `chem/etaBound.ts`, held over its metal; the same shape twice kept once,
+over the ways the molecule maps onto itself as well as atom against atom
+(PLUGINS.md, *The same shape with equivalent atoms swapped*);
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
@@ -1026,7 +1028,10 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
+they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
+molecule now saying how many conformers are sought; Stop, while a 3D
+structure is being made, stops the worker and lets the question go at
+once). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
 RDKit's own depictor lays out: for those, CoordGen's layout took from

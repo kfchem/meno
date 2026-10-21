@@ -16,7 +16,7 @@ import { pluginWorker } from "../../../../../lib/roles/worker";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { blocksOf, moleculeOf } from "../../chem/make3d";
+import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
@@ -39,8 +39,6 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
-/** How long a 3D structure may take to make: a large one's, on a slow machine. */
-const MAKE_3D_MS = 5 * 60_000;
 /** How long Meno waits for a stopped job to end before its files are taken away with its step. */
 const STOP_WAIT_MS = 15_000;
 
@@ -380,7 +378,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (!block) continue;
         let made;
         try {
-          made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, MAKE_3D_MS)).isomers[0];
+          // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same)
+          made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, CONFORMERS_MS)).isomers[0];
         } catch {
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)

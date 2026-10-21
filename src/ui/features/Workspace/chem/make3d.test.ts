@@ -120,13 +120,16 @@ describe("making a drawn structure in 3D", () => {
     expect(m.energies).toEqual(answer.energies);
     expect(m.drawnFrom).toEqual([11, 12, 13, null, null]);
     expect(m.stereo).toEqual({ atoms: {}, bonds: {} });
-    // (how they were made, kept where the plugin says: none here)
-    expect(m.made).toBeUndefined();
+    // (what its energies are: the force field the plugin named, as it named it)
+    expect(m.made).toEqual({ how: [], energies: "MMFF94" });
+    // (none named - "none" - or no energies: nothing said of them, and nothing kept where the plugin says nothing else)
+    expect(moleculeOf({ ...answer, field: "none" }, blocksOf(ethanol, [11])[0]).made).toBeUndefined();
+    expect(moleculeOf({ ...answer, energies: undefined }, blocksOf(ethanol, [11])[0]).made).toBeUndefined();
     const how = [{ label: "Optimised", text: "MMFF94s, at most 300 steps" }];
-    expect(moleculeOf({ ...answer, how }, blocksOf(ethanol, [11])[0]).made).toEqual({ how });
+    expect(moleculeOf({ ...answer, how }, blocksOf(ethanol, [11])[0]).made).toEqual({ how, energies: "MMFF94" });
     // (and its method, the one line the plugin says it in, kept with it)
     const method = "ETKDG v3 + MMFF94";
-    expect(moleculeOf({ ...answer, how, method }, blocksOf(ethanol, [11])[0]).made).toEqual({ method, how });
+    expect(moleculeOf({ ...answer, how, method }, blocksOf(ethanol, [11])[0]).made).toEqual({ method, how, energies: "MMFF94" });
   });
 
   it("keeps each centre's label, and - made with the other stereoisomers - which were left open, so that they are told apart", () => {

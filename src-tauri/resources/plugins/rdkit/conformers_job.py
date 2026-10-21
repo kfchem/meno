@@ -29,6 +29,8 @@ def main():
         given = json.load(f)
     mol = worker.mol_of(given)
     how = worker.options_of({"options": given.get("options") or {}})
+    # (as many as the molecule needs, where the options ask for no number of their own: said here, so that the log has it)
+    how["count"] = how["count"] or worker.sought(mol)
     print(f"RDKit {rdBase.rdkitVersion}: up to {how['count']} conformers of {mol.GetNumAtoms()} atoms, {how['field']}", flush=True)
     made = worker.conformers(mol, **how)
     print(f"{len(made['frames'])} kept", flush=True)
