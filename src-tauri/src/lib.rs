@@ -863,7 +863,8 @@ fn ole_close(id: u32) -> Result<(), String> {
 /// `--register-ole` and `--unregister-ole`, which the installer runs: the
 /// class Office finds Meno's structures by, written or taken out, and then
 /// nothing else; and `--unregister-defaults`, which the uninstaller runs:
-/// what is left of Meno's listing in Default apps (defaults.rs), taken out. Whether it worked is the exit code.
+/// what is left of Meno's listing in Default apps (defaults.rs), taken out.
+/// Whether it worked is the exit code.
 #[cfg(windows)]
 fn registration_asked() -> Option<i32> {
     let args: Vec<String> = std::env::args().collect();
