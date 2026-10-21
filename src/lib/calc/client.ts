@@ -159,12 +159,16 @@ export class ReaderClient implements Reader {
     return this.request({ op: "collect", step, entries, options, files, log, ended }, `reading what ${step} gave`);
   }
 
-  /** A step a plugin does at once, on the entries that came in - a conformer set's (`holds`) or a compound set's: what it did (docs/WORKFLOWS.md, `run`). */
-  run(step: string, entries: readonly unknown[], options: OptionValues, holds: string): Promise<unknown> {
-    return this.request({ op: "run", step, entries, options, holds }, `doing ${step}`);
+  /**
+   * A step a plugin does at once, on the entries that came in - a conformer set's (`holds`) or a compound set's:
+   * what it did (docs/WORKFLOWS.md, `run`). `ms`, how long it may take, where a kind needs longer than a request
+   * has - past it, the step fails whole.
+   */
+  run(step: string, entries: readonly unknown[], options: OptionValues, holds: string, ms?: number): Promise<unknown> {
+    return this.request({ op: "run", step, entries, options, holds }, `doing ${step}`, ms);
   }
 
-  private request(question: Record<string, unknown>, what: string): Promise<unknown> {
+  private request(question: Record<string, unknown>, what: string, ms = this.timeoutMs): Promise<unknown> {
     // (its worker stopped unused: asked of the one started in its place)
     if (this.closed !== null && this.retake) return this.retake().then((fresh) => fresh.request(question, what));
     // (its worker gone: asked of no one, so failing at once - not after its time, nor stopping the worker that runs now)
@@ -175,7 +179,7 @@ export class ReaderClient implements Reader {
         this.pending.delete(id);
         reject(new Error(`${this.name} did not finish ${what} in time`));
         this.watch?.overdue(id);
-      }, this.timeoutMs);
+      }, ms);
       this.pending.set(id, { resolve, reject, timer });
       this.watch?.sent(id);
       this.transport.send(JSON.stringify({ id, ...question }));

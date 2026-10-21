@@ -59,9 +59,9 @@ class Generate(unittest.TestCase):
         #  of Zenodo record 20701824, seed 7, on the CPU)
         self.assertEqual(
             self.made["said"],
-            "20 sampled from reinvent_pubchem.prior, seed 7, CPU: 16 made \u2192 38 molecules with every stereoisomer of unspecified centres; "
-            "4 not made (1: more than 8 centres or double bonds of unspecified stereo; 1: more than 8 stereoisomers; "
-            "1: no 3D structure embedded in 50 tries; 1: not a SMILES RDKit reads)",
+            "20 sampled from reinvent_pubchem.prior, seed 7, CPU: 17 made \u2192 42 molecules with every stereoisomer of unspecified centres; "
+            "4 of their stereoisomers not made (4: no 3D structure embedded in 50 tries); "
+            "3 not made (1: more than 8 centres or double bonds of unspecified stereo; 1: more than 8 stereoisomers; 1: not a SMILES RDKit reads)",
         )
         first = {r["id"]: r["value"] for r in self.made["outputs"][0]["results"]}
         self.assertEqual(first["smiles"], "O=C(c1ccc(CN2C(=O)SC(=Cc3ccccc3)C2=O)cc1)N1CCN(CCOc2ccccc2)CC1")
@@ -71,8 +71,8 @@ class Generate(unittest.TestCase):
 
     def test_counts_every_smiles_sampled_as_made_or_not_with_why(self):
         # (kept and dropped add up to what was asked for, and the line says each reason)
-        self.assertEqual(len(self.made["outputs"]), 38)
-        self.assertIn("16 made \u2192 38 molecules", self.made["said"])
+        self.assertEqual(len(self.made["outputs"]), 42)
+        self.assertIn("17 made \u2192 42 molecules", self.made["said"])
 
     def test_gives_each_a_molecule_its_smiles_says(self):
         from rdkit import Chem
@@ -116,9 +116,9 @@ class Generate(unittest.TestCase):
         # (a radical's spin is not handed on, so it is not made - fails closed - and an isotope a SMILES gives is kept)
         for smiles in ("C[CH2]", "[O]", "[CH3]"):
             self.assertEqual(self.worker.molecules_of(smiles, 7), "a radical, with unpaired electrons this plugin does not hand on")
-        made = self.worker.molecules_of("[13CH3][2H]", 7)[0]
+        made = self.worker.molecules_of("[13CH3][2H]", 7)["made"][0]
         self.assertEqual([(a["el"], a["isotope"]) for a in made["atoms"]][:2], [("C", 13), ("H", 2)])
-        self.assertEqual(self.worker.molecules_of("CCO", 7)[0]["atoms"][0]["isotope"], 0)
+        self.assertEqual(self.worker.molecules_of("CCO", 7)["made"][0]["atoms"][0]["isotope"], 0)
         # (a proton alone has no electrons: nothing to calculate)
         self.assertEqual(self.worker.molecules_of("[H+]", 7), "no electrons, so nothing to calculate")
 
@@ -131,8 +131,10 @@ class Generate(unittest.TestCase):
         for smiles, n in known.items():
             sets = set()
             for seed in range(1, 11):
-                made = self.worker.molecules_of(smiles, seed)
-                self.assertIsInstance(made, list, (smiles, seed, made))
+                got = self.worker.molecules_of(smiles, seed)
+                self.assertIsInstance(got, dict, (smiles, seed, got))
+                self.assertEqual(got["dropped"], {}, (smiles, seed))
+                made = got["made"]
                 sets.add(tuple(m["smiles"] for m in made))
                 for m in made:
                     # (each fully specified, and each its own: what its geometry was read back as)
@@ -144,12 +146,47 @@ class Generate(unittest.TestCase):
             self.assertEqual(len(set(next(iter(sets)))), n, smiles)
 
     def test_keeps_the_stereo_a_smiles_gives_and_makes_none_past_the_cap_or_when_asked_not_to(self):
-        made = self.worker.molecules_of("C[C@H](O)C(C)O", 7)
+        made = self.worker.molecules_of("C[C@H](O)C(C)O", 7)["made"]
         # (the centre it gives, as given, in each: the other one's two configurations beside it)
         self.assertEqual({m["smiles"] for m in made}, {Chem_canonical("C[C@H](O)[C@H](C)O"), Chem_canonical("C[C@H](O)[C@@H](C)O")})
         self.assertEqual(self.worker.molecules_of("CC(O)C(O)C(O)C(O)CO", 7), "more than 8 stereoisomers")
         self.assertEqual(self.worker.molecules_of("CC(O)C(C)O", 7, every=False), "its stereo is not all specified")
-        self.assertEqual(len(self.worker.molecules_of("C[C@H](O)[C@@H](C)O", 7, every=False)), 1)
+        self.assertEqual(len(self.worker.molecules_of("C[C@H](O)[C@@H](C)O", 7, every=False)["made"]), 1)
+
+    def test_drops_the_stereoisomers_no_geometry_has_and_keeps_the_rest(self):
+        # (the desk's: a bridged ring's bridgeheads enumerate stereoisomers with the bridge across the ring, which
+        #  never embed - dropped and counted, the rest made; refused only where none is)
+        for smiles, made_n, dropped_n in (("C1CC2CCC1C2", 1, 1), ("CC1(C)C2CCC1(C)C(=O)C2", 2, 2)):
+            got = self.worker.molecules_of(smiles, 7)
+            self.assertIsInstance(got, dict, (smiles, got))
+            self.assertEqual(len(got["made"]), made_n, smiles)
+            self.assertEqual(got["dropped"], {"no 3D structure embedded in 50 tries": dropped_n}, smiles)
+            # (each made says which of how many enumerated it is)
+            self.assertTrue(all(m["of"] == made_n + dropped_n for m in got["made"]), smiles)
+        # (bicyclobutane: RDKit embeds neither of the two it enumerates, with their chirality held - so none is made,
+        #  saying why; its stereo left open, it would embed as one of them, which is what is never done)
+        self.assertEqual(self.worker.molecules_of("C1C2CC12", 7), "no 3D structure embedded in 50 tries")
+
+    def test_refuses_an_allene_axis_left_unspecified_and_names_an_invertible_nitrogen(self):
+        self.assertEqual(self.worker.molecules_of("CC=C=CC", 7), "an allene axis of unspecified stereo")
+        # (one end carrying two of the same: no axis to specify)
+        self.assertEqual(len(self.worker.molecules_of("CC(C)=C=CC", 7)["made"]), 1)
+        # (an aziridine's nitrogen: where its geometry did not hold its configuration, said so - not "another stereoisomer")
+        got = self.worker.molecules_of("N1(C)CC1C", 7)
+        reasons = set(got["dropped"]) if isinstance(got, dict) else {got}
+        self.assertFalse({r for r in reasons if "another stereoisomer" in r}, reasons)
+
+    def test_stops_where_a_smiles_molecules_pass_the_runs_most_taking_none_after(self):
+        sampled, most = self.worker.sampled, self.worker.MOST
+        self.worker.sampled = lambda count, seed, folder: [("CC(O)C(C)O", 1.0), ("CC=CC", 2.0), ("CC(O)C(C)O", 3.0), ("CCO", 4.0)]
+        self.worker.MOST = 6
+        try:
+            out = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 4, "seed": 7}})
+        finally:
+            self.worker.sampled, self.worker.MOST = sampled, most
+        # (3 + 2 fit; the third SMILES's 3 would pass 6: it and the fourth, which alone would fit, not taken)
+        self.assertEqual(len(out["outputs"]), 5)
+        self.assertTrue(out["said"].endswith("stopped at SMILES 3 of 4, its molecules past the 6 one run makes: the 2 from there not taken"), out["said"])
 
     def test_keeps_how_many_to_what_it_may_be(self):
         made = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 0, "seed": 7}})

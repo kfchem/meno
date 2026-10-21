@@ -120,7 +120,16 @@ def stereoisomers_of(mol, every):
     bond it leaves unspecified, where `every`, each of them its own - what it does specify kept as given - in the
     one order every run gives them (by their isomeric SMILES); the molecule alone where it leaves none open. Else
     why not: a string. Never one stereoisomer chosen for it: that would pass as specified what was not."""
-    open_ = [si for si in Chem.FindPotentialStereo(Chem.Mol(mol)) if si.specified == Chem.StereoSpecified.Unspecified]
+    # (an allene's axis is no E/Z bond, and no enumeration here sets one: unspecified where it could be stereogenic,
+    #  the SMILES is not made - made, its geometry would be one of two, unsaid)
+    if unspecified_axis(mol):
+        return "an allene axis of unspecified stereo"
+    cumulated = {a.GetIdx() for a in mol.GetAtoms() if sum(b.GetBondType() == Chem.BondType.DOUBLE for b in a.GetBonds()) > 1}
+    open_ = [
+        si for si in Chem.FindPotentialStereo(Chem.Mol(mol))
+        if si.specified == Chem.StereoSpecified.Unspecified
+        and not (si.type == Chem.StereoType.Bond_Double and {mol.GetBondWithIdx(si.centeredOn).GetBeginAtomIdx(), mol.GetBondWithIdx(si.centeredOn).GetEndAtomIdx()} & cumulated)
+    ]
     if not open_:
         return [mol]
     if not every:
@@ -136,6 +145,29 @@ def stereoisomers_of(mol, every):
     if len(found) > MOST_STEREOISOMERS:
         return f"more than {MOST_STEREOISOMERS} stereoisomers"
     return sorted(found, key=lambda m: Chem.MolToSmiles(m))
+
+
+def unspecified_axis(mol):
+    """Whether a molecule has an allene axis (C=C=C) of no given stereo that could be stereogenic: each end carrying
+    two different groups, as RDKit ranks its atoms. CC=C=CC has one; CC(C)=C=CC, whose one end carries two methyls,
+    has none."""
+    hs = Chem.AddHs(mol)
+    ranks = list(Chem.CanonicalRankAtoms(hs, breakTies=False))
+    for c in hs.GetAtoms():
+        doubles = [b for b in c.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE]
+        if len(doubles) != 2 or c.GetDegree() != 2:
+            continue
+        ends = [b.GetOtherAtom(c) for b in doubles]
+        two_kinds = 0
+        for end in ends:
+            if sum(b.GetBondType() == Chem.BondType.DOUBLE for b in end.GetBonds()) != 1:
+                break
+            others = [n.GetIdx() for n in end.GetNeighbors() if n.GetIdx() != c.GetIdx()]
+            if len(others) == 2 and ranks[others[0]] != ranks[others[1]]:
+                two_kinds += 1
+        if two_kinds == 2:
+            return True
+    return False
 
 
 def made_of(mol, seed):
@@ -160,6 +192,10 @@ def made_of(mol, seed):
     back = Chem.Mol(mol)
     Chem.AssignStereochemistryFrom3D(back)
     if Chem.MolToSmiles(Chem.RemoveHs(back)) != want:
+        # (a nitrogen's configuration its geometry did not hold: an aziridine's, say, which inverts)
+        held = {a.GetIdx(): a.GetChiralTag() for a in Chem.RemoveHs(back).GetAtoms()}
+        if any(a.GetAtomicNum() == 7 and a.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED and held.get(a.GetIdx()) != a.GetChiralTag() for a in mol.GetAtoms()):
+            return "an invertible nitrogen, whose configuration its geometry did not hold"
         return "its geometry came out another stereoisomer"
     Chem.Kekulize(mol, clearAromaticFlags=True)
     if any(b.GetBondType() not in ORDERS for b in mol.GetBonds()):
@@ -176,7 +212,9 @@ def made_of(mol, seed):
 
 def molecules_of(smiles, seed, every=True):
     """A SMILES as molecules in 3D: one, or each stereoisomer of what it leaves unspecified (stereoisomers_of) -
-    a list of what made_of gives, each with how many its SMILES gave (`of`). Else why not: a string."""
+    `made`, what made_of gives, each with its place among them (`k`, from 0) and how many there were (`of`);
+    `dropped`, those of them that could not be made, counted by why - a bridged ring's stereoisomer with its
+    bridge across the ring, which no geometry has, among them. Else why not: a string - where none was made."""
     mol = Chem.MolFromSmiles(smiles)
     if mol is None:
         return "not a SMILES RDKit reads"
@@ -189,15 +227,16 @@ def molecules_of(smiles, seed, every=True):
     isomers = stereoisomers_of(mol, every)
     if isinstance(isomers, str):
         return isomers
-    # (all of a SMILES's stereoisomers, or none of them: never some passed on as if they were all - so the first
-    #  that cannot be made ends it, the rest not tried)
-    made = []
-    for m in isomers:
+    made, dropped = [], {}
+    for k, m in enumerate(isomers):
         one = made_of(m, seed)
         if isinstance(one, str):
-            return one
-        made.append(one)
-    return [{**m, "of": len(made)} for m in made]
+            dropped[one] = dropped.get(one, 0) + 1
+        else:
+            made.append({**one, "k": k, "of": len(isomers)})
+    if not made:
+        return next(iter(dropped)) if len(dropped) == 1 else "none of its stereoisomers could be made"
+    return {"made": made, "dropped": dropped}
 
 
 def number(options, key, default, low, high):
@@ -222,17 +261,21 @@ def op_run(m):
     with tempfile.TemporaryDirectory(prefix="meno-reinvent-") as folder:
         rows = sampled(count, seed, folder)
     method = f"sampled from {PRIOR_SAID}, seed {seed}, on the CPU"
-    outputs, why, smiles_made = [], {}, 0
-    for smiles, nll in rows:
-        made = molecules_of(smiles, seed, every)
-        # (all of a SMILES's stereoisomers within the run's molecules, or none: in the order sampled, never by time)
-        if not isinstance(made, str) and len(outputs) + len(made) > MOST:
-            made = f"past the {MOST} molecules one run makes"
-        if isinstance(made, str):
-            why[made] = why.get(made, 0) + 1
+    outputs, why, dropped, smiles_made, stopped = [], {}, {}, 0, None
+    for place, (smiles, nll) in enumerate(rows):
+        got = molecules_of(smiles, seed, every)
+        if isinstance(got, str):
+            why[got] = why.get(got, 0) + 1
             continue
+        # (the run's molecules counted in the order sampled: the first SMILES whose molecules do not fit ends it,
+        #  no later one taken - never by time)
+        if len(outputs) + len(got["made"]) > MOST:
+            stopped = place
+            break
         smiles_made += 1
-        for k, one in enumerate(made):
+        for d, n in got["dropped"].items():
+            dropped[d] = dropped.get(d, 0) + n
+        for one in got["made"]:
             enumerated = one["of"] > 1
             outputs.append({
                 "schema": 1,
@@ -248,15 +291,19 @@ def op_run(m):
                 "frames": [one["xyz"]],
                 "results": [
                     {"id": "smiles", "on": "molecule", "group": "Generated", "label": "SMILES as sampled", "value": smiles},
-                    *([{"id": "stereoisomer", "on": "molecule", "group": "Generated", "label": f"Stereoisomer {k + 1} of {one['of']} enumerated", "value": one["smiles"]}] if enumerated else []),
+                    *([{"id": "stereoisomer", "on": "molecule", "group": "Generated", "label": f"Stereoisomer {one['k'] + 1} of {one['of']} enumerated", "value": one["smiles"]}] if enumerated else []),
                     {"id": "nll", "on": "molecule", "group": "Generated", "label": f"NLL under {PRIOR}", "value": nll, "digits": 2, "rank": 1},
                 ],
             })
     said = f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU: {smiles_made} made"
     if len(outputs) != smiles_made:
         said += f" \u2192 {len(outputs)} molecules with every stereoisomer of unspecified centres"
+    if dropped:
+        said += f"; {sum(dropped.values())} of their stereoisomers not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(dropped.items())) + ")"
     if why:
         said += f"; {sum(why.values())} not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(why.items())) + ")"
+    if stopped is not None:
+        said += f"; stopped at SMILES {stopped + 1} of {len(rows)}, its molecules past the {MOST} one run makes: the {len(rows) - stopped} from there not taken"
     return {"outputs": outputs, "said": said}
 
 

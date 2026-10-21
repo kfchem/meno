@@ -441,6 +441,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     });
   }
 
+  /**
+   * How long a step that makes molecules from nothing may take at once (ms): a model sampling and making each
+   * a molecule in 3D, on a computer busy with other work - measured here at a load average of 50, 20 sampled and
+   * made took up to 91 s, past a request's two minutes for more. A wall-clock limit only ever fails the whole
+   * run: what one asking makes is the same however long it took.
+   */
+  const GENERATE_MS = 10 * 60_000;
+
   /** A step that takes nothing in, a plugin's at once (`run`, with no entries: Generate's): what it made, each a compound of its own, and what it says of the run. */
   async function runGenerate(id: number, plugin: PythonPlugin, at: number): Promise<void> {
     const d = doc.getState();
@@ -450,7 +458,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let read;
     try {
       const client = await pluginClient(plugin);
-      read = readGenerated(await client.run(step.kind, [], options, "molecules"), [`${plugin.id} ${client.version || plugin.version}`]);
+      read = readGenerated(await client.run(step.kind, [], options, "molecules", GENERATE_MS), [`${plugin.id} ${client.version || plugin.version}`]);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
