@@ -4,6 +4,7 @@ import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushAr
 import { pushShapes } from "./utils/pushes";
 import { exists } from "@tauri-apps/plugin-fs";
 import { writeDocument } from "../../../lib/io/writeDocument";
+import { turnsOf } from "../../../lib/doc/saveTurns";
 import { mapStanding, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -472,7 +473,9 @@ export function drawingSvg(
  * time; either way the document is then saved, and the tab's unsaved mark
  * goes. Export writes another kind of file, a copy, with its writer's
  * options (ExportCard), and leaves that alone. `error` says what went
- * wrong, if anything.
+ * wrong, if anything. One save of the workspace at a time: Save or Save
+ * As asked for while one is under way waits for it, and runs once
+ * (lib/doc/saveTurns).
  */
 export function useFileActions(nameTab?: (label: string) => void) {
   const store = useEditorStore();
@@ -504,7 +507,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
   );
 
   /** The canvas saved as a workspace, where the chemist says; whether it was. */
-  const saveAs = useCallback(
+  const saveAsNow = useCallback(
     async () =>
       (await attempt("Save", async () => {
         const picked = await saveDialog({
@@ -522,11 +525,15 @@ export function useFileActions(nameTab?: (label: string) => void) {
   );
 
   /** The canvas saved where it was saved last, or else where the chemist says; whether it was. */
-  const save = useCallback(async () => {
+  const saveNow = useCallback(async () => {
     const { savedPath: path } = store.getState();
     if (path && isWorkspaceFile(path)) return (await attempt("Save", async () => (await saveTo(path), true))) === true;
-    return saveAs();
-  }, [attempt, saveAs, saveTo, store]);
+    return saveAsNow();
+  }, [attempt, saveAsNow, saveTo, store]);
+
+  // (each in its turn: where it is last saved read as it begins, the workspace written as it is then)
+  const saveAs = useCallback(() => turnsOf(store)("saveAs", saveAsNow), [saveAsNow, store]);
+  const save = useCallback(() => turnsOf(store)("save", saveNow), [saveNow, store]);
 
   /**
    * `part` of the canvas - the selection, as a copy takes it - or else all

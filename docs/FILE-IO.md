@@ -550,6 +550,12 @@ How these behave:
     a file picked in Open's or Save's dialog, dropped, or opened from outside
     Meno (that plugin's scope; for a link, the file it points at). A path
     that steps up (`..`) is refused, as the plugin refuses it.
+- **One save at a time** (`lib/doc/saveTurns.ts`). Save or Save As asked for
+  while a save of the same workspace is under way waits for it, then runs
+  once - however many times it was asked for meanwhile - writing the
+  workspace as it is when it begins; one that fails does not stop the next.
+  Ctrl/Cmd+S held down saves once, as it is pressed. What changes while a
+  save writes is still unsaved after it, as before.
 
 As this part of step 5 was built (#155, from main beside step 3):
 

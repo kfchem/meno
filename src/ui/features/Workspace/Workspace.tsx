@@ -2615,6 +2615,8 @@ function TabFiles({
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const intent = saveIntent(e);
+      // (the keys held: saved once, as they were pressed - and still not the webview's)
+      if (!intent && e.repeat && saveIntent({ key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey })) e.preventDefault();
       if (!intent) return;
       e.preventDefault();
       void (intent === "save" ? save() : saveAs());
