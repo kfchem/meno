@@ -49,7 +49,9 @@ import ExportCard from "./ExportCard";
 import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
 import OrdersCard from "./OrdersCard";
-import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
+import ProtonationCard from "./ProtonationCard";
+import { addHydrogensAsChosen, addHydrogensFromDictionary, keptAsDictionary, protonationOf, useProtonationMark, type Protonation } from "./chem/protonate";
+import { canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { isSkeleton, partOf } from "./utils/completeness";
 import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
@@ -444,21 +446,9 @@ function WorkspaceContent({
   // are unknown; and those given from a SMILES, asked for on its ligand
   useBondOrders();
   const [givingOrders, setGivingOrders] = useState<{ id: number; atom: number | null } | null>(null);
-  // its ligand's hydrogens, the ones its file leaves out, added - as one undo step
-  const completeHydrogens = useCallback(
-    async (id: number, atom: number | null) => {
-      setWorking3d("Adding hydrogens…");
-      setChemError(null);
-      try {
-        await addHydrogens(store, id, atom);
-      } catch (e: unknown) {
-        setChemError(`The hydrogens could not be added: ${e instanceof Error ? e.message : String(e)}`);
-      } finally {
-        setWorking3d(null);
-      }
-    },
-    [store],
-  );
+  // its ligand's hydrogens, the ones its file leaves out, added as the chemist chooses how it is protonated - as one undo step
+  const [protonating, setProtonating] = useState<Protonation | null>(null);
+  const markProtonated = useCallback((atoms: number[] | null) => useProtonationMark.getState().mark(atoms && protonating ? { id: protonating.id, atoms } : null), [protonating]);
   // a PDB entry's residues given their orders from the wwPDB's dictionary - as one undo step
   const lookUpComponents = useCallback(
     async (id: number) => {
@@ -955,6 +945,7 @@ function WorkspaceContent({
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
+    setProtonating(null);
   }, [talking]);
   // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
   // being written, and the menu would stay open over it, its keys and the label's at odds)
@@ -1113,7 +1104,7 @@ function WorkspaceContent({
               },
             }
           : {}),
-        ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
+        ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => setProtonating(protonationOf(menuMolecule, menu?.atom ?? null)) } : {}),
         // (a skeleton that has no hydrogens to add - carbon dioxide's atoms, say, where Meno could not tell: whole, as the chemist says; never a PDB entry's chains)
         ...(!menuMolecule.biopolymer && isSkeleton(menuMolecule)
           ? { onWholeWithoutH: () => store.getState().changeMolecule3d("complete without hydrogens", menuMolecule.id, (m) => ({ ...m, wholeWithoutH: true })) }
@@ -1715,6 +1706,22 @@ function WorkspaceContent({
       </AnimatePresence>
       {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
       {ownTab && <SettingsStyleAsk active={active} />}
+      <AnimatePresence>
+        {protonating && (
+          <ProtonationCard
+            key="protonation"
+            protonation={protonating}
+            onCancel={() => setProtonating(null)}
+            onMark={markProtonated}
+            onAdd={async (forms, charges) => {
+              const chosen = { forms, charges };
+              if (keptAsDictionary(protonating, chosen)) await addHydrogensFromDictionary(store, protonating);
+              else await addHydrogensAsChosen(store, protonating, chosen);
+              setProtonating(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {givingOrders && (
           <OrdersCard

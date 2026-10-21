@@ -1831,11 +1831,72 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   gives each bond the order the SMILES has for it, and each atom its
   charge. The SMILES must be the ligand's heavy atoms and bonds, all of
   them; else the card says so and nothing changes. One undo step.
-- **Hydrogens added.** Its orders known, a ligand without hydrogens has
-  *Add hydrogens* in the same menu: RDKit's `AddHs`, placed where the
-  atoms' geometry puts them, bonded to their atoms and in their residue.
-  One undo step. Not for a molecule with other frames (an NMR entry's
-  models, a trajectory), which would be left without them.
+- **How it is protonated** (the maintainer's decisions, 2026-10-21 and
+  2026-10-22). Its orders known, a molecule without hydrogens - for a PDB
+  entry, the ligand under the pointer - has *Add hydrogens…* in the same
+  menu: a card over the canvas, *How it is protonated*, with a row for
+  each of its sites and the forms to choose from, the site lit on the
+  molecule while the pointer is over its row; any other nitrogen, oxygen
+  or sulfur can be given a charge of its own (*Charge another atom…*);
+  and the charge and spin the molecule would have. Nothing is chosen for
+  the chemist: a pH model may come later.
+  - **The sites** (`lib/chem/protonation.ts`), each atom in one at most,
+    the first that takes it: an azole (a flat five-membered ring with two
+    nitrogens or more: imidazole, pyrazole, a triazole, a tetrazole); a
+    lactam (a flat six-membered ring with a nitrogen and an oxygen on a
+    carbon of it: 2-pyridone, 4-pyridone, uracil); an amidine or a
+    guanidine; a carboxyl; a phosphate and a sulfonate (a phosphorus or
+    sulfur with four neighbours, two oxygens or more of them bonded to
+    nothing else); a ring nitrogen (a flat six-membered ring's, with no
+    substituent); a phenol and a thiol; an amine (a nitrogen with single
+    bonds only, outside a flat ring, and not an amide's, a sulfonamide's,
+    a nitro group's, nor an aminopyridine's amino group, whose ring
+    nitrogen is the site).
+  - **The forms.** A form is the hydrogens each atom of a site carries,
+    and its charge - every tautomer one of them, by where its hydrogens
+    are: imidazole with its hydrogen on N1 or on N3, an amidine's two, a
+    guanidine's three, 2-pyridone and 2-hydroxypyridine, a carboxylic
+    acid's hydrogen on either oxygen, a phosphate's on any of its oxygens.
+    The orders of the bonds round a form - in a ring, its whole flat ring
+    system's - are found again for it so that every atom's valence is met,
+    and they follow the form chosen: a carboxylate's one C=O, imidazolium's
+    and guanidinium's C=N+. Two ways of drawing the same hydrogens and
+    charge are one form. A site's charge is of one sign, and a ring's is
+    one at most.
+  - **Where the card starts** (one function, `startingForms`). Where the
+    orders and charges were given by a definition - the CCD's (*As the CCD
+    defines it*), a SMILES' (*As the SMILES gives it*) or its own file's, a
+    molfile's, whose hydrogens are those its valences leave room for (*As
+    its file gives it*) - each site starts at the form they draw. Where they were estimated from distances, which
+    say nothing of how it is protonated, every site starts unchosen, and
+    *Add hydrogens* waits until each is chosen.
+  - **The hydrogens.** The forms chosen are drawn together - every site's
+    bonds found again at once, the card saying so where they cannot all be
+    drawn - and the hydrogens they leave room for are added by RDKit's
+    `AddHs`, where the atoms' geometry puts them, bonded to their atoms and
+    in their residue. A PDB entry's ligand kept as the CCD defines it is
+    given the CCD's own hydrogens instead, by their names, each where the
+    component's ideal shape puts it beside its atom: the component's atom
+    and its neighbours - and theirs, until three not in a line - fitted
+    onto the entry's by Horn's closed-form quaternion fit
+    (`lib/chem/ccdHydrogens.ts`), so that it stands as the component has
+    it however the residue is turned and bent; a hydrogen that leaves as
+    the residue bonds to another (an amino acid's H2, a sugar's HO1) only
+    where its atom is bonded to no other residue. Where an atom of the
+    component that does not leave is missing from the entry, it is not
+    made whole: the card says which, and nothing is added.
+  - **Checked before anything is written.** Each atom must then have the
+    hydrogens its form gives it - its valence met by its bonds and its
+    hydrogens, a bond to a metal counted as the metal's
+    (`hydrogensRoom`). Where not, nothing is changed, and the card says at
+    which atoms. HEM, as the CCD defines it, gives its O2A and O2D a
+    charge and a hydrogen both: its hydrogens are not put on as they are,
+    and the chemist chooses its carboxyls' forms on the card.
+  - **Said over it.** A molecule so completed says *Hydrogens added*, or
+    *Hydrogens from the CCD* (`hydrogensAdded`), as they were not in its
+    file. One undo step. Not for a molecule with other frames (an NMR
+    entry's models, a trajectory), which would be left without them; nor,
+    yet, for a set of many in a workflow, which waits for the pH model.
 - **Not done: protonating a protein.** A chain's hydrogens depend on each
   residue's protonation state - histidine's tautomer, the pH, what is
   near - which is a calculation of its own, not a completion of the file.
@@ -1855,7 +1916,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   the component's, single, double or triple; any other residue is left as
   it was, and says so. Bonds between residues - a peptide's, a
   disulfide, a ligand's link - stay as they are. A ligand so given can be
-  given its hydrogens; chains whose every residue was given no longer say
+  given its hydrogens as the CCD defines them (*How it is protonated*,
+  above); chains whose every residue was given no longer say
   their orders are unknown, drawn as atoms. The charges are the
   dictionary's, as its components are drawn, not a protonation worked out
   for the entry. One undo step. The files come from files.wwpdb.org
@@ -1910,8 +1972,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   it is, Export saying it has none. Estimated orders on a skeleton say so
   over it, their formal charges only those its heavy atoms set (a nitro
   group's, an azide's). The way on is its hydrogens added, the chemist
-  choosing how it is protonated - or, for a PDB ligand, the CCD's - which
-  a later change brings.
+  choosing how it is protonated - or, for a PDB ligand, the CCD's (*How it
+  is protonated*, above): a molecule with hydrogens is no skeleton.
 
 ## Risks
 

@@ -18,6 +18,7 @@ import { stepTurnsOnce, stopTurnsOnce, turningOnce } from "../utils/turnOnce";
 import { Remake3D } from "./remake3d";
 import { PageHtmlLayer } from "./coverLayer";
 import { linkOf } from "../chem/make3d";
+import { useProtonationMark } from "../chem/protonate";
 import { eyeOf, pageAt } from "../utils/page";
 import { guideMove } from "../utils/guiding";
 import { selectionScheme } from "../utils/selectionScheme";
@@ -656,6 +657,8 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
   // (a measurement's value that can be set, pointed at or dragged across: the
   // atoms setting it moves, lit; and a drag across it slides sideways)
   const settingOn = scrubbing ?? hoveredMeasure;
+  // (a site of a molecule being protonated, its row on the card pointed at: its atoms lit - chem/protonate)
+  const protonationMark = useProtonationMark((x) => x.marked);
   const settingMoves = useMemo(() => {
     if (!settingOn) return null;
     const m = molecules.find((x) => x.id === settingOn.id);
@@ -804,7 +807,7 @@ export default function Molecules3D({ style = STYLE_3D }: { style?: Style3D }) {
             surface={surface?.value ?? null}
             surfaceIso={open?.iso}
             surfaceColour={colourBy?.value && row?.colour ? { grid: colourBy.value, from: row.colour.from, to: row.colour.to } : null}
-            marked={settingMoves?.id === m.id ? settingMoves.atoms : (pointed?.atoms ?? row?.atoms ?? NONE)}
+            marked={settingMoves?.id === m.id ? settingMoves.atoms : protonationMark?.id === m.id ? protonationMark.atoms : (pointed?.atoms ?? row?.atoms ?? NONE)}
             editingMeasure={measureEdit?.id === m.id ? measureEdit.measure : null}
             onSetMeasure={(measure, value) => {
               const st = store.getState();

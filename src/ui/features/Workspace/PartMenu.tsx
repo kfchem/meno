@@ -123,7 +123,7 @@ export type MenuMolecule3D = {
   onOrdersFromSmiles?: () => void;
   /** Its bond orders - its ligand's - estimated from its atoms' distances: unset, where they are known. */
   onEstimateOrders?: () => void;
-  /** The hydrogens its file leaves out - its ligand's - added: unset, where it has them or its bond orders are not known. */
+  /** The hydrogens its file leaves out - its ligand's - added, the chemist choosing how it is protonated (ProtonationCard): unset, where it has them or its bond orders are not known. */
   onAddHydrogens?: () => void;
   /** Said to be whole without hydrogens - it has none to add (lib/chem/skeleton): unset, where it is no skeleton, or a PDB entry. */
   onWholeWithoutH?: () => void;
@@ -529,7 +529,7 @@ export default function PartMenu({
           ...(molecule3d.onOrdersFromDictionary ? [{ name: "Bond orders from the CCD", keys: "", run: molecule3d.onOrdersFromDictionary }] : []),
           ...(molecule3d.onOrdersFromSmiles ? [{ name: "Bond orders from SMILES…", keys: "", run: molecule3d.onOrdersFromSmiles }] : []),
           ...(molecule3d.onEstimateOrders ? [{ name: "Estimate bond orders from distances", keys: "", run: molecule3d.onEstimateOrders }] : []),
-          ...(molecule3d.onAddHydrogens ? [{ name: "Add hydrogens", keys: "", run: molecule3d.onAddHydrogens }] : []),
+          ...(molecule3d.onAddHydrogens ? [{ name: "Add hydrogens…", keys: "", run: molecule3d.onAddHydrogens }] : []),
           ...(molecule3d.onWholeWithoutH ? [{ name: "Complete without hydrogens", keys: "", run: molecule3d.onWholeWithoutH }] : []),
         ].map((item, k) => (k === 0 ? { ...item, divider: true } : item)),
       ]

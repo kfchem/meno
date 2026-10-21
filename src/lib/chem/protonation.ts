@@ -77,15 +77,18 @@ export type Site = { kind: SiteKind; atoms: number[]; changing: number[]; forms:
 /** Where a molecule's bond orders, and so its charges, came from: the CCD, a SMILES, or an estimate from its atoms' distances. */
 export type OrdersBy = "dictionary" | "assigned" | "estimated" | "perceived" | "unknown" | undefined;
 
+/** Whether a molecule's orders and charges were given by a definition: the CCD's, a SMILES', or its own file's (`undefined`: a molfile's, its hydrogens those its valences leave room for). */
+export const definedBy = (by: OrdersBy) => by === "dictionary" || by === "assigned" || by === undefined;
+
 /**
  * The form each site starts at, as the card opens - Meno's one policy, so
- * that it is changed in one place: where its orders and charges were given
- * by a definition (the CCD's, a SMILES'), the form they draw; else none -
- * an estimate from distances says nothing of how a molecule is protonated,
- * so each site waits for the chemist.
+ * that it is changed in one place (the maintainer, 2026-10-22): where its
+ * orders and charges were given by a definition (`definedBy`), the form
+ * they draw; else none - an estimate from distances says nothing of how a
+ * molecule is protonated, so each site waits for the chemist.
  */
 export function startingForms(by: OrdersBy, sites: readonly Site[]): (number | null)[] {
-  return sites.map((s) => (by === "dictionary" || by === "assigned" ? s.now : null));
+  return sites.map((s) => (definedBy(by) ? s.now : null));
 }
 
 /** An atom's hydrogens, its bonds' orders summed (`sum`): its valence's room, a phosphorus or sulfur taking its higher valences (5; 4 and 6) where its bonds go past the lower. */
@@ -97,6 +100,19 @@ export function hydrogensOf(a: ProtonAtom, sum: number): number {
     return v == null ? 0 : v - sum;
   }
   return implicitHydrogens(a.el, sum, charge, a.radical);
+}
+
+/** The elements whose bonds an atom's valence counts: a bond to any other - a metal's, a heme's iron - is the metal's, not the ligand's. */
+const COUNTED = new Set(["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Se", "Br", "I"]);
+
+/** The hydrogens an atom's valence leaves room for (`hydrogensOf`), its bonds to atoms that count (`COUNTED`) summed - not its bonds to hydrogens, which are what is counted. */
+export function hydrogensRoom(atoms: readonly ProtonAtom[], bonds: readonly ProtonBond[], i: number): number {
+  let sum = 0;
+  for (const b of bonds) {
+    const other = b.a1 === i ? b.a2 : b.a2 === i ? b.a1 : -1;
+    if (other >= 0 && atoms[other].el !== "H" && COUNTED.has(atoms[other].el)) sum += b.order === 4 ? 1.5 : b.order;
+  }
+  return hydrogensOf(atoms[i], Math.round(sum));
 }
 
 /** The most steps a search for bond orders takes before it says none were found. */
@@ -390,7 +406,7 @@ function sitesAmong(atoms: readonly ProtonAtom[], bonds: readonly ProtonBond[], 
   // (amines)
   const doublyToHetero = (j: number) => g.near[j].some((k) => ["O", "S", "N"].includes(atoms[k].el) && order(j, k) >= 2);
   for (const n of g.heavy) {
-    if (!among.has(n) || taken.has(n) || atoms[n].el !== "N" || inFlat.has(n) || (atoms[n].charge ?? 0) !== 0) continue;
+    if (!among.has(n) || taken.has(n) || atoms[n].el !== "N" || inFlat.has(n)) continue;
     if (g.near[n].some((j) => order(n, j) !== 1) || g.near[n].length > 3) continue;
     if (g.near[n].some((j) => terminal(atoms, g, j, "O") || (["C", "S", "P"].includes(atoms[j].el) && doublyToHetero(j)))) continue;
     if (g.near[n].some((j) => inFlat.has(j) && g.near[j].some((k) => inFlat.has(k) && atoms[k].el === "N" && g.near[k].length === 2))) continue;

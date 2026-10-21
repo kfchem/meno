@@ -197,9 +197,10 @@ describe("where the card starts", () => {
     expect(sites[0].forms[sites[0].now!].name).toBe("Carboxylate");
   });
 
-  it("from the form its orders and charges draw, where a definition gave them (the CCD's, a SMILES'); else from none", () => {
+  it("from the form its orders and charges draw, where a definition gave them (the CCD's, a SMILES', its own file's); else from none", () => {
     expect(startingForms("dictionary", sites)).toEqual([sites[0].now]);
     expect(startingForms("assigned", sites)).toEqual([sites[0].now]);
+    expect(startingForms(undefined, sites)).toEqual([sites[0].now]);
     expect(startingForms("estimated", sites)).toEqual([null]);
   });
 
