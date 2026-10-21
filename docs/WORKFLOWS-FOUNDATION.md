@@ -662,7 +662,7 @@ why, naming the line or the atom:
   make 312,500,000 combinations; Enumerate makes at most 10,000*. Every
   product is drawn, read back against its structure, and kept in the
   workspace file. At the speed measured for laying out many structures at
-  once (#507: 1,000 in 9 to 15 s on this kind of computer), 10,000 take
+  once (#507: 1,000 in 9 to 15 s across eight workers), 10,000 take
   minutes and more take hours. A set past that is more than can be looked
   over, and is a sign the lists should be cut or the work done in steps.
 
