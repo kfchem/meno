@@ -65,9 +65,33 @@ export type Property = {
   at?: At;
   by?: By;
   status: PropertyStatus;
-  /** What a reader of the value must know of it that the rest does not say: a limit of how it was worked out, in a line. */
-  note?: string;
 };
+
+/**
+ * A stereogenic element of an entry - a centre, a double bond, an axis, a
+ * cumulene - by its atoms in the fixed numbering; specified where its
+ * configuration is known (from 3D, every element the geometry fixes is),
+ * unspecified where a 2D drawing leaves it open.
+ */
+export type StereoElement = { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean };
+
+/**
+ * An entry's configuration, as a plugin perceived it: its stereogenic
+ * elements and a key of their configuration, and what perceived them - "no
+ * stereo" is perceived, with no elements; or why it was not perceived.
+ */
+export type EntryStereo = { perceived: true; elements: StereoElement[]; key: string; by: By } | { perceived: false; why: string };
+
+/**
+ * An entry's configuration as one text, to compare two entries by: what
+ * perceived it (its plugin and version - keys of different versions never
+ * compare equal) and its key. None where it was not perceived, or where any
+ * element is unspecified: such an entry's configuration is not known.
+ */
+export function stereoIdentity(stereo: EntryStereo | undefined): string | null {
+  if (!stereo || !stereo.perceived || stereo.elements.some((e) => !e.specified)) return null;
+  return `${stereo.by.plugin}@${stereo.by.version}:${stereo.key}`;
+}
 
 /** An entry's status: done, failed (why), or set aside (why). */
 export type EntryStatus = "done" | { failed: string } | { aside: string };
@@ -82,6 +106,8 @@ export type Entry = {
   species: Species;
   properties: Record<string, Property>;
   status: EntryStatus;
+  /** Its configuration, once perceived (`EntryStereo`); absent until then. */
+  stereo?: EntryStereo;
 };
 
 /**

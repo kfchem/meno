@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { By } from "../entry";
 import { convert } from "../units";
 import { PROPERTY } from "./base";
-import { CONFIGURATIONS, populations } from "./populations";
-import { entry, quantity } from "./testEntries";
+import { populations } from "./populations";
+import { entry, perceived, quantity } from "./testEntries";
 
 const by = { program: "P", method: "M", basis: "B", treatment: "T" };
 /** A free energy `kcal` kcal/mol above a reference, in hartrees, at 298.15 K. */
@@ -26,9 +26,7 @@ describe("Populations", () => {
     expect(out.exits.failed).toEqual([]);
     // (each share says the temperature, and what worked out the free energies it is of)
     expect(eq.properties[PROPERTY.population]).toMatchObject({ unit: "none", at: { kelvin: 298.15, atm: 1 }, by });
-    expect(out.said).toBe(`Shares from free energy at 298.15 K · 2 in 1 group · ${CONFIGURATIONS}`);
-    // (and each share says it: the record holds no configuration yet, so a group may hold two)
-    expect(eq.properties[PROPERTY.population].note).toBe("configurations (R/S, E/Z) not told apart: stereoisomers in one group share one sum");
+    expect(out.said).toBe("Shares from free energy at 298.15 K · 2 in 1 group");
   });
 
   it("counts each as many times as its degeneracy says: 2 forms 0.5 kcal/mol up against 1, 46.24% at 298.15 K", () => {
@@ -63,7 +61,9 @@ describe("Populations", () => {
       ["e-only", { failed: "it has no free energy (thermo.free-energy), only an electronic energy, which is not weighted in its place" }],
     ]);
     // (counted: 1 + 2 = 3 came in)
-    expect(out.said).toBe(`Shares from free energy at 298.15 K · 1 in 1 group · 2 failed · ${CONFIGURATIONS}`);
+    expect(out.said).toBe(
+      "Shares from free energy at 298.15 K · 1 in 1 group · 2 failed (1: another in its group could not be weighted (e-only: it has no free energy (thermo.free-energy), only an electronic energy, which is not weighted in its place); 1: it has no free energy (thermo.free-energy), only an electronic energy, which is not weighted in its place)",
+    );
   });
 
   it("weights a group only where its free energies add up in one sum: one temperature (the node's), pressure, solvent, method and thermal treatment", () => {
@@ -83,6 +83,42 @@ describe("Populations", () => {
     const out = populations([entry("a", { [PROPERTY.freeEnergy]: g(0), [PROPERTY.degeneracy]: quantity(2, "none") }, "a"), entry("b", { [PROPERTY.freeEnergy]: g(0) }, "a")], { kelvin: 298.15 });
     if (!out.ok) throw new Error(out.said);
     expect(out.exits.failed.map((e) => (e.status as { failed: string }).failed)).toEqual(["only 1 of the 2 in its group have a degeneracy", "only 1 of the 2 in its group have a degeneracy"]);
+  });
+
+  it("never weights stereoisomers in one sum: a group of two configurations - cis and trans 1,4-dimethylcyclohexane - fails whole", () => {
+    // (two centres each, the keys of cis and trans different, as the plugin gives them)
+    const centres = [
+      { kind: "centre" as const, atoms: [0], specified: true },
+      { kind: "centre" as const, atoms: [3], specified: true },
+    ];
+    const out = populations(
+      [entry("cis", { [PROPERTY.freeEnergy]: g(0) }, "a", perceived("cis-key", centres)), entry("trans", { [PROPERTY.freeEnergy]: g(1) }, "a", perceived("trans-key", centres))],
+      { kelvin: 298.15 },
+    );
+    if (!out.ok) throw new Error(out.said);
+    expect(out.exits.done).toEqual([]);
+    expect(out.exits.failed.map((e) => (e.status as { failed: string }).failed)).toEqual([
+      "its group holds 2 configurations - different stereoisomers, which are not weighted in one sum",
+      "its group holds 2 configurations - different stereoisomers, which are not weighted in one sum",
+    ]);
+    // ((R)- and (S)-2-butanol alike, one centre each; and the same configuration weighs as one)
+    const one = [{ kind: "centre" as const, atoms: [1], specified: true }];
+    const r = (id: string, kcal: number, key: string) => entry(id, { [PROPERTY.freeEnergy]: g(kcal) }, "b", perceived(key, one));
+    expect(populations([r("R", 0, "R-key"), r("S", 0, "S-key")], { kelvin: 298.15 }).ok && "refused").toBe("refused");
+    const same = populations([r("R1", 0, "R-key"), r("R2", 1, "R-key")], { kelvin: 298.15 });
+    expect(same.ok && same.exits.done.length).toBe(2);
+  });
+
+  it("weights no group whose configuration was not perceived, or left unspecified, saying which", () => {
+    const why = (stereo: Parameters<typeof entry>[3]) => {
+      const out = populations([entry("x", { [PROPERTY.freeEnergy]: g(0) }, "a", stereo), entry("y", { [PROPERTY.freeEnergy]: g(1) }, "a")], { kelvin: 298.15 });
+      return out.ok ? (out.exits.failed[0]?.status as { failed: string } | undefined)?.failed : out.said;
+    };
+    expect(why(null)).toBe("its configuration (R/S, E/Z) was not perceived, so stereoisomers could not be told apart");
+    expect(why({ perceived: false, why: "no plugin perceives it" })).toBe("its configuration (R/S, E/Z) was not perceived (no plugin perceives it), so stereoisomers could not be told apart");
+    expect(why(perceived("k", [{ kind: "double", atoms: [1, 2], specified: false }]))).toBe("a configuration of it (R/S, E/Z) is left unspecified");
+    // (one perceived with no stereogenic element - methylcyclohexane - weighs as any other)
+    expect(why(perceived())).toBeUndefined();
   });
 
   it("refuses a temperature of 0 K or below, and nothing to weigh", () => {

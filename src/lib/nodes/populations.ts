@@ -12,19 +12,17 @@
  * treatment; else the whole group goes out of *failed*, each entry saying
  * why: shares of part of a group would be shares of something else.
  *
- * An entry's record holds no configuration of its stereocentres or double
- * bonds yet, so a group may hold two configurations - a conformer search on
- * a structure with a centre left open embeds both - and their shares are
- * then of one Boltzmann sum, which stereoisomers that do not interconvert
- * are not. Until the record holds configurations (and groups are made by
- * identity), every share says so (`note`), and so does the node's line.
+ * A group is weighted only where its entries are one configuration:
+ * stereoisomers do not interconvert, and shares of one Boltzmann sum over
+ * two of them are of nothing. A conformer search on a structure with a
+ * centre left open embeds both. So every entry's configuration must have
+ * been perceived and fully specified (lib/entry `stereoIdentity`), and all
+ * of a group's the same; else the whole group goes out of *failed*, saying
+ * which - never summed with a warning.
  */
 import { boltzmann } from "../boltzmann";
-import type { Entry, Property } from "../entry";
-import { failedWith, groups, inGroups, numberIn, PROPERTY, workedOutUnlike, type NodeOutcome } from "./base";
-
-/** What every share says of its group: its entries' configurations are not told apart. */
-export const CONFIGURATIONS = "configurations (R/S, E/Z) not told apart: stereoisomers in one group share one sum";
+import { stereoIdentity, type Entry, type EntryStereo, type Property } from "../entry";
+import { failedWith, groups, inGroups, numberIn, PROPERTY, tally, workedOutUnlike, type NodeOutcome } from "./base";
 
 /** How near a free energy's temperature must be to the node's to be the same, in kelvin. */
 const SAME_KELVIN = 1e-6;
@@ -41,13 +39,25 @@ function ownProblem(e: Entry, kelvin: number): string | null {
   const at = e.properties[PROPERTY.freeEnergy].at?.kelvin;
   if (at == null) return "its free energy does not say the temperature it was worked out at";
   if (Math.abs(at - kelvin) > SAME_KELVIN) return `its free energy is at ${at} K, not ${kelvin} K`;
+  const unknown = configurationUnknown(e.stereo);
+  if (unknown) return unknown;
   const d = e.properties[PROPERTY.degeneracy];
   if (d && (d.status !== "computed" || typeof d.value !== "number" || !(d.value > 0))) return "its degeneracy is not a number above 0";
   return null;
 }
 
-/** Why a group's free energies cannot be added up in one sum - two of them worked out differently - else nothing. */
+/** Why an entry's configuration is not known - not perceived, or an element left unspecified - else nothing. */
+function configurationUnknown(stereo: EntryStereo | undefined): string | null {
+  if (!stereo) return "its configuration (R/S, E/Z) was not perceived, so stereoisomers could not be told apart";
+  if (!stereo.perceived) return `its configuration (R/S, E/Z) was not perceived (${stereo.why}), so stereoisomers could not be told apart`;
+  if (stereoIdentity(stereo) == null) return "a configuration of it (R/S, E/Z) is left unspecified";
+  return null;
+}
+
+/** Why a group's free energies cannot be added up in one sum - two configurations, or two of them worked out differently - else nothing. */
 function mixed(g: readonly Entry[]): string | null {
+  const configurations = new Set(g.map((e) => stereoIdentity(e.stereo)));
+  if (configurations.size > 1) return `its group holds ${configurations.size} configurations - different stereoisomers, which are not weighted in one sum`;
   const unlike = workedOutUnlike(g, PROPERTY.freeEnergy);
   if (unlike) return `its group's free energies ${unlike}`;
   const counted = g.filter((e) => e.properties[PROPERTY.degeneracy]).length;
@@ -79,11 +89,11 @@ export function populations(entries: readonly Entry[], options: PopulationsOptio
     const w = boltzmann(energies, kelvin, counted);
     g.forEach((e, i) => {
       const fe = e.properties[PROPERTY.freeEnergy];
-      shares.set(e, { value: w[i], unit: "none", at: { ...fe.at!, kelvin }, ...(fe.by ? { by: { ...fe.by } } : {}), status: "computed", note: CONFIGURATIONS });
+      shares.set(e, { value: w[i], unit: "none", at: { ...fe.at!, kelvin }, ...(fe.by ? { by: { ...fe.by } } : {}), status: "computed" });
     });
   }
   const done = entries.filter((e) => shares.has(e)).map((e) => ({ ...e, properties: { ...e.properties, [PROPERTY.population]: shares.get(e)! } }));
   const out = entries.filter((e) => failed.has(e)).map((e) => failedWith(e, failed.get(e)!));
-  const said = `Shares from free energy at ${kelvin} K · ${done.length} in ${groups(weighted)}${out.length ? ` · ${out.length} failed` : ""} · ${CONFIGURATIONS}`;
+  const said = `Shares from free energy at ${kelvin} K · ${done.length} in ${groups(weighted)}${out.length ? ` · ${out.length} failed (${tally(out)})` : ""}`;
   return { ok: true, exits: { done, failed: out }, said };
 }
