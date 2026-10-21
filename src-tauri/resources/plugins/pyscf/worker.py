@@ -45,7 +45,7 @@ from pyscf.tools import molden  # noqa: E402
 
 ELEMENTS = PeriodicTable().element
 
-# electronvolts in a hartree; ångströms in a bohr
+# electronvolts in a hartree; ångströms in a bohr (CODATA 2018)
 EV_PER_HARTREE = 27.211386245988
 ANGSTROM_PER_BOHR = 0.529177210903
 SCHEMA = 1

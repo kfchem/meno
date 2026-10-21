@@ -802,6 +802,8 @@ export default function PartMenu({
               ]
             : []),
           del("Delete selection"),
+          // (an atom selected alone, right-clicked: its label, as on the atom's own menu)
+          ...(target.kind === "atom" && onEditLabel ? [{ name: "Edit label", keys: "", run: onEditLabel }] : []),
           ...moleculeList,
           ...(drawing ? [{ name: "Copy as SMILES", keys: "", run: clipboard.onCopySmiles, divider: moleculeList.length > 0 }] : []),
           ...(onExport ? [{ name: "Export…", keys: "", run: onExport, divider: !drawing && moleculeList.length > 0 }] : []),

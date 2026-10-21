@@ -160,6 +160,23 @@ export function numberHeight(digits: number, radiusA: number): number {
   return Math.min(NUMBER_HEIGHT, NUMBER_HEIGHT_MOST_A / Math.max(radiusA, 1e-6), NUMBER_WIDTH_MOST / (Math.max(digits, 1) * DIGIT_CELL));
 }
 
+/**
+ * How many numbers on balls a picture leaves out, as the balls' shader
+ * leaves them out (utils/occlusionMaterial, `ballNumberCover`): squeezed to
+ * under 0.4 of their size for room on their ball, or standing under three
+ * quarters of `least` pixels high - `heights` each a share of its ball's
+ * radius, `shares` how much of its size it has room for (`numberPlaces`),
+ * `radiiPx` each ball's radius in the picture's pixels; `digits` 0 for none.
+ */
+export function numbersLeftOut(heights: ArrayLike<number>, shares: ArrayLike<number>, radiiPx: ArrayLike<number>, digits: ArrayLike<number>, least: number): number {
+  let n = 0;
+  for (let i = 0; i < digits.length; i++) {
+    if (!digits[i] || !(radiiPx[i] > 0)) continue;
+    if (shares[i] < 0.4 || heights[i] * shares[i] * radiiPx[i] * 0.7 < least * 0.75) n++;
+  }
+  return n;
+}
+
 /** Points across a ball as seen, in its radius's units: a grid over its disc. */
 const GRID = 11;
 const SAMPLES: [number, number][] = [];

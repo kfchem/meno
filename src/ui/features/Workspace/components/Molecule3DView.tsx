@@ -1953,10 +1953,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {/* (rising out of its drawing, it shows its frames once it has risen) */}
       {/* (read from a calculation, it says what the calculation was - a
           single geometry's only when it is pointed at) */}
-      {(solid.frames.length > 1 || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
+      {(solid.frames.length > 1 || m.conformerSet || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
-          {(solid.frames.length > 1 || m.calc || named3d(m)) && !props.stacked ? (
+          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m)) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
@@ -1977,6 +1977,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               results={m.calc?.results}
               unread={m.calc?.unread}
               made={m.made}
+              conformers={m.conformerSet}
               said={m.said}
               area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}

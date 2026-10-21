@@ -11,13 +11,17 @@
  * it stands there.
  */
 import * as THREE from "three";
-import { atomColour, bondRadiusOf, KEY_LIGHT_FROM, type MoleculeLook, type Style3D } from "../../../../lib/chem/style3d";
+import { atomColour, ballCircles, bondRadiusOf, KEY_LIGHT_FROM, linedBall, type MoleculeLook, type Style3D } from "../../../../lib/chem/style3d";
 import { writeGltf, type GltfAnimation, type GltfChannel, type GltfMaterial, type GltfMesh, type GltfNode, type GltfScene, type Quat, type Vec3 } from "../../../../lib/scene/gltf";
-import { tubeAlong, unitCylinder, unitSphere } from "../../../../lib/scene/shapes";
+import { tubeAlong, unitCylinder, unitRing, unitSphere, type Shape as Solid } from "../../../../lib/scene/shapes";
 import type { Mesh } from "../utils/isosurface";
 import { bentPieces } from "../utils/stickBend";
+import { ribbonMesh } from "../utils/ribbon";
+import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { withCentres, bondLines, bondsAt, frameBondsOf, frameOf, heightOf, linesOf, lookOf, magnifiedOf, solidOf, WORLD_PER_ANGSTROM } from "../utils/molecule3d";
 import { VIBRATION_PERIOD, vibrationOffsets } from "../utils/vibration3d";
+import { MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, piecesOf } from "../utils/measure3d";
+import { COLORS } from "../../../theme/colors";
 import { MENO_MOTIONS } from "../../../../lib/plugins/manifest";
 import type { Carried3D, Molecule3D } from "../store/types";
 
@@ -76,8 +80,12 @@ export type Rendered = {
   frames: number;
   fps: number;
   page: { minX: number; maxX: number; minY: number; maxY: number };
+  /** What is worth saying of the film it makes, where anything is: its ribbons moving only every so many frames. */
+  note?: string;
 };
 
+/** A measurement's stick: thin, so coarser. */
+const MEASURE_STICK = unitCylinder(12);
 /** How smooth a ball and a stick are: as fine as a close look wants. */
 const SPHERE = unitSphere(64, 32);
 const CYLINDER = unitCylinder(32);
@@ -86,6 +94,8 @@ const MARGIN = 0.06;
 /** A surface's look, as the canvas draws it (components/Surface3D). */
 const SURFACE_OPACITY = 0.6;
 const SURFACE_ROUGHNESS = 0.55;
+/** The most points a film's ribbons come to, all its moments told: past it, a moving ribbon is written every so many frames. */
+export const RIBBON_FILM_MOST_POINTS = 1_500_000;
 /** The most frames a film may have: a minute at 60 a second. */
 export const FILM_MOST_FRAMES = 3600;
 
@@ -131,6 +141,27 @@ export function stoppedAt(end: THREE.Vector3, centre: THREE.Vector3, radius: num
   const exit = -d + Math.sqrt(reach * reach - across2);
   if (exit <= 0) return new THREE.Vector3();
   return along.multiplyScalar(Math.min(exit, len));
+}
+
+/**
+ * A line's pieces (end to end, from one atom to the other) in two halves of equal length along them: the piece the
+ * middle falls in cut there.
+ */
+export function halvesOf<P extends { a: THREE.Vector3; b: THREE.Vector3; r: number }>(pieces: readonly P[]): [P[], P[]] {
+  const lengths = pieces.map((p) => p.a.distanceTo(p.b));
+  const half = lengths.reduce((s, x) => s + x, 0) / 2;
+  let run = 0;
+  for (let i = 0; i < pieces.length; i++) {
+    if (run + lengths[i] >= half || i === pieces.length - 1) {
+      const u = lengths[i] > 1e-12 ? Math.min(1, Math.max(0, (half - run) / lengths[i])) : 0.5;
+      const cut = pieces[i].a.clone().lerp(pieces[i].b, u);
+      const one = [...pieces.slice(0, i), { ...pieces[i], a: pieces[i].a.clone(), b: cut.clone() }];
+      const two = [{ ...pieces[i], a: cut.clone(), b: pieces[i].b.clone() }, ...pieces.slice(i + 1)];
+      return [one, two];
+    }
+    run += lengths[i];
+  }
+  return [[...pieces], []];
 }
 
 export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: RenderAsk): Rendered {
@@ -193,6 +224,8 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
 
   const made: { atoms: { el: string; p: Vec3 }[]; bonds: { a: number; b: number; order: number }[] }[] = [];
   const ownMotion = film && !!motion && !(MENO_MOTIONS as readonly string[]).includes(motion);
+  // (the fewest frames a moving ribbon is written at: every one, or every so many)
+  let ribbonEvery = 1;
   for (const { m, surfaces, move } of shown) {
     const molecule = { ...m, id: 0 } as Molecule3D;
     const solid = solidOf(molecule, style);
@@ -289,9 +322,44 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
       }
     }
 
-    // each bond's lines (a double bond two, a triple three), as sticks from atom to atom
+    // the lines on its balls, where its look draws them (`ballLines`): great circles about the molecule's own axes - x and y, or
+    // all three - each a thin ring lying on the ball, as wide as the look has them in ångströms, in their colour, moving with it
+    const circles = ballCircles(drawn);
+    if (circles) {
+      const lineMat = kept(`ball line ${drawn.ballLinesColor}`, () => ({ name: `line ${drawn.ballLinesColor}`, colour: linear(drawn.ballLinesColor), metallic: 0, roughness: 0.6 }));
+      const ringOf = new Map<string, number>();
+      const ring = (r: number) => {
+        // (one ring a ball's size: its tube's share of the radius)
+        const tube = Math.max(drawn.ballLinesWidth / 2 / r, 1e-4);
+        const key = tube.toFixed(5);
+        let i = ringOf.get(key);
+        if (i === undefined) {
+          const shape = unitRing(tube);
+          i = meshes.length;
+          meshes.push({ name: `line ${drawn.ballLinesColor}`, positions: shape.positions, normals: shape.normals, indices: shape.indices, material: lineMat });
+          ringOf.set(key, i);
+        }
+        return i;
+      };
+      // (the ring lies about +Y: turned to lie about x, y and z)
+      const about = [new THREE.Quaternion().setFromUnitVectors(up, new THREE.Vector3(1, 0, 0)), new THREE.Quaternion(), new THREE.Quaternion().setFromUnitVectors(up, new THREE.Vector3(0, 0, 1))].slice(0, circles);
+      for (let i = 0; i < n; i++) {
+        if (left[i] || radii[i] <= 0 || !linedBall(m.atoms[i].el, drawn)) continue;
+        const r = radii[i] / k;
+        const p0 = samples[0].places;
+        for (const turn of about) {
+          const node = nodes.length;
+          nodes.push({ mesh: ring(r), translation: [p0[3 * i], p0[3 * i + 1], p0[3 * i + 2]], rotation: quat(turn), scale: [r, r, r] });
+          children.push(node);
+          if (animated) channels.push({ node, path: "translation", values: Float32Array.from(samples.flatMap((x) => [x.places[3 * i], x.places[3 * i + 1], x.places[3 * i + 2]])) });
+        }
+      }
+    }
+
+    // each bond's lines (a double bond two, a triple three), as sticks from atom to atom - where the look colours a bond by its
+    // atoms, each line in two halves, each its atom's colour
     if (bondR > 0 && bonds.length) {
-      const stick = shapeIn("stick", material(drawn.bondColor, drawn));
+      const byAtom = drawn.bondColouring === "byAtom";
       // (which bond each line is of, a bond's lines side by side)
       const lineOf = bonds.flatMap((b, i) => Array<number>(linesOf(b.order)).fill(i));
       const seeThrough = sticksStopped(ask);
@@ -317,28 +385,46 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
           }
           return pieces;
         });
-      const linesAt = (x: Sample) =>
-        linesIn(x).flat().map((l) => {
-          const along = l.b.clone().sub(l.a);
-          const len = along.length();
-          return { mid: l.a.clone().add(l.b).multiplyScalar(0.5), turn: len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion(), len, r: l.r };
+      // (the sticks drawn: each line whole - or, coloured by atom, its two halves - as its pieces, and the atom whose colour it is)
+      const strandsIn = (x: Sample) =>
+        linesIn(x).flatMap((pieces, li) => {
+          if (!byAtom) return [{ pieces, line: li, atom: -1 }];
+          const b = bonds[lineOf[li]];
+          const [one, two] = halvesOf(pieces);
+          const at = (atom: number) => new THREE.Vector3(x.places[3 * atom], x.places[3 * atom + 1], x.places[3 * atom + 2]);
+          // (the half that starts nearer the bond's first atom is that atom's)
+          const firstIsA1 = one[0].a.distanceToSquared(at(b.a1)) <= one[0].a.distanceToSquared(at(b.a2));
+          return [
+            { pieces: one, line: li, atom: firstIsA1 ? b.a1 : b.a2 },
+            { pieces: two, line: li, atom: firstIsA1 ? b.a2 : b.a1 },
+          ];
         });
-      // (which bond each line - each piece of a curving one - is of, a bond's lines side by side)
-      const piecesOf = linesIn(samples[0]).map((p) => p.length);
-      const lineBond = lineOf.flatMap((b, l) => Array<number>(piecesOf[l]).fill(b));
-      const each = samples.map(linesAt);
-      // (a line that bends, in a render that does not move: one smooth tube along its curve, not straight pieces end to end)
-      const perLine = linesIn(samples[0]);
-      const pieceOfBent = !animated ? perLine.flatMap((p) => Array<boolean>(p.length).fill(p.length > 1)) : [];
+      const strands0 = strandsIn(samples[0]);
+      // (each strand's material: the bond colour, or its atom's)
+      const strandMat = strands0.map((st) => material(st.atom < 0 ? drawn.bondColor : atomColour(m.atoms[st.atom].el, drawn), drawn));
+      const piecesAt = (x: Sample) =>
+        strandsIn(x).flatMap((st) =>
+          st.pieces.map((l) => {
+            const along = l.b.clone().sub(l.a);
+            const len = along.length();
+            return { mid: l.a.clone().add(l.b).multiplyScalar(0.5), turn: len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion(), len, r: l.r };
+          }),
+        );
+      // (which strand each piece is of)
+      const pieceStrand = strands0.flatMap((st, i) => Array<number>(st.pieces.length).fill(i));
+      const each = samples.map(piecesAt);
+      // (a strand that bends, in a render that does not move: one smooth tube along its curve, not straight pieces end to end)
+      const pieceOfBent = !animated ? strands0.flatMap((st) => Array<boolean>(st.pieces.length).fill(st.pieces.length > 1)) : [];
       if (!animated) {
-        const mat = meshes[stick].material;
-        perLine.forEach((pcs, li) => {
+        strands0.forEach((st, i) => {
+          const pcs = st.pieces;
           if (pcs.length < 2) return;
-          const there = samples[0].presence ? (samples[0].presence![lineOf[li]] ?? 1) : 1;
+          const there = samples[0].presence ? (samples[0].presence![lineOf[st.line]] ?? 1) : 1;
           const r = pcs[0].r * there;
           if (r <= 0) return;
           const tube = tubeAlong([pcs[0].a, ...pcs.map((q) => q.b)], r, 24);
           if (!tube.indices.length) return;
+          const mat = strandMat[i];
           const mesh = meshes.length;
           meshes.push({ name: `stick ${materials[mat].name}`, positions: tube.positions, normals: tube.normals, indices: tube.indices, material: mat });
           const node = nodes.length;
@@ -352,12 +438,12 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
         if (pieceOfBent[l]) continue;
         const at = (s: number) => {
           const x = each[s][l];
-          const there = samples[s].presence ? (samples[s].presence![lineBond[l]] ?? 1) : 1;
+          const there = samples[s].presence ? (samples[s].presence![lineOf[strands0[pieceStrand[l]].line]] ?? 1) : 1;
           return { ...x, r: x.r * there };
         };
         const first = at(0);
         const node = nodes.length;
-        nodes.push({ mesh: stick, translation: [first.mid.x, first.mid.y, first.mid.z], rotation: quat(first.turn), scale: [first.r || 1e-6, first.len || 1e-6, first.r || 1e-6] });
+        nodes.push({ mesh: shapeIn("stick", strandMat[pieceStrand[l]]), translation: [first.mid.x, first.mid.y, first.mid.z], rotation: quat(first.turn), scale: [first.r || 1e-6, first.len || 1e-6, first.r || 1e-6] });
         children.push(node);
         if (animated) {
           const keys = samples.map((_, s) => at(s));
@@ -366,6 +452,96 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
           channels.push({ node, path: "scale", values: Float32Array.from(keys.flatMap((x) => [x.r || 1e-6, x.len || 1e-6, x.r || 1e-6])) });
         }
       }
+    }
+
+    // its chains as ribbons, where its look draws them so (the atoms they stand for being left out, above): in their colours,
+    // each point its own (COLOR_0, over white), in the look's finish or the material asked for - clay and white, one colour
+    if (solid.ribbons[look] && m.biopolymer) {
+      const bp = m.biopolymer;
+      const runs = chainRuns(bp, m.atoms);
+      const made = ask.molecules ?? "meno";
+      const plain = made === "clay" || made === "white";
+      const mat = kept(`ribbon ${made} ${drawn.roughness} ${drawn.metalness}`, () => ({ ...moleculeMaterial("#ffffff", drawn, made), name: `ribbon ${made}` }));
+      const ribbonOf = (x: Sample) => {
+        // (ribbonMesh sizes the ribbon in its places' units to the ångström: here ångströms)
+        const r = ribbonMesh(x.places, runs, bp, style.ribbonColours, 1, 1);
+        const at = meshes.length;
+        meshes.push({ name: `ribbon ${materials[mat].name}`, positions: r.positions, normals: r.normals, indices: r.indices, ...(plain ? {} : { colours: rgba(r.colours) }), material: mat });
+        // (as far as it reaches: turning, from the molecule's centre whichever way it is turned; else turned as it is)
+        if (turning) {
+          let most = 0;
+          for (let i = 0; i < r.positions.length; i += 3) most = Math.max(most, Math.hypot(r.positions[i], r.positions[i + 1], r.positions[i + 2]));
+          reach(centre[0], centre[1], centre[2], most * mag);
+        } else
+          for (let i = 0; i < r.positions.length; i += 3) {
+            v.set(r.positions[i], r.positions[i + 1], r.positions[i + 2]).applyQuaternion(x.turn).multiplyScalar(mag);
+            reach(centre[0] + v.x, centre[1] + v.y, centre[2] + v.z, 0);
+          }
+        return { mesh: at, points: r.positions.length / 3 };
+      };
+      if (!animated) {
+        // (still, or turning with the whole molecule: one ribbon)
+        const one = ribbonOf(samples[0]);
+        const node = nodes.length;
+        nodes.push({ mesh: one.mesh });
+        children.push(node);
+      } else {
+        // (its atoms moving: the ribbon of each moment, shown only then - and, where a film's ribbons would weigh too much, of
+        // every so many moments, each held till the next)
+        const first = ribbonOf(samples[0]);
+        const every = Math.max(1, Math.ceil((first.points * count) / RIBBON_FILM_MOST_POINTS));
+        ribbonEvery = Math.max(ribbonEvery, every);
+        const keys = Array.from({ length: Math.ceil(count / every) }, (_, j) => j * every);
+        keys.forEach((s0, j) => {
+          const mesh = j ? ribbonOf(samples[s0]).mesh : first.mesh;
+          const on = (s: number) => Math.floor(s / every) === j;
+          const node = nodes.length;
+          nodes.push({ mesh, ...(on(0) ? {} : { scale: [0, 0, 0] as Vec3 }) });
+          children.push(node);
+          channels.push({ node, path: "scale", interpolation: "STEP", values: Float32Array.from({ length: 3 * count }, (_, i) => (on(Math.floor(i / 3)) ? 1 : 0)) });
+        });
+      }
+    }
+
+    // its measurements, as the canvas draws them: lines - a distance's dashed - and an angle's faint fan, in the canvas's blue,
+    // unlit (marks, not things), none to an atom its look leaves out; a moving molecule's of each moment, shown only then
+    const measures = (m.measures ?? []).filter((x) => x.atoms.length >= 2 && x.atoms.every((i) => i >= 0 && i < n && !left[i]));
+    if (measures.length) {
+      const lineMat = kept("measure line", () => ({ name: "measure line", colour: linear(COLORS.highlight), metallic: 0, roughness: 1, unlit: true }));
+      const fanMat = kept("measure fan", () => ({ name: "measure fan", colour: linear(COLORS.highlight, MEASURE_FAN_OPACITY), metallic: 0, roughness: 1, unlit: true, blend: true, doubleSided: true }));
+      const marksAt = (x: Sample) => {
+        // (measureMarks works in the page's units: there and back)
+        const world = Float32Array.from(x.places, (q) => q * k);
+        const pieces: [THREE.Vector3, THREE.Vector3][] = [];
+        const fan: THREE.Vector3[] = [];
+        for (const one of measures) {
+          const marks = measureMarks(world, one.atoms);
+          for (const [a, b] of piecesOf(marks)) pieces.push([a.clone().divideScalar(k), b.clone().divideScalar(k)]);
+          for (const p of marks.fan) fan.push(p.clone().divideScalar(k));
+        }
+        return { lines: sticksOf(pieces, MEASURE_RADIUS), fan: fanOf(fan) };
+      };
+      const put = (shape: Solid, mat: number, name: string, x: Sample) => {
+        if (!shape.indices.length) return -1;
+        const at = meshes.length;
+        meshes.push({ name, positions: shape.positions, normals: shape.normals, indices: shape.indices, material: mat });
+        for (let i = 0; i < shape.positions.length; i += 3) {
+          v.set(shape.positions[i], shape.positions[i + 1], shape.positions[i + 2]).applyQuaternion(x.turn).multiplyScalar(mag);
+          reach(centre[0] + v.x, centre[1] + v.y, centre[2] + v.z, 0);
+        }
+        return at;
+      };
+      const each = animated ? samples : [samples[0]];
+      each.forEach((x, s) => {
+        const made = marksAt(x);
+        for (const mesh of [put(made.lines, lineMat, "measure line", x), put(made.fan, fanMat, "measure fan", x)]) {
+          if (mesh < 0) continue;
+          const node = nodes.length;
+          nodes.push({ mesh, ...(animated && s ? { scale: [0, 0, 0] as Vec3 } : {}) });
+          children.push(node);
+          if (animated) channels.push({ node, path: "scale", interpolation: "STEP", values: Float32Array.from({ length: 3 * count }, (_, i) => (Math.floor(i / 3) === s ? 1 : 0)) });
+        }
+      });
     }
 
     // the surface it shows, where it shows one: its two signs in their colours, seen through, as the canvas draws it - or,
@@ -448,6 +624,7 @@ export function renderScene(shown: readonly Shown3D[], style: Style3D, ask: Rend
     frames: count,
     fps,
     page: { minX: (cx - w / 2) * k, maxX: (cx + w / 2) * k, minY: (cy - h / 2) * k, maxY: (cy + h / 2) * k },
+    ...(ribbonEvery > 1 ? { note: `Ribbons move every ${ordinal(ribbonEvery)} frame` } : {}),
   };
 }
 
@@ -565,4 +742,52 @@ function normalised(ns: Float32Array): Float32Array {
     } else out[i + 1] = 1;
   }
   return out;
+}
+
+/** Sticks of `radius` from each `a` to its `b`, as one mesh. */
+function sticksOf(pieces: readonly [THREE.Vector3, THREE.Vector3][], radius: number): Solid {
+  const c = MEASURE_STICK;
+  const per = c.positions.length / 3;
+  const positions = new Float32Array(pieces.length * c.positions.length);
+  const normals = new Float32Array(pieces.length * c.normals.length);
+  const indices = new Uint32Array(pieces.length * c.indices.length);
+  const p = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+  pieces.forEach(([a, b], j) => {
+    const along = b.clone().sub(a);
+    const len = along.length();
+    const turn = len > 1e-9 ? new THREE.Quaternion().setFromUnitVectors(up, along.divideScalar(len)) : new THREE.Quaternion();
+    const mid = a.clone().add(b).multiplyScalar(0.5);
+    for (let i = 0; i < per; i++) {
+      p.set(c.positions[3 * i] * radius, c.positions[3 * i + 1] * len, c.positions[3 * i + 2] * radius).applyQuaternion(turn).add(mid);
+      p.toArray(positions, 3 * (j * per + i));
+      p.fromArray(c.normals, 3 * i).applyQuaternion(turn).toArray(normals, 3 * (j * per + i));
+    }
+    for (let i = 0; i < c.indices.length; i++) indices[j * c.indices.length + i] = c.indices[i] + j * per;
+  });
+  return { positions, normals, indices };
+}
+
+/** Triangles, three points each, as a mesh: each its own face's normal. */
+function fanOf(points: readonly THREE.Vector3[]): Solid {
+  const positions = new Float32Array(3 * points.length);
+  const normals = new Float32Array(3 * points.length);
+  for (let t = 0; t + 2 < points.length; t += 3) {
+    const [a, b, c] = [points[t], points[t + 1], points[t + 2]];
+    const face = b.clone().sub(a).cross(c.clone().sub(a));
+    if (face.lengthSq() > 0) face.normalize();
+    else face.set(0, 0, 1);
+    for (let i = 0; i < 3; i++) {
+      points[t + i].toArray(positions, 3 * (t + i));
+      face.toArray(normals, 3 * (t + i));
+    }
+  }
+  return { positions, normals, indices: Uint32Array.from({ length: points.length - (points.length % 3) }, (_, i) => i) };
+}
+
+/** 2nd, 3rd, 4th, 11th, 21st: a number as an ordinal. */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
 }
