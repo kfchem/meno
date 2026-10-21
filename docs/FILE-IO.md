@@ -542,14 +542,70 @@ How these behave:
   there byte for byte as it was, and nothing of its own beside it; the
   failure is said. Meno stopped as it writes leaves the file as it was too,
   its hidden copy perhaps beside it.
-  - The file keeps its permissions. Saved through a link, the file the link
-    points at is written, and the link stays a link.
+  - The file keeps what it had besides its bytes - it is the chemist's too
+    - as far as the system lets it be kept: a new file takes the old one's
+    place, and would else have the folder's defaults. Its permissions; on
+    a Mac and Linux its owner and group, where the system lets the user
+    give them (the user's own file; another's group the user is in); on a
+    Mac its extended attributes - a Finder tag, where it was downloaded
+    from - and its access list (copyfile(3), `COPYFILE_XATTR` and
+    `COPYFILE_ACL`, and not `COPYFILE_STAT`: the file is new, and has its
+    own time of change). On Windows it is put in place by ReplaceFileW,
+    which keeps when the file was made, its short name, its object id, its
+    access list, its security attributes, its being kept encrypted or
+    compressed, and its other streams. Only the permissions failing fails
+    the save; one of the rest that cannot be kept - another user's file, a
+    file system that keeps none - is logged, and the new work saved, never
+    lost for it.
+  - What no save that puts a new file in place can keep: hard links. A
+    file with a second name elsewhere has the new bytes under the name
+    saved to; the other name still holds the bytes as they were. On Linux
+    a file's extended attributes and access list are not carried over. A
+    file whose access list forbids deleting it (on a Mac, `deny delete`)
+    cannot be saved over: it is left as it was, and the failure said.
+  - On Windows, a file held a moment by another program - an antivirus
+    looking into the new file, a cloud drive syncing the old one - is tried
+    again: five tries over a second (`ERROR_SHARING_VIOLATION`,
+    `ERROR_LOCK_VIOLATION`, and `ERROR_ACCESS_DENIED`, as Windows says of a
+    file open elsewhere without leave to delete it; whether the file may be
+    written at all was looked at before). ReplaceFileW is always given a
+    hidden name to keep the old file under until the new one is in place,
+    so the file is never gone: where the system leaves it under that name
+    (`ERROR_UNABLE_TO_MOVE_REPLACEMENT_2`), it is named as it was again,
+    and the save fails; where even that cannot be done, the failure says
+    what it is now named. Done, the hidden copy is taken away. Where the
+    access list cannot be merged - the user may not set it - the file is
+    still saved, as a plain rename would have saved it
+    (`REPLACEFILE_IGNORE_MERGE_ERRORS`, `REPLACEFILE_IGNORE_ACL_ERRORS`).
+  - Saved through a link, the file the link points at is written, and the
+    link stays a link.
   - A file that could not have been written to in place - kept read-only, a
     folder of that name - is not written over.
   - It writes only where the page may write through the file system plugin:
     a file picked in Open's or Save's dialog, dropped, or opened from outside
     Meno (that plugin's scope; for a link, the file it points at). A path
     that steps up (`..`) is refused, as the plugin refuses it.
+  - **Meno's own files are written the same way** - `settings.json`, its
+    environments' notes (`writeAppFile`, and `write_app_file`, which writes
+    only a path inside Meno's data folder or its local one: never a whole
+    path, one that steps up, or one a link leads out of the folder by), the
+    window's size and place, and how a conda-forge environment is activated
+    (`activation.json`). A settings file left half written would lose every
+    setting. Not so written, as nothing is lost by them: the logs, which
+    are added to; what is fetched and kept to be fetched no more (a PDF
+    held, the wwPDB's components, the tools that make environments, a
+    plugin's files), each written beside and put in place, and fetched
+    again where it does not read; a job's own files, made before the job is
+    named, and its state, written beside and put in place.
+- **Never over a file another tab holds** (2026-10-21; `writtenWhere`,
+  `fileActions.ts`, and `heldElsewhere`, `lib/doc/savers.ts`). A Save As
+  onto the file another tab's workspace is saved to - known by its one
+  true path, however it was written - would write it, and that tab's next
+  save would overwrite it unseen. It is refused, as a save's failure is
+  said, naming the tab as the tab bar does: "Save failed: that file is
+  open in the tab "aspirin.meno"; save there, or close it first." Nothing
+  is written. A tab saving to its own file, or to a file no tab holds, is
+  saved.
 - **One save at a time** (`lib/doc/saveTurns.ts`). Save or Save As asked for
   while a save of the same workspace is under way waits for it, then runs
   once - however many times it was asked for meanwhile - writing the
@@ -788,7 +844,20 @@ work.meno (zip)
   such file - does not keep the workspace from being saved, which would
   put new work at risk: it is saved without it, and Save says so, where
   its failures are said, until dismissed: "Saved, but figure.png is not in
-  the file: it could not be read." Its place in the
+  the file: it could not be read." Where the file saved over is the one
+  it was last saved to, and that still has something of one in it,
+  damaged - or does not read as a workspace at all, so that what it holds
+  is not known - it may be the only copy, and partly to be had: it is first
+  kept beside the new one, as it is, and Save says so: "... The file as it
+  was is kept beside it as aspirin.meno.bak." (`lastHolds`, `workspaceFile`;
+  `write_document` asked with `keep-old`). Never over a copy kept before,
+  which may hold more: `aspirin.meno.bak`, else `aspirin.meno.1.bak`,
+  `aspirin.meno.2.bak` and on. The same file under a second name where the
+  file system has them (a hard link: everything it had with it), else a
+  copy of its bytes; where it cannot be kept, the file is not saved over,
+  and why is said. Kept once: the file saved then holds nothing of it, so
+  the next save keeps no copy. A save that can keep everything keeps no
+  copy. Its place in the
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.
