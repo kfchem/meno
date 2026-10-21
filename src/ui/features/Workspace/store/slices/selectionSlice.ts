@@ -36,6 +36,12 @@ export function selectedOf(st: Pick<EditorState, "sel" | "sel3d" | "selFlow" | "
   };
 }
 
+/** Whether the selection is the atom `id` alone: no other atom, no bond, nothing else selected. */
+export function selectionIsAtom(st: Parameters<typeof selectedOf>[0], id: number): boolean {
+  if (st.sel.atoms.size !== 1 || !st.sel.atoms.has(id) || st.sel.bonds.size > 0) return false;
+  return !selectedOf({ ...st, sel: { ...st.sel, atoms: new Set(), bonds: new Set() } }).any;
+}
+
 /**
  * Whether a drag of the atom `id` moves the selection: the atom is in it,
  * with anything else - another atom, or a picture, a shape, words, a

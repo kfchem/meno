@@ -6,7 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
-import { holdsOf, setMembers } from "./entries";
+import { holdsOf, setMembers, setMolecules } from "./entries";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takesNothing, type SetHolds, type SetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
@@ -87,9 +87,8 @@ export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKin
   if (!set) return null;
   const holds = holdsOf(doc, set);
   if (holds === "pictures") return null;
-  const { structures, molecules } = setMembers(doc, set);
-  const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
-  return { holds, molecules: molecules.map((id) => byId.get(id)!), structures };
+  const { structures } = setMembers(doc, set);
+  return { holds, molecules: setMolecules(doc, set), structures };
 }
 
 /** FNV-1a over a string: a short key for what came into a step. */

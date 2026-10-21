@@ -140,8 +140,8 @@ describe("configurations", () => {
       [8, [7, 3, 9, -1], -1],
     ]);
     expect(tetra("F[C@]1(Br)CCC1Cl")).toEqual([[1, [0, 5, 2, 3], 1]]);
-    // a centre of three is none
-    expect(tetra("C[S@](=O)CC")).toEqual([]);
+    // (a sulfoxide's S, its lone pair taken in an H's place: the three atoms' volume, as RDKit's 3D embedding has it)
+    expect(tetra("C[S@](=O)CC")).toEqual([[1, [0, 2, 3], 1]]);
   });
 
   it("are as a descriptor names them: the SMILES's, its mirror image, or none", () => {

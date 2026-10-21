@@ -588,6 +588,60 @@ def shape_of(ob):
     return kind, colour
 
 
+def ribbons_by_colour(scene):
+    """A ribbon (Meno writes it as one mesh, each corner its colour: COLOR_0) as a shape of each colour it has, each named by
+    its colour as the balls and sticks are ("ribbon #c84a5e"), so that a look - which makes its material of a shape's colour -
+    colours each part as the canvas does. Its normals kept, each corner's as it was."""
+    for ob in [o for o in scene.objects if o.type == "MESH" and shape_of(o)[0] == "ribbon" and shape_of(o)[1] is None]:
+        me = ob.data
+        if not me.color_attributes or not me.polygons:
+            continue
+        col = me.color_attributes[0]
+        corner = col.domain == "CORNER"
+        normals = [n.vector.copy() for n in me.corner_normals]
+        groups = {}
+        for p in me.polygons:
+            # (a face's colour, its first corner's: Meno gives a face's corners one colour, or its ends' nearest residue's)
+            c = col.data[p.loop_start if corner else me.loops[p.loop_start].vertex_index].color_srgb
+            key = "".join(f"{min(255, max(0, round(v * 255))):02x}" for v in c[:3])
+            groups.setdefault(key, []).append(p.index)
+        for key, faces in groups.items():
+            at, verts, polys, corner_normals = {}, [], [], []
+            for fi in faces:
+                p = me.polygons[fi]
+                ring = []
+                for li in p.loop_indices:
+                    vi = me.loops[li].vertex_index
+                    if vi not in at:
+                        at[vi] = len(verts)
+                        verts.append(me.vertices[vi].co.copy())
+                    ring.append(at[vi])
+                    corner_normals.append(normals[li])
+                polys.append(ring)
+            part = bpy.data.meshes.new(f"ribbon #{key}")
+            part.from_pydata(verts, [], polys)
+            part.update()
+            for q in part.polygons:
+                q.use_smooth = True
+            part.normals_split_custom_set(corner_normals)
+            for m in me.materials:
+                part.materials.append(m)
+            piece = bpy.data.objects.new(f"ribbon #{key}", part)
+            for c in ob.users_collection:
+                c.objects.link(piece)
+            # (where the ribbon was, and - a moving molecule's ribbon of each moment shown only then - keyed as it was)
+            piece.parent = ob.parent
+            piece.matrix_parent_inverse = ob.matrix_parent_inverse.copy()
+            piece.matrix_basis = ob.matrix_basis.copy()
+            ad = ob.animation_data
+            if ad and ad.action:
+                piece.animation_data_create()
+                piece.animation_data.action = ad.action
+                if hasattr(ad, "action_slot") and ad.action_slot is not None:
+                    piece.animation_data.action_slot = ad.action_slot
+        bpy.data.objects.remove(ob)
+
+
 def studio(scene, camera, look, meshes, dark_background):
     """The world and panels of a look: a gradient world, and - for the looks that reflect - three soft rectangular panels, none seen by the camera."""
     panels, strength, low = STUDIO.get(look, MARBLE if look == "marble" else SOFT)
@@ -645,8 +699,10 @@ def apply(scene, camera, look, options, background):
     if look not in IDS:
         return False
     o = dict(options)
+    ribbons_by_colour(scene)
     meshes = [ob for ob in scene.objects if ob.type == "MESH"]
-    molecules = [ob for ob in meshes if shape_of(ob)[0] != "surface"]
+    # (a surface keeps its own material; so do the marks drawn on and among the molecules - the lines on balls, a measurement's)
+    molecules = [ob for ob in meshes if shape_of(ob)[0] not in ("surface", "line", "measure")]
     if not molecules:
         return True
     r = studio(scene, camera, look, molecules, background in ("black", "grey"))

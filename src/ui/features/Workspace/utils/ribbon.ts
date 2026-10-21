@@ -191,8 +191,9 @@ export function ribbonMesh(places: ArrayLike<number>, runs: readonly ChainRun[],
       for (let s = 0; s < SIDES; s++) {
         const a = first + j * SIDES + s;
         const b = first + j * SIDES + ((s + 1) % SIDES);
-        tri(a, a + SIDES, b);
-        tri(b, a + SIDES, b + SIDES);
+        // (anticlockwise seen from outside, as its normals face: glTF's and three's front - 3.7.2.1)
+        tri(a, b, a + SIDES);
+        tri(b, b + SIDES, a + SIDES);
       }
     }
     // (each end closed)

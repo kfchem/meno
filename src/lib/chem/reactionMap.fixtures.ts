@@ -388,6 +388,130 @@ export function chlorineShift(): { reactant: Molecule; product: Molecule; produc
 }
 
 /**
+ * CH4 + Cl -> CH3 + HCl, hydrogen abstraction, each side one structure: the
+ * chlorine stands in line with H2, along C-H2...Cl, and takes it; the
+ * methyl left flattens. The other hydrogens keep their places about the axis.
+ */
+export function methaneChlorine(): { reactant: Molecule; product: Molecule; productOrder: string[] } {
+  const c: V = [0, 0, 0];
+  const ref: V = [0, 0, 1];
+  const r: Record<string, [string, V]> = { C: ["C", c], H2: ["H", [1.09, 0, 0]], Cl: ["Cl", [3.5, 0, 0]] };
+  const p: Record<string, [string, V]> = { C: ["C", c], H2: ["H", [2.4, 0, 0]], Cl: ["Cl", [3.67, 0, 0]] };
+  [
+    ["H0", 10],
+    ["H1", 130],
+    ["H3", 250],
+  ].forEach(([name, t]) => {
+    r[name as string] = ["H", place(ref, [1, 0, 0], c, 1.09, 109.5, t as number)];
+    p[name as string] = ["H", place(ref, [1, 0, 0], c, 1.08, 90, t as number)];
+  });
+  const order = ["C", "H0", "H1", "H2", "H3", "Cl"];
+  const reactant = molecule(
+    r,
+    [
+      ["C", "H0", 1],
+      ["C", "H1", 1],
+      ["C", "H2", 1],
+      ["C", "H3", 1],
+    ],
+    order,
+  );
+  const productOrder = ["Cl", "H3", "C", "H2", "H0", "H1"];
+  const product = molecule(
+    p,
+    [
+      ["C", "H0", 1],
+      ["C", "H1", 1],
+      ["C", "H3", 1],
+      ["H2", "Cl", 1],
+    ],
+    productOrder,
+  );
+  return { reactant, product, productOrder };
+}
+
+/**
+ * Acetone -> its enol, as one step: a hydrogen of the methyl C1 moves to the
+ * oxygen, syn to the new C=C. `torsions` are the methyl hydrogens' torsions
+ * O=C2-C1-H, in degrees, for Hm0, Hm1 and Hm2; Hm0 is the one that moves.
+ */
+export function acetoneEnol(torsions: [number, number, number] = [0, 120, 240]): {
+  reactant: Molecule;
+  product: Molecule;
+  productOrder: string[];
+} {
+  const c2: V = [0, 0, 0];
+  const side = (r: number, sign: number): V => [sign * r * Math.sin((122 * Math.PI) / 180), r * Math.cos((122 * Math.PI) / 180), 0];
+  const o: V = [0, 1.21, 0];
+  const c1 = side(1.51, -1);
+  const c3 = side(1.51, 1);
+  const r: Record<string, [string, V]> = { C1: ["C", c1], C2: ["C", c2], C3: ["C", c3], O: ["O", o] };
+  torsions.forEach((t, i) => (r[`Hm${i}`] = ["H", place(o, c2, c1, 1.09, 110, t)]));
+  [60, 180, 300].forEach((t, i) => (r[`Hn${i}`] = ["H", place(o, c2, c3, 1.09, 110, t)]));
+  const ch3 = (m: string): [string, string, number][] => [0, 1, 2].map((i) => [m === "C1" ? `Hm${i}` : `Hn${i}`, m, 1]);
+  const reactant = molecule(r, [["C1", "C2", 1], ["C2", "C3", 1], ["C2", "O", 2], ...ch3("C1"), ...ch3("C3")]);
+  const op: V = [0, 1.36, 0];
+  const c1p = side(1.34, -1);
+  const p: Record<string, [string, V]> = { C1: ["C", c1p], C2: ["C", c2], C3: ["C", c3], O: ["O", op] };
+  // the hydrogen that moved: on the oxygen, syn to the double bond
+  p.Hm0 = ["H", place(c1p, c2, op, 0.97, 109, 0)];
+  p.Hm1 = ["H", place(op, c2, c1p, 1.08, 121, 0)];
+  p.Hm2 = ["H", place(op, c2, c1p, 1.08, 121, 180)];
+  [60, 180, 300].forEach((t, i) => (p[`Hn${i}`] = ["H", place(op, c2, c3, 1.09, 110, t)]));
+  const productOrder = ["Hn1", "O", "Hm2", "C3", "Hm0", "C2", "Hn0", "C1", "Hm1", "Hn2"];
+  const product = molecule(
+    p,
+    [
+      ["C1", "C2", 2],
+      ["C2", "C3", 1],
+      ["C2", "O", 1],
+      ["O", "Hm0", 1],
+      ["C1", "Hm1", 1],
+      ["C1", "Hm2", 1],
+      ...ch3("C3"),
+    ],
+    productOrder,
+  );
+  return { reactant, product, productOrder };
+}
+
+/**
+ * Cl- + CH3CH2Br -> CH3CH2Cl + Br-, each side one structure: a backside
+ * attack on the CH2, its methyl and two hydrogens folding over as an
+ * umbrella, each keeping its place about the Cl...C...Br axis.
+ */
+export function ethylSn2(): { reactant: Molecule; product: Molecule; productOrder: string[] } {
+  const c: V = [0, 0, 0];
+  const ref: V = [0, 0, 1];
+  const r: Record<string, [string, V]> = { C: ["C", c], Br: ["Br", [1.95, 0, 0]], Cl: ["Cl", [-3.3, 0, 0]] };
+  const p: Record<string, [string, V]> = { C: ["C", c], Br: ["Br", [3.4, 0, 0]], Cl: ["Cl", [-1.79, 0, 0]] };
+  // azimuths about the axis a little uneven, so that one assignment fits best
+  const around: [string, number, number][] = [
+    ["Cm", 1.53, 5],
+    ["Ha", 1.09, 128],
+    ["Hb", 1.09, 241],
+  ];
+  for (const [name, d, t] of around) {
+    r[name] = [name === "Cm" ? "C" : "H", place(ref, [1, 0, 0], c, d, 180 - 107.5, t)];
+    p[name] = [name === "Cm" ? "C" : "H", place(ref, [1, 0, 0], c, d, 180 - 71.5, t)];
+  }
+  for (const side of [r, p]) [60, 180, 300].forEach((t, i) => (side[`Hm${i}`] = ["H", place(side.Ha[1], c, side.Cm[1], 1.09, 110, t)]));
+  const bonds = (x: string): [string, string, number][] => [
+    ["C", x, 1],
+    ["C", "Cm", 1],
+    ["C", "Ha", 1],
+    ["C", "Hb", 1],
+    ["Cm", "Hm0", 1],
+    ["Cm", "Hm1", 1],
+    ["Cm", "Hm2", 1],
+  ];
+  const reactant = molecule(r, bonds("Br"), ["C", "Br", "Cl", "Cm", "Ha", "Hb", "Hm0", "Hm1", "Hm2"]);
+  const productOrder = ["Hb", "Br", "Hm2", "Cm", "Cl", "Ha", "C", "Hm0", "Hm1"];
+  const product = molecule(p, bonds("Cl"), productOrder);
+  return { reactant, product, productOrder };
+}
+
+/**
  * A structure with `n` waters beside it, each turned and placed its own way
  * (`seed` shifts them, so that the two sides' waters stand differently): one
  * structure, the waters unbonded to it or to one another.

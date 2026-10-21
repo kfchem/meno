@@ -53,6 +53,8 @@ export type Rendering = {
   total?: number;
   /** What its job said last. */
   line?: string;
+  /** What is worth saying of what it makes, as it was asked (renderScene's `note`). */
+  note?: string;
   /** Why it failed. */
   why?: string;
   job?: string;
@@ -67,9 +69,9 @@ type Renders = { list: Rendering[] };
 export const boxOf = (at: Rendering["at"]) => ({ x0: at.x - at.w / 2, x1: at.x + at.w / 2, y0: at.y - at.h / 2, y1: at.y + at.h / 2 });
 
 /** A render's frame with its words where they stand below it (frameWords), in the page's units: what is kept clear for it, and what the view eases to. */
-export function withWords(at: Rendering["at"]) {
+export function withWords(at: Rendering["at"], noted = false) {
   const b = boxOf(at);
-  const reach = wordsReach(at.w / PX, frameWords(at.w / PX, at.h / PX));
+  const reach = wordsReach(at.w / PX, frameWords(at.w / PX, at.h / PX, undefined, false, noted));
   return { x0: b.x0 - reach.side * PX, x1: b.x1 + reach.side * PX, y0: b.y0 - reach.below * PX, y1: b.y1 };
 }
 
@@ -215,11 +217,11 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   const st = store.getState();
   const there = pageBoxes(st, styleOf(st.docStyle));
   // (with its words, where they stand below it: clear of all as the frame is)
-  const reach = withWords({ x: 0, y: 0, w, h });
+  const reach = withWords({ x: 0, y: 0, w, h }, !!rendered.note);
   const place = freePlace(there, reach, { x: page.maxX + NOMINAL_BOND_LENGTH + reach.x1, y: (page.minY + page.maxY) / 2 }, NOMINAL_BOND_LENGTH);
   const at = { x: place.x, y: place.y, w, h };
   const around = { x0: page.minX, x1: page.maxX, y0: page.minY, y1: page.maxY };
-  renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, around, state: "preparing", started: Date.now() }] }));
+  renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, around, state: "preparing", started: Date.now(), ...(rendered.note ? { note: rendered.note } : {}) }] }));
 
   const settings = useAppSettings.getState();
   const { slots, cores } = runningOf(settings.calculations);

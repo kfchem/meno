@@ -78,6 +78,7 @@ export function FramesChip({
   results,
   unread,
   made,
+  conformers,
   said: fromText,
   area,
   title,
@@ -105,6 +106,8 @@ export function FramesChip({
   made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
   /** What the text it was read from says of it - its charge and multiplicity, its energies: said with the rest, opened. */
   said?: { label: string; text: string }[];
+  /** Its frames are a conformer set's (`Molecule3D.conformerSet`): shown as a set however many there are, one included. */
+  conformers?: boolean;
   /** What it keeps within: the canvas. */
   area?: Element;
   /**
@@ -184,8 +187,10 @@ export function FramesChip({
     watch.current.observe(el);
   }, []);
   // (a single geometry has nothing to go through: it says what the
-  // calculation was, and only while its molecule is pointed at)
-  const single = count < 2;
+  // calculation was, and only while its molecule is pointed at. A conformer
+  // set in which one conformer was found is a set all the same - its bar,
+  // its energy, its share - not a single geometry: the maintainer, 2026-10-21)
+  const single = count < 2 && !conformers;
   // in full: opened - a single geometry's, with nothing to go through, as it is pointed at
   const full = single ? open || hovered : expanded;
   const [lingering, setLingering] = useState(open);

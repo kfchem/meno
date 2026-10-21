@@ -17,12 +17,23 @@
 import { ELEMENTS } from "../chem/elements";
 import type { ReaderOutput } from "./output";
 import { floatsText, type Grid } from "./results";
+import { BOHR_ANGSTROM } from "../units";
 
-/** Ångströms in a bohr. */
-const ANGSTROM_PER_BOHR = 0.529177210903;
 /** What starts a cube file: two lines of comment, then four lines of a count and three numbers - the origin, and each axis. */
 export const CUBE_MARK =
-  /^[^\n]*\n[^\n]*\n\s*-?\d+(\s+[-+]?\d*\.?\d+([eE][-+]?\d+)?){3}(\s+\d+)?\s*\r?\n(\s*-?\d+(\s+[-+]?\d*\.?\d+([eE][-+]?\d+)?){3}\s*\r?\n){3}/;
+  /^[^\n]*\n[^\n]*\n\s*-?\d+(\s+[-+]?\d*\.?\d+([eEdD][-+]?\d+)?){3}(\s+\d+)?\s*\r?\n(\s*-?\d+(\s+[-+]?\d*\.?\d+([eEdD][-+]?\d+)?){3}\s*\r?\n){3}/;
+/**
+ * A number as a program writes it into a cube file: a sign, a point, an
+ * exponent - after an E, or a D as Fortran writes one; or, where the
+ * exponent takes three digits, after no letter at all ("0.10000-100" is
+ * 0.1 x 10^-100), as the Fortran standard's E and D editing writes it
+ * (ISO/IEC 1539-1, *E and D editing*: the exponent forms' table). A sign
+ * and three digits right after a number's digits are its exponent, never
+ * a number of their own: a value is written with a point.
+ */
+const NUMBER = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eEdD][-+]?\d+|[-+]\d{3}(?![\d.]))?/g;
+/** A number as `NUMBER` finds it, as JavaScript reads one. */
+const valueOf = (t: string) => Number(t.replace(/[dD]/, "e").replace(/(\d)([-+]\d{3})$/, "$1e$2"));
 /** A value above which, in both directions, a grid is two-signed: an orbital's two phases. */
 const SIGNED_LEAST = 1e-6;
 /** The value a surface is drawn at, at first: an orbital's, and a density's (atomic units). */
@@ -47,8 +58,10 @@ const SYMBOL = new Map(ELEMENTS.map((e) => [e.number, e.symbol]));
 /** An atom's element by its atomic number - a dummy, as an unknown one. */
 const symbolOf = (z: number) => SYMBOL.get(z) ?? "X";
 
+/** A whole word that is one number as `NUMBER` finds it. */
+const ONE_NUMBER = new RegExp(`^${NUMBER.source}$`);
 /** The numbers of a line of text. */
-const numbers = (line: string) => line.trim().split(/\s+/).map(Number);
+const numbers = (line: string) => line.trim().split(/\s+/).map((t) => (ONE_NUMBER.test(t) ? valueOf(t) : Number(t)));
 
 function header(text: string, name: string): Header {
   let at = 0;
@@ -66,7 +79,7 @@ function header(text: string, name: string): Header {
   const axisLines = [numbers(line()), numbers(line()), numbers(line())];
   if (axisLines.some((a) => a.length < 4 || a.slice(0, 4).some((v) => !Number.isFinite(v)) || !Number.isInteger(a[0]) || a[0] === 0)) throw bad();
   // (a positive count: bohr; a negative one: ångströms - the first axis's sign says for all)
-  const unit = axisLines[0][0] > 0 ? ANGSTROM_PER_BOHR : 1;
+  const unit = axisLines[0][0] > 0 ? BOHR_ANGSTROM : 1;
   const counts = axisLines.map((a) => Math.abs(a[0])) as [number, number, number];
   const axes = axisLines.map((a) => [a[1] * unit, a[2] * unit, a[3] * unit]) as Header["axes"];
   const origin = [first[1] * unit, first[2] * unit, first[3] * unit] as [number, number, number];
@@ -146,14 +159,17 @@ export function cubeGrid(name: string, text: string, key: string): Grid {
   if (!Number.isInteger(k) || k < 0 || k >= h.grids.length) throw new Error(`${name} has no ${key}.`);
   const points = h.counts[0] * h.counts[1] * h.counts[2];
   const every = h.grids.length;
+  // (each number at least a character and a space: a header that promises more than the rest of the file could
+  // hold is refused before room is made for them - a few bytes may otherwise ask for gigabytes)
+  if (!Number.isSafeInteger(points * every) || points * every > (text.length - h.start + 1) / 2) throw new Error(`${name} ends before its grid does.`);
   const values = new Float32Array(points);
   // (every number after the header, in turn: this grid's each `every`-th)
-  const re = /[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g;
+  const re = new RegExp(NUMBER);
   re.lastIndex = h.start;
   let seen = 0;
   let got = 0;
   for (let m = re.exec(text); m && got < points; m = re.exec(text)) {
-    if (seen++ % every === k) values[got++] = Number(m[0]);
+    if (seen++ % every === k) values[got++] = valueOf(m[0]);
   }
   if (got < points) throw new Error(`${name} ends before its grid does.`);
   let low = 0;

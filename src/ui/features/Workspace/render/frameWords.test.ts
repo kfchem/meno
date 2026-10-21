@@ -74,6 +74,17 @@ describe("a render's frame and its words", () => {
     for (const [w, h] of SIZES) expect(frameWords(w, h).place).toBe(frameWords(w, h, SAYINGS).place);
   });
 
+  it("keeps room inside for a note under its words where a render has one, or puts its words below", () => {
+    for (const [w, h] of SIZES) {
+      const noted = frameWords(w, h, undefined, false, true);
+      if (noted.place === "inside") expect(2 * 12 + 2 * lineOf(noted.px) + 3 + 8 + 16 + 8 + 16 + 8).toBeLessThanOrEqual(h);
+    }
+    // (a frame just tall enough for its words alone: with a note, they go below it)
+    const h = 2 * 12 + 2 * lineOf(13) + 3 + 8 + 16 + 8 + 2;
+    expect(frameWords(400, h).place).toBe("inside");
+    expect(frameWords(400, h, undefined, false, true).place).toBe("below");
+  });
+
   it("sets why a render failed inside a frame that holds it in two lines, else below it, wrapped, up to the box's widest", () => {
     const short = "Blender stopped";
     expect(frameWords(400, 200, [short], true).place).toBe("inside");

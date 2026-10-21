@@ -18,6 +18,8 @@ export const SIDE = 32;
 /** Above and below the words inside, and what stands under them: the bar (3 px) and the job's last line (16 px), each after a gap of 8. */
 const PAD_Y = 12;
 const UNDER = 3 + 8 + 16 + 8;
+/** A note under them besides, where a render has one (renderScene's `note`): a line of 16 px after a gap of 8. */
+const NOTE_UNDER = 16 + 8;
 /** Below a frame: the gap to it, the stop button beside the words (24 px and a gap of 4), the box's padding (8 px left), and its widest. */
 const BELOW_GAP = 6;
 const BESIDE = 24 + 4 + 8;
@@ -75,14 +77,15 @@ export type FrameWords = { place: "inside"; px: number } | { place: "below"; px:
  * less, to 10, as holds all of `says` in two lines between its margins with
  * what stands under them; else below it, at 13 px, in a box as wide as two
  * lines of the longest need - never one word a line, never under the
- * button - up to `BELOW_MOST`. A running render's `says` are all it may
+ * button - up to `BELOW_MOST`; `noted`, with room for a note under them
+ * inside (a below box's note is its title). A running render's `says` are all it may
  * say (`SAYINGS`), so where its words go is set as it begins and kept; a
  * failed one's is why it failed, shown below where it is long.
  */
-export function frameWords(w: number, h: number, says: readonly string[] = SAYINGS, failed = false): FrameWords {
+export function frameWords(w: number, h: number, says: readonly string[] = SAYINGS, failed = false, noted = false): FrameWords {
   const room = w - 2 * SIDE;
   for (let px = WORDS_PX; px >= WORDS_LEAST_PX; px--) {
-    const tall = 2 * PAD_Y + 2 * lineOf(px) + (failed ? 0 : UNDER) + 2;
+    const tall = 2 * PAD_Y + 2 * lineOf(px) + (failed ? 0 : UNDER + (noted ? NOTE_UNDER : 0)) + 2;
     if (room > 0 && tall <= h && says.every((s) => inTwo(s, room, px))) return { place: "inside", px };
   }
   const need = Math.max(...says.map((s) => twoLineRoom(s, WORDS_PX)));

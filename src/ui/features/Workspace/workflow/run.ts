@@ -7,17 +7,17 @@
  */
 import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
-import type { CalcInfo } from "../../../../lib/calc/output";
+import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, inside, setEntries, frameXyz, framesOf, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, LARGE_SET, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -94,32 +94,33 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
 
 /**
  * What the energies of molecules in 3D are, where a calculation worked them
- * out: its program and method, as the first that says says them -
- * "RDKit · ETKDG v3, MMFF94", "xtb · GFN2-xTB". None, where none says.
+ * out: its program and level (lib/calc `levelOf`), as the first that says them -
+ * "RDKit · ETKDG v3, MMFF94", "xtb · GFN2-xTB · gas phase". None, where none says.
  */
 export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energies">[]): string | undefined {
   const c = molecules.find((m) => m.energies?.length && (m.calc?.program || m.calc?.method))?.calc;
   if (!c) return undefined;
-  return [c.program, [c.method, c.basis].filter(Boolean).join("/")].filter(Boolean).join(" \u00b7 ");
+  return [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ");
 }
 
-/** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make. */
-export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind };
+/** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
+export type RunResults = NonNullable<StepRunKept["results"]>;
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
   if (!set?.made?.holds || set.made.holds === "pictures") return undefined;
-  const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
-  const held = (b: WorkflowSet | undefined) =>
-    b
-      ? setMembers(doc, b).molecules.map((id) => {
-          const { id: _id, at: _at, ...m } = byId.get(id)!;
-          return m;
-        })
-      : [];
+  // (each exit's set: its collection, where it holds one, else its molecules on the page)
+  const held = (b: WorkflowSet | undefined) => (b ? (b.collection ?? setMolecules(doc, b).map(({ id: _id, at: _at, ...m }) => m)) : []);
   const second = exitsOf(step.kind)[1];
-  return { molecules: held(set), rest: second ? held(resultOf(doc, step.id, second.id)) : [], holds: set.made.holds };
+  const restSet = second ? resultOf(doc, step.id, second.id) : undefined;
+  return {
+    molecules: held(set),
+    rest: held(restSet),
+    holds: set.made.holds,
+    ...(set.unread ? { unread: set.unread } : {}),
+    ...(restSet?.unread ? { restUnread: restSet.unread } : {}),
+  };
 }
 
 /**
@@ -169,6 +170,9 @@ export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({
 export const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
+/** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
+export const SUMMARY_W = 320 * PX;
+export const SUMMARY_H = SET_TOP + 120 * PX;
 
 /**
  * What a step gave as an entry, where a program worked it out: besides its
@@ -276,18 +280,19 @@ export function placeResults(
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
-  const { molecules: made, rest, holds } = results;
+  const { molecules: made, rest, holds, unread, restUnread } = results;
   const exits = exitsOf(step.kind);
-  doc = fillExit(doc, step, exits[0].id, made, holds, w, turns);
+  doc = fillExit(doc, step, exits[0].id, made, holds, unread, w, turns);
   // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
-  if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, w);
+  if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
   return doc;
 }
 
 /**
  * `doc` with an exit's set holding `made`: the set that exit made - emptied
  * of what it held - or one made now, sized to what it holds and laid out as
- * a run lays its results.
+ * a run lays its results; more than are laid out on the page, held in the
+ * set itself. With how many did not read from a file (`unread`), where any.
  */
 function fillExit(
   doc: WorkspaceDocument,
@@ -295,6 +300,7 @@ function fillExit(
   exit: string,
   made: readonly Omit<Molecule3D, "id" | "at">[],
   holds: SetKind,
+  unread: number | undefined,
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
@@ -304,7 +310,14 @@ function fillExit(
   // (an exit that gave nothing keeps its frame as it stands, saying so)
   if (!made.length) {
     const where = setForExit(doc, step, exit);
-    return holdMembers(markMade(where.doc, where.id, madeBy), where.id, []);
+    return holdMembers(markMade(where.doc, where.id, madeBy), where.id, [], unread);
+  }
+  // (more than are laid out on the page: held in the set, its frame summing them up - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
+  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET) {
+    const frame = was ? frameAt(was.x0, was.y1, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    if (was) return holdCollection(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, [...made], unread);
+    const id = doc.nextWorkflowId ?? 1;
+    return holdCollection(markMade(addSet(doc, frame, madeBy), id, madeBy), id, [...made], unread);
   }
   const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
   const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
@@ -313,9 +326,9 @@ function fillExit(
   doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
   // (the set holds what the step made, in the step's order)
   const members = (doc.molecules3d ?? []).filter((m) => !there.has(m.id)).map((m) => ({ molecule: m.id }));
-  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, members);
+  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, members, unread);
   const id = doc.nextWorkflowId ?? 1;
-  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy), id, members);
+  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy), id, members, unread);
 }
 
 /**

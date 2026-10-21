@@ -32,14 +32,14 @@ export const GAS_CONSTANT_HARTREE = BOLTZMANN_J / HARTREE_J;
 export const ROOM_TEMPERATURE = 298.15;
 
 /** What a unit measures. A number converts only to a unit of its own dimension. */
-export type Dimension = "energy" | "temperature" | "length";
+export type Dimension = "energy" | "temperature" | "length" | "angle";
 
 /**
  * The units Meno knows. Energies per molecule (Eh, eV, cm⁻¹) and per mole
  * (kcal/mol, kJ/mol) are one dimension, as chemists use them: a mole's
  * worth of a molecule's energy.
  */
-export type Unit = "Eh" | "kcal/mol" | "kJ/mol" | "eV" | "cm-1" | "K" | "°C" | "Å" | "bohr" | "nm" | "pm";
+export type Unit = "Eh" | "kcal/mol" | "kJ/mol" | "eV" | "cm-1" | "K" | "°C" | "Å" | "bohr" | "nm" | "pm" | "°";
 
 type UnitInfo = {
   dimension: Dimension;
@@ -63,6 +63,7 @@ export const UNITS: Readonly<Record<Unit, UnitInfo>> = {
   bohr: { dimension: "length", scale: BOHR_ANGSTROM, label: "bohr" },
   nm: { dimension: "length", scale: 10, label: "nm" },
   pm: { dimension: "length", scale: 0.01, label: "pm" },
+  "°": { dimension: "angle", scale: 1, label: "°" },
 };
 
 /** Whether a text names one of Meno's units. */
