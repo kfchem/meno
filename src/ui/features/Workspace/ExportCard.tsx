@@ -123,17 +123,20 @@ export default function ExportCard({
           </button>
         ))}
       </div>
-      {shown.length > 0 && (
-        <motion.div key={`${writer.id}:${given.join(",")}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
-          <OptionsForm options={shown} values={values} onChange={(v) => setChosen((c) => ({ ...c, [writer.id]: v }))} />
-        </motion.div>
-      )}
+      {/* (said first, above the options: in view however many there are) */}
       {lacking > 0 && (
         <p role="note" className={`mb-3 text-xs ${refused ? "text-red-700" : "text-gh-gray"}`}>
           {refused
             ? skeletonWhy(lacking)
-            : `${lacking === 1 ? "A molecule written has" : `${lacking.toLocaleString("en")} molecules written have`} no hydrogens: written ${writer.id === "sdf" ? "as skeletons, so that no reader adds any" : "as they are"}.`}
+            : lacking === 1
+              ? `A molecule written has no hydrogens: it is written ${writer.id === "sdf" ? "as a skeleton, so that no reader adds any" : "as it is"}.`
+              : `${lacking.toLocaleString("en")} molecules written have no hydrogens: they are written ${writer.id === "sdf" ? "as skeletons, so that no reader adds any" : "as they are"}.`}
         </p>
+      )}
+      {shown.length > 0 && !refused && (
+        <motion.div key={`${writer.id}:${given.join(",")}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
+          <OptionsForm options={shown} values={values} onChange={(v) => setChosen((c) => ({ ...c, [writer.id]: v }))} />
+        </motion.div>
       )}
       {/* (kept in view at the card's foot, however many options there are above) */}
       <div className="sticky -bottom-3 -mx-3 -mb-3 flex justify-end gap-2 bg-white/95 px-3 pb-3 pt-2">
