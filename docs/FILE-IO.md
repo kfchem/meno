@@ -645,7 +645,8 @@ work.meno (zip)
 - **A calculation's output opened is kept in the workspace** (the
   maintainer: kept, and seen as needed). Saved, the workspace keeps every
   output its molecules were read from that is held this session - opened,
-  or kept in a workspace opened. Opened, a workspace holds what it keeps
+  or kept in a workspace opened - or can be read again, unchanged, where
+  it was. Opened, a workspace holds what it keeps
   for the session. A molecule's menu shows its output in the workspace's
   column of texts (*Show <name>*); where it is held nowhere, it is read
   again where it was, or else the system's dialog asks for it
@@ -704,11 +705,48 @@ work.meno (zip)
   says of a part's size is not trusted to set room aside by - a few bytes
   may say a gigabyte: each part is inflated a little at a time, stopped as
   soon as it comes to more than it says, and taken only if it comes to
-  just that (`lib/binary/zip.ts`). A workspace that does not is said to be
-  damaged; a file kept that does not is not had. And each file kept - an
+  just that, and is what the CRC-32 the zip's central directory gives for
+  it says (`lib/binary/zip.ts`) - so that a byte changed on the disk after
+  the file was written, `"x":1` read as `"x":9`, is not taken for data.
+  Office's clip format is read the same way. And each file kept - an
   output, a text, a PDF or a picture alike - is taken only if its bytes
   are what its SHA-256 says, so that no file can pass for another held
   this session.
+- **A part it cannot open without, damaged, is said to be.** Its
+  workspace (`workspace.json`), what it says it holds (`meno.json`) or
+  what it is (`mimetype`) damaged, the file is not opened, and the part is
+  named: "Its workspace is damaged, and cannot be read.", "It is a Meno
+  file damaged where it says what it holds, and cannot be read." A style
+  file whose styles are damaged likewise: "It is a style file whose styles
+  are damaged, and cannot be read." (`DamagedMenoFile`, the part named,
+  so that it can be told from a file that is no Meno file at all.)
+- **A file kept, damaged, is that file alone.** The workspace opens with
+  the rest; the one damaged - or not in the file at all - is named as it
+  opens: a text or a picture in the canvas's alert ("figure.png could not
+  be read from the workspace."), a PDF in a notice ("A PDF could not be
+  opened"), an output on its molecule when it is asked for. A text that
+  cannot be read is left out, having no words to show; a picture or a PDF
+  stays where it lay, crossed from corner to corner (`lib/doc/notHad`),
+  until it is had again - the same image or PDF put down afresh, or
+  opened in another workspace's file - or is taken away: never healed
+  unseen, never let drop unsaid.
+- **A list of the files kept that is damaged, gone or not a list is not
+  believed.** The files are had without it, each by its SHA-256 and named
+  as the workspace's JSON names it - its molecules' outputs, its texts,
+  its PDFs and its pictures (`keptNamedIn`) - so that none is dropped by
+  the next save; a notice says so ("Part of a workspace is damaged": its
+  list of the files it keeps is damaged, and its files were opened without
+  it). A file the list leaves out is had the same way. A broken list alone
+  never keeps a workspace from opening.
+- **Save names what it could not keep.** A file the workspace has that
+  cannot be had - damaged in the file it came in, held nowhere, an output
+  neither held nor where it was - does not keep the workspace from being
+  saved, which would put new work at risk: it is saved without it, and
+  Save says so, where its failures are said, until dismissed: "Saved, but
+  figure.png is not in the file: it could not be read." Its place in the
+  workspace's JSON is kept - by what it is known by, which the file then
+  does not hold, nor list - so that, opened again, it is named again,
+  never taken for a file that is there.
 - **Saved within the same limits.** A workspace that would come to more
   than a workspace file is read with is not written: Save says so, with
   the sizes, rather than leave a file that would not open again.
