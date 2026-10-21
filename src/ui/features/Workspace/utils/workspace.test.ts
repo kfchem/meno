@@ -351,19 +351,25 @@ describe("a workspace with what is no entry in its lists", () => {
     expect([ws.texts, ws.pdfs, ws.pdfs[0].placed, ws.pdfs[0].inks].map((l) => l?.length)).toEqual([1, 1, 1, 1]);
   });
 
-  it("reads round it in any list of entries, first or last: it is left out, and what reads is read as before", () => {
+  it("reads round it in any list of entries, first or last: it is left out, and what reads is read as before - a set's or a run's molecules counted, those it set aside too", () => {
     const whole = readWorkspace(JSON.stringify(WHOLE));
     const entries = lists.filter((p) => (valueAt(p) as unknown[]).every(isEntry));
     expect(entries.length).toBeGreaterThan(30);
     for (const path of entries) {
       const key = path[path.length - 1];
-      // (as an atom or a bond that does not read: the workspace, or the molecule it is of, does not)
+      // (a list of molecules a step gave, kept in a set or with a run: one that does not read there is counted - WorkflowSet.unread)
+      const of = path.findIndex((k, i) => k === "collection" || ((k === "molecules" || k === "rest") && path[i - 1] === "results"));
+      // (counted where the file counts them: a run's set-aside molecules as `restUnread`)
+      const counter = path[of] === "rest" ? "restUnread" : "unread";
+      // (as an atom or a bond that does not read: the workspace, or the molecule it is of, does not - one a step gave read as one that is no molecule)
       const expected =
         key !== "atoms" && key !== "bonds"
           ? whole
           : path.length === 1
             ? null
-            : readWorkspace(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
+            : of >= 0
+              ? readWorkspace(edited(path.slice(0, -1), (holder, k) => ((holder as unknown as unknown[])[k as number] = null)))
+              : readWorkspace(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
       for (const stray of STRAYS)
         for (const first of [true, false]) {
           const text = edited(path, (holder, k) => {
@@ -371,7 +377,14 @@ describe("a workspace with what is no entry in its lists", () => {
             if (first) list.unshift(stray);
             else list.push(stray);
           });
-          expect(readWorkspace(text), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+          const read = readWorkspace(text);
+          // (one there left out, and counted)
+          if (of >= 0 && path.length === of + 1) {
+            const holder = ["workflow", ...path.slice(0, of)].reduce((o: unknown, k) => (o as Node)[k], read) as unknown as Record<string, number | undefined>;
+            expect(holder[counter], `${path.join(".")} holding ${JSON.stringify(stray)}`).toBe(1);
+            delete holder[counter];
+          }
+          expect(read, `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
           expect(workspaceProblem(text)).toBe(expected ? null : "it is not a workspace Meno reads");
         }
     }

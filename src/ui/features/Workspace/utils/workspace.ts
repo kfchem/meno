@@ -16,7 +16,7 @@ import { fillsAmong } from "./rings";
 import { styleOf, type StyleChoice } from "../../../../lib/chem/style";
 import { POINT, pointFor } from "../../../../lib/pdf/layout";
 import { acceptWorkspace3d, type Workspace3D } from "../../../../lib/chem/workspaceStyle3d";
-import type { Carried3D, Drawn, EditorState, LostText, Member, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
+import type { Carried3D, Drawn, EditorState, LostText, Member, Molecule3D, PdfItem, PictureItem, TextOf, WorkspaceText } from "../store/types";
 import { collectionHash, setMembers } from "../workflow/entries";
 import { pdfBytes } from "../../../../lib/pdf/reader";
 import { readPdfs } from "./pdfItems";
@@ -108,8 +108,10 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   const moleculeAt = new Map(state.molecules3d.map((m, i) => [m.id, i]));
   const pictureAt = new Map((state.pictures ?? []).map((p, i) => [p.id, i]));
   // (each set's members by what a file can say them by: a structure by its atoms' ids, kept; a molecule or a picture by its place in its list)
-  const savedSets = (state.sets ?? []).map(({ members, ...b }) => {
-    if (b.keep === false && b.made) return { ...b, notKept: { count: members?.length ?? 0, hash: collectionHash(page, { ...b, members }) } };
+  const savedSets = (state.sets ?? []).map(({ members, collection, ...b }) => {
+    if (b.keep === false && b.made) return { ...b, notKept: { count: collection?.length ?? members?.length ?? 0, hash: collectionHash(page, { ...b, members, collection }) } };
+    // (a large result set's collection: written as its molecules are, in the step's order)
+    if (collection) return { ...b, members: [], collection: collection.map((m) => outputKept(m, kept)) };
     const saved = (members ?? []).flatMap((m): Member[] => {
       if ("structure" in m) return [m];
       if ("molecule" in m) return moleculeAt.has(m.molecule) ? [{ molecule: moleculeAt.get(m.molecule)! }] : [];
@@ -117,11 +119,7 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
     });
     return members ? { ...b, members: saved } : b;
   });
-  const molecules3d = carriedOf(state).map((m) => {
-    if (!m.calc?.source?.path || !kept.has(m.calc.source.sha256)) return m;
-    const { path: _, ...source } = m.calc.source;
-    return { ...m, calc: { ...m.calc, source } };
-  });
+  const molecules3d = carriedOf(state).map((m) => outputKept(m, kept));
   const pdfShown = state.textsOpen && state.pdfShown != null ? (state.pdfs?.findIndex((p) => p.id === state.pdfShown) ?? -1) : -1;
   // (a text that could not be read among them, after them: shown as it was, by its place in the column)
   const column = [...(state.texts ?? []), ...(state.textsLost ?? [])];
@@ -178,6 +176,13 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   );
 }
 
+/** A molecule as a file says it: the output it was read from, where the file keeps it, not said to be anywhere else. */
+function outputKept<M extends Pick<Molecule3D, "calc">>(m: M, kept: ReadonlySet<string>): M {
+  if (!m.calc?.source?.path || !kept.has(m.calc.source.sha256)) return m;
+  const { path: _, ...source } = m.calc.source;
+  return { ...m, calc: { ...m.calc, source } };
+}
+
 /**
  * A workspace's file as Save writes it: its bytes, and the files it has
  * that could not be had to keep - each by its name; and whether the file it
@@ -203,7 +208,9 @@ export type SavedFile = { bytes: Uint8Array; notKept: string[]; lastHolds: boole
  */
 export async function workspaceFile(state: Saved & { savedPath?: string | null }): Promise<SavedFile> {
   // (the outputs they were read from, and the wavefunctions kept with them)
-  const sources = state.molecules3d.flatMap((m): CalcSource[] => [m.calc?.source, m.calc?.wavefunction].filter((s): s is CalcSource => !!s));
+  // (a large result set's molecules too: they are on no page - WorkflowSet.collection)
+  const molecules = [...state.molecules3d, ...(state.sets ?? []).flatMap((b) => (b.keep === false ? [] : (b.collection ?? [])))];
+  const sources = molecules.flatMap((m): CalcSource[] => [m.calc?.source, m.calc?.wavefunction].filter((s): s is CalcSource => !!s));
   const outputs = await outputsToKeep(sources);
   const texts = await textsToKeep(state.texts ?? []);
   const pdfs = await pdfsToKeep(state.pdfs ?? []);

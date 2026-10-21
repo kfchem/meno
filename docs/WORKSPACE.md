@@ -1128,11 +1128,11 @@ size in structure files, the shown size in pictures, undo.
 How finely the canvas is drawn: Settings, General, *Drawing resolution*
 (the maintainer, 2026-10-17, from a comparison of the choices on 100 % and
 150 % screens).
-- **2×** (the default, as before there was a choice): twice as many pixels
-  each way as the canvas's size on the page, whatever the screen. The
-  sharpest; on a screen that shows things once (100 %) the graphics card
-  draws four times the screen's pixels.
-- **Matching the screen**: as finely as the screen itself shows things -
+- **2×**: twice as many pixels each way as the canvas's size on the page,
+  whatever the screen. The sharpest; on a screen that shows things once
+  (100 %) the graphics card draws four times the screen's pixels.
+- **Matching the screen** (the default since 2026-10-21, the maintainer; a
+  choice saved before is kept, whichever it is): as finely as the screen itself shows things -
   once at 100 %, 1.25 at 125 %, 1.5 at 150 %, twice on a Retina screen -
   never finer than twice. Nothing is scaled between the canvas and the
   screen, so thin lines do not shimmer as the view moves; followed as the
@@ -1576,8 +1576,11 @@ as R and S are, cannot be told from its neighbours'.
   high on the screen is not drawn, so that, zooming out, the hydrogens'
   go first. Numbers come and go eased (0.08 s), each on its own.
 - **Pictures.** A picture of the molecule, or an export, shows the numbers
-  it shows, drawn as the canvas draws them (render3d), with the 6 pixels
-  counted in the picture's own pixels.
+  it shows, drawn as the canvas draws them (render3d) - on its balls, or in
+  Sticks where the sticks meet - with the 6 pixels counted in the picture's
+  own pixels: a picture is drawn at its size in print, so 6 of the canvas's
+  pixels would there be some 1.6 mm, and would leave out nearly every
+  number (2026-10-21).
 - **In 2D.** A drawing shows atom-map numbers, small beside each atom,
   where its reaction arrow's map is shown (*Show atom map* on the arrow's
   menu; lib/chem/layout2d `atomNotes`). The 3D menu's words follow it:

@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { Member, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { Member, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -56,6 +56,13 @@ function readSet(v: unknown): WorkflowSet | null {
       const members = membersIn(b.members);
       return members ? { members } : {};
     })(),
+    // (a large result set's collection, each molecule read as the page's are - those that do not read counted, with those its file already said had not)
+    ...(() => {
+      if (!Array.isArray(b.collection) || !made) return {};
+      const collection = b.collection.flatMap((m) => carriedMolecule(m));
+      const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
+      return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
+    })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
     ...(() => {
@@ -96,29 +103,37 @@ function readRan(v: unknown): StepRan | undefined {
   };
 }
 
+/** A molecule in 3D a set or a run keeps, read as the page's are; none where it does not read. */
+function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
+  const read = readCarried3D({ ...(m as object), at: { x: 0, y: 0 } });
+  if (!read) return [];
+  const { at: _at, turn: _turn, frame: _frame, list: _list, shown: _shown, ...molecule } = read;
+  return [molecule];
+}
+
 /** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
-  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; rest?: unknown; holds?: unknown } } | null;
+  const r = v as { kind?: unknown; options?: unknown; results?: { molecules?: unknown; rest?: unknown; holds?: unknown; unread?: unknown; restUnread?: unknown } } | null;
   if (!ran || !KINDS.some((k) => k.kind === r?.kind)) return null;
   const options = optionsIn(r?.options);
   const res = r?.results;
-  const read = (list: unknown) =>
-    Array.isArray(list)
-      ? list.flatMap((m) => {
-          const got = readCarried3D({ ...(m as object), at: { x: 0, y: 0 } });
-          if (!got) return [];
-          const { at: _at, turn: _turn, frame: _frame, list: _list, ...molecule } = got;
-          return [molecule];
-        })
-      : [];
-  const molecules = read(res?.molecules);
+  // (each exit's molecules read as the page's are - those that do not read counted, with those its file already said had not: never left out unsaid)
+  const read = (list: unknown, was: unknown) => {
+    const given: unknown[] = Array.isArray(list) ? list : [];
+    const molecules = given.flatMap(carriedMolecule);
+    return { molecules, unread: given.length - molecules.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
+  };
+  const { molecules, unread } = read(res?.molecules, res?.unread);
+  const rest = read(res?.rest, res?.restUnread);
   const holds = SETS.includes(res?.holds as SetKind) ? (res!.holds as SetKind) : undefined;
   return {
     ...ran,
     kind: r!.kind as StepKind,
     ...(Object.keys(options).length ? { options } : {}),
-    ...(holds && molecules.length ? { results: { molecules, rest: read(res!.rest), holds } } : {}),
+    ...(holds && (molecules.length || unread || rest.molecules.length || rest.unread)
+      ? { results: { molecules, rest: rest.molecules, holds, ...(unread ? { unread } : {}), ...(rest.unread ? { restUnread: rest.unread } : {}) } }
+      : {}),
   };
 }
 

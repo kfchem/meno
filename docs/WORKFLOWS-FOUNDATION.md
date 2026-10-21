@@ -219,6 +219,10 @@ Entry
   species     charge and multiplicity, and where each came from: the
               chemist, a calculation it was read from, or its atoms
   properties  name -> Property, an open map
+  stereo      which stereoisomer it is, from its own geometry: its
+              elements that could be stereogenic, and a key two entries
+              share exactly when they are one - or not perceived, and why
+              (PLUGINS.md, *Configurations*)
   status      done, failed or set aside, with the reason
 ```
 
@@ -587,7 +591,8 @@ of highest weight stands for it, carrying the results.
 | **Energy diagram** | molecules with an energy, and what each connects | a chart |
 | **Chart** | a table | a chart: one column against another |
 
-That is 31 nodes, each doing one thing.
+That is 31 nodes, each doing one thing, and *Enumerate* (below) makes
+32.
 
 **What happens to today's five**
 - ***Energy window*** becomes *Relative* (to the lowest in its group) then
@@ -605,6 +610,279 @@ when a workspace is read. The reader does this already
   where the names still mean the same.
 
 The PR says so (decision: no shims before 1.0).
+
+### Enumerate: structures made from a drawing, by rule
+
+Agreed 2026-10-21. Specified here before it is built (*In order: the PRs*,
+*Enumerate*).
+
+**Enumerate is Meno's own.** It edits Meno's own graph by a rule written
+here, and runs no program. *Generate* stays a kind that plugins fill
+(*Kinds filled by plugins*). The two are told apart by what decides the
+structures:
+
+| | **Enumerate** (Meno's) | **Generate** (a plugin's) |
+|---|---|---|
+| What decides the structures | the drawing and the chemist's lists, by the rule below | a program or a model |
+| The same input again | the same structures, in the same order, numbered the same, on any computer | what the plugin says of itself: a seed recorded where it takes one |
+| How many | known before it runs: the product of the lists' lengths | the program's |
+| What is left out | every combination is numbered; any not made goes to *aside*, with its reason | what the plugin reports; core judges only what it can (identity, through *Duplicates*) |
+| Coordinates | 2D, drawn from the drawing | structure only, or with coordinates, as the plugin gives them |
+
+**What it takes and gives.**
+- *template*: one structure drawn (molecules, 2D as drawn), with R groups
+  numbered (R1, R2, and so on).
+- *made*: molecules, 2D as drawn, one entry for each combination of the
+  lists, in order.
+- *aside*: the combinations that were not made, each with its number and
+  its reason, counted (*Aside · 2*).
+
+A 3D structure is never made here. It comes from a step after it, such as
+*Conformers*, as everywhere else (*never implicit*: molecules to 3D).
+
+**Three ways**, each one PR:
+1. **R groups**: each R1, R2 and so on in the drawing, given a list of
+   groups. Specified in full below.
+2. **Substituent swap**: atoms marked on a drawing, with a list of groups,
+   each put in place of a hydrogen there. Outlined below.
+3. **Scaffold swap**: a marked part of a drawing replaced by another with
+   the same number of bonds out. Outlined below.
+
+#### R groups
+
+**The lists.** Each R number in the drawing has a list of options, one to
+a line, typed on the step:
+
+```
+R1:  Me
+     Cl
+R2:  OMe
+     *C(=O)N(C)C
+```
+
+Each line is read in one of three ways:
+- **as a label typed on the canvas is read**: one reader, one definition.
+  Smart labels give the label its case (`otbs` is `OTBS`). The dictionary,
+  its label grammar and the chemist's own abbreviations then give its
+  structure (`abbreviationStructure`);
+- **an element's symbol** is that atom: `Cl`, `F`, `H`;
+- **a line with a `*` is SMILES**, read as a chemist's own abbreviation is
+  (`structureProblem`): exactly one `*`, bonded by one single bond to the
+  atom the group is attached by.
+
+A line without a `*` is never read as SMILES, so `CO` is a label, and its
+reading is shown. Beside each line the step shows what it was read as: the
+group's formula, in words. A chemist sees before running what every option
+became.
+
+**What stops the step before it runs.** The step does not start, and says
+why, naming the line or the atom:
+- a line that reads in none of these ways, named, with what was
+  tried. It is never skipped;
+- a group attached by more than one atom (a chelating ligand), a complex,
+  or a whole molecule (`THF`);
+- an R number in the drawing with no list, or a list for an R number not
+  in the drawing;
+- an R atom bonded by anything but one single bond (none, two, or a double
+  bond);
+- an R atom with more than one number (R¹,²), or an R with no number;
+- a wedge or hash whose narrow end is at an R atom. It would say nothing
+  about the group put there;
+- more than one structure in *template*;
+- **more than 10,000 combinations**, said with the count: *5 lists of 50
+  make 312,500,000 combinations; Enumerate makes at most 10,000*. Every
+  product is drawn, read back against its structure, and kept in the
+  workspace file. At the speed measured for laying out many structures at
+  once (#507: 1,000 in 9 to 15 s across eight workers), 10,000 take
+  minutes and more take hours. A set past that is more than can be looked
+  over, and is a sign the lists should be cut or the work done in steps.
+
+The R groups' definitions a CTfile can carry are not read (CTFILE.md).
+Only the step's lists say what an R group may be.
+
+**The rule.**
+- **One choice per R number.** Every atom drawn R1 takes the same option in
+  one product. Groups chosen independently are drawn with different
+  numbers.
+- **The order is fixed.** The combinations are taken in order, R1 outermost:
+  with R1 = {Me, Cl} and R2 = {OMe, OEt, F}, the first is (Me, OMe), the
+  second (Me, OEt), the fourth (Cl, OMe).
+- **A combination's number is its place in that order, from 1.** It keeps
+  that number whether it is made or set aside, so *made* may hold 1, 2, 4.
+  The number is a property of the entry (`number`, unit none).
+- **The join is the canvas's.** Each R atom is replaced as an abbreviation
+  drawn out on the canvas is (*Expand abbreviation*): one function, used
+  by both. P3 moves the part that places the group out of the workspace's
+  store, so the canvas and Enumerate share it:
+  - the group's attach atom takes the R atom's place and its bond;
+  - the group's other atoms are laid out from it, clear of the drawing.
+- **The template's atoms keep their numbers.** Each R atom's number goes to
+  its group's attach atom. Each group's other atoms follow the template's
+  atoms, R1's first, then R2's, each group's in its own order. Where one R
+  number is on several atoms, their groups' atoms come in the order of
+  those R atoms' own numbers in the template, the lowest first. So a core
+  atom has the same number in every product.
+- **The bonds are as drawn.** No template atom's bonds change, except that
+  the bond to R now goes to the group's attach atom. A group's atoms are as
+  its definition has them.
+- **Configurations stay as drawn.** Every wedge and hash, and every double
+  bond's side, stays where it is drawn, so the arrangement in space is
+  kept. Its descriptor can change with the group: the same arrangement may
+  be R with one group and S with another. What is kept is the arrangement,
+  as the drawing shows it.
+- **`H`** puts a hydrogen atom in the R atom's place, so its number and a
+  wedge on its bond keep their meaning. For identity it counts as one of
+  its neighbour's hydrogens (below).
+
+**Each entry says how it was made.**
+- `from` is the template's entry.
+- `made.how` gives the choices in words: *R1 = Me, R2 = OMe*.
+- Each option is given as it was typed and as it was read.
+
+**The set carries its core**, so that steps after it, and the summary
+frame, can line the products up exactly:
+`core: { atoms, bonds, attach: { R1: atom, R2: atom } }`. Its atoms and
+bonds are the template's without its R atoms, in the template's numbering,
+which is the same in every product.
+
+#### Duplicates, and what judges them
+
+**Which structures are the same is judged by Meno's identity**:
+- the identity text, `identityText` (*Identity* above, and
+  `src/lib/chem/identity.ts`);
+- the canonical text of the structure's aromatic form;
+- with each stereocentre's and each double bond's configuration as drawn,
+  and each axis of chirality.
+
+The texts are compared, not their hashed keys. The set states the method:
+*Duplicates judged by Meno's identity: constitution and configurations as
+drawn, aromatic rings as one form.* What that means, plainly:
+- **a chiral product and its mirror image are two structures.** So are two
+  diastereomers, and E and Z;
+- **two Kekulé structures of one ring are one structure.** So are
+  bond-shift isomers such as a 1,2-disubstituted cyclooctatetraene (the
+  `aromaticForm` rule, as it is written there);
+- **tautomers are two structures** (2-hydroxypyridine and 2-pyridone), and
+  so are a group written charge-separated and the same group written with
+  expanded valence (a nitro group as `*N(=O)=O` or as `*[N+](=O)[O-]`). An
+  option's form is its definition's, so this can only split duplicates
+  where the chemist's lists mix forms;
+- **a plain hydrogen atom counts as one of its neighbour's hydrogens**. A
+  product with R1 = H is then the same structure as the compound drawn
+  without that H. Only a truly plain one is folded in. A hydrogen stays an
+  atom where it is any of these:
+  - one whose wedge, hash or place sets a stereocentre's or a double
+    bond's configuration, unless that configuration is carried over to the
+    atom it is on (a stereocentre with an implicit hydrogen), and then it
+    is folded in with the configuration kept;
+  - mapped to an atom of a reaction;
+  - charged, with an unpaired electron, or an isotope (deuterium,
+    tritium);
+  - bonded to another hydrogen (H2);
+  - bridging, with more than one bond;
+  - on a metal (a hydride ligand).
+
+  P3 adds this to the identity rule itself, so it changes `identityText`
+  for every user of it. P3 lists every caller of `identityText` and
+  `identityKey`, checks each one against the change, and adds a test
+  where the change matters to it;
+- **the canonical search has a budget** (`settleBudget` in
+  `src/lib/layout/canonical.ts`). A very large, very symmetric structure
+  that exhausts it can be written two ways, so a duplicate can be missed.
+  It never judges two different structures the same, except by the rules
+  above (Kekulé structures, bond-shift isomers, hydrogens folded in): the
+  text writes the whole structure. Where the budget ran out for any product, the set
+  says so, with how many.
+
+**The first one is kept.** Where two or more combinations give the same
+structure, the first by number is made. Each later one goes to *aside*:
+*Same as 2*. A symmetric template does this: in a para-disubstituted
+benzene with R1 and R2 given the same list {Me, Cl}, (Me, Cl) is 2 and
+(Cl, Me) is 3, the same structure, so 3 is set aside as *Same as 2*. Two
+options of one list that read as the same group do it too.
+
+**The rule is tested against another canonicaliser**, as the layout's
+known answers are (#507):
+- a committed fixture holds each test product as a molfile written by
+  Meno (its 2D coordinates and wedges), with RDKit's canonical isomeric
+  SMILES of it, recorded by a script under `scripts/` with RDKit's
+  version. RDKit reads the configurations from the drawing itself, so
+  Meno's reading of the wedges is checked as well;
+- the test checks that Meno's identity splits the products into the same
+  groups as RDKit's canonical SMILES do;
+- where the two rules differ by design (bond-shift isomers, which RDKit's
+  aromaticity does not join), the fixture lists the case, and the test
+  holds Meno to its own rule there.
+
+RDKit is in the script and the fixture only, never in core.
+
+#### Valence, and stereocentres left open
+
+**The rule cannot break a valence.** No template atom's bonds change, and
+each group is attached by the one bond its definition marks. A product is
+over-valent only where its template or one of its options is.
+- **Before running**, the step asks the checks that mark valence on the
+  canvas about the template and each option. Those checks are a plugin's
+  role (the checks, PLUGINS.md *Roles*): the one definition the canvas
+  uses. An option or a template they flag stops the step, with their
+  words.
+- **Where no plugin does the checks**, the step runs, and the set says
+  *Valence not checked: no plugin does the checks*. It never claims a
+  check that was not made.
+
+**A stereocentre left open.** A group can make a stereocentre that its
+definition gives no configuration (a sec-butyl group, as written). Where
+the checks are at hand, the products with a stereocentre or double bond
+whose configuration is not given are counted, and named, on the set. They
+are made: such a product is a real structure. Its configuration is open,
+and the identity reads it as open.
+
+#### The known answers
+
+P3's tests, each against an answer worked out by hand or by another
+reader:
+- **one R on benzene** with {Me, Cl}: two products, C7H8 and C6H5Cl, in
+  that order, numbered 1 and 2;
+- **3 × 2 = 6** in the fixed order, R1 outermost, each entry's `made.how`
+  as written;
+- **the symmetric template above**: four combinations, three made, one
+  aside as *Same as 2*, with the count on the set;
+- **a stereocentre drawn next to an R**: the arrangement kept, and R and S
+  read from the products by the checks where they are at hand;
+- **R1 = H** next to a wedge: the same identity as the compound drawn
+  without the H, its configuration carried to the atom it is on;
+- **each kind of hydrogen kept as an atom** in the list above: one test
+  each, showing it is kept, and that H2, a hydride and a deuterium keep
+  identities apart from the structures that would come of folding them;
+- **every reason that stops the step**, one test each, with its words,
+  the limit among them: 10,000 combinations run, 10,001 stop;
+- **one R number on two atoms**: both take the same group, and their
+  groups' atoms are numbered in the order of the two R atoms;
+- **the RDKit fixture**, as above.
+
+#### Substituent swap (outline)
+
+The chemist marks atoms on a drawing and gives a list of groups, read as
+the R lists are. One hydrogen on a marked atom is replaced by each group in
+turn, one marked atom at a time, in the order the atoms are numbered. The
+numbering, the join, the order, the duplicates and *aside* are as for R
+groups. A marked atom with no hydrogen stops the step, named. Where a
+marked atom's hydrogens are not alike (a CH2 next to a stereocentre), the
+group makes a stereocentre left open, counted as above. How atoms are
+marked on the canvas, and whether several marked atoms are combined, are
+decided in its PR, and this section is updated before it is built.
+
+#### Scaffold swap (outline)
+
+The chemist marks a part of a drawing (the scaffold) and gives a list of
+replacements. Each replacement has as many attachment points, numbered, as
+the part has bonds out, and each point is joined where the matching bond
+leaves. The rest of the drawing keeps its atoms, numbers and coordinates.
+The replacement is laid out as Clean-up lays out a part with fixed
+neighbours. A replacement whose number of bonds out differs stops the step.
+How the points are matched, and what the *core* of the set is after a
+swap, are decided in its PR, and this section is updated before it is
+built.
 
 ### Kinds filled by plugins
 
@@ -632,7 +910,7 @@ together (`together`).
 
 | Kind | Takes | Gives |
 |---|---|---|
-| **Generate** | nothing, seeds (molecules), or a target (molecules or a table) | molecules, structure only or with coordinates |
+| **Generate** | nothing, seeds (molecules), or a target (molecules or a table) | molecules, structure only or with coordinates. Structures made from a drawing by rule are *Enumerate*'s, Meno's own (above) |
 | **Describe** | molecules | the same, with properties |
 | **Similarity** | molecules, and a query | the same, with a similarity |
 | **Substructure** | molecules, and a pattern | the same, with a true/false property |
@@ -1173,6 +1451,16 @@ open, one plugin to a PR.
 15. **The cheminformatics kinds and models**; then their plugins.
 16. **Loops**: a design of their own, later.
 
+**Enumerate** (*Enumerate: structures made from a drawing, by rule*) comes
+in its own PRs, after 5, one after another:
+- **P1**, this specification;
+- **P2**, structures into and out of Meno's own steps. Today those steps
+  take and give molecules in 3D only. P2 adds structures drawn in 2D as a
+  value that passes into such a step and comes out of it as a result set;
+- **P3**, R groups, with its known answers and the RDKit fixture;
+- **P4**, substituent swap;
+- **P5**, scaffold swap.
+
 **When the cases run:**
 - **G** runs on this computer after 13 and its plugins.
 - **F** runs on this computer after 13 for its xTB parts, and on a cluster
@@ -1201,9 +1489,9 @@ scheduler or model by name:**
   - the runner seam, and this computer's runner, knowing its resources;
 - **on the page**: summaries, tables, charts, and the words on the page with
   their rule;
-- **Meno's 31 nodes** (*Meno's own nodes*): arithmetic, geometry and data
-  handling on Meno's own data, each written from a published algorithm or
-  Meno's own rule.
+- **Meno's 32 nodes** (*Meno's own nodes*, and *Enumerate*): arithmetic,
+  geometry, data handling and structures made by rule, on Meno's own data,
+  each written from a published algorithm or Meno's own rule.
 
 **Atom mapping is core's**, in `src/lib/chem`, for the canvas and the
 *Reaction* node. Its first version is a port of ACCeL's mapper, with the

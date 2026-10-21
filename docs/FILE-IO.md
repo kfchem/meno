@@ -226,6 +226,25 @@ definition (`writeXyz`, `lib/chem/xyzWriter.ts`):
   `utils/xyzEnergies.ts`). A one-frame file's energy is written but, as for
   any one-frame XYZ, not read.
 
+### The settings file
+
+Meno's settings are kept in `settings.json` in its data folder. Since
+2026-10-21 it holds only what the user changed - what differs from the
+defaults - and not every setting (the maintainer: so that a default changed
+later reaches everyone who never touched it).
+- Within a setting, only the part changed is written: one plugin's role,
+  not the plugins' other settings.
+- A drawing style chosen, and a 3D style chosen, are written whole where any
+  part changed. A preset and its changes are read only together; a 3D
+  style's two looks are never the same.
+- What the file does not hold is the default as it is then. A file written
+  before holds every setting; it is read as it is, and written back with
+  only what differs from the defaults now. A value it held that is no
+  longer the default - 2x drawing resolution, say - stays as it was.
+- A value the user sets that is the default as it is then is not written:
+  it is the default, and follows it if the default changes later. Only a
+  value that differs from the default is kept as the user's own.
+
 ## What is unclear today
 
 Each point is resolved by the plan below (see *Every point resolved*).

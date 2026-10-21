@@ -278,6 +278,7 @@ export function createEditorStore(
     textShown: doc.getState().texts?.slice(-1)[0]?.id ?? null,
     textsOpen: !!doc.getState().texts?.length,
     cover: 0,
+    shownMarks: null,
     columnWidth: COLUMN_WIDTH,
     columnFilled: false,
     pdfColumnWidth: null,

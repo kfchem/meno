@@ -16,7 +16,9 @@ describe("mapReaction", () => {
   const result = mapped(da.reactants, [da.product]);
 
   it("maps every atom, hydrogens included, one to one", () => {
-    expect(result.maps.length).toBe(64);
+    // the search's 64 differ only in which of a ring CH2's hydrogens is which; placed for the least motion
+    // about each CH2's frame (localLeastTurn), they come to 4, each once
+    expect(result.maps.length).toBe(4);
     expect(result.complete.every(Boolean)).toBe(true);
     expect(result.maps[0]).toEqual(trueMap(DA_REACTANT_NAMES, da.productOrder));
   });
@@ -162,7 +164,8 @@ describe("mapProducts (the Reaction step)", () => {
       ["broken", "C", "Br"],
     ]);
     const every = mapProducts(reactant, [da.product], { every: true });
-    expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 64 }, (_, i) => i));
+    // the Diels-Alder's maps, each once (see "maps every atom, hydrogens included, one to one")
+    expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 4 }, (_, i) => i));
   });
 
   it("says why a product that cannot map atom for atom is not passed on, and passes on nothing of it", () => {

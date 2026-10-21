@@ -21,6 +21,14 @@ export type ReaderOutput = {
   version?: string | null;
   method?: string | null;
   basis?: string | null;
+  /**
+   * The solvation it was worked out in, as the output says it: the model,
+   * the solvent and anything else that changes its energies, in the
+   * program's own words - "ALPB(water), reference state gsolv [1 M
+   * gas/solution]"; "none" where the output says it used none; unsaid where
+   * it does not say (docs/PLUGINS.md, *The contract*).
+   */
+  solvation?: string | null;
   charge?: number | null;
   multiplicity?: number | null;
   /** Its atoms' elements, in the file's order. */
@@ -73,6 +81,8 @@ export type CalcInfo = {
   version?: string;
   method?: string;
   basis?: string;
+  /** The solvation, as the output says it (`ReaderOutput.solvation`): "none" where it says none, unset where it does not say. */
+  solvation?: string;
   charge?: number;
   multiplicity?: number;
   optimised?: boolean;
@@ -124,13 +134,14 @@ export function framesOf(out: ReaderOutput): number {
  */
 export function calcOf(out: ReaderOutput, readers: readonly string[], source?: CalcSource, unread?: CalcInfo["unread"]): CalcInfo {
   const results = readResults(out.results, out.atoms.length, framesOf(out), readers[0] ? readerIdOfLine(readers[0]) : undefined);
-  const said = (k: "program" | "version" | "method" | "basis") => text(out[k]);
+  const said = (k: "program" | "version" | "method" | "basis" | "solvation") => text(out[k]);
   return {
     readers: [...readers],
     ...(said("program") ? { program: said("program") } : {}),
     ...(said("version") ? { version: said("version") } : {}),
     ...(said("method") ? { method: said("method") } : {}),
     ...(said("basis") ? { basis: said("basis") } : {}),
+    ...(said("solvation") ? { solvation: said("solvation") } : {}),
     ...(Number.isInteger(out.charge) ? { charge: out.charge! } : {}),
     ...(Number.isInteger(out.multiplicity) && out.multiplicity! > 0 ? { multiplicity: out.multiplicity! } : {}),
     ...(typeof out.optimised === "boolean" ? { optimised: out.optimised } : {}),
@@ -175,6 +186,7 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
       version: text(c.version),
       method: text(c.method),
       basis: text(c.basis),
+      solvation: text(c.solvation),
       charge: isNum(c.charge) ? c.charge : null,
       multiplicity: isNum(c.multiplicity) ? c.multiplicity : null,
       optimised: typeof c.optimised === "boolean" ? c.optimised : null,
@@ -203,7 +215,7 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
 export function calcLine(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
   const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
-  const method = [c.method, c.basis].filter(Boolean).join("/");
+  const method = levelOf(c);
   const state = [
     c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${String(c.charge).replace(/^-/, "\u2212")}` : null,
     c.multiplicity != null ? multiplicityName(c.multiplicity) : null,
@@ -211,6 +223,17 @@ export function calcLine(c: CalcInfo): string {
     .filter(Boolean)
     .join(", ");
   return [program, job, method, state].filter(Boolean).join(" · ");
+}
+
+/**
+ * The level a calculation's energies are of, in a line: its method and
+ * basis, and its solvation where the output says it - "GFN2-xTB ·
+ * ALPB(water), reference state gsolv [1 M gas/solution]", "GFN2-xTB · gas
+ * phase" where it says it used none.
+ */
+export function levelOf(c: Pick<CalcInfo, "method" | "basis" | "solvation">): string {
+  const solvation = c.solvation === "none" ? "gas phase" : c.solvation;
+  return [[c.method, c.basis].filter(Boolean).join("/"), solvation].filter(Boolean).join(" \u00b7 ");
 }
 
 /** A multiplicity by name, as a chemist says it: singlet, doublet, ...; past a sextet, by number. */

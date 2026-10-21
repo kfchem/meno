@@ -69,7 +69,8 @@ describe("a kept map and what it shows", () => {
     const { reactants, products, result } = sides();
     const kept = keptMap(d.model, result, reactants, products);
     expect(kept.complete).toBe(true);
-    expect(kept.maps.length).toBe(64);
+    // the maps that differ in more than which of a ring CH2's hydrogens is which (src/lib/chem/reactionMap.test.ts)
+    expect(kept.maps.length).toBe(4);
     const { numbers, centres } = mapMarks(kept, d.model);
     for (const k of NAMES) expect(numbers.get(P_ID[k])).toBe(numbers.get(R_ID[k]));
     expect(new Set(NAMES.map((k) => numbers.get(R_ID[k]))).size).toBe(6);

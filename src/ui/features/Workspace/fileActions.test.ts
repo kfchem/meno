@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  drawingLayout,
   drawingSvg,
   exportKindOf,
   exportKinds,
@@ -15,6 +16,8 @@ import {
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { heldElsewhere } from "../../../lib/doc/savers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
+import { labelBox, labelSetOf, runsWidth } from "../../../lib/chem/layout2d";
+import { MARK_HALF_HEIGHT, MARK_SCALE, MARKS_APART, STEREO_GAP, stereoPlaces, stereoTextEms } from "./chem/marks";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
 import { readStructures } from "../../../lib/io/structures";
@@ -567,5 +570,78 @@ describe("a workspace saved", () => {
     const plain = disk({ "/w/a.meno": "PK old" });
     expect((await writtenWhere("/w/a.meno", bytes, plain)).old).toBeNull();
     expect([...plain.written.keys()]).toEqual(["/w/a.meno"]);
+  });
+});
+
+describe("R, S, E and Z in a picture of the drawing (the maintainer, 2026-10-21)", () => {
+  // (an invented pent-3-en-2-ol, drawn: its double bond E, its centre S, by ids that are not positions)
+  const L = NOMINAL_BOND_LENGTH;
+  const at = (id: number, x: number, y: number, el = "C") => ({ id, x: x * L, y: y * L, r: 0.9, el });
+  const model: Model = {
+    atoms: [at(1, 0, 0), at(2, 0.87, 0.5), at(3, 1.73, 0), at(4, 2.6, 0.5), at(5, 2.6, 1.5, "O"), at(6, 3.46, 0)],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 2 },
+      { id: 13, a: 3, b: 4, order: 1 },
+      { id: 14, a: 4, b: 5, order: 1 },
+      { id: 15, a: 4, b: 6, order: 1 },
+    ],
+  };
+  const marks = { valence: new Map(), centres: new Map([[4, "S" as const]]), doubleBonds: new Map([[12, "E" as const]]) };
+  const aromatic = { aromaticEnabled: false, aromaticRings: {} };
+  // (the letters alone, for the places; in parentheses, for how they are written)
+  const bare = { ...ACS_1996, stereoDescriptors: "plain" as const };
+
+  it("puts them where the canvas puts them, at the canvas's size without its floor for the screen", () => {
+    const { layout, opts } = drawingLayout(model, { ...aromatic, shownMarks: marks }, bare);
+    const items = layout.texts.filter((t) => t.text === "S" || t.text === "E");
+    expect(items.map((t) => t.text).sort()).toEqual(["E", "S"]);
+    // (the known answer: the canvas's own placing - ChemMarks2D's, at a zoom its floor does not reach)
+    const size = opts.fontPx * MARK_SCALE;
+    const laid = new Map(model.atoms.map((a) => [a.id, a]));
+    const boxes = new Map<number, ReturnType<typeof labelBox>>();
+    for (const t of layout.texts) if (t.atom != null) boxes.set(model.atoms[t.atom].id, labelBox(t, t.fontPx, labelSetOf(opts)));
+    const canvas = stereoPlaces({
+      model: { atoms: model.atoms.map((a) => ({ ...a, ...laid.get(a.id) })), bonds: model.bonds },
+      centres: marks.centres,
+      doubleBonds: marks.doubleBonds,
+      boxes,
+      half: (cip) => ({ x: (size * stereoTextEms(cip, false)) / 2, y: size * MARK_HALF_HEIGHT }),
+      apart: MARKS_APART * size,
+      off: STEREO_GAP * opts.fontPx,
+      bond: L,
+    });
+    for (const p of canvas) {
+      const t = items.find((i) => i.text === p.text)!;
+      const w = runsWidth(t.runs!, t.fontPx, labelSetOf(opts));
+      const first = runsWidth([t.runs![0]], t.fontPx, labelSetOf(opts));
+      // (a text is placed by its first letter's middle: its own middle is where the canvas puts the mark)
+      expect(t.x + w / 2 - first / 2).toBeCloseTo(p.x, 9);
+      expect(t.y).toBeCloseTo(p.y, 9);
+      expect(t.fontPx).toBeCloseTo(size, 12);
+      expect(t.runs).toEqual([{ text: p.text, italic: true }]);
+    }
+  });
+
+  it("writes them as the canvas does - in parentheses where the style says so - and has none where none are shown", () => {
+    const style = { ...ACS_1996, stereoDescriptors: "parentheses" as const };
+    const { layout } = drawingLayout(model, { ...aromatic, shownMarks: marks }, style);
+    const s = layout.texts.find((t) => t.text === "(S)");
+    expect(s?.runs).toEqual([{ text: "(" }, { text: "S", italic: true }, { text: ")" }]);
+    expect(drawingLayout(model, aromatic, ACS_1996).layout.texts.some((t) => t.text === "S" || t.text === "E")).toBe(false);
+    // (marks of atoms the picture does not hold: none of its)
+    const elsewhere = { valence: new Map(), centres: new Map([[99, "R" as const]]), doubleBonds: new Map() };
+    expect(drawingLayout(model, { ...aromatic, shownMarks: elsewhere }, ACS_1996).layout.texts.some((t) => t.text === "R")).toBe(false);
+  });
+
+  it("keeps one put by hand where it was put, in ems of the labels from its atom", () => {
+    const moved: Model = { ...model, atoms: model.atoms.map((a) => (a.id === 4 ? { ...a, stereoAt: { x: 0, y: 2 } } : a)) };
+    const { layout, opts } = drawingLayout(moved, { ...aromatic, shownMarks: marks }, bare);
+    const t = layout.texts.find((i) => i.text === "S")!;
+    const w = runsWidth(t.runs!, t.fontPx, labelSetOf(opts));
+    const first = runsWidth([t.runs![0]], t.fontPx, labelSetOf(opts));
+    const c = moved.atoms.find((a) => a.id === 4)!;
+    expect(t.x + w / 2 - first / 2).toBeCloseTo(c.x, 9);
+    expect(t.y).toBeCloseTo(c.y + 2 * opts.fontPx, 9);
   });
 });

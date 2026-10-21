@@ -109,6 +109,18 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
 }));
+/** What the plugin that perceives configurations was asked, MOL blocks each time; it answers each a centre, keyed by its place. */
+const configured: string[][] = [];
+vi.mock("../../../../lib/roles/worker", async (actual) => ({
+  ...(await actual<typeof import("../../../../lib/roles/worker")>()),
+  rolePlugin: (role: string) => (role === "configurations" ? { id: "rdkit", version: "0.1.7", name: "RDKit" } : undefined),
+  pluginWorker: async () => ({
+    request: async (_op: string, args: { molblocks: string[] }) => {
+      configured.push(args.molblocks);
+      return { molecules: args.molblocks.map((_b, i) => ({ elements: [{ kind: "centre", atoms: [0], specified: true }], key: `k${i}` })) };
+    },
+  }),
+}));
 /** Why the next outputs kept with the workspace fail to be, as the test has it: none, kept as Meno keeps them. */
 const keepFails: string[] = [];
 vi.mock("../../../../lib/calc/asks", async (actual) => {
@@ -137,7 +149,8 @@ import { MANIFESTS } from "../../../../lib/plugins/known";
 import { canWire, resultOf, stateOf } from "../workflow/flow";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
-import { countOf, setMembers } from "../workflow/entries";
+import { countOf, setEntries, setMembers } from "../workflow/entries";
+import { forgetStereo } from "../workflow/configurations";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
@@ -766,6 +779,17 @@ describe("running a workflow's steps", () => {
     expect([a, b, c].map((id) => st().steps.find((s) => s.id === id)!.ran?.ok)).toEqual([true, true, true]);
     // (Populations on what the window kept: the conformer 5 kcal/mol up set aside)
     expect(st().steps.find((s) => s.id === b)!.ran!.said).toBe("2 of 3 kept");
+  });
+
+  it("asks first which stereoisomer each entry is, for Populations - every conformer its own - and its entries carry it", async () => {
+    forgetStereo();
+    configured.length = 0;
+    const { st, b, c } = chain();
+    await st().runFrom(c);
+    // (asked once, for the conformers the window let through - Populations' entries, each its own geometry)
+    const kept = setEntries(st().molecules3d.filter((m) => setMembers(st(), st().sets.find((x) => x.made?.step === b)!).molecules.includes(m.id)), "conformers");
+    expect(configured.map((blocks) => blocks.length)).toEqual([kept.length]);
+    expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map((_e, i) => `k${i}`));
   });
 
   it("runs all that have not run or have changed - and leaves those done as they are", async () => {
