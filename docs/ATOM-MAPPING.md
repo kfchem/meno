@@ -413,3 +413,34 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
 - **Changed since.** A map of a drawing changed since (an atom, a bond, a
   charge) shows nothing new: the menu offers *Atom map* again, and *Hide
   atom map* where its numbers are still on the drawing.
+
+## For a workflow's *Reaction* step
+
+`mapProducts` (`reactionMap.ts`) is what the *Reaction* step does
+(docs/WORKFLOWS-FOUNDATION.md, *Atom mapping, and what Meno does itself*):
+
+- **One reactant structure, any number of products.** Several reactants are
+  one structure beforehand (a complex). Each product is mapped onto it on
+  its own, in 3D with every hydrogen, as above.
+- **Mapped products.** Each product is written in the reactants' numbering:
+  its own atoms, where they stand in the product, put at the places of the
+  reactant atoms they map to, and its bonds renumbered with them. Its first
+  map gives one; *every* map gives one for each, best first.
+- **Bond changes.** For each mapped product, a table: each bond the map
+  forms, breaks or changes in order, its two atoms in the reactants'
+  numbering (from 0, as an entry's bonds number them) with their
+  elements, and its bond type before and after (0 where there is none; 4,
+  aromatic). The types are the structures'
+  own; nothing is perceived from the geometry here.
+- **Nothing in part.** A product whose atoms cannot all be paired one to
+  one - a different number of atoms, a flat drawing, a map that leaves an
+  atom out - is not passed on, and the reason is said for it.
+- **Checked against known answers.** The tests hold hand-made reactions
+  whose map is known by construction: a Diels-Alder (two bonds formed,
+  four orders changed, nothing broken), an SN2 (C-Cl formed, C-Br
+  broken), and the same product with its atoms in another order (the same
+  answer). The ConfoTS showcase's first Diels-Alder, one reactant and two
+  products, was checked the same way outside the repository: for both
+  products, the two bonds formed and four orders changed are those the
+  reactant's diene and enone call for, every hydrogen stays on its own
+  atom, and each product keeps its R or S at the ring fusion.

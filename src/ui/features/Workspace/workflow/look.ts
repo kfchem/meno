@@ -48,6 +48,10 @@ export const CARD_W = 208 * PX;
 export const CARD_H = 76 * PX;
 /** How far below its top a step's ports stand: wires join where they always did as its card opens. */
 export const PORT_DOWN = 28 * PX;
+/** How far apart a card's inputs are, where it takes more than one: each under the one before. */
+export const PORT_STEP = 20 * PX;
+/** How far down a card's top its `k`th input is (from 0). */
+export const portDown = (k: number) => PORT_DOWN + k * PORT_STEP;
 /** A port's diameter. */
 export const PORT = 11 * PX;
 

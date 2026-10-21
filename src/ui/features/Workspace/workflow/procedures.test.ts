@@ -6,16 +6,21 @@ import { createWorkspaceDocument } from "../document";
 import { partsBounds, type FlowParts } from "./parts";
 import { centredParts, procedureFileName, procedureLine, procedureNeeds, procedureOf, proceduresSaved, removeProcedure, renameProcedure, saveProcedure, suggestedName } from "./procedures";
 
-/** A procedure's parts: an empty input set wired into an optimisation by xTB, whose result goes into Meno's energy window. */
+/** A procedure's parts: an empty input set wired into an optimisation by xTB, whose exit's set (6) goes into Meno's energy window - its exits' sets 7 and 8. */
 const PARTS: FlowParts = {
-  sets: [{ id: 1, x0: 0, y0: -4, x1: 4, y1: 0 }],
+  sets: [
+    { id: 1, x0: 0, y0: -4, x1: 4, y1: 0 },
+    { id: 6, x0: 10, y0: -2, x1: 14, y1: 0, made: { step: 2, exit: "out" } },
+    { id: 7, x0: 22, y0: -2, x1: 26, y1: 0, made: { step: 5, exit: "out" } },
+    { id: 8, x0: 22, y0: -4, x1: 26, y1: -3, made: { step: 5, exit: "rest" } },
+  ],
   steps: [
     { id: 5, kind: "energy-window", x: 18, y: 0, by: "meno", options: { window: 3 } },
     { id: 2, kind: "optimise", x: 6, y: 0, by: "xtb", options: { method: "gfn2", solvent: "none", level: "normal" } },
   ],
   wires: [
-    { id: 3, from: { set: 1 }, to: 2 },
-    { id: 4, from: { step: 2 }, to: 5 },
+    { id: 3, from: { set: 1 }, to: { step: 2, port: "in" } },
+    { id: 4, from: { set: 6 }, to: { step: 5, port: "in" } },
   ],
 };
 
@@ -77,7 +82,8 @@ describe("a procedure", () => {
     const at = Object.fromEntries(st().steps.map((s) => [s.kind, [s.x - set.x0, s.y - set.y1]]));
     expect(at).toEqual({ optimise: [6, 0], "energy-window": [18, 0] });
     expect(st().wires).toHaveLength(2);
-    expect(st().selFlow.sets.size + st().selFlow.steps.size).toBe(3);
+    // (its four sets - the input, and its steps' three exits - and its two steps)
+    expect(st().selFlow.sets.size + st().selFlow.steps.size).toBe(6);
     expect(doc.history().undoLabel).toBe("put down procedure");
     doc.undo();
     expect(st().steps).toEqual([]);

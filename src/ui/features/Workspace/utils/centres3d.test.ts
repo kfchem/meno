@@ -155,7 +155,7 @@ describe("a bond from a metal to a ring's or double bond's centre, in 3D (eta)",
     const keep = keptOf(m);
     expect(keep.centres).toEqual(m.centres);
     const xyz = m.atoms.flatMap((a) => [a.x, a.y, a.z]);
-    const { molecules } = resultsOf({ ok: true, kept: [{ compound: 0, number: 1, atoms: m.atoms, bonds: m.bonds, xyz, keep }], aside: [], holds: "conformers", said: "" } as never);
+    const { molecules } = resultsOf({ ok: true, kept: [{ compound: 0, number: 1, atoms: m.atoms, bonds: m.bonds, xyz, keep }], aside: [], holds: "conformers", said: "" } as never, "conformers");
     expect(molecules[0].centres).toEqual([{ metal: 0, atoms: [2, 3, 4, 5, 6] }]);
     // and one without keeps none
     expect(keptOf(cpFe(false)).centres).toBeUndefined();
