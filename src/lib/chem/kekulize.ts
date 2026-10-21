@@ -5,8 +5,13 @@
  * A MOL file may mark a ring's bonds as aromatic (bond type 4) rather than
  * single and double. The editor draws single, double and triple bonds, so an
  * aromatic system has to be given its double bonds back: every carbon in it
- * takes exactly one, a pyrrole-type N-H or a furan O takes none, and a
- * pyridine-type N takes one when the ring needs it to. This works that out
+ * takes exactly one, a pyrrole-type N-H or a furan O takes none, and of the
+ * nitrogens whose hydrogens the file does not state, as many as can take one
+ * do - each left without is read as an N-H, so as few are as can be: a
+ * tetrazine's nitrogens pair up with each other, a pteridine's every ring
+ * atom has one, and a tetrazole or a benzotriazole has one N-H. Which
+ * nitrogen carries it, where the file does not say - a tetrazole's, a
+ * purine's - is the first found: the tautomer is not in the file. This works that out
  * without anything outside TypeScript, so a file opens the same before the
  * chemistry backend is available as after.
  *
@@ -88,14 +93,21 @@ export function kekuleOrders(
   const needy = atoms
     .map((_, i) => i)
     .filter((i) => roles[i] === "needs" && partners[i].length > 0);
+  // (the atoms that may take one - a pyridine-type N, a charged ring atom - as many of them given one as can be:
+  // each left without one is read as carrying a hydrogen the file does not state, or a charge it does not, so
+  // as few as there can be: a tetrazine's nitrogens pair up with each other, and are not each given an H)
+  const willing = atoms
+    .map((_, i) => i)
+    .filter((i) => roles[i] === "may" && !QUERY_ATOMS.has(atoms[i]?.el ?? "") && partners[i].length > 0);
 
   const matched = new Array<number>(atoms.length).fill(-1);
   const free = (i: number) => partners[i].filter((p) => matched[p.other] < 0);
   let budget = 200_000;
 
-  // Most constrained atom first; a partner that needs a double bond before
-  // one that merely may take it, so a ring only uses its N when it has to.
-  const solve = (): boolean => {
+  // Most constrained atom first - every one that needs a double bond, then
+  // those that may take one, `slack` of them at most left without; a partner
+  // that needs a double bond before one that merely may take it.
+  const solve = (slack: number): boolean => {
     if (--budget < 0) return false;
     let pick = -1;
     let options: { bond: number; other: number }[] = [];
@@ -108,7 +120,37 @@ export function kekuleOrders(
         options = f;
       }
     }
-    if (pick < 0) return true;
+    if (pick < 0) {
+      // (each that needs one has it: now those that may, fewest left without)
+      let left = 0;
+      for (const a of willing) {
+        if (matched[a] >= 0) continue;
+        const f = free(a);
+        if (f.length === 0) {
+          if (++left > slack) return false;
+          continue;
+        }
+        if (pick < 0 || f.length < options.length) {
+          pick = a;
+          options = f;
+        }
+      }
+      if (pick < 0) return true;
+      for (const p of options) {
+        matched[pick] = p.bond;
+        matched[p.other] = p.bond;
+        if (solve(slack)) return true;
+        matched[pick] = -1;
+        matched[p.other] = -1;
+      }
+      // (or this one left without, where there is slack for it: counted with those left below)
+      if (left + 1 > slack) return false;
+      const was = partners[pick];
+      partners[pick] = [];
+      const ok = solve(slack);
+      partners[pick] = was;
+      return ok;
+    }
     options.sort(
       (p, q) =>
         Number(roles[p.other] !== "needs") - Number(roles[q.other] !== "needs"),
@@ -116,14 +158,22 @@ export function kekuleOrders(
     for (const p of options) {
       matched[pick] = p.bond;
       matched[p.other] = p.bond;
-      if (solve()) return true;
+      if (solve(slack)) return true;
       matched[pick] = -1;
       matched[p.other] = -1;
     }
     return false;
   };
+  const solved = () => {
+    for (let slack = 0; slack <= willing.length; slack++) {
+      matched.fill(-1);
+      if (solve(slack)) return true;
+      if (budget < 0) return false;
+    }
+    return false;
+  };
 
-  if (!solve()) {
+  if (!solved()) {
     // Nothing satisfies every atom, or the search ran out: give as many
     // carbons as will take one a double bond, and leave the rest single.
     matched.fill(-1);

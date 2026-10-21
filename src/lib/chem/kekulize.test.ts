@@ -136,4 +136,38 @@ describe("kekuleOrders", () => {
     expect(orders.filter((o) => o === 2)).toHaveLength(2);
     expect(Math.max(...n)).toBe(1);
   });
+
+  // (rings whose nitrogens must take double bonds of their own, between them: a reader that gives only its
+  // carbons theirs leaves two nitrogens without one, each then given a hydrogen it does not have - a formula
+  // two hydrogens too many. Each as RDKit writes it in a MOL file, bond type 4, no hydrogens stated)
+  it("gives 1,2,4,5-tetrazine three double bonds, one at every atom: no hydrogen on its nitrogens", () => {
+    const { orders, n } = doublesPerAtom(mol("C N N C N N", ring([0, 1, 2, 3, 4, 5])));
+    expect(orders.filter((o) => o === 2)).toHaveLength(3);
+    expect(n).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it("leaves a tetrazole one nitrogen without a double bond - its N-H - and no more: 5-phenyltetrazole, losartan's ring", () => {
+    // (c1ccc(-c2nn[nH]n2)cc1: the tetrazole's C and four N, then the phenyl's six carbons)
+    const m = mol("C N N N N C C C C C C", [...ring([0, 1, 2, 3, 4]), [0, 5, 1], ...ring([5, 6, 7, 8, 9, 10])]);
+    const { n } = doublesPerAtom(m);
+    expect(n.slice(0, 5).filter((k) => k === 0)).toHaveLength(1);
+    expect(n.slice(5)).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it("gives a pteridine's every ring atom a double bond: methotrexate's 2,4-diaminopteridine has no N-H in its rings", () => {
+    // (Nc1nc(N)c2nccnc2n1: ring atoms 1-3, 5-11; the amino N 0 and 4 outside)
+    const m = mol("N C N C N C N C C N C N", [[0, 1, 1], [1, 2, A], [2, 3, A], [3, 4, 1], [3, 5, A], [5, 6, A], [6, 7, A], [7, 8, A], [8, 9, A], [9, 10, A], [10, 5, A], [10, 11, A], [11, 1, A]]);
+    const { orders, n } = doublesPerAtom(m);
+    expect(orders.filter((o) => o === 2)).toHaveLength(5);
+    expect([1, 2, 3, 5, 6, 7, 8, 9, 10, 11].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it("leaves benzotriazole one N-H, its benzene ring whole", () => {
+    // (c1ccc2[nH]nnc2c1, no hydrogen stated: carbons 0-3, 7, 8; nitrogens 4-6)
+    const m = mol("C C C C N N N C C", [[0, 1, A], [1, 2, A], [2, 3, A], [3, 4, A], [4, 5, A], [5, 6, A], [6, 7, A], [7, 3, A], [7, 8, A], [8, 0, A]]);
+    const { n } = doublesPerAtom(m);
+    expect([0, 1, 2, 3, 7, 8].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1]);
+    expect([4, 5, 6].filter((i) => n[i] === 0)).toHaveLength(1);
+  });
 });
+
