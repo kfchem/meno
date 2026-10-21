@@ -30,7 +30,7 @@ import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { EditorState, JobSeen, Model, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, finishEntry } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
@@ -187,8 +187,50 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const now = doc.getState();
     const still = stepOf(now, id);
     if (!still) return;
-    const outcome = runMenoDrawn("enumerate", entries, still.options, now.style, [checked]);
+    const made = runMenoDrawn("enumerate", entries, still.options, now.style, [checked]);
+    const outcome = made.ok ? { ...made, said: `${made.said} \u00b7 ${await leftOpen(id, at, made.kept)}` } : made;
     doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
+  }
+
+  /**
+   * Of Enumerate's products, those with a stereocentre or double bond whose
+   * configuration is not given - a group that makes one its definition
+   * does not set (a sec-butyl, as written) - asked of the plugin that finds
+   * a structure's stereoisomers, where one is at hand without setting one
+   * up: counted, and named by number. Made all the same: such a product is
+   * a real structure, its configuration open. Its card says how many it has
+   * been through as it asks.
+   */
+  async function leftOpen(id: number, at: number, kept: readonly { drawn: Model; entry?: { number: number } }[]): Promise<string> {
+    const by = rolePlugin("stereoisomers");
+    if (!by || !(await chemAtHand("stereoisomers"))) return "Configurations left open not looked for: no plugin finds stereoisomers";
+    const working = (patch: { done: number } | null) =>
+      set((prev) => {
+        const rest = { ...prev.menoWorking };
+        if (patch) rest[id] = { since: at, total: kept.length, ...patch };
+        else delete rest[id];
+        return { ...prev, menoWorking: rest };
+      });
+    const open: number[] = [];
+    working({ done: 0 });
+    try {
+      const chem = await chemWorker("stereoisomers");
+      for (const [k, e] of kept.entries()) {
+        const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
+        if (block) {
+          const found = await chem.request("open_stereo", { molblock: block.molblock });
+          if (found.atoms.length || found.bonds.length) open.push(e.entry?.number ?? k + 1);
+        }
+        if (k % 25 === 24) working({ done: k + 1 });
+      }
+    } catch {
+      return `Configurations left open not looked for: ${by.name} could not be asked`;
+    } finally {
+      working(null);
+    }
+    if (!open.length) return `No configuration left open (${by.name})`;
+    const named = open.length > 12 ? `${open.slice(0, 12).join(", ")} and ${open.length - 12} more` : open.join(", ");
+    return `${open.length} with a configuration left open: ${named} (${by.name})`;
   }
 
   /** Meno's steps working in turns asked to stop: given up at their next turn. */
