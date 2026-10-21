@@ -769,8 +769,10 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
   across plugins only as far as is written down. None does yet.
 - A temperature, a pressure and a solvent a plugin gives with a property
   are those its program says it used; a solvent is named with its model
-  as the program names them (`ALPB(water)`), and a plugin that used one
-  always says so.
+  as the program names them (`ALPB(water)`), or `none` where the
+  program's own setup shows it used none. A plugin that cannot tell from
+  its program's output says nothing, and the solvent is then not stated -
+  never taken for the gas phase.
 
 ## Settings
 

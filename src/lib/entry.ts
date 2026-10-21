@@ -91,8 +91,9 @@ export type PropertyValue =
  * and the conditions, where they apply - the temperature (K) and pressure
  * (atm) as the program says it used them, never as a step asked; and the
  * solvent, named with its model as the program states them ("ALPB(water)",
- * "CPCM(water)"), compared as written. A plugin that used a solvent says
- * so: none said is the gas phase.
+ * "CPCM(water)"), or "none" where the program's own setup shows it used
+ * none - the gas phase, stated, not assumed - compared as written. None
+ * said is not stated: it matches nothing that is.
  */
 export type At = { geometry: string; kelvin?: number; atm?: number; solvent?: string };
 
