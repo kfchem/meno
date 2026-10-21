@@ -1378,10 +1378,20 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
   its products in their template's, and they stay apart. Any of them
   that is a record of a stack comes out a structure in its own right. The
   set says it holds structures drawn, and wires on as a set of them does.
-- **Run again**, the step's sets let go of what they held: those
-  structures go from the page, and the new ones take their place, the
-  set's top left where it was. A structure of the chemist's drawn
-  elsewhere is untouched.
+- **Run again**, the step takes away what it put in its sets, and
+  nothing else, and the new ones take their place, the set's top left
+  where it was. Each set keeps which atoms its step put on the page
+  (`WorkflowSet.put`), and those atoms, with their bonds, are all that go:
+  - a structure of the chemist's joined to one of them by a bond keeps
+    its own atoms, even a carbon then left without a bond;
+  - a structure dropped into the frame is none of the set's (a result set
+    takes in nothing: *Members are explicit*), and stays where it is;
+  - a structure of the chemist's drawn elsewhere is untouched.
+
+  A file keeps those atoms by id, as it keeps members, but only those it
+  writes: a set kept out of the file keeps none, since their ids could be
+  another atom's once the file opens and numbering goes on. A pasted step
+  or procedure keeps none either.
 - **Kept and shown again.** A run kept keeps its structures as they
   stand when the next run takes their place, an atom moved by hand
   meanwhile with them (`RunResults.drawn`, one type for the store, the run

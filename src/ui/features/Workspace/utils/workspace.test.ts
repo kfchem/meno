@@ -471,7 +471,7 @@ describe("a workspace's sets, saved (version 2)", () => {
     st().addBond(n, o, 2);
     doc.edit("sets", (d) => {
       const next = addSet(d, { x0: 19, y0: -1, x1: 23, y1: 1 });
-      return { ...next, sets: next.sets!.map((b) => ({ ...b, made: { step: 9, exit: "out", holds: "structures" as const }, keep: false as const, members: [{ structure: [n, o] }] })) };
+      return { ...next, sets: next.sets!.map((b) => ({ ...b, made: { step: 9, exit: "out", holds: "structures" as const }, keep: false as const, members: [{ structure: [n, o] }], put: [n, o] })) };
     });
     const hash = collectionHash(st(), st().sets[0]);
     const saved = JSON.parse(workspaceText(st()));
@@ -479,6 +479,8 @@ describe("a workspace's sets, saved (version 2)", () => {
     expect(saved.bonds).toHaveLength(2);
     expect(saved.sets[0].members).toBeUndefined();
     expect(saved.sets[0].notKept).toEqual({ count: 1, hash });
+    // (nor which atoms its step put there: not written, their ids could be another's once the file opens and numbering goes on)
+    expect(saved.sets[0].put).toBeUndefined();
     // (opened, nothing of it is on the page: the set says how many it held)
     const ws = readWorkspace(JSON.stringify(saved))!;
     expect(ws.drawn.atoms.map((a) => a.el)).toEqual(["C", "C", "O"]);

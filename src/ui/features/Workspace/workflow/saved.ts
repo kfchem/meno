@@ -56,6 +56,8 @@ function readSet(v: unknown): WorkflowSet | null {
       const members = membersIn(b.members);
       return members ? { members } : {};
     })(),
+    // (the atoms its step put on the page, by id, as members' are: a result set's alone)
+    ...(made && Array.isArray(b.put) && b.put.length && b.put.every((id) => isId(id)) ? { put: b.put as number[] } : {}),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
     ...(() => {

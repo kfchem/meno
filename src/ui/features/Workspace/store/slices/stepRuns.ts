@@ -44,6 +44,9 @@ const STOP_WAIT_MS = 15_000;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/** What a step says that is asked to work, or give, as only Meno's own steps can on structures drawn. */
+const ON_DRAWN = "Not on structures drawn: only Meno's own steps take or give them";
+
 /**
  * Running a workflow's steps (docs/WORKFLOWS.md, *Running*): Meno's own,
  * at once; a plugin's in its worker, asked; a plugin's program as jobs
@@ -162,8 +165,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, "meno");
     const input = inputOf(d, id)!;
-    // (Duplicates, which takes molecules in 3D alone: whyNot has said so of any other)
-    const holds = input.holds as Holds3D;
+    // (worked in turns on molecules in 3D alone: structures drawn refused here, where it is relied on)
+    if (input.holds === "structures") return void fail(id, ON_DRAWN, at, key);
+    const holds = input.holds;
     const entries = setEntries(input.molecules, holds);
     const working = (patch: { done: number } | null) =>
       set((prev) => {
@@ -193,22 +197,27 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     doc.edit("run", (x) => ranAs(x, id, said, key, { ...w, byOf, now: at }));
   }
 
-  /** The kind of set a step's results make, for what came in (Render's pictures are laid by `finishRender`). */
-  const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): SetKind => {
+  /**
+   * The kind of set a program's results make, for what came in (Render's
+   * pictures are laid by `finishRender`): molecules in 3D, or a conformer
+   * set. None, where that would be structures drawn - which only Meno's own
+   * steps give, so a program's step that would is refused.
+   */
+  const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): Holds3D | null => {
     const g = kindInfo(kind).gives;
-    return g === "same" || g === "pictures" ? holds : g;
+    const made = g === "same" || g === "pictures" ? holds : g;
+    return made === "structures" ? null : made;
   };
 
   /** The results of a step put in, as one edit - what it set aside in its second exit's set - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */
-  function bringIn(id: number, worked: Worked[], holds: SetKind, ran: StepRan, aside: SetEntry[] = []) {
+  function bringIn(id: number, worked: Worked[], holds: Holds3D, ran: StepRan, aside: SetEntry[] = []) {
     const d = doc.getState();
     const step = stepOf(d, id);
     if (!step) return;
     const before = new Set((d.molecules3d ?? []).map((m) => m.id));
     // (what it did before kept among its runs)
     if (!worked.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
-    // (molecules in 3D, as a program gives them: structures drawn come out of Meno's own steps alone)
-    const outcome = { ok: true as const, holds: holds as Holds3D, kept: worked, aside, said: ran.said };
+    const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said };
     const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
     doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
     atTheirEnds(before);
@@ -442,7 +451,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
     const input = inputOf(d, id)!;
-    const entries = setEntries(input.molecules, input.holds as "molecules" | "conformers");
+    if (input.holds === "structures") return void fail(id, ON_DRAWN, at, key);
+    const gives = givesFor(step.kind, input.holds);
+    if (!gives) return void fail(id, ON_DRAWN, at, key);
+    const entries = setEntries(input.molecules, input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
@@ -459,7 +471,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     bringIn(
       id,
       entries.filter((_, i) => keep.has(i)),
-      givesFor(step.kind, input.holds),
+      gives,
       { at, ok: true, said: `${keep.size} of ${entries.length} kept`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
       entries.filter((_, i) => !keep.has(i)),
     );
@@ -884,7 +896,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
       const said = ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`;
-      bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
+      const gives = givesFor(kind, holds ?? "molecules");
+      // (refused, and its run closed as any other)
+      if (gives) bringIn(id, worked, gives, { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
+      else fail(id, ON_DRAWN, run.at, run.input);
       close();
     } catch (e) {
       // (whatever went wrong bringing its results in: said as how it ended, and its run closed - its jobs looked at no more, those waiting for it let go)

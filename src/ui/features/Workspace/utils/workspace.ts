@@ -110,7 +110,11 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   const moleculeAt = new Map(state.molecules3d.map((m, i) => [m.id, i]));
   const pictureAt = new Map((state.pictures ?? []).map((p, i) => [p.id, i]));
   // (each set's members by what a file can say them by: a structure by its atoms' ids, kept; a molecule or a picture by its place in its list)
-  const savedSets = (state.sets ?? []).map(({ members, ...b }) => {
+  // (the atoms a step put on the page, of those written: one not written - a set kept out of the file - could be another's once the file is opened and numbering goes on)
+  const written = new Set((state.fullModel ?? state.model).atoms.map((a) => a.id));
+  const savedSets = (state.sets ?? []).map(({ members, put, ...set }) => {
+    const kept = put?.filter((id) => written.has(id));
+    const b = kept?.length ? { ...set, put: kept } : set;
     if (b.keep === false && b.made) return { ...b, notKept: { count: members?.length ?? 0, hash: collectionHash(page, { ...b, members }) } };
     const saved = (members ?? []).flatMap((m): Member[] => {
       if ("structure" in m) return [m];

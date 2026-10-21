@@ -4,7 +4,7 @@ import type { Model } from "../store/types";
 import { countOf, holdsOf, setMembers } from "./entries";
 import { canWire, givesOf, inputOf, resultOf } from "./flow";
 import { runMenoDrawn } from "./meno";
-import { addSet, addStep, connect } from "./model";
+import { addSet, addStep, connect, membersSettled } from "./model";
 import { drawnEntries, keepRun, placeResults, resultsNow, runStep, showRun, type RunResults, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
 
@@ -137,6 +137,49 @@ describe("structures drawn, given by a step", () => {
     expect(setMembers(doc, resultOf(doc, step.id, "rest")!).structures).toEqual([]);
     expect(doc.model.atoms.map((a) => a.el)).toEqual(["O", "O", "C", "C", "Cl"]);
     expect(doc.model.bonds).toHaveLength(1 + 2);
+  });
+
+  it("run again, leave a structure the chemist dropped into the set: it is none of the set's, and stays where it was", () => {
+    const first = placeResults(page(), page().steps![0], drawn([chiral()]), W);
+    const out = resultOf(first, first.steps![0].id, "out")!;
+    // (an N2 of the chemist's, drawn and put inside the frame by hand)
+    const mine = { atoms: [{ id: 900, el: "N", x: out.x0 + 0.5, y: out.y0 + 0.5 }, { id: 901, el: "N", x: out.x0 + 1.6, y: out.y0 + 0.5 }] as never[], bonds: [{ id: 902, a: 900, b: 901, order: 3 }] as never[] };
+    const dropped = membersSettled({ ...first, model: { atoms: [...first.model.atoms, ...mine.atoms], bonds: [...first.model.bonds, ...mine.bonds] }, nextId: 903 }, first);
+    expect(shapes(dropped, out.id)).toEqual([shapeOf(chiral())]);
+    const again = placeResults(dropped, dropped.steps![0], drawn([chloroethane()]), W);
+    expect(again.model.atoms.filter((a) => a.id === 900 || a.id === 901).map((a) => [a.el, a.x, a.y])).toEqual([
+      ["N", out.x0 + 0.5, out.y0 + 0.5],
+      ["N", out.x0 + 1.6, out.y0 + 0.5],
+    ]);
+    expect(again.model.bonds.some((b) => b.id === 902)).toBe(true);
+  });
+
+  it("run again, take away only the atoms the step put there: a structure the chemist joined to one by a bond keeps its own atoms", () => {
+    const first = placeResults(page(), page().steps![0], drawn([chiral()]), W);
+    const out = resultOf(first, first.steps![0].id, "out")!;
+    expect(out.put).toHaveLength(4);
+    // (a methyl of the chemist's, bonded to the step's bromine: one structure with it now, and so a member)
+    const br = first.model.atoms.find((a) => a.el === "Br" && out.put!.includes(a.id))!;
+    const joined = membersSettled(
+      { ...first, model: { atoms: [...first.model.atoms, { id: 900, el: "C", x: br.x - 1.5, y: br.y, r: 0.9 } as never], bonds: [...first.model.bonds, { id: 901, a: br.id, b: 900, order: 1 } as never] }, nextId: 902 },
+      first,
+    );
+    expect(setMembers(joined, resultOf(joined, joined.steps![0].id, "out")!).structures[0]).toContain(900);
+    const again = placeResults(joined, joined.steps![0], drawn([chloroethane()]), W);
+    // (the chemist's carbon stays, its bond to the bromine gone with the bromine; every atom the step put is gone)
+    expect(again.model.atoms.find((a) => a.id === 900)?.el).toBe("C");
+    expect(again.model.bonds.some((b) => b.id === 901)).toBe(false);
+    expect(again.model.atoms.some((a) => out.put!.includes(a.id))).toBe(false);
+    expect(resultOf(again, again.steps![0].id, "out")!.put).toHaveLength(3);
+  });
+
+  it("say, in a file, which atoms their step put there - each by id, as members are", () => {
+    const doc = placeResults(page(), page().steps![0], drawn([chiral()]), W);
+    const saved = readWorkflow(JSON.parse(JSON.stringify({ sets: doc.sets, steps: doc.steps, wires: doc.wires })))!;
+    const out = resultOf(doc, doc.steps![0].id, "out")!;
+    expect(saved.sets.find((b) => b.id === out.id)!.put).toEqual(out.put);
+    // (a chemist's set says none, and none is read for one)
+    expect(readWorkflow({ sets: [{ id: 1, x0: 0, y0: 0, x1: 2, y1: 2, put: [3, 4] }] })!.sets[0].put).toBeUndefined();
   });
 
   it("are kept with the run that gave them, as they stand then, and shown again as they were", () => {
