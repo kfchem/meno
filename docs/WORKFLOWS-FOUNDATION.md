@@ -657,7 +657,14 @@ why, naming the line or the atom:
 - an R atom with more than one number (R¹,²), or an R with no number;
 - a wedge or hash whose narrow end is at an R atom. It would say nothing
   about the group put there;
-- more than one structure in *template*.
+- more than one structure in *template*;
+- **more than 10,000 combinations**, said with the count: *5 lists of 50
+  make 312,500,000 combinations; Enumerate makes at most 10,000*. Every
+  product is drawn, read back against its structure, and kept in the
+  workspace file. At the speed measured for laying out many structures at
+  once (#507: 1,000 in 9 to 15 s on this kind of computer), 10,000 take
+  minutes and more take hours. A set past that is more than can be looked
+  over, and is a sign the lists should be cut or the work done in steps.
 
 The R groups' definitions a CTfile can carry are not read (CTFILE.md).
 Only the step's lists say what an R group may be.
@@ -680,7 +687,9 @@ Only the step's lists say what an R group may be.
   - the group's other atoms are laid out from it, clear of the drawing.
 - **The template's atoms keep their numbers.** Each R atom's number goes to
   its group's attach atom. Each group's other atoms follow the template's
-  atoms, R1's first, then R2's, each group's in its own order. So a core
+  atoms, R1's first, then R2's, each group's in its own order. Where one R
+  number is on several atoms, their groups' atoms come in the order of
+  those R atoms' own numbers in the template, the lowest first. So a core
   atom has the same number in every product.
 - **The bonds are as drawn.** No template atom's bonds change, except that
   the bond to R now goes to the group's attach atom. A group's atoms are as
@@ -748,9 +757,10 @@ drawn, aromatic rings as one form.* What that means, plainly:
   where the change matters to it;
 - **the canonical search has a budget** (`settleBudget` in
   `src/lib/layout/canonical.ts`). A very large, very symmetric structure
-  that exhausts it can be written two ways, so a duplicate can be missed,
-  but two different structures are never judged the same: the text writes
-  the whole structure. Where the budget ran out for any product, the set
+  that exhausts it can be written two ways, so a duplicate can be missed.
+  It never judges two different structures the same, except by the rules
+  above (Kekulé structures, bond-shift isomers, hydrogens folded in): the
+  text writes the whole structure. Where the budget ran out for any product, the set
   says so, with how many.
 
 **The first one is kept.** Where two or more combinations give the same
@@ -813,7 +823,10 @@ reader:
 - **each kind of hydrogen kept as an atom** in the list above: one test
   each, showing it is kept, and that H2, a hydride and a deuterium keep
   identities apart from the structures that would come of folding them;
-- **every reason that stops the step**, one test each, with its words;
+- **every reason that stops the step**, one test each, with its words,
+  the limit among them: 10,000 combinations run, 10,001 stop;
+- **one R number on two atoms**: both take the same group, and their
+  groups' atoms are numbered in the order of the two R atoms;
 - **the RDKit fixture**, as above.
 
 #### Substituent swap (outline)
