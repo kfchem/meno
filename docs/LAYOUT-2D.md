@@ -913,3 +913,39 @@ Every step is measured on the benchmark, and a change is kept only if the
 drawings it makes are better. How to go about changing the engine, and
 what the maintainer has decided, is in
 [`LAYOUT-2D-TUNING.md`](LAYOUT-2D-TUNING.md).
+
+## Many at once
+
+A workflow's generated set - a summary's grid of samples, a series of
+analogues varied round one core - is laid out structure by structure, as
+one would be, and set out together (`src/lib/layout/many.ts`).
+
+- **Each read back against the molecule it was given** (`readBack.ts`
+  `notAsGiven`; the maintainer, 2026-10-21: a laid-out structure must be
+  the same molecule it was given, checked, not assumed, on every path that
+  lays out many at once). Every atom placed and none on another; each
+  double bond given cis or trans drawn so, none in a small ring drawn
+  trans; each stereocentre shown as given and none shown where none is
+  given, atom by atom; and the structure read back - its atoms, charges,
+  H's, bonds and the configurations the drawing shows - the same as given,
+  by its identity text. One that is not says how, in words, and is kept:
+  never dropped, never passed over.
+- **Lined up on a core.** Where what made a series gives its core, the
+  core is found in each structure atom for atom (`scaffold.ts`
+  `coreMatches`: the same elements, every bond between core atoms the same
+  and no other); where it does not, the series are the structures sharing
+  a ring scaffold - their rings and the chains between them - and the
+  result says so, since analogues whose groups carry rings then stand in
+  series of their own. Each member is turned, or mirrored with every wedge
+  turned to hashes and back, to lie on the core as the first member draws
+  it, and read back again where it was moved. A drawing with depth is only
+  turned. A core of rings lines up exactly; a core with a chain in it - a
+  benzamide's C(=O)N - comes out the other way round in about half of a
+  series, which lining up afterwards cannot change.
+- **Set out in a grid.** Every cell alike, as large as the largest
+  drawing and a gap; each series beginning a row of its own.
+- **Off the drawing's thread.** In the app, in batches across a pool of
+  workers (as many as the cores but one, at most eight), apart from the one
+  that lays out a drawing (`chem/layOut.ts` `layOutMany`).
+  `npm run layout-many` times a thousand analogues
+  (`testdata/analogues.ts`) and reads every one back.
