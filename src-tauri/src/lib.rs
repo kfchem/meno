@@ -28,6 +28,7 @@ mod pixienv;
 mod plugfiles;
 mod present;
 mod roaming;
+mod savefile;
 mod tools;
 mod update;
 mod windowstate;
@@ -1003,6 +1004,8 @@ pub fn run() {
             pdf::pdf_text,
             pdf::pdf_objects,
             pdf::pdf_figure,
+            // a chemist's documents written where they chose, whole or not at all
+            savefile::write_document,
             // the system clipboard, for structures
             clipboard::clipboard_write,
             clipboard::clipboard_read,

@@ -2,7 +2,8 @@ import { carriedDrawing, recordDrawings, seenDrawing, seenOnly } from "./utils/s
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
-import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../lib/io/writeDocument";
 import { mapStanding, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -495,7 +496,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
     async (path: string) => {
       // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
       const written = store.getState().writing();
-      await writeFile(path, await workspaceFile(store.getState()));
+      await writeDocument(path, await workspaceFile(store.getState()));
       store.getState().markSavedAs(path, written);
       naming.current?.(fileNameOf(path));
     },
@@ -553,7 +554,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
           const chosen = carriedOf(state).filter((_, i) => molecules.includes(state.molecules3d[i].id));
           if (!chosen.length) throw new Error(`There is no molecule in 3D to write as ${writer.name}.`);
           const text = await (await readerClient(plugin)).write(writer.id, fileNameOf(path), [writtenOf(chosen, style3dOf(state))], options);
-          await writeTextFile(path, text);
+          await writeDocument(path, text);
           return;
         }
         const kind = writer.id as WriterId;
@@ -562,8 +563,8 @@ export function useFileActions(nameTab?: (label: string) => void) {
         if (kind === "svg") {
           // The style the canvas is drawn in: the document's own, or the app's.
           const style = styleOf(state.docStyle);
-          await writeTextFile(path, drawingSvg(drawn, state, style, true));
-        } else await writeTextFile(path, structureFileText(drawn, path, options, style3dOf(state)));
+          await writeDocument(path, drawingSvg(drawn, state, style, true));
+        } else await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
       }),
     [attempt, store],
   );
@@ -590,7 +591,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
         });
         if (!picked) return;
         const path = picked.toLowerCase().endsWith(".sdf") ? picked : `${picked}.sdf`;
-        await writeTextFile(path, mappedPairSdf(map, name));
+        await writeDocument(path, mappedPairSdf(map, name));
       }),
     [attempt, store],
   );

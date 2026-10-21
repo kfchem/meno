@@ -3,7 +3,8 @@ import { AnimatePresence, motion } from "motion/react";
 import clsx from "clsx";
 import { ArrowsPointingInIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon, ChevronDoubleRightIcon, ChevronDownIcon, ChevronUpIcon, CodeBracketIcon, MagnifyingGlassIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { exists, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../lib/io/writeDocument";
 import TextBody from "../TextEditor";
 import { columnText, markdownReaderOf, setShowsSource, useShowsSource } from "../TextEditor/columnText";
 import MarkdownBody from "../TextEditor/MarkdownBody";
@@ -180,7 +181,7 @@ function Column({ texts, read, shown, pdf, width }: { texts: WorkspaceText[]; re
     try {
       setError(null);
       const picked = await saveDialog({ title: "Export", defaultPath: textExportPath(t, t.path ? await takenBeside(t.path, (p) => exists(p)) : undefined) });
-      if (picked) await writeTextFile(picked, t.text);
+      if (picked) await writeDocument(picked, t.text);
     } catch (e) {
       setError(`Export failed: ${e instanceof Error ? e.message : String(e)}`);
     }

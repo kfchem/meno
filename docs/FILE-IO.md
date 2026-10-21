@@ -173,11 +173,17 @@ finds is kept as its own (`combine`); Meno checks every answer (`checked`,
 
 | Way out | Written by, where | Kinds | Carries |
 | --- | --- | --- | --- |
-| **Save, Save As** (`fileActions.ts`) | main thread, then the fs plugin | `.meno` only | everything on the page, with the files it keeps |
+| **Save, Save As** (`fileActions.ts`) | main thread, then Meno's writer of documents (`writeDocument`, `src-tauri/src/savefile.rs`) | `.meno` only | everything on the page, with the files it keeps |
 | **Export…** (the selection's menu; `fileActions.ts`, `lib/io/writers.ts`) | main thread, or the plugin that writes the kind | MOL, SDF, RXN, PDB, XYZ and SVG by Meno; for molecules in 3D, what the added plugins write | the selection: the drawing; SDF each molecule in 3D at the frame shown, or every frame a record; PDB the molecules in 3D alone; XYZ the molecules in 3D alone, their atoms only, a block a frame; SVG the page as drawn, molecules in 3D as a picture, no record |
 | **Copy, Cut** (`clipboardActions.ts`) | TS makes each flavour, Rust puts them on the clipboard (`clipboard.rs`) | Mac: the record, MOL, RXN, GVML (with EMF), PNG. Windows: the record, MDLCT and MOL, RXN, GVML, PNG, EMF, DIB, or an OLE object in place of GVML and PNG | the record carries molecules in 3D and their results; a surface promised stays a promise |
 | **Copy as SMILES** | RDKit, then the clipboard as text | SMILES | the selection's structure |
 | **Office live link** (Windows) | TS, then Rust `ole_update` | the record and EMF in the object | as `.meno` does, the surface shown included |
+
+Every file a chemist chooses where to put - a workspace saved, an export,
+a text, a style, a procedure, a picture or film, a PDF - is written by one
+writer, whole or not at all (*Save and Export*, *A document is written
+whole or not at all*). Meno's own files, kept in its folders - its
+settings, its environments' notes - are not.
 
 Never written: PNG or EMF as files, anything printed or dragged out.
 Plugins write nothing that leaves them (a temporary copy of the output,
@@ -526,6 +532,24 @@ How these behave:
   2 - `cholesterol-2.pdb`.
 - **Copy stays as it is**: the record and the clipboard's flavours, not
   Export. The SMILES panel copies through the same clipboard as the menu.
+- **A document is written whole or not at all** (2026-10-21; `writeDocument`,
+  `lib/io/writeDocument.ts`, and `write_document`, `src-tauri/src/savefile.rs`).
+  Every file the chemist chose where to put - Save, Save As, Export, a
+  text exported, a style, a procedure, a picture, a PDF - is written beside
+  where it goes first, under a hidden name of its own (`.work.meno.<id>.part`),
+  made to reach the disk, then put in its place in one step. A save that fails
+  part way - the disk full, the drive taken away - leaves the file that was
+  there byte for byte as it was, and nothing of its own beside it; the
+  failure is said. Meno stopped as it writes leaves the file as it was too,
+  its hidden copy perhaps beside it.
+  - The file keeps its permissions. Saved through a link, the file the link
+    points at is written, and the link stays a link.
+  - A file that could not have been written to in place - kept read-only, a
+    folder of that name - is not written over.
+  - It writes only where the page may write through the file system plugin:
+    a file picked in Open's or Save's dialog, dropped, or opened from outside
+    Meno (that plugin's scope; for a link, the file it points at). A path
+    that steps up (`..`) is refused, as the plugin refuses it.
 
 As this part of step 5 was built (#155, from main beside step 3):
 
