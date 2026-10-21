@@ -406,10 +406,63 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   (`roles: [{role, options}]`, for a role that takes them); Settings draws
   them under the role, where it is chosen, and the plugin is sent them
   with each request for the role (`options`). RDKit declares its conformer
-  search's (0.1.8): how many sought, the force field (MMFF94, MMFF94s,
-  UFF), the steps an optimisation may take, the RMSD within which two are
-  the same shape, the random seed - and its *Conformers* step takes the
-  same, said once.
+  search's (0.1.8): how many sought - as many as the molecule needs, or a
+  number given - the force field (MMFF94, MMFF94s, UFF), the steps an
+  optimisation may take, the RMSD within which two are the same shape, the
+  random seed - and its *Conformers* step takes the same, said once.
+- **How many conformers are sought is the molecule's to say**
+  (2026-10-20): a fixed number is too few for a molecule with much to
+  explore and more than a rigid one has shapes, so the RDKit plugin asks
+  the molecule, unless the chemist sets a number (*Conformers sought*,
+  *This many*). By the bonds in it that turn, it is Ebejer, Morris and
+  Deane's rule - fifty up to seven such bonds, two hundred to twelve,
+  three hundred beyond (*Conformer Generation using RDKit*, 1st RDKit User
+  General Meeting, London 2012; *Freely Available Conformer Generation
+  Methods: How Good Is Good Enough?*, J. Chem. Inf. Model. 2012, 52,
+  1146-1158). Two things are added to it, both measured here:
+  - **a ring that can flip is worth at least two hundred.** A ring's two
+    chairs are shapes of its own that no turning bond counts, and an
+    embedding falls into the rarer one seldom - 3.8% of embeddings for
+    tert-butylcyclohexane, 4.3% for phenylcyclohexane, over 8000
+    embeddings of each of twelve monosubstituted cyclohexanes - so thirty
+    tries missed the axial chair of phenylcyclohexane altogether. At two
+    hundred, both chairs came back for all twelve, at every seed tried. A
+    ring counts if it has five atoms or more, is not aromatic, and is not
+    bridged, a bridge holding its ring in the one shape - bridged meaning
+    that it shares more than one bond with a ring of its own size or
+    smaller, since against a larger ring it is no bridge but the way round
+    it, as each sugar of a cyclodextrin lies on its macrocycle.
+  - **a molecule that cannot change shape is worth ten**, RDKit's own
+    number for an embedding: nothing in it turns and no ring of it can
+    flip, so each try gives the same shape back (benzene, caffeine,
+    adamantane).
+- **The same shape with equivalent atoms swapped is the one conformer**
+  (2026-10-20): a tert-butyl's three methyls turned round, or a phenyl
+  flipped, leaves every atom of it somewhere else, so comparing atom
+  against atom counted such a shape again and again - a
+  tert-butylcyclohexane came back as 26 conformers that were 5, an
+  adamantane as 15 that were 1, an ibuprofen as 28 that were 9. Shapes are
+  now compared over the ways the molecule maps onto itself as well
+  (RDKit's `GetBestRMS`, within the same 0.5 Å over heavy atoms), as an
+  eta system's rings already were. Two things hold it back, both measured:
+  - **only where the two sit at the one energy.** A shape and the same
+    shape relabelled have the one energy exactly - over 4000 such pairs
+    here the largest gap the optimisation left was 0.000001 kcal/mol -
+    while two different shapes can fall within half an angstrom of each
+    other once relabelled: phenylcyclohexane's twist-boat lands 0.40 Å
+    from its chair that way and sits 6.1 kcal/mol above it. Without this,
+    every twist-boat of it was swallowed by a chair. Where nothing could
+    be optimised and no energies came back - no force field here having
+    parameters for it - there is nothing to show it with, so those shapes
+    are told apart atom against atom, as they were; an eta system, which
+    never has energies, keeps the comparison it was given in the first
+    place, its rings turning on their metal being the swap it is for.
+  - **only where there are few enough ways to try.** A
+    tetrakis(triphenylphosphine)palladium maps onto itself millions of
+    ways, and trying them took 2.1 s for a single pair of conformers
+    against 0.002 s for a thousand of them. Past a thousand ways its
+    shapes are told apart atom against atom, as before, and its list may
+    hold the same shape twice.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
@@ -732,10 +785,10 @@ Each entry in `prepare`, `collect` and `run` is one molecule, as JSON:
 - **The other roles are chosen where they are used:**
   - in *Chemistry* - what is done on a structure drawn, at once, and who
     does it (the maintainer, 2026-10-17) - who parses SMILES, checks a
-    structure and assigns R/S, and, on a card of their own, *Molecules in
-    3D*, who makes a structure in 3D and its conformers, and by what
-    method, its stereoisomers, a formula drawn from it, and its renders.
-    (*Molecules in 3D* itself is how they look and turn; a workflow step's
+    structure and assigns R/S, and, on a card of their own, *3D*, who
+    makes a structure in 3D and its conformers, and by what method, its
+    stereoisomers, a formula drawn from it, and its renders. (Settings'
+    *3D* tab itself is how they look and turn; a workflow step's
     defaults are in *Calculations*);
   - in a workflow step, who runs it, defaulting to the choice in Settings.
 - **A choice taken away gives way** (the maintainer, 2026-10-12): when the
@@ -753,7 +806,7 @@ By the maintainer, 2026-10-06:
    does now: started when first needed, kept for the session. (Revised
    2026-10-13: kept while it is used, stopped once unused for 15 minutes.)
 2. **The other roles are chosen where they are used** (*Chemistry*,
-   *Molecules in 3D*, a workflow step), not in the Plugins tab. The
+   its *3D* card among them, a workflow step), not in the Plugins tab. The
    Plugins tab says what each plugin offers.
 3. **RDKit can be taken away like any plugin.** The core features then
    say what to add.
@@ -805,8 +858,8 @@ After the files (FILE-IO.md's order, steps 2 to 5):
 1. **RDKit as a plugin** (FILE-IO.md's step 6; built). It gets its own
    entry in the list. Its roles are named, and it is assigned to the core
    roles by default, started when first needed as now. Molecules reach it
-   as MOL blocks (decision 4, revised). The choices go in *Chemistry* and
-   *Molecules in 3D*, with RDKit as the only plugin at first.
+   as MOL blocks (decision 4, revised). The choices go in *Chemistry* (its
+   *3D* card for molecules in 3D), with RDKit as the only plugin at first.
 2. **New roles, each with a plugin that fills it:** fingerprints into
    the workflow, a structure search, running a calculation.
 3. **Plugins without Python, perhaps** (raised by the maintainer on

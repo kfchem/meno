@@ -363,6 +363,7 @@ export function createEditorStore(
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
     fitNonce: 0,
+    showRequest: null,
     autoFitSuspended: false,
     labelEdit: { active: false, atomId: null, value: "" },
     labelLeft: null,

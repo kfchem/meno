@@ -14,7 +14,9 @@ import * as THREE from "three";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { drawPart, type DrawnPart } from "../../../../lib/pdf/reader";
 import type { Sheet } from "../../../../lib/pdf/layout";
-import { INK_WIDTHS_PT, inkColour, markerColour } from "../../../../lib/chem/ink";
+import { inkColour, inkWidthPt, markerColour } from "../../../../lib/chem/ink";
+import { bondLinePtOf } from "../../../../lib/chem/shapes";
+import { useDrawnLayout } from "./drawnLayoutContext";
 import { setInUse } from "../../../../lib/chem/palette";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { PdfInk } from "../store/types";
@@ -442,6 +444,8 @@ export function Page(props: {
 /** Writing on a page: over its pictures (tiles up to about 0.0024) and under its marks (0.0025, a ring's 0.0026) - each piece in its pen, its points the page's. */
 function PageInk({ ink, left, topY, unit, opacity }: { ink: readonly PdfInk[]; left: number; topY: number; unit: number; opacity: number }) {
   const marker = markerColour(setInUse(useAppSettings((s) => s.colours)));
+  // (a pen as wide as the drawing's bonds, where it wrote so - in the page's points, as they are)
+  const bondLinePt = bondLinePtOf(useDrawnLayout().opts);
   const pieces = useMemo(
     () =>
       ink.map((k) => {
@@ -453,9 +457,9 @@ function PageInk({ ink, left, topY, unit, opacity }: { ink: readonly PdfInk[]; l
           }
           return { ...s, points };
         });
-        return { k, geometry: strokesGeometry(strokes, INK_WIDTHS_PT[k.pen][k.width] * unit, k.pen !== "marker") };
+        return { k, geometry: strokesGeometry(strokes, inkWidthPt(k, bondLinePt) * unit, k.pen !== "marker") };
       }),
-    [ink, left, topY, unit],
+    [ink, left, topY, unit, bondLinePt],
   );
   useEffect(() => () => pieces.forEach((p) => p.geometry.dispose()), [pieces]);
   return (

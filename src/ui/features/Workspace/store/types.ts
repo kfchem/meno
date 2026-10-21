@@ -1,10 +1,11 @@
+import type { ShowBox } from "../utils/viewShow";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
-import type { ShapeGeometry, ShapeKind, ShapeWeight } from "../../../../lib/chem/shapes";
+import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
 import type { Cycle } from "../../../../lib/chem/cycle";
 export type { Cycle } from "../../../../lib/chem/cycle";
 import type { InkPen, InkStroke } from "../../../../lib/chem/ink";
@@ -218,8 +219,6 @@ export type Caption = {
   size?: number;
   /** Letters of it set otherwise than the rest - bold, in italics, in a colour, raised or lowered - apart and in order (lib/chem/captions `WordsMark`). */
   marks?: WordsMark[];
-  /** The shape it is written in, by id: kept about its middle, as wide as it is inside, going where it goes (docs/PRESENTING.md, *Shapes*). */
-  shape?: number;
 };
 /**
  * A change to words on the page: written anew, moved, put over an arrow or
@@ -312,20 +311,20 @@ export type PictureFrom = { sha256: string; page: number; box: [number, number, 
 export type Slide = { id: number; x: number; y: number; w: number; h: number; around?: true };
 
 /**
- * A shape on the page (docs/PRESENTING.md, *Shapes*): a rectangle, a
- * rounded one, an ellipse, a line, an arrow or a callout, where and how
+ * A shape on the page (docs/PRESENTING.md, *Shapes*): a rectangle - its
+ * corners square or rounded - an ellipse or a line, where and how
  * lib/chem/shapes says - and its line's colour (none of its own, the
  * drawing's ink; "none", no line) and its fill (none of its own, none).
- * Words in it are words on the page that say so (`Caption.shape`). Each
- * lies over those before it.
+ * A shape is a shape: no words in it. Each lies over those before it.
  */
 export type Shape = ShapeGeometry & { id: number; stroke?: string; fill?: string };
 /**
- * A change to a shape: where it lies, its tail, its line's weight, dashed
- * or not, its line's colour and its fill (null, none of its own).
+ * A change to a shape: where it lies, its corners' radius (0, square), its
+ * line's width in points (null, as the drawing's bonds), dashed or not, its
+ * line's colour and its fill (null, none of its own).
  */
-export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "tail">> & {
-  weight?: ShapeWeight;
+export type ShapePatch = Partial<Pick<ShapeGeometry, "x0" | "y0" | "x1" | "y1" | "radius">> & {
+  width?: number | null;
   dash?: boolean;
   stroke?: string | null;
   fill?: string | null;
@@ -337,7 +336,8 @@ export type ShapeDraft = { kind: ShapeKind; from: { x: number; y: number }; to: 
  * A piece of writing by hand on the page (docs/PRESENTING.md,
  * *Handwriting*): strokes written one after another in one pen, near each
  * other - selected, moved, coloured and deleted together. `width`, which of
- * the pen's three widths (lib/chem/ink `INK_WIDTHS_PT`); `color`, its own -
+ * the pen's three widths (lib/chem/ink `INK_WIDTHS_PT`: a pen's first as wide
+ * as the drawing's bonds, following its style); `color`, its own -
  * none, a pen's is the drawing's ink and a marker's the first of the colour
  * set in use (lib/chem/ink `markerColour`).
  */
@@ -472,8 +472,13 @@ export type Molecule3D = {
   centres?: { metal: number; atoms: number[] }[];
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
-  /** How it was made, where something made it - its conformers' method and force field - as rows to show, in the words of what made it. */
-  made?: { method?: string; how: { label: string; text: string }[] };
+  /**
+   * How it was made, where something made it - its conformers' method and
+   * force field - as rows to show, in the words of what made it; and what
+   * its energies are (`energies`), where it gave them: the force field's
+   * name, as it said it.
+   */
+  made?: { method?: string; how: { label: string; text: string }[]; energies?: string };
   /** What the text it was read from says of it - its charge and multiplicity, its energies - where it was read from coordinates in a text (lib/io/coordinates), as rows to show. */
   said?: { label: string; text: string }[];
   /**
@@ -588,7 +593,23 @@ export type WorkflowSet = {
   /** The step and exit that made it, and what it holds: every exit has a set of its own, made with the step and empty until it runs. */
   made?: { step: number; exit: string; holds: SetHolds };
   name?: string;
+  /**
+   * What it holds, in order (docs/WORKFLOWS-FOUNDATION.md, *Members are
+   * explicit*): each a structure drawn (by its atoms' ids), a molecule in
+   * 3D or a picture (by id). Dropping something into the frame adds it at
+   * its place, dragging it out takes it out, a frame resized takes in and
+   * lets go of what then lies inside it or not (workflow/model
+   * `membersSettled`); a step's result set holds what the step made, in its
+   * order. None yet: what lies inside it, as a set was before.
+   */
+  members?: Member[];
+  /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
+  keep?: false;
+  /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
+  notKept?: { count: number; hash: string };
 };
+/** One of a set's members: a structure drawn, by its atoms' ids; a molecule in 3D, or a picture, by id. */
+export type Member = { structure: number[] } | { molecule: number } | { picture: number };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -1134,12 +1155,12 @@ export type EditorState = {
   toggleShapeSel: (id: number) => void;
   /** A shape put on the page, over the others; its id. */
   addShape: (shape: Omit<Shape, "id">) => number | null;
-  /** A shape moved, made larger or smaller, its tail moved, or its look changed: one step for a drag (`gesture`). */
+  /** A shape moved, made larger or smaller, its corners rounded, or its look changed: one step for a drag (`gesture`). */
   /** A resize let go: back as it was at the press (Escape, or undo during it). */
   dropShapeChange: (id: number, gesture: string) => void;
   updateShape: (id: number, patch: ShapePatch, gesture?: string) => void;
-  /** The shapes `ids` given the same look - their lines' weight, dashed or not - as one step. */
-  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "weight" | "dash">) => void;
+  /** The shapes `ids` given the same look - their lines' width, dashed or not - as one step. */
+  styleShapes: (ids: readonly number[], patch: Pick<ShapePatch, "width" | "dash">) => void;
   /** The shapes `ids` given a colour for their line or their fill - or none of their own - as one step; one for all a chooser gives (`gesture`). */
   colourShapes: (ids: readonly number[], which: "stroke" | "fill", color: string | null, gesture?: string) => void;
   /** The shapes `ids` brought over all the others, or put under them. */
@@ -1204,7 +1225,7 @@ export type EditorState = {
    * words opened it: the caret put there - and a drag (`drag`) selecting on
    * from there - as if it had pressed there among them.
    */
-  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress; shape?: number } | null;
+  captionEdit: { id: number | null; at: { x: number; y: number }; n?: number; drawn?: boolean; press?: CaptionPress } | null;
   setCaptionEdit: (edit: EditorState["captionEdit"]) => void;
   /** The words being written, drawn in place of their caption's own: from now. */
   markCaptionDrawn: (n: number) => void;
@@ -1226,7 +1247,7 @@ export type EditorState = {
   /** The caption's own words drawn again: what was written no longer drawn over them. */
   captionShown: (id: number) => void;
   /** Words added, as one step - taken out of a PDF, where they came from, as wide as their lines were and lying as they did; their id. */
-  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[]; shape?: number }) => number;
+  addCaption: (text: string, x: number, y: number, arrow?: number, from?: WordsFrom, width?: number, align?: Caption["align"], more?: { size?: number; marks?: WordsMark[] }) => number;
   /**
    * Words changed - written anew, moved, put over an arrow or taken from
    * one (`arrow` null), made as wide as something or as their words
@@ -1297,6 +1318,8 @@ export type EditorState = {
   placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => void;
   /** A chemist's set named anew; an empty name takes its name away (*Input* again). */
   renameSet: (id: number, name: string) => void;
+  /** A step's result set kept in the workspace's file, or not: one step. */
+  keepSet: (id: number, keep: boolean) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
@@ -1359,6 +1382,14 @@ export type EditorState = {
   arrows: Arrow[];
   pluses: Plus[];
   fitNonce: number;
+  /**
+   * What was just put down on the page, to be shown (utils/viewShow): the
+   * view moved along to take it in, or out as little as needed - each
+   * request its own number.
+   */
+  showRequest: { box: ShowBox; n: number } | null;
+  /** The view to show `box`, as what was just put down is shown (`showRequest`). */
+  requestShow: (box: ShowBox) => void;
   autoFitSuspended: boolean;
   aromaticEnabled: boolean; // legacy/global
   aromaticRings: Record<string, boolean>; // per-ring enabled flags by ringKey
@@ -1739,6 +1770,13 @@ export type EditorState = {
   easeDocumentStyle: (style: StyleChoice) => void;
   /** The workspace's styles in 3D set: one step to undo - a run of a slider's in one `coalesceKey`. Its molecules go over to them, eased. */
   setDocumentStyle3d: (style3d: Workspace3D, coalesceKey?: string) => void;
+  /**
+   * Settings' styles taken by the workspace, asked (../SettingsStyleAsk):
+   * its drawing style - its bond eased in, as a preset chosen in its card -
+   * and its two looks in 3D, primary and secondary, its molecules going
+   * over to them eased; either left as it is where none is given. One step.
+   */
+  adoptSettingsStyles: (drawing: StyleChoice | null, roles: Pick<Workspace3D, "primary" | "secondary"> | null) => void;
   toggleAromatic: () => void;
   setRingEnabled: (key: string, v: boolean) => void;
   toggleRing: (key: string) => void;

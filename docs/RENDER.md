@@ -58,7 +58,7 @@ Blender plugin, in Settings, *Plugins*). A card over the canvas asks:
   plugin's below).
 
 Each is remembered: Meno's for a picture and a film apart, the plugin's as
-the role's options, which Settings, *Molecules in 3D*, shows as well.
+the role's options, which Settings, *Chemistry*, shows as well, on its *3D* card.
 
 ## What Meno writes
 

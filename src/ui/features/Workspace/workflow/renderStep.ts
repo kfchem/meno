@@ -10,7 +10,7 @@ import type { Carried3D, Molecule3D, PictureItem, Turn3D, WorkflowStep } from ".
 import { setMembers, type SetEntry } from "./entries";
 import { resultOf } from "./flow";
 import { BETWEEN, SET_PAD, SET_TOP } from "./look";
-import { addSet, markMade, resizeSet } from "./model";
+import { addSet, holdMembers, markMade, resizeSet } from "./model";
 import { frameAt, LEAST_W, placeFor, ROW_MOST } from "./run";
 
 /**
@@ -67,13 +67,16 @@ export function placePictures(doc: WorkspaceDocument, step: WorkflowStep, made: 
   const was = resultOf(doc, step.id);
   if (was) doc = removePictures(doc, setMembers(doc, was).pictures);
   const frame = was ? frameAt(was.x0, was.y1, width, height) : placeFor(doc, step, width, height);
+  const there = new Set((doc.pictures ?? []).map((p) => p.id));
   made.forEach(({ picture, size }, i) => {
     doc = addPicture(doc, { ...picture, x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y, w: size[0], h: size[1] });
   });
+  // (the set holds the pictures the step made, in its order)
+  const members = (doc.pictures ?? []).filter((p) => !there.has(p.id)).map((p) => ({ picture: p.id }));
   const madeBy = { step: step.id, holds: "pictures" as const };
-  if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy, undefined);
+  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, undefined), was.id, members);
   const id = doc.nextWorkflowId ?? 1;
-  return markMade(addSet(doc, frame, madeBy), id, madeBy, undefined);
+  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy, undefined), id, members);
 }
 
 /** What a Render step's card says it did: how long it took, and how many pictures it made - of how many, where some failed. */

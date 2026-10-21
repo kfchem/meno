@@ -30,8 +30,14 @@ import { etaBound } from "./etaBound";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
 
-/** How long a structure's conformers may take: a large one's, on a slow machine, minutes. */
-export const CONFORMERS_MS = 5 * 60_000;
+/**
+ * How long a structure's conformers may take: a large one's, on a slow machine, minutes. Fifteen of them
+ * since 2026-10-20, when how many are sought became the molecule's to say: a ciclosporin took 2.5 minutes
+ * here and a vancomycin 2.4, which on a machine half as quick is past the five minutes this allowed before.
+ * The chemist need not wait it out - Stop, while a 3D structure is being made, stops the plugin's worker
+ * and lets the question go at once.
+ */
+export const CONFORMERS_MS = 15 * 60_000;
 /** The room between a drawing and the molecule in 3D that rises out of it, and between molecules. */
 const GAP = 1.5 * NOMINAL_BOND_LENGTH;
 
@@ -159,6 +165,8 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
   const renumbered = (r: Record<string, string> | undefined, at: Map<number, number>) =>
     Object.fromEntries(Object.entries(r ?? {}).flatMap(([k, v]) => (at.has(Number(k)) ? [[String(at.get(Number(k))), v]] : [])));
   const chosen = { atoms: renumbered(c.chosen.atoms, atomAt), bonds: renumbered(c.chosen.bonds, bondAt) };
+  // (its energies the force field's the plugin named - none where it used none)
+  const energiesFrom = c.energies?.length && c.field && c.field !== "none" ? c.field : undefined;
   return {
     atoms: kept.map((i, k) => {
       const a = c.atoms[i];
@@ -182,7 +190,7 @@ export function moleculeOf(c: Conformers, block: Block, several = false): Omit<M
     conformerSet: true,
     // (made from a drawing shown magnified: shown as large - docs/WORKSPACE.md, *Magnified display*)
     ...(block.part.atoms[0]?.magnified != null && block.part.atoms[0].magnified !== 1 ? { magnified: block.part.atoms[0].magnified } : {}),
-    ...(c.how?.length || c.method ? { made: { ...(c.method ? { method: c.method } : {}), how: c.how ?? [] } } : {}),
+    ...(c.how?.length || c.method || energiesFrom ? { made: { ...(c.method ? { method: c.method } : {}), how: c.how ?? [], ...(energiesFrom ? { energies: energiesFrom } : {}) } } : {}),
     stereo: {
       atoms: numbered(renumbered(c.cip?.atoms, atomAt)),
       bonds: numbered(renumbered(c.cip?.bonds, bondAt)),

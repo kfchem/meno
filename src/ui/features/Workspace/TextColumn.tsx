@@ -25,7 +25,7 @@ import { dragWords, onSelected } from "./components/wordsDrag";
 import { dragBox, inBox } from "./components/boxDrag";
 import { figureAt, figuresHad, type Box } from "../../../lib/pdf/figures";
 import { linkAt, linksOf, type PdfLink } from "../../../lib/pdf/reader";
-import { followLink, goBack, isBackKey, readerOf } from "./components/pdfColumnReader";
+import { followLink, followsLink, goBack, isBackKey, linkHint, readerOf } from "./components/pdfColumnReader";
 import { DOUBLE_CLICK_MS } from "./constants";
 import { atomAtSpot } from "./utils/figures";
 
@@ -619,11 +619,21 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const st = store.getState();
       const sha = st.pdfs.find((x) => x.id === id)?.sha256;
       st.setFigureLit(q.on && sha ? atomAtSpot(st.model, sha, q.page, q.x, q.y) : null);
-      // (over a link, the system's hand, and where it goes; over words, the text cursor)
+      // (over a link, what ⌘- or Ctrl-click does - the system's hand only with the key held; over words, the text cursor)
+      hovered = e;
+      pointerOver(e);
+    };
+    // (the cursor and the hint where the pointer is: again as ⌘ or Ctrl is pressed or let go)
+    let hovered: PointerEvent | null = null;
+    const pointerOver = (e: { clientX: number; clientY: number; metaKey: boolean; ctrlKey: boolean }) => {
+      const q = inPdf(e);
       const link = linkUnder(e);
-      const t = q.on ? lettersOf(q.page) : null;
-      el.style.cursor = link ? "pointer" : t && letterNear(t, q.x, q.y) != null ? "text" : "";
-      el.title = link ? (link.uri ?? (link.page != null ? `Page ${link.page + 1}` : "")) : "";
+      const t = q?.on ? lettersOf(q.page) : null;
+      el.style.cursor = link && followsLink(e) ? "pointer" : q && t && letterNear(t, q.x, q.y) != null ? "text" : "";
+      el.title = link ? linkHint(link) : "";
+    };
+    const onModifier = (e: KeyboardEvent) => {
+      if (over && hovered && (e.key === "Meta" || e.key === "Control")) pointerOver({ clientX: hovered.clientX, clientY: hovered.clientY, metaKey: e.metaKey, ctrlKey: e.ctrlKey });
     };
     const onLeave = () => {
       over = false;
@@ -718,7 +728,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       }
       // (let go where it was pressed, in a figure - its figures come since, if they had not - its box; on a link, the link followed)
       const sha = shaOf();
-      const fig = boxed && !linkUnder(e) ? (boxed.fig ?? (sha ? figureAt(figuresHad(sha, boxed.page) ?? [], boxed.x, boxed.y) : null)) : null;
+      const fig = boxed && !(followsLink(e) && linkUnder(e)) ? (boxed.fig ?? (sha ? figureAt(figuresHad(sha, boxed.page) ?? [], boxed.x, boxed.y) : null)) : null;
       if (boxed && fig) {
         store.getState().setPdfBox({ id, page: boxed.page, box: fig });
         return;
@@ -729,8 +739,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       }
       if (e.button !== 0 || !press || Math.hypot(e.clientX - press.x, e.clientY - press.y) > CLICK_PX) return;
       press = null;
-      // a click: a link followed, nothing selected
-      const link = linkUnder(e);
+      // a click: nothing selected - and with ⌘ (Ctrl) on a link, the link followed
+      const link = followsLink(e) ? linkUnder(e) : null;
       const now = store.getState().pdfs.find((x) => x.id === id);
       if (drawn?.unit === "letter" && !drawn.moved) store.getState().setPdfSel(null);
       if (link && now) followLink(store, now, link);
@@ -784,6 +794,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     el.addEventListener("mouseup", onMouseUp);
     el.addEventListener("contextmenu", onMenu);
     window.addEventListener("keydown", onKey, true);
+    window.addEventListener("keydown", onModifier, true);
+    window.addEventListener("keyup", onModifier, true);
     return () => {
       el.removeEventListener("wheel", onWheel);
       el.removeEventListener("gesturestart", onGestureStart);
@@ -796,6 +808,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       el.removeEventListener("mouseup", onMouseUp);
       el.removeEventListener("contextmenu", onMenu);
       window.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("keydown", onModifier, true);
+      window.removeEventListener("keyup", onModifier, true);
       lit(false);
     };
   }, [el, store, id]);

@@ -27,7 +27,8 @@ import { useThree } from "@react-three/fiber";
 import { useEditorStore } from "../store";
 import type { InkLook } from "../store/types";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { INK_WIDTHS_PT, inkWidth, pressureFelt, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
+import { inkWidth, inkWidthPt, pressureFelt, strokeHit, strokesBounds, thinned, type InkStroke } from "../../../../lib/chem/ink";
+import { bondLinePtOf } from "../../../../lib/chem/shapes";
 import { shownSheet } from "../../../../lib/pdf/layout";
 import { pageAt } from "../utils/page";
 import { pageUnder, pointsOnPage, toPagePoint } from "../utils/pdfInk";
@@ -55,6 +56,8 @@ export default function InkWriting() {
   const { opts } = useDrawnLayout();
   const pointPx = opts.pointPx ?? POINT_FALLBACK;
   const em = opts.fontPx;
+  // (a pen as wide as the drawing's bonds, where it writes so)
+  const bondLinePt = bondLinePtOf(opts);
   const lastRef = useRef<Last | null>(null);
 
   // (the pointer over the page, while the card is open: one to write with)
@@ -115,7 +118,7 @@ export default function InkWriting() {
 
     const write = (down: PointerEvent, pen: boolean, talk: boolean) => {
       const mode = talk ? null : store.getState().inkMode;
-      const look: InkLook = mode && mode.tool !== "eraser" ? { pen: mode.tool, width: mode.width, ...(mode.color ? { color: mode.color } : {}) } : { pen: "pen", width: 1 };
+      const look: InkLook = mode && mode.tool !== "eraser" ? { pen: mode.tool, width: mode.width, ...(mode.color ? { color: mode.color } : {}) } : { pen: "pen", width: 0 };
       // (begun on a PDF's page: that page's)
       const on = talk ? null : pageUnder(store.getState().pdfs, toPage(down.clientX, down.clientY));
       const taking = new StrokeTaking(down, toPage, pen);
@@ -163,7 +166,7 @@ export default function InkWriting() {
           return;
         }
         // (its width and an em in the units it is kept in: a PDF's points, or the page's)
-        const width = on ? INK_WIDTHS_PT[look.pen][look.width] : inkWidth(look, pointPx);
+        const width = on ? inkWidthPt(look, bondLinePt) : inkWidth(look, pointPx, bondLinePt);
         const nearBy = on ? em / pointPx : em;
         const box = strokesBounds([stroke], width / 2);
         if (!box) return;
@@ -200,11 +203,11 @@ export default function InkWriting() {
         const p = toPage(e.clientX, e.clientY);
         const reach = ERASE_PX * pixel();
         if (talk) {
-          st.eraseTalkStrokes(st.talkInk.flatMap((k, i) => (strokeHit(k.stroke, p, reach, inkWidth(k.look, pointPx)) ? [i] : [])));
+          st.eraseTalkStrokes(st.talkInk.flatMap((k, i) => (strokeHit(k.stroke, p, reach, inkWidth(k.look, pointPx, bondLinePt)) ? [i] : [])));
           invalidate();
           return;
         }
-        const cuts = st.inks.flatMap((k) => k.strokes.flatMap((s, index) => (strokeHit(s, p, reach, inkWidth(k, pointPx)) ? [{ id: k.id, index }] : [])));
+        const cuts = st.inks.flatMap((k) => k.strokes.flatMap((s, index) => (strokeHit(s, p, reach, inkWidth(k, pointPx, bondLinePt)) ? [{ id: k.id, index }] : [])));
         if (cuts.length) st.eraseStrokes(cuts, gesture);
         // (and what is written on PDFs' pages there, in their points)
         const onPdfs = st.pdfs.flatMap((pdf) =>
@@ -215,7 +218,7 @@ export default function InkWriting() {
                 if (!sheet) return [];
                 const unit = sheet.w / pdf.pages[k.page][0];
                 const q = toPagePoint(sheet, pdf.pages[k.page], p);
-                return k.strokes.flatMap((s, index) => (strokeHit(s, q, reach / unit, INK_WIDTHS_PT[k.pen][k.width]) ? [{ pdf: pdf.id, piece, index }] : []));
+                return k.strokes.flatMap((s, index) => (strokeHit(s, q, reach / unit, inkWidthPt(k, bondLinePt)) ? [{ pdf: pdf.id, piece, index }] : []));
               }),
         );
         if (onPdfs.length) st.erasePdfStrokes(onPdfs, gesture);
@@ -239,7 +242,7 @@ export default function InkWriting() {
 
     window.addEventListener("pointerdown", onDown, true);
     return () => window.removeEventListener("pointerdown", onDown, true);
-  }, [gl, camera, store, invalidate, pointPx, em]);
+  }, [gl, camera, store, invalidate, pointPx, em, bondLinePt]);
 
   return null;
 }

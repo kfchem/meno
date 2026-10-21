@@ -74,6 +74,8 @@ import { unsureOf, type Unsure } from "./chem/drawing";
 import { structureValues } from "./utils/byStructure";
 import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
+import CornersCard from "./CornersCard";
+import SettingsStyleAsk from "./SettingsStyleAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -188,6 +190,7 @@ import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
 import { centredAt } from "./utils/copyPaste";
 import { putDownSmiles } from "./utils/quickAddSmiles";
+import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
 import { gestureUnderWay, letLostGesturesGo, wordsUnderWay } from "./store/gesture";
 import { Remake3D } from "./components/remake3d";
@@ -210,7 +213,7 @@ import InkWriting from "./components/InkWriting";
 import PenCard from "./PenCard";
 import { shapeFrom } from "./components/shapeFrom";
 import { arrowFrom } from "./components/arrowFrom";
-import { isBox, wordsRoom } from "../../../lib/chem/shapes";
+import { roundedPt, roundestOf } from "../../../lib/chem/shapes";
 import { isBlankDocument, pdfsInRow, picturesInRow, SHAPE_PAD, textsInRow } from "./document";
 import { freePlace, pageBoxes } from "./utils/freePlace";
 import { sheetRoom } from "./utils/textSheets";
@@ -477,11 +480,13 @@ function WorkspaceContent({
       setMaking3d(Date.now());
       try {
         const chem = await chemWorker("conformers");
-        // (the options the plugin takes for the role, as chosen in Settings, Molecules in 3D)
+        // (the options the plugin takes for the role, as chosen in Settings, Chemistry, on its 3D card)
         const declared = rolePlugin("conformers")?.roleOptions.conformers ?? [];
         const options = valuesOf(declared, useAppSettings.getState().options[roleOptionsRole("conformers")]);
         const made: Parameters<ReturnType<typeof store.getState>["riseMolecules3d"]>[0] = [];
         let allInView = true;
+        // (where the rows made lie: shown, where they are not seen whole - utils/viewShow)
+        let made3d: { x0: number; x1: number; y0: number; y1: number } | null = null;
         // (what they keep clear of: the molecules in 3D there already, as they are seen now - and each row made)
         const look3d = style3dOf(store.getState());
         const st = store.getState();
@@ -503,7 +508,10 @@ function WorkspaceContent({
           const row = replacing
             ? { at: rowFrom(turned, replacing.at), inView: true }
             : placeRow(turned, boxOf(block.part), viewBox(), camRef.current ? eyeOf(camRef.current)?.z : undefined, taken);
-          if ("box" in row) solids.push(row.box);
+          if ("box" in row) {
+            solids.push(row.box);
+            made3d = made3d ? { x0: Math.min(made3d.x0, row.box.x0), x1: Math.max(made3d.x1, row.box.x1), y0: Math.min(made3d.y0, row.box.y0), y1: Math.max(made3d.y1, row.box.y1) } : row.box;
+          }
           allInView &&= row.inView;
           ms.forEach((m, i) =>
             made.push({ m: { ...m, at: row.at[i] }, turn: turned[i].turn, from: turned[i].start, flat: turned[i].flat }),
@@ -516,8 +524,8 @@ function WorkspaceContent({
           return;
         }
         store.getState().riseMolecules3d(made, replacing ? [replacing.id] : []);
-        // (with no room for them in view, the view takes them in)
-        if (!allInView) requestFit();
+        // (with no room for them in view, the view goes to them - along, or out as little as needed)
+        if (!allInView && made3d) store.getState().requestShow(made3d);
       } catch (e: unknown) {
         if (!stopped) setChemError(`No 3D structure could be made: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
@@ -526,7 +534,7 @@ function WorkspaceContent({
         setWorking3d(null);
       }
     },
-    [store, viewBox, requestFit, camRef],
+    [store, viewBox, camRef],
   );
   const make3d = useCallback(
     async (around: Iterable<number>, replacing?: Molecule3D) => {
@@ -588,16 +596,16 @@ function WorkspaceContent({
         store.getState().drawFormula3d(id, placed, link);
         // (its bonds drawn single where their orders could not be had: said)
         if (ordersUnknown) setChemError("Bond orders unknown: the formula is drawn with every bond single.");
-        // (beyond the view, the view takes it in)
-        const view = viewBox();
-        if (view && placed.atoms.some((a) => a.x < view.x0 || a.x > view.x1 || a.y < view.y0 || a.y > view.y1)) requestFit();
+        // (shown: the view moved to take it in, where it is not seen whole - utils/viewShow)
+        const box = addedBox(Number.NEGATIVE_INFINITY, placed);
+        if (box) store.getState().requestShow(box);
       } catch (e: unknown) {
         setChemError(`The formula could not be drawn: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
         setWorking3d(null);
       }
     },
-    [store, viewBox, requestFit],
+    [store],
   );
   // A molecule in 3D turned to lie as its drawing does, as it did as it rose
   const turnLikeDrawing = useCallback(
@@ -656,6 +664,8 @@ function WorkspaceContent({
   const [colourCard, setColourCard] = useState<{ target: ColourTarget; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the card of sizes for words on the page, where their menu was (docs/EDITOR-2D.md, *Text*)
   const [sizeCard, setSizeCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
+  // the card of a rectangle's corners, where its menu was (docs/PRESENTING.md, *Shapes*)
+  const [cornersCard, setCornersCard] = useState<{ id: number; x: number; y: number; within: { width: number; height: number } } | null>(null);
   // the field to look for words in the PDFs, opened at the column's top on
   // the PDF it shows - or the one under the pointer, or read there, or the
   // first - with the words selected in it, if any
@@ -933,6 +943,7 @@ function WorkspaceContent({
     setMenu(null);
     setColourCard(null);
     setSizeCard(null);
+    setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
   }, [talking]);
@@ -1409,7 +1420,7 @@ function WorkspaceContent({
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
   const layoutOpts = useMemo(() => editorLayoutOptions(style), [style]);
   const keepTop = (c: Caption, next: Partial<Pick<Caption, "text" | "size" | "marks">>): { y?: number } => {
-    if (!c.width || c.arrow != null || c.shape != null) return {};
+    if (!c.width || c.arrow != null) return {};
     const set = labelSetOf(layoutOpts);
     const top = c.y + wordsSet(c, layoutOpts, set).halfH;
     const after = { ...c, ...next };
@@ -1668,6 +1679,8 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
+      {ownTab && <SettingsStyleAsk active={active} />}
       <AnimatePresence>
         {givingOrders && (
           <OrdersCard
@@ -1791,7 +1804,7 @@ function WorkspaceContent({
               else if (what === "push") st.setPushDraw({ from: null, half: false, pointer: null, to: null });
               // (a slide of what is seen: Quick Add only says when, not where)
               // (the pen's card: writing with the mouse or the trackpad, until Done)
-              else if (what === "pen") st.setInkMode({ tool: "pen", color: null, width: 1 });
+              else if (what === "pen") st.setInkMode({ tool: "pen", color: null, width: 0 });
               else if (what === "slide") {
                 const seen = viewBox();
                 if (seen) st.addSlide(slideOfView(seen, WIDE));
@@ -1852,6 +1865,26 @@ function WorkspaceContent({
             onClose={() => setSizeCard(null)}
           />
         )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {cornersCard &&
+          (() => {
+            const sh = store.getState().shapes.find((x) => x.id === cornersCard.id);
+            const pointPx = layoutOpts.pointPx ?? pointOfStyle(store.getState().docStyle);
+            if (!sh || sh.kind !== "rect") return null;
+            return (
+              <CornersCard
+                key={`${cornersCard.x},${cornersCard.y}`}
+                now={sh.radius ?? 0}
+                most={roundestOf(sh.x1 - sh.x0, sh.y1 - sh.y0) / pointPx}
+                onCorners={(pt) => store.getState().updateShape(sh.id, { radius: pt })}
+                x={cornersCard.x}
+                y={cornersCard.y}
+                within={cornersCard.within}
+                onClose={() => setCornersCard(null)}
+              />
+            );
+          })()}
       </AnimatePresence>
       <AnimatePresence>
         {pdfCard &&
@@ -1942,6 +1975,11 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          keepInFile={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.made ? { kept: set.keep !== false, set: (keep: boolean) => store.getState().keepSet(set.id, keep) } : undefined;
+          })()}
           onUseAsInput={menu.selection === "here" && selectionAsSet() ? () => {
             const frame = selectionAsSet();
             if (!frame) return;
@@ -1950,7 +1988,7 @@ function WorkspaceContent({
           } : undefined}
           onReadStructure={(() => {
             const st = store.getState();
-            const ui = { working: setWorking3d, say: setChemError, view: viewBox, fit: requestFit };
+            const ui = { working: setWorking3d, say: setChemError };
             // (the figure in a box drawn on a PDF: the structure beside the PDF)
             const pdf = menu.kind === "pdf" ? st.pdfs.find((x) => x.id === menu.id) : undefined;
             const box = st.pdfBox;
@@ -2003,7 +2041,7 @@ function WorkspaceContent({
           })()}
           onFitWords={(() => {
             const c = menu.kind === "caption" ? store.getState().captions.find((x) => x.id === menu.id) : undefined;
-            return c?.width && c.shape == null ? () => store.getState().updateCaption(c.id, { width: null }) : undefined;
+            return c?.width ? () => store.getState().updateCaption(c.id, { width: null }) : undefined;
           })()}
           onEditText={() => {
             const c = store.getState().captions.find((x) => x.id === menu.id);
@@ -2078,14 +2116,10 @@ function WorkspaceContent({
             const st = store.getState();
             const sh = menu.kind === "shape" ? st.shapes.find((x) => x.id === menu.id) : undefined;
             if (!sh) return undefined;
-            const words = st.captions.find((c) => c.shape === sh.id);
-            const room = wordsRoom(sh, SHAPE_PAD);
             return {
-              ...(isBox(sh.kind) && room
-                ? { onWrite: () => st.setCaptionEdit(words ? { id: words.id, at: { x: words.x, y: words.y } } : { id: null, at: { x: room.x, y: room.y }, shape: sh.id }) }
-                : {}),
-              weight: sh.weight ?? "regular",
-              onWeight: (weight) => st.styleShapes([sh.id], { weight }),
+              ...(sh.kind === "rect" ? { onCorners: () => setCornersCard({ id: sh.id, x: menu.x, y: menu.y, within: menu.within }) } : {}),
+              width: sh.width ?? null,
+              onWidth: (width) => st.styleShapes([sh.id], { width }),
               dash: !!sh.dash,
               onDash: () => st.styleShapes([sh.id], { dash: !sh.dash }),
               onFront: () => st.orderShapes([sh.id], true),
@@ -2108,7 +2142,9 @@ function WorkspaceContent({
                   const st = store.getState();
                   const cam = camRef.current;
                   const b = selectedBox(st, style, (cam as { zoom?: number } | null)?.zoom ?? 1, cam ? eyeOf(cam)?.z : undefined);
-                  if (b) st.addShape({ kind: "rounded", x0: b.x0 - SHAPE_PAD, y0: b.y0 - SHAPE_PAD, x1: b.x1 + SHAPE_PAD, y1: b.y1 + SHAPE_PAD });
+                  // (a rectangle a third of a bond clear of it, its corners rounded)
+                  const box = b && { kind: "rect" as const, x0: b.x0 - SHAPE_PAD, y0: b.y0 - SHAPE_PAD, x1: b.x1 + SHAPE_PAD, y1: b.y1 + SHAPE_PAD };
+                  if (box) st.addShape({ ...box, radius: roundedPt(box.x1 - box.x0, box.y1 - box.y0, pointOfStyle(st.docStyle)) });
                 }
               : undefined
           }
@@ -2148,7 +2184,7 @@ function WorkspaceContent({
               spread: !!p.spread,
               icon: !!p.icon,
               onSpread: () => st.spreadPdf(p.id, !p.spread),
-              onWrite: () => st.setInkMode({ tool: "pen", color: null, width: 1 }),
+              onWrite: () => st.setInkMode({ tool: "pen", color: null, width: 0 }),
               ...(p.spread && p.placed?.length ? { onRows: () => st.pdfPagesInRows(p.id) } : {}),
               onIcon: () => st.iconPdf(p.id, !p.icon),
               ...(!p.spread && !p.icon && p.page < p.pages.length - 1 ? { onNext: () => st.turnPdf(p.id, p.page + 1) } : {}),

@@ -33,6 +33,18 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain("cursor-pointer");
   });
 
+  it("says under a conformer set's bars what its energies are, in the words of what made them, whichever is shown", () => {
+    const kcal = (e: number) => e / 627.509474;
+    const energies = [0, kcal(0.5), kcal(1.2)];
+    const made = { how: [], energies: "Field X" };
+    const at = (frame: number) => renderToString(<FramesChip count={3} frame={frame} energies={energies} open onFrame={none} made={made} />);
+    expect(at(0)).toContain("Energies from <!-- -->Field X");
+    expect(at(2)).toContain("Energies from <!-- -->Field X");
+    // (nothing said where what made them said nothing, nor for a calculation's, which says its own line)
+    expect(renderToString(<FramesChip count={3} frame={0} energies={energies} open onFrame={none} made={{ how: [] }} />)).not.toContain("Energies from");
+    expect(renderToString(<FramesChip count={3} frame={0} energies={energies} open onFrame={none} made={made} about="a calculation" />)).not.toContain("Energies from");
+  });
+
   it("writes a conformer's energy and share by what they round to: 10.0 kcal/mol, not 10.00; >99%, not 100%, beside another", () => {
     const kcal = (e: number) => e / 627.509474;
     const at = (frame: number, energies: number[], populations: number[]) =>

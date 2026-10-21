@@ -23,7 +23,7 @@ import {
   type Grown,
 } from "./assemble";
 import { angleOf, dist, mirror, segmentsCross, sub } from "./geometry";
-import { hydrogenRunsInto, hydrogenSpot, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
+import { hydrogenRunsInto, hydrogenSpot, hydrogenWritten, LABEL_ROOM, labelsCrowding, labelsOnVertices, layoutMetrics, type LayoutMetrics } from "./metrics";
 import { atomDepth, boxesDepth, isName, namesLaid, segmentMeetsBox } from "./names";
 import { isMetal, METAL_BOND, orderOf, perceive, type LayoutInput, type Molecule, type RingSystem } from "./perceive";
 import { extendRingSystem, metalHub, misshapen, narrowGap, placeRingSystem, regularize, ringSystemVariants } from "./ringSystem";
@@ -2033,8 +2033,9 @@ export function roomForHydrogens(
           return { x: v.x / d, y: v.y / d };
         }),
       );
-      const h = { x: at.x + off.x, y: at.y + off.y };
-      const count = mol.hs[a] > 1 && off.x >= 0;
+      const w = hydrogenWritten(off, mol.hs[a]);
+      const h = { x: at.x + w.x, y: at.y + w.y };
+      const count = w.count;
       const hits: number[] = [];
       for (const b of piece) {
         if (b === a) continue;

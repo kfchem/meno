@@ -25,7 +25,7 @@ import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedL
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
-import { isBox, moved as shapeMoved, wordsRoom } from "../../../lib/chem/shapes";
+import { isBox, moved as shapeMoved } from "../../../lib/chem/shapes";
 import { GAP_MOST, type Cycle, type CycleBranch } from "../../../lib/chem/cycle";
 import type { InkStroke } from "../../../lib/chem/ink";
 import { ICON_NAME_WIDTH, pdfRoom, POINT, scaleOf } from "../../../lib/pdf/layout";
@@ -35,7 +35,7 @@ import { readerLine, sameAtoms, type Found, type Unread } from "../../../lib/cal
 import { readResults } from "../../../lib/calc/results";
 import type { CalcInfo } from "../../../lib/calc/output";
 import { newTextName } from "./utils/texts";
-import { fitSets } from "./workflow/model";
+import { fitSets, membersSettled } from "./workflow/model";
 
 export type WorkspaceDocument = {
   model: Model;
@@ -182,7 +182,7 @@ export function createWorkspaceDocument(data?: unknown, style: StyleChoice = DEF
   // (its history held to about 100 MB: what a step costs is the atoms and
   // bonds it copies - the lists a drawing's edit makes anew, not those it
   // shares with the step before; the maintainer, 2026-10-13)
-  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(fitSets(withOneMagnification(next, before), before), before), cost: stepCost });
+  return createDocument<WorkspaceDocument>(doc, { settle: (next, before) => withRecordsSettled(membersSettled(fitSets(withOneMagnification(next, before), before), before), before), cost: stepCost });
 }
 
 /** What keeping a workspace's state in its history costs beyond the one before it: the atom and bond lists it does not share with it. */
@@ -1049,8 +1049,8 @@ export type ImportedScheme = {
   shapes?: Omit<Shape, "id">[];
   /** Catalytic cycles. */
   cycles?: Omit<Cycle, "id">[];
-  /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), or in a shape it brings (`shapeAt`), where it is. */
-  captions?: (Omit<Caption, "id" | "arrow" | "shape"> & { arrowAt?: number; shapeAt?: number })[];
+  /** Words, each over or under an arrow it brings by its place among them (`arrowAt`), where it is. */
+  captions?: (Omit<Caption, "id" | "arrow"> & { arrowAt?: number })[];
   /** Molecules in 3D a file brings, where they are to stand - and, where it says, the frame each shows (an optimisation's last). */
   molecules3d?: (Omit<Molecule3D, "id"> & { frame?: number; list?: CarriedList; shown?: true })[];
 };
@@ -1062,10 +1062,9 @@ export function schemeOf(part: Drawn): ImportedScheme {
     pluses: (part.pluses ?? []).map(({ id: _id, ...p }) => p),
     shapes: (part.shapes ?? []).map(({ id: _id, ...s }) => s),
     cycles: (part.cycles ?? []).map(({ id: _id, ...c }) => c),
-    captions: (part.captions ?? []).map(({ id: _id, arrow, shape, ...c }) => {
+    captions: (part.captions ?? []).map(({ id: _id, arrow, ...c }) => {
       const at = arrow == null ? -1 : (part.arrows ?? []).findIndex((a) => a.id === arrow);
-      const inside = shape == null ? -1 : (part.shapes ?? []).findIndex((x) => x.id === shape);
-      return { ...c, ...(at >= 0 ? { arrowAt: at } : {}), ...(inside >= 0 ? { shapeAt: inside } : {}) };
+      return { ...c, ...(at >= 0 ? { arrowAt: at } : {}) };
     }),
     // (how one was turned, and its frame, are the view's: not the document's)
     molecules3d: (part.molecules3d ?? []).map(({ turn: _turn, frame: _frame, list: _list, ...m }) => m),
@@ -1082,12 +1081,9 @@ export function withImportedScheme(
   const firstArrow = doc.nextArrowId;
   for (const { x, y, angle, length, ...rest } of scheme?.arrows ?? []) next = addArrow(next, x, y, angle, length, rest);
   for (const p of scheme?.pluses ?? []) next = addPlus(next, p.x, p.y);
-  // (and the words in a shape it brings, in that shape)
-  const firstShape = next.nextShapeId ?? 1;
   for (const sh of scheme?.shapes ?? []) next = addShape(next, sh);
   for (const cy of scheme?.cycles ?? []) next = addCycle(next, cy);
-  for (const { arrowAt, shapeAt, ...c } of scheme?.captions ?? [])
-    next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : {}), ...(shapeAt != null ? { shape: firstShape + shapeAt } : {}) });
+  for (const { arrowAt, ...c } of scheme?.captions ?? []) next = addCaption(next, { ...c, ...(arrowAt != null ? { arrow: firstArrow + arrowAt } : {}) });
   // (the frame each shows is the canvas's to keep, not the document's; a
   // stack it brings, numbered after the document's own - utils/stacks)
   // (a stack of one - one pasted out of its stack - is that molecule alone)
@@ -1761,8 +1757,8 @@ export type MarkPlaces = {
   inks?: { id: number; strokes: InkStroke[] }[];
   /** Catalytic cycles moved, sized, carried round or turned over with the rest: where each one's middle now is, and its radius, the way it goes and its arrows in and out. */
   cycles?: { id: number; x: number; y: number; r?: number; ccw?: true; branches?: CycleBranch[]; ends?: Record<string, number> }[];
-  /** Shapes moved or carried round with the rest: where each now lies, and its tail; their words go with them. */
-  shapes?: { id: number; x0: number; y0: number; x1: number; y1: number; tail?: { x: number; y: number } }[];
+  /** Shapes moved or carried round with the rest: where each now lies. */
+  shapes?: { id: number; x0: number; y0: number; x1: number; y1: number }[];
   /** Charges and R, S, E and Z put by hand, turned with the rest: where each now stands from what it is of (`withMarksAt`). */
   markAts?: MarksAt;
 };
@@ -1803,13 +1799,10 @@ export function placeMarks(doc: WorkspaceDocument, places?: MarkPlaces): Workspa
       ...doc,
       shapes: (doc.shapes ?? []).map((sh) => {
         const q = at.get(sh.id);
-        if (!q) return sh;
-        const { tail: _tail, ...kept } = sh;
-        return { ...kept, x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1, ...(q.tail ? { tail: q.tail } : {}) };
+        return q ? { ...sh, x0: q.x0, y0: q.y0, x1: q.x1, y1: q.y1 } : sh;
       }),
     };
-    // (their words where they now are, whatever else moved them)
-    return withShapeWords(placeMarks(placed, { ...places, shapes: [] }), new Set(at.keys()));
+    return placeMarks(placed, { ...places, shapes: [] });
   }
   if (places?.slides?.length) {
     const at = new Map(places.slides.map((p) => [p.id, p]));
@@ -2177,7 +2170,7 @@ export function removeSlides(doc: WorkspaceDocument, ids: Iterable<number>): Wor
 
 // --- shapes ----------------------------------------------------------------------
 
-/** How far a shape's words stand in from its edges, either side: a third of a bond. */
+/** How far *Box around these* stands clear of what it is round: a third of a bond. */
 export const SHAPE_PAD = NOMINAL_BOND_LENGTH / 3;
 
 const finite = (...xs: number[]) => xs.every(Number.isFinite);
@@ -2185,21 +2178,24 @@ const finite = (...xs: number[]) => xs.every(Number.isFinite);
 /** `doc` with a shape put on the page, over the others; it is numbered `nextShapeId`. A box with no room, or a line with no length, is not. */
 export function addShape(doc: WorkspaceDocument, shape: Omit<Shape, "id">): WorkspaceDocument {
   const { x0, y0, x1, y1 } = shape;
-  if (!finite(x0, y0, x1, y1) || (shape.tail && !finite(shape.tail.x, shape.tail.y))) return doc;
+  if (!finite(x0, y0, x1, y1) || (shape.radius != null && !finite(shape.radius))) return doc;
   if (isBox(shape.kind) ? !(x1 > x0 && y1 > y0) : x0 === x1 && y0 === y1) return doc;
   const id = doc.nextShapeId ?? 1;
   return { ...doc, shapes: [...(doc.shapes ?? []), { ...shape, id }], nextShapeId: id + 1 };
 }
 
-/** `s` as `patch` changes it: weight regular, plain and no colour of its own being what a shape has when it says nothing. */
+/** `s` as `patch` changes it: a line as wide as the bonds', plain and no colour of its own being what a shape has when it says nothing. */
 function patched(s: Shape, patch: ShapePatch): Shape {
-  const { weight, dash, stroke, fill, ...place } = patch;
-  const { weight: w0, dash: d0, stroke: s0, fill: f0, ...rest } = s;
-  const w = weight === undefined ? w0 : weight === "regular" ? undefined : weight;
+  const { width, dash, stroke, fill, ...place } = patch;
+  const { width: w0, dash: d0, stroke: s0, fill: f0, ...rest } = s;
+  const w = width === undefined ? w0 : width != null && width > 0 && Number.isFinite(width) ? width : undefined;
   const d = dash === undefined ? d0 : dash || undefined;
   const st = stroke === undefined ? s0 : (stroke ?? undefined);
   const f = fill === undefined ? f0 : (fill ?? undefined);
-  return { ...rest, ...place, ...(w ? { weight: w } : {}), ...(d ? { dash: true as const } : {}), ...(st ? { stroke: st } : {}), ...(f ? { fill: f } : {}) };
+  // (square corners: no radius kept)
+  const { radius: r0, ...kept } = { ...rest, ...place };
+  const r = r0 != null && r0 > 0 && rest.kind === "rect" ? r0 : undefined;
+  return { ...kept, ...(r ? { radius: r } : {}), ...(w ? { width: w } : {}), ...(d ? { dash: true as const } : {}), ...(st ? { stroke: st } : {}), ...(f ? { fill: f } : {}) };
 }
 
 const sameShape = (a: Shape, b: Shape) => JSON.stringify(a) === JSON.stringify(b);
@@ -2208,7 +2204,7 @@ const sameShape = (a: Shape, b: Shape) => JSON.stringify(a) === JSON.stringify(b
  * `doc` with the shape `id` changed as `patch` says - never to a box with no
  * room, nor to a line with no length (as `addShape` and the reader refuse
  * one: a line's end dragged onto its other end was kept, then lost on
- * saving) - its words where it now is.
+ * saving).
  */
 export function updateShape(doc: WorkspaceDocument, id: number, patch: ShapePatch): WorkspaceDocument {
   const was = doc.shapes?.find((x) => x.id === id);
@@ -2216,11 +2212,11 @@ export function updateShape(doc: WorkspaceDocument, id: number, patch: ShapePatc
   const next = patched(was, patch);
   const roomless = isBox(next.kind) ? !(next.x1 > next.x0 && next.y1 > next.y0) : next.x0 === next.x1 && next.y0 === next.y1;
   if (!finite(next.x0, next.y0, next.x1, next.y1) || roomless || sameShape(was, next)) return doc;
-  return withShapeWords({ ...doc, shapes: doc.shapes!.map((x) => (x.id === id ? next : x)) }, new Set([id]));
+  return { ...doc, shapes: doc.shapes!.map((x) => (x.id === id ? next : x)) };
 }
 
 /** `doc` with the shapes `ids` changed alike as `patch` says - their look, not where they are. */
-export function restyleShapes(doc: WorkspaceDocument, ids: Iterable<number>, patch: Pick<ShapePatch, "weight" | "dash" | "stroke" | "fill">): WorkspaceDocument {
+export function restyleShapes(doc: WorkspaceDocument, ids: Iterable<number>, patch: Pick<ShapePatch, "width" | "dash" | "stroke" | "fill">): WorkspaceDocument {
   const take = new Set(ids);
   let changed = false;
   const shapes = (doc.shapes ?? []).map((x) => {
@@ -2243,7 +2239,6 @@ export function orderShapes(doc: WorkspaceDocument, ids: Iterable<number>, front
   return next.every((x, i) => x === shapes[i]) ? doc : { ...doc, shapes: next };
 }
 
-/** `doc` without the shapes `ids`, and without the words in them. */
 // --- writing by hand -----------------------------------------------------------
 
 const sameLook = (a: InkLook, b: InkLook) => a.pen === b.pen && a.width === b.width && (a.color ?? null) === (b.color ?? null);
@@ -2379,41 +2374,17 @@ export function removeCycles(doc: WorkspaceDocument, ids: Iterable<number>): Wor
   return { ...doc, cycles: doc.cycles.filter((c) => !gone.has(c.id)) };
 }
 
+/** `doc` without the shapes `ids`. */
 export function removeShapes(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
   const gone = new Set(ids);
   if (!doc.shapes?.some((x) => gone.has(x.id))) return doc;
-  return {
-    ...doc,
-    shapes: doc.shapes.filter((x) => !gone.has(x.id)),
-    ...(doc.captions ? { captions: doc.captions.filter((c) => c.shape == null || !gone.has(c.shape)) } : {}),
-  };
-}
-
-/** `doc` with the words in the shapes `ids` - all of them, with none given - about their middles and as wide as they are inside; words in a shape there is not, or that holds none, in none. */
-export function withShapeWords(doc: WorkspaceDocument, ids?: ReadonlySet<number>): WorkspaceDocument {
-  if (!doc.captions?.some((c) => c.shape != null && (!ids || ids.has(c.shape)))) return doc;
-  const byId = new Map((doc.shapes ?? []).map((x) => [x.id, x]));
-  let changed = false;
-  const captions = doc.captions.map((c) => {
-    if (c.shape == null || (ids && !ids.has(c.shape))) return c;
-    const sh = byId.get(c.shape);
-    const room = sh ? wordsRoom(sh, SHAPE_PAD) : null;
-    if (!room) {
-      changed = true;
-      const { shape: _shape, ...rest } = c;
-      return rest;
-    }
-    if (c.x === room.x && c.y === room.y && c.width === room.width) return c;
-    changed = true;
-    return { ...c, x: room.x, y: room.y, width: room.width };
-  });
-  return changed ? { ...doc, captions } : doc;
+  return { ...doc, shapes: doc.shapes.filter((x) => !gone.has(x.id)) };
 }
 
 /** Where the shape `s` lies moved by `d`, as `MarkPlaces` says it. */
 export function shapePlace(s: Shape, d: { x: number; y: number }): NonNullable<MarkPlaces["shapes"]>[number] {
   const m = shapeMoved(s, d);
-  return { id: s.id, x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1, ...(m.tail ? { tail: m.tail } : {}) };
+  return { id: s.id, x0: m.x0, y0: m.y0, x1: m.x1, y1: m.y1 };
 }
 
 export function removeCaption(doc: WorkspaceDocument, id: number): WorkspaceDocument {

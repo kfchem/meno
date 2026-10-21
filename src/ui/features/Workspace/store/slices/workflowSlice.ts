@@ -58,6 +58,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         ),
       ),
     renameSet: (id: number, name: string) => doc.edit("rename set", (d) => wf.renameSet(d, id, name)),
+    keepSet: (id: number, keep: boolean) => doc.edit(keep ? "keep set in file" : "keep set out of file", (d) => wf.keepSet(d, id, keep)),
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextWorkflowId ?? 1;
       doc.edit("add set", (d) => wf.addSet(d, frame));

@@ -85,8 +85,8 @@ src/
     Workspace/            the workspace: 2D editor, molecules in 3D, texts, PDFs, workflows (see below)
     TextEditor/           a text Meno draws: its editor, line pictures, and the field typed through
     StyleEditor/          every drawing setting, with a preview
-    SettingsPanel/        Settings: drawing style, molecules in 3D, chemistry, files, calculations
-                          and their jobs, plugins, dictionary, network
+    SettingsPanel/        Settings, a tab each: General, Drawing, 3D, Chemistry, Files, Calculations
+                          and their jobs, Plugins, Dictionary, Network
 src-tauri/
   src/lib.rs              Tauri commands (see table below)
   src/fonts.rs            the system's typefaces
@@ -366,6 +366,12 @@ what a drag there does, not what grabs it, and none is a hand:
   grid, dark with a white edge to be seen on anything, its spot in the
   middle, and writes their rules once as Meno starts (`installCursors`).
   An element asks for one with `data-cursor` (`setCursor`).
+- **Held for a drag**: `holdCursor` puts one over the whole page until
+  the drag lets it go (`data-cursor-held` on the root, its rule
+  `!important`), so that the pointer stays what the drag does wherever
+  it runs - over words, whose text cursor would otherwise take its place.
+  A drag lost (the window left, the pointer cancelled) lets it go too,
+  and each release lets go only its own hold.
 - **Sharp on any screen**: each rule gives the SVG at 1x, then
   `-webkit-image-set` at 1x, 2x and 3x, which WebKit and Chromium read;
   the system's pointer stands behind it.
@@ -1004,7 +1010,9 @@ Meno asks about first; `conformers` makes each stereoisomer asked for
 their covalent lengths and the metal typed for UFF, or, where UFF has no
 type for it, a lighter metal of its group standing in and no energies
 given; a ring bound through all its atoms, written as a multi-centre bond
-by `chem/etaBound.ts`, held over its metal; the same shape twice kept once;
+by `chem/etaBound.ts`, held over its metal; the same shape twice kept once,
+over the ways the molecule maps onto itself as well as atom against atom
+(PLUGINS.md, *The same shape with equivalent atoms swapped*);
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
@@ -1020,7 +1028,10 @@ engine to draw; it says whether it found them (`perceived`), which the
 3D view takes too (`chem/bondOrders.ts`). `orders_from_smiles` and
 `add_hydrogens` complete a ligand there: its orders from a SMILES, its
 hydrogens added. These take as long as
-they take (`CONFORMERS_MS`, five minutes at most). What the worker lays out
+they take (`CONFORMERS_MS`, fifteen minutes at most since 2026-10-20, the
+molecule now saying how many conformers are sought; Stop, while a 3D
+structure is being made, stops the worker and lets the question go at
+once). What the worker lays out
 in 2D (`from_smiles`, `drawing_of`) it lays out with CoordGen, except a
 structure with a ring of 34 atoms or more, or 25 rings or more, which
 RDKit's own depictor lays out: for those, CoordGen's layout took from
@@ -1600,4 +1611,5 @@ that every kind of these is in this table, by its id, and no other.
 
 See the README "Development" section. In short: `npm run typecheck`,
 `npm run lint`, `npm test`, `npm run build` for the frontend, and
-`cargo check` / `cargo clippy` / `cargo test` in `src-tauri/`.
+`cargo check` / `cargo clippy` / `cargo test` in `src-tauri/`. How long
+a test may take before it fails: docs/TESTING.md, *Timeouts*.

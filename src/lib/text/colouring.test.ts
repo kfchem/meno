@@ -5,6 +5,7 @@ import { Lines } from "./editing";
 import { registered } from "../io/kinds";
 import { acceptManifest } from "../plugins/manifest";
 import { MANIFESTS } from "../plugins/known";
+import { measured } from "../../testing/timeouts";
 
 /** The plugins Meno carries, all added. */
 const carried = registered(MANIFESTS);
@@ -104,7 +105,7 @@ describe("a text's colours, by Lezer's grammars", () => {
     const after = new Lines(typed);
     expect(colouring.spans(after, 1).map((s) => s.tone)).toEqual(["property", "number", "property", "string", "property", "number"]);
     expect(colouring.spans(after, after.count - 3).map((s) => s.tone)).toEqual(["property", "number"]);
-  });
+  }, measured(340));
 });
 
 describe("a calculation's input, by its plugin's grammar", () => {

@@ -18,7 +18,7 @@ import { fragmentOf, partOf } from "../chem/cleanUp";
 import { forFlatReaders } from "../chem/drawing";
 import { notOneReaction, reactionFileText } from "../chem/reactionFile";
 import { marksOf, stylesOf, WORDS_SIZE_RANGE, type WordsMark } from "../../../../lib/chem/captions";
-import { isBox, moved as shapeMoved, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
+import { isBox, moved as shapeMoved, roundedPt, SHAPE_KINDS, type ShapeKind } from "../../../../lib/chem/shapes";
 import { strokeMoved, strokesBounds } from "../../../../lib/chem/ink";
 import { readInkPiece } from "./inkRecord";
 import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Drawn, FigureSpot, Measure3D, Molecule3D, PictureItem, Plus, PushArrow, PushEnd, Sel, Shape, Ink, Slide, Turn3D, Unsure, WordsFrom } from "../store/types";
@@ -29,7 +29,7 @@ import { readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
-import { pdfBounds } from "../../../../lib/pdf/layout";
+import { pdfBounds, POINT, pointFor } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { magnificationWithin } from "./magnified";
@@ -105,8 +105,7 @@ export function schemeAmong(drawn: Drawn, ids: Set<number>): { arrows: Arrow[]; 
   return {
     arrows,
     pluses: (drawn.pluses ?? []).filter(within),
-    // (words in a shape are the shape's: they go with it, not with the atoms beside them)
-    captions: (drawn.captions ?? []).filter((c) => c.shape == null && (within(c) || (c.arrow != null && taken.has(c.arrow)))),
+    captions: (drawn.captions ?? []).filter((c) => within(c) || (c.arrow != null && taken.has(c.arrow))),
   };
 }
 
@@ -252,7 +251,9 @@ export function readRecord(text: string): Drawn | null {
   }
   const r = data as { format?: unknown; version?: unknown; pdfs?: unknown; sheets?: unknown; bondPt?: unknown; labelPt?: unknown };
   if (r?.format !== RECORD || r.version !== VERSION) return null;
-  const drawn = readDrawn(data);
+  // (the bond's printed length in the style it was copied in, where it says: a record without one pastes as it is)
+  const bondPt = isNum(r.bondPt) && r.bondPt > 0 ? r.bondPt : undefined;
+  const drawn = readDrawn(data, bondPt ? pointFor(bondPt) : POINT);
   if (!drawn) return null;
   // (a copy's PDFs and texts' sheets: a workspace's file keeps its own, apart)
   const pdfs = readPdfs(r.pdfs).map((p, i) => ({ ...p, id: i + 1 }));
@@ -261,18 +262,29 @@ export function readRecord(text: string): Drawn | null {
       ? [{ id: i + 1, name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }]
       : [],
   );
-  // (the bond's printed length in the style it was copied in, where it says: a record without one pastes as it is)
-  const bondPt = isNum(r.bondPt) && r.bondPt > 0 ? r.bondPt : undefined;
   const labelPt = isNum(r.labelPt) && r.labelPt > 0 ? r.labelPt : undefined;
   return { ...drawn, ...(bondPt ? { bondPt } : {}), ...(labelPt ? { labelPt } : {}), ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
 }
 
 /**
+ * Of a record's molecules in 3D and pictures, the places in its lists of
+ * those that read, in order (as `readDrawn` reads them): what a workspace's
+ * set members, saved by place, are matched by (utils/workspace).
+ */
+export function placesRead(data: unknown): { molecules3d: number[]; pictures: number[] } {
+  const r = data as { molecules3d?: unknown; pictures?: unknown } | null;
+  const places = (list: unknown, reads: (v: unknown) => unknown) => (Array.isArray(list) ? list.flatMap((v, i) => (reads(v) ? [i] : [])) : []);
+  return { molecules3d: places(r?.molecules3d, readCarried3D), pictures: places(r?.pictures, readPicture) };
+}
+
+/**
  * What is drawn, as Meno's own record and workspace file hold it: atoms and
  * bonds, arrows, pluses and molecules in 3D. Null where the atoms or bonds
- * do not read; what else does not read is left out.
+ * do not read; what else does not read is left out. `pointPx`, the page's
+ * units to the point in the style it was drawn in: what a shape saved before
+ * shapes had a corner radius of their own is read by.
  */
-export function readDrawn(data: unknown): Drawn | null {
+export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
   const r = data as {
     format?: unknown;
     version?: unknown;
@@ -307,13 +319,13 @@ export function readDrawn(data: unknown): Drawn | null {
   const pluses = (Array.isArray(r.pluses) ? (r.pluses as Partial<Plus>[]) : []).filter(
     (p) => isEntry(p) && isNum(p.id) && isNum(p.x) && isNum(p.y),
   ) as Plus[];
-  // (words over an arrow that is not there are over none; in a shape that is not there, in none)
+  // (words over an arrow that is not there are over none)
   const arrowIds = new Set(arrows.map((a) => a.id));
   const shapes = (Array.isArray(r.shapes) ? r.shapes : []).flatMap((x): Shape[] => {
-    const read = readShape(x);
+    const read = readShape(x, pointPx);
     return read ? [read] : [];
   });
-  const shapeIds = new Set(shapes.filter((x) => isBox(x.kind)).map((x) => x.id));
+  // (words written in a shape before 2026-10-19 - a shape is a shape now - words on the page as they were: where, as wide and as large, beside it)
   const captions = (Array.isArray(r.captions) ? (r.captions as Partial<Caption>[]) : []).flatMap((c): Caption[] => {
     if (!isEntry(c) || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return [];
     const from = wordsFromOf(c.from);
@@ -324,7 +336,6 @@ export function readDrawn(data: unknown): Drawn | null {
         y: c.y,
         text: c.text,
         ...(isNum(c.arrow) && arrowIds.has(c.arrow) ? { arrow: c.arrow } : {}),
-        ...(isNum(c.shape) && shapeIds.has(c.shape) ? { shape: c.shape } : {}),
         ...(isNum(c.width) && c.width > 0 ? { width: c.width } : {}),
         ...(c.align === "left" || c.align === "right" || c.align === "justify" ? { align: c.align } : {}),
         ...(from ? { from } : {}),
@@ -491,12 +502,21 @@ function readCycle(raw: unknown): Cycle | null {
   };
 }
 
-function readShape(raw: unknown): Shape | null {
+/** The widest a shape's line reads as, in points. */
+const WIDTH_MOST_PT = 72;
+
+/**
+ * A shape as saved - one saved before 2026-10-19 as a rounded rectangle, or
+ * as a callout, a rectangle with its corners as they were drawn (`pointPx`,
+ * the page's units to the point it was drawn at), a callout's tail let go.
+ */
+function readShape(raw: unknown, pointPx: number): Shape | null {
   const s = raw as Partial<Record<keyof Shape, unknown>> | null;
-  if (!s || !isNum(s.id) || !SHAPE_KINDS.includes(s.kind as ShapeKind) || !isNum(s.x0) || !isNum(s.y0) || !isNum(s.x1) || !isNum(s.y1)) return null;
-  const kind = s.kind as ShapeKind;
+  const was = s?.kind === "rounded" || s?.kind === "callout";
+  const kind = (was ? "rect" : s?.kind) as ShapeKind;
+  if (!s || !isNum(s.id) || !SHAPE_KINDS.includes(kind) || !isNum(s.x0) || !isNum(s.y0) || !isNum(s.x1) || !isNum(s.y1)) return null;
   if (isBox(kind) ? !(s.x1 > s.x0 && s.y1 > s.y0) : s.x0 === s.x1 && s.y0 === s.y1) return null;
-  const tail = s.tail as { x?: unknown; y?: unknown } | undefined;
+  const radius = was ? roundedPt(s.x1 - s.x0, s.y1 - s.y0, pointPx) : kind === "rect" && isNum(s.radius) && s.radius > 0 ? s.radius : 0;
   return {
     id: s.id,
     kind,
@@ -504,8 +524,13 @@ function readShape(raw: unknown): Shape | null {
     y0: s.y0,
     x1: s.x1,
     y1: s.y1,
-    ...(kind === "callout" && tail && isNum(tail.x) && isNum(tail.y) ? { tail: { x: tail.x, y: tail.y } } : {}),
-    ...(s.weight === "thin" || s.weight === "thick" ? { weight: s.weight } : {}),
+    ...(radius > 0 ? { radius } : {}),
+    ...(() => {
+      // (its line's own width, in points - or, saved before 2026-10-19, its weight: thin 0.6, thick 2, regular as the bonds')
+      const old = (s as { weight?: unknown }).weight;
+      const width = isNum(s.width) && s.width > 0 && s.width <= WIDTH_MOST_PT ? s.width : old === "thin" ? 0.6 : old === "thick" ? 2 : null;
+      return width ? { width } : {};
+    })(),
     ...(s.dash === true ? { dash: true as const } : {}),
     ...(typeof s.stroke === "string" && (s.stroke === "none" || COLOUR.test(s.stroke)) ? { stroke: s.stroke.toLowerCase() } : {}),
     ...(typeof s.fill === "string" && COLOUR.test(s.fill) && isBox(kind) ? { fill: s.fill.toLowerCase() } : {}),
@@ -568,8 +593,12 @@ function madeOf(v: unknown): Carried3D["made"] {
     .slice(0, 20)
     .filter((r): r is { label: string; text: string } => typeof r?.label === "string" && typeof r?.text === "string")
     .map((r) => ({ label: r.label.slice(0, 80), text: r.text.slice(0, 300) }));
-  const said = typeof method === "string" && method ? { method: method.slice(0, 300) } : {};
-  return rows.length || "method" in said ? { ...said, how: rows } : undefined;
+  const energies = (v as { energies?: unknown } | null | undefined)?.energies;
+  const said = {
+    ...(typeof method === "string" && method ? { method: method.slice(0, 300) } : {}),
+    ...(typeof energies === "string" && energies ? { energies: energies.slice(0, 80) } : {}),
+  };
+  return rows.length || Object.keys(said).length ? { ...said, how: rows } : undefined;
 }
 
 /** A molecule's open list as a file carries it; otherwise none. */

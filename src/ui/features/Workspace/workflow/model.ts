@@ -4,9 +4,9 @@
  * document, so that undo takes it back and Save keeps it.
  */
 import type { WorkspaceDocument } from "../document";
-import type { StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
-import { setMembers, structuresOf, type Frame } from "./entries";
+import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
 import { SET_PAD, SET_TOP } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
@@ -18,10 +18,25 @@ const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 /** A frame with its corners in order: x0 left of x1, y0 below y1. */
 export const framed = (f: Frame): Frame => ({ x0: Math.min(f.x0, f.x1), y0: Math.min(f.y0, f.y1), x1: Math.max(f.x0, f.x1), y1: Math.max(f.y0, f.y1) });
 
-/** `doc` with a set round `frame`; it is numbered `nextWorkflowId`. Made by a step, it says so; named, it has the name. */
+/** `doc` with a set round `frame`, holding what lies inside it, in the order it lies; it is numbered `nextWorkflowId`. Made by a step, it says so; named, it has the name. */
 export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet["made"], name?: string): WorkspaceDocument {
   const id = idOf(doc);
-  return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), { id, ...framed(frame), ...(made ? { made } : {}), ...(name ? { name } : {}) }] };
+  const f = framed(frame);
+  const set: WorkflowSet = { id, ...f, ...(made ? { made } : {}), ...(name ? { name } : {}), members: membersOf(lyingIn(doc, f)) };
+  return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
+}
+
+/** A set's members, as given: a step's result set holding what the step made, in its order. */
+export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[]): WorkspaceDocument {
+  return withSet(doc, id, (b) => ({ ...b, members }));
+}
+
+/** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
+export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
+  const set = doc.sets?.find((b) => b.id === id);
+  if (!set?.made || (set.keep !== false) === keep) return doc;
+  const { keep: _was, ...rest } = set;
+  return { ...doc, sets: (doc.sets ?? []).map((b) => (b.id === id ? (keep ? rest : { ...rest, keep: false as const }) : b)) };
 }
 
 /** A chemist's set named anew - a step's set is named for what made it - its name taken away where the new one is empty. */
@@ -168,6 +183,104 @@ export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, port:
 export function removeWire(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const wires = (doc.wires ?? []).filter((w) => w.id !== id);
   return wires.length === (doc.wires ?? []).length ? doc : { ...doc, wires };
+}
+
+/**
+ * `doc` after an edit, each set's members as the edit leaves them
+ * (docs/WORKFLOWS-FOUNDATION.md, *Members are explicit*): the frame's
+ * gesture is the edit.
+ * - A member gone from the page is gone from the set; a structure member
+ *   follows its atoms - drawn on, split, joined to another.
+ * - What the edit took out of a frame - its middle inside the frame before
+ *   and outside it now, moved or the frame resized - leaves the set.
+ * - What the edit brought into a chemist's set - outside before (or not
+ *   there at all) and inside now - joins it, at its place in reading order
+ *   among the members. A step's result set takes in nothing: what it holds
+ *   is its step's.
+ * - What stays inside or outside keeps its place, or its absence: moved
+ *   within the frame, a member keeps its place in the order.
+ * A set with no members yet (one read from a file saved before sets kept
+ * them) holds what lies inside its frame, once.
+ */
+export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument): WorkspaceDocument {
+  if (!doc.sets?.length) return doc;
+  const samePage = doc.model === before.model && doc.molecules3d === before.molecules3d && doc.pictures === before.pictures;
+  if (samePage && doc.sets === before.sets) return doc;
+  const now = placesOf(doc);
+  const wasAtom = new Map(before.model.atoms.map((a) => [a.id, a]));
+  const wasMiddle = (ids: readonly number[]) => {
+    const at = ids.flatMap((id) => (wasAtom.has(id) ? [wasAtom.get(id)!] : []));
+    return at.length ? { x: at.reduce((s, a) => s + a.x, 0) / at.length, y: at.reduce((s, a) => s + a.y, 0) / at.length } : null;
+  };
+  const was = placesOf(before);
+  let changed = false;
+  const sets = doc.sets.map((set) => {
+    if (!set.members) {
+      changed = true;
+      return { ...set, members: membersOf(lyingIn(doc, set)) };
+    }
+    const prior = before.sets?.find((b) => b.id === set.id);
+    if (samePage && prior && prior.x0 === set.x0 && prior.x1 === set.x1 && prior.y0 === set.y0 && prior.y1 === set.y1 && prior.members === set.members) return set;
+    // (each member as the page has it now: a structure as the structures that hold its atoms, in its place)
+    const held = setMembers(doc, set);
+    type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean };
+    const nowAt = new Map(now.structures.map((s) => [s.ids[0], s]));
+    const list: Placed[] = [
+      ...held.structures.map((ids) => {
+        const at = nowAt.get(ids[0])!.at;
+        const w = wasMiddle(ids);
+        return { member: { structure: ids } as Member, at, wasIn: !!(prior && w && inside(prior, w)) };
+      }),
+      ...held.molecules.map((id) => {
+        const w = was.molecules.get(id);
+        return { member: { molecule: id } as Member, at: now.molecules.get(id)!, wasIn: !!(prior && w && inside(prior, w)) };
+      }),
+      ...held.pictures.map((id) => {
+        const w = was.pictures.get(id);
+        return { member: { picture: id } as Member, at: now.pictures.get(id)!, wasIn: !!(prior && w && inside(prior, w)) };
+      }),
+    ];
+    // (members in the order the set had them: structures, molecules and pictures interleaved as listed)
+    const rank = new Map<string, number>();
+    set.members.forEach((m, k) => {
+      if ("structure" in m) m.structure.forEach((id) => rank.set(`s${id}`, rank.get(`s${id}`) ?? k));
+      else rank.set("molecule" in m ? `m${m.molecule}` : `p${m.picture}`, k);
+    });
+    const keyOf = (m: Member) => ("structure" in m ? Math.min(...m.structure.map((id) => rank.get(`s${id}`) ?? Infinity)) : (rank.get("molecule" in m ? `m${m.molecule}` : `p${m.picture}`) ?? Infinity));
+    list.sort((p, q) => keyOf(p.member) - keyOf(q.member));
+    // what the edit took out
+    let kept = prior ? list.filter((p) => !(p.wasIn && !inside(set, p.at))) : list;
+    // what the edit brought into a chemist's set, each at its place in reading order
+    if (!set.made && prior) {
+      const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));
+      const heldAtoms = new Set(held.structures.flat());
+      const add = (member: Member, at: { x: number; y: number }, w: { x: number; y: number } | null | undefined) => {
+        if (!inside(set, at) || (w && inside(prior, w))) return;
+        const k = kept.findIndex((p) => readingOrder(at, p.at) < 0);
+        const entry = { member, at, wasIn: false };
+        kept = k < 0 ? [...kept, entry] : [...kept.slice(0, k), entry, ...kept.slice(k)];
+      };
+      for (const s of now.structures) if (!s.ids.some((id) => heldAtoms.has(id))) add({ structure: s.ids }, s.at, wasMiddle(s.ids));
+      for (const [id, at] of now.molecules) if (!isMember.has(`m${id}`)) add({ molecule: id }, at, was.molecules.get(id));
+      for (const [id, at] of now.pictures) if (!isMember.has(`p${id}`)) add({ picture: id }, at, was.pictures.get(id));
+    }
+    const members = kept.map((p) => p.member);
+    if (sameMembers(members, set.members)) return set;
+    changed = true;
+    return { ...set, members };
+  });
+  return changed ? { ...doc, sets } : doc;
+}
+
+/** `doc` with each set that has no members yet - one read from a file saved before sets kept them - holding what lies inside its frame: read once, as the workspace opens. */
+export function membersFound(doc: WorkspaceDocument): WorkspaceDocument {
+  if (!doc.sets?.some((b) => !b.members)) return doc;
+  return { ...doc, sets: doc.sets.map((b) => (b.members ? b : { ...b, members: membersOf(lyingIn(doc, b)) })) };
+}
+
+/** Whether two lists of members are the same, in the same order. */
+function sameMembers(a: readonly Member[], b: readonly Member[]): boolean {
+  return a.length === b.length && a.every((m, k) => JSON.stringify(m) === JSON.stringify(b[k]));
 }
 
 /** What made a set, said of it: the step, which of its exits, and what it holds. */

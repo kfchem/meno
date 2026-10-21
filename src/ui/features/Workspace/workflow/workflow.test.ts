@@ -20,6 +20,7 @@ import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
 import { selectionFrame } from "./selectionSet";
 import { readWorkflow } from "./saved";
+import { measured } from "../../../../testing/timeouts";
 
 /** Three atoms, bent, at `at` on the page: frame k opened out by k * `step` ångströms, with energies `e` (hartrees). */
 function bent(at: { x: number; y: number }, n = 1, e?: number[], step = 0.4, el = "O"): Omit<Molecule3D, "id"> {
@@ -141,7 +142,9 @@ describe("what a set holds", () => {
     const alone = addSet({ ...page, model: { atoms: drawn.atoms.filter((a) => last.has(a.id)), bonds: drawn.bonds.filter((b) => last.has(b.a)) } }, all);
     const grownAlone = fitSets({ ...alone, model: moved(alone.model) }, alone);
     expect(grown.sets![0].x1).toBeGreaterThan(all.x1);
-    expect(grown.sets).toEqual(grownAlone.sets);
+    // (their frames: what each holds is its own - a thousand structures against one)
+    const frame = (s: WorkspaceDocument["sets"]) => s!.map(({ x0, y0, x1, y1 }) => ({ x0, y0, x1, y1 }));
+    expect(frame(grown.sets)).toEqual(frame(grownAlone.sets));
     // (the very same structures for every set asking of the page: found once, not again for each set)
     const everything = setMembers(page, all).structures;
     expect(setMembers(page, left).structures.every((ids) => everything.includes(ids))).toBe(true);
@@ -280,7 +283,7 @@ describe("Meno's own steps", () => {
     pauses = 0;
     expect(await runMenoInTurns("duplicates", order, "conformers", undefined, undefined, { pause: async () => void pauses++, slice: 20, now, stopped: () => pauses >= 2 })).toBeNull();
     expect(pauses).toBe(2);
-  });
+  }, measured(390));
 
   it("lay a conformer in Duplicates over only those kept that could be alike - two thousand distinct ones, not each over every other", () => {
     const many = shaken(2_000, 0.6);

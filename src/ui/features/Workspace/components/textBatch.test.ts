@@ -3,6 +3,7 @@ import { Text } from "troika-three-text";
 import * as THREE from "three";
 import { readFileSync } from "node:fs";
 import { BATCH_MOST, PACKED_COLOUR, TextBatch, type BatchRun } from "./textBatch";
+import { measured } from "../../../../testing/timeouts";
 
 const run = (text: string, more: Partial<BatchRun> = {}): BatchRun => ({ text, x: 1, y: 2, size: 0.5, color: "#141414", italic: false, bold: false, ...more });
 
@@ -90,12 +91,59 @@ describe("texts drawn as a batch", () => {
     expect(b.root.children).toHaveLength(2);
     b.dispose();
     expect(b.root.children).toHaveLength(0);
-  });
+  }, measured(420));
 
   it("unpacks a member's colour as the page's colours are: the line of troika's shader it replaces is there to be replaced", () => {
     // (./textBatch's PageBatch replaces the line that unpacks a member's colour with Meno's, which reads it as
     // sRGB - were the line to change with troika, Meno's would no longer be put in: this says so first)
     const source = readFileSync(new URL("../../../../../node_modules/troika-three-text/src/BatchedText.js", import.meta.url), "utf8");
     expect(source).toContain(PACKED_COLOUR);
+  });
+
+  it("packs a chunk before it is shown: once every member's letters are set, and says it is setting until then", async () => {
+    // (troika's setting of letters as it goes: begun as asked, each finished here when the test says)
+    const pending: (() => void)[] = [];
+    sync.mockImplementation(function (this: Text) {
+      const t = this as Text & { _needsSync: boolean; _isSyncing: boolean };
+      if (!t._needsSync) return t;
+      t._needsSync = false;
+      t._isSyncing = true;
+      pending.push(() => {
+        t._isSyncing = false;
+        t.dispatchEvent({ type: "synccomplete" } as never);
+      });
+      return t;
+    });
+    const settle = () => new Promise((r) => setTimeout(r, 0));
+    const b = new TextBatch("font.ttf", 30);
+    b.root.visible = false;
+    let told = 0;
+    b.onSynced(() => told++);
+    b.set("a", {}, [run("OH")], 1);
+    b.set("b", {}, [run("NH"), run("2", { y: 1.8, size: 0.35 })], 1);
+    const chunk = b.root.children[0] as THREE.Object3D & { sync: () => void };
+    const packs = vi.spyOn(chunk, "sync");
+    expect(b.setting()).toBe(true);
+    // (one member's letters set, two to come: not packed yet)
+    pending.shift()!();
+    await settle();
+    expect(packs).not.toHaveBeenCalled();
+    expect(b.setting()).toBe(true);
+    // (all set: packed off the page, shown or not - and setting till that is done)
+    pending.shift()!();
+    pending.shift()!();
+    expect(b.setting()).toBe(true);
+    await settle();
+    expect(packs).toHaveBeenCalledTimes(1);
+    expect(b.setting()).toBe(false);
+    expect(told).toBeGreaterThan(0);
+    // (a label changed in place: set again, then packed again)
+    b.set("a", {}, [run("OMe")], 1);
+    expect(b.setting()).toBe(true);
+    pending.shift()!();
+    await settle();
+    expect(packs).toHaveBeenCalledTimes(2);
+    expect(b.setting()).toBe(false);
+    b.dispose();
   });
 });

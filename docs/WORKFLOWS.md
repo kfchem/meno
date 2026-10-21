@@ -39,8 +39,10 @@ each is merged, this file describes what is built.
    15.) **A set is a conformer set only where the flow shows that it is
    one**; made by the chemist, it is a compound set (*Compound sets and
    conformer sets*, below).
-5. **What lies inside a set's frame is what it holds**: a structure moved
-   into it joins it, one moved out leaves it.
+5. **A set holds its members, in order**: what lies inside its frame as
+   it is made; a structure moved into it joins it, one moved out leaves
+   it; a frame resized takes in and lets go of what then lies inside it
+   or not.
 6. **xTB first.** Programs installed separately - ORCA, Gaussian and
    others - are to be run later, through the same kinds of step.
 7. **This computer only**, for now. A cluster or a remote machine comes
@@ -112,7 +114,7 @@ built*).
 
 - **Workflow** - what is wired together on one page: sets and the steps
   between them.
-- **Set** - a frame on the page, and what lies inside it. An *input* set
+- **Set** - a frame on the page, and its members, in order. An *input* set
   is made by the chemist round what is there; a *result* set is made by
   a step, round what it gave.
 - **Entry** - one structure in a set: a drawing, or a molecule in 3D,
@@ -219,19 +221,34 @@ pointer does; put back by an undo, they glide back.
      stays.
 4. **Or from the menu**: right-click the selection, *Use as input*.
 
-**What a set holds is what lies inside its frame** (decided):
+**A set holds its members, in order** (decided; WORKFLOWS-FOUNDATION.md,
+*Members are explicit*):
 
-- a structure or a molecule in 3D whose middle is inside the frame is in
-  the set; dragged in, it joins; dragged out, it leaves;
+- made, a set holds what lies inside its frame - a structure, a molecule
+  in 3D or a picture whose middle is inside it - in the order it lies
+  (top to bottom, left to right);
+- dragged into a set the chemist made, a structure or a molecule joins it,
+  at its place in that order among the members; dragged out of any set,
+  it leaves; moved within the frame, it keeps its place;
+- a frame resized takes in what then lies inside it and lets go of what
+  then lies outside it, as one step to undo; what joins or leaves is
+  marked a moment as it does;
+- deleted from the page, a member is gone from its set, with nothing
+  asked; drawn on, a structure stays one member, and joined to another
+  the two are one; the frame grows to keep it inside if it would reach
+  past it;
+- a step's result set holds what its step made, in its order, and takes
+  nothing in: dragged into it, a structure stays outside the set;
 - the frame is the set's own: its tab drags it, with all it holds; its
   edges and corners drag to size it;
-- drawn on, a structure stays in it, and the frame grows to keep it
-  inside if it would reach past it;
 - *Delete set* (right-click its tab) takes the frame away and leaves what
-  it held; a set left empty stays, empty, until it is deleted.
+  it held; a set left empty stays, empty, until it is deleted;
+- *Don't keep in the file* (right-click a result set's tab): its molecules
+  are not written to the workspace's file - only how many it held and
+  their collection's hash - and opened again, the set says *Not kept*
+  with that count.
 
-A set's entries are its structures and molecules in 3D, in the order they
-lie (top to bottom, left to right). A set the chemist makes is a
+A set's entries are its members, in their order. A set the chemist makes is a
 **compound set**: each entry a compound of its own, however alike two
 are (*Compound sets and conformer sets*).
 
@@ -944,7 +961,7 @@ Decided while building it, for the maintainer to confirm:
 
 - **RDKit's conformer search in a step is the one *3D structures* makes
   on the canvas** - ETKDG v3, then MMFF94, MMFF94s or UFF - with the same
-  options, starting from those chosen in Settings, *Molecules in 3D*
+  options, starting from those chosen in Settings, *Chemistry*, on its *3D* card
   (2026-10-13), run as a job: RDKit's own Python runs a script of the plugin's
   on the molecule written into the job's folder, so that a long search
   goes on when Meno closes, as any job does. The stereo is kept as the

@@ -9,7 +9,7 @@
 import { labelSetOf, type Atom as LAtom, type Bond as LBond, type LayoutOptions } from "../../../../lib/chem/layout2d";
 import { chemistry } from "../../../../lib/chem/molecule";
 import { wordsSet, type Words } from "../../../../lib/chem/captions";
-import { shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
+import { asBonds, bondLinePtOf, shapeBounds, type ShapeGeometry } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 
@@ -100,11 +100,11 @@ export function selectedBox(st: Selected, style: DrawingStyle, zoom = 1, eyeHeig
   }
   for (const s of st.shapes) if (st.selShapes.has(s.id)) {
     // (for guides, its frame: what lines up and is sized)
-    const r = frames ? shapeFrame(s) : shapeBounds(s, opts.pointPx ?? 0);
+    const r = frames ? shapeFrame(s) : shapeBounds(asBonds(s, bondLinePtOf(opts)), opts.pointPx ?? 0);
     take(r.x0, r.y0, r.x1, r.y1);
   }
   for (const k of st.inks) if (st.selInks.has(k.id)) {
-    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0, bondLinePtOf(opts)) / 2);
     if (r) take(r.x0, r.y0, r.x1, r.y1);
   }
   // (a catalytic cycle: its circle)
@@ -185,7 +185,7 @@ export function besidesBoxes(st: Selected, style: DrawingStyle, eyeHeight?: numb
   // and writing by hand, each piece
   for (const k of st.inks) {
     if (st.selInks.has(k.id)) continue;
-    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+    const r = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0, bondLinePtOf(opts)) / 2);
     if (r) out.push(r);
   }
   return out;

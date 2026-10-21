@@ -76,7 +76,7 @@ export function restyled<T extends Restylable>(parts: T, k: number, about: Pt = 
   if (parts.slides) out.slides = parts.slides.map((s) => ({ ...s, x: x(s.x), y: y(s.y), w: s.w * k, h: s.h * k }));
   if (parts.cycles) out.cycles = parts.cycles.map((c) => ({ ...c, x: x(c.x), y: y(c.y), r: c.r * k }));
   if (parts.shapes)
-    out.shapes = parts.shapes.map((s) => ({ ...s, x0: x(s.x0), y0: y(s.y0), x1: x(s.x1), y1: y(s.y1), ...(s.tail ? { tail: { x: x(s.tail.x), y: y(s.tail.y) } } : {}) }));
+    out.shapes = parts.shapes.map((s) => ({ ...s, x0: x(s.x0), y0: y(s.y0), x1: x(s.x1), y1: y(s.y1) }));
   if (parts.inks)
     out.inks = parts.inks.map((ink) => ({
       ...ink,

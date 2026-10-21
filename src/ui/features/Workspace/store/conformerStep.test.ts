@@ -3,7 +3,7 @@
  * (docs/WORKFLOWS.md, *Kinds of step*): one structure it cannot make in 3D
  * leaves the others made, and is said by its place in words - never in the
  * library's own text; and the search is the one *3D structures* makes,
- * with the options chosen in Settings, Molecules in 3D.
+ * with the options chosen in Settings, Chemistry, on its 3D card.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
@@ -153,13 +153,14 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).toMatch(/ · 1 conformer · structures 2 and 3 of 3 could not be made in 3D$/);
   });
 
-  it("is given the options chosen in Settings, Molecules in 3D, as 3D structures on the canvas is", async () => {
+  it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {
     useAppSettings.setState((s) => ({ ...s, options: { ...s.options, "role:conformers": { count: 12, field: "UFF" } } }));
     await searched();
-    expect(asked[0].options).toMatchObject({ count: 12, field: "UFF", iters: 2000, same: 0.5, seed: 19781 });
-    // (offered on the step's card as its own, those chosen in Settings its defaults)
+    expect(asked[0].options).toMatchObject({ sought: "needed", count: 12, field: "UFF", iters: 2000, same: 0.5, seed: 19781 });
+    // (offered on the step's card as its own, those chosen in Settings its defaults - how many sought among
+    //  them: as many as the molecule needs, or a number, which is shown only when a number is asked for)
     const offered = optionsFor("conformers", "rdkit");
-    expect(offered.map((o) => o.id)).toEqual(["count", "field", "iters", "same", "seed"]);
+    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "same", "seed"]);
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
   });
 

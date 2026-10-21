@@ -14,13 +14,14 @@ import { style3dOf } from "../style3d";
 import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
 import { eyeOf } from "../utils/page";
 import { setViewGoal } from "./viewGoal";
+import { viewToShow } from "../utils/viewShow";
 import { opensWith } from "./openingFit";
 import { wordsSet } from "../../../../lib/chem/captions";
 import { pdfRoom } from "../../../../lib/pdf/layout";
 import { cornersOf } from "../utils/selection";
 import { sheetRoom } from "../utils/textSheets";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { shapeBounds } from "../../../../lib/chem/shapes";
+import { asBonds, bondLinePtOf, shapeBounds } from "../../../../lib/chem/shapes";
 import { inkWidth, strokesBounds } from "../../../../lib/chem/ink";
 import { schemeExtent } from "../utils/schemeExtent";
 import { partsBounds } from "../workflow/parts";
@@ -127,7 +128,7 @@ export default function FitToContent2D({
     }
     // and the shapes, all they draw (docs/PRESENTING.md, *Shapes*)
     for (const sh of shapes) {
-      const b = shapeBounds(sh, opts.pointPx ?? 0);
+      const b = shapeBounds(asBonds(sh, bondLinePtOf(opts)), opts.pointPx ?? 0);
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
     }
@@ -139,7 +140,7 @@ export default function FitToContent2D({
     }
     // and writing by hand (docs/PRESENTING.md, *Handwriting*)
     for (const k of inks) {
-      const b = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0) / 2);
+      const b = strokesBounds(k.strokes, inkWidth(k, opts.pointPx ?? 0, bondLinePtOf(opts)) / 2);
       if (!b) continue;
       bounds.min = { x: Math.min(bounds.min.x, b.x0), y: Math.min(bounds.min.y, b.y0) };
       bounds.max = { x: Math.max(bounds.max.x, b.x1), y: Math.max(bounds.max.y, b.y1) };
@@ -235,5 +236,18 @@ export default function FitToContent2D({
     autoFitSuspended,
     store,
   ]);
+  // What was just put down, shown: the view eased along to take it in, or
+  // out as little as needed, in what the column leaves (utils/viewShow)
+  const showRequest = useEditor((s) => s.showRequest);
+  const shown = useRef(showRequest?.n ?? 0);
+  useEffect(() => {
+    if (!showRequest || showRequest.n === shown.current) return;
+    shown.current = showRequest.n;
+    const cam = camera as THREE.OrthographicCamera;
+    const to = viewToShow({ x: cam.position.x, y: cam.position.y, zoom: cam.zoom || 1 }, { w: size.width, h: size.height, cover: store.getState().cover }, showRequest.box, paddingPx);
+    if (!to) return;
+    setViewGoal(cam, { zoom: to.zoom, x: to.x, y: to.y });
+    invalidate();
+  }, [showRequest, camera, size.width, size.height, store, paddingPx, invalidate]);
   return null;
 }

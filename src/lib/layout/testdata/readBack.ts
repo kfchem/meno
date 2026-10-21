@@ -3,6 +3,7 @@ import { readStereo, sameConfiguration, type DrawnAtom, type DrawnBond } from ".
 import { layout2D } from "../engine";
 import { perceive, type LayoutInput } from "../perceive";
 import { fromSmiles } from "./fromSmiles";
+import { measured } from "../../../testing/timeouts";
 
 /**
  * What a drawing the engine makes does not show as given: its double bonds
@@ -116,17 +117,17 @@ function misreadCentres(input: LayoutInput, out: ReturnType<typeof layout2D>): s
  * as it is, the faces of its ring fusions and epoxides among them. The
  * engine draws a solid only with its configurations as given; this reads
  * back the drawing it hands over. (A list to a test file, the lists side by
- * side.)
+ * side; each with the time its slowest molecule was measured to take, which
+ * sets their timeout: testing/timeouts.)
  */
-export function readsBackAsGiven(list: string, molecules: readonly { name: string; smiles: string }[]): void {
+export function readsBackAsGiven(list: string, molecules: readonly { name: string; smiles: string }[], slowestMs: number): void {
   describe(`a drawing, its double bonds and (in perspective) its centres, on ${list}`, () => {
-    // (a large molecule's layout takes a while on a busy machine)
     it.each(molecules.map((m) => [m.name, m.smiles]))(
       "%s reads back as the molecule given",
       (_, smiles) => {
         expect(misread(fromSmiles(smiles))).toEqual([]);
       },
-      60_000,
+      measured(slowestMs),
     );
   });
 }

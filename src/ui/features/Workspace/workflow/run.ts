@@ -17,7 +17,7 @@ import { exitsOf, kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kin
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -296,15 +296,18 @@ function fillExit(
   // (an exit that gave nothing keeps its frame as it stands, saying so)
   if (!made.length) {
     const where = setForExit(doc, step, exit);
-    return markMade(where.doc, where.id, madeBy);
+    return holdMembers(markMade(where.doc, where.id, madeBy), where.id, []);
   }
   const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
   const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
   // (all put on the page at once: one at a time copied the page's molecules again for each)
+  const there = new Set((doc.molecules3d ?? []).map((m) => m.id));
   doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
-  if (was) return markMade(resizeSet(doc, was.id, frame), was.id, madeBy);
+  // (the set holds what the step made, in the step's order)
+  const members = (doc.molecules3d ?? []).filter((m) => !there.has(m.id)).map((m) => ({ molecule: m.id }));
+  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, members);
   const id = doc.nextWorkflowId ?? 1;
-  return markMade(addSet(doc, frame, madeBy), id, madeBy);
+  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy), id, members);
 }
 
 /**

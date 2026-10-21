@@ -33,6 +33,7 @@ export type ReagentUse =
   | "organometallic"
   | "catalyst"
   | "organocatalyst"
+  | "photocatalyst"
   | "solvent"
   | "other";
 
@@ -48,6 +49,7 @@ export const REAGENT_USES: { use: ReagentUse; title: string }[] = [
   { use: "organometallic", title: "Organometallic reagents" },
   { use: "catalyst", title: "Metal catalysts" },
   { use: "organocatalyst", title: "Organocatalysts and chiral reagents" },
+  { use: "photocatalyst", title: "Photocatalysts" },
   { use: "solvent", title: "Solvents" },
   { use: "other", title: "Other named reagents" },
 ];
@@ -84,6 +86,14 @@ const HOVEYDA: Ligand = {
   name: "2-isopropoxybenzylidene",
 };
 
+/** Zhan's: the Hoveyda–Grubbs benzylidene with a dimethylsulfamoyl para to its ether. */
+const ZHAN: Ligand = {
+  label: "=CH-o-OiPr-p-SO2NMe2C6H3",
+  smiles: "[CH:1]c9cc(S(=O)(=O)N(C)C)ccc9[O:2]C(C)C",
+  double: [1],
+  name: "5-(dimethylsulfamoyl)-2-isopropoxybenzylidene",
+};
+
 export const REAGENTS: Reagent[] = [
   // --- oxidation ---------------------------------------------------------------
   { label: "DMP", also: ["Dess–Martin periodinane", "Dess-Martin periodinane", "Dess–Martin"], use: "oxidation", smiles: "CC(=O)O[I]1(OC(C)=O)(OC(C)=O)OC(=O)c2ccccc21", name: "Dess–Martin periodinane" },
@@ -92,6 +102,14 @@ export const REAGENTS: Reagent[] = [
   { label: "PIFA", also: ["PhI(OCOCF3)2", "PhI(TFA)2"], use: "oxidation", smiles: "FC(F)(F)C(=O)O[I](OC(=O)C(F)(F)F)c1ccccc1", name: "[bis(trifluoroacetoxy)iodo]benzene" },
   { label: "TEMPO", use: "oxidation", smiles: "CC1(C)CCCC(C)(C)N1[O]", name: "2,2,6,6-tetramethylpiperidin-1-oxyl" },
   { label: "AZADO", use: "oxidation", smiles: "[O]N1C2CC3CC1CC(C3)C2", name: "2-azaadamantane N-oxyl" },
+  // (the free nitroxyls, their radical on O, as their suppliers' pages and PubChem - by its record, not its name, which gives the
+  // hydroxylamine - have them)
+  { label: "1-Me-AZADO", use: "oxidation", smiles: "CC12CC3CC(C1)CC(C3)N2[O]", name: "1-methyl-2-azaadamantane N-oxyl" },
+  { label: "Nor-AZADO", use: "oxidation", smiles: "[O]N1C2CC3CC1CC3C2", name: "9-azanoradamantane N-oxyl" },
+  { label: "ABNO", use: "oxidation", smiles: "[O]N1C2CCCC1CCC2", name: "9-azabicyclo[3.3.1]nonane N-oxyl" },
+  { label: "keto-ABNO", use: "oxidation", smiles: "O=C1CC2CCCC(C1)N2[O]", name: "9-azabicyclo[3.3.1]nonan-3-one N-oxyl" },
+  // (the hydroxylamine, sold for oxidations as AZADO is: three suppliers' pages - Wako, BLD Pharm, TCI - show it alike)
+  { label: "AZADOL", use: "oxidation", smiles: "ON1C2CC3CC(C2)CC1C3", name: "2-azaadamantan-2-ol" },
   { label: "PCC", use: "oxidation", smiles: "[O-][Cr](=O)(=O)Cl.c1cc[nH+]cc1", name: "pyridinium chlorochromate" },
   { label: "PDC", use: "oxidation", smiles: "[O-][Cr](=O)(=O)O[Cr](=O)(=O)[O-].c1cc[nH+]cc1.c1cc[nH+]cc1", name: "pyridinium dichromate" },
   { label: "TPAP", use: "oxidation", smiles: "CCC[N+](CCC)(CCC)CCC.[O-][Ru](=O)(=O)=O", name: "tetrapropylammonium perruthenate" },
@@ -105,6 +123,8 @@ export const REAGENTS: Reagent[] = [
     name: "potassium peroxymonosulfate (2KHSO5·KHSO4·K2SO4)",
   },
   { label: "OsO4", use: "oxidation", smiles: "O=[Os](=O)(=O)=O", name: "osmium tetroxide", formula: true },
+  { label: "RuO4", use: "oxidation", smiles: "O=[Ru](=O)(=O)=O", name: "ruthenium tetroxide", formula: true },
+  { label: "NaBO3·4H2O", use: "oxidation", smiles: "[Na+].[Na+].[B-]1(O)(O)OO[B-](O)(O)OO1.O.O.O.O.O.O", name: "sodium perborate tetrahydrate (the peroxoborate dimer, as two NaBO3·4H2O)", formula: true },
   { label: "KMnO4", use: "oxidation", smiles: "[K+].[O-][Mn](=O)(=O)=O", name: "potassium permanganate", formula: true },
   { label: "MnO2", use: "oxidation", smiles: "O=[Mn]=O", name: "manganese dioxide", formula: true },
   { label: "SeO2", use: "oxidation", smiles: "O=[Se]=O", name: "selenium dioxide", formula: true },
@@ -126,6 +146,7 @@ export const REAGENTS: Reagent[] = [
   // --- reduction ---------------------------------------------------------------
   { label: "LAH", use: "reduction", smiles: "[Li+].[AlH4-]", name: "lithium aluminium hydride" },
   { label: "STAB", use: "reduction", smiles: "[Na+].CC(=O)O[BH-](OC(C)=O)OC(C)=O", name: "sodium triacetoxyborohydride" },
+  { label: "Zn(BH4)2", use: "reduction", smiles: "[Zn+2].[BH4-].[BH4-]", name: "zinc borohydride", formula: true },
   { label: "DIBAL", also: ["DIBAL-H", "DIBALH", "DIBAH"], use: "reduction", smiles: "CC(C)C[AlH]CC(C)C", name: "diisobutylaluminium hydride" },
   { label: "Red-Al", use: "reduction", smiles: "[Na+].COCCO[AlH2-]OCCOC", name: "sodium bis(2-methoxyethoxy)aluminium hydride" },
   { label: "L-Selectride", use: "reduction", smiles: `[Li+].${SEC_BU3BH}`, name: "lithium tri-sec-butylborohydride" },
@@ -141,6 +162,17 @@ export const REAGENTS: Reagent[] = [
   { label: "DBU", use: "base", smiles: "C1CCC2=NCCCN2CC1", name: "1,8-diazabicyclo[5.4.0]undec-7-ene" },
   { label: "DBN", use: "base", smiles: "C1CN2CCCN=C2C1", name: "1,5-diazabicyclo[4.3.0]non-5-ene" },
   { label: "TBD", use: "base", smiles: "C1CNC2=NCCCN2C1", name: "1,5,7-triazabicyclo[4.4.0]dec-5-ene" },
+  // (as sold, as their suppliers' pages and PubChem have them: the list in the PR that added them)
+  { label: "MTBD", use: "base", smiles: "CN1CCCN2CCCN=C12", name: "7-methyl-1,5,7-triazabicyclo[4.4.0]dec-5-ene" },
+  { label: "BEMP", use: "base", smiles: "CCN(CC)P1(=NC(C)(C)C)N(C)CCCN1C", name: "2-tert-butylimino-2-diethylamino-1,3-dimethylperhydro-1,3,2-diazaphosphorine" },
+  {
+    label: "P4-tBu",
+    also: ["P4-t-Bu"],
+    use: "base",
+    smiles: "CC(C)(C)N=P(N=P(N(C)C)(N(C)C)N(C)C)(N=P(N(C)C)(N(C)C)N(C)C)N=P(N(C)C)(N(C)C)N(C)C",
+    name: "1-tert-butyl-4,4,4-tris(dimethylamino)-2,2-bis[tris(dimethylamino)phosphoranylidenamino]-2λ5,4λ5-catenadi(phosphazene)",
+  },
+  { label: "BTMG", also: ["Barton's base"], use: "base", smiles: "CN(C)C(=NC(C)(C)C)N(C)C", name: "2-tert-butyl-1,1,3,3-tetramethylguanidine" },
   { label: "DMAP", use: "base", smiles: "CN(C)c1ccncc1", name: "4-(dimethylamino)pyridine" },
   { label: "DIPEA", also: ["DIEA", "Hünig's base", "Hunig's base"], use: "base", smiles: "CCN(C(C)C)C(C)C", name: "N,N-diisopropylethylamine" },
   { label: "TEA", use: "base", smiles: "CCN(CC)CC", name: "triethylamine" },
@@ -181,6 +213,12 @@ export const REAGENTS: Reagent[] = [
   { label: "TBTU", use: "coupling", smiles: `CN(C)C(=[N+](C)C)N1N=[N+]([O-])C2=CC=CC=C21.${BF4}`, name: "1-[bis(dimethylamino)methylene]-1H-benzotriazolium 3-oxide tetrafluoroborate" },
   { label: "COMU", use: "coupling", smiles: `CCOC(=O)C(C#N)=NOC(=[N+](C)C)N1CCOCC1.${PF6}`, name: "(1-cyano-2-ethoxy-2-oxoethylideneaminooxy)dimethylaminomorpholinocarbenium hexafluorophosphate" },
   { label: "PyBOP", use: "coupling", smiles: `C1CCN(C1)[P+](N1CCCC1)(N1CCCC1)ON1N=NC2=CC=CC=C21.${PF6}`, name: "(benzotriazol-1-yloxy)tripyrrolidinophosphonium hexafluorophosphate" },
+  // (the 7-aza one in Kekulé form, as PyBOP is)
+  { label: "PyAOP", use: "coupling", smiles: `C1CCN(C1)[P+](N1CCCC1)(N1CCCC1)ON1N=NC2=C1N=CC=C2.${PF6}`, name: "(7-azabenzotriazol-1-yloxy)tripyrrolidinophosphonium hexafluorophosphate" },
+  { label: "TCFH", use: "coupling", smiles: `CN(C)C(Cl)=[N+](C)C.${PF6}`, name: "chloro-N,N,N',N'-tetramethylformamidinium hexafluorophosphate" },
+  { label: "DEPBT", use: "coupling", smiles: "CCOP(=O)(OCC)ON1N=Nc2ccccc2C1=O", name: "3-[(diethoxyphosphoryl)oxy]-1,2,3-benzotriazin-4(3H)-one" },
+  { label: "EEDQ", use: "coupling", smiles: "CCOC1C=Cc2ccccc2N1C(=O)OCC", name: "N-ethoxycarbonyl-2-ethoxy-1,2-dihydroquinoline" },
+  { label: "BOP-Cl", use: "coupling", smiles: "O=C1OCCN1P(=O)(Cl)N1CCOC1=O", name: "bis(2-oxo-3-oxazolidinyl)phosphinic chloride" },
   { label: "BOP", use: "coupling", smiles: `CN(C)[P+](N(C)C)(N(C)C)ON1N=NC2=CC=CC=C21.${PF6}`, name: "(benzotriazol-1-yloxy)tris(dimethylamino)phosphonium hexafluorophosphate" },
   { label: "T3P", use: "coupling", smiles: "CCCP1(=O)OP(=O)(CCC)OP(=O)(CCC)O1", name: "propylphosphonic anhydride" },
   { label: "CDI", use: "coupling", smiles: "O=C(n1ccnc1)n1ccnc1", name: "1,1'-carbonyldiimidazole" },
@@ -188,6 +226,7 @@ export const REAGENTS: Reagent[] = [
   { label: "Oxyma", also: ["OxymaPure"], use: "coupling", smiles: "CCOC(=O)C(C#N)=NO", name: "ethyl cyano(hydroxyimino)acetate" },
   { label: "NHS", use: "coupling", smiles: "ON1C(=O)CCC1=O", name: "N-hydroxysuccinimide" },
   { label: "Yamaguchi reagent", also: ["TCBC"], use: "coupling", smiles: "O=C(Cl)c1c(Cl)cc(Cl)cc1Cl", name: "2,4,6-trichlorobenzoyl chloride" },
+  { label: "MNBA", also: ["Shiina reagent", "Shiina's reagent"], use: "coupling", smiles: "Cc1cccc([N+](=O)[O-])c1C(=O)OC(=O)c1c(C)cccc1[N+](=O)[O-]", name: "2-methyl-6-nitrobenzoic anhydride" },
   { label: "Mukaiyama reagent", also: ["Mukaiyama's reagent"], use: "coupling", smiles: "C[n+]1ccccc1Cl.[I-]", name: "2-chloro-1-methylpyridinium iodide" },
   { label: "DPPA", use: "coupling", smiles: "[N-]=[N+]=NP(=O)(Oc1ccccc1)Oc1ccccc1", name: "diphenyl phosphorazidate" },
   { label: "DEAD", use: "coupling", smiles: "CCOC(=O)N=NC(=O)OCC", name: "diethyl azodicarboxylate" },
@@ -205,9 +244,26 @@ export const REAGENTS: Reagent[] = [
   { label: "Deoxo-Fluor", use: "halogenation", smiles: "COCCN(CCOC)S(F)(F)F", name: "bis(2-methoxyethyl)aminosulfur trifluoride" },
   { label: "Togni I", also: ["Togni reagent I", "Togni's reagent I"], use: "halogenation", smiles: "CC1(C)O[I](C(F)(F)F)c2ccccc21", name: "3,3-dimethyl-1-(trifluoromethyl)-1,2-benziodoxole" },
   { label: "Togni II", also: ["Togni reagent II", "Togni's reagent II"], use: "halogenation", smiles: "FC(F)(F)[I]1OC(=O)c2ccccc21", name: "1-(trifluoromethyl)-1,2-benziodoxol-3(1H)-one" },
+  { label: "Umemoto Reagent II", also: ["Umemoto reagent II", "Umemoto's reagent II", "Umemoto's Reagent II"], use: "halogenation", smiles: "FC(F)(F)[S+]1c2ccc(F)cc2-c2cc(F)ccc12.[O-]S(=O)(=O)C(F)(F)F", name: "2,8-difluoro-S-(trifluoromethyl)dibenzothiophenium triflate" },
+  { label: "Umemoto Reagent IV", also: ["Umemoto reagent IV", "Umemoto's reagent IV", "Umemoto's Reagent IV"], use: "halogenation", smiles: "FC(F)(F)Oc1ccc2c(c1)-c1cc(OC(F)(F)F)ccc1[S+]2C(F)(F)F.[O-]S(=O)(=O)C(F)(F)F", name: "2,8-bis(trifluoromethoxy)-S-(trifluoromethyl)dibenzothiophenium triflate" },
   { label: "Ruppert–Prakash reagent", also: ["Ruppert-Prakash reagent"], use: "halogenation", smiles: "C[Si](C)(C)C(F)(F)F", name: "(trifluoromethyl)trimethylsilane" },
   { label: "Langlois reagent", also: ["Langlois' reagent"], use: "halogenation", smiles: "[Na+].[O-]S(=O)C(F)(F)F", name: "sodium trifluoromethanesulfinate" },
+  // (each as it is sold - salts as salts - its structure as its supplier's page and PubChem have it, and its first report: the
+  // list in the PR that added them)
+  { label: "TASF", also: ["TAS-F"], use: "halogenation", smiles: "CN(C)[S+](N(C)C)N(C)C.C[Si-](C)(C)(F)F", name: "tris(dimethylamino)sulfonium difluorotrimethylsilicate" },
+  { label: "TBAT", use: "halogenation", smiles: `${TBA}.F[Si-](F)(c1ccccc1)(c1ccccc1)c1ccccc1`, name: "tetrabutylammonium difluorotriphenylsilicate" },
+  { label: "XtalFluor-E", use: "halogenation", smiles: `CCN(CC)[S+](F)F.${BF4}`, name: "(diethylamino)difluorosulfonium tetrafluoroborate" },
+  { label: "XtalFluor-M", use: "halogenation", smiles: `F[S+](F)N1CCOCC1.${BF4}`, name: "difluoro(morpholino)sulfonium tetrafluoroborate" },
+  { label: "PyFluor", use: "halogenation", smiles: "O=S(=O)(F)c1ccccn1", name: "pyridine-2-sulfonyl fluoride" },
+  { label: "PhenoFluor", use: "halogenation", smiles: "CC(C)c1cccc(C(C)C)c1N1C=CN(c2c(C(C)C)cccc2C(C)C)C1(F)F", name: "1,3-bis(2,6-diisopropylphenyl)-2,2-difluoro-2,3-dihydro-1H-imidazole" },
+  { label: "AlkylFluor", use: "halogenation", smiles: `CC(C)c1cccc(C(C)C)c1-n1cc[n+](c1F)-c1c(C(C)C)cccc1C(C)C.${BF4}`, name: "1,3-bis(2,6-diisopropylphenyl)-2-fluoroimidazolium tetrafluoroborate" },
+  { label: "Fluolead", use: "halogenation", smiles: "Cc1cc(cc(C)c1S(F)(F)F)C(C)(C)C", name: "4-tert-butyl-2,6-dimethylphenylsulfur trifluoride" },
+  { label: "Umemoto Reagent I", also: ["Umemoto reagent I", "Umemoto's reagent I", "Umemoto's Reagent I"], use: "halogenation", smiles: `FC(F)(F)[S+]1c2ccccc2-c2ccccc12.${BF4}`, name: "S-(trifluoromethyl)dibenzothiophenium tetrafluoroborate" },
+  { label: "N-fluoropyridinium triflate", use: "halogenation", smiles: "F[n+]1ccccc1.[O-]S(=O)(=O)C(F)(F)F", name: "N-fluoropyridinium trifluoromethanesulfonate" },
+  { label: "Hu reagent", also: ["Hu Reagent", "2-PySO2CF2H"], use: "halogenation", smiles: "FC(F)S(=O)(=O)c1ccccn1", name: "difluoromethyl 2-pyridyl sulfone" },
+  { label: "PhSO2CF2H", use: "halogenation", smiles: "FC(F)S(=O)(=O)c1ccccc1", name: "difluoromethyl phenyl sulfone", formula: true },
   { label: "SOCl2", use: "halogenation", smiles: "O=S(Cl)Cl", name: "thionyl chloride", formula: true },
+  { label: "Ghosez's reagent", also: ["Ghosez reagent"], use: "halogenation", smiles: "CC(C)=C(Cl)N(C)C", name: "1-chloro-N,N,2-trimethyl-1-propenylamine" },
   { label: "POCl3", use: "halogenation", smiles: "O=P(Cl)(Cl)Cl", name: "phosphoryl chloride", formula: true },
   { label: "PCl5", use: "halogenation", smiles: "ClP(Cl)(Cl)(Cl)Cl", name: "phosphorus pentachloride", formula: true },
 
@@ -242,6 +298,7 @@ export const REAGENTS: Reagent[] = [
   { label: "Grubbs III", also: ["Grubbs-III", "G-III", "GIII", "Grubbs 3rd"], use: "catalyst", complex: "RuCl2(=CHPh)(SIMes)(py)2", name: "third-generation Grubbs catalyst" },
   { label: "HG-I", also: ["HG I", "HGI", "Hoveyda–Grubbs I", "Hoveyda-Grubbs I"], use: "catalyst", complex: "RuCl2(chelate)(PCy3)", ligands: { chelate: HOVEYDA }, name: "first-generation Hoveyda–Grubbs catalyst" },
   { label: "HG-II", also: ["HG II", "HGII", "Hoveyda–Grubbs II", "Hoveyda-Grubbs II"], use: "catalyst", complex: "RuCl2(chelate)(SIMes)", ligands: { chelate: HOVEYDA }, name: "second-generation Hoveyda–Grubbs catalyst" },
+  { label: "Zhan catalyst-1B", also: ["Zhan-1B", "Zhan 1B"], use: "catalyst", complex: "RuCl2(chelate)(SIMes)", ligands: { chelate: ZHAN }, name: "Zhan catalyst-1B" },
   {
     label: "Schrock's catalyst",
     also: ["Schrock catalyst", "Schrock cat."],
@@ -334,6 +391,21 @@ export const REAGENTS: Reagent[] = [
     name: "1,2:4,5-di-O-isopropylidene-β-D-erythro-2,3-hexodiulo-2,6-pyranose",
     enantiomers: { as: [], mirror: [], plain: true },
   },
+
+  // --- photocatalysts --------------------------------------------------------------
+  { label: "4CzIPN", use: "photocatalyst", smiles: "N#Cc1c(-n3c4ccccc4c4ccccc43)c(C#N)c(-n3c4ccccc4c4ccccc43)c(-n3c4ccccc4c4ccccc43)c1-n3c4ccccc4c4ccccc43", name: "1,2,3,5-tetrakis(carbazol-9-yl)-4,6-dicyanobenzene" },
+  { label: "4DPAIPN", use: "photocatalyst", smiles: "N#Cc1c(N(c3ccccc3)c3ccccc3)c(C#N)c(N(c3ccccc3)c3ccccc3)c(N(c3ccccc3)c3ccccc3)c1N(c3ccccc3)c3ccccc3", name: "1,2,3,5-tetrakis(diphenylamino)-4,6-dicyanobenzene" },
+  { label: "TPT", use: "photocatalyst", smiles: `c1ccc(cc1)-c1cc(-c2ccccc2)[o+]c(-c2ccccc2)c1.${BF4}`, name: "2,4,6-triphenylpyrylium tetrafluoroborate" },
+  { label: "Mes-Acr-Me BF4", also: ["Mes-Acr-Me+ BF4-", "Mes-Acr-Me+ BF4−", "Mes-Acr-MeBF4"], use: "photocatalyst", smiles: `C[n+]1c2ccccc2c(-c2c(C)cc(C)cc2C)c2ccccc21.${BF4}`, name: "9-mesityl-10-methylacridinium tetrafluoroborate" },
+  { label: "Mes-Acr-Me ClO4", also: ["Mes-Acr-Me+ ClO4-", "Mes-Acr-Me+ ClO4−", "Mes-Acr-MeClO4"], use: "photocatalyst", smiles: "C[n+]1c2ccccc2c(-c2c(C)cc(C)cc2C)c2ccccc21.[O-]Cl(=O)(=O)=O", name: "9-mesityl-10-methylacridinium perchlorate" },
+  {
+    label: "Eosin Y disodium salt",
+    also: ["Eosin Y disodium"],
+    use: "photocatalyst",
+    smiles: "[Na+].[Na+].[O-]C(=O)C1=CC=CC=C1C1=C2C=C(Br)C(=O)C(Br)=C2OC2=C1C=C(Br)C([O-])=C2Br",
+    name: "2',4',5',7'-tetrabromofluorescein disodium salt",
+  },
+  { label: "Eosin Y free acid", use: "photocatalyst", smiles: "O=C1OC2(c3ccccc13)c1cc(Br)c(O)c(Br)c1Oc1c2cc(Br)c(O)c1Br", name: "2',4',5',7'-tetrabromofluorescein" },
 
   // --- solvents ------------------------------------------------------------------
   { label: "DMF", use: "solvent", smiles: "CN(C)C=O", name: "N,N-dimethylformamide" },

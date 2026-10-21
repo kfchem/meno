@@ -9,6 +9,7 @@ import {
   type StrokeNode,
 } from "./stroke";
 import type { Pt } from "./extendSnap";
+import { measured } from "../../../../testing/timeouts";
 
 const L = 1;
 // one carbon, and a second to the left of it
@@ -197,7 +198,7 @@ describe("a chain stroke traced round fused rings", () => {
         [-1, 1, -1],
       ] as (1 | -1)[][])
         expect(ringsTraced([a, b, third], ways)).toEqual({ atoms: 14, bonds: 16 });
-  });
+  }, measured(700));
 
   it("draws phenanthrene traced along its bonds, over the bonds the rings share", () => {
     const at = (c: Pt, k: number): Pt => ({ x: c.x + B * Math.cos(((60 * k - 90) * Math.PI) / 180), y: c.y + B * Math.sin(((60 * k - 90) * Math.PI) / 180) });

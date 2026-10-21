@@ -6,6 +6,7 @@ import { drawnRingSets, MOST_SETS_TRIED, ringSetsToTry, withRingSet } from "./ri
 import { placeRingSystem } from "./ringSystem";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { segmentsCross } from "./geometry";
+import { measured } from "../../testing/timeouts";
 
 const ibogaine = "CC[C@H]1C[C@@H]2C[C@@H]3[C@H]1N(C2)CCC4=C3NC5=C4C=C(C=C5)OC";
 
@@ -88,7 +89,7 @@ describe("the smallest set of rings a bridged system is drawn from", () => {
       return d.join(",");
     };
     expect(shape(layout2D(reversed))).toBe(shape(layout2D(input)));
-  });
+  }, measured(480));
 
   it("draws ibogaine with neither a bond crossing by its N nor its junction H against the indole's NH", () => {
     // (flat from its best set, two bonds crossed by the N; its cage from its

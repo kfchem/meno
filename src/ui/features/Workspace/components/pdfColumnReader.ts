@@ -18,6 +18,7 @@ import type { EditorStore } from "../store";
 import type { PdfItem } from "../store/types";
 import { atOf, columnLayout, deepest, pageInView, pointOf, pointOn, topOf, type ColumnLayout } from "../../../../lib/pdf/column";
 import { isWebAddress, type PdfLink } from "../../../../lib/pdf/reader";
+import { IS_MAC } from "../../../../lib/doc/shortcuts";
 
 /** The column's header, its names and buttons, over the top of it: what is read begins under it, in CSS pixels. */
 export const HEADER_PX = 44;
@@ -339,6 +340,23 @@ export class ColumnReader {
     const zoom = Math.round(this.goal.zoom * 1000) / 1000;
     if (pdf.reading.at !== at || pdf.reading.zoom !== zoom) this.store.getState().setPdfReading(this.id, { at, zoom });
   }
+}
+
+/**
+ * Whether a click follows a link it is on (docs/WORKSPACE.md, *PDFs*): only
+ * with ⌘ held on a Mac, Ctrl elsewhere, as the system's own links are -
+ * a plain click does what it does on the page anywhere else (the
+ * maintainer, 2026-10-18: a link opened at a plain click was a surprise).
+ */
+export function followsLink(e: { metaKey: boolean; ctrlKey: boolean }, mac = IS_MAC): boolean {
+  return mac ? e.metaKey : e.ctrlKey;
+}
+
+/** What a link does, as it is shown over it: ⌘-click (Ctrl-click) and where it goes. */
+export function linkHint(link: PdfLink, mac = IS_MAC): string {
+  const how = mac ? "\u2318-click" : "Ctrl+click";
+  if (link.uri) return `${how} to open ${link.uri.trim()}`;
+  return link.page != null ? `${how} to go to page ${link.page + 1}` : "";
 }
 
 /**

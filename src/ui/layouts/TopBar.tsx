@@ -1,11 +1,9 @@
 import { PlusIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import clsx from "clsx";
-import { motion } from "motion/react";
 import type { MouseEvent } from "react";
 import { TabKind } from "../../lib/core";
 import { IS_MAC, shortcutLabel } from "../../lib/doc/shortcuts";
 import OfflineToggle from "../network/OfflineToggle";
-import { DURATION, EASE } from "../theme/motion";
 import SaveIcon from "./SaveIcon";
 import { TabStrip, type TabMeta } from "./Tabs";
 import WindowButtons, { SystemButtonsRoom } from "./WindowButtons";
@@ -60,17 +58,17 @@ export default function TopBar({ ctl, mac = IS_MAC }: { ctl: TabsController; mac
           close={close}
         />
         <div data-tauri-drag-region className="shrink-0 h-full flex items-center pr-1">
-          <motion.button
-            layout="position"
-            transition={{ layout: { duration: DURATION.base, ease: EASE } }}
+          {/* (moved along by the tabs before it, as they open and close their room) */}
+          <button
             aria-label="New workspace"
             title="New workspace"
             onClick={add}
             onMouseDown={stop}
             className="h-7 w-7 rounded-md flex items-center justify-center text-gh-gray transition-colors duration-150 ease-meno hover:bg-gray-200 hover:text-gh-black"
           >
-            <PlusIcon className="h-4 w-4" />
-          </motion.button>
+            {/* (as large as a tab's ×, drawn in the same 12 px and the same line: neither drawing the eye from the other - the maintainer, 2026-10-19) */}
+            <PlusIcon className="h-3 w-3" />
+          </button>
         </div>
         <div data-tauri-drag-region className="flex-1" />
       </div>

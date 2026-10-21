@@ -34,7 +34,7 @@ import { LabelWords } from "../utils/labelWords";
 import { pageAt } from "../utils/page";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { WholeTexts2D } from "./Labels2D";
-import { pageField } from "./pageField";
+import { keyAfterKept, pageField } from "./pageField";
 import { leaveWatch, pastLabel } from "../utils/labelLeave";
 import { WRITE_MS, writtenLetters } from "../utils/writtenLetters";
 import { measured, usePressAmong, useWriting, writingMarks, type WritingDrawn } from "./writing";
@@ -101,8 +101,9 @@ export default function LabelTyping2D() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const s = store.getState();
-      if (!s.labelKept || e.repeat || e.isComposing) return;
-      const enter = e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey;
+      // (an Enter as an input method on Windows gives it - "Process" - an Enter all the same: pageField `keyAfterKept`)
+      const enter = keyAfterKept(e);
+      if (!s.labelKept || enter == null) return;
       if (s.keyAfterLabel(enter) && enter) e.preventDefault();
     };
     const onPress = () => store.getState().forgetLabelKept();
@@ -238,9 +239,10 @@ function Typing({ session }: { session: Session }) {
     const s = store.getState();
     if (!s.labelEdit.active || s.labelEdit.n !== n) return;
     if (keep) {
-      // (as it is kept: as it reads from its bond - aco OAc - its italic prefixes hyphenated - tbu t-Bu)
-      s.setLabelEditValue(useAppSettings.getState().labels.smart ? keptLabel(ed.typed, labelReading) : ed.typed);
-      s.commitLabelEdit(ed.typed, byEnter);
+      // (as it is kept: without the spaces hung at its ends - nothing drawn moves - and as it reads from its bond - aco OAc - its italic prefixes hyphenated - tbu t-Bu)
+      const typed = ed.typed.trim();
+      s.setLabelEditValue(useAppSettings.getState().labels.smart ? keptLabel(typed, labelReading) : typed);
+      s.commitLabelEdit(typed, byEnter);
     } else s.cancelLabelEdit();
   };
   const finishing = useRef(finish);

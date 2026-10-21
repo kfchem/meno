@@ -1,4 +1,5 @@
 import { boltzmann } from "../../../../lib/boltzmann";
+import { easeInOut, easeOut } from "../../../theme/motion";
 import { ROOM_TEMPERATURE } from "../../../../lib/units";
 import * as THREE from "three";
 import { bentPieces } from "./stickBend";
@@ -117,6 +118,30 @@ export function spotFollowed(was: SpotAbout, goal: SpotAbout, dt: number, tau: n
   const a = Math.abs(turn * keep) < 0.01 ? goal.a : goal.a - turn * keep;
   const r = Math.abs((was.r - goal.r) * keep) < 0.01 ? goal.r : goal.r + (was.r - goal.r) * keep;
   return { a, r };
+}
+
+/** A label's fade: how far it is in view, 0 to 1; and where its fade is going - from what, to what, and how long it has gone so far, in seconds. */
+export type LabelFade = { v: number; from: number; to: number; t: number };
+
+/**
+ * A label's fade one frame of `dt` seconds on, toward in view (`to` 1) or
+ * out of it (0), over `time` seconds either way: eased into view as a mark
+ * comes (easeOut), and out of it as gently out of its start as into its end
+ * (easeInOut), as CSS's `meno-fade-in` and `meno-fade-out` are. It goes by
+ * the frames' `dt` as given - the 3D view's, at most a thirtieth of a
+ * second, so that a frame slow to come takes it no further than one on time
+ * would. One coming into view starts only once
+ * `goIn` says so - every label shown with it there to be seen - so that
+ * labels shown together come into view together; one going goes at once.
+ * Changed in place; whether it is still on its way.
+ */
+export function fadeStep(fade: LabelFade, to: 0 | 1, goIn: boolean, dt: number, time: number): boolean {
+  if (fade.to !== to && (to === 0 || goIn)) Object.assign(fade, { from: fade.v, to, t: 0 });
+  if (fade.v === fade.to) return false;
+  fade.t += Math.max(dt, 0);
+  const u = fade.t / time;
+  fade.v = u >= 1 ? fade.to : fade.from + (fade.to - fade.from) * (fade.to ? easeOut(u) : easeInOut(u));
+  return fade.v !== fade.to;
 }
 
 /** How far a measurement's value may run into another before it is in its way, in pixels; and how clear its own point must be for it to go back there - so that two side by side, the view turning, do not trade places frame by frame. */

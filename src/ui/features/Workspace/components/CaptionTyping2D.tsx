@@ -33,7 +33,7 @@
 import * as THREE from "three";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, marksOf, WORDS_STEPS, wordsFontPx, wordsSet } from "../../../../lib/chem/captions";
+import { CAPTION_LINE, captionPlace, captionPlaces, captionSet, keptWords, marksOf, WORDS_STEPS, wordsFontPx, wordsSet } from "../../../../lib/chem/captions";
 import { IS_MAC, plusOrEquals } from "../../../../lib/doc/shortcuts";
 import { fontStack, labelSetOf, sameTexts, type TextItem } from "../../../../lib/chem/layout2d";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -43,8 +43,6 @@ import { useEditor, useEditorStore } from "../store";
 import type { Caption, EditorState } from "../store/types";
 import { pageAt } from "../utils/page";
 import { stylesThrough, WordsEditor } from "../utils/wordsEditor";
-import { wordsRoom } from "../../../../lib/chem/shapes";
-import { SHAPE_PAD } from "../document";
 import { useDrawnLayout, useDrawnZoom } from "./drawnLayoutContext";
 import { arrowsBeside, useWordsWriting } from "./drawnArrows";
 import { WholeTexts2D } from "./Labels2D";
@@ -97,15 +95,8 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const [own, setOwn] = useState<number | undefined>(caption?.size);
   const fs = wordsFontPx({ size: own }, opts);
   const set = useMemo(() => labelSetOf(opts), [opts]);
-  // (a box given a width, not over an arrow nor in a shape, keeps its top as it grows: where its top was as it opened)
-  const [top] = useState(() => (caption?.width && caption.arrow == null && caption.shape == null ? caption.y + wordsSet(caption, opts, labelSetOf(opts)).halfH : null));
-  // (in a shape - or, new, written in one: about its middle, as wide as it is inside)
-  const inShape = caption ? caption.shape : edit.shape;
-  const shapes = useEditor((s) => s.shapes);
-  const room = useMemo(() => {
-    const sh = inShape != null ? shapes.find((x) => x.id === inShape) : undefined;
-    return sh ? wordsRoom(sh, SHAPE_PAD) : null;
-  }, [inShape, shapes]);
+  // (a box given a width, not over an arrow, keeps its top as it grows: where its top was as it opened)
+  const [top] = useState(() => (caption?.width && caption.arrow == null ? caption.y + wordsSet(caption, opts, labelSetOf(opts)).halfH : null));
   const cam = camera as THREE.OrthographicCamera;
   // (the view's zoom as the drawing takes it up: drawn again as it changes - drawnLayoutContext `useDrawnZoom`)
   const zoom = useDrawnZoom();
@@ -116,7 +107,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const c = left ? null : ed.composing;
   const text = left ? (caption?.text ?? "") : ed.text;
   const shownText = c ? text.slice(0, c.from) + c.text + text.slice(c.to) : text;
-  const width = room?.width ?? caption?.width;
+  const width = caption?.width;
   const align = caption?.align;
   // (their letters as they are set - what the IME composes as what it is typed into)
   const marks = left ? caption?.marks : marksOf(ed.styles);
@@ -125,14 +116,14 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
   const laid = captionSet(shownText, 0, 0, fs, set, width, align, shownMarks);
   const halfW = Math.max(laid.halfW, fs / 2);
   const halfH = Math.max(laid.halfH, fs / 2);
-  const at = left && caption ? { x: caption.x, y: caption.y } : room ? { x: room.x, y: room.y } : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
+  const at = left && caption ? { x: caption.x, y: caption.y } : top != null ? { x: opened.x, y: top - laid.halfH } : opened;
   const places = captionPlaces(text, at.x, at.y, fs, set, width, align, marks);
   const shown = c ? captionPlaces(shownText, at.x, at.y, fs, set, width, align, shownMarks) : places;
   // (over an arrow, or going over one as they are kept: the arrow as long as they need, as they are written)
   const arrows = useEditor((s) => s.arrows);
   const captions = useEditor((s) => s.captions);
   const beside = useMemo(() => arrowsBeside({ arrows, captions }, opts, set, edit.id), [arrows, captions, opts, set, edit.id]);
-  const goes = left || !text.trim() || room ? null : caption ? (caption.arrow != null ? { arrow: caption.arrow, ...at } : null) : captionPlace(edit.at, { w: laid.halfW, h: laid.halfH }, beside, fs);
+  const goes = left || !text.trim() ? null : caption ? (caption.arrow != null ? { arrow: caption.arrow, ...at } : null) : captionPlace(edit.at, { w: laid.halfW, h: laid.halfH }, beside, fs);
   useWordsWriting(goes?.arrow != null ? { arrow: goes.arrow, x: goes.x, y: goes.y, halfW: laid.halfW, halfH: laid.halfH } : null, n);
   // what is drawn: the caret, what is selected and the light round them as the words drawn have them - those last given, until they are drawn
   const latest = useRef<WritingDrawn | null>(null);
@@ -164,10 +155,10 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
     const s = store.getState();
     // (the word last typed ended as they are kept)
     if (keep) ed.kept();
-    const text = ed.text.replace(/\s+$/, "").replace(/^\s*\n/, "");
-    // (the letters' marks within what is kept: what was cut off its end goes with it)
-    const lead = ed.text.length - ed.text.replace(/^\s*\n/, "").length;
-    const kept = marksOf(ed.styles.slice(lead, lead + text.length));
+    // (without the spaces hung at its lines' ends - nothing drawn moves - nor blank lines around it; the letters' marks with what is kept)
+    const words = keptWords(ed.text, ed.styles);
+    const text = words.text;
+    const kept = marksOf(words.styles);
     // (the caption they are now - none, new ones let go or any written away)
     let still: number | null = edit.id;
     if (keep) {
@@ -182,10 +173,7 @@ function Writing({ edit, caption, left = false }: { edit: Edit; caption?: Captio
           return { ...o, halfW: r.halfW, halfH: r.halfH };
         });
       const sameMarks = JSON.stringify(kept) === JSON.stringify(caption?.marks ?? []);
-      if (edit.id == null && room && edit.shape != null) {
-        // (new words in a shape: in it)
-        if (text.trim()) still = s.addCaption(text, room.x, room.y, undefined, undefined, room.width, undefined, { size: own, marks: kept, shape: edit.shape });
-      } else if (edit.id == null) {
+      if (edit.id == null) {
         if (text.trim()) {
           const placed = captionPlace(edit.at, half(text), arrowsBeside(s, opts, set, edit.id), opts.fontPx, others);
           still = s.addCaption(text, placed.x, placed.y, placed.arrow, undefined, undefined, undefined, { size: own, marks: kept });

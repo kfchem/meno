@@ -5,6 +5,7 @@ import { counterIonStructure, ligandPicture, namedLigand } from "./ligands";
 import { contractGraph, contractionTrials, contractions, type ContractGraph } from "./contract";
 import { kekuleOrders } from "./kekulize";
 import { readSmiles } from "./smiles";
+import { measured } from "../../testing/timeouts";
 
 const fromSmiles = (smiles: string): ContractGraph => {
   const r = readSmiles(smiles);
@@ -166,7 +167,7 @@ describe("the dictionary's pictures", () => {
         .filter((el) => el === "Ph" || el === "PPh2"),
     ).toEqual([]);
     // (BINAP's picture is laid out here, 0.7 to 1.8 s alone: a busy machine passes the default 5 s)
-  }, 30_000);
+  }, measured(1_900));
 
   it("write a counter-anion's CF3 by formula, as everywhere", () => {
     const placed = picturedStructure(counterIonStructure("BArF")!, 1);

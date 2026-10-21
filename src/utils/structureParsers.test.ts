@@ -3,6 +3,7 @@ import { atomsTogether, bondedPairs, bondsByDistance, bondRadii, parseSDF, parse
 import samplePdbText from "../samples/cholesterol.pdb?raw";
 import { readStructures } from "../lib/io/structures";
 import sampleXyz from "../samples/cholesterol.xyz?raw";
+import { measured } from "../testing/timeouts";
 
 describe("parseXYZ", () => {
   it("parses the sample and infers bonds", () => {
@@ -76,7 +77,7 @@ describe("bondsByDistance", () => {
     const found = bondsByDistance(atoms);
     expect(found.length).toBeGreaterThan(1000);
     expect(found).toEqual(byPairs);
-  });
+  }, measured(450));
 });
 
 describe("parseSDF", () => {
