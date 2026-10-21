@@ -1747,11 +1747,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
 
 - **Said over it.** *No H in file* where the molecule - for a PDB entry,
   its chains while they are drawn as atoms, or a ligand - has no
-  hydrogens and either has a carbon whose neighbours leave room for some,
-  its orders unknown (none or one, but for the end of a C≡O or C≡N; two
-  not in a line; three not in a plane: so not C60, carbon dioxide, CCl4
-  or a metal's carbonyls), or has an atom whose valence, its orders
-  known, leaves room for some; *Bond orders
+  hydrogens and is a skeleton (below: `lib/chem/skeleton.ts`); *Bond
+  orders estimated, protonation unknown* under it where a skeleton's
+  orders were estimated from its distances; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
   side chains round a ligand, in a look with ribbons, among them); *3
@@ -1799,8 +1797,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   has two S=O and a phosphate one P=O, to its shortest oxygens; a nitro
   group's charges are N+ and O-. Bonds to metals stay single. Where an
   atom's shape asks for a double bond it cannot have, nothing is changed
-  and the orders stay unknown. Otherwise they are drawn with no mark: a
-  later SMILES or CCD replaces them. Comparing lengths with bond-type
+  and the orders stay unknown. Otherwise they are drawn - with no mark
+  but on a skeleton, which says its protonation is unknown (below) - and
+  a later SMILES or CCD replaces them. Comparing lengths with bond-type
   radii, and counting a ring's electrons, are ideas from the maintainer's
   ACCeL; the code is Meno's own. Checked (2026-10-11) against 120
   molecules made in 3D by RDKit with their hydrogens taken away: all
@@ -1853,6 +1852,45 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   each is fetched once; only the components' names leave Meno. A PDB file
   with no chain (a ligand on its own) keeps no residue names, and is not
   looked up.
+- **A skeleton is not a molecule** (the maintainer's ruling, 2026-10-21:
+  "treating a structure without hydrogens as a molecule is itself
+  wrong"). A file of coordinates without hydrogens gives a molecule's
+  skeleton: how its atoms are protonated, and so its charge and spin, are
+  not in it. Meno's one rule for a skeleton (`lib/chem/skeleton.ts`
+  `lacksHydrogens`, for a molecule `utils/completeness.ts` `isSkeleton`):
+  none of its atoms - a ligand's, a PDB entry's chains' - is a hydrogen,
+  and some would carry one. Its orders known, an atom whose valence leaves
+  room for one would. Its orders unknown, a carbon whose neighbours leave
+  room would (none, or one but for the end of a C≡O or C≡N; two not in a
+  line; three whose angles at it sum to less than 338° - halfway between
+  a tetrahedron's corner, 328.4°, and C60's carbons, 348°); and where no
+  carbon says so but another atom could carry one - an oxygen with one
+  bond, a nitrogen with two - the orders are estimated from the distances
+  (above) and an atom other than carbon they leave room on would: a
+  carboxylate's oxygen, an amine's nitrogen. Where they cannot be
+  estimated, it cannot be told that none is missing: a skeleton. Carbon
+  dioxide, SF6, CCl4, C60 and a metal's carbonyls are whole by
+  themselves; any other that is whole without hydrogens is said so by the
+  chemist - *Complete without hydrogens* on its menu (`wholeWithoutH`,
+  one undo step; never a PDB entry's). A skeleton is given no charge or
+  spin (`lib/io/writers` `speciesOf` gives none: before, H-less
+  methylamine's 13 electrons made it a neutral doublet, and ethane's
+  heavy atoms were C2); a step whose plugin needs the whole molecule -
+  *Conformers*, *Optimise*, *Energy*, *Frequencies*, *NCI*, a plugin's
+  *Duplicates* (`whole` in `workflow/kinds.ts`) - refuses it before
+  anything is sent, saying what to do (`skeletonsRefused`); Meno's own
+  steps on its shape and energies, and *Render*, take it. It is not drawn
+  as a formula, which would say how every atom is protonated. A plugin's
+  writer, given the molecule with its charge and spin, is not given it;
+  Export says so before a file is asked for. An SD file or a copy writes
+  it as a skeleton - each atom's valence its bonds' orders summed (the
+  atom block's vvv, 15 for none; V3000's VAL, -1 for none, "CTfile
+  Formats"), so that no reader adds hydrogens - and an XYZ or PDB file as
+  it is, Export saying it has none. Estimated orders on a skeleton say so
+  over it, their formal charges only those its heavy atoms set (a nitro
+  group's, an azide's). The way on is its hydrogens added, the chemist
+  choosing how it is protonated - or, for a PDB ligand, the CCD's - which
+  a later change brings.
 
 ## Risks
 
