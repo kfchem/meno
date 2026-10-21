@@ -39,3 +39,29 @@ export function writeXyz(frames: readonly XyzFrame[]): string {
     .map((f) => [String(f.atoms.length), f.comment, ...f.atoms.map((a) => `${a.el.padEnd(2)} ${coordinate(a.x).padStart(14)} ${coordinate(a.y).padStart(14)} ${coordinate(a.z).padStart(14)}`)].join("\n") + "\n")
     .join("");
 }
+
+/**
+ * What an XYZ file does not hold of molecules to be written, in plain
+ * words: it holds each atom's element and position only, so their charges,
+ * radicals, isotopes and bonds are not written - each said, with how many,
+ * where there are any; null where there is nothing it leaves out. The
+ * format's own limit, said rather than kept silent (the command centre,
+ * 2026-10-22).
+ */
+export function xyzLeavesOut(molecules: readonly { atoms: readonly { charge?: number; radical?: unknown; isotope?: number }[]; bonds: readonly unknown[] }[]): string | null {
+  const atoms = molecules.flatMap((m) => m.atoms);
+  const count = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  const charges = atoms.filter((a) => a.charge).length;
+  const radicals = atoms.filter((a) => a.radical).length;
+  const isotopes = atoms.filter((a) => a.isotope).length;
+  const bonds = molecules.reduce((n, m) => n + m.bonds.length, 0);
+  const parts = [
+    ...(charges ? [count(charges, "atom's charge", "atoms' charges")] : []),
+    ...(radicals ? [count(radicals, "atom's radical", "atoms' radicals")] : []),
+    ...(isotopes ? [count(isotopes, "atom's isotope", "atoms' isotopes")] : []),
+    ...(bonds ? [count(bonds, "bond", "bonds")] : []),
+  ];
+  if (!parts.length) return null;
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `An XYZ file holds elements and positions only: ${list} ${parts.length === 1 && !list.endsWith("s") ? "is" : "are"} not written.`;
+}
