@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { holdEachKept } from "./reader";
+import { isNotHad } from "../doc/notHad";
 
 describe("a workspace's PDFs held as it opens", () => {
   it("holds each, and tells of each that cannot be - refused, or not held whole by the file - by its name", async () => {
@@ -19,5 +20,18 @@ describe("a workspace's PDFs held as it opens", () => {
     await Promise.all(held.values());
     expect([...held.keys()]).toEqual(["a", "b"]);
     expect(told).toEqual(["lost.pdf: the workspace's file does not hold it whole", "locked.pdf: it is locked with a password"]);
+  });
+
+  it("marks one the file does not hold whole as damaged, until it is had again - from another file, or opened", async () => {
+    const lost = "9".repeat(64);
+    const told: string[] = [];
+    holdEachKept({ files: [{ sha256: lost, media: "application/pdf", name: "lost.pdf" }], data: () => null }, async () => "held", (name) => told.push(name), new Map());
+    expect(told).toEqual(["lost.pdf"]);
+    expect(isNotHad(lost)).toBe(true);
+    // (the same PDF, whole, from another workspace's file)
+    const held = new Map<string, Promise<unknown>>();
+    holdEachKept({ files: [{ sha256: lost, media: "application/pdf", name: "found.pdf" }], data: () => new Uint8Array([1]) }, async () => ({ sha256: lost }), () => {}, held);
+    await Promise.all(held.values());
+    expect(isNotHad(lost)).toBe(false);
   });
 });

@@ -428,7 +428,7 @@ export const createModelSlice = (
 
   openWorkspace: (ws: Workspace, start = false) => {
     const { drawn } = ws;
-    // (its texts, those read - utils/workspace `readTexts` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered)
+    // (its texts, those read - utils/workspace `readKept` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered)
     const read = ws.texts.filter((t) => t.text != null);
     const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) }));
     const shown = ws.textShown != null ? read.indexOf(ws.texts[ws.textShown]) : -1;

@@ -24,7 +24,8 @@ import { pictureBytes } from "../../../../lib/picture/held";
 import { placesRead, readDrawn } from "./copyPaste";
 import { calcShowing, heldOutput, outputsToKeep, sha256Of } from "../../../../lib/calc/asks";
 import { writeMenoFile } from "../../../../lib/doc/menoFileWriter";
-import type { KeptData } from "../../../../lib/doc/menoFile";
+import type { KeptData, KeptName } from "../../../../lib/doc/menoFile";
+import { markNotHad } from "../../../../lib/doc/notHad";
 import type { CalcSource } from "../../../../lib/calc/output";
 import { readWorkflow, type SavedWorkflow } from "../workflow/saved";
 
@@ -45,7 +46,7 @@ export type Workspace = {
   aromaticRings: Record<string, boolean>;
   /** A workflow on the page: its sets, steps and wires (docs/WORKFLOWS.md). */
   workflow?: SavedWorkflow;
-  /** The texts it holds, as its file keeps them: each by its SHA-256 - and its words, once read (`readTexts`). */
+  /** The texts it holds, as its file keeps them: each by its SHA-256 - and its words, once read (`readKept`). */
   texts: SavedText[];
   /** Which of them its column showed, by its place among them; none, it was closed. */
   textShown?: number;
@@ -172,34 +173,68 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   );
 }
 
-/** The canvas as its workspace file: its JSON, every output its molecules were read from that is held this session, and its texts. */
-export async function workspaceFile(state: Saved): Promise<Uint8Array> {
+/** A workspace's file as Save writes it: its bytes, and the files it has that could not be had to keep - each by its name. */
+export type SavedFile = { bytes: Uint8Array; notKept: string[] };
+
+/**
+ * The canvas as its workspace file: its JSON, every output its molecules
+ * were read from that can be had - held this session, or where it was -
+ * its texts, its PDFs and its pictures. One that cannot be had - damaged
+ * in the file it came in, or held nowhere - is not kept, and named
+ * (`notKept`): the workspace is saved without it, so that nothing new is
+ * lost for it, and its JSON still has it where it lay - by what it is
+ * known by, which its file does not hold - so that, opened again, it is
+ * named again, never taken for one that is there.
+ */
+export async function workspaceFile(state: Saved): Promise<SavedFile> {
   // (the outputs they were read from, and the wavefunctions kept with them)
   const sources = state.molecules3d.flatMap((m): CalcSource[] => [m.calc?.source, m.calc?.wavefunction].filter((s): s is CalcSource => !!s));
-  const kept = await outputsToKeep(sources);
+  const outputs = await outputsToKeep(sources);
   const texts = await textsToKeep(state.texts ?? []);
   const pdfs = await pdfsToKeep(state.pdfs ?? []);
-  return writeMenoFile(
-    workspaceText(state, new Set(kept.map((k) => k.sha256)), texts.map((t) => t.sha256)),
-    [...kept, ...texts, ...pdfs, ...picturesToKeep(state.pictures ?? [])],
+  const pictures = picturesToKeep(state.pictures ?? []);
+  const bytes = await writeMenoFile(
+    workspaceText(state, new Set(outputs.kept.map((k) => k.sha256)), texts.map((t) => t.sha256)),
+    [...outputs.kept, ...texts, ...pdfs.kept, ...pictures.kept],
   );
+  return { bytes, notKept: [...outputs.notKept, ...pdfs.notKept, ...pictures.notKept] };
 }
 
-/** The pictures as a workspace's file keeps them: each image as it is, once - those held this session (lib/picture/held). */
-function picturesToKeep(pictures: readonly PictureItem[]): KeptData[] {
+/**
+ * What Save says of the files a workspace has that it could not keep, each
+ * named (`workspaceFile`'s `notKept`) - none where it kept them all.
+ */
+export function notKeptSaid(names: readonly string[]): string | null {
+  if (!names.length) return null;
+  const listed = names.length === 1 ? names[0] : `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+  return names.length === 1 ? `Saved, but ${listed} is not in the file: it could not be read.` : `Saved, but ${listed} are not in the file: they could not be read.`;
+}
+
+/** The pictures as a workspace's file keeps them: each image as it is, once - those held this session (lib/picture/held); those not, named. */
+function picturesToKeep(pictures: readonly PictureItem[]): { kept: KeptData[]; notKept: string[] } {
   const seen = new Map<string, PictureItem>();
   for (const p of pictures) if (!seen.has(p.sha256)) seen.set(p.sha256, p);
-  return [...seen.values()].flatMap((p) => {
+  const kept: KeptData[] = [];
+  const notKept: string[] = [];
+  for (const p of seen.values()) {
     const data = pictureBytes(p.sha256);
-    return data ? [{ sha256: p.sha256, name: p.name, media: p.media, data }] : [];
-  });
+    if (data) kept.push({ sha256: p.sha256, name: p.name, media: p.media, data });
+    else notKept.push(p.name);
+  }
+  return { kept, notKept };
 }
 
-/** The PDFs as a workspace's file keeps them: each as it was, once, read from where Meno holds it (lib/pdf/reader). */
-async function pdfsToKeep(pdfs: readonly PdfItem[]): Promise<KeptData[]> {
+/** The PDFs as a workspace's file keeps them: each as it was, once, read from where Meno holds it (lib/pdf/reader); those it holds no more, named. */
+async function pdfsToKeep(pdfs: readonly PdfItem[]): Promise<{ kept: KeptData[]; notKept: string[] }> {
   const seen = new Map<string, string>();
   for (const p of pdfs) if (!seen.has(p.sha256)) seen.set(p.sha256, p.name);
-  return Promise.all([...seen].map(async ([sha256, name]) => ({ sha256, name, media: "application/pdf", data: await pdfBytes(sha256) })));
+  const read = await Promise.all(
+    [...seen].map(async ([sha256, name]) => ({ sha256, name, data: await pdfBytes(sha256).catch(() => null) })),
+  );
+  return {
+    kept: read.flatMap(({ sha256, name, data }) => (data ? [{ sha256, name, media: "application/pdf", data }] : [])),
+    notKept: read.filter((r) => !r.data).map((r) => r.name),
+  };
 }
 
 /** The texts as a workspace's file keeps them, in order: each as UTF-8, by its SHA-256 - one an output's too kept once. */
@@ -212,17 +247,53 @@ async function textsToKeep(texts: readonly WorkspaceText[]): Promise<KeptData[]>
 
 /**
  * A workspace's texts read from its file, held as it was opened (lib/calc/
- * asks): each with its words, and which its column showed - those not to
- * be had left out, and named (`missing`).
+ * asks) - each with its words, and which its column showed - and its
+ * pictures looked at: what could not be read named (`missing`). A text
+ * that cannot be is left out, having nothing to show; a picture stays
+ * where it lay, marked as not had (lib/doc/notHad) until it is had again.
  */
-export async function readTexts(ws: Workspace): Promise<{ ws: Workspace; missing: string[] }> {
+export async function readKept(ws: Workspace): Promise<{ ws: Workspace; missing: string[] }> {
   const read = await Promise.all(ws.texts.map(async (t) => ({ ...t, text: t.text ?? (await heldOutput(t.sha256))?.text })));
   const texts = read.filter((t) => t.text != null);
   const shown = ws.textShown != null ? texts.indexOf(read[ws.textShown]) : -1;
   return {
     ws: { ...ws, texts, ...(shown >= 0 ? { textShown: shown } : { textShown: undefined }) },
-    missing: read.filter((t) => t.text == null).map((t) => t.name),
+    missing: [...read.filter((t) => t.text == null).map((t) => t.name), ...picturesNotHad(ws.drawn.pictures ?? [])],
   };
+}
+
+/** Of a workspace's pictures, each image not to be had - each marked so, and named once. */
+function picturesNotHad(pictures: readonly Pick<PictureItem, "sha256" | "name">[]): string[] {
+  const names: string[] = [];
+  const seen = new Set<string>();
+  for (const p of pictures) {
+    if (seen.has(p.sha256)) continue;
+    seen.add(p.sha256);
+    // (read now, as it would be to be drawn: one its file holds damaged, or does not hold, is not had)
+    if (pictureBytes(p.sha256)) continue;
+    markNotHad(p.sha256);
+    names.push(p.name);
+  }
+  return names;
+}
+
+/**
+ * The files a workspace's JSON says it keeps, as it names them - each
+ * output its molecules were read from, its texts, its PDFs and its
+ * pictures: what its file's own list says of them where that list is
+ * damaged or gone (lib/doc/menoFile `readMenoFile`); none where it does
+ * not read.
+ */
+export function keptNamedIn(text: string): KeptName[] {
+  const ws = readWorkspace(text);
+  if (!ws) return [];
+  const sources = (ws.drawn.molecules3d ?? []).flatMap((m) => [m.calc?.source, m.calc?.wavefunction].filter((s): s is CalcSource => !!s));
+  return [
+    ...sources.map((s) => ({ sha256: s.sha256, name: s.name, ...(s.kind ? { kind: s.kind } : {}), media: "text/plain" })),
+    ...ws.texts.map((t) => ({ sha256: t.sha256, name: t.name, media: "text/plain" })),
+    ...ws.pdfs.map((p) => ({ sha256: p.sha256, name: p.name, media: "application/pdf" })),
+    ...(ws.drawn.pictures ?? []).map((p) => ({ sha256: p.sha256, name: p.name, media: p.media })),
+  ];
 }
 
 /** A workspace's JSON read, or null where `text` is not one this version reads. */

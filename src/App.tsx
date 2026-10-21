@@ -395,7 +395,7 @@ export default function App() {
           continue;
         }
         // (a workspace file: its workspace, and the outputs it keeps held)
-        const workspace = workspaceOfFile(bytes);
+        const workspace = workspaceOfFile(bytes, name);
         if (workspace != null) {
           workspaces.push({ name, workspace, path });
           continue;
@@ -468,7 +468,7 @@ export default function App() {
           askStyles(styles);
           continue;
         }
-        const workspace = workspaceOfFile(bytes);
+        const workspace = workspaceOfFile(bytes, f.name);
         if (workspace != null) {
           openWorkspaceTab(f.name, workspace);
           continue;

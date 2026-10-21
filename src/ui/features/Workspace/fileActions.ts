@@ -22,7 +22,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
-import { carriedOf, isWorkspaceFile, workspaceFile } from "./utils/workspace";
+import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE } from "./chem/marks";
@@ -473,9 +473,10 @@ export function drawingSvg(
  * time; either way the document is then saved, and the tab's unsaved mark
  * goes. Export writes another kind of file, a copy, with its writer's
  * options (ExportCard), and leaves that alone. `error` says what went
- * wrong, if anything. One save of the workspace at a time: Save or Save
- * As asked for while one is under way waits for it, and runs once
- * (lib/doc/saveTurns).
+ * wrong, if anything - and, a save done, each file the workspace has that
+ * it could not keep (utils/workspace `workspaceFile`). One save of the
+ * workspace at a time: Save or Save As asked for while one is under way
+ * waits for it, and runs once (lib/doc/saveTurns).
  */
 export function useFileActions(nameTab?: (label: string) => void) {
   const store = useEditorStore();
@@ -499,9 +500,12 @@ export function useFileActions(nameTab?: (label: string) => void) {
     async (path: string) => {
       // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
       const written = store.getState().writing();
-      await writeDocument(path, await workspaceFile(store.getState()));
+      const { bytes, notKept } = await workspaceFile(store.getState());
+      await writeDocument(path, bytes);
       store.getState().markSavedAs(path, written);
       naming.current?.(fileNameOf(path));
+      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed)
+      setError(notKeptSaid(notKept));
     },
     [store],
   );
