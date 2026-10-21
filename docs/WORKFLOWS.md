@@ -289,7 +289,12 @@ Gaussian each stop when asked to. Their plugins work out its energy
 where it is instead, and it comes back where it was - in *Conformers*,
 its only conformer. More kinds come with Meno as they are needed - a
 free energy from an energy and its corrections, a template input written
-out - each specified before it is built.
+out - each specified before it is built. *Enumerate*, Meno's own, is
+specified and not yet built: structures made from one drawing by rule,
+such as each R group given a list of groups, in 2D, every combination
+numbered and any not made set aside with its reason
+(WORKFLOWS-FOUNDATION.md, *Enumerate*). It is not *Generate*, which a
+plugin's program or model fills.
 
 ### Who does a step
 
