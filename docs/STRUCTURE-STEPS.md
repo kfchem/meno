@@ -105,3 +105,39 @@ Checked: a Diels-Alder reactant re-bonded to its product. The product's
 bonds come in in the reactants' numbering, and the two new ring bonds stand
 long in the reactant's geometry. The product as drawn, not renumbered, is
 refused at its first atom.
+
+## Compare bonding
+
+Whether an entry's geometry is bonded as a reference is, the two holding the
+same atoms in one numbering (`comparedBonding`); or, against several
+references, the first it is bonded as (`matchingReference`).
+
+- **Bonds read from the geometry** as Meno reads any geometry given no bonds
+  (`bondedPairs`): two atoms closer than their single-bond covalent radii
+  (Pyykkö's) together and a tenth over. Which atoms are bonded is compared,
+  not bond orders.
+- **R or S, where asked.** Because the two share one numbering, a centre has
+  the reference's configuration where its neighbours stand round it the same
+  way: the sign of the volume its first three neighbours (by number) make
+  about it, here and in the reference. With the same bonds, the same sign
+  is the same R or S. A stereocentre is a reference atom with four
+  neighbours, no two in one symmetry orbit (`symmetryOrbits`). So a
+  methylene's two hydrogens swapped are no difference. Three-coordinate
+  centres (amines, phosphines, sulfoxides) are not compared.
+- **E or Z, where asked.** A double bond is cis or trans as the first
+  neighbours (by number) at its two ends stand: the dihedral between them
+  under or over 90 degrees. Each end must have one other neighbour, or two
+  that are not alike.
+- **Passed over:** atoms, elements and bonds the chemist lists, such as a
+  metal's coordination, in both the bonds and the configurations.
+- **Every difference is said:** which bond, how far apart its atoms stand,
+  and against what distance; which centre; which double bond. An entry with
+  frames, entries in different numberings, or configurations asked of a
+  reference with no 3D places are refused, with the reason.
+
+Checked:
+- A Diels-Alder reactant against its product lacks exactly the two ring
+  bonds formed. The product's geometry is bonded as the product.
+- CHFClBr and its mirror image differ where R or S is asked; CH2FCl with
+  its hydrogens swapped does not.
+- cis- and trans-2-butene differ where E or Z is asked.
