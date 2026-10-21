@@ -39,7 +39,6 @@ import os
 import subprocess
 import sys
 import tempfile
-import time
 
 from rdkit import Chem, RDLogger, rdBase
 from rdkit.Chem import Descriptors, rdDistGeom, rdForceFieldHelpers
@@ -53,17 +52,18 @@ FILES = sys.argv[1] if len(sys.argv) > 1 else None
 #: PubChem as of 2024-06-03 (the file's own metadata, `origina_data_source`).
 PRIOR = "reinvent_pubchem.prior"
 PRIOR_SAID = "reinvent_pubchem.prior (REINVENT 4 priors v2, Zenodo 10.5281/zenodo.20701824; PubChem 2024-06-03)"
-#: The most molecules one run makes: sampled and embedded at once, well inside a request's two minutes
-#: (measured here: 100 sampled in 5.6 s on the CPU, each embedded in well under a second).
-MOST = 200
+#: The most molecules one run makes, sampled and made at once inside a request's two minutes - with room to
+#: spare on a busy computer: measured on this Mac (M4) under a load average of 14 to 24, 100 took 10 to 24 s,
+#: start-up included, and 200 took 44 to 173 s, past the two minutes. Each is a number of molecules, never a
+#: time: what one asking makes is the same anywhere, and a run too slow fails whole, never cut short.
+MOST = 100
 #: The seed where none is asked for.
 SEED = 1
 #: The most steps a force field may take tidying one embedded geometry.
 STEPS = 2000
-#: The longest one molecule's geometry may take to embed (seconds; RDKit's own `timeout`), and the longest a run
-#: may make molecules for before the rest are counted as not made: a request has two minutes in all.
-EMBED_SECONDS = 10
-MAKING_SECONDS = 90
+#: How many times ETKDG may try to embed one molecule's geometry (its `maxIterations`) before it is counted as not
+#: made: a number of tries, not a time, so that the same asking makes the same molecules on any computer.
+EMBED_TRIES = 200
 #: Bond orders as Meno's outputs give them, Kekulé.
 ORDERS = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3}
 
@@ -115,13 +115,14 @@ def molecule_of(smiles, seed):
     #  multiplicity taken from its electrons' parity - so it is not made)
     if Descriptors.NumRadicalElectrons(mol):
         return "a radical, with unpaired electrons this plugin does not hand on"
+    if sum(a.GetAtomicNum() for a in mol.GetAtoms()) - Chem.GetFormalCharge(mol) <= 0:
+        return "no electrons, so nothing to calculate"
     mol = Chem.AddHs(mol)
     params = rdDistGeom.ETKDGv3()
     params.randomSeed = int(seed)
-    params.timeout = EMBED_SECONDS
-    began = time.monotonic()
+    params.maxIterations = EMBED_TRIES
     if rdDistGeom.EmbedMolecule(mol, params) != 0:
-        return f"no 3D structure embedded in {EMBED_SECONDS} s" if time.monotonic() - began >= EMBED_SECONDS else "no 3D structure could be embedded"
+        return f"no 3D structure embedded in {EMBED_TRIES} tries"
     if rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
         rdForceFieldHelpers.MMFFOptimizeMolecule(mol, maxIters=STEPS)
         field = "MMFF94"
@@ -164,9 +165,8 @@ def op_run(m):
         rows = sampled(count, seed, folder)
     method = f"sampled from {PRIOR_SAID}, seed {seed}, on the CPU"
     outputs, why = [], {}
-    began = time.monotonic()
     for smiles, nll in rows:
-        made = molecule_of(smiles, seed) if time.monotonic() - began < MAKING_SECONDS else f"the run's {MAKING_SECONDS} s for making molecules were up"
+        made = molecule_of(smiles, seed)
         if isinstance(made, str):
             why[made] = why.get(made, 0) + 1
             continue

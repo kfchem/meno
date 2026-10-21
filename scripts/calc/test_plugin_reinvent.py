@@ -53,7 +53,7 @@ class Generate(unittest.TestCase):
         self.assertEqual(
             self.made["said"],
             "20 sampled from reinvent_pubchem.prior, seed 7, CPU: 18 made, 2 not "
-            "(1: no 3D structure could be embedded; 1: not a SMILES RDKit reads)",
+            "(1: no 3D structure embedded in 200 tries; 1: not a SMILES RDKit reads)",
         )
         first = {r["id"]: r["value"] for r in self.made["outputs"][0]["results"]}
         self.assertEqual(first["smiles"], "O=C(c1ccc(CN2C(=O)SC(=Cc3ccccc3)C2=O)cc1)N1CCN(CCOc2ccccc2)CC1")
@@ -98,10 +98,13 @@ class Generate(unittest.TestCase):
         made = self.worker.molecule_of("[13CH3][2H]", 7)
         self.assertEqual([(a["el"], a["isotope"]) for a in made["atoms"]][:2], [("C", 13), ("H", 2)])
         self.assertEqual(self.worker.molecule_of("CCO", 7)["atoms"][0]["isotope"], 0)
+        # (a proton alone has no electrons: nothing to calculate)
+        self.assertEqual(self.worker.molecule_of("[H+]", 7), "no electrons, so nothing to calculate")
 
     def test_keeps_how_many_to_what_it_may_be(self):
         made = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 0, "seed": 7}})
         self.assertTrue(made["said"].startswith("1 sampled"), made["said"])
+        self.assertEqual(self.worker.number({"count": 500}, "count", 20, 1, self.worker.MOST), 100)
         with self.assertRaises(ValueError):
             self.worker.op_run({"step": "optimise", "entries": [], "options": {}})
 
