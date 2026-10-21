@@ -275,7 +275,10 @@ went before, to stderr and the page's console.
   about the code that ran - and of that, what it quotes in double or single
   quotes left out (a single quote only with no letter or digit on its outer
   side, so that the apostrophe of can't or Meno's is kept), as any other
-  message may quote what was read (a file's text, a SMILES, a name). Of
+  message may quote what was read (a file's text, a SMILES, a name); and,
+  failing closed, a line with any quote mark left after that - one never
+  closed, one after a letter that is no contraction's, a curly quote, a
+  backtick - cut from its first quote mark to its end. Of
   words logged it has only Meno's own messages (`KNOWN` in `lib/log.ts`, a
   tab's name in them left out), any others as `[text]`;
   a number as it is; and of any other thing only what it is (`[Object]`,
