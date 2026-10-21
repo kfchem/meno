@@ -56,9 +56,10 @@ describe("a double bond's cis or trans, read from SMILES", () => {
     expect(() => readSmiles("C[C@](=C)C")).toThrow(/not four/);
   });
 
-  it("refuses a phosphine's, an arsine's or a sulfonium's centre that closes a ring at itself, and reads a sulfoxide's", () => {
+  it("refuses a phosphine's, an arsine's or a sulfonium's centre that closes a ring at itself, and reads a sulfoxide's or a sulfilimine's", () => {
     // (RDKit reads such a P, As or S+ ring the other way from the H's rule: measured on its 3D embeddings - so not
-    // read here; a sulfoxide's or a selenoxide's ring, closed at its centre, agrees, and is read)
+    // read here; a ring closed at a centre with a double bond on it - a sulfoxide's, a selenoxide's, a
+    // sulfilimine's - agrees, and is read)
     for (const x of ["P@", "P@@", "As@", "As@@", "S@+", "S@@+"]) {
       for (const smiles of [`C[${x}]1CCCC1C`, `CC1CCC[${x}]1C`, `c1ccccc1[${x}]1CCC1C`]) {
         expect(() => readSmiles(smiles)).toThrow(/closes a ring at itself/);
@@ -69,6 +70,12 @@ describe("a double bond's cis or trans, read from SMILES", () => {
         expect(readSmiles(smiles).atoms.filter((a) => a.tetra)).toHaveLength(1);
       }
     }
+    // (sulfilimines, both enantiomers: each the same configuration RDKit gives it, the sign of the volume on its 3D embedding)
+    expect(readSmiles("CC1CCCC[S@]1=NC").atoms[6].tetra).toEqual({ neighbours: [5, 1, 7], volume: 1 });
+    for (const dbl of ["=NC", "=NS(=O)(=O)C", "=Nc2ccccc2"]) {
+      for (const x of ["S@", "S@@"]) expect(readSmiles(`CC1CCCC[${x}]1${dbl}`).atoms.filter((a) => a.tetra)).toHaveLength(1);
+    }
+    expect(readSmiles("CC1CCCC[S@]1=NC").atoms[6].tetra!.volume).toBe(-readSmiles("CC1CCCC[S@@]1=NC").atoms[6].tetra!.volume);
   });
 });
 

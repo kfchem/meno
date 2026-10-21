@@ -162,8 +162,8 @@ export function readSmiles(text: string): Smiles {
   }
   if (rings.size) throw new Error(`Unclosed ring in ${text}`);
   for (const [at, mark] of chiral) {
-    const oxide = bonds.some((b) => b.order === 2 && (b.a1 === at || b.a2 === at) && atoms[b.a1 === at ? b.a2 : b.a1].el === "O");
-    atoms[at].tetra = configuration(atoms[at], around[at], mark, { first: first.has(at), closes: closes.has(at), oxide }, text);
+    const double = bonds.some((b) => b.order === 2 && (b.a1 === at || b.a2 === at));
+    atoms[at].tetra = configuration(atoms[at], around[at], mark, { first: first.has(at), closes: closes.has(at), double }, text);
   }
   // A double bond's cis or trans (OpenSMILES): a directional bond on each
   // end; a neighbour written before its end with "/" lies below it, one
@@ -209,7 +209,7 @@ const LONE_PAIR_CENTRES = new Set(["S", "Se", "P", "As"]);
  * it moves; a lone pair, not an atom, left out. Any other mark, or a centre
  * that is none of these, is refused, never read past.
  */
-function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: string, at: { first: boolean; closes: boolean; oxide: boolean }, text: string): Configuration {
+function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: string, at: { first: boolean; closes: boolean; double: boolean }, text: string): Configuration {
   const why = (reason: string) => new Error(`Cannot read the configuration at [${atom.el}${mark}] in ${text}: ${reason}`);
   if (mark !== "@" && mark !== "@@") throw why(`only @ and @@ are read`);
   let around = [...neighbours];
@@ -220,10 +220,10 @@ function configuration(atom: SmilesAtom, neighbours: readonly number[], mark: st
   // (written first, where the H's rule would look from its lone pair and the reading libraries do not - RDKit takes
   // it as the last of four - the configuration is not read: refused. Else first of the three that follow, as an H)
   if (lonePair && at.first) throw why("a centre with a lone pair written first is read differently by different readers - write an atom before it");
-  // (with a ring-closure digit of its own and no S=O or Se=O - a phosphine's, an arsine's, a sulfonium's ring - RDKit
-  // reads it the other way: measured on RDKit's 3D embeddings, 18 of 18 such P, As and S+ rings opposite; the
-  // oxides agree, 16 of 16)
-  if (lonePair && at.closes && !at.oxide) throw why("a centre with a lone pair that closes a ring at itself is read differently by different readers - write the ring closure on another atom");
+  // (with a ring-closure digit of its own and no double bond on it - a phosphine's, an arsine's, a sulfonium's ring -
+  // RDKit reads it the other way: measured on RDKit's 3D embeddings, 18 of 18 such P, As and S+ rings opposite; with
+  // one - a sulfoxide, a selenoxide, a sulfilimine (S=N), an S=C - they agree, 64 of 64)
+  if (lonePair && at.closes && !at.double) throw why("a centre with a lone pair and no double bond that closes a ring at itself is read differently by different readers - write the ring closure on another atom");
   if (lonePair) around.splice(1, 0, -1);
   if (around.length !== 4 || around.filter((n) => n === -1).length > 1) throw why(`it has ${neighbours.length} neighbours, not four (or three and a lone pair)`);
   const h = around.indexOf(-1);
