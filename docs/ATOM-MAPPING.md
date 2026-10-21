@@ -391,9 +391,10 @@ A reaction drawn on the page is mapped from its arrow's right-click menu,
   reactant atoms they map to, and its bonds renumbered with them. Its first
   map gives one; *every* map gives one for each, best first.
 - **Bond changes.** For each mapped product, a table: each bond the map
-  forms, breaks or changes in order, its two atoms numbered from 1 in the
-  reactants' numbering with their elements, and its bond type before and
-  after (0 where there is none; 4, aromatic). The types are the structures'
+  forms, breaks or changes in order, its two atoms in the reactants'
+  numbering (from 0, as an entry's bonds number them) with their
+  elements, and its bond type before and after (0 where there is none; 4,
+  aromatic). The types are the structures'
   own; nothing is perceived from the geometry here.
 - **Nothing in part.** A product whose atoms cannot all be paired one to
   one - a different number of atoms, a flat drawing, a map that leaves an

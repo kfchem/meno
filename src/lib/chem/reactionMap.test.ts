@@ -113,7 +113,7 @@ describe("mapReaction", () => {
 describe("mapProducts (the Reaction step)", () => {
   const da = dielsAlder();
   const reactant = da.reactants[0];
-  const at = (name: string) => DA_REACTANT_NAMES.indexOf(name) + 1;
+  const at = (name: string) => DA_REACTANT_NAMES.indexOf(name);
   /** The product's atoms in another order: the same structure, as another file might hold it. */
   const reordered = (m: Molecule, order: number[]): Molecule => {
     const place = new Map(order.map((old, i) => [old, i]));
@@ -132,7 +132,7 @@ describe("mapProducts (the Reaction step)", () => {
   it("gives the known bond changes of a Diels-Alder: two bonds formed, the diene's and the ene's orders changed, nothing broken", () => {
     const rows = mapProducts(reactant, [da.product]).mapped[0].changes;
     const pair = (p: string, q: string) => [at(p), at(q)].sort((x, y) => x - y);
-    expect(rows.map((r) => [r.change, ...[r.atom1, r.atom2], r.before, r.after])).toEqual([
+    expect(rows.map((r) => [r.change, ...[r.a1, r.a2], r.before, r.after])).toEqual([
       ["formed", ...pair("C1", "C5"), 0, 1],
       ["formed", ...pair("C4", "C6"), 0, 1],
       ["order", ...pair("C1", "C2"), 2, 1],

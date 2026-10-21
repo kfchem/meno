@@ -214,14 +214,14 @@ function renumbered(product: Molecule, map: readonly number[], n: number): Molec
 
 /**
  * A row of a reaction's table of bond changes: a bond formed, broken or
- * changed in order, its atoms numbered from 1 in the reactants' numbering
- * with their elements, and its CTfile bond type before and after (0 where
+ * changed in order, its atoms in the reactants' numbering (from 0, as an
+ * entry's bonds number them) with their elements, and its CTfile bond type before and after (0 where
  * there is no bond; 4, aromatic). The types are the structures' own, as they
  * came in: nothing is perceived here.
  */
 export type BondChangeRow = {
-  atom1: number;
-  atom2: number;
+  a1: number;
+  a2: number;
   element1: string;
   element2: string;
   before: number;
@@ -247,8 +247,8 @@ export type ProductNotMapped = { product: number; map?: number; reason: string }
 export function bondChangeRows(reactant: Molecule, product: Molecule, map: readonly number[]): BondChangeRow[] {
   const c = bondChanges(reactant, product, map);
   const row = (b: BondChange, change: BondChangeRow["change"]): BondChangeRow => ({
-    atom1: b.a1 + 1,
-    atom2: b.a2 + 1,
+    a1: b.a1,
+    a2: b.a2,
     element1: reactant.atoms[b.a1].el,
     element2: reactant.atoms[b.a2].el,
     before: b.before,
