@@ -821,7 +821,8 @@ as Settings allows; each one's log; *Stop*, for its program and
 everything it started; how each ended, recorded - and a job whose runner
 went without saying, the computer restarted, told apart. Settings,
 *Calculations*, *Jobs*: *Jobs at once*, *Cores for each*, and the
-finished jobs' files, cleared. How it works: ARCHITECTURE.md, *Jobs*.
+finished jobs' files - how many, and how much they hold - cleared. How it
+works: ARCHITECTURE.md, *Jobs*.
 
 Decided while building it, for the maintainer to confirm:
 

@@ -713,6 +713,13 @@ closes*).
   job has (`.taken-…`), then removing it: one a program still holds a file
   in (Windows) is never left half there as a job - nor read as one in the
   queue; what was left goes at the next clearing.
+- **What a finished job made can be taken out of its folder** alone
+  (`job_trim`): every file in its work folder it was not given - its
+  spec lists those (`given`) - and the folders that leaves empty; its
+  log, its record and its input stay, to be read. A failed render's is,
+  as it fails: a film's frames, which the job can make again, are
+  hundreds of megabytes at 1080p. Settings says how much the finished
+  jobs' folders hold (`jobs_finished_bytes`).
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without
@@ -1347,6 +1354,7 @@ closing quits Meno once they have been asked to stop.
 | `job_state`, `jobs_list` | `lib/jobs.ts` | A job's record, or every job's - *gone* where its runner went without saying how it ended. |
 | `job_log`, `job_files`, `job_read`, `job_folder` | `lib/jobs.ts` | A job's log from a byte on; the files in its folder, one read; where they are. |
 | `job_stop`, `job_remove`, `jobs_clear_finished` | `lib/jobs.ts` | A job asked to stop; a finished job's folder taken away, or every finished one's. |
+| `job_trim`, `jobs_finished_bytes` | `lib/jobs.ts` | What a finished job made taken out of its folder, its log and input kept; the bytes every finished job's folder holds. |
 
 Events: `uv:log`, `uv:err` (plain strings); `ext:stdout`, `ext:stderr`,
 `ext:exit` (JSON strings `{ id, line? }`). `ext:exit` is emitted exactly once
