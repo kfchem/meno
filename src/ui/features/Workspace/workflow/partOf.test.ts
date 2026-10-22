@@ -86,9 +86,11 @@ describe("a part of a search's conformers", () => {
     const part = waters([0, 1, 2], { partOf: true });
     expect(setEntries([part], "conformers").every((e) => e.partOf)).toBe(true);
     expect(parts(ran("energy-window", [part], { window: 3 }).molecules)).toEqual([true]);
-    // (As conformers: a compound made of any entry that was a part, a part)
+    // (As conformers: a compound made of any entry that was a part, a part - each one's stereoisomer known, as As conformers asks)
     const single = { ...waters([0]), conformerSet: false };
-    const grouped = runMeno("as-conformers", [...setEntries([{ ...single, partOf: true }], "molecules"), ...setEntries([{ ...single, id: 2 }], "molecules")], "molecules");
+    const known = { perceived: true as const, elements: [], key: "O", by: { plugin: "rdkit", version: "0.1.7" } };
+    const singles = [...setEntries([{ ...single, partOf: true }], "molecules"), ...setEntries([{ ...single, id: 2 }], "molecules")].map((e) => ({ ...e, stereo: known }));
+    const grouped = runMeno("as-conformers", singles, "molecules");
     expect(grouped.ok && resultsOf(grouped, "as-conformers").molecules.map((m) => m.partOf)).toEqual([true]);
     // (an optimisation of a part's conformer, a part still)
     const entry: SetEntry = setEntries([part], "conformers")[0];
@@ -106,15 +108,15 @@ describe("a part of a search's conformers", () => {
   it("shows the shares a Populations step worked out of it, saying at what temperature", () => {
     const out = runMeno("populations", setEntries([waters([0, 0], { partOf: true })], "conformers"), "conformers", { temperature: 298.15 });
     // (said of what they are: shares over the conformers given, not the compound's populations)
-    expect(out.said).toBe("1 compound at 298.15 K · shares over the 2 conformers given, part of a search");
+    expect(out.said).toBe("1 compound at 298.15 K, from electronic energies · shares over the 2 conformers given, part of a search");
     const [m] = out.ok ? resultsOf(out, "populations").molecules : [];
     expect([m.partOf, sharesOf(m)]).toEqual([true, [0.5, 0.5]]);
   });
 
   it("says no more than the temperature of a whole compound's, and of several, how many are parts", () => {
     const whole = runMeno("populations", setEntries([waters([0, 0, 1])], "conformers"), "conformers", { temperature: 298.15 });
-    expect(whole.said).toBe("1 compound at 298.15 K");
+    expect(whole.said).toBe("1 compound at 298.15 K, from electronic energies");
     const both = runMeno("populations", setEntries([waters([0, 1]), waters([0, 2], { partOf: true }, 2)], "conformers"), "conformers", { temperature: 300 });
-    expect(both.said).toBe("2 compounds at 300 K · 1 of them part of a search, shares over the conformers given");
+    expect(both.said).toBe("2 compounds at 300 K, from electronic energies · 1 of them part of a search, shares over the conformers given");
   });
 });

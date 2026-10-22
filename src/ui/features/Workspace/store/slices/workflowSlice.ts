@@ -79,7 +79,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         // (the one shown closed: the last of the others, or what the column showed before it)
         if (prev.setTableShown !== id) return { ...prev, setsRead };
         const next = setsRead[setsRead.length - 1] ?? null;
-        const nothing = next == null && prev.pdfShown == null && !prev.texts.some((t) => t.id === prev.textShown && t.reading !== false);
+        const nothing = next == null && prev.pdfShown == null && !prev.texts.some((t) => t.id === prev.textShown && t.reading !== false) && !prev.textsLost.some((t) => t.id === prev.textShown);
         return { ...prev, setsRead, setTableShown: next, ...(nothing ? { textsOpen: false } : {}) };
       }),
     removeSet: (id: number) => {

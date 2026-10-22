@@ -2,7 +2,7 @@ import clsx from "clsx";
 import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import { NAME_DOWN, SET_PAD, PX } from "./look";
-import { HAIR, Port, type PortLook } from "./StepCard";
+import { HAIR, Port } from "./StepCard";
 
 /** How wide the band along a frame's edge is that a press takes to size it, in px. */
 const EDGE = 8;
@@ -18,11 +18,8 @@ export type SetFrameProps = {
   chosen: boolean;
   /** Its words too small to read at this zoom: its frame alone, and what it holds. */
   compact: boolean;
-  /** Its port that gives; and, made by a step, the one that takes from it. */
-  give: PortLook;
   onTabDown: (e: ReactPointerEvent) => void;
   onEdgeDown: (edge: Edge, e: ReactPointerEvent) => void;
-  onGiveDown: (e: ReactPointerEvent) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
   /** A chemist's set: its name changed - two clicks on it, Enter to keep it, Escape to leave it as it was. */
@@ -123,7 +120,6 @@ export default function SetFrame(p: SetFrameProps) {
           )}
         </div>
       )}
-      <Port look={p.give} label={`Out of ${p.name}`} data={{ "data-give-set": String(p.set.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: h / 2 }} />
       {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} />}
     </div>
   );

@@ -132,4 +132,14 @@ describe("a set read in the column", () => {
     st().removeSet(set.id);
     expect([st().setsRead, st().setTableShown]).toEqual([[], null]);
   });
+
+  it("keeps the column open, closed, where it showed a text that could not be read before it", () => {
+    const { doc, store, set } = large(60);
+    const st = () => store.getState();
+    doc.amend((d) => ({ ...d, textsLost: [{ id: 7, name: "notes.txt", sha256: "0".repeat(64) }] }));
+    st().showText(7);
+    st().readSetTable(set.id);
+    st().stopReadingSetTable(set.id);
+    expect([st().setTableShown, st().textsOpen, st().textShown]).toEqual([null, true, 7]);
+  });
 });

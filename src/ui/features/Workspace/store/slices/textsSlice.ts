@@ -32,6 +32,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
     editText: (id: number, text: string) =>
       doc.edit("type text", (d) => ops.editText(d, id, text), { coalesceKey: `text:${id}` }),
     removeText: (id: number) => doc.edit("close text", (d) => ops.removeText(d, id)),
+    removeLostText: (id: number) => doc.edit("close text", (d) => ops.removeLostText(d, id)),
     removeTexts: (ids: Iterable<number>) => {
       const gone = new Set(ids);
       doc.edit(gone.size > 1 ? "delete texts" : "delete text", (d) => ops.removeTexts(d, gone));

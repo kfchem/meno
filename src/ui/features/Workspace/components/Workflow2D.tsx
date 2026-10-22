@@ -26,7 +26,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, portDown, PX, shuttingCard } from "../workflow/look";
+import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PORTS_Z, portDown, PX, shuttingCard, underCard } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -305,12 +305,27 @@ export default function Workflow2D() {
   const [compact, setCompact] = useState(false);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   const layer = useRef<HTMLDivElement>(null);
+  const portsLayer = useRef<HTMLDivElement>(null);
+  // the card opened over the rest - or shutting - as tall as it is now, in the page's units: the ports under it are not drawn
+  const [cover, setCover] = useState<{ step: number; w: number; h: number } | null>(null);
+  const over = openStep ?? shutting;
+  useEffect(() => {
+    const el = over != null ? layer.current?.querySelector<HTMLElement>(`[data-step-card="${over}"] > *`) : null;
+    if (over == null || !el) return setCover(null);
+    // (followed as it opens, and as it shuts: it grows and shrinks)
+    const measure = () => setCover({ step: over, w: el.offsetWidth * PX, h: el.offsetHeight * PX });
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [over]);
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     const small = wordsTooSmall(z);
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+    portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
   });
 
   const worldOf = (cx: number, cy: number): Pt => {
@@ -675,10 +690,8 @@ export default function Workflow2D() {
             hovered={hoveredSet === b.id}
             chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
-            give={portLook("give", { set: b.id })}
             onTabDown={(e) => dragSet(e, b)}
             onEdgeDown={(edge, e) => sizeSet(edge, e, b)}
-            onGiveDown={(e) => drawFrom(e, { set: b.id })}
             onContextMenu={menuOf("set", b.id)}
             onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
@@ -716,7 +729,6 @@ export default function Workflow2D() {
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onClose={() => store.getState().setWorkflowView({ openStep: null })}
             onCardDown={(e) => dragStep(e, s)}
-            onTakeDown={(e, port) => drawInto(e, s.id, port)}
             onContextMenu={menuOf("step", s.id)}
             onHover={(on) => (on ? hover({ hoveredStep: s.id }) : unhover("hoveredStep", s.id))}
           />
@@ -725,6 +737,10 @@ export default function Workflow2D() {
     }),
   ];
   const shownParts = usePresence(parts, (el) => String(el.key));
+  // the card opened over the rest, on the page: what the ports under it are not drawn for; a port's reach, half its 9 hairs (a hair, 1 / zoom on the page)
+  const coverStep = cover ? stepById.get(cover.step) : undefined;
+  const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
+  const portR = 4.5 / zoom;
   // the wires: each drawn, and each step's to the set it made
   const wireParts = [
     ...wires.flatMap((w) => {
@@ -787,7 +803,45 @@ export default function Workflow2D() {
               <Fragment key={key}>{item}</Fragment>
             ),
           )}
-    
+        </div>
+      </PageHtml>
+      {/* The ports, on a layer of their own over the molecules' chips and
+          cards: a port is pressed, lit and let go on whatever lies over it
+          on the page - a chip below a molecule among many reaching over a
+          set's edge, say. Small as they are, they hide nothing. */}
+      {/* (but those under a step's card opened over the rest: it is over them, and takes the press) */}
+      <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[PORTS_Z, PORTS_Z]} pointerEvents="none">
+        <div ref={portsLayer} style={{ position: "relative", width: 0, height: 0 }}>
+          {sets.map((b) => {
+            const f = shownOf(b);
+            const info = setInfo.get(b.id)!;
+            if (underCard({ x: f.x1, y: (f.y0 + f.y1) / 2 }, coverFrame, portR)) return null;
+            return (
+              <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
+                <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} />
+              </div>
+            );
+          })}
+          {steps.map((s) => {
+            const ports = inputsOf(s.kind);
+            const name = kindInfo(s.kind).name;
+            return (
+              <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>
+                {ports.map((p, k) =>
+                  s.id !== cover?.step && underCard({ x: s.x, y: s.y - portDown(k) }, coverFrame, portR) ? null : (
+                  <Port
+                    key={p.id}
+                    look={portLook("take", { step: s.id, port: p.id })}
+                    label={ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}`}
+                    data={{ "data-take": `${s.id}:${p.id}` }}
+                    onPointerDown={(e) => drawInto(e, s.id, p.id)}
+                    style={{ left: 0, top: portDown(k) / PX }}
+                  />
+                  ),
+                )}
+              </div>
+            );
+          })}
           {/* the selection's port: pulled, the selection becomes an input set */}
           {asSet && !wireDrag && (
             <div className="meno-fade-in" style={{ ...onLayer(asSet.x1, (asSet.y0 + asSet.y1) / 2), width: 0, height: 0 }}>

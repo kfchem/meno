@@ -10,7 +10,7 @@ import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
-import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -30,7 +30,7 @@ import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
 import { withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
-import { COLUMN_WIDTH, shownPdf, shownText } from "../utils/texts";
+import { COLUMN_WIDTH, columnOf, shownPdf, shownText } from "../utils/texts";
 
 // Re-export types for backward compatibility
 export * from "./types";
@@ -69,6 +69,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     docStyle3d: doc.style3d ?? DEFAULT_WORKSPACE_3D,
     pageId: doc.pageId,
     texts: doc.texts ?? NO_TEXTS,
+    textsLost: doc.textsLost ?? NO_LOST_TEXTS,
     pdfs: doc.pdfs ?? NO_PDFS,
     pictures: doc.pictures ?? NO_PICTURES,
     slides: doc.slides ?? NO_SLIDES,
@@ -107,6 +108,7 @@ function flowHeld(sel: SelFlow, sets: readonly WorkflowSet[], steps: readonly Wo
 }
 
 const NO_TEXTS: WorkspaceText[] = [];
+const NO_LOST_TEXTS: LostText[] = [];
 const NO_PDFS: PdfItem[] = [];
 const NO_PICTURES: PictureItem[] = [];
 const NO_SLIDES: Slide[] = [];
@@ -255,7 +257,8 @@ export function connectStoreToDocument(
         held.turns3d = turns3d;
       }
       // (the text or the PDF its column shows, as they come and go: utils/texts)
-      const texts = shownText(prev.texts, mirrored.texts, prev.textShown);
+      // (one that could not be read among them, shown as what it is: TextColumn)
+      const texts = shownText(columnOf(prev.texts, prev.textsLost), columnOf(mirrored.texts, mirrored.textsLost), prev.textShown);
       const pdf = shownPdf(prev.pdfs, mirrored.pdfs, prev.pdfShown, texts);
       // (and the sets read as tables, of those still there holding their own - one shown giving way to a text or a PDF come)
       const stillRead = prev.setsRead.filter((id) => (mirrored.sets ?? []).some((b) => b.id === id && b.collection));
@@ -280,6 +283,7 @@ export function createEditorStore(
     textShown: doc.getState().texts?.slice(-1)[0]?.id ?? null,
     textsOpen: !!doc.getState().texts?.length,
     cover: 0,
+    shownMarks: null,
     columnWidth: COLUMN_WIDTH,
     columnFilled: false,
     pdfColumnWidth: null,

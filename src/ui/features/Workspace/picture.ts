@@ -30,8 +30,8 @@ import { createSVG } from "../../../lib/chem/layout2d";
 import { style3dOf } from "./style3d";
 import { inPoints, type DrawingStyle } from "../../../lib/chem/style";
 import { gvmlImages, gvmlPicture } from "../../../lib/office/gvml";
-import { drawingLayout } from "./fileActions";
-import type { Drawn, EditorState } from "./store/types";
+import { drawingLayout, type PictureState } from "./fileActions";
+import type { Drawn } from "./store/types";
 import { readRecord, recordText } from "./utils/copyPaste";
 import { withSolidsImage } from "./render3d";
 import { useAppSettings } from "../../../lib/settings/appSettings";
@@ -64,9 +64,6 @@ export function pictureDpiFor(width: number, height: number, dpi: number): numbe
 
 const utf8 = new TextEncoder();
 
-/** The page a picture is made of: its aromatic circles, and its styles in 3D (none, a page no workspace's: Meno's own). */
-type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>;
-
 /**
  * Meno's record of `part` and the EMF of it that carries the record - what a
  * copy puts in Office's clip format, and what a document holding the
@@ -74,7 +71,7 @@ type Aromatic = Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial
  * are in both; molecules in 3D are a bitmap in the EMF, where there is a page
  * to draw one in.
  */
-export async function structurePicture(part: Drawn, aromatic: Aromatic, style: DrawingStyle, dpi = pictureDpi()) {
+export async function structurePicture(part: Drawn, aromatic: PictureState, style: DrawingStyle, dpi = pictureDpi()) {
   // (the bond's printed length always said: a copy pasted into a workspace of another style is converted)
   const record = recordText({ ...part, bondPt: part.bondPt ?? style.bondLengthPt, labelPt: part.labelPt ?? inPoints(style.fontSize, style) });
   // (the picture, of a stack, the one it shows - of a stack of drawings, the record; the record, all of it: utils/stacks)
@@ -98,7 +95,7 @@ export async function structurePicture(part: Drawn, aromatic: Aromatic, style: D
  */
 export async function pictureItems(
   part: Drawn,
-  aromatic: Aromatic,
+  aromatic: PictureState,
   style: DrawingStyle,
   platformTakes?: Set<Flavor> | null,
   dpi = pictureDpi(),

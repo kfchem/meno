@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { elementOf, MOST_ATOMS, readPdb, recordName, writePdb, type PdbWriteMolecule } from "./pdb";
+import { elementOf, MOST_ATOMS, pdbLeavesOut, readPdb, recordName, writePdb, type PdbWriteMolecule } from "./pdb";
 import sample from "../../samples/cholesterol.pdb?raw";
 
 /** Columns `from` to `to`, as the format numbers them. */
@@ -386,5 +386,27 @@ describe("a PDB file, written", () => {
     const entry = readPdb(sample);
     expect(entry.models[0].atoms).toHaveLength(74);
     expect(entry.conect).toHaveLength(77);
+  });
+});
+
+describe("what a PDB file cannot hold, said (pdbLeavesOut)", () => {
+  it("says a mass number other than hydrogen's D and T, and a charge past 9, and how many atoms lose each", () => {
+    const atoms = [
+      { el: "C", isotope: 13 },
+      { el: "C", isotope: 13 },
+      { el: "O", isotope: 18 },
+      { el: "H", isotope: 2 },
+      { el: "Fe", charge: 10 },
+    ];
+    expect(pdbLeavesOut(atoms)).toBe("A PDB file cannot hold 3 atoms' isotopes (13C, 18O) - it holds hydrogen's D and T only; or 1 atom's charge - it holds charges up to 9 either way: left out.");
+    // (and the file written leaves them out, as said: the carbon written C, the iron's charge blank)
+    const text = writePdb([[{ atoms: atoms.map((a, i) => ({ ...a, x: i, y: 0, z: 0 })), bonds: [] }]]);
+    const lines = text.split("\n").filter((l) => l.startsWith("HETATM") || l.startsWith("ATOM"));
+    expect(lines.map((l) => l.slice(76, 78).trim())).toEqual(["C", "C", "O", "D", "FE"]);
+    expect(lines[4].slice(78, 80)).toBe("  ");
+  });
+
+  it("says nothing where it holds it all: D, T and charges up to 9", () => {
+    expect(pdbLeavesOut([{ el: "H", isotope: 2 }, { el: "H", isotope: 3 }, { el: "N", charge: 1 }, { el: "U", charge: -9 }, { el: "C" }])).toBeNull();
   });
 });

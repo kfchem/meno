@@ -1,5 +1,5 @@
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../../lib/io/writeDocument";
 import { pictureBytes } from "../../../../lib/picture/held";
 import type { PictureItem } from "../store/types";
 
@@ -23,5 +23,5 @@ export async function savePictureFile(p: Pick<PictureItem, "name" | "sha256" | "
   if (!picked) return;
   // (that kind, whatever it was called)
   const path = kind.extensions.some((e) => picked.toLowerCase().endsWith(`.${e}`)) ? picked : `${picked}.${kind.extensions[0]}`;
-  await writeFile(path, bytes);
+  await writeDocument(path, bytes);
 }
