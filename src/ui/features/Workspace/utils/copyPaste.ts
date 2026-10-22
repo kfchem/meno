@@ -676,8 +676,8 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
-    // (the geometries an opened optimisation or scan converged on: each one it has, in order, once)
-    ...(Array.isArray(m.entryFrames) && m.entryFrames.length && m.entryFrames.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= frames.length && (k === 0 || f > all[k - 1]))
+    // (the geometries an opened optimisation or scan converged on: each one it has, in order, once - or none, where none did)
+    ...(Array.isArray(m.entryFrames) && m.entryFrames.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= frames.length && (k === 0 || f > all[k - 1]))
       ? { entryFrames: [...(m.entryFrames as number[])] }
       : {}),
     ...(m.notConverged === true ? { notConverged: true as const } : {}),

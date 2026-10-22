@@ -526,11 +526,12 @@ export type Molecule3D = {
    * Of an opened optimisation's or relaxed scan's geometries - its own
    * first, then its frames, from 0 - those the run found converged, which a
    * set takes as its entries: an optimisation's last, a scan's each point.
-   * The rest are steps on the way, shown, never entries. None where every
-   * geometry is one (docs/WORKFLOWS.md, *Compound sets and conformer sets*).
+   * The rest are steps on the way, shown, never entries; empty, where none
+   * converged. None where every geometry is one (docs/WORKFLOWS.md,
+   * *Compound sets and conformer sets*).
    */
   entryFrames?: number[];
-  /** An opened optimisation or scan whose last point never converged - stopped, or cut short: its last geometry an entry all the same, and said so over it (completeness `notConvergedMark`). */
+  /** An opened optimisation or scan whose last point never converged - stopped, or cut short: that point no entry, and said so over it (completeness `notConvergedMark`). */
   notConverged?: true;
 };
 /**

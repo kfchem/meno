@@ -295,10 +295,11 @@ describe("a calculation's output, as a reader read it", () => {
       expect(entries(m).map((e) => [e.frame, e.energy])).toEqual([[4, SCAN[4]]]);
     });
 
-    it("one that never converged: its last geometry, said not to have", () => {
+    it("one that never converged: no entry - no geometry that is no minimum weighed - its frames kept, said not to have", () => {
       const [m] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
       expect(m.notConverged).toBe(true);
-      expect(entries(m).map((e) => e.frame)).toEqual([1]);
+      expect(entries(m)).toEqual([]);
+      expect(m.frames).toHaveLength(1);
       expect(notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary")).toContain("Not converged");
     });
 
@@ -310,22 +311,28 @@ describe("a calculation's output, as a reader read it", () => {
       expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "4 of 21 frames are entries (converged points)"]);
     });
 
-    it("a scan stopped before its last point converged: the points it converged on, and that last point, said not to have", () => {
+    it("a scan stopped before its last point converged: the points it converged on - that last point a frame, no entry, said not to have", () => {
       // (the same Gaussian scan's output cut short in its third point - 13 geometries, points 1 and 2 converged)
       const converged = SCAN.slice(0, 13).map((_, k) => [4, 10].includes(k));
       const [m] = calcResult(output(13, converged), ["cclib"], "scan-cut.log").molecules3d!;
-      expect(m.entryFrames).toEqual([4, 10, 12]);
+      expect(m.entryFrames).toEqual([4, 10]);
+      expect(entries(m).map((e) => e.energy)).toEqual([-113.545985, -113.549191]);
+      expect(m.frames).toHaveLength(12);
       expect(m.notConverged).toBe(true);
       const molecule = { ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D;
-      expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "3 of 13 frames are entries (converged points, and the last)", "Last point not converged"]);
+      expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "2 of 13 frames are entries (converged points)", "Last point not converged"]);
     });
 
     it("an optimisation stopped at its first geometry says it did not converge, as one stopped at its second does", () => {
       const [one] = calcResult(output(1, [false]), ["cclib"], "opt1.log").molecules3d!;
       const [two] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
       const notes = (m: typeof one) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
-      expect(notes(one)).toEqual(["Bond orders unknown", "Not converged"]);
-      expect(notes(two)).toEqual(["Bond orders unknown", "1 of 2 frames is an entry (the last)", "Not converged"]);
+      expect(notes(one)).toEqual(["Bond orders unknown", "No frame is an entry (none converged)", "Not converged"]);
+      expect(notes(two)).toEqual(["Bond orders unknown", "No frame is an entry (none converged)", "Not converged"]);
+      // (and so they stay, the workspace saved and opened again: none an entry)
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...two, at: { x: 0, y: 0 } })))!;
+      expect(back.entryFrames).toEqual([]);
+      expect(entriesIn(back)).toBe(0);
     });
 
     it("every geometry, where the reader marks none - and where its marks are not one a geometry", () => {
