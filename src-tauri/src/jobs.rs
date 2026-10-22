@@ -307,15 +307,21 @@ fn runner_there(dir: &Path) -> bool {
     }
 }
 
+/// What is said of a job's folder holding what it was to run but no record of how it ran (lib's `NO_RECORD`).
+const NO_RECORD: &str = "it has no record of how it ran";
+
 /// A job's record as it is now - none where its folder is not a job's (yet).
 /// One whose record says it is waiting or running, but whose runner is gone,
-/// is gone, and is recorded so.
+/// is gone, and is recorded so; one with no record past its start, gone,
+/// saying so (`NO_RECORD`).
 pub fn current_record(dir: &Path) -> Option<JobRecord> {
     let created = read_spec(dir)?.created;
     let Some(record) = read_record(dir) else {
-        // (its runner starting: waiting, for a while)
-        let state = if now_ms().saturating_sub(created) < STARTING_MS { JobState::Waiting } else { JobState::Gone };
-        return Some(JobRecord::new(state, created));
+        // (its runner starting: waiting, for a while - then a folder with no record, said so: Meno cannot account for it)
+        if now_ms().saturating_sub(created) < STARTING_MS {
+            return Some(JobRecord::new(JobState::Waiting, created));
+        }
+        return Some(JobRecord { why: Some(NO_RECORD.into()), ..JobRecord::new(JobState::Gone, created) });
     };
     if record.state.finished() || runner_there(dir) {
         return Some(record);
@@ -2926,6 +2932,12 @@ mod tests {
         // (recorded running, by a runner that holds nothing)
         write_record(&dir, &JobRecord { started: Some(2), ..JobRecord::new(JobState::Running, 1) }).unwrap();
         assert_eq!(current_record(&dir).unwrap().state, JobState::Gone);
+        assert_eq!(current_record(&dir).unwrap().why, None);
+        // (a folder with what it was to run but no record, past its start: gone, saying it has no record)
+        let mut spec = read_spec(&dir).unwrap();
+        spec.created = now_ms() - 2 * STARTING_MS;
+        let (_, bare) = make_job(&root, &spec, &[]).unwrap();
+        assert_eq!(current_record(&bare).map(|r| (r.state, r.why)), Some((JobState::Gone, Some(NO_RECORD.to_string()))));
         // and one it holds is not
         let other = shell(&root, ECHO, 1);
         let lock = OpenOptions::new().create(true).truncate(false).write(true).open(other.join(RUNNER_LOCK)).unwrap();

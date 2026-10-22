@@ -804,6 +804,20 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toBe(both);
   });
 
+  it("stops on a job folder with no record of how it ran - and, adopted, reads it as one done", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1, "gone", { why: "it has no record of how it ran", files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: `Output Meno cannot account for: ${idOf(1)} (its folder has no record of how it ran)`, unaccounted: [idOf(1)] });
+    await st().adoptJob(step, idOf(1));
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, adopted: { [idOf(1)]: expect.any(Number) } });
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toMatch(/ \u00b7 1 adopted$/);
+  });
+
   it("deleted, keeps the folder of a job another step's run took up again", async () => {
     const { st, step } = editor();
     const run = st().runStep(step);

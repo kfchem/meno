@@ -42,6 +42,9 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
+/** What a job's runner says of a folder holding what a job was to run but no record of how it ran (jobs.rs `NO_RECORD`). */
+const NO_RECORD = "it has no record of how it ran";
+
 /** How long before its run a job may have been asked for and be the run's own: the moments a run takes to ready its jobs. */
 const STARTED_BEFORE_MS = 60_000;
 
@@ -780,8 +783,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
       // stopped - or every one gone without saying how it ended: nothing comes in. (Some gone - the computer restarted,
       // say - and others done: those done come in, the others said failed, as WORKFLOWS.md, When Meno closes, has it.)
-      const lost = records.map((r) => !r || r.state === "gone");
-      if (records.some((r) => r?.state === "stopped") || lost.every(Boolean)) {
+      // (a job's folder without its record - whatever is in it, nothing Meno can say ran - is no job gone: it is
+      //  output Meno cannot account for, below; adopted, it is read as one done)
+      const unrecorded = records.map((r) => r?.state === "gone" && r.why === NO_RECORD);
+      const lost = records.map((r, k) => (!r || r.state === "gone") && !unrecorded[k]);
+      if (records.some((r) => r?.state === "stopped") || (lost.every(Boolean) && !unrecorded.some(Boolean))) {
         bringIn(id, [], "molecules", { at: run.at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: run.input, took, jobs: ids, ...as });
         return close();
       }
@@ -790,6 +796,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const unaccounted = run.jobs.flatMap((j, k) => {
         const r = records[k];
         if (!r || lost[k] || run.adopted?.[j.id] != null) return [];
+        if (unrecorded[k]) return [{ id: j.id, why: "its folder has no record of how it ran" }];
         if (j.key && r.key !== j.key) return [{ id: j.id, why: "its key is not the one it was asked for with" }];
         if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [{ id: j.id, why: "made before this run began" }];
         return [];
@@ -866,7 +873,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         let said;
         try {
-          said = readCollected(await client.collect(kind, mine.map(pluginEntry), run.options, files, log, record.state), mine.length);
+          // (a folder with no record, adopted: read as one that ran to its end - the chemist took what it holds)
+          said = readCollected(await client.collect(kind, mine.map(pluginEntry), run.options, files, log, unrecorded[k] ? "done" : record.state), mine.length);
         } catch (e) {
           fails(mine.length, message(e));
           continue;

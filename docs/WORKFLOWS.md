@@ -1471,8 +1471,10 @@ question N):
   What an adopted job gave says so in its calculation (`adopted`, with
   when), so its line begins *adopted output* wherever it is shown.
 
-Not yet: a job folder found without its record, which is still taken as
-*gone*.
+- **A job's folder found without its record** - what it was to run, but
+  nothing of how it ran - is output Meno cannot account for too, not a job
+  gone: it stops the step (*its folder has no record of how it ran*), and,
+  adopted, is read as a job that ran to its end.
 
 ## Questions
 
