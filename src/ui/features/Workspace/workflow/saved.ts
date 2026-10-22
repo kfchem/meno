@@ -90,6 +90,13 @@ function readSet(v: unknown): WorkflowSet | null {
       const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
     })(),
+    // (or its structures drawn, each read as the page's drawing is, with what its step said of it - those that do not read counted, as molecules are)
+    ...(() => {
+      if (!Array.isArray(b.drawnCollection) || !made || Array.isArray(b.collection)) return {};
+      const drawnCollection = b.drawnCollection.flatMap(drawnKeptIn);
+      const unread = b.drawnCollection.length - drawnCollection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
+      return drawnCollection.length || unread ? { drawnCollection, ...(unread ? { unread } : {}) } : {};
+    })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),
     ...(() => {
@@ -138,6 +145,13 @@ function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
   return [molecule];
 }
 
+/** A structure drawn a run gave, as a file keeps it - read as the page's drawing is, with what its step said of it; none where it does not read. */
+function drawnKeptIn(m: unknown): DrawnKept[] {
+  const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
+  const entry = entryIn((m as { entry?: unknown } | null)?.entry);
+  return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds, ...(entry ? { entry } : {}) }] : [];
+}
+
 /** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are, each structure drawn as the page's drawing is. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
@@ -158,11 +172,7 @@ function readKept(v: unknown): StepRunKept | null {
     // (each structure read as the page's drawing is - those that do not read counted, as molecules are)
     const drawn = (list: unknown, was: unknown) => {
       const given: unknown[] = Array.isArray(list) ? list : [];
-      const models = given.flatMap((m): DrawnKept[] => {
-        const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
-        const entry = entryIn((m as { entry?: unknown } | null)?.entry);
-        return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds, ...(entry ? { entry } : {}) }] : [];
-      });
+      const models = given.flatMap(drawnKeptIn);
       return { models, unread: given.length - models.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
     };
     const made = drawn(res?.drawn?.made, res?.unread);

@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Model } from "../store/types";
 import { countOf, holdsOf, setMembers } from "./entries";
-import { canWire, givesOf, inputOf, resultOf } from "./flow";
+import { canWire, givesOf, inputKey, inputOf, resultOf } from "./flow";
 import { runMenoDrawn } from "./meno";
 import { addSet, addStep, connect, membersSettled } from "./model";
-import { drawnEntries, keepRun, placeResults, resultsNow, runStep, showRun, type RunResults, type RunWith } from "./run";
+import { drawnEntries, inputEntries, keepRun, placeResults, resultsNow, runStep, showRun, SUMMARY_H, SUMMARY_W, type RunResults, type RunWith } from "./run";
+import { LARGE_SET } from "./entries";
+import { partsOf } from "./parts";
 import { readWorkflow } from "./saved";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
@@ -223,6 +225,97 @@ describe("structures drawn, given by a step", () => {
     // (never left out unsaid: how many of the first exit's did not read)
     expect(results.unread).toBe(1);
     expect(results.restUnread).toBeUndefined();
+  });
+});
+
+describe("a large set of structures drawn, given by a step", () => {
+  /** `n` structures as a step might number them: each a chloroethane, said to be the `k`th made. */
+  const many = (n: number, from = 1) => Array.from({ length: n }, (_, k) => ({ ...chloroethane(), entry: { number: from + k, how: `R1 = ${from + k}` } }));
+
+  it("of more than are laid out are held in the set itself, none on the page, in the step's order - as many as it holds said in its frame", () => {
+    const doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1), many(2)), W);
+    const out = resultOf(doc, doc.steps![0].id, "out")!;
+    expect(out.drawnCollection).toHaveLength(LARGE_SET + 1);
+    expect(out.drawnCollection!.map((m) => m.entry!.number)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1));
+    expect(out.drawnCollection!.map(shapeOf)).toEqual(Array.from({ length: LARGE_SET + 1 }, () => shapeOf(chloroethane())));
+    expect(out.members).toEqual([]);
+    expect(out.put).toBeUndefined();
+    expect([out.x1 - out.x0, out.y1 - out.y0].map((v) => +v.toFixed(6))).toEqual([SUMMARY_W, SUMMARY_H].map((v) => +v.toFixed(6)));
+    expect(countOf(doc, out)).toEqual({ holds: "structures", entries: LARGE_SET + 1, compounds: LARGE_SET + 1 });
+    // (none of them on the page: the chemist's two atoms, and the two the second exit put there)
+    expect(doc.model.atoms).toHaveLength(2 + 2 * 3);
+    // (as many as are laid out, on the page as before)
+    const fifty = placeResults(page(), page().steps![0], drawn(many(LARGE_SET)), W);
+    expect(resultOf(fifty, fifty.steps![0].id, "out")!.drawnCollection).toBeUndefined();
+    expect(shapes(fifty, resultOf(fifty, fifty.steps![0].id, "out")!.id)).toHaveLength(LARGE_SET);
+  });
+
+  it("go on along a wire as they are held: a step that takes them is given each, in order, and its key changes with them", () => {
+    let doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1)), W);
+    const out = { set: resultOf(doc, doc.steps![0].id, "out")!.id };
+    doc = addStep(doc, "conformers", 40, 0);
+    const search = doc.steps![1].id;
+    expect(canWire(doc, out, search)).toBe(true);
+    doc = connect(doc, out, search);
+    const input = inputOf(doc, search)!;
+    expect(input.holds).toBe("structures");
+    expect(input.structures).toEqual([]);
+    const entries = inputEntries(doc.model, input);
+    expect(entries.map((e) => e.place)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k));
+    expect(entries.every((e) => shapeOf(e.drawn).atoms.join() === shapeOf(chloroethane()).atoms.join())).toBe(true);
+    // (one of them changed: what comes in is not what came in)
+    const key = inputKey(doc, doc.steps![1], "meno");
+    const held = resultOf(doc, doc.steps![0].id, "out")!.drawnCollection!;
+    const changed = { ...held[7], atoms: held[7].atoms.map((a) => (a.el === "Cl" ? { ...a, el: "Br" } : a)) };
+    const other = { ...doc, sets: doc.sets!.map((b) => (b.id === out.set ? { ...b, drawnCollection: held.map((m, k) => (k === 7 ? changed : m)) } : b)) };
+    expect(inputKey(other, other.steps![1], "meno")).not.toBe(key);
+  });
+
+  it("run again, are taken away whole: fewer put on the page in their place, or more held in place of those the page had", () => {
+    const large = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1)), W);
+    const fewer = placeResults(large, large.steps![0], drawn([chiral()]), W);
+    const out = resultOf(fewer, fewer.steps![0].id, "out")!;
+    expect(out.drawnCollection).toBeUndefined();
+    expect(shapes(fewer, out.id)).toEqual([shapeOf(chiral())]);
+    const more = placeResults(fewer, fewer.steps![0], drawn(many(LARGE_SET + 2)), W);
+    expect(resultOf(more, more.steps![0].id, "out")!.drawnCollection).toHaveLength(LARGE_SET + 2);
+    // (the chiral one the step put there gone; the chemist's own left)
+    expect(more.model.atoms.map((a) => a.el)).toEqual(["O", "O"]);
+  });
+
+  it("are kept with the run that gave them, as held, and shown again held", () => {
+    let doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1)), W);
+    doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 1, ok: true, said: "first", input: "k", kind: s.kind } })) };
+    const step = () => doc.steps![0];
+    expect(resultsNow(doc, step())!.drawn!.made.map((m) => m.entry!.number)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1));
+    doc = keepRun(doc, step());
+    doc = placeResults(doc, step(), drawn([chiral()]), W);
+    doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 2, ok: true, said: "second", input: "k", kind: s.kind } })) };
+    doc = showRun(doc, step().id, 0, W);
+    expect(resultOf(doc, step().id, "out")!.drawnCollection).toHaveLength(LARGE_SET + 1);
+    expect(doc.model.atoms).toHaveLength(2);
+  });
+
+  it("are read back from a file as held - one that does not read left out and counted, with those its file said had not", () => {
+    const doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1)), W);
+    const text = JSON.parse(JSON.stringify({ sets: doc.sets, steps: doc.steps, wires: doc.wires }));
+    const out = text.sets.find((b: { made?: { exit: string } }) => b.made?.exit === "out");
+    out.drawnCollection[3] = { atoms: "no" };
+    out.unread = 2;
+    const read = readWorkflow(text)!.sets.find((b) => b.made?.exit === "out")!;
+    expect(read.drawnCollection).toHaveLength(LARGE_SET);
+    expect(read.drawnCollection!.map((m) => m.entry!.number)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1).filter((n) => n !== 4));
+    expect(read.unread).toBe(3);
+    // (a chemist's set holds none: none is read for one)
+    expect(readWorkflow({ sets: [{ id: 1, x0: 0, y0: 0, x1: 2, y1: 2, drawnCollection: [chloroethane()] }] })!.sets[0].drawnCollection).toBeUndefined();
+  });
+
+  it("are not copied with their set: put down again, it holds nothing until its step runs", () => {
+    const doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1)), W);
+    const out = resultOf(doc, doc.steps![0].id, "out")!;
+    const parts = partsOf(doc, new Set([out.id]), new Set([doc.steps![0].id]));
+    expect(parts.sets[0].drawnCollection).toBeUndefined();
+    expect(parts.sets[0].unread).toBeUndefined();
   });
 });
 

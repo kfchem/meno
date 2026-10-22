@@ -25,7 +25,7 @@ import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { drawnEntries, energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { energiesBy, inputEntries, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
@@ -63,6 +63,14 @@ const ON_DRAWN = "Not on structures drawn: only Meno's own steps take or give th
 export function notMade(places: readonly number[], of: number): string {
   const which = places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
   return `${which} of ${of} could not be made in 3D`;
+}
+
+/** How many structures drawn come into a step (flow `inputOf`): on the page, or held in a large result set. */
+const drawnIn = (input: { structures: readonly unknown[]; held?: readonly unknown[] }) => input.held?.length ?? input.structures.length;
+
+/** A molecule in 3D without its link to a drawing (`drawnFrom`, `drawnAs`): made from a structure held off the page, whose atoms' ids are no drawing's. */
+function unlinked<M extends { drawnFrom?: unknown; drawnAs?: unknown }>({ drawnFrom: _f, drawnAs: _a, ...m }: M): Omit<M, "drawnFrom" | "drawnAs"> {
+  return m;
 }
 
 export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState, w: Pick<RunWith, "extentOf">) {
@@ -169,7 +177,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     if (input.holds !== "structures") return void fail(id, ON_DRAWN, at, key);
     // (what came in when it was asked to run: checked and run on that, as Meno's steps in turns are)
-    const entries = drawnEntries(d.model, input.structures);
+    const entries = inputEntries(d.model, input);
     const lists = String(optionsOf(kindInfo("enumerate").options ?? [], step.options).lists ?? "");
     let checked: string;
     const by = rolePlugin("checks");
@@ -437,7 +445,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const working = (patch: { done: number } | null) =>
       set((prev) => {
         const rest = { ...prev.menoWorking };
-        if (patch) rest[id] = { since: at, total: input.structures.length, ...patch };
+        if (patch) rest[id] = { since: at, total: drawnIn(input), ...patch };
         else delete rest[id];
         return { ...prev, menoWorking: rest };
       });
@@ -469,10 +477,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const failed: number[] = [];
     try {
       let chem = await pluginWorker(plugin);
-      for (const [place, atoms] of input.structures.entries()) {
+      // (each structure drawn: on the page, by its atoms; or held in a large result set, as it holds it)
+      const sources = input.held ? input.held.map((m) => ({ model: m as Model, atoms: m.atoms.map((a) => a.id), off: true })) : input.structures.map((atoms) => ({ model: d.model, atoms, off: false }));
+      for (const [place, { model, atoms, off }] of sources.entries()) {
         if (menoStops.has(id)) break;
         working({ done: place });
-        const block = blocksOf(d.model, atoms)[0];
+        const block = blocksOf(model, atoms)[0];
         if (!block) continue;
         let made;
         try {
@@ -491,7 +501,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           failed.push(place + 1);
           continue;
         }
-        const m = moleculeOf(made, block);
+        // (one made from a structure on no page is linked to no drawing: its atoms' ids are its own, not the page's)
+        const m = off ? unlinked(moleculeOf(made, block)) : moleculeOf(made, block);
         // (what worked out their energies, for the steps that rank them: the plugin, and its force field)
         const calc = { readers: [], program: plugin.name, ...(made.field ? { method: made.field } : {}) };
         // (each conformer with them, and with what the molecule keeps: the conformers of one compound are made alike - entries `unlikeMade`)
@@ -523,7 +534,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     if (!worked.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
     const took = Date.now() - at;
-    const left = failed.length ? ` \u00b7 ${notMade(failed, input.structures.length)}` : "";
+    const left = failed.length ? ` \u00b7 ${notMade(failed, drawnIn(input))}` : "";
     bringIn(id, worked, "conformers", {
       at,
       ok: true,

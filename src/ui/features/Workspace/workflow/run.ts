@@ -59,7 +59,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (!input) return fail("Nothing comes into it");
   const outcome =
     input.holds === "structures"
-      ? runMenoDrawn(step.kind, drawnEntries(doc.model, input.structures), step.options, doc.style)
+      ? runMenoDrawn(step.kind, inputEntries(doc.model, input), step.options, doc.style)
       : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
@@ -114,6 +114,11 @@ export function drawnEntries(model: Model, structures: readonly (readonly number
   return structures.map((ids, place) => ({ place, drawn: partOf(model, new Set(ids)) }));
 }
 
+/** The structures drawn that come into a step (flow `inputOf`), as its entries: those on the page as they are drawn now, or those a large result set holds, as it holds them. */
+export function inputEntries(model: Model, input: { structures: readonly (readonly number[])[]; held?: readonly DrawnKept[] }): DrawnEntry[] {
+  return input.held ? input.held.map(({ entry: _e, ...drawn }, place) => ({ place, drawn })) : drawnEntries(model, input.structures);
+}
+
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
@@ -123,6 +128,8 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
     // (each structure as it is drawn now: moved, or an atom changed by hand since, as it is)
     const drawn = (b: WorkflowSet | undefined): DrawnKept[] => {
       if (!b) return [];
+      // (a large result set's, as it holds them)
+      if (b.drawnCollection) return [...b.drawnCollection];
       // (with what its step said of each, by any of its atoms: a member joined to the chemist's still says it)
       const said = new Map((b.members ?? []).flatMap((m) => ("structure" in m && m.entry ? m.structure.map((id) => [id, m.entry!] as const) : [])));
       return drawnEntries(doc.model, setMembers(doc, b).structures).map((e) => {
@@ -130,7 +137,15 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
         return entry ? { ...e.drawn, entry } : e.drawn;
       });
     };
-    return { molecules: [], rest: [], holds: "structures", drawn: { made: drawn(set), rest: second ? drawn(resultOf(doc, step.id, second.id)) : [], ...(set.core ? { core: set.core } : {}) } };
+    const restSet = second ? resultOf(doc, step.id, second.id) : undefined;
+    return {
+      molecules: [],
+      rest: [],
+      holds: "structures",
+      drawn: { made: drawn(set), rest: drawn(restSet), ...(set.core ? { core: set.core } : {}) },
+      ...(set.unread ? { unread: set.unread } : {}),
+      ...(restSet?.unread ? { restUnread: restSet.unread } : {}),
+    };
   }
   // (each exit's set: its collection, where it holds one, else its molecules on the page)
   const held = (b: WorkflowSet | undefined) => (b ? (b.collection ?? setMolecules(doc, b).map(({ id: _id, at: _at, ...m }) => m)) : []);
@@ -307,8 +322,9 @@ export function placeResults(
   const { molecules: made, rest, holds, unread, restUnread } = results;
   const exits = exitsOf(step.kind);
   if (holds === "structures") {
-    doc = fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? [], results.drawn?.core);
-    return exits[1] ? fillDrawn(doc, step, exits[1].id, results.drawn?.rest ?? [], results.drawn?.core) : doc;
+    // (with how many of each did not read from a file, said in its frame as molecules' are)
+    doc = fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? [], results.drawn?.core, unread);
+    return exits[1] ? fillDrawn(doc, step, exits[1].id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
   }
   doc = fillExit(doc, step, exits[0].id, made, holds, unread, w, turns);
   // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
@@ -351,14 +367,18 @@ function fillExit(
  * results (`laidOut`) by its atoms' box (chem/make3d `boxOf`), and put on
  * the page as it was drawn, moved whole. Each its own structure, its atoms
  * numbered afresh, as a paste is; and the set keeps which atoms they are
- * (`WorkflowSet.put`), for the next run to take away those alone.
+ * (`WorkflowSet.put`), for the next run to take away those alone. More
+ * than are laid out on the page (`LARGE_SET`) are held in the set itself,
+ * none of them on the page (`WorkflowSet.drawnCollection`), as molecules
+ * in 3D are. With how many did not read from a file (`unread`), where any.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnKept[], core?: SeriesCore): WorkspaceDocument {
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnKept[], core?: SeriesCore, unread?: number): WorkspaceDocument {
+  if (made.length > LARGE_SET) return filled(doc, step, { exit, holds: "structures", unread, drawnCollection: [...made], ...(core ? { core } : {}) }, [], () => ({ doc, members: [] }));
   // (each about the middle of its box)
   const boxes = made.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
   const rooms = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: 0 }));
-  return filled(doc, step, { exit, holds: "structures", ...(core ? { core } : {}) }, rooms, (d, at) => {
+  return filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => {
     // (all put on the page at once, as one model - one at a time copied the page's drawing again for each - their ids made apart first: two given in one numbering, as a template's products are, would be one structure)
     const apart = numberedApart(made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y)));
     const there = new Set(d.model.atoms.map((a) => a.id));
@@ -378,25 +398,25 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
  * made now, as large as `rooms` laid out need (`laidOut`), its top left
  * where the old one's was; then `place` puts what it holds on the page,
  * each at its place, and the set holds those, in the step's order - and
- * the atoms its step put, where it put any. A `collection` - more than are
- * laid out on the page - is held in the set itself, its frame summing it
- * up. With how many did not read from a file (`unread`), where any.
+ * the atoms its step put, where it put any. A `collection` or a
+ * `drawnCollection` - more than are laid out on the page - is held in the
+ * set itself, its frame summing it up. With how many did not read from a file (`unread`), where any.
  */
 function filled(
   doc: WorkspaceDocument,
   step: WorkflowStep,
-  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; core?: SeriesCore },
+  of: { exit: string; holds: SetKind; unread?: number; collection?: NonNullable<WorkflowSet["collection"]>; drawnCollection?: NonNullable<WorkflowSet["drawnCollection"]>; core?: SeriesCore },
   rooms: readonly (Frame & { chip: number })[],
   place: (doc: WorkspaceDocument, at: readonly { x: number; y: number }[]) => { doc: WorkspaceDocument; members: Member[]; put?: number[] },
 ): WorkspaceDocument {
   const was = resultOf(doc, step.id, of.exit);
   if (was) doc = emptied(doc, was);
   const madeBy = { step: step.id, exit: of.exit, holds: of.holds };
-  if (of.collection) {
+  if (of.collection || of.drawnCollection) {
     const frame = was ? frameAt(was.x0, was.y1, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
-    return holdCollection(doc, id, of.collection, of.unread);
+    return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
   }
   // (an exit that gave nothing keeps its frame as it stands, saying so)
   if (!rooms.length) {

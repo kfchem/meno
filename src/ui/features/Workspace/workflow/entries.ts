@@ -209,7 +209,8 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
   const molecules = setMolecules(page, set);
   const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
-  const entries = structures.length + frames;
+  // (a large result set's structures drawn, held off the page, as many as it holds)
+  const entries = structures.length + (set.drawnCollection?.length ?? 0) + frames;
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
 
@@ -467,7 +468,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
  * apart by it, and the same again by the same. FNV-1a, twice over, 64 bits
  * as hex.
  */
-export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & Pick<WorkflowSet, "members" | "collection">): string {
+export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & Pick<WorkflowSet, "members" | "collection" | "drawnCollection">): string {
   const { structures, pictures } = setMembers(page, set);
   const atoms = new Map(page.model.atoms.map((a) => [a.id, a]));
   const shown = new Map((page.pictures ?? []).map((p) => [p.id, p as Partial<Pick<PictureItem, "sha256">>]));
@@ -477,6 +478,11 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
     const els = ids.map((id) => `${atoms.get(id)!.el}${atoms.get(id)!.charge ?? ""}`).join(",");
     const bonds = page.model.bonds.filter((b) => inIt.has(b.a) && inIt.has(b.b)).map((b) => `${ids.indexOf(b.a)}-${ids.indexOf(b.b)}:${b.order}`).join(",");
     parts.push(`s|${els}|${bonds}`);
+  }
+  // (a large result set's, held off the page: each by its own atoms' order, as those on it are by theirs)
+  for (const m of set.drawnCollection ?? []) {
+    const at = new Map(m.atoms.map((a, i) => [a.id, i]));
+    parts.push(`s|${m.atoms.map((a) => `${a.el}${a.charge ?? ""}`).join(",")}|${m.bonds.map((b) => `${at.get(b.a)}-${at.get(b.b)}:${b.order}`).join(",")}`);
   }
   for (const m of setMolecules(page, set)) {
     const frames = Array.from({ length: framesOf(m) }, (_, f) => geometryKey(frameXyz(m, f))).join(",");

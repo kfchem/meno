@@ -1444,10 +1444,20 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
 
-Not yet: a large set of structures drawn. *A large result set* holds more
-than 50 molecules in 3D in the set itself, off the page; structures drawn
-are all put on the page however many there are. Enumerate, which can make
-up to 10,000, holds them in its set the same way (P3b).
+**A large set of structures drawn** is held as a large set of molecules
+is (*A large result set*): an exit that gives more than 50 puts none of
+them on the page. Its set holds each structure as the step drew it, in
+the step's order, with what the step said of it, and its frame says how
+many ("120 structures"). The steps after it take them from there, and a
+run kept keeps them. The workspace's file keeps them too, or, with *Don't
+keep in the file*, only their count and hash. Opened from a file, a
+structure of theirs that does not read is left out and counted. A
+molecule in 3D made from one of them is linked to no drawing, since its
+atoms are on no page. Run again with 50 or fewer, the step puts them on
+the page as before. Copied with its step, the set holds nothing until the
+step runs again, as a large set of molecules does. Held off the page,
+they are kept as the step drew them: a change of the workspace's style
+reaches them only once they are on the page.
 
 ## Questions
 

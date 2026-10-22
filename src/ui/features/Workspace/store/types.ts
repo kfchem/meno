@@ -634,7 +634,15 @@ export type WorkflowSet = {
    * Its frame shows them summed up; the steps after it take them from here.
    */
   collection?: Omit<Molecule3D, "id" | "at">[];
-  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules did not read, and were left out - said with its count until the step runs again. */
+  /**
+   * A result set of more structures drawn than are laid out on the page
+   * (`LARGE_SET`, as `collection` is for molecules in 3D): what the step
+   * drew, held in the set itself, in the step's order - each drawn on its
+   * own, its atoms numbered within it, with what its step said of it - but
+   * on no page. The steps after it take them from here.
+   */
+  drawnCollection?: DrawnKept[];
+  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules or structures did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;

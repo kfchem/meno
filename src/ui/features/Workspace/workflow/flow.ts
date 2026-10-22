@@ -4,7 +4,7 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnKept, Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers, setMolecules } from "./entries";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
@@ -78,14 +78,21 @@ export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE
   return inputsOf(step.kind).length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
 }
 
-/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
-export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][] } | null {
+/**
+ * What comes into a step: the kind of set, and its molecules in 3D and
+ * structures drawn, in order - those on the page by their atoms' ids, or,
+ * from a large result set, as it holds them off the page (`held`). Null
+ * where nothing does - or what would has not been made yet, or is
+ * pictures, which no step takes.
+ */
+export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; held?: readonly DrawnKept[] } | null {
   const from = wireInto(doc, step, port)?.from;
   if (!from) return null;
   const set = findSet(doc, from.set);
   if (!set) return null;
   const holds = holdsOf(doc, set);
   if (holds === "pictures") return null;
+  if (set.drawnCollection) return { holds, molecules: [], structures: [], held: set.drawnCollection };
   const { structures } = setMembers(doc, set);
   return { holds, molecules: setMolecules(doc, set), structures };
 }
@@ -181,6 +188,7 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
   for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
   for (const s of input.structures) h = hash(drawnKey(doc.model, s), h);
+  for (const m of input.held ?? []) h = hash(drawnKey(m, m.atoms.map((a) => a.id)), h);
   return h.toString(36);
 }
 

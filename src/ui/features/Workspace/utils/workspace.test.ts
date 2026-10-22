@@ -5,7 +5,8 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
 import { readKept, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
-import { addSet } from "../workflow/model";
+import { addSet, addStep } from "../workflow/model";
+import { placeResults } from "../workflow/run";
 import { collectionHash } from "../workflow/entries";
 import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
@@ -506,6 +507,35 @@ describe("a workspace's sets, saved (version 2)", () => {
     const ws = readWorkspace(JSON.stringify(saved))!;
     expect(ws.drawn.atoms.map((a) => a.el)).toEqual(["C", "C", "O"]);
     expect(ws.workflow!.sets[0].notKept).toEqual({ count: 1, hash });
+  });
+
+  it("of a large result set of structures drawn: each written as the set holds it, with what its step said of it - or, kept out of the file, only how many and their hash", () => {
+    const { doc, st } = canvas();
+    // (51 nitrogen molecules a step gave, numbered: more than are laid out, so held in the set)
+    const n2 = (k: number) => ({ atoms: [{ id: 1, el: "N", x: 0, y: 0, r: 0.9 }, { id: 2, el: "N", x: 1.1, y: 0, r: 0.9 }] as never[], bonds: [{ id: 1, a: 1, b: 2, order: 3 }] as never[], entry: { number: k, how: `R1 = ${k}` } });
+    const made = Array.from({ length: 51 }, (_, k) => n2(k + 1));
+    doc.edit("sets", (d) => {
+      const s = addStep(d, "duplicates", 40, 0);
+      return placeResults(s, s.steps![s.steps!.length - 1], { molecules: [], rest: [], holds: "structures", drawn: { made, rest: [] } }, { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }) });
+    });
+    const at = st().sets.findIndex((b) => b.made?.exit === "out");
+    const saved = JSON.parse(workspaceText(st()));
+    // (none of them on the page, so none among its atoms)
+    expect(saved.atoms.map((a: { el: string }) => a.el)).toEqual(["C", "C", "O"]);
+    expect(saved.sets[at].members).toEqual([]);
+    expect(saved.sets[at].drawnCollection).toEqual(made);
+    const ws = readWorkspace(JSON.stringify(saved))!;
+    expect(ws.workflow!.sets[at].drawnCollection).toEqual(made);
+    // (kept out of the file: not written, only how many it held and their hash)
+    doc.edit("sets", (d) => ({ ...d, sets: d.sets!.map((b, i) => (i === at ? { ...b, keep: false as const } : b)) }));
+    const hash = collectionHash(st(), st().sets[at]);
+    const unkept = JSON.parse(workspaceText(st()));
+    expect(unkept.sets[at].drawnCollection).toBeUndefined();
+    expect(unkept.sets[at].notKept).toEqual({ count: 51, hash });
+    // (the hash tells what it held apart: one of them another structure, another hash)
+    const held = st().sets[at];
+    const other = { ...held, drawnCollection: held.drawnCollection!.map((m, k) => (k === 9 ? { ...m, bonds: [{ ...m.bonds[0], order: 2 as const }] } : m)) };
+    expect(collectionHash(st(), other)).not.toBe(hash);
   });
 
   it("of a file of version 1 - sets that did not keep members - are what lies inside each frame as it opens", () => {

@@ -625,12 +625,22 @@ export default function Workflow2D() {
                   ? plural(count.compounds, "compound")
                   : `${plural(count.compounds, "compound")} · ${count.entries}`;
           // (a large result set: what it holds, said large in its frame)
-          const summary = b.collection
-            ? {
-                count: count.entries.toLocaleString("en-US"),
-                nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
-              }
-            : undefined;
+          const summary =
+            b.collection || b.drawnCollection
+              ? {
+                  count: count.entries.toLocaleString("en-US"),
+                  nouns:
+                    count.holds === "conformers"
+                      ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}`
+                      : count.holds === "structures"
+                        ? count.entries === 1
+                          ? "structure"
+                          : "structures"
+                        : count.entries === 1
+                          ? "molecule"
+                          : "molecules",
+                }
+              : undefined;
           // (its name: a step's first exit is named as the kind names what it makes; another exit, by its own name)
           const exit = made && b.made ? exitOf(made.kind, b.made.exit) : undefined;
           const name = made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (b.name ?? "Input");

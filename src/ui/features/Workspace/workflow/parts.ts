@@ -39,7 +39,7 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members: _m, keep: _k, notKept: _n, put: _p, core: _c, ...b }) =>
+      .map(({ members: _m, collection: _l, drawnCollection: _d, unread: _u, keep: _k, notKept: _n, put: _p, core: _c, ...b }) =>
         b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b,
       ),
     steps: (doc.steps ?? [])
