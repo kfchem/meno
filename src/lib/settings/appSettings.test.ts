@@ -10,13 +10,14 @@ import { BALL_AND_STICK } from "../chem/style3d";
 import { STYLE_PRESETS } from "../chem/style";
 
 describe("how finely the canvas is drawn, as the settings file holds it", () => {
-  it("is twice, from a file from before there was a choice, or one that does not read", () => {
-    expect(acceptAppSettings({}).canvas).toEqual({ resolution: 2 });
-    expect(acceptAppSettings({ canvas: { resolution: 3 } }).canvas).toEqual({ resolution: 2 });
-    expect(acceptAppSettings({ canvas: "fine" }).canvas).toEqual({ resolution: 2 });
+  it("is as the screen shows things, by default: from a file from before there was a choice, or one that does not read", () => {
+    expect(acceptAppSettings({}).canvas).toEqual({ resolution: "display" });
+    expect(acceptAppSettings({ canvas: { resolution: 3 } }).canvas).toEqual({ resolution: "display" });
+    expect(acceptAppSettings({ canvas: "fine" }).canvas).toEqual({ resolution: "display" });
   });
 
-  it("is as the screen shows things, or once, where it says so", () => {
+  it("keeps a choice saved, whichever it is - twice, the default before, included", () => {
+    expect(acceptAppSettings({ canvas: { resolution: 2 } }).canvas).toEqual({ resolution: 2 });
     expect(acceptAppSettings({ canvas: { resolution: "display" } }).canvas).toEqual({ resolution: "display" });
     expect(acceptAppSettings({ canvas: { resolution: 1 } }).canvas).toEqual({ resolution: 1 });
   });
@@ -40,7 +41,7 @@ describe("the settings file", () => {
       canvas: { resolution: "display" as const },
       labels: { smart: false },
       words: { smart: false },
-      calculations: { atOnce: 2, cores: 4 },
+      calculations: { cores: 4, coresAll: 8, memoryAll: 12288 },
       procedures: [{ id: "p-1", name: "Optimise, then energies", saved: 1, flow: { sets: [{ id: 1, x0: 0, y0: -4, x1: 4, y1: 0 }], steps: [{ id: 2, kind: "optimise", x: 6, y: 0 }], wires: [{ id: 3, from: { set: 1 }, to: 2 }] } }],
       colours: { use: "set-1", sets: [{ id: "set-1", name: "Talk slides", colours: ["#cd4560", "#317689", "#2a9d8f"] }] },
     };
@@ -67,10 +68,10 @@ describe("the settings file", () => {
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
     // which way the wheel zooms: in, upwards, unless the file says out
     expect(acceptAppSettings({ pointer: { wheelUp: "sideways" } }).pointer).toEqual({ wheelUp: "in" });
-    // jobs at once and cores for each: whole numbers, at least one, within reason
-    expect(acceptAppSettings({ calculations: { atOnce: 0, cores: 2.5 } }).calculations).toEqual({});
-    expect(acceptAppSettings({ calculations: { atOnce: 65, cores: "8" } }).calculations).toEqual({});
-    expect(acceptAppSettings({ calculations: { atOnce: 3, cores: 16 } }).calculations).toEqual({ atOnce: 3, cores: 16 });
+    // cores for each, and the cores and memory jobs may use: whole numbers, at least one, within reason
+    expect(acceptAppSettings({ calculations: { cores: 2.5, coresAll: 0, memoryAll: -1 } }).calculations).toEqual({});
+    expect(acceptAppSettings({ calculations: { cores: "8", coresAll: 1025 } }).calculations).toEqual({});
+    expect(acceptAppSettings({ calculations: { cores: 16, coresAll: 32, memoryAll: 24576 } }).calculations).toEqual({ cores: 16, coresAll: 32, memoryAll: 24576 });
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
@@ -139,5 +140,52 @@ describe("the settings file", () => {
       loaded: true,
       error: null,
     });
+  });
+});
+
+describe("the settings file holds only what the user changed (the maintainer, 2026-10-21)", () => {
+  const read = (text: string) => acceptAppSettings(JSON.parse(text));
+  const variants: [string, Record<string, unknown>][] = [
+    ["another drawing style", { drawingStyle: { preset: STYLE_PRESETS[1].id, changes: {} } }],
+    ["a change of the drawing style", { drawingStyle: { preset: STYLE_PRESETS[0].id, changes: { bondLengthPt: 21 } } }],
+    ["the 3D looks the other way round", { style3d: { ...DEFAULT_APP_SETTINGS.style3d, primary: "space", secondary: "balls" } }],
+    ["offline", { network: { offline: true, granted: [] } }],
+    ["a network grant", { network: { offline: false, granted: ["updates"] } }],
+    ["valence warnings off", { chemistry: { valenceWarnings: false } }],
+    ["asked about updates", { updates: { asked: true } }],
+    ["a plugin's role", { plugins: { ...DEFAULT_APP_SETTINGS.plugins, roles: { conformers: "some-plugin" } } }],
+    ["a plugin removed", { plugins: { ...DEFAULT_APP_SETTINGS.plugins, removed: ["some-plugin"] } }],
+    ["the wheel zooming out", { pointer: { wheelUp: "out" } }],
+    ["once", { canvas: { resolution: 1 } }],
+    ["labels as typed", { labels: { smart: false } }],
+    ["words as typed", { words: { smart: false } }],
+    ["cores jobs may use", { calculations: { coresAll: 2 } }],
+    ["memory jobs may use", { calculations: { memoryAll: 4096 } }],
+    ["pictures at another resolution", { pictures: { dpi: 300 } }],
+  ];
+
+  it("writes nothing but its format where nothing was changed", () => {
+    expect(JSON.parse(settingsFileText(DEFAULT_APP_SETTINGS))).toEqual({ format: 1 });
+  });
+
+  it("writes only what was changed, and reads back as it was - each setting alike", () => {
+    for (const [what, change] of variants) {
+      const settings = acceptAppSettings({ ...change });
+      // (a change the settings take: else the test would prove nothing)
+      expect(settings, what).not.toEqual(DEFAULT_APP_SETTINGS);
+      const text = settingsFileText(settings);
+      expect(Object.keys(JSON.parse(text)), what).toEqual(["format", Object.keys(change)[0]]);
+      expect(read(text), what).toEqual(settings);
+    }
+    // (within a setting, only what changed: a plugin's role, not the other parts of the plugins' settings)
+    expect(JSON.parse(settingsFileText(acceptAppSettings({ plugins: { ...DEFAULT_APP_SETTINGS.plugins, roles: { conformers: "some-plugin" } } }))).plugins).toEqual({ roles: { conformers: "some-plugin" } });
+    // (but a drawing style chosen whole: its preset and its changes are read only together)
+    expect(JSON.parse(settingsFileText(acceptAppSettings({ drawingStyle: { preset: STYLE_PRESETS[0].id, changes: { bondLengthPt: 21 } } }))).drawingStyle).toEqual({ preset: STYLE_PRESETS[0].id, changes: { bondLengthPt: 21 } });
+  });
+
+  it("reads a file that holds every setting - as Meno wrote them before - and writes back only what differs from the defaults now", () => {
+    const old = JSON.parse(JSON.stringify({ format: 1, ...DEFAULT_APP_SETTINGS, pointer: { wheelUp: "out" } }));
+    const settings = read(JSON.stringify(old));
+    expect(JSON.parse(settingsFileText(settings))).toEqual({ format: 1, pointer: { wheelUp: "out" } });
   });
 });

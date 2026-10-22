@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  drawingLayout,
   drawingSvg,
   exportKindOf,
   exportKinds,
@@ -10,9 +11,14 @@ import {
   structureFileText,
   suggestedExportPath,
   suggestedSavePath,
+  writtenWhere,
+  keepsOld,
 } from "./fileActions";
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
+import { heldElsewhere } from "../../../lib/doc/savers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
+import { labelBox, labelSetOf, runsWidth } from "../../../lib/chem/layout2d";
+import { MARK_HALF_HEIGHT, MARK_SCALE, MARKS_APART, STEREO_GAP, stereoPlaces, stereoTextEms } from "./chem/marks";
 import { ACS_1996, RSC } from "../../../lib/chem/style";
 import type { Model } from "./store/types";
 import { readStructures } from "../../../lib/io/structures";
@@ -505,5 +511,154 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const back = await processFileContent("d2o.pdb", text);
     expect(back.molecules3d![0].atoms.map((a) => [a.el, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
     expect(back.molecules3d![0].bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 2]]);
+  });
+});
+
+describe("a workspace saved", () => {
+  /** What a save did, in turn, and the files it wrote, by path - on a file system that takes no notice of case, keeping a name as it was first written. */
+  function disk(files: Record<string, string> = {}) {
+    const done: string[] = [];
+    const written = new Map(Object.entries(files));
+    const kept = (path: string) => [...written.keys()].find((k) => k.toLowerCase() === path.toLowerCase()) ?? path;
+    const write = async (path: string, bytes: Uint8Array, keepOld: boolean) => {
+      done.push(`write ${path}${keepOld ? ", keeping the old" : ""}`);
+      const at = kept(path);
+      const old = keepOld && written.has(at) ? `${at}.bak` : null;
+      if (old) written.set(old, written.get(at)!);
+      written.set(at, new TextDecoder().decode(bytes));
+      return old;
+    };
+    const truePathOf = async (path: string) => (done.push(`true path of ${path}`), kept(path));
+    return { done, written, write, truePathOf };
+  }
+  const bytes = new TextEncoder().encode("PK new");
+
+  it("is written where the dialog said, then known by the file's one true path, as an opened one is", async () => {
+    const d = disk({ "/Users/Chem/Work/Aspirin.meno": "PK old" });
+    expect(await writtenWhere("/users/chem/work/ASPIRIN.meno", bytes, d)).toEqual({ kept: "/Users/Chem/Work/Aspirin.meno", old: null });
+    // (asked once the file is there, too: a new file has no name kept before it is written)
+    expect(d.done).toEqual(["true path of /users/chem/work/ASPIRIN.meno", "write /users/chem/work/ASPIRIN.meno", "true path of /users/chem/work/ASPIRIN.meno"]);
+  });
+
+  it("is never written over a file another tab holds: refused, naming that tab, nothing written - its own file and a free one written", async () => {
+    const d = disk({ "/w/aspirin.meno": "PK the other tab's", "/w/mine.meno": "PK mine" });
+    const tabs = [
+      { id: "t1", openedFrom: "/w/mine.meno", label: "mine.meno" },
+      { id: "t2", openedFrom: "/w/aspirin.meno", label: "aspirin.meno" },
+    ];
+    const heldBy = (path: string) => heldElsewhere(path, "t1", tabs);
+    // (Save As onto the other tab's file, however it was written)
+    await expect(writtenWhere("/W/ASPIRIN.meno", bytes, { ...d, heldBy })).rejects.toThrow('that file is open in the tab "aspirin.meno"; save there, or close it first.');
+    expect(d.written.get("/w/aspirin.meno")).toBe("PK the other tab's");
+    expect(d.done.some((x) => x.startsWith("write"))).toBe(false);
+    // (as a save's failure is said)
+    const said = await writtenWhere("/w/aspirin.meno", bytes, { ...d, heldBy }).catch((e: Error) => `Save failed: ${e.message}`);
+    expect(said).toBe('Save failed: that file is open in the tab "aspirin.meno"; save there, or close it first.');
+    // (its own file, and one no tab holds)
+    expect((await writtenWhere("/w/mine.meno", bytes, { ...d, heldBy })).kept).toBe("/w/mine.meno");
+    expect((await writtenWhere("/w/free.meno", bytes, { ...d, heldBy })).kept).toBe("/w/free.meno");
+    expect([...d.written.keys()].sort()).toEqual(["/w/aspirin.meno", "/w/free.meno", "/w/mine.meno"]);
+    expect(d.written.get("/w/mine.meno")).toBe("PK new");
+  });
+
+  it("keeps the file it was saved over beside it only where asked of that file, and says where", async () => {
+    const d = disk({ "/w/a.meno": "PK damaged" });
+    const keepOld = (path: string) => path === "/w/a.meno";
+    expect(await writtenWhere("/W/A.meno", bytes, { ...d, keepOld })).toEqual({ kept: "/w/a.meno", old: "/w/a.meno.bak" });
+    expect(d.written.get("/w/a.meno.bak")).toBe("PK damaged");
+    expect(await writtenWhere("/w/b.meno", bytes, { ...d, keepOld })).toEqual({ kept: "/w/b.meno", old: null });
+    // (a save not asked to: none)
+    const plain = disk({ "/w/a.meno": "PK old" });
+    expect((await writtenWhere("/w/a.meno", bytes, plain)).old).toBeNull();
+    expect([...plain.written.keys()]).toEqual(["/w/a.meno"]);
+  });
+});
+
+describe("a workspace that left something out as it opened, saved", () => {
+  const left = { left: { picture: 1 }, kept: false };
+  it("keeps the file it was opened from beside the first save over it - its only copy of what was left out", () => {
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, left)).toBe(true);
+    // (not once kept: the file saved then holds nothing of it)
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, { ...left, kept: true })).toBe(false);
+  });
+  it("keeps no other file, and none where nothing was left out", () => {
+    expect(keepsOld("/w/b.meno", "/w/a.meno", false, left)).toBe(false);
+    expect(keepsOld("/w/a.meno", null, false, left)).toBe(false);
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, null)).toBe(false);
+    // (as before: a file it last saved still holding one it cannot keep)
+    expect(keepsOld("/w/a.meno", "/w/a.meno", true, null)).toBe(true);
+  });
+});
+
+describe("R, S, E and Z in a picture of the drawing (the maintainer, 2026-10-21)", () => {
+  // (an invented pent-3-en-2-ol, drawn: its double bond E, its centre S, by ids that are not positions)
+  const L = NOMINAL_BOND_LENGTH;
+  const at = (id: number, x: number, y: number, el = "C") => ({ id, x: x * L, y: y * L, r: 0.9, el });
+  const model: Model = {
+    atoms: [at(1, 0, 0), at(2, 0.87, 0.5), at(3, 1.73, 0), at(4, 2.6, 0.5), at(5, 2.6, 1.5, "O"), at(6, 3.46, 0)],
+    bonds: [
+      { id: 11, a: 1, b: 2, order: 1 },
+      { id: 12, a: 2, b: 3, order: 2 },
+      { id: 13, a: 3, b: 4, order: 1 },
+      { id: 14, a: 4, b: 5, order: 1 },
+      { id: 15, a: 4, b: 6, order: 1 },
+    ],
+  };
+  const marks = { valence: new Map(), centres: new Map([[4, "S" as const]]), doubleBonds: new Map([[12, "E" as const]]) };
+  const aromatic = { aromaticEnabled: false, aromaticRings: {} };
+  // (the letters alone, for the places; in parentheses, for how they are written)
+  const bare = { ...ACS_1996, stereoDescriptors: "plain" as const };
+
+  it("puts them where the canvas puts them, at the canvas's size without its floor for the screen", () => {
+    const { layout, opts } = drawingLayout(model, { ...aromatic, shownMarks: marks }, bare);
+    const items = layout.texts.filter((t) => t.text === "S" || t.text === "E");
+    expect(items.map((t) => t.text).sort()).toEqual(["E", "S"]);
+    // (the known answer: the canvas's own placing - ChemMarks2D's, at a zoom its floor does not reach)
+    const size = opts.fontPx * MARK_SCALE;
+    const laid = new Map(model.atoms.map((a) => [a.id, a]));
+    const boxes = new Map<number, ReturnType<typeof labelBox>>();
+    for (const t of layout.texts) if (t.atom != null) boxes.set(model.atoms[t.atom].id, labelBox(t, t.fontPx, labelSetOf(opts)));
+    const canvas = stereoPlaces({
+      model: { atoms: model.atoms.map((a) => ({ ...a, ...laid.get(a.id) })), bonds: model.bonds },
+      centres: marks.centres,
+      doubleBonds: marks.doubleBonds,
+      boxes,
+      half: (cip) => ({ x: (size * stereoTextEms(cip, false)) / 2, y: size * MARK_HALF_HEIGHT }),
+      apart: MARKS_APART * size,
+      off: STEREO_GAP * opts.fontPx,
+      bond: L,
+    });
+    for (const p of canvas) {
+      const t = items.find((i) => i.text === p.text)!;
+      const w = runsWidth(t.runs!, t.fontPx, labelSetOf(opts));
+      const first = runsWidth([t.runs![0]], t.fontPx, labelSetOf(opts));
+      // (a text is placed by its first letter's middle: its own middle is where the canvas puts the mark)
+      expect(t.x + w / 2 - first / 2).toBeCloseTo(p.x, 9);
+      expect(t.y).toBeCloseTo(p.y, 9);
+      expect(t.fontPx).toBeCloseTo(size, 12);
+      expect(t.runs).toEqual([{ text: p.text, italic: true }]);
+    }
+  });
+
+  it("writes them as the canvas does - in parentheses where the style says so - and has none where none are shown", () => {
+    const style = { ...ACS_1996, stereoDescriptors: "parentheses" as const };
+    const { layout } = drawingLayout(model, { ...aromatic, shownMarks: marks }, style);
+    const s = layout.texts.find((t) => t.text === "(S)");
+    expect(s?.runs).toEqual([{ text: "(" }, { text: "S", italic: true }, { text: ")" }]);
+    expect(drawingLayout(model, aromatic, ACS_1996).layout.texts.some((t) => t.text === "S" || t.text === "E")).toBe(false);
+    // (marks of atoms the picture does not hold: none of its)
+    const elsewhere = { valence: new Map(), centres: new Map([[99, "R" as const]]), doubleBonds: new Map() };
+    expect(drawingLayout(model, { ...aromatic, shownMarks: elsewhere }, ACS_1996).layout.texts.some((t) => t.text === "R")).toBe(false);
+  });
+
+  it("keeps one put by hand where it was put, in ems of the labels from its atom", () => {
+    const moved: Model = { ...model, atoms: model.atoms.map((a) => (a.id === 4 ? { ...a, stereoAt: { x: 0, y: 2 } } : a)) };
+    const { layout, opts } = drawingLayout(moved, { ...aromatic, shownMarks: marks }, bare);
+    const t = layout.texts.find((i) => i.text === "S")!;
+    const w = runsWidth(t.runs!, t.fontPx, labelSetOf(opts));
+    const first = runsWidth([t.runs![0]], t.fontPx, labelSetOf(opts));
+    const c = moved.atoms.find((a) => a.id === 4)!;
+    expect(t.x + w / 2 - first / 2).toBeCloseTo(c.x, 9);
+    expect(t.y).toBeCloseTo(c.y + 2 * opts.fontPx, 9);
   });
 });

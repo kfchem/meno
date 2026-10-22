@@ -54,11 +54,18 @@ C          -0.00000000000000    0.00000000000000    2.09682010367354
 H          -0.00000000000000    0.00000000000000    3.14662249230588
 """
 
-# (after "Calculation of Vibrational Frequencies": the THERMODYNAMIC summary and the table under it)
+# (after "Calculation of Vibrational Frequencies": the setup printed before the thermochemistry, the table - a line of
+# xtb's other stream fallen between its rows, as a log of both streams has it - the THERMODYNAMIC summary, and the
+# summary the run ends with: its total energy, and its total enthalpy, the total energy and H(T) of the row used)
 THERMO = """
+          |             Thermodynamic Functions             |
+          :  scaling factor                  1.0000000      :
+          :  rotor cutoff                   50.0000000 cm⁻¹ :
+          :  imag. cutoff                  -20.0000000 cm⁻¹ :
     T/K    H(0)-H(T)+PV         H(T)/Eh          T*S/Eh         G(T)/Eh
 ------------------------------------------------------------------------
  150.00    0.250495E-02    0.546739E-01    0.135034E-01    0.411705E-01
+Note: The following floating-point exceptions are signalling: IEEE_UNDERFLOW_FLAG
  298.15    0.617016E-02    0.583013E-01    0.316937E-01    0.266076E-01 (used)
 ------------------------------------------------------------------------
         :::::::::::::::::::::::::::::::::::::::::::::::::::::
@@ -70,6 +77,22 @@ THERMO = """
         :: zero point energy           0.052131167146 Eh   ::
         :: G(RRHO) contrib.           -0.025523531193 Eh   ::
         :::::::::::::::::::::::::::::::::::::::::::::::::::::
+         | TOTAL ENERGY               -8.640016786693 Eh   |
+         | TOTAL ENTHALPY             -8.581715486693 Eh   |
+"""
+
+# (after "Implicit Solvation" and the setup xtb prints: a run asked for ALPB in water - the model, its solvent and the
+# reference state, in its default - and one asked for none, its program call holding no solvation option)
+SOLVATED = """
+          program call               : xtb input.xyz --hess --gfn 2 --alpb thf -P 4 -I xcontrol
+      * Solvation model:               ALPB
+        Solvent                        thf
+        Parameter file                 internal GFN2-xTB/ALPB
+        Dielectric constant                7.4257E+00
+        Reference state                gsolv [1 M gas/solution]
+"""
+GAS = """
+          program call               : xtb input.xyz --hess --gfn 2 -P 4 -I xcontrol
 """
 
 
@@ -140,6 +163,22 @@ class Prepare(unittest.TestCase):
         for step in ("optimise", "energy"):
             self.assertEqual(len(ask("prepare", step=step, entries=[labelled], options=defaults(step))["jobs"]), 1)
 
+    def test_refuses_an_entry_alone_and_prepares_the_others(self):
+        # (the second labelled: its frequencies refused, saying why, as a refusal of the step is said; the first and third run)
+        labelled = {**ETHYNE, "atoms": ETHYNE["atoms"][:3] + [{**ETHYNE["atoms"][3], "isotope": 2, "mass": 2.01410177812}]}
+        half = {**ETHYNE, "charge": 0.5}
+        said = ask("prepare", step="frequencies", entries=[ETHYNE, labelled, ETHYNE, half], options=defaults("frequencies"))
+        self.assertEqual([j["entries"] for j in said["jobs"]], [[0], [2]])
+        self.assertEqual([(r["entry"], r["kind"]) for r in said["refused"]], [(1, "refused"), (3, "refused")])
+        self.assertTrue(said["refused"][0]["why"].startswith("xTB: xTB's frequencies here take no isotope's mass: 2H"))
+        self.assertEqual(said["refused"][1]["why"], "xTB: The charge is not a whole number.")
+        # (none refused: none said)
+        self.assertNotIn("refused", ask("prepare", step="frequencies", entries=[ETHYNE], options=defaults("frequencies")))
+        # (what is asked of them all, not known: the step refused as a whole, whatever the entries)
+        whole = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "optimise", "entries": [ETHYNE, labelled], "options": {"level": "perfect"}}))
+        self.assertFalse(whole["ok"])
+        self.assertIn("no level is called 'perfect'", whole["error"])
+
     def test_refuses_what_it_does_not_know(self):
         for options in ({"method": "dft"}, {"solvent": "lava"}, {"level": "perfect"}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "optimise", "entries": [ETHYNE], "options": options}))
@@ -196,9 +235,10 @@ class Collect(unittest.TestCase):
             "reduced masses": [1, 1, 1, 1, 1, 1, 2.0, 3.0],
             "IR intensities / km/mol": [0, 0, 0, 0, 0, 0, 1.5, 2.5],
         })
-        out = ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "thf"}, files={"xtbout.json": dump}, log=THERMO, ended="done")["outputs"][0]
+        out = ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "thf"}, files={"xtbout.json": dump}, log=SOLVATED + THERMO, ended="done")["outputs"][0]
         self.assertEqual(out["energies"], [-8.64])
-        self.assertEqual(out["method"], "GFN2-xTB (ALPB, thf)")
+        self.assertEqual(out["method"], "GFN2-xTB")
+        self.assertEqual(out["solvation"], "ALPB(thf), reference state gsolv [1 M gas/solution]")
         vibrations = next(r for r in out["results"] if r["id"] == "vibrations")
         # (the translations and rotations left out; an imaginary one kept, negative)
         self.assertEqual([row["cells"] for row in vibrations["rows"]], [[1, -120.5, 2.0, 1.5], [2, 829.07, 3.0, 2.5]])
@@ -210,6 +250,93 @@ class Collect(unittest.TestCase):
         self.assertAlmostEqual(thermo["thermo.temperature"], 298.15)
         self.assertAlmostEqual(thermo["thermo.h-correction"], 0.0583013)
         self.assertAlmostEqual(thermo["thermo.ts"], 0.0316937)
+        # (the total enthalpy: the total energy and H(T) of the row used)
+        self.assertAlmostEqual(thermo["thermo.enthalpy"], -8.640016786693 + 0.0583013, places=6)
+        # (and how they were worked out, as its setup said)
+        self.assertEqual(thermo["thermo.treatment"], "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1")
+
+    def test_warns_of_frequencies_at_a_geometry_not_fully_optimised_in_xtb_s_words(self):
+        # (the block xtb 6.7.1 ends a --hess run with on a geometry not optimised: a warning, never a failure)
+        warned = "\n########################################################################\n[WARNING] Runtime exception occurred\n-1- hessian_numhess: Hessian on incompletely optimized geometry!\n########################################################################\n"
+        dump = json.dumps({"total energy": -5.0, "vibrational frequencies / rcm": [0.0] * 6 + [1500.0, 3600.0], "reduced masses": [1] * 8, "IR intensities / km/mol": [0] * 8})
+        out = ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + THERMO + warned, ended="done")["outputs"][0]
+        self.assertEqual(out["warnings"], [{"kind": "hessian-not-stationary", "text": "hessian_numhess: Hessian on incompletely optimized geometry!"}])
+        self.assertEqual(out["energies"], [-5.0])
+        # (another warning: its words, of no kind core knows; none, none said)
+        other = warned.replace("hessian_numhess: Hessian on incompletely optimized geometry!", "something else")
+        self.assertEqual(ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + THERMO + other, ended="done")["outputs"][0]["warnings"], [{"kind": "other", "text": "something else"}])
+        self.assertNotIn("warnings", ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + THERMO, ended="done")["outputs"][0])
+        # (an error's block is not a warning)
+        self.assertEqual(worker.warnings_of("[ERROR] Program stopped due to fatal error\n-1- no\n"), [])
+
+    def test_the_imaginary_frequencies_xtb_judged_significant(self):
+        # (a methanol saddle point from an eclipsed start: xtb lists -382.63 and says it found one significant)
+        frequencies = [-0.00004, -0.00003, -0.00002, -0.00001, 0.0, 0.00001, -382.63, 1038.5, 1084.0, 1137.3, 1235.4, 1412.3, 1464.7, 1490.0, 2952.0, 2971.1, 3001.2, 3535.0]
+        dump = json.dumps({"total energy": -8.23, "vibrational frequencies / rcm": frequencies, "reduced masses": [1] * 18, "IR intensities / km/mol": [0] * 18})
+        found = "imag cut-off (cm-1) :    5.00\n found            1  significant imaginary frequency\n writing imag mode distorted coords to xtbhess.xyz\n"
+        methanol = {"atoms": [{"el": el, "x": float(i), "y": 0.0, "z": 0.0} for i, el in enumerate("COHHHH")], "charge": 0, "multiplicity": 1}
+        collect = lambda log, step="frequencies": ask("collect", step=step, entries=[methanol], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + log, ended="done")["outputs"][0]
+        self.assertEqual(collect(found)["imaginary"], [-382.63])
+        # (none said found: none, judged so - the six near zero, translations and rotations, are none of them)
+        self.assertEqual(collect("")["imaginary"], [])
+        # (not a frequency job: not judged)
+        self.assertNotIn("imaginary", collect(found, "energy"))
+
+    def test_the_solvation_as_xtb_said_it(self):
+        self.assertEqual(worker.solvation_of(SOLVATED), "ALPB(thf), reference state gsolv [1 M gas/solution]")
+        self.assertEqual(worker.solvation_of(GAS), "none")
+        # (another reference state, as xtb prints one: its free energy is another)
+        other = SOLVATED.replace("gsolv [1 M gas/solution]", "gsolv [1 bar gas/1 M solution]")
+        self.assertEqual(worker.solvation_of(other), "ALPB(thf), reference state gsolv [1 bar gas/1 M solution]")
+        # (nothing said, nothing taken: never the options)
+        self.assertIsNone(worker.solvation_of(""))
+        self.assertIsNone(worker.solvation_of(THERMO))
+        # (a program call asking for a model that printed none: not said)
+        self.assertIsNone(worker.solvation_of(GAS.replace("-P 4", "--alpb thf -P 4")))
+        out = ask("collect", step="energy", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": json.dumps({"total energy": -5.0})}, log=GAS, ended="done")["outputs"][0]
+        self.assertEqual(out["solvation"], "none")
+        unsaid = ask("collect", step="energy", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": json.dumps({"total energy": -5.0})}, log="", ended="done")["outputs"][0]
+        self.assertNotIn("solvation", unsaid)
+
+    def test_a_run_whose_solvation_is_not_as_asked_is_refused(self):
+        dump = {"xtbout.json": json.dumps({"total energy": -5.0})}
+        for asked, log in (("none", SOLVATED), ("water", SOLVATED), ("thf", GAS)):
+            said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "energy", "entries": [ETHYNE], "options": {"solvent": asked}, "files": dump, "log": log, "ended": "done"}))
+            self.assertFalse(said["ok"], asked)
+            self.assertIn("not as asked", said["error"])
+
+    def test_the_treatment_is_the_one_printed_gfn_ff_s_frequencies_scaled(self):
+        gfnff = THERMO.replace("scaling factor                  1.0000000", "scaling factor                  1.0300000")
+        self.assertEqual(worker.treatment_of(gfnff), "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1.03")
+        self.assertIsNone(worker.treatment_of(""))
+
+    def test_of_several_temperatures_the_one_used(self):
+        # (xtb works out each temperature asked and uses the last: marked "(used)", the summary's free energy of it)
+        table = """
+    T/K    H(0)-H(T)+PV         H(T)/Eh          T*S/Eh         G(T)/Eh
+------------------------------------------------------------------------
+ 250.00    0.316789E-02    0.232683E-01    0.173839E-01    0.588431E-02
+ 298.15    0.378099E-02    0.238814E-01    0.214005E-01    0.248084E-02
+ 350.00    0.444615E-02    0.245465E-01    0.258418E-01   -0.129528E-02 (used)
+------------------------------------------------------------------------
+"""
+        thermo = {r["id"]: r["value"] for r in worker.thermo_of(table)}
+        self.assertEqual(thermo["thermo.temperature"], 350.0)
+        self.assertAlmostEqual(thermo["thermo.h-correction"], 0.0245465)
+        self.assertAlmostEqual(thermo["thermo.ts"], 0.0258418)
+
+    def test_the_energy_from_the_summary_where_there_is_no_dump(self):
+        out = ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={}, log=GAS + THERMO, ended="done")["outputs"][0]
+        self.assertEqual(out["energies"], [-8.640016786693])
+
+    def test_an_optimisation_of_another_molecule_is_refused(self):
+        # (an atom's element changed in what xtb wrote back: not this entry's)
+        for name in ("xtbopt.log", "xtbopt.xyz"):
+            files = {"xtbopt.log": PATH, "xtbopt.xyz": PATH.split("4\n SCF")[0], ".xtboptok": ""}
+            files[name] = files[name].replace("C  0.00 0.00 2.00", "N  0.00 0.00 2.00", 1)
+            said = worker.answer(json.dumps({"id": 1, "op": "collect", "step": "optimise", "entries": [ETHYNE], "options": {}, "files": files, "log": "", "ended": "done"}))
+            self.assertFalse(said["ok"], name)
+            self.assertIn("another molecule", said["error"])
 
     def test_the_dipole_is_the_one_printed_for_the_geometry_it_ended_on(self):
         # (after an optimisation the dump's dipole is the starting geometry's; the printout's, the last geometry's)

@@ -43,8 +43,26 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
   dipole depends on where it is taken about), from the geometry it is of
   and its atoms' masses - an isotope's own, the rest the standard atomic
   weights; the
-  thermochemistry from the THERMODYNAMIC summary and the H(T), T*S and
-  G(T) table it prints.
+  thermochemistry from the THERMODYNAMIC summary, the closing summary's
+  TOTAL ENTHALPY, and the H(T), T*S and G(T) table it prints; how it was
+  worked out - the rotor cutoff, the cutoff below which an imaginary
+  frequency is taken as real, and the frequencies' scaling factor - from
+  the setup it prints before them (GFN-FF's factor is not 1); no pressure,
+  as xtb prints none;
+- the solvation as xtb printed it in its setup: the model, the solvent
+  and the reference state, whose free energy differs by state ("Implicit
+  Solvation": gsolv, 1 L of gas and 1 L of solution, unless another is
+  asked). None where its program call asked for none and it printed no
+  model: so said, not taken from the options. Where that is not what was
+  asked, the job is refused;
+- the imaginary frequencies of a frequency job as xtb itself judged them:
+  as many as it says it found ("found 1 significant imaginary
+  frequency", below its cutoff), the most negative of those its dump
+  lists; none where it says it found none - it says nothing then;
+- what xtb warned of as it ran on - the numbered messages of a block it
+  heads "[WARNING]" - each in its own words: a Hessian worked out at a
+  geometry not fully optimised ("Hessian on incompletely optimized
+  geometry!") named as such. A warning never fails its entry.
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -106,6 +124,12 @@ MASSES = {
 }
 # what a charged molecule's dipole is called: said, as it is taken about a point of Meno's choosing
 ABOUT_CENTRE = "Dipole moment about the centre of mass"
+# the solvation as xtb prints it in its setup (xtb 6.7.1): the model, then its solvent and reference state a few lines on
+SOLVATION_MODEL = re.compile(r"^\s*\*\s*Solvation model:\s*(\S.*?)\s*$", re.M)
+SOLVENT_LINE = re.compile(r"^\s*Solvent\s+(\S.*?)\s*$", re.M)
+REFERENCE_LINE = re.compile(r"^\s*Reference state\s+(\S.*?)\s*$", re.M)
+# the options that ask xtb for a solvation model ("Commandline Usage")
+SOLVATION_FLAGS = {"--alpb", "--gbsa", "-g", "--cosmo", "--cpcmx"}
 # a frequency smaller than this, either way, is a translation or a rotation projected out (cm-1)
 FREQUENCY_LEAST = 1.0
 FLOAT = r"[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eEdD][-+]?\d+)?"
@@ -181,25 +205,30 @@ def refuse_isotopes(entry):
             raise Refused(f"xTB's frequencies here take no isotope's mass: {iso}{el} would be given as {el} of natural mass")
 
 
-def args_for(step, options, entry, cores):
+def asked_of_all(step, options):
+    """What a step's options ask of every entry, checked: a method, a solvent and a level it knows."""
     method = METHODS.get(options.get("method", "gfn2"))
     if method is None:
         raise Refused(f"no method is called {options.get('method')!r}")
     solvent = options.get("solvent", "none")
     if solvent != "none" and solvent not in SOLVENTS:
         raise Refused(f"no solvent is called {solvent!r}")
+    if step == "optimise" and options.get("level", "normal") not in LEVELS:
+        raise Refused(f"no level is called {options.get('level')!r}")
+    return method, solvent
+
+
+def args_for(step, options, entry, cores):
+    method, solvent = asked_of_all(step, options)
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity")
     if multiplicity < 1:
         raise Refused("the multiplicity is less than one")
     args = [INPUT]
     if step == "optimise":
-        level = options.get("level", "normal")
-        if level not in LEVELS:
-            raise Refused(f"no level is called {level!r}")
         # (a lone atom: its energy where it is)
         if not lone(entry):
-            args += ["--opt", level]
+            args += ["--opt", options.get("level", "normal")]
     elif step == "frequencies":
         refuse_isotopes(entry)
         args += ["--hess"]
@@ -213,30 +242,48 @@ def args_for(step, options, entry, cores):
 
 
 def op_prepare(m):
+    """A job for each entry. One this plugin will not run - an isotope's
+    frequencies, a charge that is no whole number - is refused alone, saying
+    why (`refused`), and the others are run; where every one is, or what is
+    asked of them all cannot be done - a method, a solvent or a level it does
+    not know - the step is refused as a whole."""
     step = m.get("step")
     if step not in STEPS:
         raise Refused(f"this plugin does no {step!r}")
     options = m.get("options") or {}
+    entries = m.get("entries") or []
+    if not entries:
+        raise Refused("nothing came in")
+    asked_of_all(step, options)
     jobs = []
-    for i, entry in enumerate(m.get("entries") or []):
+    refused = []
+    first = None
+    for i, entry in enumerate(entries):
+        try:
+            args = args_for(step, options, entry, m.get("cores"))
+        except Refused as e:
+            # (said as a refusal of the whole step is: "xTB: ...")
+            refused.append({"entry": i, "why": f"xTB: {e}.", "kind": "refused"})
+            first = first or e
+            continue
         reads = [DUMP] + ([PATH, LAST, CONVERGED, NOT_CONVERGED] if step == "optimise" and not lone(entry) else [])
         jobs.append({
             "entries": [i],
             "program": PROGRAM,
-            "args": args_for(step, options, entry, m.get("cores")),
+            "args": args,
             "files": [{"name": INPUT, "text": xyz_of(entry)}, {"name": CONTROL, "text": CONTROL_TEXT}],
             "reads": reads,
         })
     if not jobs:
-        raise Refused("nothing came in")
-    return {"jobs": jobs}
+        raise first
+    return {"jobs": jobs, **({"refused": refused} if refused else {})}
 
 
 # --- what a job wrote ---------------------------------------------------------
 
 
 def frames_of(text, count):
-    """Xmol frames: each one's coordinates, as x, y, z of every atom, and its comment line."""
+    """Xmol frames: each one's elements, its coordinates, as x, y, z of every atom, and its comment line."""
     lines = text.splitlines()
     frames = []
     i = 0
@@ -248,17 +295,25 @@ def frames_of(text, count):
         if not head.isdigit() or int(head) != count or i + 2 + count > len(lines):
             break
         comment = lines[i + 1]
+        elements = []
         xyz = []
         for line in lines[i + 2: i + 2 + count]:
             parts = line.split()
             if len(parts) < 4:
                 return frames
+            elements.append(parts[0].capitalize())
             xyz += [number(p) for p in parts[1:4]]
         if len(xyz) != 3 * count:
             break
-        frames.append((xyz, comment))
+        frames.append((elements, xyz, comment))
         i += 2 + count
     return frames
+
+
+def total_in(log):
+    """The total energy the summary xtb ends with says, where there is no dump to read it from: its last."""
+    said = re.findall(r"\|\s*TOTAL ENERGY\s+(" + FLOAT + r")\s+Eh", log)
+    return number(said[-1]) if said else None
 
 
 def energy_in(comment):
@@ -416,6 +471,10 @@ def thermo_of(log):
     contrib = summary("G(RRHO) contrib.")
     if contrib is not None:
         add("thermo.g-correction", "Correction to Gibbs free energy", contrib, quantity="energy")
+    # (the closing summary's: the total energy and H(T))
+    enthalpy = re.search(r"\|\s*TOTAL ENTHALPY\s+(" + FLOAT + r")\s+Eh", log)
+    if enthalpy:
+        add("thermo.enthalpy", "Enthalpy", number(enthalpy.group(1)), quantity="energy")
     # the table under its last heading: the row of the temperature used - marked so, or the last
     at = log.rfind("H(0)-H(T)+PV")
     row = re.compile(r"^\s*(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s+(" + FLOAT + r")\s*(\(used\))?\s*$")
@@ -425,17 +484,50 @@ def thermo_of(log):
             if rows:
                 break
             continue
+        # (what xtb wrote to its other stream may fall between the rows: passed over)
         m = row.match(line)
-        if not m:
-            break
-        rows.append(m.groups())
+        if m:
+            rows.append(m.groups())
     if rows:
         used = [r for r in rows if r[5]] or rows[-1:]
         t, _, h, ts, _, _ = used[-1]
         add("thermo.h-correction", "Correction to enthalpy", number(h), quantity="energy")
         add("thermo.ts", "T·S", number(ts), quantity="energy")
         add("thermo.temperature", "Temperature", number(t), unit="K", digits=2)
+    treatment = treatment_of(log)
+    if treatment and out:
+        add("thermo.treatment", "Treatment", treatment)
     return out
+
+
+def solvation_of(log):
+    """The solvation a run used, as xtb printed it in its setup: "ALPB(water), reference state gsolv [1 M gas/solution]"; "none" where its program call asked for none and it printed no model; otherwise None - not said."""
+    m = SOLVATION_MODEL.search(log)
+    if m:
+        block = "\n".join(log[m.end():].splitlines()[1:12])
+        solvent = SOLVENT_LINE.search(block)
+        reference = REFERENCE_LINE.search(block)
+        if not solvent:
+            return None
+        return f"{m.group(1)}({solvent.group(1)})" + (f", reference state {reference.group(1)}" if reference else "")
+    call = re.search(r"program call\s*:\s*(.*)$", log, re.M)
+    if call and not SOLVATION_FLAGS.intersection(call.group(1).split()):
+        return "none"
+    return None
+
+
+def treatment_of(log):
+    """How the thermochemistry was worked out, as the setup printed before it says: its rotor cutoff, its imaginary cutoff and its scaling factor; None where it printed no setup."""
+    at = log.rfind("Thermodynamic Functions")
+    if at < 0:
+        return None
+    said = {}
+    for key in ("scaling factor", "rotor cutoff", "imag. cutoff"):
+        m = re.search(r":\s*" + re.escape(key) + r"\s+(" + FLOAT + r")", log[at:])
+        if not m:
+            return None
+        said[key] = f"{number(m.group(1)):g}"
+    return f"rotor cutoff {said['rotor cutoff']} cm-1, imag. cutoff {said['imag. cutoff']} cm-1, scaling factor {said['scaling factor']}"
 
 
 def why_of(log):
@@ -448,13 +540,35 @@ def why_of(log):
     return said[0] if len(said) == 1 else f"{said[0]}: {said[-1]}"
 
 
+def imaginary_of(log, frequencies):
+    """The imaginary frequencies xtb judged significant, in cm-1, negative: as many as it says it found, the most negative of `frequencies`."""
+    found = re.findall(r"found\s+(\d+)\s+significant imaginary frequenc", log)
+    n = int(found[-1]) if found else 0
+    return sorted(f for f in frequencies if isinstance(f, (int, float)) and math.isfinite(f) and f < 0)[:n]
+
+
+# (xtb's own words, as it warns of frequencies at a geometry whose gradient is not near zero)
+HESSIAN_NOT_STATIONARY = "Hessian on incompletely optimized geometry"
+
+
+def warnings_of(log):
+    """What xtb warned of as it ran on: the numbered messages of each block it heads "[WARNING]", each once."""
+    out = []
+    for block in re.finditer(r"^\[WARNING\][^\n]*\n((?:[ \t]*-\d+-[^\n]*\n?)+)", log, re.M):
+        for m in re.finditer(r"^\s*-\d+-\s+(.*\S)\s*$", block.group(1), re.M):
+            text = m.group(1)
+            if all(w["text"] != text for w in out):
+                out.append({"kind": "hessian-not-stationary" if HESSIAN_NOT_STATIONARY in text else "other", "text": text})
+    return out
+
+
 def output_of(step, entry, options, files, log):
     elements = elements_of(entry)
     n = len(elements)
     dump = dump_of(files)
     start = [float(entry["atoms"][i].get(k, 0.0)) for i in range(n) for k in ("x", "y", "z")]
     total = dump.get("total energy")
-    total = float(total) if isinstance(total, (int, float)) and math.isfinite(total) else None
+    total = float(total) if isinstance(total, (int, float)) and math.isfinite(total) else total_in(log)
     frames = [start]
     energies = [total] if total is not None else None
     optimised = None
@@ -462,12 +576,14 @@ def output_of(step, entry, options, files, log):
         path = frames_of(files.get(PATH) or "", n)
         if not path:
             raise Refused("xtb wrote no optimisation")
-        frames = [xyz for xyz, _ in path]
-        energies = [energy_in(c) for _, c in path]
         last = frames_of(files.get(LAST) or "", n)
-        if last and last[0][0] != frames[-1]:
-            frames.append(last[0][0])
-            energies.append(energy_in(last[0][1]))
+        if any(els != elements for els, _, _ in path + last[:1]):
+            raise Refused("xtb wrote back another molecule")
+        frames = [xyz for _, xyz, _ in path]
+        energies = [energy_in(c) for _, _, c in path]
+        if last and last[0][1] != frames[-1]:
+            frames.append(last[0][1])
+            energies.append(energy_in(last[0][2]))
         if any(e is None for e in energies):
             energies = None
         optimised = True if CONVERGED in files else False if NOT_CONVERGED in files else None
@@ -483,11 +599,18 @@ def output_of(step, entry, options, files, log):
     if step == "frequencies":
         results += thermo_of(log)
     solvent = options.get("solvent", "none")
+    solvation = solvation_of(log)
+    as_asked = solvation == "none" if solvent == "none" else solvation is not None and f"({solvent})" in solvation
+    if solvation is not None and not as_asked:
+        raise Refused(f"xtb ran with solvation {solvation}, not as asked ({solvent})")
+    warnings = warnings_of(log)
+    imaginary = imaginary_of(log, dump.get("vibrational frequencies / rcm") or []) if step == "frequencies" else None
     return {
         "schema": SCHEMA,
         "program": "xtb",
         "version": version,
-        "method": method + (f" (ALPB, {solvent})" if solvent != "none" else "") if method else None,
+        "method": method,
+        **({"solvation": solvation} if solvation is not None else {}),
         "charge": charge,
         "multiplicity": whole(entry.get("multiplicity", 1), "The multiplicity"),
         "atoms": elements,
@@ -495,6 +618,8 @@ def output_of(step, entry, options, files, log):
         "energies": energies,
         "optimised": optimised,
         "results": results,
+        **({"warnings": warnings} if warnings else {}),
+        **({"imaginary": imaginary} if imaginary is not None else {}),
     }
 
 

@@ -42,7 +42,7 @@ import os
 import re
 import sys
 
-VERSION = "0.5.0"
+VERSION = "0.5.2"
 PROGRAM = "blender"
 SCRIPT = "render.py"
 LOOKS_SCRIPT = "looks.py"
@@ -203,13 +203,40 @@ def op_prepare(m):
     return {"jobs": jobs}
 
 
+# (Blender's own last words, which say nothing of why: that a script failed, and the memory it did not free as it quit)
+BLENDER_OWN = re.compile(r"^Error: (script failed|Not freed memory blocks)", re.I)
+# (an exception Python raised, as its traceback ends: its kind, then what it says - "TypeError: ...")
+RAISED = re.compile(r"^[A-Za-z_][\w.]*(Error|Exception|Exit)\b: ")
+
+
+# (where what was raised has been said in full: Blender's own words after it - its last, its version as it quits, "Blender
+# quit" - or a line of its progress as it renders - "Fra:", "Saved:", "Time:", a line it stamps with the time, info and
+# warnings - or of render.py's own: "progress 3/100", "Rendering on ...", "Making the film", "Rendered ...")
+SAID_AFTER = re.compile(
+    r"^(Error: (script failed|Not freed memory blocks)|Blender |Traceback |progress \d+/\d+$|Fra:|Saved:|Time:|Info:|Warning:"
+    r"|\d+:\d+(\.\d+)?\s|Rendering |Making the film|Rendered )",
+    re.I,
+)
+
+
 def why_of(log):
-    """Why Blender stopped, as it says: its last line that says error, else its last."""
+    """Why Blender stopped, as it says: the last that render.py said as it stopped ("render.py: ...") or that Python
+    raised - all of it, a message of several lines as one - else its last line that says error, else its last; never
+    Blender's own last words, which say only that a script failed or what memory it did not free."""
     lines = [line.strip() for line in log.splitlines() if line.strip()]
-    for line in reversed(lines):
-        if re.search(r"\berror\b|render\.py:", line, re.I):
+    told = [line for line in lines if not BLENDER_OWN.match(line)]
+    for k in range(len(lines) - 1, -1, -1):
+        if "render.py:" in lines[k] or RAISED.match(lines[k]):
+            whole = [lines[k]]
+            for more in lines[k + 1:]:
+                if SAID_AFTER.match(more):
+                    break
+                whole.append(more)
+            return " ".join(whole)
+    for line in reversed(told):
+        if re.search(r"\berror\b", line, re.I):
             return line
-    return lines[-1] if lines else "Blender said nothing"
+    return told[-1] if told else (lines[-1] if lines else "Blender said nothing")
 
 
 def op_collect(m):

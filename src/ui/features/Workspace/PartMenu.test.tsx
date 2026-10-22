@@ -76,6 +76,14 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "bond", id: 2 }), { onEditLabel: none }).listed).not.toContain("Edit label");
   });
 
+  it("lists Edit label on the selection's menu where an atom selected alone is right-clicked", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { onEditLabel: none }).listed).toContain("Edit label");
+    // (none given - the selection more than that atom - none listed)
+    expect(menu(here).listed).not.toContain("Edit label");
+    expect(menu(target({ selection: "here", drawing: true }), { onEditLabel: none }).listed).not.toContain("Edit label");
+  });
+
   it("puts what is done most to an atom first, as icons, Delete at the end, and lists the rest", () => {
     expect(menu(target({ kind: "atom", id: 1 }))).toMatchObject({
       icons: ["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Delete atom"],
@@ -249,5 +257,23 @@ describe("a menu's rules", () => {
     const first = listed3.indexOf('role="menuitem"');
     expect(first).toBeGreaterThan(-1);
     expect(listed3.slice(0, first)).not.toContain('role="separator"');
+  });
+});
+
+describe("a set's menu", () => {
+  it("opens a large result set as a table in the column, first - and offers it for no other set", () => {
+    const set = target({ kind: "set", id: 4 });
+    const large = menu(set, { onOpenAsTable: none, keepInFile: { kept: true, set: none } }).listed;
+    expect(large[0]).toBe("Open as a table");
+    expect(menu(set, { keepInFile: { kept: true, set: none } }).listed).not.toContain("Open as a table");
+  });
+
+  it("says what goes with a set that holds its molecules itself, before it is deleted", () => {
+    const set = target({ kind: "set", id: 7 });
+    // (in words, listed - not an icon whose name shows only on hover)
+    const own = menu(set, { setHoldsOwn: "118 molecules" });
+    expect([own.icons, own.listed[own.listed.length - 1]]).toEqual([[], "Delete set and the 118 molecules it holds"]);
+    const plain = menu(set);
+    expect([plain.icons, plain.listed.some((n) => n.includes("it holds"))]).toEqual([["Delete set"], false]);
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcLine, calcOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
+import { calcLine, calcOf, imaginaryWords, levelOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
 import { combine, whoReads, checked } from "./read";
 import { READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { kindById, registered } from "../io/kinds";
@@ -53,6 +53,16 @@ describe("what a reader hands back", () => {
     expect(c).toEqual({ readers: ["cclib 1.9rc1"], program: "xTB" });
   });
 
+  it("keeps the imaginary frequencies the program judged it has, in plain words - and what it warned of - read back from a file as they were", () => {
+    const saddle = calcOf({ ...water, imaginary: [-382.63], warnings: [{ kind: "hessian-not-stationary", text: "Hessian on incompletely optimized geometry!" }] }, ["xtb 6.7.1"]);
+    expect(saddle.imaginary).toEqual([-382.63]);
+    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm-1");
+    expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm-1");
+    expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
+    // (judged none, or not numbers below 0: no mark)
+    for (const imaginary of [[], [382.63], [Number.NaN], null]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
+  });
+
   it("reads back from a file as it was kept, and not where it does not read", () => {
     const kept = calcOf(water, ["cclib 1.9rc1"]);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)).toEqual(kept);
@@ -97,6 +107,18 @@ describe("what a reader hands back", () => {
     expect(calcLine(calcOf(water, ["cclib"]))).toBe("ORCA 6.0.1 · B3LYP/def2-SVP · charge 0, singlet");
     expect(calcLine({ readers: ["cclib"], program: "xTB", method: "GFN2-xTB", charge: -1, multiplicity: 2 })).toBe("xTB · GFN2-xTB · charge \u22121, doublet");
     expect(calcLine({ readers: ["cclib"], charge: 2 })).toBe("charge +2");
+  });
+
+  it("says the solvation the output says, after the method, and gas phase where it says none", () => {
+    const solvated = calcOf({ ...water, program: "xtb", version: "6.7.1", method: "GFN2-xTB", basis: null, solvation: "ALPB(water), reference state gsolv [1 M gas/solution]" }, ["xtb 0.1.0"]);
+    expect(solvated.solvation).toBe("ALPB(water), reference state gsolv [1 M gas/solution]");
+    expect(calcLine(solvated)).toBe("xtb 6.7.1 · GFN2-xTB · ALPB(water), reference state gsolv [1 M gas/solution] · charge 0, singlet");
+    expect(levelOf({ method: "GFN2-xTB", solvation: "none" })).toBe("GFN2-xTB · gas phase");
+    // (unsaid: nothing said of it)
+    expect(levelOf({ method: "B3LYP", basis: "def2-SVP" })).toBe("B3LYP/def2-SVP");
+    // (kept in the file, and read back)
+    expect(readCalc(JSON.parse(JSON.stringify(solvated)), 3, 2)?.solvation).toBe(solvated.solvation);
+    expect(calcOf({ ...water, solvation: "  " }, ["cclib"]).solvation).toBeUndefined();
     expect(multiplicityName(7)).toBe("multiplicity 7");
   });
 });

@@ -58,6 +58,20 @@ describe("a chain's ribbon", () => {
     expect(Math.max(...mesh.indices)).toBeLessThan(mesh.positions.length / 3);
     expect(new Set(mesh.residues)).toEqual(new Set([0, 1, 2, 3, 4, 5]));
   });
+
+  it("faces each triangle the way its corners' normals do - anticlockwise seen from outside, as a renderer takes its front", () => {
+    const mesh = ribbonMesh(places, [run], bp, "chain", 1, 1);
+    const at = (i: number) => new THREE.Vector3().fromArray(mesh.positions, 3 * i);
+    let against = 0;
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const [a, b, c] = [mesh.indices[t], mesh.indices[t + 1], mesh.indices[t + 2]];
+      const face = at(b).sub(at(a)).cross(at(c).sub(at(a)));
+      if (face.lengthSq() < 1e-16) continue;
+      const normal = new THREE.Vector3().fromArray(mesh.normals, 3 * a).add(new THREE.Vector3().fromArray(mesh.normals, 3 * b)).add(new THREE.Vector3().fromArray(mesh.normals, 3 * c));
+      if (face.dot(normal) < 0) against++;
+    }
+    expect(against).toBe(0);
+  });
 });
 
 describe("a ribbon under the pointer", () => {

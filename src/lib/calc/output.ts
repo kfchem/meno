@@ -6,6 +6,7 @@
  * one's energy, what the calculation was - and everything else as results,
  * in the one general form (results.ts).
  */
+import { warningsOf, type Warning } from "./warnings";
 import { readResults, type Result } from "./results";
 import { readerIdOfLine } from "./catalog";
 import type { StructureRead } from "../io/structures";
@@ -21,6 +22,23 @@ export type ReaderOutput = {
   version?: string | null;
   method?: string | null;
   basis?: string | null;
+  /**
+   * The solvation it was worked out in, as the output says it: the model,
+   * the solvent and anything else that changes its energies, in the
+   * program's own words - "ALPB(water), reference state gsolv [1 M
+   * gas/solution]"; "none" where the output says it used none; unsaid where
+   * it does not say (docs/PLUGINS.md, *The contract*).
+   */
+  solvation?: string | null;
+  /** What it warns of, each with its kind (./warnings `WARNING_KINDS`; any other, `other`) and the program's own words. */
+  warnings?: { kind?: string; text: string }[];
+  /**
+   * Its imaginary frequencies at the geometry it ended on, in cm-1, each
+   * negative as programs list them - those the program itself judged
+   * imaginary (xtb's "significant" ones, Gaussian's NImag, the modes ORCA
+   * marks): none where it judged none; unsaid where it did not judge.
+   */
+  imaginary?: number[] | null;
   charge?: number | null;
   multiplicity?: number | null;
   /** Its atoms' elements, in the file's order. */
@@ -73,6 +91,8 @@ export type CalcInfo = {
   version?: string;
   method?: string;
   basis?: string;
+  /** The solvation, as the output says it (`ReaderOutput.solvation`): "none" where it says none, unset where it does not say. */
+  solvation?: string;
   charge?: number;
   multiplicity?: number;
   optimised?: boolean;
@@ -89,7 +109,21 @@ export type CalcInfo = {
   wavefunction?: CalcSource;
   /** The readers chosen to read it as well that could not, each by id, and why (lib/calc/read). */
   unread?: { from: string; why: string }[];
+  /** What the calculation warned of, each a kind core knows with the program's own words (./warnings): none moves its entry. */
+  warnings?: Warning[];
+  /** The imaginary frequencies the program judged its last geometry has, in cm-1, negative (`ReaderOutput.imaginary`): a mark that it is no minimum. */
+  imaginary?: number[];
 };
+
+/** A program's imaginary frequencies as Meno keeps them: each a number below 0, in cm-1; none, where they are not that. */
+export function imaginaryOf(v: unknown): number[] | undefined {
+  return Array.isArray(v) && v.length && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
+}
+
+/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 382.6i cm-1". */
+export function imaginaryWords(cm: readonly number[]): string {
+  return `${cm.length} imaginary frequenc${cm.length === 1 ? "y" : "ies"}, ${cm.map((f) => `${Math.abs(f).toFixed(1)}i`).join(", ")} cm-1`;
+}
 
 /**
  * An output as a molecule keeps it: its name, its kind (lib/io/kinds), its
@@ -124,13 +158,14 @@ export function framesOf(out: ReaderOutput): number {
  */
 export function calcOf(out: ReaderOutput, readers: readonly string[], source?: CalcSource, unread?: CalcInfo["unread"]): CalcInfo {
   const results = readResults(out.results, out.atoms.length, framesOf(out), readers[0] ? readerIdOfLine(readers[0]) : undefined);
-  const said = (k: "program" | "version" | "method" | "basis") => text(out[k]);
+  const said = (k: "program" | "version" | "method" | "basis" | "solvation") => text(out[k]);
   return {
     readers: [...readers],
     ...(said("program") ? { program: said("program") } : {}),
     ...(said("version") ? { version: said("version") } : {}),
     ...(said("method") ? { method: said("method") } : {}),
     ...(said("basis") ? { basis: said("basis") } : {}),
+    ...(said("solvation") ? { solvation: said("solvation") } : {}),
     ...(Number.isInteger(out.charge) ? { charge: out.charge! } : {}),
     ...(Number.isInteger(out.multiplicity) && out.multiplicity! > 0 ? { multiplicity: out.multiplicity! } : {}),
     ...(typeof out.optimised === "boolean" ? { optimised: out.optimised } : {}),
@@ -140,6 +175,8 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
       ? { source: { name: source.name, sha256: source.sha256, ...(source.kind ? { kind: source.kind } : {}), ...(source.path ? { path: source.path } : {}) } }
       : {}),
     ...(unread?.length ? { unread: unread.map((u) => ({ from: u.from, why: u.why })) } : {}),
+    ...(warningsOf(out.warnings).length ? { warnings: warningsOf(out.warnings) } : {}),
+    ...(imaginaryOf(out.imaginary) ? { imaginary: imaginaryOf(out.imaginary) } : {}),
   };
 }
 
@@ -175,10 +212,14 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
       version: text(c.version),
       method: text(c.method),
       basis: text(c.basis),
+      solvation: text(c.solvation),
       charge: isNum(c.charge) ? c.charge : null,
       multiplicity: isNum(c.multiplicity) ? c.multiplicity : null,
       optimised: typeof c.optimised === "boolean" ? c.optimised : null,
       job: jobOf(c.job),
+      // (what it warned of, and the imaginary frequencies it was marked with: kept with the workspace as they came)
+      ...(Array.isArray(c.warnings) ? { warnings: c.warnings as { kind?: string; text: string }[] } : {}),
+      ...(imaginaryOf(c.imaginary) ? { imaginary: imaginaryOf(c.imaginary) } : {}),
       atoms: new Array(atoms).fill(""),
       frames: new Array(frames).fill(new Array(3 * atoms).fill(0)),
       results,
@@ -203,7 +244,7 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
 export function calcLine(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
   const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
-  const method = [c.method, c.basis].filter(Boolean).join("/");
+  const method = levelOf(c);
   const state = [
     c.charge != null ? `charge ${c.charge > 0 ? "+" : ""}${String(c.charge).replace(/^-/, "\u2212")}` : null,
     c.multiplicity != null ? multiplicityName(c.multiplicity) : null,
@@ -211,6 +252,17 @@ export function calcLine(c: CalcInfo): string {
     .filter(Boolean)
     .join(", ");
   return [program, job, method, state].filter(Boolean).join(" · ");
+}
+
+/**
+ * The level a calculation's energies are of, in a line: its method and
+ * basis, and its solvation where the output says it - "GFN2-xTB ·
+ * ALPB(water), reference state gsolv [1 M gas/solution]", "GFN2-xTB · gas
+ * phase" where it says it used none.
+ */
+export function levelOf(c: Pick<CalcInfo, "method" | "basis" | "solvation">): string {
+  const solvation = c.solvation === "none" ? "gas phase" : c.solvation;
+  return [[c.method, c.basis].filter(Boolean).join("/"), solvation].filter(Boolean).join(" \u00b7 ");
 }
 
 /** A multiplicity by name, as a chemist says it: singlet, doublet, ...; past a sextet, by number. */

@@ -5,7 +5,7 @@ import { writeRxnfile, type WriterModel } from "../../../../lib/chem/molWriter";
 import { buildEditorModelFromRXN } from "../../../../utils/importers";
 import sample from "../../../../samples/esterification.rxn?raw";
 import { drawnOf } from "../utils/io";
-import { notOneReaction, reactionArrows, reactionFileText } from "./reactionFile";
+import { notOneReaction, reactionArrows, reactionFileText, reactionForSmiles } from "./reactionFile";
 
 const L = NOMINAL_BOND_LENGTH;
 const chain = (els: string[]): WriterModel => ({
@@ -99,5 +99,40 @@ describe("a drawn reaction, saved as an RXN file", () => {
     expect(() => reactionFileText({ ...drawn, arrows: [...drawn.arrows!, { ...drawn.arrows![0], id: 2 }] })).toThrow(
       /one reaction, and the drawing has 2 arrows/,
     );
+  });
+});
+
+describe("a drawn reaction, copied as SMILES (reactionForSmiles)", () => {
+  it("is its reaction as its RXN file holds it - the worker writes it reactants>agents>products - never a mixture", () => {
+    const { drawn } = opened(fischer);
+    const made = reactionForSmiles(drawn);
+    expect(made && "rxn" in made ? made.rxn : made).toBe(reactionFileText(drawn));
+  });
+
+  it("holds H2 as a reactant of its own: its two hydrogens a molecule, not hydrogens of another", () => {
+    // (ethene and H2 to ethane: the worker writes it C=C.[H][H]>>CC - scripts/chem/test_chem_worker.py)
+    const hydrogenation = writeRxnfile({ reactants: [chain(["C", "C"]), chain(["H", "H"])], products: [chain(["C", "C"])], reagents: [] });
+    const made = reactionForSmiles(opened(hydrogenation).drawn);
+    const back = readRxnfile(made && "rxn" in made ? made.rxn : "");
+    expect(back.reactants.map((m) => m.atoms.map((a) => a.symbol).join(""))).toEqual(["CC", "HH"]);
+    expect(back.reactants[1].bonds).toHaveLength(1);
+  });
+
+  it("is a SMILES of the molecules where the drawing shows no reaction", () => {
+    const { drawn } = opened(fischer);
+    expect(reactionForSmiles({ ...drawn, arrows: [] })).toBeNull();
+  });
+
+  it("says why where it holds no one reaction to write: two arrows, or nothing on one side", () => {
+    const { drawn } = opened(sample);
+    expect(reactionForSmiles({ ...drawn, arrows: [...drawn.arrows!, { ...drawn.arrows![0], id: 2 }] })).toEqual({
+      why: "a reaction SMILES holds one reaction, and the selection has 2 arrows: copy its steps one at a time",
+    });
+    // (the products taken away: the arrow has nothing after it)
+    const tail = drawn.arrows![0].x;
+    const before = drawn.atoms.filter((a) => a.x < tail);
+    const ids = new Set(before.map((a) => a.id));
+    const oneSided = { ...drawn, atoms: before, bonds: drawn.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)), pluses: [] };
+    expect(reactionForSmiles(oneSided)).toEqual({ why: "the arrow has nothing after it - no product to write as a reaction" });
   });
 });

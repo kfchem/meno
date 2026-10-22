@@ -5,6 +5,7 @@ import { marksAll } from "../../../../../lib/chem/captions";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { EditorState } from "../types";
+import type { LeftOut } from "../../utils/readNotes";
 import { StoreApi } from "zustand";
 import type { StyleChoice } from "../../../../../lib/chem/style";
 import { style3dIn, type Workspace3D } from "../../../../../lib/chem/workspaceStyle3d";
@@ -38,11 +39,16 @@ export function createUiSlice(
     setCover: (px: number) => {
       if (Math.abs(get().cover - px) > 0.25) set({ cover: px });
     },
+    setShownMarks: (marks: EditorState["shownMarks"]) => {
+      if (get().shownMarks !== marks) set({ shownMarks: marks });
+    },
     markSavedAs: (path: string, written?: WorkspaceDocument) => {
       set((prev: EditorState) => ({ ...prev, savedPath: path }));
       doc.markSaved(written);
     },
     writing: () => doc.getState(),
+    markLeftOnOpen: (left: LeftOut | null) => set({ leftOnOpen: left ? { left, kept: false } : null }),
+    markLeftKept: () => set((prev: EditorState) => (prev.leftOnOpen && !prev.leftOnOpen.kept ? { leftOnOpen: { ...prev.leftOnOpen, kept: true } } : {})),
     markOpenedOver: (name: string) =>
       set((prev: EditorState) => ({ ...prev, savedPath: null, openedName: name })),
 

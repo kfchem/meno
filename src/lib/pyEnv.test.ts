@@ -6,7 +6,7 @@ import type { ConsentRequest } from "./net/network";
 // the user answers when asked.
 const files = new Map<string, string>();
 // (where each was written and looked for: the app's resources, or its local data)
-const wroteIn = new Map<string, number>();
+const wroteIn = new Map<string, string>();
 const lookedIn = new Map<string, number>();
 const commands: { cmd: string; args?: Record<string, unknown> }[] = [];
 const asked: ConsentRequest[] = [];
@@ -22,16 +22,18 @@ vi.mock("@tauri-apps/plugin-fs", () => ({
     if (!files.has(p)) throw new Error(`no ${p}`);
     return files.get(p)!;
   },
-  writeTextFile: async (p: string, text: string, o?: { baseDir?: number }) => {
-    wroteIn.set(p, o?.baseDir ?? 0);
-    files.set(p, text);
-  },
   mkdir: async () => {},
 }));
 vi.mock("@tauri-apps/plugin-os", () => ({ platform: () => "macos", arch: () => "aarch64" }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: async (cmd: string, args?: Record<string, unknown>) => {
+  invoke: async (cmd: string, args?: Record<string, unknown>, options?: { headers?: Record<string, string> }) => {
+    // (Meno's own file, written whole: by its path in the folder named)
+    if (cmd === "write_app_file") {
+      const rel = decodeURIComponent(options!.headers!.rel);
+      wroteIn.set(rel, options!.headers!.base);
+      return void files.set(rel, new TextDecoder().decode(args as unknown as Uint8Array));
+    }
     commands.push({ cmd, args });
     if (cmd === "py_env_python_path_uv") return "/data/uv/plugin-blender/venv/bin/python";
     if (cmd === "py_env_setup_uv") return void files.set(VENV_PYTHON, "");
@@ -97,7 +99,7 @@ describe("setting a plugin up, with what it downloads besides", () => {
     // (the files the user was told of, kept with its record of being set up)
     expect(stamp()).toEqual({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] });
     // (the record, and the environment looked for, in the local data folder - not the roaming one the settings are in)
-    expect(wroteIn.get(STAMP)).toBe(3);
+    expect(wroteIn.get(STAMP)).toBe("local");
     expect(lookedIn.get(STAMP)).toBe(3);
     expect(lookedIn.get(VENV_PYTHON)).toBe(3);
   });
