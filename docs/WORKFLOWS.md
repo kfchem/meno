@@ -713,7 +713,10 @@ states an undo goes back to as well.
   opens it. Its outputs are kept in the workspace when they come in; the
   folder goes by *Settings, Calculations, Clear finished jobs' files* - not
   with its step, deleted: another step may have taken its job up again,
-  and a copy of the workspace saved elsewhere names the same jobs.
+  and a copy of the workspace saved elsewhere names the same jobs. Two
+  take their own folders away: a Render job, once its picture is on the
+  page, and a job started for a step deleted before its run began - none
+  of them taken up again from another run.
 
 ## Licences
 
@@ -1485,9 +1488,18 @@ question N):
 - **A step deleted takes no job's folder away**: another step's run may
   have taken one up again, and a copy of the workspace saved elsewhere
   names the same jobs. Their folders go when finished jobs are cleared.
+  (A Render job takes its own away once its picture is on the page; so
+  does a job started for a step deleted before its run began - never one
+  taken up again.)
 - **What a job gave is kept as one digest**: the SHA-256 of its log and of
   every file in its folder, each by its name, read as its run is brought
-  in (jobs.rs `digest_of`), and kept with the run beside its key. A job is
+  in (jobs.rs `digest_of`), and kept with the run beside its key. The
+  files the system writes as a folder is looked at - `.DS_Store` and `._`
+  files, `Thumbs.db`, `desktop.ini` - are left out: *Show files* never
+  makes a job one Meno cannot account for. Each check reads the outputs
+  in full, streamed through the hash - a run's wavefunctions and cube
+  files, of hundreds of MB, as it is brought in and as it is taken up
+  again: nothing less says they are the same. A job is
   taken up again only where its digest was kept, and what it gives then
   must be the same: its files changed since - written over, added to, or
   taken away - stop the step (*its files have changed since they were

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { sha256Hex } from "./binary/sha256";
 import { isJobKey, jobKey, KEY_AT_ONCE, reusable, type Keyed } from "./jobKeys";
 
@@ -39,6 +39,13 @@ describe("a job's key", () => {
     // (a large input - hashed off Meno's way - keyed the same as it would be at once)
     const large = { ...XTB, files: [{ name: "wavefunction.molden", text: "0.123456789 ".repeat(KEY_AT_ONCE / 4) }] };
     expect(await jobKey(large)).toBe(sha256Hex(new TextEncoder().encode(JSON.stringify([2, "xtb", "0.1.3", "xtb", "6.7.1", [], XTB.args, null, [], large.files.map((f) => [f.name, f.text])]))));
+    // (and where the browser has none of its own: Meno's, the same key - a step never stopped for want of it)
+    vi.stubGlobal("crypto", {});
+    try {
+      expect(await jobKey(large)).toBe(await (async () => sha256Hex(new TextEncoder().encode(JSON.stringify([2, "xtb", "0.1.3", "xtb", "6.7.1", [], XTB.args, null, [], large.files.map((f) => [f.name, f.text])]))))());
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("finds a job the workspace ran to the end under a key - in a step's last run or one it keeps - read, and only while its runner says it is done", () => {

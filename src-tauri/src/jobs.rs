@@ -2260,7 +2260,7 @@ fn digest_of(dir: &Path) -> std::io::Result<String> {
         Ok(())
     };
     one("log", &dir.join(LOG))?;
-    let mut names = work_files(dir);
+    let mut names: Vec<String> = work_files(dir).into_iter().filter(|n| !os_metadata(n)).collect();
     names.sort();
     for name in names {
         one(&format!("work/{name}"), &dir.join(WORK).join(&name))?;
@@ -2268,7 +2268,16 @@ fn digest_of(dir: &Path) -> std::io::Result<String> {
     Ok(sum.finalize().iter().map(|b| format!("{b:02x}")).collect())
 }
 
-/// What a job gave, as one digest (`digest_of`): read off Meno's way, its files however large.
+/// Whether a file in a job's folder is one the system writes there itself - Finder's `.DS_Store` and `._` files,
+/// Explorer's `Thumbs.db` and `desktop.ini` - as *Show files* opens it: no output of the job's, left out of its
+/// digest, so that looking at a job's files never makes it one Meno cannot account for.
+fn os_metadata(name: &str) -> bool {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    base == ".DS_Store" || base.starts_with("._") || base.eq_ignore_ascii_case("Thumbs.db") || base.eq_ignore_ascii_case("desktop.ini")
+}
+
+/// What a job gave, as one digest (`digest_of`): read off Meno's way, its files however large - each streamed
+/// through the hash, never held whole.
 #[tauri::command]
 pub async fn job_digest(app: AppHandle, id: String) -> Result<String, String> {
     let dir = job_dir(&app, &id)?;
@@ -3145,7 +3154,17 @@ mod tests {
         fs::write(dir.join(WORK).join("out.txt"), "1.0").unwrap();
         assert_eq!(digest_of(&dir).unwrap(), wrote);
         fs::rename(dir.join(WORK).join("out.txt"), dir.join(WORK).join("out2.txt")).unwrap();
-        assert_ne!(digest_of(&dir).unwrap(), wrote);
+        let renamed = digest_of(&dir).unwrap();
+        assert_ne!(renamed, wrote);
+        // (what the system writes as the folder is looked at - Finder's, Explorer's - no output: left out)
+        fs::create_dir_all(dir.join(WORK).join("sub")).unwrap();
+        for name in [".DS_Store", "._out2.txt", "Thumbs.db", "desktop.ini", "sub/.DS_Store", "sub/THUMBS.DB"] {
+            fs::write(dir.join(WORK).join(name), "seen").unwrap();
+        }
+        assert_eq!(digest_of(&dir).unwrap(), renamed);
+        // (a file of the job's own beginning with a dot is no such file)
+        fs::write(dir.join(WORK).join(".hidden-output"), "x").unwrap();
+        assert_ne!(digest_of(&dir).unwrap(), renamed);
         let _ = fs::remove_dir_all(root);
     }
 

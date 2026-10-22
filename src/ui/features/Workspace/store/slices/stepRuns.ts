@@ -605,9 +605,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    */
   const gone = (id: number) => !stepOf(doc.getState(), id);
 
-  /** Jobs started for a step that has gone since: stopped, and their folders taken away once they have ended. */
+  /**
+   * Jobs started for a step that has gone since: stopped, and their folders taken away once they have ended -
+   * those this run started alone: a job taken up again is an earlier run's, or another step's, and stays.
+   */
   const forgetStarted = (jobs: readonly StepJob[]) => {
     for (const j of jobs) {
+      if (j.reused) continue;
       forgotten.add(j.id);
       void (async () => {
         await stopJob(j.id).catch(() => {});

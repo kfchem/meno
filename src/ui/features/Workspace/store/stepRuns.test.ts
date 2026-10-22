@@ -690,6 +690,34 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps).toHaveLength(0);
   });
 
+  it("deleted while its jobs are being started, takes away only those it started - never one taken up again", async () => {
+    const { st, step } = waters(2);
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await first;
+    expect(asked.started).toHaveLength(2);
+    // (run again: the first entry's job the same - taken up again - the second's another, held as it starts)
+    const job = (entry: number, level: string) => ({ entries: [entry], program: "xtb", args: ["input.xyz", "--opt", level], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["xtbopt.log"] });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [job(0, "normal"), job(1, "tight")] }) as never);
+    let go = () => {};
+    holdStart = new Promise((r) => (go = r));
+    const ran = st().runStep(step);
+    for (let i = 0; i < 8 && asked.started.length < 3; i++) await settle();
+    expect(asked.started).toHaveLength(3);
+    st().removeStep(step, true);
+    holdStart = null;
+    end(3, "stopped");
+    go();
+    await ran;
+    for (let i = 0; i < 4; i++) await settle();
+    expect(asked.removed).toEqual([idOf(3)]);
+    expect(asked.stopped).toEqual([idOf(3)]);
+  });
+
   it("brings in what the jobs done gave where another went without finishing - that one said failed", async () => {
     const { st, step } = waters(3);
     const ran = st().runStep(step);

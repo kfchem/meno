@@ -40,8 +40,10 @@ export async function jobKey(k: Keyed): Promise<string> {
   const files = [...k.files].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0)).map((f) => [f.name, f.text]);
   const text = JSON.stringify([KEY_FORM, k.plugin, k.pluginVersion, k.program, k.programVersion, [...(k.stamps ?? [])], [...k.args], k.stdin ?? null, (k.then ?? []).map((t) => [t.program, [...t.args]]), files]);
   const bytes = new TextEncoder().encode(text);
-  if (bytes.length <= KEY_AT_ONCE) return sha256Hex(bytes);
-  const sum = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  // (the browser's own where it is there: where it is not, Meno's own - never a step stopped for want of it)
+  const subtle = globalThis.crypto?.subtle;
+  if (bytes.length <= KEY_AT_ONCE || !subtle) return sha256Hex(bytes);
+  const sum = new Uint8Array(await subtle.digest("SHA-256", bytes));
   return Array.from(sum, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
