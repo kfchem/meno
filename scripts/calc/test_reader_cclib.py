@@ -238,8 +238,15 @@ class Imaginary(unittest.TestCase):
         self.assertEqual(worker.imaginary_of(data, entry.replace("ag=1", "ag=0"), "gaussian"), [])
 
     def test_orca_s_marks_in_its_last_list_of_frequencies(self):
-        listed = "VIBRATIONAL FREQUENCIES\n-----------------------\n\n   0:       0.00 cm**-1\n   6:    -382.63 cm**-1 ***imaginary mode***\n   7:    1038.54 cm**-1\n\nNORMAL MODES\n   9:   -5.00 cm**-1 ***imaginary mode***\n"
-        self.assertEqual(worker.imaginary_of(types.SimpleNamespace(), listed, "orca"), [-382.63])
+        # (as ORCA 6.1.1 printed them for eclipsed ethane, HF/STO-3G, its H-C-C-H dihedral held at 0 - and the CP-SCF's
+        # "imaginary perturbations" before them, which are no vibrations)
+        listed = (
+            "Total number of imaginary perturbations ...      0\n\n"
+            "VIBRATIONAL FREQUENCIES\n-----------------------\n\nScaling factor for frequencies =  1.000000000  (already applied!)\n\n"
+            + "".join(f"     {k}:       0.00 cm**-1\n" for k in range(6))
+            + "     6:    -308.84 cm**-1  ***imaginary mode***\n     7:    1063.00 cm**-1\n\nNORMAL MODES\n   9:   -5.00 cm**-1 ***imaginary mode***\n"
+        )
+        self.assertEqual(worker.imaginary_of(types.SimpleNamespace(), listed, "orca"), [-308.84])
         self.assertEqual(worker.imaginary_of(types.SimpleNamespace(), listed.replace(" ***imaginary mode***", "", 1), "orca"), [])
         self.assertIsNone(worker.imaginary_of(types.SimpleNamespace(), "no frequencies here", "orca"))
         self.assertIsNone(worker.imaginary_of(types.SimpleNamespace(vibfreqs=[-382.63]), listed, "xtb"))
