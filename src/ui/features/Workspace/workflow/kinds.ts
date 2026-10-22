@@ -8,6 +8,7 @@ import { numberText } from "../../../../lib/calc/results";
 import type { Option } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
+import { conditionsIn, conditionText } from "../../../../lib/nodes/filter";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind };
@@ -15,8 +16,8 @@ export type { SetKind, StepKind };
 /** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
 export type SetHolds = SetKind | "pictures";
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sliders set. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sliders";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -108,6 +109,31 @@ export const KINDS: readonly KindInfo[] = [
     perceives: "configurations",
     options: [{ id: "temperature", label: "At", type: "number", default: 298.15, min: 1, step: 1, unit: "K" }],
   },
+  {
+    // (entries kept by conditions on their properties, each with its unit - lib/nodes/filter - the rest out of the second exit, each saying why)
+    kind: "filter",
+    name: "Filter",
+    icon: "sliders",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Filtered",
+    second: { id: "rest", name: "The rest", gives: "same", of: "rest" },
+    options: [
+      { id: "conditions", label: "Conditions", type: "text", default: "" },
+      {
+        id: "match",
+        label: "Kept where",
+        type: "choice",
+        choices: [
+          { value: "all", label: "All are met" },
+          { value: "any", label: "Any is met" },
+        ],
+        default: "all",
+      },
+    ],
+    how: (v) => filterHow(String(v.conditions ?? ""), v.match === "any" ? "any" : "all"),
+  },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
     kind: "choose",
@@ -134,6 +160,14 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
   },
 ];
+
+/** How a Filter step does its work, in a line: its conditions as read, and whether all or any - or why they do not read, or that there are none. */
+export function filterHow(text: string, match: "all" | "any"): string {
+  const read = conditionsIn(text);
+  if ("why" in read) return read.why;
+  if (!read.conditions.length) return "No conditions yet";
+  return read.conditions.map(conditionText).join(match === "any" ? " or " : " and ");
+}
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
 

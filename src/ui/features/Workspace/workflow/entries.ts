@@ -246,6 +246,8 @@ export type SetEntry = {
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
   name?: string;
+  /** Its properties by name, as its molecule's frame has them (`Molecule3D.properties`) - a model's, a descriptor's - each with its unit and what worked it out. */
+  properties?: Record<string, Property>;
   /**
    * What the calculation it was read from says - the program, the method
    * its energy is of - and what its molecule keeps besides (`keptOf`): the
@@ -363,6 +365,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    const properties = m.properties?.length === n ? m.properties : undefined;
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, ...rest }) => rest)(m.calc) : undefined;
@@ -381,6 +384,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
         keep,
         from: m.id,
@@ -411,7 +415,9 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.radical ? { radical: a.radical } : {}),
   }));
   const at = { geometry: geometryKey(e.xyz) };
+  // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own)
   const properties: Record<string, Property> = {
+    ...e.properties,
     group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
     number: { value: e.number, unit: "none", status: "computed" },
     ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, status: "computed" as const } } : {}),

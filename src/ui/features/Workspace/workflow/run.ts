@@ -520,6 +520,8 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        // (its properties, as its last frame's: none for a path's frames before it)
+        ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties] } : {}),
         ...e.keep,
       };
     });
@@ -533,6 +535,8 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
     const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
+    // (each conformer's properties, as it came - an empty map where it had none)
+    const properties = g.some((e) => e.properties) ? g.map((e) => e.properties ?? {}) : undefined;
     // (what the calculation was, where a program worked them out - each conformer's results its own, not the
     //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
@@ -546,6 +550,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
       ...(degeneracies ? { degeneracies } : {}),
+      ...(properties ? { properties } : {}),
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),

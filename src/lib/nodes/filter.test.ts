@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filter } from "./filter";
+import { conditionsIn, filter } from "./filter";
 import { entry, quantity } from "./testEntries";
 
 const rel = (kcal: number) => quantity(kcal, "kcal/mol");
@@ -70,5 +70,36 @@ describe("Filter", () => {
     x.properties.e = { value: 0, unit: "kcal/mol", status: { failed: "SCF not converged" } };
     const out = filter([x], { conditions: [{ property: "e", compare: "≤", value: 3, unit: "kcal/mol" }], match: "all" });
     expect(out.ok && out.exits.rest[0].status).toEqual({ aside: "its e failed: SCF not converged" });
+  });
+});
+
+describe("conditions as typed", () => {
+  it("reads a property, a comparison and a value - a number with its unit, true or false, or a text - one to a line or after a semicolon", () => {
+    expect(conditionsIn("nll < 30; energy <= -76.4 Eh\nrelative energy ≤ 3 kcal/mol\nshift >= 2.5 cm⁻¹ ; aromatic = true; name != \"water\"")).toEqual({
+      conditions: [
+        { property: "nll", compare: "<", value: 30, unit: "none" },
+        { property: "energy", compare: "≤", value: -76.4, unit: "Eh" },
+        { property: "relative energy", compare: "≤", value: 3, unit: "kcal/mol" },
+        { property: "shift", compare: "≥", value: 2.5, unit: "cm-1" },
+        { property: "aromatic", compare: "=", value: true },
+        { property: "name", compare: "≠", value: "water" },
+      ],
+    });
+    // (a minus sign as typeset, and nothing between the lines)
+    expect(conditionsIn("  ;\n e ≥ −1.5e-2 eV ;")).toEqual({ conditions: [{ property: "e", compare: "≥", value: -0.015, unit: "eV" }] });
+  });
+
+  it("says why of the first that does not read", () => {
+    expect(conditionsIn("nll 30")).toEqual({ why: '"nll 30" compares nothing: it takes a property, then < ≤ > ≥ = or ≠, then a value' });
+    expect(conditionsIn("< 30")).toEqual({ why: '"< 30" names no property' });
+    expect(conditionsIn("mw < 500 g/mol")).toEqual({ why: '"mw < 500 g/mol": g/mol is no unit Meno knows' });
+    expect(conditionsIn("nll <")).toEqual({ why: '"nll <" has nothing to compare with' });
+  });
+
+  it("filters as read: what comes in kept by the conditions typed", () => {
+    const typed = conditionsIn("relative energy <= 3 kcal/mol; imaginary = 0");
+    if ("why" in typed) throw new Error(typed.why);
+    const out = filter(set, { conditions: typed.conditions, match: "all" });
+    expect(out.ok && ids(out.exits.kept)).toEqual(["a"]);
   });
 });

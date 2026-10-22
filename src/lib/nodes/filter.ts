@@ -12,7 +12,7 @@
  * as 4.184 kJ/mol) is the value typed.
  */
 import type { Entry } from "../entry";
-import type { Unit } from "../units";
+import { isUnit, UNITS, type Unit } from "../units";
 import { entries as count, numberIn, setAside, tally, unitLabel, unreadable, type NodeOutcome } from "./base";
 
 /** A comparison: less than, at most, more than, at least, equal to, other than. Text and true/false compare by = and ≠ alone. */
@@ -97,4 +97,62 @@ export function filter(entries: readonly Entry[], options: FilterOptions): NodeO
   }
   const said = `${kept.length} of ${count(entries.length)} kept${rest.length ? ` · rest ${rest.length} (${tally(rest)})` : ""}`;
   return { ok: true, exits: { kept, rest }, said };
+}
+
+/** The comparisons as they may be typed, each with the one it is: ≤ as <=, ≥ as >=, ≠ as != - the longer first, so that <= is not < and =. */
+const TYPED: [string, Comparison][] = [
+  ["<=", "≤"],
+  [">=", "≥"],
+  ["!=", "≠"],
+  ["==", "="],
+  ["≤", "≤"],
+  ["≥", "≥"],
+  ["≠", "≠"],
+  ["<", "<"],
+  [">", ">"],
+  ["=", "="],
+];
+
+/** A unit as typed: by Meno's name for it ("cm-1") or as it is written ("cm⁻¹"); none where it is neither. */
+function unitTyped(u: string): Unit | undefined {
+  if (isUnit(u)) return u;
+  return (Object.keys(UNITS) as Unit[]).find((k) => UNITS[k].label === u);
+}
+
+/**
+ * Conditions as a chemist types them, one to a line or each after a
+ * semicolon: a property, a comparison (< ≤ > ≥ = ≠, or <= >= !=), and a
+ * value - a number, with its unit where it has one ("energy ≤ -76.4 Eh",
+ * "nll < 30"); true or false; else a text, in quotes or not. Why not, of the
+ * first that does not read: no comparison, no property, a unit Meno does not
+ * know, nothing to compare with.
+ */
+export function conditionsIn(text: string): { conditions: Condition[] } | { why: string } {
+  const conditions: Condition[] = [];
+  for (const raw of text.split(/[;\n]/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    // (the first comparison in it: what is before it the property, after it the value)
+    let at = -1;
+    let typed = "";
+    let compare: Comparison = "=";
+    for (const [t, c] of TYPED) {
+      const k = line.indexOf(t);
+      if (k >= 0 && (at < 0 || k < at || (k === at && t.length > typed.length))) [at, typed, compare] = [k, t, c];
+    }
+    if (at < 0) return { why: `"${line}" compares nothing: it takes a property, then < ≤ > ≥ = or ≠, then a value` };
+    const property = line.slice(0, at).trim();
+    const value = line.slice(at + typed.length).trim();
+    if (!property) return { why: `"${line}" names no property` };
+    if (!value) return { why: `"${line}" has nothing to compare with` };
+    const number = /^([-+−]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*(.*)$/.exec(value);
+    if (number) {
+      const unitText = number[2].trim();
+      const unit = unitText ? unitTyped(unitText) : "none";
+      if (!unit) return { why: `"${line}": ${unitText} is no unit Meno knows` };
+      conditions.push({ property, compare, value: Number(number[1].replace("−", "-")), unit });
+    } else if (value === "true" || value === "false") conditions.push({ property, compare, value: value === "true" });
+    else conditions.push({ property, compare, value: value.replace(/^"(.*)"$/, "$1") });
+  }
+  return { conditions };
 }

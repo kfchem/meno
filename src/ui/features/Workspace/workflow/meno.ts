@@ -8,7 +8,8 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, unlikeMade, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, unlikeMade, type SetEntry } from "./entries";
+import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
@@ -40,6 +41,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
       return populations(entries, Number(options.temperature));
     case "choose":
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
+    case "filter":
+      return filtered(entries, holds, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }
@@ -186,6 +189,24 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   const out = new Map<number, SetEntry[]>();
   for (const e of entries) pushTo(out, e.compound, e);
   return [...out.values()];
+}
+
+/**
+ * Entries kept by conditions on their properties (lib/nodes `filter`), read
+ * as each is an entry (`entryOfSet`): those that meet them, the rest set
+ * aside - said, both counted, with why each of the rest was, an entry with
+ * no value for a property named among them.
+ */
+function filtered(entries: readonly SetEntry[], holds: SetKind, text: string, match: "all" | "any"): Outcome {
+  const read = conditionsIn(text);
+  if ("why" in read) return { ok: false, said: read.why };
+  const out = filter(
+    entries.map((e, i) => entryOfSet(e, String(i))),
+    { conditions: read.conditions, match },
+  );
+  if (!out.ok) return out;
+  const back = (es: readonly { id: string }[]) => es.map((e) => entries[Number(e.id)]);
+  return { ok: true, holds, kept: back(out.exits.kept), aside: back(out.exits.rest), said: out.said };
 }
 
 const NO_ENERGY: Outcome = { ok: false, said: "Not every entry has an energy" };

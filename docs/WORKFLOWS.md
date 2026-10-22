@@ -277,9 +277,10 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
+| Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 
-The first six run a program; the last five work on a set's entries
+The first six run a program; the last six work on a set's entries
 alone (*Who does a step*). A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
@@ -1382,6 +1383,50 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### Filter (2026-10-22)
+
+*Filter*, Meno's own, keeps the entries whose properties meet its
+conditions (lib/nodes `filter`, WORKFLOWS-FOUNDATION.md, *Meno's own
+nodes*): the first proof of a generative workflow - structures a model
+generates, made 3D, filtered on the model's NLL and 2D properties - needs
+it.
+
+- **Its conditions are typed**, one to a line or each after a semicolon:
+  a property, a comparison (< ≤ > ≥ = ≠, or <= >= != as typed), and a
+  value - a number with its unit where the property has one ("nll < 30",
+  "energy ≤ -76.4 Eh", "gap > 40 kcal/mol"), true or false, or a text.
+  *Kept where* is all of them met, or any. Its card says them as read
+  ("nll < 30 and mw ≤ 500"), or why one does not read - a unit Meno does
+  not know, no comparison - and it does not run until they do.
+- **A number is compared in the condition's unit**, converted within its
+  dimension only: 0.5 eV against 40 kcal/mol is 11.530274 kcal/mol. A
+  property of another dimension, or of none where the condition has one,
+  meets nothing, and says so.
+- **What it reads** is each entry as Meno's entry record (`entryOfSet`):
+  its properties as its molecule's frame carries them
+  (`Molecule3D.properties`, one map for each frame - a model's NLL, a
+  descriptor - each with its unit and what worked it out), and Meno's own:
+  its energy, in hartrees, its number among its compound's conformers,
+  its compound as its group, its name. Meno's own names are its own: a
+  property given under one of them is read as Meno's.
+- **Its two exits add up to what came in**: those kept, in the order they
+  came, and *The rest*, both counted on its line, with how many of the
+  rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
+  not nll < 30 (40); 1: it has no nll)"). An entry with no value for a
+  property named does not meet that condition, and is never dropped
+  unsaid. What it keeps and sets aside is as it came: its number, its
+  energy, its properties.
+- **A molecule's properties are kept in the file**, a map for each frame;
+  one that does not read - of a unit Meno does not know, or a list - is
+  left out, and a list of maps that is not one for each frame is not
+  read. A frame edited into a molecule of its own keeps none: they were
+  the result's.
+
+Not yet: structures drawn - *Generate*'s output, read from their record
+(`DrawnEntry.record.properties`) once that is on main; conditions picked
+from what comes in rather than typed; units Meno does not have yet (g/mol,
+Å²), which come with *Descriptors*.
 
 ## Questions
 

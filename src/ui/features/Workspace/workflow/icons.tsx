@@ -1,4 +1,5 @@
 import {
+  AdjustmentsHorizontalIcon,
   ArrowTrendingDownIcon,
   BoltIcon,
   ChartBarIcon,
@@ -34,6 +35,7 @@ const ICONS: Record<StepIcon, Icon> = {
   bars: ChartBarIcon,
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
+  sliders: AdjustmentsHorizontalIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

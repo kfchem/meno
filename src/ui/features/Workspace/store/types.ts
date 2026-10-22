@@ -4,6 +4,7 @@ import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
 import type { OptionValues } from "../../../../lib/options";
+import type { Property } from "../../../../lib/entry";
 import type { ArrowCorner, ArrowForm, ArrowKind, ArrowLook, ArrowWeight } from "../../../../lib/chem/reactionArrow";
 import type { ArrowWords, WordsMark } from "../../../../lib/chem/captions";
 import type { ShapeGeometry, ShapeKind } from "../../../../lib/chem/shapes";
@@ -516,6 +517,13 @@ export type Molecule3D = {
   shares?: number[];
   /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
+  /**
+   * Each frame's properties by name, as lib/entry has them - each with its
+   * unit and what worked it out (a model's NLL, a descriptor) - where a
+   * step or a plugin gave them (docs/WORKFLOWS.md, *Filter*): what a step
+   * that works on entries reads and keeps as they were.
+   */
+  properties?: Record<string, Property>[];
   /**
    * Its frames are the path to its last geometry - an optimisation's, made
    * by a step (docs/WORKFLOWS.md, *Results*) - so that a set takes it as

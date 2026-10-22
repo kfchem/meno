@@ -235,9 +235,9 @@ export function stereoAfter(m: Pick<Molecule3D, "atoms" | "bonds" | "stereo">, b
  * A result's frame, edited, as a molecule of its own (`isResult`): its
  * atoms where the edit put them, its bonds as that frame has them, its
  * drawing, look, measurements and stereo labels kept - and nothing that
- * was the result's: no other frames, energies, populations, numbers or
- * calculation, nor what its file left out. It says what it was made from
- * (`edited`).
+ * was the result's: no other frames, energies, populations, numbers,
+ * properties or calculation, nor what its file left out. It says what it
+ * was made from (`edited`).
  */
 export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[], stereo: Molecule3D["stereo"], at: { x: number; y: number }): Omit<Molecule3D, "id"> {
   const {
@@ -248,6 +248,7 @@ export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[],
     conformerSet: _set,
     shares: _shares,
     degeneracies: _degeneracies,
+    properties: _properties,
     numbers: _numbers,
     path: _path,
     made: _made,

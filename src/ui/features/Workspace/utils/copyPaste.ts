@@ -5,6 +5,7 @@
  */
 import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
+import { propertiesIn } from "../../../../lib/entry";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
@@ -684,6 +685,8 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
     ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
+    // (each frame's properties, one map each - a frame with none read, an empty one)
+    ...(Array.isArray(m.properties) && m.properties.length === 1 + frames.length && m.properties.some((p) => propertiesIn(p)) ? { properties: (m.properties as unknown[]).map((p) => propertiesIn(p) ?? {}) } : {}),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
