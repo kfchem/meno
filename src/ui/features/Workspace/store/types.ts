@@ -641,7 +641,13 @@ export type Member = { structure: number[] } | { molecule: number } | { picture:
  * its jobs, by id, whose logs and files are kept until the step is deleted;
  * and the kind and options it ran with.
  */
-export type StepRan = { at: number; ok: boolean; said: string; input: string; stopped?: true; took?: number; jobs?: string[]; kind?: StepKind; options?: OptionValues };
+/**
+ * What a step did when it ran: when, whether it did, what it said, what came
+ * in (`inputKey`), whether it was stopped and how long it took, its jobs, and
+ * its kind and options then - and whether the chemist keeps it
+ * (`keep`: docs/WORKFLOWS.md, *Earlier runs*), never dropped while kept.
+ */
+export type StepRan = { at: number; ok: boolean; said: string; input: string; stopped?: true; took?: number; jobs?: string[]; kind?: StepKind; options?: OptionValues; keep?: true };
 /**
  * An earlier run a step keeps (docs/WORKFLOWS.md, *Results*): what it did
  * then - its kind and options as they were - and what it gave, as its
@@ -1406,6 +1412,8 @@ export type EditorState = {
   stopStep: (id: number) => void;
   /** Every step's jobs asked to stop. */
   stopAll: () => void;
+  /** A step's run kept, or no longer (docs/WORKFLOWS.md, *Earlier runs*): the one it shows at -1, an earlier one by its place among them - one step to undo. */
+  keepRunOf: (id: number, index: number, keep: boolean) => void;
   /** An earlier run of a step shown again - its results in its result set - what it showed kept among its runs instead: one step to undo. */
   showRun: (id: number, index: number) => void;
   /** A step's logs opened in the column of texts, following its jobs while they run. */

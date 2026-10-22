@@ -63,6 +63,9 @@ const ITEM = 32;
 const ROW = 36;
 /** A compact row under the icons: the kinds of bond there are besides the common ones. */
 const ROW2 = 28;
+/** A note under a command: its line's height, and about how many of its letters a line of the menu holds. */
+const NOTE_LINE = 16;
+const NOTE_CHARS = 40;
 
 /** What the clipboard's items in the menu do. */
 export type MenuClipboard = {
@@ -86,10 +89,11 @@ const CYCLE_GAPS: readonly (readonly [number, string])[] = [
   [1, "Arrows well apart"],
 ];
 
-type Item = { name: string; keys: string; run: () => void; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean; after?: ReactNode };
+type Item = { name: string; keys: string; run: () => void; note?: string; divider?: boolean; checked?: boolean; icon?: ReactNode; del?: boolean; disabled?: boolean; press?: (e: React.PointerEvent) => void; compact?: boolean; keep?: boolean; after?: ReactNode };
 
 /** What the workspace does as a whole, offered on empty space: a rule above it where `divider` says. */
-export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean };
+/** A command of the canvas's menu - with a note under it, where it says what pressing it drops. */
+export type CanvasCommand = { name: string; keys: string; run: () => void; divider?: boolean; note?: string };
 
 /** What can be done to a molecule in 3D from the menu. */
 export type MenuMolecule3D = {
@@ -254,7 +258,7 @@ export default function PartMenu({
   onRunStep: () => void;
   onStepOptions: () => void;
   /** What a step right-clicked can do besides, as it is: stopped, while its jobs wait or run; its logs and files shown, where it has jobs. */
-  step?: { onRunFrom?: () => void; onStop?: () => void; onShowLog?: () => void; onShowFiles?: () => void };
+  step?: { onRunFrom?: () => void; onStop?: () => void; onShowLog?: () => void; onShowFiles?: () => void; note?: string };
   /** What a PDF right-clicked can do: read in the column, its pages turned, spread or gathered, made an icon or full size (docs/PDF.md). */
   pdf?: {
     spread: boolean;
@@ -884,7 +888,11 @@ export default function PartMenu({
   const compact = items.filter((i) => i.icon && i.compact);
   const row2 = more ? compact : [];
   const list = withRules(items.filter((i) => !i.icon));
-  const height = (row.length ? ROW + 9 : 0) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.filter((i) => i.divider).length * 9 + 12;
+  // (a note under a command, said in as many lines as it takes at the menu's width)
+  const noteOf = (text?: string) => (text ? Math.ceil(text.length / NOTE_CHARS) * NOTE_LINE + 6 : 0);
+  const stepNote = target.kind === "step" ? step?.note : undefined;
+  const height =
+    (row.length ? ROW + 9 : 0) + noteOf(stepNote) + (compact.length ? ROW2 + 4 : 0) + (magnifying ? ROW2 + 4 : 0) + list.length * ITEM + list.reduce((n, i) => n + noteOf(i.note), 0) + list.filter((i) => i.divider).length * 9 + 12;
   const run = (item: Item) => () => {
     if (!item.keep) onClose();
     item.run();
@@ -986,6 +994,12 @@ export default function PartMenu({
           ))}
         </div>
       )}
+      {/* (what running the step drops, said before it is pressed: as wide as the menu, never widening it) */}
+      {stepNote && (
+        <div className="px-3 pb-1.5 text-[11px] leading-4 text-gh-gray whitespace-normal" style={{ width: 0, minWidth: "100%" }}>
+          {stepNote}
+        </div>
+      )}
       <AnimatePresence initial={false}>
       {row2.length > 0 && (
         <motion.div
@@ -1040,6 +1054,11 @@ export default function PartMenu({
           <span>{item.name}</span>
           {item.checked ? <CheckIcon aria-label="Chosen" className="h-4 w-4 text-gh-gray" /> : <kbd className="font-sans text-xs text-gh-gray">{item.keys}</kbd>}
         </button>,
+        item.note && (
+          <div key={`${item.name}-note`} className="px-3 pb-1.5 -mt-1 text-[11px] leading-4 text-gh-gray whitespace-normal" style={{ width: 0, minWidth: "100%" }}>
+            {item.note}
+          </div>
+        ),
         item.after && <Fragment key={`${item.name}-after`}>{item.after}</Fragment>,
       ])}
     </motion.div>

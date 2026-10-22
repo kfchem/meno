@@ -205,3 +205,48 @@ export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   if (key !== step.ran.input) return "changed";
   return step.ran.ok ? "done" : step.ran.stopped ? "stopped" : "failed";
 }
+
+/**
+ * The steps to run to run `id`, in order: the furthest back before it
+ * that has not run, has changed, failed, stopped or is running - however many done
+ * lie between - and every step from it to `id`, which take anew what it
+ * gives.
+ */
+export function chainTo(doc: Flow, id: number): number[] {
+  const back = stepsBefore(doc, id).slice(0, 200);
+  let far = -1;
+  back.forEach((sid, k) => {
+    const s = stepOf(doc, sid);
+    if (s && (s.running || stateOf(doc, s, byOf(s)) !== "done")) far = k;
+  });
+  return [...back.slice(0, far + 1).reverse(), id];
+}
+
+/** The steps after a step: those that take what it gives, and those after them. */
+export function stepsAfter(doc: Flow, id: number): number[] {
+  const out: number[] = [];
+  const seen = new Set([id]);
+  const queue = [id];
+  while (queue.length) {
+    const at = queue.shift()!;
+    // (every exit's set: what any of them gives comes down to the steps wired from it)
+    const made = new Set((doc.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
+    for (const wire of doc.wires ?? []) {
+      if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
+        seen.add(wire.to.step);
+        out.push(wire.to.step);
+        queue.push(wire.to.step);
+      }
+    }
+  }
+  return out;
+}
+
+/** The steps a run of `targets` runs (store `runSteps`): each, and those before it it runs first (`chainTo`). */
+export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [...new Set(targets.flatMap((t) => chainTo(doc, t)))];
+
+/** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
+export function allToRun(doc: Flow): number[] {
+  const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
+  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
+}

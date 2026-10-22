@@ -8,6 +8,7 @@ import type { Option, OptionValues } from "../../../../lib/options";
 import type { JobSeen, WorkflowStep } from "../store/types";
 import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
+import { when } from "./earlierRuns";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
 import { CARD_H, CARD_W, portDown, PX } from "./look";
@@ -84,16 +85,7 @@ export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | un
 }
 
 /** A run as its step lists it: when, what it said, how it was set, whether it is the one shown. */
-export type RunRow = { at: number; said: string; how: string; shown: boolean };
-
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
-const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-
-/** When a run was, in few words: its time - and its day, where that was not today. */
-function when(at: number, now = Date.now()): string {
-  const same = new Date(at).toDateString() === new Date(now).toDateString();
-  return same ? TIME.format(at) : `${DAY.format(at)} ${TIME.format(at)}`;
-}
+export type RunRow = { at: number; said: string; how: string; shown: boolean; keep: boolean };
 
 /** A place in the queue, as it is said: 1st, 2nd, 3rd, 4th... */
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -157,11 +149,15 @@ export type StepCardProps = {
   options: OptionValues;
   /** The kinds of step who does it fills: another of them can be chosen in it. */
   kinds: readonly { kind: StepKind; name: string }[];
-  /** Its runs, newest first - the one shown first: when, what it said, how it was set; an earlier one can be shown again. */
+  /** Its runs, newest first - the one shown first: when, what it said, how it was set, whether it is kept; an earlier one can be shown again. */
   runs: readonly RunRow[];
+  /** What running it again drops of its earlier runs, and of those it runs first (workflow/earlierRuns `droppedBy`) - none, where it drops none. */
+  drops?: string;
   onOptions: (values: OptionValues) => void;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
+  /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
+  onKeepRun: (index: number, keep: boolean) => void;
   /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
   onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
@@ -278,6 +274,14 @@ export default function StepCard(p: StepCardProps) {
                         </div>
                         {r.how && <div className="text-[10px] leading-4 text-gh-gray truncate">{r.how}</div>}
                       </div>
+                      <button
+                        onClick={() => p.onKeepRun(i - 1, !r.keep)}
+                        aria-pressed={r.keep}
+                        title={r.keep ? "Kept until this is pressed again" : "Keep this run: running again never drops it"}
+                        className={clsx("h-6 shrink-0 rounded-md border px-2 text-[11px]", r.keep ? "border-accel-base bg-accel-base/5 text-accel-base" : "border-gh-line bg-white text-gh-black hover:bg-gh-base")}
+                      >
+                        {r.keep ? "Kept" : "Keep"}
+                      </button>
                       {r.shown ? (
                         <span className="shrink-0 text-[11px] leading-6 text-gh-gray">Shown</span>
                       ) : (
@@ -291,6 +295,7 @@ export default function StepCard(p: StepCardProps) {
                     </div>
                   ))}
                 </div>
+                {p.drops && <div className="mt-1.5 text-[11px] leading-4 text-gh-gray">{`Running again drops ${p.drops} from this workspace`}</div>}
               </div>
             )}
             <div className="mt-3 flex justify-end">

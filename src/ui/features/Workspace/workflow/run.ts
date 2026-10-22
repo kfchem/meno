@@ -17,7 +17,7 @@ import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } 
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, holdCollection, holdMembers, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -123,15 +123,35 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
 
 /**
  * `doc` with what a step last did kept among its earlier runs, its results
- * with it - as a new run is about to take its place. One that did nothing -
- * refused before it began - is not kept.
+ * with it - as a new run is about to take its place (docs/WORKFLOWS.md,
+ * *Earlier runs*): the run before this one is kept in full, and so is every
+ * run the chemist keeps (`keep`); the others are dropped (`dropsOnRun`),
+ * as the step's menu said before it ran. One that did nothing - refused
+ * before it began - is not kept, and then none is dropped.
  */
 export function keepRun(doc: WorkspaceDocument, step: WorkflowStep): WorkspaceDocument {
   const ran = step.ran;
   if (!ran || (!ran.ok && ran.took == null)) return doc;
   const results = resultsNow(doc, step);
   const kept: StepRunKept = { ...ran, kind: ran.kind ?? step.kind, ...((ran.options ?? step.options) ? { options: ran.options ?? step.options } : {}), ...(results ? { results } : {}) };
-  return withStepRuns(doc, step.id, [kept, ...(step.runs ?? [])].slice(0, RUNS_KEPT));
+  return withStepRuns(doc, step.id, [kept, ...(step.runs ?? []).filter((r) => r.keep)]);
+}
+
+/** `doc` with a step's run kept, or no longer (`keep`): what it last did at -1, an earlier run by its place among them. */
+export function keptRun(doc: WorkspaceDocument, id: number, index: number, keep: boolean): WorkspaceDocument {
+  const step = stepOf(doc, id);
+  const set = <R extends { keep?: true }>({ keep: _k, ...r }: R) => (keep ? { ...r, keep: true as const } : r);
+  if (!step) return doc;
+  if (index < 0) return step.ran ? setRan(doc, id, set(step.ran)) : doc;
+  const runs = step.runs ?? [];
+  return index < runs.length ? withStepRuns(doc, id, runs.map((r, i) => (i === index ? (set(r) as StepRunKept) : r))) : doc;
+}
+
+/** The earlier runs a step drops as it runs again (`keepRun`): those it does not keep - none, where what it last did is not kept in their place. */
+export function dropsOnRun(step: WorkflowStep): StepRunKept[] {
+  const ran = step.ran;
+  if (!ran || (!ran.ok && ran.took == null)) return [];
+  return (step.runs ?? []).filter((r) => !r.keep);
 }
 
 /**
@@ -156,7 +176,7 @@ export function showRun(
   const current: StepRunKept[] = was
     ? [{ ...was, kind: was.kind ?? step.kind, ...((was.options ?? step.options) ? { options: was.options ?? step.options } : {}), ...(now ? { results: now } : {}) }]
     : [];
-  doc = withStepRuns(doc, id, [...current, ...others].slice(0, RUNS_KEPT));
+  doc = withStepRuns(doc, id, [...current, ...others]);
   if (results) doc = placeResults(doc, stepOf(doc, id)!, results, w, lay?.(results, ran.kind ?? step.kind));
   return setRan(doc, id, ran);
 }

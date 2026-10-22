@@ -70,6 +70,7 @@ import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
+import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
@@ -1523,7 +1524,7 @@ function WorkspaceContent({
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
-          { name: "Run all", keys: "", run: () => void store.getState().runAll(), divider: true },
+          { name: "Run all", keys: "", run: () => void store.getState().runAll(), divider: true, note: runAllNote(store.getState()) },
           ...(steps.some((x) => x.running) ? [{ name: "Stop all", keys: "", run: () => store.getState().stopAll() }] : []),
         ]
       : []),
@@ -1972,7 +1973,7 @@ function WorkspaceContent({
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
-              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id), note: runNote(st, s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
             };
           })()}

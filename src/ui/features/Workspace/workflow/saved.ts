@@ -9,7 +9,6 @@ import { readCarried3D } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
-import { RUNS_KEPT } from "./model";
 
 export type SavedWorkflow = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wire[] };
 
@@ -86,7 +85,7 @@ function optionsIn(v: unknown): OptionValues {
 }
 
 function readRan(v: unknown): StepRan | undefined {
-  const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown } | undefined;
+  const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown; keep?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.ok !== "boolean" || typeof r.said !== "string" || typeof r.input !== "string") return undefined;
   const jobs = Array.isArray(r.jobs) ? r.jobs.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
   const options = optionsIn(r.options);
@@ -100,6 +99,8 @@ function readRan(v: unknown): StepRan | undefined {
     ...(jobs.length ? { jobs } : {}),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),
+    // (a run the chemist keeps: never dropped while kept)
+    ...(r.keep === true ? { keep: true as const } : {}),
   };
 }
 
@@ -164,7 +165,7 @@ function readStep(v: unknown): WorkflowStep | null {
   const options = optionsIn(s.options);
   const ran = readRan(s.ran);
   const running = readRunning(s.running);
-  const runs = (Array.isArray(s.runs) ? s.runs : []).map(readKept).filter((k): k is StepRunKept => k != null).slice(0, RUNS_KEPT);
+  const runs = (Array.isArray(s.runs) ? s.runs : []).map(readKept).filter((k): k is StepRunKept => k != null);
   return {
     id: s.id,
     kind: s.kind as StepKind,

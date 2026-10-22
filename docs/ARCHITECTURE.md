@@ -647,8 +647,10 @@ not taken from either.
   opens Settings, Plugins. A workspace opened with steps running
   is looked at the same way, and picks them up. What a plugin sends and
   reads back is checked as data (`workflow/programs.ts`). A step keeps
-  its earlier runs, with what each gave (`keepRun`, `showRun` in
-  `workflow/run.ts`), as a new run's results come in.
+  the run before its last and every run kept, with what each gave
+  (`keepRun`, `dropsOnRun`, `keptRun`, `showRun` in `workflow/run.ts`), as
+  a new run's results come in. What a run would drop is said before it
+  (`workflow/earlierRuns.ts`).
 - **A workflow's parts in the selection** (`selFlow`, beside `sel` and
   `sel3d`): taken by a box or a lasso by their middles (`workflow/parts.ts`
   `flowIn`), by Ctrl or ⌘ and a click, or *Select all*; deleted, moved
