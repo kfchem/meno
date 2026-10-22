@@ -1421,6 +1421,13 @@ unspecified) - and each property a column.
   its entry's ("energy · at another geometry"): a conformer's energy at its
   own geometry is one column for all the conformers, never a column for
   each geometry.
+- The column at another geometry mixes geometries: each row's value may
+  be at a different one, none of them its row's. Its name says so always,
+  even where it is the property's only column ("energy · at another
+  geometry", never "energy").
+- An entry whose geometry is frames, a drawing or none has no geometry
+  of its own a property could be at: a property of it is read at another
+  geometry.
 - A property with no value, or not worked out (failed, or still to be),
   is missing in its row, and counted, each said apart.
 - A property that is no number, text or true or false - a list, a table,

@@ -192,10 +192,16 @@ const variantOf = (p: Property) => JSON.stringify([p.unit, p.by ?? null, p.at ??
  * Where a property of molecules seen as a table was worked out, as its
  * column tells it apart: at its entry's own geometry - each row its own,
  * one column for all ("energy") - or at another than its entry's ("energy
- * · at another geometry"), never a column for each geometry.
+ * · at another geometry"), never a column for each geometry. The column at
+ * another geometry mixes geometries - each row's value may be at a
+ * different one - and its name always says so, even where it is the
+ * property's only column. An entry whose geometry is frames, a drawing or
+ * none has no own geometry: a property of it at any geometry is at
+ * another.
  */
 export const OWN_GEOMETRY = "own";
 export const ANOTHER_GEOMETRY = "another";
+const ANOTHER_SAID = "at another geometry";
 function asSeen(p: Property, own: string | undefined): Property {
   if (!p.at) return p;
   return { ...p, at: { ...p.at, geometry: p.at.geometry === own ? OWN_GEOMETRY : ANOTHER_GEOMETRY } };
@@ -217,7 +223,7 @@ const FIELDS: { what: string; of: (p: Property) => string | number | undefined; 
   { what: "temperature", of: (p) => p.at?.kelvin, say: (v) => `${v} K` },
   { what: "pressure", of: (p) => p.at?.atm, say: (v) => `${v} atm` },
   { what: "solvent", of: (p) => p.at?.solvent, say: (v) => `${v}` },
-  { what: "geometry", of: (p) => p.at?.geometry, say: (v) => (v === OWN_GEOMETRY ? "at its geometry" : v === ANOTHER_GEOMETRY ? "at another geometry" : `geometry ${v}`) },
+  { what: "geometry", of: (p) => p.at?.geometry, say: (v) => (v === OWN_GEOMETRY ? "at its geometry" : v === ANOTHER_GEOMETRY ? ANOTHER_SAID : `geometry ${v}`) },
   { what: "unit", of: (p) => (p.unit === "none" ? undefined : p.unit), say: (v) => `(${v})` },
 ];
 
@@ -296,7 +302,11 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   }
   const keys: { name: string; variant: string }[] = [];
   for (const [name, of] of ways) {
-    const labels = variantNames(name, [...of.values()]);
+    const given = [...of.values()];
+    // (one at another geometry than its entry's says so in its name, whether or not another way tells it apart: its values are of geometries other than their rows')
+    const labels = variantNames(name, given).map((label, k) =>
+      given[k].at?.geometry !== ANOTHER_GEOMETRY || label.includes(ANOTHER_SAID) ? label : `${label}${label === name ? " \u00b7 " : " "}${ANOTHER_SAID}`,
+    );
     [...of].forEach(([variant, p], k) => {
       const label = labels[k];
       const v = p.value;

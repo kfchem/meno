@@ -90,9 +90,9 @@ const energy = (v: number, method: string): Property => ({ value: v, unit: "Eh",
 describe("molecules seen as a table", () => {
   it("is a row per entry - its id, constitution, configuration - and a column per property, numbers with their unit and what worked them out", () => {
     const t = moleculesAsTable([water("e1", { energy: energy(-76.4, "A"), name: { value: "water", unit: "none", status: "computed" } }), water("e2", { energy: energy(-76.3, "A") })]);
-    expect(t.columns.map((c) => c.name)).toEqual(["id", "constitution", "configuration", "energy", "name"]);
-    // (worked out at a geometry not the entry's own - it has none here - said so, not by its key)
-    expect(t.columns[3]).toEqual({ name: "energy", kind: "number", unit: "Eh", by: { program: "prog", method: "A" }, at: { geometry: "another" } });
+    expect(t.columns.map((c) => c.name)).toEqual(["id", "constitution", "configuration", "energy \u00b7 at another geometry", "name"]);
+    // (worked out at a geometry not the entry's own - it has none here - said so, not by its key: in its name too)
+    expect(t.columns[3]).toEqual({ name: "energy \u00b7 at another geometry", kind: "number", unit: "Eh", by: { program: "prog", method: "A" }, at: { geometry: "another" } });
     expect(t.rows.map((r) => [r[0], r[2], r[3], r[4]])).toEqual([
       ["e1", "not known", -76.4, "water"],
       ["e2", "not known", -76.3, null],
@@ -107,8 +107,8 @@ describe("molecules seen as a table", () => {
       water("e2", { energy: energy(-76.1, "B") }),
       water("e3", { energy: { ...energy(-76.5, "A"), status: { failed: "did not converge" } } }),
     ]);
-    // (named for what tells them apart - here the method, the rest alike)
-    expect(t.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 A", "energy \u00b7 B"]);
+    // (named for what tells them apart - here the method, the rest alike - and where: at another geometry than their entries', which have none)
+    expect(t.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 A at another geometry", "energy \u00b7 B at another geometry"]);
     expect(t.rows.map((r) => r.slice(3))).toEqual([
       [-76.4, null],
       [null, -76.1],
@@ -136,7 +136,8 @@ describe("molecules seen as a table", () => {
     ]);
     expect(t.columns.slice(3).map((c) => [c.name, c.kind === "number" ? c.at?.geometry : null])).toEqual([
       ["energy", "own"],
-      ["sp", "another"],
+      // (at another geometry: said in its name, though it is its property's only column)
+      ["sp \u00b7 at another geometry", "another"],
     ]);
     expect(t.rows.map((r) => r.slice(3))).toEqual([
       [-76.4, null],
@@ -145,6 +146,20 @@ describe("molecules seen as a table", () => {
     // (the same property at its own geometry in one row and another's in the next: two columns, named for where)
     const mixed = moleculesAsTable([at3d("e1", [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], { own: -76.4 }), { ...at3d("e2", [0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0], {}), properties: { energy: { ...energy(-76.2, "A"), at: { geometry: "elsewhere" } } } }]);
     expect(mixed.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 at its geometry", "energy \u00b7 at another geometry"]);
+    // (two ways at another geometry, told apart by method: each says where too)
+    const two = moleculesAsTable([
+      { ...at3d("e1", [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], {}), properties: { energy: { ...energy(-76.2, "A"), at: { geometry: "elsewhere" } } } },
+      { ...at3d("e2", [0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0], {}), properties: { energy: { ...energy(-76.1, "B"), at: { geometry: "elsewhere" } } } },
+    ]);
+    expect(two.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 A at another geometry", "energy \u00b7 B at another geometry"]);
+    // (an entry of frames or a drawing has no own geometry: its property at any is at another)
+    const k = [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
+    const drawn = moleculesAsTable([
+      { ...water("d1", {}), geometry: { kind: "2d", xy: [0, 0, 1, 0, -0.3, 0.9] }, properties: { energy: { ...energy(-76.4, "A"), at: { geometry: geometryKey(k) } } } },
+      { ...water("f1", {}), geometry: { kind: "frames", frames: [k, k] }, properties: { energy: { ...energy(-76.3, "A"), at: { geometry: geometryKey(k) } } } },
+    ]);
+    expect(drawn.columns.slice(3).map((c) => [c.name, c.kind === "number" ? c.at?.geometry : null])).toEqual([["energy \u00b7 at another geometry", "another"]]);
+    expect(drawn.rows.map((r) => r[3])).toEqual([-76.4, -76.3]);
   });
 });
 
