@@ -1807,11 +1807,12 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
 /// neither leads out - and holding what it is to run. Where it is there.
 pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
     let refused = || format!("not a job of Meno's: {}", dir.display());
-    let jobs = jobs_in(data);
-    let root = jobs.canonicalize().map_err(|_| refused())?;
+    // (in one of Meno's jobs' folders - its own, or the working folder chosen, as Meno's data folder says, never as
+    //  the runner is told)
+    let roots: Vec<PathBuf> = jobs_roots(data).iter().filter_map(|r| r.canonicalize().ok()).collect();
     let real = dir.canonicalize().map_err(|_| refused())?;
     let id = real.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if real.parent() != Some(root.as_path()) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
+    if !real.parent().is_some_and(|p| roots.iter().any(|r| r == p)) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
         return Err(refused());
     }
     // (the folder checked, and no other found again by its name: on Windows,
@@ -1863,10 +1864,97 @@ fn jobs_in(data: &Path) -> PathBuf {
     data.join("jobs")
 }
 
+/// Where the working folder chosen for jobs is kept: in Meno's own data folder, read by Meno and by every runner -
+/// never from what a runner is given.
+const WORKING_FOLDER: &str = "jobs-folder.json";
+/// The folder Meno makes jobs in, inside the working folder chosen: its own, beside whatever else is there.
+const IN_CHOSEN: &str = "meno-jobs";
+
+#[derive(Serialize, Deserialize)]
+struct WorkingFolder {
+    path: String,
+}
+
+/// The working folder chosen for jobs in Settings, where one is and is still there; none, Meno's own.
+fn chosen_folder(data: &Path) -> Option<PathBuf> {
+    let chosen: WorkingFolder = serde_json::from_str(&fs::read_to_string(data.join(WORKING_FOLDER)).ok()?).ok()?;
+    let path = PathBuf::from(chosen.path);
+    (path.is_absolute() && path.is_dir()).then_some(path)
+}
+
+/// The jobs' folders: the one new jobs are made in - the working folder chosen, its `meno-jobs`, else Meno's own -
+/// first; and Meno's own besides, where another is chosen, so that jobs made there before are still found.
+fn jobs_roots(data: &Path) -> Vec<PathBuf> {
+    let own = jobs_in(data);
+    match chosen_folder(data).map(|c| c.join(IN_CHOSEN)) {
+        Some(chosen) if chosen != own => vec![chosen, own],
+        _ => vec![own],
+    }
+}
+
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = jobs_in(&crate::local_data_dir(app)?);
+    let root = jobs_roots(&crate::local_data_dir(app)?).remove(0);
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
+}
+
+/// Every jobs' folder there is, the one new jobs are made in first.
+fn all_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
+    Ok(jobs_roots(&crate::local_data_dir(app)?))
+}
+
+/// The working folder jobs are made in, and whether it is Meno's own (Settings, *Calculations*, *Jobs*).
+#[derive(Serialize)]
+pub struct JobsFolder {
+    pub path: String,
+    pub own: bool,
+}
+
+#[tauri::command]
+pub fn jobs_folder(app: AppHandle) -> Result<JobsFolder, String> {
+    let data = crate::local_data_dir(&app)?;
+    let chosen = chosen_folder(&data);
+    let path = chosen.clone().unwrap_or_else(|| jobs_in(&data));
+    Ok(JobsFolder { path: path.to_string_lossy().into_owned(), own: chosen.is_none() })
+}
+
+/// The working folder jobs are made in, chosen (`path`), or Meno's own again (none): a folder that is there, that
+/// Meno can write in; changed only while no job waits or runs - those under way stay where they are, and one
+/// queue never spans two folders. What jobs may use goes with it.
+#[tauri::command]
+pub fn jobs_folder_choose(app: AppHandle, path: Option<String>) -> Result<JobsFolder, String> {
+    let data = crate::local_data_dir(&app)?;
+    choose_folder(&data, path.as_deref())?;
+    jobs_folder(app)
+}
+
+fn choose_folder(data: &Path, path: Option<&str>) -> Result<(), String> {
+    let roots = jobs_roots(data);
+    let busy: u32 = roots.iter().map(|r| under_way(r)).sum();
+    if busy > 0 {
+        return Err(format!("{busy} job{} wait or run: the folder is changed once they have ended", if busy == 1 { "" } else { "s" }));
+    }
+    let limits = limits_in(&roots[0]);
+    match path {
+        None => {
+            let _ = fs::remove_file(data.join(WORKING_FOLDER));
+        }
+        Some(path) => {
+            let folder = PathBuf::from(path);
+            if !folder.is_absolute() || !folder.is_dir() {
+                return Err(format!("not a folder: {path}"));
+            }
+            let jobs = folder.join(IN_CHOSEN);
+            fs::create_dir_all(&jobs).map_err(|e| format!("Meno cannot make its folder there: {e}"))?;
+            // (written in, as a job's files will be)
+            let probe = jobs.join(format!(".probe-{}", std::process::id()));
+            fs::write(&probe, b"").map_err(|e| format!("Meno cannot write there: {e}"))?;
+            let _ = fs::remove_file(probe);
+            let text = serde_json::to_string(&WorkingFolder { path: folder.to_string_lossy().into_owned() }).map_err(|e| e.to_string())?;
+            fs::write(data.join(WORKING_FOLDER), text).map_err(|e| e.to_string())?;
+        }
+    }
+    write_limits(&jobs_roots(data)[0], limits).map_err(|e| e.to_string())
 }
 
 /// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
@@ -1911,12 +1999,10 @@ fn job_id(label: &str) -> String {
 
 /// A job's folder, by its id - which is only ever one Meno made.
 fn job_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
-    let ok = job_id_ok(id);
-    let dir = jobs_root(app)?.join(id);
-    if !ok || !dir.join(SPEC).is_file() {
+    if !job_id_ok(id) {
         return Err(format!("no job {id}"));
     }
-    Ok(dir)
+    all_roots(app)?.into_iter().map(|r| r.join(id)).find(|d| d.join(SPEC).is_file()).ok_or_else(|| format!("no job {id}"))
 }
 
 /// What a plugin asks to run (docs/WORKFLOWS.md, `prepare`): its program, by
@@ -2065,20 +2151,20 @@ pub fn under_way(root: &Path) -> u32 {
 
 /// How many of Meno's jobs wait or run - every workspace's, open or not.
 pub fn under_way_now(app: &AppHandle) -> u32 {
-    jobs_root(app).map(|root| under_way(&root)).unwrap_or(0)
+    all_roots(app).map(|roots| roots.iter().map(|r| under_way(r)).sum()).unwrap_or(0)
 }
 
 /// Every job in Meno's data folder, those asked for first first.
 #[tauri::command]
 pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
-    let root = jobs_root(&app)?;
-    let mut jobs: Vec<JobListed> = fs::read_dir(&root)
-        .map_err(|e| e.to_string())?
-        .flatten()
+    let mut jobs: Vec<JobListed> = all_roots(&app)?
+        .iter()
+        .filter_map(|root| fs::read_dir(root).ok())
+        .flat_map(|dir| dir.flatten())
         .filter_map(|e| {
             let id = e.file_name().to_str()?.to_string();
-            // (one being taken away, or left of one: no job)
-            if id.starts_with(TAKEN) {
+            // (one being taken away, or left of one: no job; nor anything not named as a job is)
+            if id.starts_with(TAKEN) || !job_id_ok(&id) {
                 return None;
             }
             listed(&id, &e.path())
@@ -2166,7 +2252,7 @@ fn clear_finished(root: &Path) -> Result<u32, String> {
 /// Every finished job's folder taken away: how many.
 #[tauri::command]
 pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
-    clear_finished(&jobs_root(&app)?)
+    all_roots(&app)?.iter().filter(|r| r.is_dir()).map(|r| clear_finished(r)).sum()
 }
 
 /// The most memory a job may say it takes, in MiB: 64 TiB.
