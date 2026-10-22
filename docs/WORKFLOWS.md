@@ -1461,8 +1461,15 @@ question N):
   started nor took up again - made more than a minute before the run
   began. Each job keeps its key with it (`job.json`).
 
-Not yet: *Adopt*, which takes such a job's output as the step's result,
-recorded with when, marked wherever it is shown; and a job folder found
+- **Adopt**, on the step's menu, one item for each such job (*Adopt
+  water-optimise-3f9a2c1d*): that job's output taken as the step's result
+  on purpose, recorded with when, the run taken up again as it stood - any
+  other such job still stops it. The step's line then says so (*2
+  adopted*), and its run keeps each job adopted with when; all of it kept
+  with the workspace.
+
+Not yet: the molecules an adopted job gave marked as such wherever they
+are shown (today, its step's line says it); and a job folder found
 without its record, which is still taken as *gone*.
 
 ## Questions

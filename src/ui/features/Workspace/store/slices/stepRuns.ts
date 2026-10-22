@@ -789,13 +789,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       //  that this run did not start nor took up again - stop the step, naming them: nothing comes in)
       const unaccounted = run.jobs.flatMap((j, k) => {
         const r = records[k];
-        if (!r || lost[k]) return [];
-        if (j.key && r.key !== j.key) return [`${j.id} (its key is not the one it was asked for with)`];
-        if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [`${j.id} (made before this run began)`];
+        if (!r || lost[k] || run.adopted?.[j.id] != null) return [];
+        if (j.key && r.key !== j.key) return [{ id: j.id, why: "its key is not the one it was asked for with" }];
+        if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [{ id: j.id, why: "made before this run began" }];
         return [];
       });
       if (unaccounted.length) {
-        bringIn(id, [], "molecules", { at: run.at, ok: false, said: `Output Meno cannot account for: ${unaccounted.join("; ")}`, input: run.input, took, jobs: ids, ...as });
+        const said = `Output Meno cannot account for: ${unaccounted.map((u) => `${u.id} (${u.why})`).join("; ")}`;
+        bringIn(id, [], "molecules", { at: run.at, ok: false, said, input: run.input, took, jobs: ids, unaccounted: unaccounted.map((u) => u.id), held: run, ...as });
         return close();
       }
       // (Render's: pictures, beside the step - no set)
@@ -927,9 +928,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           : doneSaid(worked, total, took);
       // (jobs whose key ran to the end before: not run again, what they gave taken up again - said, counted)
       const again = run.jobs.filter((j) => j.reused).length;
-      const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
+      const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
+      const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!) } : {};
-      bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...as });
+      // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
+      const adopted = run.adopted && Object.keys(run.adopted).length ? { adopted: run.adopted } : {};
+      bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...adopted, ...as });
       close();
     } catch (e) {
       // (whatever went wrong bringing its results in: said as how it ended, and its run closed - its jobs looked at no more, those waiting for it let go)
@@ -1100,6 +1104,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       await revealItemInDir(await jobFolder(job));
     },
     lookAtJobs,
+    /**
+     * A job whose output Meno could not account for, adopted by the
+     * chemist: taken as the step's result, recorded with when - its run
+     * taken up again as it stood, every other job checked as before.
+     */
+    adoptJob: async (id: number, job: string) => {
+      const step = stepOf(doc.getState(), id);
+      const held = step?.ran?.held;
+      if (!held || !step?.ran?.unaccounted?.includes(job)) return;
+      doc.amend((x) => setRunning(x, id, { ...held, adopted: { ...(held.adopted ?? {}), [job]: Date.now() } }), { unsaved: true });
+      await finishStep(id);
+    },
     /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */
     jobsKept: (step: { ran?: StepRan }) => (step.ran?.jobs ?? []).some((j) => !forgotten.has(j)),
     /** A step deleted: its jobs stopped, and their files taken away once they have ended - those of every run it keeps, not its last alone - and those waiting for its run let go, as when it is stopped. */

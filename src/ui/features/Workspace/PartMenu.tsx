@@ -254,7 +254,14 @@ export default function PartMenu({
   onRunStep: () => void;
   onStepOptions: () => void;
   /** What a step right-clicked can do besides, as it is: stopped, while its jobs wait or run; its logs and files shown, where it has jobs. */
-  step?: { onRunFrom?: () => void; onStop?: () => void; onShowLog?: () => void; onShowFiles?: () => void };
+  step?: {
+    onRunFrom?: () => void;
+    onStop?: () => void;
+    onShowLog?: () => void;
+    onShowFiles?: () => void;
+    /** Each job whose output Meno could not account for: *Adopt* it, by its id. */
+    adopt?: { job: string; run: () => void }[];
+  };
   /** What a PDF right-clicked can do: read in the column, its pages turned, spread or gathered, made an icon or full size (docs/PDF.md). */
   pdf?: {
     spread: boolean;
@@ -777,6 +784,7 @@ export default function PartMenu({
           { name: "Options…", keys: "", run: onStepOptions, icon: MENU_ICONS.options },
           del("Delete step"),
           ...(step?.onShowLog ? [{ name: "Show log", keys: "", run: step.onShowLog }] : []),
+          ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
         ]

@@ -780,6 +780,23 @@ describe("a step that runs a plugin's program", () => {
     expect(done.ok).toBe(false);
     expect(done.said).toBe(`Output Meno cannot account for: ${idOf(1)} (its key is not the one it was asked for with); ${idOf(2)} (made before this run began)`);
     expect(st().molecules3d).toHaveLength(2);
+    // (adopted one at a time, on purpose: the other still stops it - kept so in the workspace's file)
+    await st().adoptJob(step, idOf(1));
+    const one = st().steps.find((s) => s.id === step)!.ran!;
+    expect(one.said).toBe(`Output Meno cannot account for: ${idOf(2)} (made before this run began)`);
+    expect(Object.keys(one.held!.adopted!)).toEqual([idOf(1)]);
+    const saved = readWorkspace(workspaceText(st()))!;
+    expect(saved.workflow!.steps.find((s) => s.id === step)!.ran).toMatchObject({ unaccounted: [idOf(2)], held: { adopted: { [idOf(1)]: expect.any(Number) } } });
+    // (the second adopted: what they gave comes in, said adopted, each with when)
+    await st().adoptJob(step, idOf(2));
+    const both = st().steps.find((s) => s.id === step)!.ran!;
+    expect(both.ok).toBe(true);
+    expect(both.said).toMatch(/ \u00b7 2 adopted$/);
+    expect(Object.keys(both.adopted!)).toEqual([idOf(1), idOf(2)]);
+    expect(st().molecules3d).toHaveLength(4);
+    // (a job never stopped on is not adopted)
+    await st().adoptJob(step, idOf(9));
+    expect(st().steps.find((s) => s.id === step)!.ran).toBe(both);
   });
 
   it("deleted, keeps the folder of a job another step's run took up again", async () => {

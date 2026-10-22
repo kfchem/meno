@@ -104,6 +104,7 @@ function readRan(v: unknown): StepRan | undefined {
     ...(isNum(r.took) && r.took >= 0 ? { took: r.took } : {}),
     ...(jobs.length ? { jobs } : {}),
     ...(keys ? { keys } : {}),
+    ...readAccounting(r),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),
   };
@@ -143,6 +144,22 @@ function readKept(v: unknown): StepRunKept | null {
   };
 }
 
+/** Jobs adopted, by id, with when: ids as Meno gives them, times as numbers. */
+function adoptedIn(v: unknown): Record<string, number> | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const out = Object.fromEntries(Object.entries(v).filter(([id, at]) => JOB.test(id) && isNum(at)));
+  return Object.keys(out).length ? (out as Record<string, number>) : undefined;
+}
+
+/** What a run stopped on output Meno could not account for keeps, as a file has it: those jobs, the run as it stood, and the jobs adopted. */
+function readAccounting(r: object): Pick<StepRan, "unaccounted" | "held" | "adopted"> {
+  const v = r as { unaccounted?: unknown; held?: unknown; adopted?: unknown };
+  const unaccounted = Array.isArray(v.unaccounted) ? v.unaccounted.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
+  const held = unaccounted.length ? readRunning(v.held) : undefined;
+  const adopted = adoptedIn(v.adopted);
+  return { ...(held ? { unaccounted, held } : {}), ...(adopted ? { adopted } : {}) };
+}
+
 /** A step's run under way, as a file keeps it: its jobs to be picked up. */
 function readRunning(v: unknown): StepRunning | undefined {
   const r = v as { at?: unknown; input?: unknown; options?: unknown; jobs?: unknown } | undefined;
@@ -164,8 +181,9 @@ function readRunning(v: unknown): StepRunning | undefined {
   );
   const kind = (r as { kind?: unknown }).kind;
   const over = (r as { over?: unknown }).over;
+  const adopted = adoptedIn((r as { adopted?: unknown }).adopted);
   return jobs.length
-    ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}), ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}) }
+    ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}), ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}), ...(adopted ? { adopted } : {}) }
     : undefined;
 }
 

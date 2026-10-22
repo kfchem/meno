@@ -1966,6 +1966,8 @@ function WorkspaceContent({
               // (its jobs under way, or Meno's own working in turns: Stop)
               ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
               ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
+              // (output Meno could not account for: each such job adopted on purpose, one at a time)
+              ...(s.ran?.held && s.ran.unaccounted?.length && !s.running ? { adopt: s.ran.unaccounted.map((job) => ({ job, run: () => void st.adoptJob(s.id, job) })) } : {}),
             };
           })()}
           onStepOptions={() => {

@@ -642,6 +642,11 @@ export type StepRan = {
   jobs?: string[];
   /** Its jobs' keys, one for each of `jobs` (lib/jobKeys): what a later run finds a job to take up again by. */
   keys?: string[];
+  /** Stopped on output Meno cannot account for: the jobs it could not, by id, and the run as it stood - for *Adopt* to take up again. */
+  unaccounted?: string[];
+  held?: StepRunning;
+  /** The jobs whose output the chemist adopted, by id, with when (ms since 1970): taken as the step's result though Meno could not account for it. */
+  adopted?: Record<string, number>;
   kind?: StepKind;
   options?: OptionValues;
 };
@@ -686,6 +691,8 @@ export type StepRunning = {
   options: OptionValues;
   jobs: StepJob[];
   kind?: StepKind;
+  /** The jobs whose output the chemist adopted, by id, with when: not checked again as it is taken up. */
+  adopted?: Record<string, number>;
   /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
   over?: string;
 };
@@ -1428,6 +1435,8 @@ export type EditorState = {
   showStepLog: (id: number) => Promise<void>;
   /** The folder of a step's last job shown where the system shows files. */
   showStepFiles: (id: number) => Promise<void>;
+  /** A job whose output Meno could not account for, adopted: taken as the step's result, recorded with when. */
+  adoptJob: (id: number, job: string) => Promise<void>;
   /** The jobs of the steps that have any looked at: where each is, and, those that have all ended, their results brought in. */
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */
