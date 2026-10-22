@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Entry, Property } from "./entry";
-import { headerOf, moleculesAsTable, numberOf, readTable, records } from "./table";
+import { delimiterOf, headerOf, moleculesAsTable, numberOf, readTable, records, variantNames } from "./table";
 
 describe("a delimited text's records (RFC 4180)", () => {
   it("reads quoted fields - delimiters, line breaks and doubled quotes in them - CRLF lines, and skips blank lines", () => {
@@ -106,12 +106,61 @@ describe("molecules seen as a table", () => {
       water("e2", { energy: energy(-76.1, "B") }),
       water("e3", { energy: { ...energy(-76.5, "A"), status: { failed: "did not converge" } } }),
     ]);
-    expect(t.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 prog A (Eh)", "energy \u00b7 prog B (Eh)"]);
+    // (named for what tells them apart - here the method, the rest alike)
+    expect(t.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 A", "energy \u00b7 B"]);
     expect(t.rows.map((r) => r.slice(3))).toEqual([
       [-76.4, null],
       [null, -76.1],
       [null, null],
     ]);
     expect(t.left).toEqual([{ column: "charges", why: "a list, not a column" }]);
+  });
+});
+
+describe("a table read from a file, as programs write them", () => {
+  it("leaves out a byte-order mark before a quoted first header", () => {
+    const t = readTable('\uFEFF"name",energy (Eh),count\na,1,2\n');
+    expect([t.columns.map((c) => c.name), t.rows, t.unread]).toEqual([["name", "energy", "count"], [["a", 1, 2]], []]);
+  });
+
+  it("reads values separated by semicolons where the first line has those and no commas", () => {
+    expect(["a\tb", "a;b", "a,b", "a;b,c"].map(delimiterOf)).toEqual(["\t", ";", ",", ","]);
+    const t = readTable("name;shift (none)\nC1;7,26\nC2;128.4\n");
+    expect(t.columns.map((c) => c.name)).toEqual(["name", "shift"]);
+    // (a decimal comma is no number Meno reads: said where it is)
+    expect(t.unread).toEqual([{ row: 1, column: "shift", text: "7,26", why: "not a number" }]);
+  });
+
+  it("names a second column of one name apart, and says so", () => {
+    const t = readTable("x,x,x\n1,2,3\n");
+    expect(t.columns.map((c) => c.name)).toEqual(["x", "x (2)", "x (3)"]);
+    expect(t.unread.map((u) => u.why)).toEqual(['a second column named "x": named "x (2)"', 'a second column named "x": named "x (3)"']);
+  });
+
+  it("says why a column of numbers but for a cell is read as text", () => {
+    const t = readTable("value\n1\n2\nabout 3\n4\n");
+    expect(t.columns).toEqual([{ name: "value", kind: "text" }]);
+    expect(t.unread).toEqual([{ row: 3, column: "value", text: "about 3", why: "read as text: 1 of 4 cells are no number" }]);
+  });
+});
+
+describe("a property's ways of being worked out, named apart", () => {
+  const p = (by: Property["by"], at: Property["at"]): Property => ({ value: 1, unit: "Eh", by, at, status: "computed" });
+  it("by what tells them apart - geometry, step, run, plugin, conditions - numbered only where that is not enough", () => {
+    expect(variantNames("energy", [p({ program: "xtb", step: "3" }, { geometry: "aa" }), p({ program: "xtb", step: "4" }, { geometry: "aa" })])).toEqual(["energy \u00b7 step 3", "energy \u00b7 step 4"]);
+    expect(variantNames("energy", [p({ program: "xtb" }, { geometry: "aa" }), p({ program: "xtb" }, { geometry: "bb" }), p({ program: "xtb", plugin: "x" }, { geometry: "bb" })])).toEqual([
+      "energy \u00b7 plugin not stated geometry aa",
+      "energy \u00b7 plugin not stated geometry bb",
+      "energy \u00b7 plugin x geometry bb",
+    ]);
+    expect(variantNames("G", [p({ program: "xtb", run: "r1" }, { geometry: "g", kelvin: 298.15 }), p({ program: "xtb", run: "r1" }, { geometry: "g", kelvin: 310 })])).toEqual(["G \u00b7 298.15 K", "G \u00b7 310 K"]);
+    // (one way: its name alone)
+    expect(variantNames("energy", [p({ program: "xtb" }, { geometry: "g" })])).toEqual(["energy"]);
+  });
+
+  it("counts a property with no value as missing, never throwing", () => {
+    const t = moleculesAsTable([water("e1", { energy: { ...energy(-76.4, "A"), value: null as unknown as number } }), water("e2", { energy: energy(-76.3, "A") })]);
+    expect(t.rows.map((r) => r[3])).toEqual([null, -76.3]);
+    expect(t.left).toEqual([{ column: "energy", why: "1 with no value, missing in its row" }]);
   });
 });

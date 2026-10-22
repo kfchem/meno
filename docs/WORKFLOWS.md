@@ -1384,14 +1384,18 @@ count, a share), text, true or false, an entry's id. A column of numbers
 says what worked them out and where, where that is known.
 
 **Read from a file** (`readTable`): CSV, or TSV where the first line has a
-tab, read as RFC 4180 has it (quoted fields may hold the delimiter, line
-breaks and doubled quotes).
+tab, or values separated by semicolons where it has those and no commas
+(as spreadsheets write CSV where a comma is the decimal mark) - read as
+RFC 4180 has it (quoted fields may hold the delimiter, line breaks and
+doubled quotes); a byte-order mark before it is left out.
 - The first line names the columns, each with its unit in brackets:
   "energy (kcal/mol)", "T [K]", "count (none)". A unit Meno's units table
   does not know is said, and its column is read as text.
 - A column is of numbers where its header gives a unit, or where every
   cell it has reads as one; of true or false where every one says so;
-  else of text.
+  else of text - and where some of its cells are numbers, why ("read as
+  text: 1 of 4 cells are no number", with the first).
+- A name given twice: the second is "name (2)", and that is said.
 - A number is digits with a point, a sign (the minus sign too) and an
   exponent - nothing else: no thousands' separators, since a comma means
   one thing in one place and another elsewhere.
@@ -1405,8 +1409,12 @@ charges and bonds; isotopes are not part of it), its configuration (as
 perceived; "not known" where it was not, or an element is left
 unspecified) - and each property a column.
 - A property worked out in more than one way - another method,
-  temperature or solvent - is a column for each, named for how ("energy ·
-  prog B (Eh)"), never one column of values that are not alike.
+  temperature, solvent, geometry, step, run or plugin - is a column for
+  each, named for what tells it apart from the others ("energy · B",
+  "G · 310 K", "energy · step 4", "energy · plugin not stated geometry
+  1a2b"), numbered only where that still leaves two alike - never one
+  column of values that are not alike.
+- A property with no value is missing in its row, and counted.
 - A property an entry has not computed (failed, not applicable) is no
   value in its row.
 - A property that is no number, text or true or false - a list, a table,

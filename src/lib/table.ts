@@ -109,21 +109,39 @@ export function numberOf(text: string): number | null {
 const TRUE = new Set(["true", "yes"]);
 const FALSE = new Set(["false", "no"]);
 
+/** The delimiter a file's first line shows: a tab; else a semicolon where it has semicolons and no commas (as spreadsheets write CSV where a comma is the decimal mark); else a comma. */
+export function delimiterOf(first: string): "\t" | ";" | "," {
+  if (first.includes("\t")) return "\t";
+  return first.includes(";") && !first.includes(",") ? ";" : ",";
+}
+
 /**
  * A table read from a file's text: CSV, or TSV where its first line has a
- * tab. Its first record names the columns, each with its unit in brackets
+ * tab, or values separated by semicolons where it has those and no commas;
+ * a byte-order mark before it, as some programs write one, left out. Its first record names the columns, each with its unit in brackets
  * where it has one. A column is of numbers where its header gives a unit,
  * or where every cell it has reads as one; of true or false where every one
  * says so; else of text. A cell of a number column that is no number - or a
  * row with more or fewer cells than there are columns - is counted and
  * said, and left with no value; an empty cell is no value, as written.
  */
-export function readTable(text: string): Table {
+export function readTable(given: string): Table {
+  const text = given.replace(/^\uFEFF/, "");
   const first = text.split(/\r?\n/, 1)[0] ?? "";
-  const all = records(text, first.includes("\t") ? "\t" : ",");
+  const all = records(text, delimiterOf(first));
   const unread: Unread[] = [];
   if (!all.length) return { columns: [], rows: [], unread, left: [] };
-  const heads = all[0].map(headerOf);
+  // (a name given twice: the second "name (2)", and said)
+  const seen = new Map<string, number>();
+  const heads = all[0].map((h) => {
+    const head = headerOf(h);
+    const k = (seen.get(head.name) ?? 0) + 1;
+    seen.set(head.name, k);
+    if (k === 1) return head;
+    const name = `${head.name} (${k})`;
+    unread.push({ row: 0, column: name, text: head.name, why: `a second column named "${head.name}": named "${name}"` });
+    return { ...head, name };
+  });
   const body: string[][] = [];
   all.slice(1).forEach((r, k) => {
     if (r.length === heads.length) body.push(r);
@@ -134,8 +152,14 @@ export function readTable(text: string): Table {
     if (h.unknown != null) unread.push({ row: 0, column: h.name, text: h.unknown, why: "a unit Meno's units table does not know: read as text" });
     if (h.unit) return { name: h.name, kind: "number", unit: h.unit };
     const cells = body.map((r) => r[j].trim()).filter(Boolean);
-    if (h.unknown == null && cells.length && cells.every((c) => numberOf(c) != null)) return { name: h.name, kind: "number", unit: "none" };
+    const numbers = cells.filter((c) => numberOf(c) != null).length;
+    if (h.unknown == null && cells.length && numbers === cells.length) return { name: h.name, kind: "number", unit: "none" };
     if (cells.length && cells.every((c) => TRUE.has(c.toLowerCase()) || FALSE.has(c.toLowerCase()))) return { name: h.name, kind: "bool" };
+    // (numbers but for some: read as text, and said why - with the first cell that is no number)
+    if (h.unknown == null && numbers) {
+      const k = body.findIndex((r) => r[j].trim() && numberOf(r[j].trim()) == null);
+      unread.push({ row: k + 1, column: h.name, text: body[k][j].trim(), why: `read as text: ${cells.length - numbers} of ${cells.length} cells are no number` });
+    }
     return { name: h.name, kind: "text" };
   });
   const rows = body.map((r, k) =>
@@ -159,11 +183,49 @@ export function readTable(text: string): Table {
 /** A column's key: a property's name, with its unit, what worked it out and where - so that values worked out differently are never one column. */
 const variantOf = (p: Property) => JSON.stringify([p.unit, p.by ?? null, p.at ?? null]);
 
-/** What worked a column's numbers out, and where, in a few words - told apart where one property's values were worked out more ways than one. */
-export function workedOut(by: By | undefined, at: At | undefined): string {
-  const how = by ? [by.program ?? by.model ?? by.plugin, by.version, by.method, by.basis, by.treatment].filter(Boolean).join(" ") : "";
-  const where = at ? [at.kelvin != null ? `${at.kelvin} K` : "", at.atm != null ? `${at.atm} atm` : "", at.solvent ?? ""].filter(Boolean).join(", ") : "";
-  return [how, where].filter(Boolean).join(" \u00b7 ") || "not stated";
+/** What tells a property's ways of being worked out apart, field by field, as a column's name says it: what worked it out, where, and its unit. */
+const FIELDS: { what: string; of: (p: Property) => string | number | undefined; say: (v: string | number) => string }[] = [
+  { what: "program", of: (p) => p.by?.program, say: (v) => `${v}` },
+  { what: "model", of: (p) => p.by?.model, say: (v) => `model ${v}` },
+  { what: "version", of: (p) => p.by?.version, say: (v) => `version ${v}` },
+  { what: "method", of: (p) => p.by?.method, say: (v) => `${v}` },
+  { what: "basis", of: (p) => p.by?.basis, say: (v) => `${v}` },
+  { what: "treatment", of: (p) => p.by?.treatment, say: (v) => `${v}` },
+  { what: "plugin", of: (p) => p.by?.plugin, say: (v) => `plugin ${v}` },
+  { what: "step", of: (p) => p.by?.step, say: (v) => `step ${v}` },
+  { what: "run", of: (p) => p.by?.run, say: (v) => `run ${v}` },
+  { what: "temperature", of: (p) => p.at?.kelvin, say: (v) => `${v} K` },
+  { what: "pressure", of: (p) => p.at?.atm, say: (v) => `${v} atm` },
+  { what: "solvent", of: (p) => p.at?.solvent, say: (v) => `${v}` },
+  { what: "geometry", of: (p) => p.at?.geometry, say: (v) => `geometry ${v}` },
+  { what: "unit", of: (p) => (p.unit === "none" ? undefined : p.unit), say: (v) => `(${v})` },
+];
+
+/**
+ * Each way a property was worked out, named as its column: its name alone
+ * where there is one way; else its name with what tells that way apart from
+ * the others - the fields that differ among them, each said ("energy · B",
+ * "energy · 298.15 K", "energy · step 4", "energy · geometry 1a2b3c4d") -
+ * numbered only where that still leaves two alike.
+ */
+export function variantNames(name: string, ways: readonly Property[]): string[] {
+  if (ways.length < 2) return ways.map(() => name);
+  const differ = FIELDS.filter((f) => new Set(ways.map((p) => String(f.of(p) ?? ""))).size > 1);
+  const names = ways.map((p) => {
+    const said = differ.flatMap((f) => {
+      const v = f.of(p);
+      return v == null || v === "" ? [`${f.what} not stated`] : [f.say(v)];
+    });
+    return said.length ? `${name} \u00b7 ${said.join(" ")}` : name;
+  });
+  // (still alike: numbered, the last resort)
+  const count = new Map<string, number>();
+  return names.map((n) => {
+    if (names.filter((x) => x === n).length < 2) return n;
+    const k = (count.get(n) ?? 0) + 1;
+    count.set(n, k);
+    return `${n} (${k})`;
+  });
 }
 
 /**
@@ -186,9 +248,15 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   // (each property's ways it was worked out, in the order first met)
   const ways = new Map<string, Map<string, Property>>();
   const left = new Map<string, string>();
+  const missing = new Map<string, number>();
   for (const e of entries) {
     for (const [name, p] of Object.entries(e.properties)) {
-      const v = p.value;
+      const v = p.value as Property["value"] | null | undefined;
+      // (a property with no value: missing in its row, and counted)
+      if (v == null) {
+        missing.set(name, (missing.get(name) ?? 0) + 1);
+        continue;
+      }
       if (typeof v === "object" && !("entry" in v)) {
         left.set(name, `${"list" in v ? "a list" : "table" in v ? "a table" : "vector" in v ? "a vector" : "modes" in v ? "modes" : "restraints"}, not a column`);
         continue;
@@ -200,8 +268,9 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   }
   const keys: { name: string; variant: string }[] = [];
   for (const [name, of] of ways) {
-    for (const [variant, p] of of) {
-      const label = of.size > 1 ? `${name} \u00b7 ${workedOut(p.by, p.at)}${p.unit !== "none" ? ` (${p.unit})` : ""}` : name;
+    const labels = variantNames(name, [...of.values()]);
+    [...of].forEach(([variant, p], k) => {
+      const label = labels[k];
       const v = p.value;
       columns.push(
         typeof v === "number"
@@ -213,7 +282,7 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
               : { name: label, kind: "text" },
       );
       keys.push({ name, variant });
-    }
+    });
   }
   const rows = entries.map((e): Cell[] => [
     e.id,
@@ -221,10 +290,15 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
     stereoIdentity(e.stereo) ?? "not known",
     ...keys.map(({ name, variant }) => {
       const p = e.properties[name];
-      if (!p || p.status !== "computed" || variantOf(p) !== variant) return null;
+      if (!p || p.value == null || p.status !== "computed" || variantOf(p) !== variant) return null;
       const v = p.value;
       return typeof v === "object" ? ("entry" in v ? v.entry : null) : v;
     }),
   ]);
-  return { columns, rows, unread: [], left: [...left].map(([column, why]) => ({ column, why })) };
+  return {
+    columns,
+    rows,
+    unread: [],
+    left: [...[...left].map(([column, why]) => ({ column, why })), ...[...missing].map(([column, k]) => ({ column, why: `${k} with no value, missing in ${k === 1 ? "its row" : "their rows"}` }))],
+  };
 }
