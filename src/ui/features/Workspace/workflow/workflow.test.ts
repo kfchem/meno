@@ -870,7 +870,7 @@ describe("Quick Add's calculations", () => {
 });
 
 describe("a workflow's parts in the selection", () => {
-  /** A page with a molecule in a set (1), wired into an optimisation (2) whose exit is set 3 - and the store over it. */
+  /** A page with a molecule in a set (1), wired into an optimisation (2) whose exits are sets 3 and 4 (Failed) - and the store over it. */
   function selecting() {
     const doc = createWorkspaceDocument();
     doc.edit("page", () => connect(addStep(page(), "optimise", 6, 3, { method: "gfn2" }, "xtb"), { set: 1 }, 2));
@@ -882,7 +882,7 @@ describe("a workflow's parts in the selection", () => {
   it("are taken by Select all, by Ctrl or ⌘ and a click - in, and out again - and let go with the rest", () => {
     const { st } = selecting();
     st().selectAll();
-    expect(st().selFlow).toEqual({ sets: new Set([1, 3]), steps: new Set([2]) });
+    expect(st().selFlow).toEqual({ sets: new Set([1, 3, 4]), steps: new Set([2]) });
     st().clearSel();
     expect(st().selFlow).toEqual({ sets: new Set(), steps: new Set() });
     st().toggleFlowSel({ step: 2 });
@@ -912,10 +912,11 @@ describe("a workflow's parts in the selection", () => {
     const step = st().steps.find((s) => s.kind === "energy")!;
     // (the step put down given the set for its exit it came without: every step has its exits)
     const exit = resultOf(st(), step.id)!;
-    expect(st().sets).toHaveLength(4);
+    const failed = resultOf(st(), step.id, "failed")!;
+    expect(st().sets).toHaveLength(6);
     const set = st().sets.find((b) => !b.made && b.id !== 1)!;
     expect(st().wires.some((w) => w.to.step === step.id && w.from.set === set.id)).toBe(true);
-    expect(st().selFlow).toEqual({ sets: new Set([set.id, exit.id]), steps: new Set([step.id]) });
+    expect(st().selFlow).toEqual({ sets: new Set([set.id, exit.id, failed.id]), steps: new Set([step.id]) });
   });
 });
 

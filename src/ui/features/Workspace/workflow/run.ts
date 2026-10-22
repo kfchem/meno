@@ -17,7 +17,7 @@ import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } 
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, holdCollection, holdMembers, moveSet, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -264,9 +264,27 @@ export function placeResults(
 ): WorkspaceDocument {
   const { molecules: made, rest, holds, unread, restUnread } = results;
   const exits = exitsOf(step.kind);
-  doc = fillExit(doc, step, exits[0].id, made, holds, unread, w, turns);
+  doc = keepExitsUnder(fillExit(doc, step, exits[0].id, made, holds, unread, w, turns), step);
   // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
   if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  return doc;
+}
+
+/**
+ * `doc` with a step's later exits' sets kept under its first, as they were
+ * made (`withExits`): each moved down, with what it holds, where the one
+ * above it has grown onto it - never up, nor sideways.
+ */
+function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
+  const exits = exitsOf(step.kind);
+  let above = resultOf(doc, step.id, exits[0].id);
+  for (const exit of exits.slice(1)) {
+    const b = resultOf(doc, step.id, exit.id);
+    if (!above || !b) break;
+    const reach = above.y0 - BETWEEN;
+    if (b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN) doc = moveSet(doc, b.id, 0, reach - b.y1);
+    above = resultOf(doc, step.id, exit.id);
+  }
   return doc;
 }
 
@@ -436,10 +454,14 @@ export function fitResultSets(
     if (within && apart) continue;
     const least = Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD);
     const frameOf = (l: { width: number; height: number }) => frameAt(set.x0, set.y1, l.width, Math.max(l.height, set.y1 - set.y0));
+    // (its step's other exits' sets are no hindrance: they move down with it)
+    const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === set.made!.step).map((b) => b.id));
     let lay = laidOut(rooms, least);
-    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
+    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member, sets: siblings })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
     doc = moveMolecules3d(doc, ms.map((m, i) => ({ id: m.id, at: { x: set.x0 + lay.at[i].x, y: set.y1 + lay.at[i].y } })));
     doc = resizeSet(doc, set.id, frameOf(lay));
+    const step = doc.steps?.find((s) => s.id === set.made!.step);
+    if (step) doc = keepExitsUnder(doc, step);
   }
   return doc;
 }
@@ -461,11 +483,11 @@ export function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: numb
 /**
  * Whether a frame keeps `BETWEEN` clear of what is on the page - its sets,
  * its steps' cards, its structures and its molecules in 3D - but for the
- * set `self` and the molecules it holds.
+ * set `self`, the molecules it holds and the sets `self.sets`.
  */
-function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number> }): boolean {
+function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number>; sets?: ReadonlySet<number> }): boolean {
   const taken: Frame[] = [
-    ...(doc.sets ?? []).filter((b) => b.id !== self?.set),
+    ...(doc.sets ?? []).filter((b) => b.id !== self?.set && !self?.sets?.has(b.id)),
     ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
   ];
   const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules.has(m.id)).map((m) => m.at)];

@@ -80,7 +80,8 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(d.molecules3d).toHaveLength(3);
     d = ran(waters(70), "molecules", d);
     expect(d.molecules3d ?? []).toHaveLength(0);
-    expect(d.sets).toHaveLength(1);
+    // (the step's set, and its Failed one)
+    expect(d.sets).toHaveLength(2);
     expect(d.sets![0].collection).toHaveLength(70);
     d = ran(waters(2), "molecules", d);
     expect(d.molecules3d).toHaveLength(2);
