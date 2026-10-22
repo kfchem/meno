@@ -14,7 +14,7 @@ import type { Molecule3D } from "../store/types";
 import type { EntryStereo } from "../../../../lib/entry";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
+import { keptApart, notAllMinima, pushTo, runMeno, runMenoInTurns } from "./meno";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
 
@@ -367,6 +367,42 @@ describe("Meno's own steps", () => {
     // (0: the lowest of each compound alone)
     const none = runMeno("energy-window", set, "conformers", { window: 0 });
     expect(none.ok && none.kept.map((e) => e.number)).toEqual([1]);
+  });
+
+  it("give no populations where one conformer is no minimum - its calculation judged it has an imaginary frequency - naming it and its frequency", () => {
+    // (the correctness lane's methanol saddle point: xtb, -382.63 cm-1, one significant)
+    const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) => (i === 1 ? { ...e, imaginary: [-382.63] } : e));
+    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first" });
+    expect(notAllMinima(set)).toBe("a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first");
+    // (taken out, as the chemist would: given)
+    const minima = set.filter((e) => !e.imaginary);
+    expect(runMeno("populations", minima, "conformers", { temperature: 298.15 }).ok).toBe(true);
+    expect(notAllMinima(minima)).toBeNull();
+    // (a window on electronic energies weighs no populations: it keeps the saddle point where its energy falls)
+    expect(runMeno("energy-window", set, "conformers", { window: 3 }).ok).toBe(true);
+  });
+
+  it("give no populations, and no window, where one conformer's optimisation did not converge - naming it", () => {
+    const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) =>
+      i === 2 ? { ...e, failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : e,
+    );
+    const said = "a #3 is not converged: it is no minimum - take it out first";
+    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said });
+    // (another kind of failure is not said so)
+    const refused = set.map((e) => (e.failed ? { ...e, failed: { kind: "refused" as const, why: "x" } } : e));
+    expect(runMeno("energy-window", refused, "conformers", { window: 3 }).ok).toBe(true);
+  });
+
+  it("carry each conformer's imaginary frequencies, frame by frame - a single geometry's its calculation's, of its last", () => {
+    const m = { ...bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), imaginary: [null, [-382.63], null] };
+    expect(entries(m, "conformers").map((e) => e.imaginary)).toEqual([undefined, [-382.63], undefined]);
+    const one = { ...bent({ x: 0, y: 0 }), calc: { readers: ["xtb 6.7.1"], imaginary: [-382.63] } };
+    expect(entries(one, "molecules").map((e) => e.imaginary)).toEqual([[-382.63]]);
+    // (an earlier frame of a path: not the geometry the frequencies are of)
+    const path = { ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["xtb 6.7.1"], imaginary: [-382.63] }, path: true as const };
+    expect(entries(path, "molecules").map((e) => e.imaginary)).toEqual([[-382.63]]);
+    expect(setEntries([{ ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["xtb 6.7.1"], imaginary: [-382.63] }, id: 1 }], "molecules").map((e) => e.imaginary)).toEqual([undefined, [-382.63]]);
   });
 
   it("take an energy that is no number - NaN, or infinite - for none: in a window, in populations, in choosing the lowest and in Duplicates' order", () => {

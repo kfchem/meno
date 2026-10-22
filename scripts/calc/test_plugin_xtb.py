@@ -269,6 +269,19 @@ class Collect(unittest.TestCase):
         # (an error's block is not a warning)
         self.assertEqual(worker.warnings_of("[ERROR] Program stopped due to fatal error\n-1- no\n"), [])
 
+    def test_the_imaginary_frequencies_xtb_judged_significant(self):
+        # (a methanol saddle point from an eclipsed start: xtb lists -382.63 and says it found one significant)
+        frequencies = [-0.00004, -0.00003, -0.00002, -0.00001, 0.0, 0.00001, -382.63, 1038.5, 1084.0, 1137.3, 1235.4, 1412.3, 1464.7, 1490.0, 2952.0, 2971.1, 3001.2, 3535.0]
+        dump = json.dumps({"total energy": -8.23, "vibrational frequencies / rcm": frequencies, "reduced masses": [1] * 18, "IR intensities / km/mol": [0] * 18})
+        found = "imag cut-off (cm-1) :    5.00\n found            1  significant imaginary frequency\n writing imag mode distorted coords to xtbhess.xyz\n"
+        methanol = {"atoms": [{"el": el, "x": float(i), "y": 0.0, "z": 0.0} for i, el in enumerate("COHHHH")], "charge": 0, "multiplicity": 1}
+        collect = lambda log, step="frequencies": ask("collect", step=step, entries=[methanol], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + log, ended="done")["outputs"][0]
+        self.assertEqual(collect(found)["imaginary"], [-382.63])
+        # (none said found: none, judged so - the six near zero, translations and rotations, are none of them)
+        self.assertEqual(collect("")["imaginary"], [])
+        # (not a frequency job: not judged)
+        self.assertNotIn("imaginary", collect(found, "energy"))
+
     def test_the_solvation_as_xtb_said_it(self):
         self.assertEqual(worker.solvation_of(SOLVATED), "ALPB(thf), reference state gsolv [1 M gas/solution]")
         self.assertEqual(worker.solvation_of(GAS), "none")

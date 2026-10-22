@@ -5,7 +5,7 @@ import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
 import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, workedOf } from "./programs";
 import type { SetEntry } from "./entries";
-import { resultsOf } from "./run";
+import { resultsOf, type Worked } from "./run";
 
 const WATER: SetEntry = {
   compound: 0,
@@ -267,6 +267,20 @@ describe("a conformer search", () => {
     expect(without.map((w) => w.share)).toEqual([undefined, undefined]);
     // (as the molecule's own shares, in its conformer set)
     expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "conformers").molecules[0].shares).toEqual([0.7, 0.3]);
+  });
+
+  it("keeps each conformer's imaginary frequencies, as its frequency job judged them, with that conformer - not with the compound", () => {
+    // (CREST's conformers, then each one's frequencies by xtb: the second a saddle point)
+    const conformers: SetEntry[] = [WATER, { ...WATER, number: 2 }];
+    const out = (imaginary: number[]) => ({ schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[]], energies: [-1], imaginary });
+    const done = conformers.map((e, i) => workedOf("frequencies", e, out(i === 1 ? [-382.63] : []), ["xtb 6.7.1"]));
+    if (done.some(isFailure)) throw new Error("not done");
+    const [m] = resultsOf({ ok: true, holds: "conformers", kept: done as Worked[], aside: [], said: "" }, "frequencies").molecules;
+    expect(m.imaginary).toEqual([null, [-382.63]]);
+    expect(m.calc?.imaginary).toBeUndefined();
+    // (taken on: the second named as no minimum)
+    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.imaginary)).toEqual([undefined, [-382.63]]);
+    expect(setEntries([{ ...m, id: 2, at: { x: 0, y: 0 } }], "conformers").map((e) => e.calc?.imaginary)).toEqual([undefined, undefined]);
   });
 
   it("takes what a plugin kept at once by place - never one it was not given", () => {

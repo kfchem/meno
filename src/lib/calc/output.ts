@@ -32,6 +32,13 @@ export type ReaderOutput = {
   solvation?: string | null;
   /** What it warns of, each with its kind (./warnings `WARNING_KINDS`; any other, `other`) and the program's own words. */
   warnings?: { kind?: string; text: string }[];
+  /**
+   * Its imaginary frequencies at the geometry it ended on, in cm-1, each
+   * negative as programs list them - those the program itself judged
+   * imaginary (xtb's "significant" ones, Gaussian's NImag, the modes ORCA
+   * marks): none where it judged none; unsaid where it did not judge.
+   */
+  imaginary?: number[] | null;
   charge?: number | null;
   multiplicity?: number | null;
   /** Its atoms' elements, in the file's order. */
@@ -104,7 +111,19 @@ export type CalcInfo = {
   unread?: { from: string; why: string }[];
   /** What the calculation warned of, each a kind core knows with the program's own words (./warnings): none moves its entry. */
   warnings?: Warning[];
+  /** The imaginary frequencies the program judged its last geometry has, in cm-1, negative (`ReaderOutput.imaginary`): a mark that it is no minimum. */
+  imaginary?: number[];
 };
+
+/** A program's imaginary frequencies as Meno keeps them: each a number below 0, in cm-1; none, where they are not that. */
+export function imaginaryOf(v: unknown): number[] | undefined {
+  return Array.isArray(v) && v.length && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
+}
+
+/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 382.6i cm-1". */
+export function imaginaryWords(cm: readonly number[]): string {
+  return `${cm.length} imaginary frequenc${cm.length === 1 ? "y" : "ies"}, ${cm.map((f) => `${Math.abs(f).toFixed(1)}i`).join(", ")} cm-1`;
+}
 
 /**
  * An output as a molecule keeps it: its name, its kind (lib/io/kinds), its
@@ -157,6 +176,7 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
       : {}),
     ...(unread?.length ? { unread: unread.map((u) => ({ from: u.from, why: u.why })) } : {}),
     ...(warningsOf(out.warnings).length ? { warnings: warningsOf(out.warnings) } : {}),
+    ...(imaginaryOf(out.imaginary) ? { imaginary: imaginaryOf(out.imaginary) } : {}),
   };
 }
 
@@ -197,6 +217,9 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
       multiplicity: isNum(c.multiplicity) ? c.multiplicity : null,
       optimised: typeof c.optimised === "boolean" ? c.optimised : null,
       job: jobOf(c.job),
+      // (what it warned of, and the imaginary frequencies it was marked with: kept with the workspace as they came)
+      ...(Array.isArray(c.warnings) ? { warnings: c.warnings as { kind?: string; text: string }[] } : {}),
+      ...(imaginaryOf(c.imaginary) ? { imaginary: imaginaryOf(c.imaginary) } : {}),
       atoms: new Array(atoms).fill(""),
       frames: new Array(frames).fill(new Array(3 * atoms).fill(0)),
       results,

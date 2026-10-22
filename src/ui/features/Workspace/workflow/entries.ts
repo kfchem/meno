@@ -245,6 +245,8 @@ export type SetEntry = {
   stereo?: EntryStereo;
   /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
   failed?: Failure;
+  /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
+  imaginary?: number[];
   name?: string;
   /**
    * What the calculation it was read from says - the program, the method
@@ -352,6 +354,10 @@ export function keptAlike(g: readonly SetEntry[]): Kept {
   return out as Kept;
 }
 
+/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
+const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
+  (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
+
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
@@ -365,7 +371,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
-    const calcBefore = m.calc ? (({ results: _r, ...rest }) => rest)(m.calc) : undefined;
+    const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       const xyz = frameXyz(m, f);
@@ -384,6 +390,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(m.name ? { name: m.name } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
+        // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
+        ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
         keep,
         from: m.id,
         frame: f,

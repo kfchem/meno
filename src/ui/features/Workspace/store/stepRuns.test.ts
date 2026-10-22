@@ -743,8 +743,8 @@ describe("a step that runs a plugin's program", () => {
     const { st, step } = waters(2);
     const base = worker.collect.getMockImplementation()!;
     worker.collect.mockImplementationOnce(base).mockImplementationOnce(async (...args: Parameters<typeof base>) => {
-      const r = (await base(...args)) as { outputs: { optimised: boolean }[] };
-      return { outputs: r.outputs.map((o) => ({ ...o, optimised: false })) };
+      const r = await base(...args);
+      return r.outputs ? { outputs: r.outputs.map((o) => ({ ...o, optimised: false })) } : r;
     });
     const ran = st().runStep(step);
     await settle();

@@ -6,6 +6,7 @@ import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
+import { imaginaryWords } from "../../../../lib/calc/output";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -88,6 +89,7 @@ export function FramesChip({
   title,
   failed,
   warnings,
+  imaginary,
 }: {
   count: number;
   frame: number;
@@ -127,6 +129,8 @@ export function FramesChip({
   failed?: readonly (Failure | null)[];
   /** What its calculation warned of: counted on it, each said in full with the rest, opened. A warning moves nothing. */
   warnings?: readonly Warning[];
+  /** The imaginary frequencies each frame's calculation judged it has, in cm-1 (null, none): the one told's said on it - a mark that it is no minimum. */
+  imaginary?: readonly (readonly number[] | null)[];
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -225,7 +229,14 @@ export function FramesChip({
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
   // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
   const failure = failed?.[told] ?? undefined;
-  const marks = [failure ? FAILURE_WORDS[failure.kind] : "", warnings?.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+  const saddle = imaginary?.[told];
+  const marks = [
+    failure ? FAILURE_WORDS[failure.kind] : "",
+    saddle?.length ? imaginaryWords(saddle) : "",
+    warnings?.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => chipLine([about ?? "", energy != null ? absolute(energy) : ""], results);

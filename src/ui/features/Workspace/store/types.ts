@@ -416,6 +416,12 @@ export type Molecule3D = {
    * it, its chip saying it in plain words.
    */
   failed?: (Failure | null)[];
+  /**
+   * A conformer set's: the imaginary frequencies each conformer's
+   * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame
+   * by frame - null, none. A single geometry's are its calculation's own.
+   */
+  imaginary?: (number[] | null)[];
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */

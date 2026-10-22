@@ -55,6 +55,10 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
   asked). None where its program call asked for none and it printed no
   model: so said, not taken from the options. Where that is not what was
   asked, the job is refused;
+- the imaginary frequencies of a frequency job as xtb itself judged them:
+  as many as it says it found ("found 1 significant imaginary
+  frequency", below its cutoff), the most negative of those its dump
+  lists; none where it says it found none - it says nothing then;
 - what xtb warned of as it ran on - the numbered messages of a block it
   heads "[WARNING]" - each in its own words: a Hessian worked out at a
   geometry not fully optimised ("Hessian on incompletely optimized
@@ -536,6 +540,13 @@ def why_of(log):
     return said[0] if len(said) == 1 else f"{said[0]}: {said[-1]}"
 
 
+def imaginary_of(log, frequencies):
+    """The imaginary frequencies xtb judged significant, in cm-1, negative: as many as it says it found, the most negative of `frequencies`."""
+    found = re.findall(r"found\s+(\d+)\s+significant imaginary frequenc", log)
+    n = int(found[-1]) if found else 0
+    return sorted(f for f in frequencies if isinstance(f, (int, float)) and math.isfinite(f) and f < 0)[:n]
+
+
 # (xtb's own words, as it warns of frequencies at a geometry whose gradient is not near zero)
 HESSIAN_NOT_STATIONARY = "Hessian on incompletely optimized geometry"
 
@@ -593,6 +604,7 @@ def output_of(step, entry, options, files, log):
     if solvation is not None and not as_asked:
         raise Refused(f"xtb ran with solvation {solvation}, not as asked ({solvent})")
     warnings = warnings_of(log)
+    imaginary = imaginary_of(log, dump.get("vibrational frequencies / rcm") or []) if step == "frequencies" else None
     return {
         "schema": SCHEMA,
         "program": "xtb",
@@ -607,6 +619,7 @@ def output_of(step, entry, options, files, log):
         "optimised": optimised,
         "results": results,
         **({"warnings": warnings} if warnings else {}),
+        **({"imaginary": imaginary} if imaginary is not None else {}),
     }
 
 

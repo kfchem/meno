@@ -25,7 +25,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { readCalc } from "../../../../lib/calc/output";
+import { imaginaryOf, readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -686,6 +686,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
     ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
     ...(failedOf(m.failed, 1 + frames.length) ? { failed: failedOf(m.failed, 1 + frames.length) } : {}),
+    ...(imaginaryFrames(m.imaginary, 1 + frames.length) ? { imaginary: imaginaryFrames(m.imaginary, 1 + frames.length) } : {}),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
@@ -699,6 +700,13 @@ function failedOf(given: unknown, frames: number): (Failure | null)[] | undefine
     const g = f as { kind?: unknown; why?: unknown } | null;
     return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
   });
+  return out.some(Boolean) ? out : undefined;
+}
+
+/** A conformer set's imaginary frequencies, one list or null for each frame, as `CalcInfo.imaginary` takes them. */
+function imaginaryFrames(given: unknown, frames: number): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== frames) return undefined;
+  const out = given.map((f) => imaginaryOf(f) ?? null);
   return out.some(Boolean) ? out : undefined;
 }
 
