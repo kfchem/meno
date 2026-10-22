@@ -1412,13 +1412,17 @@ unspecified) - and each property a column.
 - A property worked out in more than one way - another method,
   temperature, solvent, geometry, step, run or plugin - is a column for
   each, named for what tells it apart from the others ("energy · B",
-  "G · 310 K", "energy · step 4", "energy · plugin not stated geometry
-  1a2b"), numbered only where that still leaves two alike - never one
-  column of values that are not alike. The name is made from what differs
-  among the entries there are: a new way arriving can change it.
-- A property with no value is missing in its row, and counted.
-- A property an entry has not computed (failed, not applicable) is no
-  value in its row.
+  "G · 310 K", "energy · step 4"), numbered only where that still leaves
+  two alike - never one column of values that are not alike. The name is
+  made from what differs among the entries there are: a new way arriving
+  can change it.
+- Where it was worked out is told apart as at the entry's own geometry -
+  every row its own, one column ("energy") - or at another geometry than
+  its entry's ("energy · at another geometry"): a conformer's energy at its
+  own geometry is one column for all the conformers, never a column for
+  each geometry.
+- A property with no value, or not worked out (failed, or still to be),
+  is missing in its row, and counted, each said apart.
 - A property that is no number, text or true or false - a list, a table,
   a vector - is no column, and that is said.
 

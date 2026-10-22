@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Entry, Property } from "./entry";
+import { geometryKey, type Entry, type Property } from "./entry";
 import { delimiterOf, headerOf, moleculesAsTable, numberOf, readTable, records, variantNames } from "./table";
 
 describe("a delimited text's records (RFC 4180)", () => {
@@ -91,7 +91,8 @@ describe("molecules seen as a table", () => {
   it("is a row per entry - its id, constitution, configuration - and a column per property, numbers with their unit and what worked them out", () => {
     const t = moleculesAsTable([water("e1", { energy: energy(-76.4, "A"), name: { value: "water", unit: "none", status: "computed" } }), water("e2", { energy: energy(-76.3, "A") })]);
     expect(t.columns.map((c) => c.name)).toEqual(["id", "constitution", "configuration", "energy", "name"]);
-    expect(t.columns[3]).toEqual({ name: "energy", kind: "number", unit: "Eh", by: { program: "prog", method: "A" }, at: { geometry: "g" } });
+    // (worked out at a geometry not the entry's own - it has none here - said so, not by its key)
+    expect(t.columns[3]).toEqual({ name: "energy", kind: "number", unit: "Eh", by: { program: "prog", method: "A" }, at: { geometry: "another" } });
     expect(t.rows.map((r) => [r[0], r[2], r[3], r[4]])).toEqual([
       ["e1", "not known", -76.4, "water"],
       ["e2", "not known", -76.3, null],
@@ -113,7 +114,37 @@ describe("molecules seen as a table", () => {
       [null, -76.1],
       [null, null],
     ]);
-    expect(t.left).toEqual([{ column: "charges", why: "a list, not a column" }]);
+    // (one that failed: missing in its row, and counted)
+    expect(t.left).toEqual([
+      { column: "charges", why: "a list, not a column" },
+      { column: "energy", why: "1 not worked out, missing in its row" },
+    ]);
+  });
+
+  it("makes a property worked out at each entry's own geometry one column - every row its own - and one at another geometry its own column", () => {
+    const at3d = (id: string, xyz: number[], energies: { own?: number; other?: number }): Entry => ({
+      ...water(id, {}),
+      geometry: { kind: "3d", xyz },
+      properties: {
+        ...(energies.own != null ? { energy: { ...energy(energies.own, "A"), at: { geometry: geometryKey(xyz) } } } : {}),
+        ...(energies.other != null ? { sp: { ...energy(energies.other, "A"), at: { geometry: "elsewhere" } } } : {}),
+      },
+    });
+    const t = moleculesAsTable([
+      at3d("e1", [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], { own: -76.4 }),
+      at3d("e2", [0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0], { own: -76.3, other: -76.2 }),
+    ]);
+    expect(t.columns.slice(3).map((c) => [c.name, c.kind === "number" ? c.at?.geometry : null])).toEqual([
+      ["energy", "own"],
+      ["sp", "another"],
+    ]);
+    expect(t.rows.map((r) => r.slice(3))).toEqual([
+      [-76.4, null],
+      [-76.3, -76.2],
+    ]);
+    // (the same property at its own geometry in one row and another's in the next: two columns, named for where)
+    const mixed = moleculesAsTable([at3d("e1", [0, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0], { own: -76.4 }), { ...at3d("e2", [0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0], {}), properties: { energy: { ...energy(-76.2, "A"), at: { geometry: "elsewhere" } } } }]);
+    expect(mixed.columns.slice(3).map((c) => c.name)).toEqual(["energy \u00b7 at its geometry", "energy \u00b7 at another geometry"]);
   });
 });
 

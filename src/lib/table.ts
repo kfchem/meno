@@ -8,7 +8,7 @@
  * configuration, and its properties as columns). What does not read is
  * counted and said, cell by cell - never left out unsaid.
  */
-import { stereoIdentity, type At, type By, type Entry, type Property } from "./entry";
+import { geometryKey, stereoIdentity, type At, type By, type Entry, type Property } from "./entry";
 import { identityKey } from "./chem/identity";
 import { isUnit, type Unit } from "./units";
 
@@ -188,6 +188,21 @@ export function readTable(given: string): Table {
 /** A column's key: a property's name, with its unit, what worked it out and where - so that values worked out differently are never one column. */
 const variantOf = (p: Property) => JSON.stringify([p.unit, p.by ?? null, p.at ?? null]);
 
+/**
+ * Where a property of molecules seen as a table was worked out, as its
+ * column tells it apart: at its entry's own geometry - each row its own,
+ * one column for all ("energy") - or at another than its entry's ("energy
+ * · at another geometry"), never a column for each geometry.
+ */
+export const OWN_GEOMETRY = "own";
+export const ANOTHER_GEOMETRY = "another";
+function asSeen(p: Property, own: string | undefined): Property {
+  if (!p.at) return p;
+  return { ...p, at: { ...p.at, geometry: p.at.geometry === own ? OWN_GEOMETRY : ANOTHER_GEOMETRY } };
+}
+/** An entry's own geometry's key: its one geometry in 3D's; none for frames, a drawing or none, which no property's geometry is. */
+const ownKey = (e: Entry) => (e.geometry.kind === "3d" ? geometryKey(e.geometry.xyz) : undefined);
+
 /** What tells a property's ways of being worked out apart, field by field, as a column's name says it: what worked it out, where, and its unit. */
 const FIELDS: { what: string; of: (p: Property) => string | number | undefined; say: (v: string | number) => string }[] = [
   { what: "program", of: (p) => p.by?.program, say: (v) => `${v}` },
@@ -202,7 +217,7 @@ const FIELDS: { what: string; of: (p: Property) => string | number | undefined; 
   { what: "temperature", of: (p) => p.at?.kelvin, say: (v) => `${v} K` },
   { what: "pressure", of: (p) => p.at?.atm, say: (v) => `${v} atm` },
   { what: "solvent", of: (p) => p.at?.solvent, say: (v) => `${v}` },
-  { what: "geometry", of: (p) => p.at?.geometry, say: (v) => `geometry ${v}` },
+  { what: "geometry", of: (p) => p.at?.geometry, say: (v) => (v === OWN_GEOMETRY ? "at its geometry" : v === ANOTHER_GEOMETRY ? "at another geometry" : `geometry ${v}`) },
   { what: "unit", of: (p) => (p.unit === "none" ? undefined : p.unit), say: (v) => `(${v})` },
 ];
 
@@ -241,8 +256,9 @@ export function variantNames(name: string, ways: readonly Property[]): string[] 
  * where not perceived, or an element left unspecified); and each property
  * a column. A property whose values were worked out in more than one way -
  * another method, temperature or solvent - is a column for each, named for
- * how. One that is no number, text or true or false is left, and said; a
- * property an entry has not computed is no value in its row.
+ * how - where, as at the entry's own geometry or at another (`asSeen`). One
+ * that is no number, text or true or false is left, and said; one with no
+ * value, or not worked out, is missing in its row, and counted.
  */
 export function moleculesAsTable(entries: readonly Entry[]): Table {
   const columns: TableColumn[] = [
@@ -254,12 +270,19 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   const ways = new Map<string, Map<string, Property>>();
   const left = new Map<string, string>();
   const missing = new Map<string, number>();
+  const failed = new Map<string, number>();
   for (const e of entries) {
-    for (const [name, p] of Object.entries(e.properties)) {
+    const own = ownKey(e);
+    for (const [name, given] of Object.entries(e.properties)) {
+      const p = asSeen(given, own);
       const v = p.value as Property["value"] | null | undefined;
-      // (a property with no value: missing in its row, and counted)
+      // (a property with no value, or not worked out - failed, or still to be: missing in its row, and counted)
       if (v == null) {
         missing.set(name, (missing.get(name) ?? 0) + 1);
+        continue;
+      }
+      if (p.status !== "computed") {
+        failed.set(name, (failed.get(name) ?? 0) + 1);
         continue;
       }
       if (typeof v === "object" && !("entry" in v)) {
@@ -294,7 +317,8 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
     identityKey({ atoms: e.structure.atoms.map((a) => ({ el: a.el, ...(a.charge ? { charge: a.charge } : {}) })), bonds: e.structure.bonds.map((b) => ({ a: b.a1, b: b.a2, order: b.order })) }),
     stereoIdentity(e.stereo) ?? "not known",
     ...keys.map(({ name, variant }) => {
-      const p = e.properties[name];
+      const given = e.properties[name];
+      const p = given && asSeen(given, ownKey(e));
       if (!p || p.value == null || p.status !== "computed" || variantOf(p) !== variant) return null;
       const v = p.value;
       return typeof v === "object" ? ("entry" in v ? v.entry : null) : v;
@@ -304,7 +328,9 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
     columns,
     rows,
     unread: [],
-    left: [...[...left].map(([column, why]) => ({ column, why })), ...[...missing].map(([column, k]) => ({ column, why: `${k} with no value, missing in ${k === 1 ? "its row" : "their rows"}` }))],
+    left: [...[...left].map(([column, why]) => ({ column, why })), ...[...missing].map(([column, k]) => ({ column, why: `${k} with no value, missing in ${k === 1 ? "its row" : "their rows"}` })),
+      ...[...failed].map(([column, k]) => ({ column, why: `${k} not worked out, missing in ${k === 1 ? "its row" : "their rows"}` })),
+    ],
   };
 }
 
