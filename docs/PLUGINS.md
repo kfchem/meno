@@ -807,6 +807,10 @@ The same for every plugin and for Meno's own parts:
     as the program itself judged them (xtb's "significant" ones,
     Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
     marks the molecule as no minimum;
+  - a job `prepare` gives may declare the memory it takes, in MiB
+    (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
+    times its processes, Gaussian's %Mem - counted against what this
+    computer's jobs may use; none declared, it is counted by its cores;
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job

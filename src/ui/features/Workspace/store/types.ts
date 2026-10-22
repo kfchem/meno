@@ -704,6 +704,8 @@ export type StepRunning = {
   options: OptionValues;
   jobs: StepJob[];
   kind?: StepKind;
+  /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
+  over?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
 };

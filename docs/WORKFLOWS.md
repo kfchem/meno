@@ -590,9 +590,25 @@ states an undo goes back to as well.
 
 ### Several at once
 
-- By default **one job runs at a time** on this computer; others wait,
-  in the order they were started. Settings, *Calculations*: how many at
-  once, and how many cores each may use.
+- **Jobs run as many at once as their cores and memory fit** what this
+  computer's jobs may use - all its cores and three quarters of its
+  memory, unless Settings, *Calculations*, says less - and the others
+  wait, in the order they were started: a job never starts ahead of one
+  asked for before it, however small (2026-10-22; until then, a number of
+  jobs at once). A job takes the cores Settings gives each - unset, all
+  that jobs may use, so one runs at a time - and the memory its plugin
+  declares (ORCA's %maxcore for each process, Gaussian's %Mem); one that
+  declares none is counted by its cores alone. So a small job waits behind
+  a large one that does not fit yet, though it would fit itself: the
+  order is kept, and nothing is starved. A job asking for more memory than
+  the limits, though no more than the computer has, starts once no job
+  that declares memory runs, and none that declares memory starts beside
+  it - one that declares none still may, where cores allow - and its step
+  says so (*1 job asks for more memory (30.0 GB) than jobs may use (24.0
+  GB): nothing else that declares memory runs beside it*); one larger than
+  the computer - more cores or memory than it
+  has - is refused, saying so, never started to swap or fail inside its
+  program.
 - **A step on many entries makes one job for each** (decided), queued as
   above - each with its own log, a failure its own, several at once
   where Settings allows.
@@ -878,8 +894,10 @@ Decided while building it, for the maintainer to confirm:
   once** - all of them while one runs at a time; set, never more than the
   computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
   and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
-- **Jobs at once counts for jobs asked for after it is changed**: one
-  already waiting keeps the number it was asked with.
+- **Jobs at once counted for jobs asked for after it was changed** (until
+  2026-10-22): one already waiting kept the number it was asked with. What
+  jobs may use now counts at once, for every job waiting - Settings tells
+  the runner as it changes.
 - **A job whose runner went without saying how it ended is *gone***, in
   its record; its card will show it *Stopped*, with its log, as above.
 - **Stop is at once on Windows** (its job object is ended); on macOS and
@@ -1442,6 +1460,30 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### The runner seam (2026-10-22)
+
+Foundation PR 14, its first part (WORKFLOWS-FOUNDATION.md, *Where jobs
+run*):
+
+- **A runner says where a job runs** (`lib/runners`): it starts a job,
+  says how it stands, gives its log and files, stops it and takes it
+  away. This computer's is the one built in step 2, now behind that seam;
+  a runner for another machine hangs on it later as a plugin of its own,
+  its jobs named by it (`<runner>:<job>`). There is one runner yet, so no
+  step offers *Runs on*.
+- **This computer's runner knows its resources**: Settings, *Calculations*,
+  *Jobs*: *Cores for each job*, *Cores jobs may use* and *Memory jobs may
+  use*, the computer's own cores and memory beside them (*of 10*, *GB of
+  32*). Meno tells the runner what jobs may use as it starts and as
+  Settings changes (`.limits.json` in the jobs folder); the runner reads it
+  as it looks for a waiting job's turn.
+- **A plugin declares a job's memory** (`prepare`: `memory`, in MiB).
+
+Not yet, in the seam's second part: the working folder chosen in
+Settings, path-safe folder names from the workspace's, step's and
+entry's, *Open the folder*, and job folders cleaned once their files are
+in the `.meno` unless *Keep job folders* is chosen.
 
 ### Failed entries (2026-10-22)
 

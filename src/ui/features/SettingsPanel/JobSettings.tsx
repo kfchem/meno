@@ -1,32 +1,53 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { clearFinishedJobs, computerCores, finished, finishedJobsBytes, keptText, listJobs, runningOf } from "../../../lib/jobs";
+import { clearFinishedJobs, computerCores, computerResources, finished, finishedJobsBytes, keptText, limitsOf, listJobs, runningOf } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
-import { JOBS_AT_ONCE_MOST, useAppSettings } from "../../../lib/settings/appSettings";
+import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
 
+/** A mebibyte's share of a gibibyte: memory is set in GB, kept in MiB. */
+const MIB_PER_GB = 1024;
+
 /**
- * Jobs in Settings, *Calculations* (docs/WORKFLOWS.md, *Several at once*):
- * how many run at once on this computer, how many cores each may use, and
- * the files of those finished - how many, and how much they hold - cleared.
+ * Jobs in Settings, *Calculations* (docs/WORKFLOWS-FOUNDATION.md, *This
+ * computer's runner knows its resources*): the cores each job takes, the
+ * cores and memory this computer's jobs may use at once - all its cores and
+ * three quarters of its memory unless set - and the files of those
+ * finished - how many, and how much they hold - cleared. Jobs run as many
+ * at once as fit.
  */
 export default function JobSettings() {
   const calculations = useAppSettings((s) => s.calculations);
   const setCalculations = useAppSettings((s) => s.setCalculations);
-  const cores = computerCores();
-  const running = runningOf(calculations, cores);
+  const [computer, setComputer] = useState({ cores: computerCores(), memory: 0 });
+  useEffect(() => {
+    if (!isTauri()) return;
+    computerResources().then(setComputer, () => {});
+  }, []);
+  const limits = limitsOf(calculations, computer);
+  const running = runningOf(calculations, computer.cores);
+  const gb = (mib: number) => Math.round((mib / MIB_PER_GB) * 10) / 10;
   const options: Option[] = [
-    { id: "at-once", label: "Jobs at once", type: "number", default: 1, min: 1, max: JOBS_AT_ONCE_MOST, step: 1 },
-    { id: "cores", label: "Cores for each", type: "number", default: running.cores, min: 1, max: cores, step: 1, unit: `of ${cores}` },
+    { id: "cores", label: "Cores for each job", type: "number", default: running.cores, min: 1, max: limits.cores, step: 1, unit: `of ${limits.cores}` },
+    { id: "cores-all", label: "Cores jobs may use", type: "number", default: computer.cores, min: 1, max: computer.cores, step: 1, unit: `of ${computer.cores}` },
+    ...(computer.memory > 0
+      ? [{ id: "memory-all", label: "Memory jobs may use", type: "number" as const, default: gb((computer.memory * 3) / 4), min: 0.5, max: gb(computer.memory), step: 0.5, unit: `GB of ${gb(computer.memory)}` }]
+      : []),
   ];
-  const values: OptionValues = { "at-once": running.slots, cores: running.cores };
+  const values: OptionValues = { cores: running.cores, "cores-all": limits.cores, ...(computer.memory > 0 ? { "memory-all": gb(limits.memory) } : {}) };
   const change = (v: OptionValues) => {
-    const whole = (n: unknown, most: number) => (typeof n === "number" ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
-    const atOnce = whole(v["at-once"], JOBS_AT_ONCE_MOST) ?? running.slots;
-    // (cores left as they were shared, shared again among as many as now run at once)
-    const chosen = v.cores !== values.cores ? whole(v.cores, cores) : calculations.cores;
-    const { atOnce: _a, cores: _c, ...rest } = calculations;
-    setCalculations({ ...rest, ...(atOnce !== 1 ? { atOnce } : {}), ...(chosen != null ? { cores: chosen } : {}) });
+    const whole = (n: unknown, most: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(Math.max(1, Math.round(n)), most) : undefined);
+    // (each kept as it was set, or as it was where it was not changed - unset, the default, where it comes to that)
+    const cores = v.cores !== values.cores ? whole(v.cores, computer.cores) : calculations.cores;
+    const all = v["cores-all"] !== values["cores-all"] ? whole(v["cores-all"], computer.cores) : calculations.coresAll;
+    const memory = v["memory-all"] !== values["memory-all"] && typeof v["memory-all"] === "number" ? whole(v["memory-all"] * MIB_PER_GB, computer.memory) : calculations.memoryAll;
+    const { cores: _c, coresAll: _a, memoryAll: _m, ...rest } = calculations;
+    setCalculations({
+      ...rest,
+      ...(cores != null ? { cores } : {}),
+      ...(all != null && all !== computer.cores ? { coresAll: all } : {}),
+      ...(memory != null ? { memoryAll: memory } : {}),
+    });
   };
 
   // the finished jobs whose files are kept, and the bytes they hold
