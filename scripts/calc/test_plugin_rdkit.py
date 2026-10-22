@@ -1088,6 +1088,36 @@ class OpenStereo(unittest.TestCase):
         AllChem.Compute2DCoords(mol)
         return self.worker.op_open_stereo({"molblock": Chem.MolToMolBlock(mol)})
 
+    def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
+        """`open_stereo` and then `conformers` of one structure, as a Conformers step asks them: the stereoisomers
+        tried in 3D once, not twice - the same answer both times, and copies, so that one caller's changes are
+        not another's."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles("CC1=CCC2CC1C2(C)C")
+        AllChem.Compute2DCoords(mol)
+        block = Chem.MolToMolBlock(mol)
+        calls = []
+        real = self.worker.EnumerateStereoisomers
+
+        def counted(*args, **kwargs):
+            calls.append(1)
+            return real(*args, **kwargs)
+
+        self.worker.EMBEDDABLE.clear()
+        self.worker.EnumerateStereoisomers = counted
+        try:
+            first = self.worker.op_open_stereo({"molblock": block})
+            again = self.worker.op_open_stereo({"molblock": block})
+            made = self.worker.op_conformers({"molblock": block, "isomers": "all", "options": {"count": 1}})
+        finally:
+            self.worker.EnumerateStereoisomers = real
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(first, again)
+        self.assertEqual(len(made["isomers"]), first["isomers"])
+        self.worker.embeddable(self.worker.read(block))[0].SetProp("asked", "by one")
+        self.assertFalse(self.worker.embeddable(self.worker.read(block))[0].HasProp("asked"))
+
     def test_a_cage_or_bridged_ring_its_rings_fix_is_one_way_only(self):
         for name, smiles, centres in [
             ("adamantane", "C1C2CC3CC1CC(C2)C3", 4),
