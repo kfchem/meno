@@ -385,10 +385,12 @@ const drawnAsked: string[] = [];
 /**
  * RDKit's worker, as a stand-in for its `conformers` role: the structure's
  * atoms, in the order they came, each its element and charge - as RDKit's
- * answer has them - its bonds, and two conformers with their energies.
+ * answer has them - its bonds, and two conformers with their energies; and
+ * for its `configurations` role, each molecule one with no stereo.
  */
 const chem = {
-  request: async (op: string, payload: { molblock: string }) => {
+  request: async (op: string, payload: { molblock: string; molblocks?: string[] }) => {
+    if (op === "configurations") return { molecules: (payload.molblocks ?? []).map(() => ({ elements: [], key: "none" })) };
     if (op !== "conformers") throw new Error(`no ${op} here`);
     drawnAsked.push(payload.molblock);
     const mol = readMolfile(payload.molblock)!;

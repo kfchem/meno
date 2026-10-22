@@ -7,10 +7,10 @@
  */
 import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
 import type { Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
-import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
+import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, LARGE_SET, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } from "./kinds";
@@ -181,28 +181,12 @@ export const SUMMARY_H = SET_TOP + 120 * PX;
 export type Worked = SetEntry & {
   path?: number[][];
   pathEnergies?: number[];
-  calc?: CalcInfo;
-  /** What the molecule made keeps besides: the drawing it was made from, its stereo labels, how it was made, its sticks to ring centres. */
-  keep?: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
 
-/**
- * What a molecule made in 3D for a step keeps besides its atoms, bonds and
- * places (`Worked.keep`): the drawing it was made from, its stereo labels,
- * how it was made, and its bonds to ring centres (eta) - its atoms in the
- * same order, as the step's entries keep them.
- */
-export function keptOf(m: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">): NonNullable<Worked["keep"]> {
-  return {
-    drawnFrom: m.drawnFrom,
-    drawnAs: m.drawnAs,
-    ...(m.stereo ? { stereo: m.stereo } : {}),
-    ...(m.made ? { made: m.made } : {}),
-    ...(m.centres?.length ? { centres: m.centres } : {}),
-  };
-}
+/** What a molecule made in 3D for a step keeps besides its atoms, bonds and places (entries `keptOf`). */
+export { keptOf };
 
 /**
  * What a step of `kind` gave, as its exits' sets are to hold it: its
@@ -531,12 +515,16 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
   for (const e of outcome.kept) pushTo(groups, e.compound, e);
   return [...groups.values()].map((g) => {
     const first = g[0];
-    const energies = g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
-    const shares = g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
+    const alike = unlikeMade(g) == null;
+    const energies = alike && g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
+    const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
-    // (what the calculation was, where a program worked them out: each conformer's results its own, not the compound's)
-    const calc = (first as Worked).calc;
+    // (what the calculation was, where a program worked them out - each conformer's results its own, not the
+    //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
+    //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
+    //  first, saying why)
+    const calc = alike ? (first as Worked).calc : undefined;
     return {
       atoms: atomsAt(first),
       bonds: first.bonds.map((b) => ({ ...b })),
@@ -548,7 +536,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
-      ...(first as Worked).keep,
+      ...(alike ? keptAlike(g) : {}),
     };
   });
 }
