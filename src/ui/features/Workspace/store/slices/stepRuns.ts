@@ -504,7 +504,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
-    //  refused - run alone: said, on the step's line)
+    //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
     const jobs: StepJob[] = [];
     try {
