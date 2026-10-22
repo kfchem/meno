@@ -109,13 +109,13 @@
   },
   {
    "name": "a methyl's R1 #2",
-   "molfile": "00b712b10ed442aa7f5a297d0c1548a6c41c1354afb5a2c9963f9c5772005233",
+   "molfile": "2206b0794e751dcd52a85ae90b575eaa36c70a1c464d0d16285cd29fd04f0eab",
    "smiles": "[2H]C",
    "expected": "[2H]C"
   },
   {
    "name": "a methyl's R1 #3",
-   "molfile": "41a84dacee6772703f551347c8e46a5c86f5fc2a2d0ac83a2f31ac1876e513b4",
+   "molfile": "09199dabde4df85be94ec0a9052742cf705d6ad633a4bc9f2bdadfba2d7b475a",
    "smiles": "C[N+](C)(C)C",
    "expected": "C[N+](C)(C)C"
   },
