@@ -22,7 +22,7 @@ import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/en
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readCounted, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -454,21 +454,27 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
+    let counted = new Map<number, { degeneracy: number; mirror: number[] }>();
     try {
       const client = await pluginClient(plugin);
-      const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}) }));
-      kept = readKept(await client.run(step.kind, given, options, input.holds), entries.length);
+      const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
+      const raw = await client.run(step.kind, given, options, input.holds);
+      kept = readKept(raw, entries.length);
+      if (typeof kept !== "string") counted = readCounted(raw, kept, entries.map((e) => e.atoms.length));
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
     if (typeof kept === "string") return void fail(id, kept, at, key);
     const keep = new Set(kept);
     const took = Date.now() - at;
+    // (a mirror image counted in: the one kept stands for both, and keeps the atoms it swaps - each kept says how many it stands for)
+    const counting = options.mirrors === "counted";
+    const twins = counted.size ? ` \u00b7 ${counted.size} mirror image${counted.size === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
     bringIn(
       id,
-      entries.filter((_, i) => keep.has(i)),
+      entries.flatMap((e, i) => (!keep.has(i) ? [] : counted.has(i) ? [{ ...e, ...counted.get(i)! }] : counting ? [{ ...e, degeneracy: e.degeneracy ?? 1 }] : [e])),
       givesFor(step.kind, input.holds),
-      { at, ok: true, said: `${keep.size} of ${entries.length} kept`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
+      { at, ok: true, said: `${keep.size} of ${entries.length} kept${twins}`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
       entries.filter((_, i) => !keep.has(i)),
     );
   }

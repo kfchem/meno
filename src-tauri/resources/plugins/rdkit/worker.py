@@ -1622,6 +1622,10 @@ class Sameness:
     def apart(self, A, B):
         """The RMSD of conformer A from B (places, n x 3) at its least over the ways tried, or a number
         above SAME_CONFORMER where no way could bring it under that."""
+        return self.laid(A, B)[0]
+
+    def laid(self, A, B):
+        """`apart`, and where each atom of A is taken in B at that least (None where none was within reach)."""
         import numpy as np
 
         P = A[self.core] - A[self.core].mean(axis=0)
@@ -1633,7 +1637,7 @@ class Sameness:
         # (the least each way's core can be apart, turned and moved - over all n atoms, a bound on the whole)
         rest = (P ** 2).sum() + (Q ** 2).sum(axis=(1, 2)) - 2 * (s[:, 0] + s[:, 1] + d * s[:, 2])
         least = np.sqrt(np.maximum(rest, 0.0) / self.n)
-        best = float("inf")
+        best, best_to = float("inf"), None
         for w in np.argsort(least):
             if least[w] > SAME_CONFORMER or least[w] >= best:
                 break
@@ -1644,8 +1648,18 @@ class Sameness:
             to[self.core] = self.ways[w]
             if not self._hang(laid, B, to):
                 continue
-            best = min(best, rmsd_laid(A, B[to]))
-        return best
+            here = rmsd_laid(A, B[to])
+            if here < best:
+                best, best_to = here, [int(j) for j in to]
+        return best, best_to
+
+    def mirror_of(self, A, B):
+        """Whether B is the mirror image of A - A reflected and laid over it within SAME_CONFORMER - and, where it
+        is, where each atom of A is taken in it: A's atom i plays in B the part of its atom `to[i]`. Else None."""
+        import numpy as np
+
+        r, to = self.laid(np.asarray(A) * np.array([-1.0, 1.0, 1.0]), np.asarray(B))
+        return to if r <= SAME_CONFORMER else None
 
     def _hang(self, laid, B, to):
         """Each atom that hangs on one of the core taken to the nearest free one of its kind on the atom
@@ -1983,8 +1997,6 @@ def op_add_hydrogens(m):
 CONFORMERS_JOB = os.path.join(os.path.dirname(os.path.abspath(__file__)), "conformers_job.py")
 #: What a conformer search's job writes, and is read back from.
 CONFORMERS_OUT = "conformers.json"
-#: Below this RMSD (angstroms) two entries are taken to be the same, unless a step says otherwise.
-ALIKE = 0.125
 
 BOND_TYPES = {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE, 3: Chem.BondType.TRIPLE, 4: Chem.BondType.AROMATIC}
 RADICALS = {"doublet": 1, "triplet": 2, "singlet": 2}
@@ -2071,14 +2083,23 @@ def op_collect(m):
 def op_run(m):
     """A step done at once. *Duplicates*: within each compound - a conformer
     set's, or in a compound set the entries of the same structure - lowest
-    energy first, each entry set aside that is within the RMSD of one kept,
-    over their heavy atoms, at its best over the molecule's symmetries. Never
-    two of different charge or spin: they are different species."""
+    energy first, each entry set aside that is the same conformer as one kept
+    (Sameness: all atoms within SAME_CONFORMER, over the ways the molecule
+    maps onto itself, never reflected). Never two of different charge or
+    spin: they are different species.
+
+    A conformer's mirror image is kept apart - an average by atom over both
+    needs both - unless `mirrors` is "counted" (the maintainer, 2026-10-22):
+    then it is counted in the one kept, only where the two are one
+    stereoisomer as their geometries have it (a chiral molecule's mirror
+    image is its enantiomer); the one kept's degeneracy counts both, and the
+    atoms the mirror image swaps are given (`counted`: its atom i is atom
+    `mirror[i]` of the mirror image)."""
     if m.get("step") != "duplicates":
         raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
-    alike = float((m.get("options") or {}).get("rmsd", ALIKE))
+    counting = (m.get("options") or {}).get("mirrors") == "counted"
     entries = m.get("entries") or []
-    heavy = []
+    mols = []
     groups = {}
     for i, entry in enumerate(entries):
         mol = mol_of(entry)
@@ -2087,18 +2108,35 @@ def op_run(m):
             entry.get("charge", 0),
             entry.get("multiplicity", 1),
         )
-        heavy.append(Chem.RemoveHs(mol))
+        mols.append(mol)
         groups.setdefault(key, []).append(i)
     kept = []
+    counted = {}
     for members in groups.values():
         energy = lambda i: entries[i].get("energy") if isinstance(entries[i].get("energy"), (int, float)) else float("inf")
+        same = Sameness(mols[members[0]])
+        place = lambda i: mols[i].GetConformer().GetPositions()
         mine = []
         for i in sorted(members, key=lambda i: (energy(i), i)):
-            if any(rdMolAlign.GetBestRMS(Chem.Mol(heavy[i]), heavy[k]) < alike for k in mine):
+            P = place(i)
+            sig = same.signature(P)
+            near = [k for k in mine if same.bound(same.signature(place(k)), sig) <= SAME_CONFORMER]
+            if any(same.same(place(k), P) for k in near):
                 continue
+            if counting:
+                # (one stereoisomer, as their geometries have it: the same isomeric SMILES)
+                iso = Chem.MolToSmiles(mols[i])
+                twin = next((k for k in near if k not in counted and Chem.MolToSmiles(mols[k]) == iso and same.mirror_of(place(k), P)), None)
+                if twin is not None:
+                    counted[twin] = {
+                        "entry": twin,
+                        "degeneracy": int(entries[twin].get("degeneracy") or 1) + int(entries[i].get("degeneracy") or 1),
+                        "mirror": same.mirror_of(place(twin), P),
+                    }
+                    continue
             mine.append(i)
         kept += mine
-    return {"kept": sorted(kept)}
+    return {"kept": sorted(kept), **({"counted": [counted[k] for k in sorted(counted)]} if counting else {})}
 
 
 OPS = {

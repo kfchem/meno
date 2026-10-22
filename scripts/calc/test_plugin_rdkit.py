@@ -615,6 +615,53 @@ class SameConformer(unittest.TestCase):
         same = self.worker.Sameness(mol)
         self.assertGreater(same.apart(P, mirror), self.worker.SAME_CONFORMER)
 
+    @staticmethod
+    def entry(mol, P, energy=0.0):
+        """A conformer as Meno gives one to `run`: its atoms in place, its bonds, its compound and energy."""
+        orders = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3, Chem.BondType.AROMATIC: 4}
+        return {
+            "atoms": [{"el": a.GetSymbol(), "x": float(P[i][0]), "y": float(P[i][1]), "z": float(P[i][2])} for i, a in enumerate(mol.GetAtoms())],
+            "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": orders[b.GetBondType()]} for b in mol.GetBonds()],
+            "compound": 0,
+            "energy": energy,
+        }
+
+    def test_duplicates_keeps_a_mirror_image_apart_or_counts_it_in_with_the_atoms_it_swaps(self):
+        import numpy as np
+        mol = self.embedded("COC1CCCCC1", seed=11)
+        P = mol.GetConformer().GetPositions()
+        ring = [a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.IsInRing()]
+        c1 = next(i for i in ring if any(n.GetSymbol() == "O" for n in mol.GetAtomWithIdx(i).GetNeighbors()))
+        c2, c6 = [n.GetIdx() for n in mol.GetAtomWithIdx(c1).GetNeighbors() if n.GetIdx() in ring]
+        # (its mirror image as a conformer of the same molecule takes it: reflected, the ring's two sides swapped -
+        #  reflected alone, C1's four neighbours would turn the other way round, which no turn of a bond does)
+        swap = next(w for w in mol.GetSubstructMatches(mol, uniquify=False, maxMatches=1000) if w[c2] == c6 and w[c1] == c1)
+        reflected = P * np.array([-1.0, 1.0, 1.0])
+        M = np.empty_like(P)
+        for i, j in enumerate(swap):
+            M[j] = reflected[i]
+        mirror = self.turned(M)
+        relabelled = self.turned(P, seed=8)
+        given = [self.entry(mol, P), self.entry(mol, relabelled, 1e-6), self.entry(mol, mirror)]
+        run = lambda options: self.worker.op_run({"step": "duplicates", "entries": given, "options": options, "holds": "conformers"})
+        # (by default: the same conformer turned set aside, its mirror image kept - two)
+        self.assertEqual(run({}), {"kept": [0, 2]})
+        counted = run({"mirrors": "counted"})
+        self.assertEqual(counted["kept"], [0])
+        [twin] = counted["counted"]
+        self.assertEqual((twin["entry"], twin["degeneracy"]), (0, 2))
+        # (the ring carbons either side of the methoxy swap: C2 for C6, and each of their hydrogens)
+        self.assertEqual((twin["mirror"][c2], twin["mirror"][c6], twin["mirror"][c1]), (c6, c2, c1))
+        self.assertEqual(sorted(twin["mirror"]), list(range(mol.GetNumAtoms())))
+
+    def test_duplicates_never_counts_in_an_enantiomer(self):
+        import numpy as np
+        mol = self.embedded("CC(O)CC", seed=4)
+        P = mol.GetConformer().GetPositions()
+        given = [self.entry(mol, P), self.entry(mol, P * np.array([-1.0, 1.0, 1.0]))]
+        out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {"mirrors": "counted"}, "holds": "molecules"})
+        self.assertEqual(out, {"kept": [0, 1], "counted": []})
+
     def test_bound_is_never_above_the_rmsd(self):
         import numpy as np
         mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))

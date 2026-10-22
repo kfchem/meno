@@ -1014,11 +1014,13 @@ Decided while building it, for the maintainer to confirm:
   how many: *0:45 · 17 conformers* (*... of 2 compounds*).
 - **RDKit's *Duplicates*** compares the entries of each compound - a
   conformer set's, or in a compound set those of the same structure -
-  lowest energy first, and sets aside each within the RMSD of one kept:
-  over the heavy atoms, at its best over the molecule's symmetries
-  (0.125 Å by default, the threshold CREST's own sorting starts from). It is done at
-  once in RDKit's worker - `run {step, entries, options, holds}`, no job -
-  and says *2 of 3 kept*.
+  lowest energy first, and sets aside each that is the same conformer as
+  one kept, on the one definition (*The same conformer*; until 2026-10-22,
+  0.125 Å over the heavy atoms). A mirror image is kept apart, or counted
+  in as Meno's are - only where the two are one stereoisomer, as their
+  geometries have it. It is done at once in RDKit's worker - `run {step,
+  entries, options, holds}`, no job - and says *2 of 3 kept*, and
+  *1 mirror image counted in (degeneracy 2)* where it counted one.
 - **CREST's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF, or
   GFN2-xTB//GFN-FF: searched with GFN-FF, the conformers then optimised
   with GFN2-xTB), a solvent (ALPB, the 24 xTB offers), how thorough the

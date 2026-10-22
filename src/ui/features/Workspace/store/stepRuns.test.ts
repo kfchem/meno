@@ -929,10 +929,28 @@ describe("a plugin's conformer search, and its duplicates", () => {
     const step = st().addStep("duplicates", "rdkit", 10, 20);
     st().connect({ set }, step);
     await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { rmsd: 0.125 }, "molecules");
+    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { mirrors: "apart" }, "molecules");
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
     // (the one set aside, in the step's second exit's set)
     expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
+  });
+
+  it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {
+    const { doc, st } = editor();
+    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
+    const set = st().sets[0].id;
+    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    st().updateStep(step, { options: { mirrors: "counted" } });
+    st().connect({ set }, step);
+    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 2, 1] }] }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept \u00b7 1 mirror image counted in (degeneracy 2)" });
+    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(setEntries(out, "molecules").map((e) => [e.degeneracy, e.mirror])).toEqual([[2, [0, 2, 1]]]);
+    // (one not as said - not a permutation of its atoms: none taken)
+    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 0, 1] }] }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "1 of 2 kept" });
   });
 });
 
