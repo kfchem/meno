@@ -13,6 +13,7 @@ import PointerSettings from "./PointerSettings";
 import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
 import LogSettings from "./LogSettings";
+import LicenceSettings from "./LicenceSettings";
 import LabelSettings from "./LabelSettings";
 import PictureSettings from "./PictureSettings";
 import CalculationSettings from "./CalculationSettings";
@@ -41,7 +42,8 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
  * (each keeps its own after), how molecules in 3D look and turn,
  * what is pointed out on a structure, who reads and writes each kind
  * of file and how sharp a copied picture is, the calculations of a workflow and how its jobs run, the plugins, what the labels Meno reads stand for, and what Meno
- * may do on the network.
+ * may do on the network; and the licences of the software by others it is
+ * built with.
  */
 /** Every section as wide as the others, its words at one measure within it (./widths). */
 const SECTION = `mt-6 ${SECTION_WIDTH}`;
@@ -105,6 +107,7 @@ export default function SettingsPanel() {
             <LabelSettings />
             <ColourSettings />
             <LogSettings />
+            <LicenceSettings />
           </section>
         ) : section === "style" ? (
           <section className={SECTION}>

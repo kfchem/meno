@@ -108,7 +108,7 @@ export const KINDS: readonly KindInfo[] = [
     perceives: "configurations",
     options: [{ id: "temperature", label: "At", type: "number", default: 298.15, min: 1, step: 1, unit: "K" }],
   },
-  { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers" },
+  { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
     kind: "choose",
     name: "Choose one",
