@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { finished, followJob, liveJobsOf, runningOf, limitsOf, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { finished, followJob, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -52,6 +52,15 @@ describe("jobs", () => {
     expect(limitsOf({ coresAll: 64, memoryAll: 64 * 1024 }, computer)).toEqual({ cores: 10, memory: 32 * 1024 });
     // (its memory not told: as Settings says, and none said, none counted)
     expect(limitsOf({}, { cores: 4, memory: 0 })).toEqual({ cores: 4, memory: 0 });
+  });
+
+  it("says where a step's jobs ask for more memory than jobs may use: each runs alone", () => {
+    const limits = { memory: 24 * 1024 };
+    expect(overLimits([{ memory: 12000 }, {}], limits)).toBeNull();
+    expect(overLimits([{ memory: 30 * 1024 }, { memory: 12000 }], limits)).toBe("1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): it runs alone");
+    expect(overLimits([{ memory: 30 * 1024 }, { memory: 28 * 1024 }], limits)).toBe("2 jobs ask for more memory (30.0 GB) than jobs may use (24.0 GB): each runs alone");
+    // (no limit on memory: nothing to say)
+    expect(overLimits([{ memory: 30 * 1024 }], { memory: 0 })).toBeNull();
   });
 
   it("asks for a job as the backend takes it", async () => {

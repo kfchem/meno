@@ -8,7 +8,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
-import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
@@ -503,6 +503,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, message(e), at, key);
     }
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
+    // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
+    //  refused - run alone: said, on the step's line)
+    const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
     const jobs: StepJob[] = [];
     try {
       for (const p of prepared) {
@@ -526,7 +529,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, `It could not be started: ${message(e)}`, at, key);
     }
     if (gone(id)) return forgetStarted(jobs);
-    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind }), { unsaved: true });
+    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(over ? { over } : {}) }), { unsaved: true });
     set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
@@ -887,7 +890,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         kind === "conformers"
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
-      const said = ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`;
+      const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${run.over ? ` \u00b7 ${run.over}` : ""}`;
       bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
       close();
     } catch (e) {

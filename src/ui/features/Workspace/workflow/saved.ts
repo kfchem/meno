@@ -155,7 +155,10 @@ function readRunning(v: unknown): StepRunning | undefined {
       : [],
   );
   const kind = (r as { kind?: unknown }).kind;
-  return jobs.length ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}) } : undefined;
+  const over = (r as { over?: unknown }).over;
+  return jobs.length
+    ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}), ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}) }
+    : undefined;
 }
 
 function readStep(v: unknown): WorkflowStep | null {

@@ -35,6 +35,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
+  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid)
+  computerResources: async () => ({ cores: 8, memory: 32 * 1024 }),
 }));
 
 /** The files a job made that Meno reads itself, as the test has them: a render's pictures, by where they are. */
@@ -710,6 +712,23 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await again;
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 Some atoms are very close" });
+  });
+
+  it("says where a job asks for more memory than jobs may use - it runs alone - kept with the workspace while it runs", async () => {
+    const { st, step } = waters(2);
+    const job = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...job, memory: 30 * 1024 }, { entries: [1], ...job, memory: 1000 }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started.map((a) => a.memory)).toEqual([30 * 1024, 1000]);
+    const over = "1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): it runs alone";
+    expect(st().steps.find((s) => s.id === step)!.running?.over).toBe(over);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toBe(`0:01 \u00b7 2 of 2 \u00b7 ${over}`);
   });
 
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
