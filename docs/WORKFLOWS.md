@@ -1722,6 +1722,67 @@ than 50 molecules in 3D in the set itself, off the page; structures drawn
 are all put on the page however many there are. Enumerate, which can make
 up to 10,000, holds them in its set the same way (P3b).
 
+### Tables (2026-10-22)
+
+A table is a value of its own (docs/WORKFLOWS-FOUNDATION.md, *Values and
+their types*; PR 10, first part: `src/lib/table.ts`): rows and typed
+columns - numbers with their unit from Meno's units table (or none: a
+count, a share), text, true or false, an entry's id. A column of numbers
+says what worked them out and where, where that is known.
+
+**Read from a file** (`readTable`): CSV, or TSV where the first line has a
+tab, or values separated by semicolons where it has those and no commas
+and the second line has them too (as spreadsheets write CSV where a comma
+is the decimal mark; one column's name may hold a semicolon) - read as
+RFC 4180 has it (quoted fields may hold the delimiter, line breaks and
+doubled quotes); a byte-order mark before it is left out.
+- The first line names the columns, each with its unit in brackets:
+  "energy (kcal/mol)", "T [K]", "count (none)". A unit Meno's units table
+  does not know is said, and its column is read as text.
+- A column is of numbers where its header gives a unit, or where every
+  cell it has reads as one; of true or false where every one says so;
+  else of text - and where some of its cells are numbers, why ("read as
+  text: 1 of 4 cells are no number", with the first).
+- A name given twice: the second is "name (2)", and that is said.
+- A number is digits with a point, a sign (the minus sign too) and an
+  exponent - nothing else: no thousands' separators, since a comma means
+  one thing in one place and another elsewhere.
+- **What does not read is counted and said**: a cell of a number column
+  that is no number, where it is and what it said; a row with more or
+  fewer cells than the columns. An empty cell is no value, as written.
+
+**Molecules seen as a table** (`moleculesAsTable`): one row per entry, in
+order - its id, its constitution (Meno's identity key of its atoms,
+charges and bonds; isotopes are not part of it), its configuration (as
+perceived; "not known" where it was not, or an element is left
+unspecified) - and each property a column.
+- A property worked out in more than one way - another method,
+  temperature, solvent, geometry, step, run or plugin - is a column for
+  each, named for what tells it apart from the others ("energy · B",
+  "G · 310 K", "energy · step 4"), numbered only where that still leaves
+  two alike - never one column of values that are not alike. The name is
+  made from what differs among the entries there are: a new way arriving
+  can change it.
+- Where it was worked out is told apart as at the entry's own geometry -
+  every row its own, one column ("energy") - or at another geometry than
+  its entry's ("energy · at another geometry"): a conformer's energy at its
+  own geometry is one column for all the conformers, never a column for
+  each geometry.
+- The column at another geometry mixes geometries: each row's value may
+  be at a different one, none of them its row's. Its name says so always,
+  even where it is the property's only column ("energy · at another
+  geometry", never "energy").
+- An entry whose geometry is frames, a drawing or none has no geometry
+  of its own a property could be at: a property of it is read at another
+  geometry.
+- A property with no value, or not worked out (failed, or still to be),
+  is missing in its row, and counted, each said apart.
+- A property that is no number, text or true or false - a list, a table,
+  a vector - is no column, and that is said.
+
+Sets that hold tables, and the steps that take and give them, follow
+(PR 10, second part).
+
 ## Questions
 
 None left open in what is built (2026-10-08): the seven steps are built
