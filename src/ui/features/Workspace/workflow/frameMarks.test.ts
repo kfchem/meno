@@ -4,6 +4,7 @@ import { sharesOf } from "../utils/molecule3d";
 import { factor } from "../../../../lib/units";
 import { MARKS_UNREAD, setEntries } from "./entries";
 import { runMeno } from "./meno";
+import { workedOf } from "./programs";
 import { resultsOf, type RunResults } from "./run";
 import { framesMolecule } from "./setTable";
 
@@ -83,5 +84,24 @@ describe("a frame's marks", () => {
     expect(out.ok).toBe(false);
     expect(!out.ok && out.said).toContain(MARKS_UNREAD);
     expect(sharesOf(kept)).toBeUndefined();
+  });
+
+  it("of what a program works out anew are its own: a re-run's clean result is clear, and one that fails again is marked by its own", () => {
+    const [before] = setEntries([waters([0], { conformerSet: false, failed: [{ kind: "not-converged", why: "it did not converge" }], imaginary: [[-50]], marksUnread: true })], "molecules");
+    expect(before).toMatchObject({ failed: { kind: "not-converged" }, imaginary: [-50], marksUnread: true });
+    const out = { schema: 1, program: "a program", atoms: ["O", "H", "H"], frames: [[...before.xyz]], energies: [-76] };
+    const made = (worked: ReturnType<typeof workedOf>) => {
+      if (!("xyz" in worked)) throw new Error("no entry");
+      return resultsOf({ ok: true, holds: "molecules", kept: [worked], aside: [], said: "" }, "optimise").molecules[0];
+    };
+    // (optimised again to a minimum: no mark of the geometry it came from)
+    const clean = workedOf("optimise", before, out, ["a program"]);
+    expect("xyz" in clean && [clean.failed, clean.imaginary, clean.marksUnread]).toEqual([undefined, undefined, undefined]);
+    expect(marks(made(clean))).toEqual({ failed: undefined, imaginary: undefined, marksUnread: undefined });
+    // (not converged again, and a saddle point: its own result's marks)
+    const again = workedOf("optimise", before, { ...out, optimised: false, imaginary: [-210.4] }, ["a program"]);
+    expect(marks(made(again))).toEqual({ failed: [{ kind: "not-converged", why: "The optimisation did not converge" }], imaginary: [[-210.4]], marksUnread: undefined });
+    // (and where an entry still says frequencies of its own, the new calculation's verdict is the one taken)
+    expect("xyz" in again && made({ ...again, imaginary: [-50] }).imaginary).toEqual([[-210.4]]);
   });
 });

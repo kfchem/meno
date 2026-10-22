@@ -659,8 +659,8 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
   return { calc: { readers: [], ...(e.charge != null ? { charge: e.charge } : {}), ...(e.multiplicity != null ? { multiplicity: e.multiplicity } : {}) } };
 }
 
-/** The imaginary frequencies an entry was judged to have: its own, or - one a program step just made - its calculation's. */
-const imaginaryOfEntry = (e: SetEntry): number[] | undefined => e.imaginary ?? (e as Worked).calc?.imaginary;
+/** The imaginary frequencies an entry was judged to have: its calculation's verdict - one a program step just made - else its own. */
+const imaginaryOfEntry = (e: SetEntry): number[] | undefined => (e as Worked).calc?.imaginary ?? e.imaginary;
 
 function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
