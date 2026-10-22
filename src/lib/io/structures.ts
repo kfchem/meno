@@ -8,7 +8,9 @@
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf, waysOf } from "../../utils/xyzEnergies";
 import { MENO_XYZ_ENERGY } from "../chem/xyzWriter";
-import { xyzEnergies } from "./kinds";
+import { xyzEnergies, xyzSteps } from "./kinds";
+import { xyzStepsFile } from "../plugins/manifest";
+import type { Unmarked } from "../calc/output";
 import { atomsTogether, bondsByDistance, wholeXyzFrames } from "../../utils/structureParsers";
 import type { Molecule, ParsedAtom, ParsedBond } from "../chem/molecule";
 import { readPdb, type PdbAtom, type PdbEntry, type PdbModel, type PdbUnreadableAtom } from "../chem/pdb";
@@ -44,6 +46,9 @@ export type FileMolecule3D = {
   together?: number;
   /** How many of its file's atoms it leaves out, their element not read - a PDB entry's unknown atom (X, UNX), say; in a frame, the most. */
   atomsLeftOut?: number;
+  /** Which of its geometries are entries - none, of an optimisation's steps (`xyzSteps`) - and why none is (Molecule3D `entryFrames`, `noEntryWhy`). */
+  entryFrames?: number[];
+  noEntryWhy?: Unmarked;
 };
 
 /**
@@ -226,6 +231,9 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           ...(rest.length && energies?.length === kept.size ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
           ...(kept.size < whole.total ? { framesLeftOut: whole.total - kept.size } : {}),
+          // (a file a program writes of an optimisation's steps, as its plugin names it: which converged it does
+          // not say - its output does - so none is an entry, and that is said)
+          ...(rest.length && filename && xyzSteps().some((d) => xyzStepsFile(filename, d)) ? { entryFrames: [], noEntryWhy: "unstated" as const } : {}),
           ...togetherIn(first),
         },
       ],
@@ -424,6 +432,11 @@ export function checkedStructures(raw: unknown, name: string): StructureRead {
     if (!(m.frames ?? []).every((f) => Array.isArray(f) && f.length === 3 * n && f.every(finite))) throw bad("a frame of a molecule in 3D is not whole");
     if (m.framesLeftOut != null && !(Number.isInteger(m.framesLeftOut) && m.framesLeftOut > 0)) throw bad("a molecule in 3D's frames left out are no count");
     if (m.together != null && !(Number.isInteger(m.together) && m.together > 0)) throw bad("a molecule in 3D's atoms in one place are no count");
+    // (which of its geometries are entries: each one it has, in order, once - never read as every one where not)
+    const entries: unknown = m.entryFrames;
+    if (entries != null && !(Array.isArray(entries) && entries.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= (m.frames?.length ?? 0) && (k === 0 || f > all[k - 1])))) {
+      throw bad("which of a molecule in 3D's frames are entries does not read");
+    }
     // (an energy for each frame, the first among them, or none: each frame's is the one at its place)
     if (m.energies != null && !(Array.isArray(m.energies) && m.energies.length === 1 + (m.frames?.length ?? 0) && m.energies.every(finite))) {
       throw bad("the energies of a molecule in 3D are not one for each of its frames");

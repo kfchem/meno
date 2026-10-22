@@ -18,7 +18,7 @@ import type { Role3D } from "../../../../lib/chem/style3d";
 import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
-import type { CalcInfo } from "../../../../lib/calc/output";
+import type { CalcInfo, Unmarked } from "../../../../lib/calc/output";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
@@ -533,6 +533,14 @@ export type Molecule3D = {
   entryFrames?: number[];
   /** An opened optimisation or scan whose last point never converged - stopped, or cut short: that point no entry, and said so over it (completeness `notConvergedMark`). */
   notConverged?: true;
+  /**
+   * Why none of its geometries is an entry, where it is not that none
+   * converged (lib/calc/output `Unmarked`): the run did not end as it
+   * should, they are the points of a scan or a reaction path, the file does
+   * not say which converged, or which did could not be read. Said over it
+   * (completeness `entriesMark`).
+   */
+  noEntryWhy?: Unmarked;
 };
 /**
  * A text the workspace holds - a file opened as text, an output shown -

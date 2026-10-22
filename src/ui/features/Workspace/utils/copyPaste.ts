@@ -25,7 +25,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { readCalc } from "../../../../lib/calc/output";
+import { readCalc, UNMARKED, type Unmarked } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -615,6 +615,21 @@ function stackOf(given: unknown): Carried3D["stack"] | undefined {
   return { id: s.id as number, ...(s.spread === true ? { spread: true as const } : {}) };
 }
 
+/**
+ * A molecule's entries as its record gives them (`Molecule3D.entryFrames`,
+ * `noEntryWhy`), of `frames` frames after its first: none said, every frame
+ * one. Given, each one it has, in order, once - or none, with why where it
+ * was said. Given but not readable so, none is one, "which are could not be
+ * read": what counts as an entry is never widened.
+ */
+function entriesRead(entryFrames: unknown, why: unknown, frames: number): Pick<Molecule3D, "entryFrames" | "noEntryWhy"> {
+  if (entryFrames === undefined) return {};
+  const reads = Array.isArray(entryFrames) && entryFrames.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= frames && (k === 0 || f > all[k - 1]));
+  if (!reads) return { entryFrames: [], noEntryWhy: "unread" };
+  const said = !entryFrames.length && UNMARKED.includes(why as Unmarked) ? { noEntryWhy: why as Unmarked } : {};
+  return { entryFrames: [...(entryFrames as number[])], ...said };
+}
+
 /** A molecule in 3D in Meno's own record, or null where it does not read as one. */
 export function readCarried3D(given: unknown): Carried3D | null {
   const m = given as Partial<Record<keyof Carried3D, unknown>>;
@@ -676,10 +691,9 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
-    // (the geometries an opened optimisation or scan converged on: each one it has, in order, once - or none, where none did)
-    ...(Array.isArray(m.entryFrames) && m.entryFrames.every((f, k, all) => Number.isInteger(f) && f >= 0 && f <= frames.length && (k === 0 || f > all[k - 1]))
-      ? { entryFrames: [...(m.entryFrames as number[])] }
-      : {}),
+    // (the geometries an opened optimisation or scan converged on: each one it has, in order, once - or none, where
+    // none did. Where that does not read, none is an entry, and that is said: never every one)
+    ...entriesRead(m.entryFrames, m.noEntryWhy, frames.length),
     ...(m.notConverged === true ? { notConverged: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
     ...(Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? { framesLeftOut: m.framesLeftOut as number } : {}),

@@ -1160,7 +1160,7 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
-    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0))] : []),
+    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy)] : []),
     ...(m.notConverged ? [notConvergedMark(m.entryFrames?.length ?? 1)] : []),
     ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];

@@ -13,7 +13,7 @@ import type { Kind } from "../io/kinds";
 import { useAppSettings } from "../settings/appSettings";
 import { alsoReadersFor, anyPluginById, READERS, readerFor, type FileChoices, type Plugin, type ReaderPlugin } from "./catalog";
 import { forThisSystem } from "../plugins/here";
-import { OUTPUT_SCHEMA, type ReaderOutput } from "./output";
+import { frameReads, marksOf, OUTPUT_SCHEMA, type ReaderOutput } from "./output";
 import { readResults, type Result } from "./results";
 import { addedReaders, readerClient, useReaders } from "./workers";
 import { publishReading } from "./readings";
@@ -86,7 +86,7 @@ export const readerLine = (f: { from: string; version: string }) => (f.version ?
  */
 export function combine(found: readonly Found[]): { output: ReaderOutput; readers: string[] } {
   const framesOf = (o: ReaderOutput) =>
-    Array.isArray(o.frames) ? o.frames.filter((f) => Array.isArray(f) && f.length === 3 * (o.atoms?.length ?? 0)) : [];
+    Array.isArray(o.frames) ? o.frames.filter((f) => frameReads(f, o.atoms?.length ?? 0)) : [];
   const base = found.find((f) => f.output.atoms?.length && framesOf(f.output).length);
   if (!base) return { output: found[0]?.output ?? { atoms: [], frames: [] }, readers: [] };
   const atoms = base.output.atoms;
@@ -95,6 +95,10 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
   const sameFrames = (o: ReaderOutput) => framesOf(o).length === frames.length;
   const first = <T>(pick: (o: ReaderOutput) => T | null | undefined): T | undefined =>
     taken.map((f) => pick(f.output)).find((v) => v != null && v !== "") ?? undefined;
+  // (which geometries an optimisation or a scan converged on, by the first reader that marks them - of those that
+  // read, each its own mark: one that does not read left out with its mark, never all marks with it)
+  const marking = taken.find((f) => sameFrames(f.output) && marksOf(f.output));
+  const marks = marking ? marksOf(marking.output) : null;
   const results: Result[] = taken.flatMap((f) => readResults(f.output.results, atoms.length, sameFrames(f.output) ? frames.length : 0, f.from));
   return {
     output: {
@@ -110,8 +114,7 @@ export function combine(found: readonly Found[]): { output: ReaderOutput; reader
       atoms,
       frames,
       energies: first((o) => (sameFrames(o) && o.energies?.length === frames.length ? o.energies : null)),
-      // (which geometries an optimisation or a scan converged on, by the reader that read them as these)
-      converged: first((o) => (sameFrames(o) && o.converged?.length === frames.length ? o.converged : null)),
+      ...(marks ? { converged: marks.converged, ...(marks.unmarked ? { unmarked: marks.unmarked } : {}) } : {}),
       results,
       // (of a file of several jobs, its jobs as its reader read them: each opens as a molecule of its own)
       ...(base.output.job ? { job: base.output.job } : {}),

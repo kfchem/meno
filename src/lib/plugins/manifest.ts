@@ -101,6 +101,13 @@ export type WriteDecl = {
  */
 export const ENERGY_UNITS = ["hartree", "eV", "kcal/mol", "kJ/mol"] as const;
 export type XyzEnergyDecl = { id: string; pattern: string; unit: (typeof ENERGY_UNITS)[number] };
+/**
+ * An XYZ file a plugin's program writes whose frames are an optimisation's
+ * steps, which of them converged not said in it (docs/FILE-IO.md): its id,
+ * and its file's name - `*` any run of characters - as the program's
+ * documentation or its own output names it.
+ */
+export type XyzStepsDecl = { id: string; file: string };
 
 /**
  * A look a render plugin declares (docs/RENDER.md, docs/PLUGINS.md): its id, what the card calls it, a short description,
@@ -268,6 +275,8 @@ export type Manifest = {
   writes: WriteDecl[];
   /** How the XYZ files its program writes carry a frame's energy on a comment line, from that program's documentation (docs/FILE-IO.md). */
   xyzEnergies: XyzEnergyDecl[];
+  /** The XYZ files its program writes whose frames are an optimisation's steps, none of them said to be converged: none of them an entry. */
+  xyzSteps: XyzStepsDecl[];
   /** The roles it fills besides reading and writing files. */
   roles: RoleDecl[];
   /** The kinds of step it fills, each once. */
@@ -348,6 +357,23 @@ function kindOf(v: unknown): KindDecl | null {
 }
 
 /** A program's name, as a job is given it: a name, not a path. */
+/** The XYZ files a plugin says are an optimisation's steps: an id, and a file's name of letters, digits, `.`, `_`, `-` and `*` - what is not that is left out. */
+function acceptXyzSteps(v: unknown): XyzStepsDecl[] {
+  const out: XyzStepsDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || typeof r.file !== "string" || !/^[A-Za-z0-9._*-]{1,80}$/.test(r.file) || !/[A-Za-z0-9]/.test(r.file)) continue;
+    out.push({ id: r.id, file: r.file });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/** Whether a file's name is the one a plugin's `xyzSteps` names: `*` any run of characters, the rest as it is, any case. */
+export function xyzStepsFile(name: string, decl: Pick<XyzStepsDecl, "file">): boolean {
+  const pattern = decl.file.split("*").map((p) => p.replace(/\./g, "\\.")).join(".*");
+  return new RegExp(`^${pattern}$`, "i").test(name);
+}
 /** The ways a plugin says its program writes an XYZ frame's energy: an id, and a pattern that compiles and has one capture group - what is not that is left out. */
 function acceptXyzEnergies(v: unknown): XyzEnergyDecl[] {
   const out: XyzEnergyDecl[] = [];
@@ -746,6 +772,7 @@ export function acceptManifest(raw: unknown): Manifest | null {
     reads: readable,
     writes,
     xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
+    xyzSteps: acceptXyzSteps(m.xyzSteps),
     roles,
     steps,
     systems,

@@ -9,6 +9,7 @@ import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
 import samplePdb from "../../../../samples/cholesterol.pdb?raw";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import type { Molecule3D } from "../store/types";
+import type { Unmarked } from "../../../../lib/calc/output";
 import { entriesIn, setEntries } from "../workflow/entries";
 import { notesOf, solidOf } from "./molecule3d";
 import { readCarried3D } from "./copyPaste";
@@ -180,6 +181,25 @@ describe("files of 3D structures", () => {
     const r = await processFileContent("md.xyz", "2\nfirst\nH 0 0 0\nH 0.74 0 0\n2\nsecond\nH 0 0 0\nH 0.80 0 0\n2\nthird\nH 0 0 0\n");
     expect(r.molecules3d![0].frames).toHaveLength(1);
     expect(r.molecules3d![0].framesLeftOut).toBe(1);
+  });
+
+  it("open an optimisation's steps, as a plugin names its program's file of them: no frame an entry, convergence not stated in it", async () => {
+    // (xtb 6.7.1 writes an optimisation's steps to xtbopt.log, ORCA 6.1.1 to <name>_trj.xyz: which converged is said in their outputs, not there)
+    registerKinds(MANIFESTS.filter((m) => ["xtb", "orca"].includes(m.id)));
+    try {
+    const steps = "3\n energy: -5.0687 gnorm: 0.0652 xtb: 6.7.1\nO 0 0 0\nH 0.99 0 0\nH -0.3 0.95 0\n3\n energy: -5.0705 gnorm: 0.0003 xtb: 6.7.1\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n";
+    for (const name of ["xtbopt.log", "opt_trj.xyz", "OSCAN_TRJ.XYZ"]) {
+      const m = (await processFileContent(name, steps)).molecules3d![0];
+      expect([m.entryFrames, m.noEntryWhy, entriesIn(m)], name).toEqual([[], "unstated", 0]);
+    }
+    // (an ensemble - a scan's points, a conformer search's - every frame an entry, as before)
+    for (const name of ["oscan.allxyz", "crest_conformers.xyz", "xtbopt.xyz"]) {
+      const m = (await processFileContent(name, steps)).molecules3d![0];
+      expect([m.entryFrames, entriesIn(m)], name).toEqual([undefined, 2]);
+    }
+    } finally {
+      registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
+    }
   });
 
   it("keep each frame's energy, where a calculation reader finds one", async () => {
@@ -357,11 +377,52 @@ describe("a calculation's output, as a reader read it", () => {
       expect(entriesIn(back)).toBe(0);
     });
 
-    it("every geometry, where the reader marks none - and where its marks are not one a geometry", () => {
+    const notes = (m: Omit<Molecule3D, "id" | "at">) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
+
+    it("every geometry, where the reader marks none; none, where its marks are not one a geometry - convergence not stated, never every one", () => {
       const [plain] = calcResult({ ...output(3, []), converged: undefined }, ["cclib"], "x.out").molecules3d!;
       expect(entriesIn(plain)).toBe(3);
       const [odd] = calcResult(output(3, [false, true]), ["cclib"], "x.out").molecules3d!;
-      expect(odd.entryFrames).toBeUndefined();
+      expect([odd.entryFrames, odd.noEntryWhy, odd.notConverged]).toEqual([[], "unstated", undefined]);
+      expect(notes(odd)).toEqual(["Bond orders unknown", "No frame is an entry (convergence not stated in this file)"]);
+    });
+
+    it("a geometry that does not read, between others: left out with its own mark - each other kept by its own", () => {
+      // (the scan, its eighth geometry cut short: 20 read, the four points still the four, a place earlier after it)
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const o = output(21, converged);
+      const [m] = calcResult({ ...o, frames: o.frames.map((f, k) => (k === 7 ? f.slice(0, 10) : f)) }, ["cclib"], "scan.log").molecules3d!;
+      expect(m.frames).toHaveLength(19);
+      expect(m.entryFrames).toEqual([4, 9, 14, 19]);
+      expect(entriesIn(m)).toBe(4);
+      expect(m.notConverged).toBeUndefined();
+    });
+
+    it("none, where the reader says why none is: a run that did not end as it should, a path's points, convergence not stated", () => {
+      const why = (unmarked: Unmarked, n = 3) => calcResult({ ...output(n, Array(n).fill(false)), unmarked }, ["cclib"], "x.log").molecules3d![0];
+      expect(notes(why("error"))).toEqual(["Bond orders unknown", "No frame is an entry (the run ended with an error)"]);
+      expect(notes(why("cut"))).toEqual(["Bond orders unknown", "No frame is an entry (the run did not come to its end)"]);
+      expect(notes(why("path"))).toEqual(["Bond orders unknown", "No frame is an entry (points of a scan or a reaction path)"]);
+      expect(notes(why("unstated"))).toEqual(["Bond orders unknown", "No frame is an entry (convergence not stated in this file)"]);
+      // (a single point that ended with an error: no entry either)
+      const one = why("error", 1);
+      expect([one.entryFrames, entriesIn(one)]).toEqual([[], 0]);
+      expect(notes(one)).toEqual(["Bond orders unknown", "No frame is an entry (the run ended with an error)"]);
+      // (and so they stay, saved and opened again)
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...why("cut"), at: { x: 0, y: 0 } })))!;
+      expect([back.entryFrames, back.noEntryWhy]).toEqual([[], "cut"]);
+    });
+
+    it("none, where which are entries does not read as the workspace is opened again - never every one", () => {
+      const [m] = calcResult(output(5, [false, false, false, false, true]), ["cclib"], "opt.log").molecules3d!;
+      for (const bad of [[9], [2, 1], "4", [0.5], null]) {
+        const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: bad, at: { x: 0, y: 0 } })))!;
+        expect([back.entryFrames, back.noEntryWhy, entriesIn(back)], JSON.stringify(bad)).toEqual([[], "unread", 0]);
+      }
+      expect(notes(readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [9], at: { x: 0, y: 0 } })))!)).toContain("No frame is an entry (which are could not be read)");
+      // (a why that does not read is not said; none is still none)
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [], noEntryWhy: "lost", at: { x: 0, y: 0 } })))!;
+      expect([back.entryFrames, back.noEntryWhy]).toEqual([[], undefined]);
     });
 
     it("kept as the workspace is saved and opened again", () => {

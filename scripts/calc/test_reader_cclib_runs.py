@@ -214,6 +214,37 @@ class Converged(unittest.TestCase):
         self.assertIsNone(worker.converged_of(self.data([1, 4, 4]), " #p HF/STO-3G IRC(maxpoints=2)\n -----\n", 3))
 
 
+class Unmarked(unittest.TestCase):
+    """Why none of a run's geometries is one it found, where cclib marks none of them: never every one taken as found."""
+
+    @staticmethod
+    def data(scan=None):
+        return types.SimpleNamespace(optstatus=None, OPT_DONE=4, scanenergies=scan)
+
+    def test_a_run_that_did_not_end_as_it_should(self):
+        self.assertEqual(worker.unmarked_of(self.data(), "", 1, "error"), "error")
+        self.assertEqual(worker.unmarked_of(self.data(), "", 4, "cut"), "cut")
+
+    def test_a_path_s_points_and_other_geometries_not_marked(self):
+        self.assertEqual(worker.unmarked_of(self.data(scan=[-1.0, -1.1, -1.2]), "", 3, "normal"), "path")
+        self.assertEqual(worker.unmarked_of(self.data(), " #p HF/STO-3G IRC(maxpoints=2)\n -----\n", 5, "normal"), "path")
+        # (more than one, none marked: a dynamics run, an optimisation whose marks do not match its geometries)
+        self.assertEqual(worker.unmarked_of(self.data(), "", 4, "normal"), "unstated")
+        self.assertEqual(worker.unmarked_of(self.data(), "", 4, None), "unstated")
+
+    def test_none_for_one_geometry_of_a_run_that_ended_as_it_should(self):
+        self.assertIsNone(worker.unmarked_of(self.data(), "", 1, "normal"))
+        self.assertIsNone(worker.unmarked_of(self.data(), "", 1, None))
+        self.assertIsNone(worker.unmarked_of(self.data(), "", 0, "error"))
+
+    def test_a_job_the_program_went_on_from_came_to_its_end(self):
+        # (ORCA says it once, at the end of a file of several jobs: each job but the last is told it is followed)
+        told = []
+        with mock.patch.object(worker, "job_texts", return_value=["one", "two", "three"]), mock.patch.object(worker, "op_read", side_effect=lambda m: told.append(m["followed"]) or {"results": []}):
+            worker.op_read_jobs({"name": "mj.out", "text": "x"})
+        self.assertEqual(told, [True, True, False])
+
+
 class StateOfTheDensity(unittest.TestCase):
     """Of a job with excited states, which state its dipole, charges and orbitals are of - as Gaussian 16 and
     ORCA 6.1.1 say it of formaldehyde's TD/HF/STO-3G optimisation: Gaussian's population analysis the SCF

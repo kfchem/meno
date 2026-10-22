@@ -1,13 +1,14 @@
 {
   "id": "xtb",
   "name": "xTB",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "uses": [{"name": "xtb", "version": "6.7.1"}],
   "description": "Optimises molecules in 3D, and works out their energies and vibrations, with the semiempirical GFN methods of the Grimme group.",
   "licence": "LGPL-3.0-or-later",
   "homepage": "https://xtb-docs.readthedocs.io",
   "environment": "pixi",
   "xyzEnergies": [{"id": "xtb", "pattern": "(?:^|\\s)energy:\\s*(-?\\d+\\.\\d+(?:[eE][-+]?\\d+)?)", "unit": "hartree"}],
+  "xyzSteps": [{"id": "xtb-opt", "file": "xtbopt.log"}],
   "steps": [
     {
       "kinds": ["optimise"],

@@ -573,6 +573,9 @@ def op_read(m):
     # how the run went: the energies of SCFs that did not converge not given - and, where it stopped before its
     # end, the geometries after the last it worked out an energy for left out
     ended, why, scf = run_of(text, program)
+    # (a job the program went on from to the next came to its end: ORCA says so once, at the end of the file)
+    if ended == "cut" and m.get("followed"):
+        ended = "normal"
     found = len(getattr(data, "scfenergies", None) if has(data, "scfenergies") else [])
     good = found
     if scf is not None and False in scf:
@@ -601,6 +604,12 @@ def op_read(m):
     converged = converged_of(data, text, len(frames))
     if converged is not None:
         result["converged"] = converged
+    # (where none is marked, and its geometries are not to be taken as found - its run did not end as it should,
+    # or they are no optimisation's points marked converged - none is an entry, and why)
+    unmarked = unmarked_of(data, text, len(frames), ended) if converged is None else None
+    if unmarked:
+        result["converged"] = [False] * len(frames)
+        result["unmarked"] = unmarked
     # (of a job with excited states, which state its dipole, its charges and its orbitals are of)
     states = density_states(data, text, program)
     result["results"] = (
@@ -667,6 +676,20 @@ def converged_of(data, text, frames):
     for ok in status:
         out += [False, True] if ok else [False]
     return out
+
+
+def unmarked_of(data, text, frames, ended):
+    """Why none of a run's geometries is one it found, where `converged_of` marks none: "error" or "cut" where the
+    run ended with an error or did not come to its end; "path" for a rigid scan's or a reaction path's points;
+    "unstated" for other geometries, more than one, none of them marked converged (an optimisation whose marks
+    cannot be matched to its geometries, a dynamics run). None for one geometry of a run that ended as it should."""
+    if frames < 1:
+        return None
+    if ended in ("error", "cut"):
+        return ended
+    if frames < 2:
+        return None
+    return "path" if path_kind(data, text) in ("scan", "irc") else "unstated"
 
 
 # the density Gaussian's population analysis - its charges, its dipole - is of: "Population analysis using the SCF Density."
@@ -846,7 +869,7 @@ def op_read_jobs(m):
     jobs = []
     for k, t in enumerate(texts):
         try:
-            out = op_read({**m, "text": t})
+            out = op_read({**m, "text": t, "followed": k < len(texts) - 1})
         except Exception:  # noqa: BLE001 - a job left out, the others read
             continue
         out["job"] = {"number": k + 1, "of": len(texts), "kind": job_kind(out)}
