@@ -5,12 +5,13 @@ import type { Molecule3D } from "../store/types";
 import { readWorkspace, workspaceText } from "../utils/workspace";
 import { createEditorStore, connectStoreToDocument } from "../store";
 import { createWorkspaceDocument } from "../document";
-import { countOf, heldOwn, setMolecules } from "./entries";
+import { countOf, heldOwn, holdsOf, setEntries, setMolecules } from "./entries";
 import { canWire, resultOf, wireRefusal } from "./flow";
 import { kindInfo } from "./kinds";
 import { addSet, addStep, connect, keepSet, membersSettled, removeStep } from "./model";
+import { runMeno } from "./meno";
 import { partsOf } from "./parts";
-import { placeResults, type RunWith } from "./run";
+import { placeResults, runStep, whyNot, type RunWith } from "./run";
 import StepCard from "./StepCard";
 import { leftByCut } from "../clipboardActions";
 
@@ -152,6 +153,40 @@ describe("a wire a step does not take", () => {
       const { doc, set, step } = setOf(frames);
       expect([canWire(doc, { set }, step), wireRefusal(doc, { set }, step)]).toEqual([true, null]);
     }
+  });
+
+  it("takes no set mixing a conformer set with other molecules - a scan's frames are not conformers - and names those that are not, at the wire and at a run", () => {
+    // (a conformer set of two compounds, and a scan of three frames beside them: no conformer search's)
+    const withScan = (d: WorkspaceDocument): WorkspaceDocument => {
+      const next = addMolecule3d(d, { ...water(90, { energies: [-76, -75.99, -75.98], frames: [[0, 0, 0, 0.76, 0.6, 0, -0.76, 0.6, 0], [0, 0, 0, 0.76, 0.61, 0, -0.76, 0.61, 0]] }), name: "scan.log", at: { x: 2, y: 0 } } as Omit<Molecule3D, "id">);
+      const scan = next.molecules3d![next.molecules3d!.length - 1].id;
+      return { ...next, sets: next.sets!.map((b, k) => (k === 0 ? { ...b, members: [...(b.members ?? []), { molecule: scan }] } : b)) };
+    };
+    const { doc: sets, step } = setOf(2);
+    let doc = withScan(sets);
+    const set = doc.sets![0];
+    expect([setMolecules(doc, set).length, holdsOf(doc, set)]).toEqual([3, "molecules"]);
+    const why = "It mixes conformer sets with other molecules in 3D: scan.log is no conformer set";
+    expect([canWire(doc, { set: set.id }, step), wireRefusal(doc, { set: set.id }, step)]).toEqual([false, why]);
+    // (nor one that takes molecules in 3D: neither way is it read rightly)
+    doc = addStep(doc, "optimise", 20, 10, {}, "xtb");
+    expect(wireRefusal(doc, { set: set.id }, doc.steps![1].id)).toBe(why);
+    // (wired while it held conformer sets alone, the scan come in after: its run says so, and nothing runs)
+    const later = withScan(connect(setOf(2).doc, { set: set.id }, step));
+    expect(whyNot(later, later.steps![0], "meno")).toBe(why);
+    expect(runStep(later, step, { extentOf, byOf: () => "meno", now: 1 }).steps![0].ran).toMatchObject({ ok: false, said: why });
+  });
+
+  it("says, of compounds of one conformer each, that a window or shares over them do nothing", () => {
+    const { doc, set } = setOf(1);
+    const entries = setEntries(setMolecules(doc, doc.sets!.find((b) => b.id === set)!), "conformers");
+    expect(runMeno("energy-window", entries, "conformers", { window: 3 }).said).toBe("2 of 2 kept \u00b7 each compound has one conformer");
+    expect(runMeno("populations", entries, "conformers", { temperature: 298.15 }).said).toBe("2 compounds at 298.15 K, from electronic energies \u00b7 each compound has one conformer");
+    expect(runMeno("energy-window", entries.slice(0, 1), "conformers", { window: 3 }).said).toBe("1 of 1 kept \u00b7 the compound has one conformer");
+    // (one of two with one: it says how many)
+    const mixed = setEntries(setMolecules(setOf(2).doc, setOf(2).doc.sets![0]), "conformers").slice(1);
+    expect(runMeno("energy-window", mixed, "conformers", { window: 3 }).said).toBe("3 of 3 kept \u00b7 1 compound has one conformer");
+    expect(runMeno("energy-window", setEntries(setMolecules(setOf(2).doc, setOf(2).doc.sets![0]), "conformers"), "conformers", { window: 3 }).said).toBe("4 of 4 kept");
   });
 
   it("says why of a set that is no conformer set, and of a loop", () => {

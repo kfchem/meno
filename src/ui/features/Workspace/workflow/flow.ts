@@ -6,7 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
-import { holdsOf, setMembers, setMolecules } from "./entries";
+import { holdsOf, plainAmong, setMembers, setMolecules } from "./entries";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
@@ -85,6 +85,9 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   // (pictures - a Render step's - no step takes)
   if (holds === "pictures") return "Pictures go into no step";
   if (holds == null) return null;
+  // (a set mixing conformer sets with other molecules, which no step takes: which are the others)
+  const mixed = holds === "molecules" && !set.made ? plainAmong(setMolecules(doc, set)) : null;
+  if (mixed) return mixed;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
   const several = inputsOf(step.kind).length > 1;
   const takes = portOf(step.kind, port).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));

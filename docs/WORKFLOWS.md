@@ -339,6 +339,12 @@ one of the kinds of calculation it does (decided: 16):
   not molecules in 3D" (2026-10-22). It says so until a wire is drawn
   again. A conformer set of one conformer is a conformer set all the
   same, and goes where conformer sets go (the maintainer, 2026-10-21).
+  A set mixing conformer sets with other molecules in 3D goes into no
+  step - a scan's frames are not conformers, nor a conformer set's
+  conformers compounds - and the card names those that are no conformer
+  set ("It mixes conformer sets with other molecules in 3D: scan.log is
+  no conformer set"), at the wire or, where one came into the set after
+  it was wired, at its run.
 - **A wire let go on empty space** opens Quick Add already at
   *Calculations*, showing only the kinds that take what the wire
   carries - and a plugin only where it does one of them.
@@ -512,6 +518,10 @@ beside its edge - being drawn over all of it.
 - **Energy window**, **Duplicates**: the entries kept out of the first
   exit, the rest out of the second;
 - **Populations**: the same entries, with their populations;
+- where compounds have one conformer each, so that a window or shares
+  over them do nothing, *Energy window* and *Populations* say so after
+  their line: "2 of 2 kept · each compound has one conformer", or "1
+  compound has one conformer" where others have more (2026-10-22);
 - **As conformers**: the same entries, as a conformer set.
 
 They are calculation results as Meno knows them: the frames chip,
