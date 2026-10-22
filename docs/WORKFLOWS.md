@@ -489,7 +489,12 @@ shuts (docs/PDF.md, step 5).
 ![A step's results and its log](workflows/6-results.svg)
 
 When a run is done, what it gave comes in as a result set to the right
-of the step, wired from it (decided):
+of the step, wired from it (decided). Its molecules lie in rows, left to
+right: a few in rows up to twelve bonds wide, as before; many in a grid
+about a window's shape, 3 : 2, so that fitted to the view they read at a
+glance - not in a column one molecule wide (2026-10-22). A set's ports
+are reachable whatever lies over them on the page - a molecule's chip
+beside its edge - being drawn over all of it.
 
 - **Optimise**: each entry as optimised, its path as frames, the energy
   of each frame - what an optimisation read from a file shows today;
