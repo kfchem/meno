@@ -1,4 +1,5 @@
 import PageHtml from "./PageHtml";
+import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
@@ -19,7 +20,6 @@ const LEAST_BAR = 3;
 /** How long a single geometry's chip stays once its molecule is let go - time to reach it - in milliseconds. */
 const LINGER_MS = 400;
 /** The chip kept clear of the canvas's lower edge, in pixels. */
-const EDGE = 8;
 /** How far below its molecule it hangs, in page pixels (workflow/look CHIP makes room for it). */
 const GAP = 10;
 
@@ -240,25 +240,36 @@ export function FramesChip({
   if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
   if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => chipLine([about ?? "", energy != null ? absolute(energy) : ""], results);
-  // how far it has risen to stay within the canvas, followed each frame
-  // while it is open, and until it is back down
+  // how far it has risen, and slid aside, to stay within the canvas -
+  // its details as wide as they are, by a molecule at its edge - followed
+  // each frame while it is open, and until it is back in place
   const chipEl = useRef<HTMLDivElement>(null);
   const [lift, setLift] = useState(0);
   const lifted = useRef(0);
+  const [slide, setSlide] = useState(0);
+  const slid = useRef(0);
   useEffect(() => {
-    if (!area || (!full && lifted.current === 0)) return;
+    if (!area || (!full && lifted.current === 0 && slid.current === 0)) return;
     let id = 0;
     const fit = () => {
       const el = chipEl.current;
       if (el) {
-        const over = el.getBoundingClientRect().bottom + EDGE - area.getBoundingClientRect().bottom;
+        const r = el.getBoundingClientRect();
+        const a = area.getBoundingClientRect();
+        const over = r.bottom + EDGE - a.bottom;
         const next = Math.max(0, Math.round(lifted.current + over));
         if (next !== lifted.current) {
           lifted.current = next;
           setLift(next);
         }
+        // (from where it would stand, not slid)
+        const aside = asideOf(r.left + slid.current, r.right + slid.current, a.left, a.right);
+        if (aside !== slid.current) {
+          slid.current = aside;
+          setSlide(aside);
+        }
       }
-      if (full || lifted.current > 0) id = requestAnimationFrame(fit);
+      if (full || lifted.current > 0 || slid.current !== 0) id = requestAnimationFrame(fit);
     };
     fit();
     return () => cancelAnimationFrame(id);
@@ -267,7 +278,8 @@ export function FramesChip({
     <div
       ref={root}
       className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
-      style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
+      // (the pointer goes through it but for what it shows: a chip hidden keeps its size, and would hide what lies under it - a set's port, a step's card)
+      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0", pointerEvents: "none" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
         else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);
@@ -285,7 +297,7 @@ export function FramesChip({
             className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
             style={{
               opacity: shown ? (full ? 1 : 0.75) : 0,
-              pointerEvents: shown ? undefined : "none",
+              pointerEvents: shown ? "auto" : "none",
               width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
             }}
           >
@@ -334,7 +346,8 @@ export function FramesChip({
             </div>
             <div
               ref={said}
-              className="w-max text-[11px] leading-[18px] text-gh-gray tabular-nums whitespace-nowrap"
+              // (a line too long - a model's provenance, said whole - goes on to more lines, no wider than the details are, centred)
+              className={`w-max text-[11px] leading-[18px] text-gh-gray tabular-nums ${single ? "max-w-[20rem] text-center [overflow-wrap:anywhere]" : "whitespace-nowrap"}`}
               onClick={(e) => {
                 if (!expanded) return;
                 e.stopPropagation();
@@ -376,7 +389,7 @@ export function FramesChip({
           </div>
         </div>
       )}
-      {below}
+      {below && <div style={{ pointerEvents: "auto" }}>{below}</div>}
     </div>
   );
 }

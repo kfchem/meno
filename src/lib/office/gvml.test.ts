@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { constants, deflateRawSync } from "node:zlib";
-import { concat, crc32, MOST_UNZIPPED, unzip, zipStored } from "../binary/zip";
+import { constants, crc32 as zlibCrc32, deflateRawSync } from "node:zlib";
+import { concat, crc32, entryBytes, MOST_UNZIPPED, unzip, zipEntries, zipStored } from "../binary/zip";
 import { textOf, withText } from "../binary/png";
 import { gvmlImages, gvmlPicture } from "./gvml";
 
@@ -9,9 +9,10 @@ const utf8 = new TextEncoder();
 /**
  * An archive made by hand of entries deflated, as Office writes them: each
  * `data` deflated, or `packed` as given - saying it comes to `size`, where
- * it is to say other than it does.
+ * it is to say other than it does, and that its CRC-32 is `crc`, where it is
+ * given (that of `data`, else).
  */
-function deflatedZip(entries: { name: string; data?: Uint8Array; packed?: Uint8Array; size?: number }[]): Uint8Array {
+function deflatedZip(entries: { name: string; data?: Uint8Array; packed?: Uint8Array; size?: number; crc?: number }[]): Uint8Array {
   const parts: Uint8Array[] = [];
   const central: Uint8Array[] = [];
   let offset = 0;
@@ -19,7 +20,7 @@ function deflatedZip(entries: { name: string; data?: Uint8Array; packed?: Uint8A
     const name = utf8.encode(e.name);
     const packed = e.packed ?? new Uint8Array(deflateRawSync(e.data!));
     const size = e.size ?? e.data!.length;
-    const crc = e.data ? crc32(e.data) : 0;
+    const crc = e.crc ?? (e.data ? crc32(e.data) : 0);
     const local = new DataView(new ArrayBuffer(30));
     local.setUint32(0, 0x04034b50, true);
     local.setUint16(8, 8, true);
@@ -61,6 +62,8 @@ const ONE_MB = new Uint8Array(deflateRawSync(new Uint8Array(MB), { finishFlush: 
 
 /** `megabytes` of nothing, deflated - one megabyte's deflate said again and again, then ended: a bomb as one is made, a KB a megabyte. */
 const nothing = (megabytes: number) => concat([...Array<Uint8Array>(megabytes).fill(ONE_MB), new Uint8Array([0x03, 0x00])]);
+/** The CRC-32 of `megabytes` of nothing: what an archive holding them rightly says. */
+const crcOfNothing = (megabytes: number) => crc32(new Uint8Array(megabytes * MB));
 
 describe("zip", () => {
   it("writes stored entries that it reads back", () => {
@@ -82,7 +85,7 @@ describe("zip", () => {
     for (let i = 0; i < long.length; i++) long[i] = (i * 7919 + (i >> 9)) % 256;
     const got = unzip(deflatedZip([{ name: "long.bin", data: long }]))!.get("long.bin")!;
     expect(Buffer.from(got).equals(long)).toBe(true);
-    expect(unzip(deflatedZip([{ name: "nothing", packed: nothing(3), size: 3 * MB }]))!.get("nothing")!.every((b) => b === 0)).toBe(true);
+    expect(unzip(deflatedZip([{ name: "nothing", packed: nothing(3), size: 3 * MB, crc: crcOfNothing(3) }]))!.get("nothing")!.every((b) => b === 0)).toBe(true);
   });
 
   it("inflates only the files asked for", () => {
@@ -124,8 +127,8 @@ describe("zip", () => {
     expect(got).toBeNull();
     // several, each within the limit - here one of the caller's own - and all of them past it
     const two = deflatedZip([
-      { name: "a", packed: nothing(1), size: MB },
-      { name: "b", packed: nothing(1), size: MB },
+      { name: "a", packed: nothing(1), size: MB, crc: crcOfNothing(1) },
+      { name: "b", packed: nothing(1), size: MB, crc: crcOfNothing(1) },
     ]);
     expect(unzip(two, undefined, 2 * MB)?.size).toBe(2);
     expect(unzip(two, undefined, 2 * MB - 1)).toBeNull();
@@ -134,6 +137,28 @@ describe("zip", () => {
 
   it("checks with the CRC-32 everyone uses", () => {
     expect(crc32(utf8.encode("123456789"))).toBe(0xcbf43926);
+    // (of every length about the eight bytes it is worked out by at a time, and from any byte on: as zlib's)
+    const bytes = Uint8Array.from({ length: 4099 }, (_, i) => (i * 7919 + (i >> 7)) % 256);
+    for (const [from, to] of [[0, 0], [0, 1], [3, 10], [1, 17], [5, 4099], [0, 4096]]) expect(crc32(bytes.subarray(from, to))).toBe(zlibCrc32(bytes.subarray(from, to)));
+  });
+
+  it("takes no entry whose bytes are not what its CRC-32 says, stored or deflated", () => {
+    const data = utf8.encode('{"x":1}'.repeat(40));
+    // deflated, as Office writes them: the archive saying another CRC-32 than its bytes come to
+    expect(unzip(deflatedZip([{ name: "x.json", data, crc: crc32(data) ^ 1 }]))).toBeNull();
+    expect(unzip(deflatedZip([{ name: "x.json", data }]))!.get("x.json")).toEqual(data);
+    // stored: a byte of it changed after it was written - "x":1 read as "x":9 - its size the same
+    const stored = zipStored([{ name: "x.json", data }]);
+    const changed = stored.slice();
+    changed[Buffer.from(stored).indexOf('"x":1') + 4] = "9".charCodeAt(0);
+    expect(unzip(changed)).toBeNull();
+    // (and alone, so: the others still had where only they are wanted)
+    const two = zipStored([{ name: "x.json", data }, { name: "y.txt", data: "fine" }]);
+    const one = two.slice();
+    one[Buffer.from(two).indexOf('"x":1') + 4] = "9".charCodeAt(0);
+    expect(unzip(one, (name) => name === "y.txt")!.get("y.txt")).toEqual(utf8.encode("fine"));
+    expect(entryBytes(zipEntries(one)![0])).toBeNull();
+    expect(zipEntries(one)![0].crc).toBe(crc32(data));
   });
 });
 

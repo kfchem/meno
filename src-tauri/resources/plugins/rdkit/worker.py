@@ -38,6 +38,7 @@ import sys
 from rdkit import Chem, RDLogger, rdBase
 from rdkit.Geometry import Point3D
 from rdkit.Chem import (
+    rdChemReactions,
     rdCIPLabeler,
     rdDepictor,
     rdDistGeom,
@@ -86,6 +87,30 @@ def read(molblock, sanitize=True):
         Chem.AssignChiralTypesFromBondDirs(mol)
         Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
     return mol
+
+
+def op_rxn_to_smiles(m):
+    """A reaction as Meno writes it to an RXN file - its reactants, its reagents (agents) and its products, each
+    molecule as its MOL block holds it, wedges and atom map numbers too - as a reaction SMILES: "reactants>agents>
+    products", each molecule's canonical SMILES, its stereo kept, an H drawn to carry a wedge not written."""
+    rxn = rdChemReactions.ReactionFromRxnBlock(m["rxnblock"], sanitize=False, removeHs=False)
+    if rxn is None:
+        raise ValueError("This reaction could not be read.")
+    out = rdChemReactions.ChemicalReaction()
+    for templates, add in ((rxn.GetReactants(), out.AddReactantTemplate), (rxn.GetAgents(), out.AddAgentTemplate), (rxn.GetProducts(), out.AddProductTemplate)):
+        for mol in templates:
+            mol = Chem.Mol(mol)
+            problem = Chem.SanitizeMol(mol, catchErrors=True)
+            if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+                raise ValueError(f"cannot make sense of a molecule of the reaction ({problem})")
+            Chem.AssignChiralTypesFromBondDirs(mol)
+            Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+            # (an H drawn to carry a wedge not written, as `to_smiles` writes none: the reaction's atoms are read as
+            # queries, which RDKit keeps their hydrogens on unless asked)
+            ps = Chem.RemoveHsParameters()
+            ps.removeWithQuery = True
+            add(Chem.RemoveHs(mol, ps))
+    return {"smiles": rdChemReactions.ReactionToSmiles(out)}
 
 
 def op_to_smiles(m):
@@ -2106,6 +2131,7 @@ OPS = {
     "collect": op_collect,
     "run": op_run,
     "to_smiles": op_to_smiles,
+    "rxn_to_smiles": op_rxn_to_smiles,
     "from_smiles": op_from_smiles,
     "analyse": op_analyse,
     "open_stereo": op_open_stereo,

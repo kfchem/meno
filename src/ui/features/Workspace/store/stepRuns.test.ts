@@ -392,7 +392,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc?.wavefunction).toMatchObject({ name: "water.molden", kind: "molden" });
     // (held, for a step after it to be given; and kept in the workspace's file)
     expect((await heldOutput(m.calc!.wavefunction!.sha256))?.text).toBe("[Molden Format]\n");
-    const file = readMenoFile(await workspaceFile(st()));
+    const file = readMenoFile((await workspaceFile(st())).bytes);
     expect(file.files.map((f) => f.sha256)).toContain(m.calc!.wavefunction!.sha256);
   });
 

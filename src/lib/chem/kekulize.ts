@@ -39,17 +39,26 @@ type Role = "needs" | "may" | "never";
 const QUERY_ATOMS = new Set(["A", "Q", "*", "L"]);
 
 /** Per bond, the order to draw it with: 1, 2 or 3. */
-export function kekuleOrders(
-  atoms: readonly KekuleAtom[],
-  bonds: readonly KekuleBond[],
-): (1 | 2 | 3)[] {
+export function kekuleOrders(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): (1 | 2 | 3)[] {
+  return kekulized(atoms, bonds).orders;
+}
+
+/**
+ * Per bond, the order to draw it with (`kekuleOrders`); and the atoms read
+ * as carrying an H the input did not state, where another atom of their
+ * ring system could have carried it instead (`hChosen`, by index): which
+ * nitrogen of an imidazole, a tetrazole, a purine or a porphine has it is
+ * Meno's choice there, and not the input's (the maintainer, 2026-10-22: to
+ * be said where the structure is shown).
+ */
+export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[] } {
   const out: (1 | 2 | 3)[] = bonds.map((b) =>
     b.order === 2 ? 2 : b.order === 3 ? 3 : 1,
   );
   const aromatic = bonds
     .map((b, i) => (b.order === AROMATIC_BOND ? i : -1))
     .filter((i) => i >= 0);
-  if (aromatic.length === 0) return out;
+  if (aromatic.length === 0) return { orders: out, hChosen: [] };
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
@@ -295,7 +304,16 @@ export function kekuleOrders(
     const { a1, a2 } = bonds[i];
     out[i] = matched[a1] === i && matched[a2] === i ? 2 : 1;
   }
-  return out;
+  // (a neutral N or P of two bonds whose H the input did not state, left without its double bond, carries one;
+  // where others of its ring system could have carried it, which does is a choice made here)
+  const carriers = willing.filter((i) => ["N", "P"].includes(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null);
+  const hChosen: number[] = [];
+  for (const k of new Set(carriers.map((i) => system[i]))) {
+    const here = carriers.filter((i) => system[i] === k);
+    const left = here.filter((i) => matched[i] < 0);
+    if (left.length && left.length < here.length) hChosen.push(...left);
+  }
+  return { orders: out, hChosen: hChosen.sort((p, q) => p - q) };
 }
 
 function canonical(el: string): string {
