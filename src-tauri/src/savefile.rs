@@ -64,8 +64,7 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
     if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f)) {
         return Err(format!("Meno may not read {}", from.display()));
     }
-    // (a workspace's file - whatever it holds - never more than Meno can open again: keptjobs.rs)
-    let workspace = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("meno"));
+    let most = most_for(&path, !appended.is_empty());
     // (as the plugin takes a path: whole, and going up nowhere)
     if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
         return Err(format!("{} is not a whole path", path.display()));
@@ -75,13 +74,21 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         return Err(format!("Meno may not write to {}", path.display()));
     }
     tauri::async_runtime::spawn_blocking(move || {
-        let most = workspace.then_some(crate::keptjobs::MOST_WORKSPACE_FILE);
         replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
         .map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
             .map_err(|e| format!("{}: {e}", path.display()))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The most the document at `path` may come to, where it is held to one: a
+/// workspace's file - whatever it holds - and anything written with job
+/// files added (`with_jobs`), whatever it is called, never more than Meno
+/// can open again (keptjobs.rs); anything else, none.
+fn most_for(path: &Path, with_jobs: bool) -> Option<u64> {
+    let workspace = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("meno"));
+    (workspace || with_jobs).then_some(crate::keptjobs::MOST_WORKSPACE_FILE)
 }
 
 /// A document's bytes written to the hidden file `file` a save puts in place
@@ -878,6 +885,16 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), new);
         replace_keeping(&dir.join("big.pdf"), false, |f| document_written(f, &new, None, None)).unwrap();
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_workspace_file_and_anything_written_with_job_files_is_held_to_the_cap_whatever_it_is_called() {
+        let most = Some(crate::keptjobs::MOST_WORKSPACE_FILE);
+        assert_eq!(most_for(Path::new("/w/work.meno"), false), most);
+        assert_eq!(most_for(Path::new("/w/WORK.MENO"), false), most);
+        assert_eq!(most_for(Path::new("/w/work.zip"), true), most);
+        assert_eq!(most_for(Path::new("/w/work"), true), most);
+        assert_eq!(most_for(Path::new("/w/paper.pdf"), false), None);
     }
 
     #[test]
