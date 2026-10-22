@@ -2768,6 +2768,44 @@ mod tests {
     }
 
     #[test]
+    fn makes_jobs_in_the_working_folder_chosen_finds_those_made_before_and_changes_it_only_while_none_is_under_way() {
+        let data = temp();
+        let scratch = temp();
+        assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        // (one made in Meno's own before)
+        let before = sized(&jobs_in(&data), ECHO, 1, 0);
+        write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
+        choose_folder(&data, Some(scratch.to_str().unwrap())).unwrap();
+        let chosen = scratch.join(IN_CHOSEN);
+        assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
+        // (what jobs may use goes with it)
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
+        let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
+        assert!(runner_folder(&data, &dir).is_ok());
+        assert!(runner_folder(&data, &before).is_ok());
+        let elsewhere = temp();
+        let (_, stray) = make_job(&elsewhere, &read_spec(&before).unwrap(), &[]).unwrap();
+        assert!(runner_folder(&data, &stray).is_err());
+        // (a job waiting: the folder is not changed)
+        write_record(&dir, &JobRecord::new(JobState::Waiting, now_ms())).unwrap();
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)).unwrap();
+        lock.lock().unwrap();
+        assert_eq!(choose_folder(&data, None), Err("1 job wait or run: the folder is changed once they have ended".into()));
+        drop(lock);
+        write_record(&dir, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
+        // (Meno's own again; a folder that is not one, refused)
+        choose_folder(&data, None).unwrap();
+        assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
+        assert!(choose_folder(&data, Some("relative/path")).is_err());
+        assert!(choose_folder(&data, Some(data.join("not there").to_str().unwrap())).is_err());
+        for d in [data, scratch, elsewhere] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
     fn takes_the_limits_settings_wrote_and_this_computer_s_where_none_are() {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());

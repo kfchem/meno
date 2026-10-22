@@ -75,6 +75,11 @@ export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
 export const clearFinishedJobs = () => runnerOf().clearFinished();
 
+/** The working folder this computer's jobs are made in (its `meno-jobs`), and whether it is Meno's own. */
+export const jobsFolder = () => invoke<{ path: string; own: boolean }>("jobs_folder");
+/** Jobs made in a working folder chosen - or in Meno's own again (null): refused, saying why, while any job waits or runs. */
+export const chooseJobsFolder = (path: string | null) => invoke<{ path: string; own: boolean }>("jobs_folder_choose", { path });
+
 /** This computer's cores, and its memory in MiB (nought where it could not be told), as its system says. */
 export const computerResources = () => invoke<{ cores: number; memory: number }>("computer_resources");
 

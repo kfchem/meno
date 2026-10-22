@@ -1412,10 +1412,25 @@ run*):
   as it looks for a waiting job's turn.
 - **A plugin declares a job's memory** (`prepare`: `memory`, in MiB).
 
-Not yet, in the seam's second part: the working folder chosen in
-Settings, path-safe folder names from the workspace's, step's and
-entry's, *Open the folder*, and job folders cleaned once their files are
-in the `.meno` unless *Keep job folders* is chosen.
+Its second part:
+
+- **Where jobs run** is chosen in Settings, *Calculations*, *Jobs*: Meno's
+  own folder, or a working folder the chemist chooses, in which Meno makes
+  a `meno-jobs` of its own. It is changed only while no job waits or runs,
+  so that one queue never spans two folders; jobs made in the folder before
+  are still found and read. Meno keeps the choice in its own data folder,
+  and a runner reads it there - it takes a job only from one of those
+  folders, never from where it is told.
+- **A job's folder is named by what it is**, path-safe: its entry's name
+  and its step's, small ASCII letters, digits and hyphens only, and eight
+  characters of an id of its own (`water-optimise-3f9a2c1d`) - a name in
+  Japanese or with spaces gives what ASCII it has, or *job*. Jobs made
+  before, named by a UUID alone, are still read.
+
+Not yet: job folders cleaned once their files are in the `.meno` unless
+*Keep job folders* is chosen (that waits for raw outputs kept in the
+`.meno`, #9b); *Show files*, on a step's menu, opens a job's folder, and
+an entry's menu does not yet.
 
 ## Questions
 

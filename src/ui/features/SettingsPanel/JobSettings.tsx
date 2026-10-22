@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { clearFinishedJobs, computerCores, computerResources, finished, limitsOf, listJobs, runningOf } from "../../../lib/jobs";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, jobsFolder, limitsOf, listJobs, runningOf } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
@@ -49,6 +50,20 @@ export default function JobSettings() {
     });
   };
 
+  // where jobs are made: a working folder chosen, or Meno's own (changed only while none waits or runs)
+  const [folder, setFolder] = useState<{ path: string; own: boolean } | null>(null);
+  const [folderWhy, setFolderWhy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTauri()) return;
+    jobsFolder().then(setFolder, () => {});
+  }, []);
+  const choose = async (own: boolean) => {
+    setFolderWhy(null);
+    const path = own ? null : await openDialog({ directory: true, multiple: false, title: "Where jobs run" }).catch(() => null);
+    if (!own && typeof path !== "string") return;
+    chooseJobsFolder(path).then(setFolder, (e) => setFolderWhy(String(e)));
+  };
+
   // the finished jobs whose files are kept
   const [kept, setKept] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
@@ -73,6 +88,25 @@ export default function JobSettings() {
   return (
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
       <OptionRows options={options} values={values} onChange={change} />
+      {folder && (
+        <div className="py-2 pl-3 pr-3 flex items-center gap-3">
+          <span className="min-w-0 flex-1 text-sm text-gh-black">
+            Where jobs run
+            <span className="block text-xs text-gh-gray truncate" title={folder.path}>
+              {folder.own ? "Meno's own folder" : folder.path}
+            </span>
+            {folderWhy && <span className="block text-xs text-accel-accent">{folderWhy}</span>}
+          </span>
+          <button onClick={() => void choose(false)} className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base">
+            Choose…
+          </button>
+          {!folder.own && (
+            <button onClick={() => void choose(true)} className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base">
+              Meno's own
+            </button>
+          )}
+        </div>
+      )}
       {kept != null && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
           <span className="min-w-0 flex-1 text-sm text-gh-black">Finished jobs' files</span>
