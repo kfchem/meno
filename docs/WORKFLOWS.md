@@ -1432,6 +1432,32 @@ Not yet: job folders cleaned once their files are in the `.meno` unless
 `.meno`, #9b); *Show files*, on a step's menu, opens a job's folder, and
 an entry's menu does not yet.
 
+### Job keys, and a job taken up again (2026-10-22)
+
+Foundation PR 9a, its first part (WORKFLOWS-FOUNDATION.md, *A job's key*;
+question N):
+
+- **A job's key** is the SHA-256 of what it runs - its input files, its
+  program and arguments, what it reads as its input, the programs run
+  after it - and of its plugin's version and its program's (`lib/jobKeys`):
+  the version a program installed separately says, else what the plugin's
+  worker says it runs. Its files in any order give the same key; any byte
+  changed, another. The cores a job is given are in its input where its
+  program is told them there (ORCA's %pal, Gaussian's %NProcShared, xTB's
+  `-P`), so a job given other cores is another job.
+- **Same key, same result.** A job whose key this workspace has run to the
+  end - in any step's last run, or one it keeps - is not run again while
+  its runner still has it: what it gave is taken up again, and the step's
+  line says so (*Reused*, or *2 reused*). Only within one workspace: no
+  cache on the computer decides what runs. Its folder cleared since, it is
+  run again.
+- **A step deleted keeps the folder of a job another step's run took up
+  again**, while that step keeps it.
+- Kept with the workspace: each run's jobs' keys, one for each job.
+
+Not yet, in its second part: outputs Meno cannot account for stopping
+the step, and *Adopt*.
+
 ## Questions
 
 None left open in what is built (2026-10-08): the seven steps are built

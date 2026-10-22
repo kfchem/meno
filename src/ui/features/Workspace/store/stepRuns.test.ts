@@ -219,7 +219,7 @@ describe("a step that runs a plugin's program", () => {
     expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
     expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
-    expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"] }]);
+    expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)
     expect(doc.history()).toMatchObject({ dirty: true, undoLabel: "wire" });
     expect(readWorkflow({ sets: st().sets, steps: st().steps, wires: st().wires })?.steps[0].running).toEqual(running);
@@ -729,6 +729,63 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran!.said).toBe(`0:01 \u00b7 2 of 2 \u00b7 ${over}`);
+  });
+
+  it("takes up again a job it ran to the end, its key the same - starting none - and runs one whose key changed", async () => {
+    const { st, step } = editor();
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await first;
+    const ran = st().steps.find((s) => s.id === step)!.ran!;
+    expect(ran.keys).toHaveLength(1);
+    expect(asked.started).toHaveLength(1);
+    // (run again, nothing changed: its job's key ran to the end - not run again, what it gave taken up again)
+    await st().runStep(step);
+    await settle();
+    await settle();
+    await st().lookAtJobs();
+    await settle();
+    expect(asked.started).toHaveLength(1);
+    const again = st().steps.find((s) => s.id === step)!.ran!;
+    expect(again).toMatchObject({ ok: true, jobs: [idOf(1)], keys: ran.keys });
+    expect(again.said).toMatch(/ \u00b7 Reused$/);
+    // (another level: its plugin asks for another run - another key, run)
+    st().updateStep(step, { options: { level: "tight" } });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "xtb", args: ["input.xyz", "--opt", "tight"], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["xtbopt.log"] }] }) as never);
+    const third = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(2);
+    end(2);
+    await st().lookAtJobs();
+    await third;
+    expect(st().steps.find((s) => s.id === step)!.ran!.keys).not.toEqual(ran.keys);
+  });
+
+  it("deleted, keeps the folder of a job another step's run took up again", async () => {
+    const { st, step } = editor();
+    const run = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await run;
+    // (a second step on the same set, the same: it takes the first's job up again)
+    const set = st().sets[0].id;
+    const twin = st().addStep("optimise", "xtb", 10, 30);
+    st().connect({ set }, twin);
+    await st().runStep(twin);
+    await settle();
+    await settle();
+    await st().lookAtJobs();
+    await settle();
+    expect(st().steps.find((s) => s.id === twin)!.ran).toMatchObject({ jobs: [idOf(1)] });
+    st().removeStep(step);
+    await settle();
+    expect(asked.removed).not.toContain(idOf(1));
   });
 
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {

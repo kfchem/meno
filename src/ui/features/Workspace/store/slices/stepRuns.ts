@@ -10,7 +10,8 @@ import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
 import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
-import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
+import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
+import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { pluginWorker } from "../../../../../lib/roles/worker";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
@@ -495,14 +496,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     };
     const given = await Promise.all(entries.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
     let prepared;
+    // (what its worker says it runs: the program's version where none installed separately says its own)
+    let said = "";
     try {
       const client = await pluginClient(plugin);
       const sent = entries.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
       prepared = readPrepared(await client.prepare(step.kind, sent, options, cores), entries.length);
+      said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
+    // (the jobs this workspace ran before, and how each stands now: one whose key ran to the end is not run again)
+    const states = new Map((await listJobs().catch((): Job[] => [])).map((j) => [j.id, j.state]));
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
@@ -524,7 +530,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           label: `${entries[p.entries[0]]?.name ?? compoundLetter(entries[p.entries[0]]?.compound ?? 0)} ${kindInfo(step.kind).name}`,
           ...(path ? { path } : {}),
         };
-        jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
+        const jobKeyed = jobKey({
+          plugin: plugin.id,
+          pluginVersion: plugin.version,
+          program: p.program,
+          programVersion: useInstalled.getState().chosen[programKey(plugin.id, p.program)]?.version ?? said,
+          args: p.args,
+          ...(p.stdin ? { stdin: p.stdin } : {}),
+          ...(p.then ? { then: p.then } : {}),
+          files: p.files,
+        });
+        const again = reusable([...(doc.getState().steps ?? [])], jobKeyed, (j) => states.get(j));
+        jobs.push({ id: again ?? (await startJob(ask)), entries: p.entries, reads: p.reads, key: jobKeyed, ...(again ? { reused: true as const } : {}) });
       }
     } catch (e) {
       for (const j of jobs) void stopJob(j.id).catch(() => {});
@@ -532,7 +549,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     if (gone(id)) return forgetStarted(jobs);
     doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(over ? { over } : {}) }), { unsaved: true });
-    set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
+    set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: j.reused ? "done" : "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
   }
@@ -892,8 +909,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         kind === "conformers"
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
-      const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${run.over ? ` \u00b7 ${run.over}` : ""}`;
-      bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as });
+      // (jobs whose key ran to the end before: not run again, what they gave taken up again - said, counted)
+      const again = run.jobs.filter((j) => j.reused).length;
+      const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
+      const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!) } : {};
+      bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...as });
       close();
     } catch (e) {
       // (whatever went wrong bringing its results in: said as how it ended, and its run closed - its jobs looked at no more, those waiting for it let go)
@@ -1072,7 +1092,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const waiting = waiters.get(step.id) ?? [];
       waiters.delete(step.id);
       waiting.forEach((f) => f());
-      const jobs = [...new Set([...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? []), ...(step.runs ?? []).flatMap((r) => r.jobs ?? [])])];
+      // (a job another step's run took up again - or whose run this one took up - stays while that step keeps it)
+      const kept = new Set(
+        (doc.getState().steps ?? [])
+          .filter((s) => s.id !== step.id)
+          .flatMap((s) => [...(s.running?.jobs.map((j) => j.id) ?? []), ...(s.ran?.jobs ?? []), ...(s.runs ?? []).flatMap((r) => r.jobs ?? [])]),
+      );
+      const jobs = [...new Set([...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? []), ...(step.runs ?? []).flatMap((r) => r.jobs ?? [])])].filter((j) => !kept.has(j));
       for (const job of jobs) {
         forgotten.add(job);
         void (async () => {

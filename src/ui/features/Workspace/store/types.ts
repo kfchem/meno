@@ -632,7 +632,19 @@ export type Member = { structure: number[] } | { molecule: number } | { picture:
  * its jobs, by id, whose logs and files are kept until the step is deleted;
  * and the kind and options it ran with.
  */
-export type StepRan = { at: number; ok: boolean; said: string; input: string; stopped?: true; took?: number; jobs?: string[]; kind?: StepKind; options?: OptionValues };
+export type StepRan = {
+  at: number;
+  ok: boolean;
+  said: string;
+  input: string;
+  stopped?: true;
+  took?: number;
+  jobs?: string[];
+  /** Its jobs' keys, one for each of `jobs` (lib/jobKeys): what a later run finds a job to take up again by. */
+  keys?: string[];
+  kind?: StepKind;
+  options?: OptionValues;
+};
 /**
  * An earlier run a step keeps (docs/WORKFLOWS.md, *Results*): what it did
  * then - its kind and options as they were - and what it gave, as its
@@ -652,7 +664,16 @@ export type RunKeptResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest:
  * plugin reads back once it is done.
  */
 /** A job of a step's run: its id, the entries it is for, the files it reads back - and, a Render's, the size its picture takes on the page. */
-export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [number, number] };
+export type StepJob = {
+  id: string;
+  entries: number[];
+  reads: string[];
+  size?: [number, number];
+  /** Its key (lib/jobKeys): what it runs and the versions of what runs it. */
+  key?: string;
+  /** A job whose key this workspace had run to the end before: not run again, what it gave taken up again. */
+  reused?: true;
+};
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
  * when it started, what came into it (`inputKey`), its options as they

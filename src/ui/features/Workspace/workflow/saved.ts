@@ -10,6 +10,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { RUNS_KEPT } from "./model";
+import { isJobKey } from "../../../../lib/jobKeys";
 
 export type SavedWorkflow = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wire[] };
 
@@ -90,6 +91,9 @@ function readRan(v: unknown): StepRan | undefined {
   const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.ok !== "boolean" || typeof r.said !== "string" || typeof r.input !== "string") return undefined;
   const jobs = Array.isArray(r.jobs) ? r.jobs.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
+  // (a key for each job, or none: one missing would take a job up again by another's)
+  const given = (r as { keys?: unknown }).keys;
+  const keys = Array.isArray(given) && given.length === jobs.length && jobs.length === (r.jobs as unknown[]).length && given.every(isJobKey) ? (given as string[]) : undefined;
   const options = optionsIn(r.options);
   return {
     at: r.at,
@@ -99,6 +103,7 @@ function readRan(v: unknown): StepRan | undefined {
     ...(r.stopped === true ? { stopped: true as const } : {}),
     ...(isNum(r.took) && r.took >= 0 ? { took: r.took } : {}),
     ...(jobs.length ? { jobs } : {}),
+    ...(keys ? { keys } : {}),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),
   };
@@ -151,6 +156,8 @@ function readRunning(v: unknown): StepRunning | undefined {
             reads: Array.isArray(j.reads) ? j.reads.filter((n): n is string => typeof n === "string" && IN_FOLDER.test(n)) : [],
             // (a Render's: the size its picture takes on the page)
             ...(Array.isArray(j.size) && j.size.length === 2 && j.size.every((n) => isNum(n) && n > 0) ? { size: [j.size[0], j.size[1]] as [number, number] } : {}),
+            ...(isJobKey((j as { key?: unknown }).key) ? { key: (j as { key: string }).key } : {}),
+            ...((j as { reused?: unknown }).reused === true ? { reused: true as const } : {}),
           },
         ]
       : [],
