@@ -55,10 +55,22 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
  * own (`running`, amended in): undo does not take a run back, and the
  * workspace saved keeps it, so that one opened again picks its jobs up.
  */
+/** Structures by their places among `of`: "structure 3", "structures 1, 2 and 4". */
+const structuresAt = (places: readonly number[]) =>
+  places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
+
 /** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
 export function notMade(places: readonly number[], of: number): string {
-  const which = places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
-  return `${which} of ${of} could not be made in 3D`;
+  return `${structuresAt(places)} of ${of} could not be made in 3D`;
+}
+
+/**
+ * The structures not made in 3D because their drawing leaves a stereocentre
+ * or a double bond open, by their places among `of`: a conformer search
+ * never chooses a configuration the drawing does not give.
+ */
+export function stereoOpen(places: readonly number[], of: number): string {
+  return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
 }
 
 export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState, w: Pick<RunWith, "extentOf">) {
@@ -375,6 +387,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let compounds = 0;
     // (those that could not be made, by their places among the structures: the others made all the same)
     const failed: number[] = [];
+    // (those whose drawing leaves a stereocentre or a double bond open, by their places: not made, a configuration never chosen for them)
+    const open: number[] = [];
     try {
       let chem = await pluginWorker(plugin);
       for (const [place, atoms] of input.structures.entries()) {
@@ -384,6 +398,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (!block) continue;
         let made;
         try {
+          // (a step cannot ask, as the canvas's 3D structure does, which stereoisomer is meant: one whose drawing leaves any open is not made)
+          const left = await chem.request("open_stereo", { molblock: block.molblock }, CONFORMERS_MS);
+          if (left.atoms.length || left.bonds.length) {
+            open.push(place + 1);
+            continue;
+          }
           // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same)
           made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, CONFORMERS_MS)).isomers[0];
         } catch {
@@ -429,9 +449,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
-    if (!worked.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
+    const of = input.structures.length;
+    // (each not made said: those that could not be, and those whose stereo is left open)
+    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : [])];
+    if (!worked.length) {
+      const why = open.length ? unmade.join(" \u00b7 ") : "No structure drawn could be made in 3D";
+      return void fail(id, why[0].toUpperCase() + why.slice(1), at, key);
+    }
     const took = Date.now() - at;
-    const left = failed.length ? ` \u00b7 ${notMade(failed, input.structures.length)}` : "";
+    const left = unmade.map((u) => ` \u00b7 ${u}`).join("");
     bringIn(id, worked, "conformers", {
       at,
       ok: true,
