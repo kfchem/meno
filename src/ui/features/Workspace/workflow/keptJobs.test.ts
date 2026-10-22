@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { KeptJobFile } from "../../../../lib/jobs";
-import { JOB_FILE_MEDIA, menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
+import { JOB_FILE_MEDIA, menoFileBytes, MOST_FILE, MOST_WORKSPACE_FILE, readMenoFile } from "../../../../lib/doc/menoFile";
 import type { WorkflowStep } from "../store/types";
-import { heldJobFile, holdJobFilesOf, jobsOfStep, jobsToKeep, sizeAsk, takesPast, withKeptJobs } from "./keptJobs";
+import { readFileSync } from "node:fs";
+import { heldJobFile, heldJobSource, holdJobFilesOf, jobsOfStep, jobsToKeep, showFilesSaid, sizeAsk, takesPast, withKeptJobs } from "./keptJobs";
 
 const J1 = "0b6f5c1e-0000-4000-8000-000000000001";
 const J2 = "0b6f5c1e-0000-4000-8000-000000000002";
@@ -47,6 +48,7 @@ describe("what a save keeps of the steps' jobs", () => {
     ]);
     expect(kept.bytes).toBe(4268 + 4060);
     expect(kept.adds).toBe(4268 + 4060);
+    expect(kept.largest).toBe(5000);
   });
 
   it("with Don't keep raw outputs, keeps what a job was given, what was read back and its logs, and names each file left out with its size", async () => {
@@ -87,6 +89,33 @@ describe("what a save keeps of the steps' jobs", () => {
     });
     expect(kept.carried).toEqual([{ sha256: sha("1"), name: "work/job.out", media: JOB_FILE_MEDIA, data: new Uint8Array([1, 2, 3]) }]);
     expect(kept.appended).toEqual([]);
+  });
+
+  it("has Meno read a job's files again from the file it was opened from, where that is as it was - never through the page", async () => {
+    const opened = step(1, [J3]);
+    opened.ran!.kept = [{ job: J3, files: [{ name: "work/job.out", sha256: sha("1"), size: 3, role: "read" }] }];
+    const bytes = new Map([[sha("1"), new Uint8Array([1, 2, 3])]]);
+    const there = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async () => "/work/opened.meno");
+    expect(there.appended).toEqual([{ sha256: sha("1"), job: J3, name: "work/job.out", from: "/work/opened.meno" }]);
+    expect(there.listed.map((f) => f.sha256)).toEqual([sha("1")]);
+    expect(there.carried).toEqual([]);
+    expect(there.adds).toBe(3);
+    // (that file changed or gone since: kept from what was held of it as it was opened)
+    const changed = await jobsToKeep([opened], async () => null, (s) => bytes.get(s) ?? null, async () => null);
+    expect(changed.appended).toEqual([]);
+    expect(changed.carried.map((c) => c.sha256)).toEqual([sha("1")]);
+  });
+
+  it("reads again from where a file was opened only while it is there as it was", async () => {
+    const data = new TextEncoder().encode("kept");
+    const { sha256Hex } = await import("../../../../lib/binary/sha256");
+    const real = sha256Hex(data);
+    holdJobFilesOf(readMenoFile(menoFileBytes("{}", [{ sha256: real, name: "work/b.out", media: JOB_FILE_MEDIA, data }])), { path: "/w/a.meno", size: 10, mtime: 5 });
+    expect(await heldJobSource(real, async () => ({ size: 10, mtime: 5 }))).toBe("/w/a.meno");
+    expect(await heldJobSource(real, async () => ({ size: 10, mtime: 6 }))).toBeNull();
+    expect(await heldJobSource(real, async () => ({ size: 11, mtime: 5 }))).toBeNull();
+    expect(await heldJobSource(real, async () => null)).toBeNull();
+    expect(await heldJobSource(sha("7"), async () => ({ size: 10, mtime: 5 }))).toBeNull();
   });
 
   it("keeps nothing, and says nothing, of a job neither on this computer nor kept before", async () => {
@@ -142,12 +171,32 @@ describe("the size warning", () => {
     expect(takesPast(T + 1, null, T)).toBe(true);
     expect(takesPast(T + 1, T + 5, T)).toBe(false);
     expect(takesPast(T, 0, T)).toBe(false);
+    // (past it already, and grown by half of it or more since: said again)
+    expect(takesPast(T + T / 2 + 10, T + 10, T)).toBe(true);
+    expect(takesPast(T + T / 2 + 9, T + 10, T)).toBe(false);
+  });
+
+  it("refuses, offering only to keep no raw outputs, a workspace past what a workspace file may come to - however large it was before", () => {
+    const MB = 2 ** 20;
+    const steps = [step(1, [J1])];
+    const jobs = { steps: [{ step: 1, bytes: 1200 * MB }], adds: 1200 * MB, largest: 600 * MB };
+    expect(sizeAsk(steps, jobs, 10 * MB, 1100 * MB, 500)).toMatchObject({ bytes: 1210 * MB, most: MOST_WORKSPACE_FILE });
+    // (under it: no `most`, a warning only)
+    expect(sizeAsk(steps, { ...jobs, adds: 600 * MB }, 10 * MB, null, 500)!.most).toBeUndefined();
+    // (one job file past what a workspace's file keeps of one - deflating well, or not yet written to be measured: refused all the same)
+    expect(sizeAsk(steps, { ...jobs, adds: 300 * MB, largest: MOST_FILE + 1 }, 0, 2 * MB, 500)).toMatchObject({ most: MOST_WORKSPACE_FILE });
+  });
+
+  it("holds the same most as the save that refuses one past it (src-tauri keptjobs.rs)", () => {
+    const rust = readFileSync(new URL("../../../../../src-tauri/src/keptjobs.rs", import.meta.url), "utf8");
+    const most = /pub const MOST_WORKSPACE_FILE: u64 = 1 << (\d+);/.exec(rust);
+    expect(most && 2 ** Number(most[1])).toBe(MOST_WORKSPACE_FILE);
   });
 
   it("names the largest steps, numbered where several are of a kind, with the file the page wrote and the job files added from the disk", () => {
     const MB = 2 ** 20;
     const steps = [step(1, [J1]), step(2, [J2]), step(3, [J3], { kind: "conformers" })];
-    const jobs = { steps: [{ step: 2, bytes: 400 * MB }, { step: 3, bytes: 90 * MB }, { step: 1, bytes: 20 * MB }], adds: 510 * MB };
+    const jobs = { steps: [{ step: 2, bytes: 400 * MB }, { step: 3, bytes: 90 * MB }, { step: 1, bytes: 20 * MB }], adds: 510 * MB, largest: 300 * MB };
     expect(sizeAsk(steps, jobs, 10 * MB, null, 500)).toEqual({
       bytes: 520 * MB,
       threshold: 500 * MB,
@@ -160,6 +209,14 @@ describe("the size warning", () => {
     // (the file there past it already; or under the threshold Settings says; or no job files to leave out: nothing asked)
     expect(sizeAsk(steps, jobs, 10 * MB, 600 * MB, 500)).toBeNull();
     expect(sizeAsk(steps, jobs, 10 * MB, null, 1000)).toBeNull();
-    expect(sizeAsk(steps, { steps: [], adds: 0 }, 900 * MB, null, 500)).toBeNull();
+    expect(sizeAsk(steps, { steps: [], adds: 0, largest: 0 }, 900 * MB, null, 500)).toBeNull();
+  });
+});
+
+describe("what Show files says of what it did not write back out", () => {
+  it("names each file left as it was, and each the workspace's file does not hold; nothing where it wrote them all", () => {
+    expect(showFilesSaid([], [])).toBeNull();
+    expect(showFilesSaid(["work/a.out"], [])).toBe("work/a.out was there already, changed since, and left as it is.");
+    expect(showFilesSaid(["a", "b"], ["c", "d", "e", "f"])).toBe("a, b were there already, changed since, and left as they are. c, d, e and 1 more are not in the workspace's file.");
   });
 });

@@ -1075,6 +1075,7 @@ pub fn run() {
             jobs::job_trim,
             jobs::jobs_finished_bytes,
             keptjobs::job_kept,
+            keptjobs::file_now,
             keptjobs::job_write_back
         ])
         .build(context)

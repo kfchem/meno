@@ -73,7 +73,9 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { atOnce: 65, cores: "8" } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { atOnce: 3, cores: 16 } }).calculations).toEqual({ atOnce: 3, cores: 16 });
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 0 } }).calculations).toEqual({});
-    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({ largeWorkspaceMB: 2048 });
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
+    // (past the most a workspace's file may come to at all: not taken)
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,

@@ -5,6 +5,7 @@ import {
   readTextFile,
 } from "@tauri-apps/plugin-fs";
 import { writeAppFile } from "../io/writeDocument";
+import { MOST_WORKSPACE_FILE } from "../doc/menoFile";
 import { create } from "zustand";
 import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem/style";
 import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
@@ -77,8 +78,8 @@ export type CalculationSettings = {
 /** The most jobs at once, and cores for each, Settings takes. */
 export const JOBS_AT_ONCE_MOST = 64;
 export const CORES_MOST = 1024;
-/** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this. */
-export const LARGE_WORKSPACE_MOST = 1_000_000;
+/** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this - the most a workspace's file may come to at all. */
+export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):

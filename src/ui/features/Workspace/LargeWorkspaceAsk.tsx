@@ -8,13 +8,16 @@ import { megabytes } from "./workflow/keptJobs";
  * (docs/FILE-IO.md, *A step's jobs*): about how large it comes to, its
  * largest steps by what their jobs' files add, and whether to keep no raw
  * outputs of those - or save it all, as it is. Nothing is left out unless
- * asked. A card over the canvas, not a dialog, so that the steps it names
- * stay in view.
+ * asked. Past what a workspace's file may come to (`most`), it says it
+ * cannot be saved as it is, and offers only to keep no raw outputs of
+ * those steps. A card over the canvas, not a dialog, so that the steps it
+ * names stay in view.
  */
 export default function LargeWorkspaceAsk({
   bytes,
   threshold,
   steps,
+  most,
   onKeepNoRaw,
   onSaveAll,
   onCancel,
@@ -23,13 +26,15 @@ export default function LargeWorkspaceAsk({
   threshold: number;
   /** The largest steps, by name, with what their jobs' files add. */
   steps: { name: string; bytes: number }[];
+  /** The most a workspace's file may come to, where this one would be past it. */
+  most?: number;
   onKeepNoRaw: () => void;
   onSaveAll: () => void;
   onCancel: () => void;
 }) {
-  const allRef = useRef<HTMLButtonElement>(null);
+  const firstRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    allRef.current?.focus();
+    firstRef.current?.focus();
   }, []);
   // (Escape cancels while its tab is in front)
   const inFront = useInFront();
@@ -55,10 +60,12 @@ export default function LargeWorkspaceAsk({
       onClick={(e) => e.stopPropagation()}
     >
       <h2 id="large-workspace-title" className="font-semibold mb-1">
-        A large workspace
+        {most ? "Too large to open again" : "A large workspace"}
       </h2>
       <p className="text-gh-gray mb-2">
-        Saved, it comes to about {megabytes(bytes)}, past {megabytes(threshold)}. It keeps every file its steps' jobs wrote. The largest:
+        {most
+          ? `Saved, it would come to about ${megabytes(bytes)}: a workspace file Meno can open again holds at most ${megabytes(most)}. Nothing is saved as it is. The largest steps:`
+          : `Saved, it comes to about ${megabytes(bytes)}, past ${megabytes(threshold)}. It keeps every file its steps' jobs wrote. The largest:`}
       </p>
       <ul className="mb-2 text-gh-black">
         {steps.map((s, i) => (
@@ -76,12 +83,18 @@ export default function LargeWorkspaceAsk({
         <button onClick={onCancel} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
           Cancel
         </button>
-        <button onClick={onKeepNoRaw} className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100">
+        <button
+          ref={most ? firstRef : undefined}
+          onClick={onKeepNoRaw}
+          className={most ? "rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 hover:brightness-95" : "rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100"}
+        >
           Don't keep their raw outputs
         </button>
-        <button ref={allRef} onClick={onSaveAll} className="rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 hover:brightness-95">
-          Save it all
-        </button>
+        {!most && (
+          <button ref={firstRef} onClick={onSaveAll} className="rounded-md border border-accel-base bg-accel-lightbase px-3 py-1.5 hover:brightness-95">
+            Save it all
+          </button>
+        )}
       </div>
     </motion.div>
   );

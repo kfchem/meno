@@ -72,7 +72,19 @@ export type KeptJobFile = { name: string; size: number; sha256: string; deflated
 /** A job's files a workspace may keep, where its folder is on this computer; null where it is not. */
 export const jobKept = (id: string) => invoke<KeptJobFile[] | null>("job_kept", { id });
 /** Writes a file a workspace kept of a job back out, where the job's folder is not on this computer; where its work folder now is. */
-export const writeJobBack = (id: string, name: string, bytes: Uint8Array) => invoke<string>("job_write_back", bytes, { headers: { job: id, name } });
+/** A file the page may read, as it is now: its size, and when it was last written (ms); none where it is not there or may not be read (src-tauri keptjobs.rs `file_now`). */
+export const fileNow = (path: string) => invoke<{ size: number; mtime: number | null } | null>("file_now", { path });
+export type WrittenBack = { work: string; differs: boolean };
+/**
+ * A file a workspace kept of the job `id` written back out (src-tauri
+ * keptjobs.rs `job_write_back`): read by Meno from the workspace's file it
+ * was opened from (`from`, a path), or else sent as its bytes. Where its
+ * work folder is; and whether a file there that is not it was left as it is.
+ */
+export const writeJobBack = (id: string, name: string, sha256: string, source: { from: string } | { bytes: Uint8Array }) =>
+  "from" in source
+    ? invoke<WrittenBack>("job_write_back", new Uint8Array(), { headers: { job: id, name, sha256, from: encodeURIComponent(source.from) } })
+    : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => invoke<void>("job_stop", { id });
 /** A finished job's folder taken away. */

@@ -9,7 +9,7 @@ import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
 import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
-import { heldJobFile } from "../../workflow/keptJobs";
+import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
@@ -1066,12 +1066,27 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (its folder not on this computer - a workspace saved elsewhere: what the file kept of it written back out, and shown)
       const kept = [step.ran, ...(step.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
       let work: string | null = null;
+      // (each file not written back, and why: never one there already written over)
+      const differs: string[] = [];
+      const notHad: string[] = [...(kept?.left ?? []).map((l) => l.name)];
       for (const f of kept?.files ?? []) {
-        const bytes = heldJobFile(f.sha256);
-        if (bytes) work = await writeJobBack(job, f.name, bytes);
+        const from = await heldJobSource(f.sha256);
+        const bytes = from ? null : heldJobFile(f.sha256);
+        if (!from && !bytes) {
+          notHad.push(f.name);
+          continue;
+        }
+        const back = await writeJobBack(job, f.name, f.sha256, from ? { from } : { bytes: bytes! }).catch(() => null);
+        if (!back) {
+          notHad.push(f.name);
+          continue;
+        }
+        work = back.work;
+        if (back.differs) differs.push(f.name);
       }
       if (!work) throw new Error("Its files are not on this computer, and the workspace's file keeps none of them.");
       await revealItemInDir(work);
+      return showFilesSaid(differs, notHad);
     },
     lookAtJobs,
     /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */

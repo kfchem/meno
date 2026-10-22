@@ -1433,7 +1433,8 @@ export type EditorState = {
   /** A step's logs opened in the column of texts, following its jobs while they run. */
   showStepLog: (id: number) => Promise<void>;
   /** The folder of a step's last job shown where the system shows files. */
-  showStepFiles: (id: number) => Promise<void>;
+  /** A step's job's files shown - written back out first, where its folder is not on this computer: what is said of those not written back, if anything. */
+  showStepFiles: (id: number) => Promise<string | null | void>;
   /** The jobs of the steps that have any looked at: where each is, and, those that have all ended, their results brought in. */
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */

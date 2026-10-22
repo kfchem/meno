@@ -52,6 +52,13 @@ export type KeptData = Omit<KeptFile, "size"> & { data: Uint8Array };
 export const MOST_WORKSPACE = 256 * 1024 * 1024;
 export const MOST_FILE = 1024 * 1024 * 1024;
 export const MOST_FILES = 10_000;
+/**
+ * The most a workspace's file may come to, saved - as src-tauri keptjobs.rs
+ * `MOST_WORKSPACE_FILE` says, which refuses one past it: one Meno can open
+ * again (opening reads it whole, and reads no ZIP64). Half the 2 GB seen to
+ * open on a Mac.
+ */
+export const MOST_WORKSPACE_FILE = 2 ** 30;
 
 const SHA = /^[0-9a-f]{64}$/;
 

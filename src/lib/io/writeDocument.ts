@@ -8,8 +8,8 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 
-/** A job's file to be added to a workspace's file from the disk as it is written (src-tauri keptjobs.rs `Appended`). */
-export type Appended = { sha256: string; job: string; name: string };
+/** A job's file to be added to a workspace's file from the disk as it is written (src-tauri keptjobs.rs `Appended`): from its job's folder, or from the workspace's file it was opened from (`from`). */
+export type Appended = { sha256: string; job: string; name: string; from?: string };
 
 /**
  * `content` - bytes, or text written as UTF-8 - written to `path`, where

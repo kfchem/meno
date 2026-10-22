@@ -1697,6 +1697,7 @@ function WorkspaceContent({
             bytes={files.sizeAsked.bytes}
             threshold={files.sizeAsked.threshold}
             steps={files.sizeAsked.steps}
+            most={files.sizeAsked.most}
             onKeepNoRaw={() => files.sizeAsked?.answer("no raw")}
             onSaveAll={() => files.sizeAsked?.answer("all")}
             onCancel={() => files.sizeAsked?.answer("cancel")}
@@ -1988,7 +1989,11 @@ function WorkspaceContent({
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
               ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
-              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
+              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () =>
+                    void st
+                      .showStepFiles(s.id)
+                      .then((said) => said && useNotices.getState().show({ id: `show-files:${s.id}`, title: "Some files were not written out", text: said }))
+                      .catch(() => {}) } : {}),
               // (a step a plugin does runs jobs, whose files the workspace's file keeps: workflow/keptJobs)
               ...(byOf(s) !== MENO.id ? { keepRaw: { kept: s.keepRaw !== false, set: (keep: boolean) => st.keepRawOutputs(s.id, keep) } } : {}),
             };

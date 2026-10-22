@@ -2,9 +2,11 @@ import { carriedDrawing, recordDrawings, seenDrawing, seenOnly } from "./utils/s
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
-import { exists, stat } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
+import { fileNow } from "../../../lib/jobs";
 import { writeDocument, type Appended } from "../../../lib/io/writeDocument";
 import { jobsToKeep, LARGE_WORKSPACE_MB, sizeAsk, type SizeAsk } from "./workflow/keptJobs";
+import { MOST_FILE } from "../../../lib/doc/menoFile";
 import { truePath } from "../../../lib/io/truePath";
 import { turnsOf } from "../../../lib/doc/saveTurns";
 import { heldElsewhere } from "../../../lib/doc/savers";
@@ -563,12 +565,14 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
         const { savedPath } = store.getState();
         const jobs = await jobsToKeep(store.getState().steps ?? []);
-        return { written, savedPath, jobs, file: await workspaceFile(store.getState(), jobs) };
+        // (a job file past what a workspace's file keeps of one: asked about first - never written to be refused)
+        const file = jobs.largest > MOST_FILE ? null : await workspaceFile(store.getState(), jobs);
+        return { written, savedPath, jobs, file };
       };
       let at = await made();
       // (past the size Settings says, as the file it replaces was not: asked - never anything left out unasked - docs/FILE-IO.md, *A step's jobs*)
-      const before = await stat(path).then((s) => s.size, () => null);
-      const asked = sizeAsk(store.getState().steps ?? [], at.jobs, at.file.bytes.length, before, useAppSettings.getState().calculations.largeWorkspaceMB ?? LARGE_WORKSPACE_MB);
+      const before = await fileNow(path).then((f) => f?.size ?? null, () => null);
+      const asked = sizeAsk(store.getState().steps ?? [], at.jobs, at.file?.bytes.length ?? 0, before, useAppSettings.getState().calculations.largeWorkspaceMB ?? LARGE_WORKSPACE_MB);
       if (asked) {
         const answer = await new Promise<"all" | "no raw" | "cancel">((answer) => setSizeAsked({ ...asked, answer }));
         setSizeAsked(null);
@@ -578,7 +582,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
           at = await made();
         }
       }
-      const { bytes, notKept, lastHolds } = at.file;
+      // (still past it, its raw outputs left out or none to leave: written, to say why it cannot be)
+      const { bytes, notKept, lastHolds } = at.file ?? (await workspaceFile(store.getState(), at.jobs));
       const { kept, old } = await writtenWhere(
         path,
         bytes,
