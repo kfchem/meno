@@ -115,7 +115,7 @@ references, the first it is bonded as (`matchingReference`).
 
 - **Bonds read from the geometry** as Meno reads any geometry given no bonds
   (`bondedPairs`): two atoms closer than their single-bond covalent radii
-  (Pyykkö's) together and a tenth over. Which atoms are bonded is compared,
+  (Pyykkö's) together and a fifth over. Which atoms are bonded is compared,
   not bond orders.
 - **R or S, where asked.** Because the two share one numbering, a centre has
   the reference's configuration where its neighbours stand round it the same

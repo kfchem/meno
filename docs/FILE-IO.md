@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`) |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -880,6 +880,48 @@ work.meno (zip)
   workspace's JSON is kept - by what it is known by, which the file then
   does not hold, nor list - so that, opened again, it is named again,
   never taken for a file that is there.
+- **What does not read is left out, counted and said - never silently.**
+  A workspace's file, or Meno's own record of a copy, can hold something
+  that does not read: damaged, or written by hand. Only an atom or a bond
+  of the drawing keeps the whole file from opening (and that is said).
+  Everything else that does not read is left out alone, and each kind is
+  counted as it is read (`utils/readNotes`). Opening says so with the
+  texts and pictures that could not be had: "1 picture, 1 step and 1 wire
+  in the file could not be read and were left out." A paste says the same
+  of the copy.
+  - **What is counted.** Whole records: arrows, plus signs, shapes, words,
+    electron-pushing arrows, molecules in 3D and their measurements,
+    pictures, slides, catalytic cycles, handwriting and its strokes, texts,
+    PDFs, their pages laid apart and the writing on them, sets, steps, wires,
+    a step's earlier runs and jobs under way. Ties whose other end is not
+    there: a set's member, a result set's step, a text's molecule and words
+    tied to an arrow. Within a molecule in 3D: a calculation's record, its
+    results and its notes of what could not be read.
+  - **Nothing more is left out than what does not read.** A conformer or
+    frame that does not read is left out with its own energy, number, share
+    and degeneracy. Every other frame keeps its own, and its results of
+    frames stay its own; a row of a list of a frame left out is of none.
+    It is counted with the frames its file left out (`framesLeftOut`). An
+    R/S or E/Z label of an atom or bond the molecule does not have is
+    left out alone, and so is a ligand atom of unknown orders that is not
+    one of its own. Before 2026-10-22, one damaged frame lost every
+    conformer's energy, and one label out of range lost every label.
+    The shares are kept as they were saved, of the whole ensemble.
+  - **What a file says by place is never taken for another.** A text's
+    molecule and a set's members are matched to the molecules that read by
+    their places in the file. The text and the PDF its column showed are
+    matched by their places among those listed. One that did not read is of
+    none, or shown none, and that is said. A PDF one of whose pages' sizes
+    does not read is left out whole, because every page after it would
+    otherwise be a place wrong.
+  - **Presentation is put right silently.** A colour, a width or an angle
+    out of range is read as its default, as before, and not counted.
+  - **Save says it, every time.** None of what was left out is in a file
+    saved since: "Saved, but 1 picture and 1 wire that could not be read
+    when it opened are not in the file." The first save over the file it
+    was opened from first keeps that file beside it, as above: "... The
+    file as it was is kept beside it as aspirin.meno.bak." It is the only
+    copy of what was left out.
 - **Saved within the same limits.** A workspace that would come to more
   than a workspace file is read with is not written: Save says so, with
   the sizes, rather than leave a file that would not open again.

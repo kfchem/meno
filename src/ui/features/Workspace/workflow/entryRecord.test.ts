@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { geometryKey } from "../../../../lib/entry";
+import { FREQUENCY, geometryKey } from "../../../../lib/entry";
 import { entryOfSet, type SetEntry } from "./entries";
 import { constitutionOf, runMeno } from "./meno";
 import { speciesKept } from "./run";
@@ -64,5 +64,92 @@ describe("a molecule's species through Meno's own steps", () => {
   it("keeps the charge and spin a calculation said, where a step of Meno's own hands the entry on", () => {
     expect(speciesKept(water(1, 0, undefined, { charge: -1, multiplicity: 2 }))).toEqual({ calc: { readers: [], charge: -1, multiplicity: 2 } });
     expect(speciesKept(water(1, 0))).toEqual({});
+  });
+});
+
+describe("a calculation's thermochemistry as the entry's properties", () => {
+  /** What a reading is, as a plugin gives it: of the molecule, an energy in hartrees, or with its own unit. */
+  const reading = (id: string, value: number | string, measure: Record<string, unknown> = { quantity: "energy" }) =>
+    ({ id, on: "molecule", group: "Thermochemistry", label: id, value, ...measure }) as never;
+  const xtb = {
+    readers: ["xtb 6.7.1"],
+    program: "xtb",
+    method: "GFN2-xTB",
+    solvation: "ALPB(water), reference state gsolv [1 M gas/solution]",
+    results: [
+      reading("thermo.free-energy", -5.0623),
+      reading("thermo.enthalpy", -5.0428),
+      reading("thermo.zpve", 0.0213),
+      reading("thermo.g-correction", 0.0047),
+      reading("thermo.h-correction", 0.0242),
+      reading("thermo.temperature", 298.15, { unit: "K" }),
+      reading("thermo.treatment", "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1"),
+    ],
+  };
+
+  it("takes each as the program said it: in hartrees, at the temperature and in the solvation it used, by what, with its treatment", () => {
+    const e = water(1, 0, -5.07, { calc: xtb });
+    const p = entryOfSet(e, "x").properties;
+    const at = { geometry: geometryKey(e.xyz), kelvin: 298.15, solvent: "ALPB(water), reference state gsolv [1 M gas/solution]" };
+    const by = { plugin: "xtb", program: "xtb", method: "GFN2-xTB", treatment: "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1" };
+    expect(p["thermo.free-energy"]).toEqual({ value: -5.0623, unit: "Eh", at, by, status: "computed" });
+    expect(p["thermo.enthalpy"]).toMatchObject({ value: -5.0428, unit: "Eh", at, by });
+    expect(p["thermo.zpve"]).toMatchObject({ value: 0.0213, at, by });
+    expect(p["thermo.g-correction"]).toMatchObject({ value: 0.0047, at, by });
+    // (xtb says no pressure: none is said for it - never one assumed)
+    expect(p["thermo.free-energy"].at).not.toHaveProperty("atm");
+    // (only those agreed as properties: the rest stay readings)
+    expect(p).not.toHaveProperty("thermo.h-correction");
+    // (the energy: in the solvation it was worked out in, by what - no temperature, which is not its)
+    expect(p.energy).toEqual({ value: -5.07, unit: "Eh", at: { geometry: geometryKey(e.xyz), solvent: xtb.solvation }, by: { plugin: "xtb", program: "xtb", method: "GFN2-xTB" }, status: "computed" });
+  });
+
+  it("says the pressure where the program said one, the gas phase where it said none, and nothing where it said nothing", () => {
+    const orca = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", basis: "def2-SVP", solvation: "none", results: [reading("thermo.free-energy", -76.4), reading("thermo.temperature", 298.15, { unit: "K" }), reading("thermo.pressure", 1, { unit: "atm" })] };
+    const p = entryOfSet(water(1, 0, -76.42, { calc: orca }), "x").properties;
+    expect(p["thermo.free-energy"].at).toMatchObject({ kelvin: 298.15, atm: 1, solvent: "none" });
+    expect(p["thermo.free-energy"].by).toEqual({ plugin: "cclib", program: "ORCA", method: "B3LYP", basis: "def2-SVP" });
+    const unsaid = entryOfSet(water(1, 0, -76.42, { calc: { ...orca, solvation: undefined } }), "x").properties;
+    expect(unsaid["thermo.free-energy"].at).not.toHaveProperty("solvent");
+  });
+
+  it("takes nothing that is not an energy in hartrees, and nothing where no calculation was", () => {
+    const odd = { readers: ["x 1"], results: [reading("thermo.free-energy", "n/a"), reading("thermo.enthalpy", 3, { unit: "kcal/mol" })] };
+    const p = entryOfSet(water(1, 0, undefined, { calc: odd }), "x").properties;
+    expect(p).not.toHaveProperty("thermo.free-energy");
+    expect(p).not.toHaveProperty("thermo.enthalpy");
+    const bare = entryOfSet(water(1, 0, -76.4), "x").properties;
+    expect(bare.energy).toEqual({ value: -76.4, unit: "Eh", at: { geometry: geometryKey(water(1, 0).xyz) }, status: "computed" });
+  });
+});
+
+describe("a calculation's vibrations as the entry's properties", () => {
+  const list = (rows: { cells: (number | string)[]; move?: unknown }[], columns = [{ label: "Mode", quantity: "number" }, { label: "Frequency", quantity: "wavenumber" }]) =>
+    ({ id: "vibrations", on: "list", group: "Vibrations", label: "Vibrations", columns, rows }) as never;
+
+  it("takes each frequency in cm-1, an imaginary one negative, in the program's order - and the modes where every one gives them", () => {
+    const move = (k: number) => Array.from({ length: 9 }, (_, i) => (i === k ? 0.7 : 0));
+    const calc = { readers: ["cclib 1.9rc1"], program: "ORCA", method: "B3LYP", results: [list([{ cells: [1, -35.2], move: move(0) }, { cells: [2, 1595.4], move: move(1) }, { cells: [3, 3657.1], move: move(2) }])] };
+    const e = water(1, 0, -76.4, { calc });
+    const p = entryOfSet(e, "x").properties;
+    expect(p.vibrations).toEqual({
+      value: { table: { columns: [FREQUENCY], rows: [[-35.2], [1595.4], [3657.1]] } },
+      unit: "none",
+      at: { geometry: geometryKey(e.xyz) },
+      by: { plugin: "cclib", program: "ORCA", method: "B3LYP" },
+      status: "computed",
+    });
+    expect(p.modes.value).toEqual({ modes: [move(0), move(1), move(2)] });
+  });
+
+  it("gives no modes where any vibration gives none, or only a promise of them; and nothing where no column is a frequency", () => {
+    const calc = (results: unknown[]) => ({ readers: ["xtb 6.7.1"], program: "xtb", method: "GFN2-xTB", results }) as never;
+    const xtb = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590] }, { cells: [2, 3650] }])]) }), "x").properties;
+    expect(xtb.vibrations.value).toEqual({ table: { columns: [FREQUENCY], rows: [[1590], [3650]] } });
+    expect(xtb).not.toHaveProperty("modes");
+    const asked = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590], move: { ask: "m1" } }])]) }), "x").properties;
+    expect(asked).not.toHaveProperty("modes");
+    const odd = entryOfSet(water(1, 0, -5, { calc: calc([list([{ cells: [1, 1590] }], [{ label: "Mode", quantity: "number" }, { label: "Shift", unit: "ppm" }] as never)]) }), "x").properties;
+    expect(odd).not.toHaveProperty("vibrations");
   });
 });

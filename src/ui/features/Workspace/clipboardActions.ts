@@ -9,6 +9,7 @@ import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionForSmiles } from "./chem/reactionFile";
 import { structureOnClipboard } from "./chem/fromClipboard";
+import { leftOutSaid } from "./utils/readNotes";
 import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
 import type { EditorStore } from "./store";
@@ -217,6 +218,9 @@ export function useClipboardActions(
         }
         pastes.current = now;
         store.getState().pasteModel(centredAt(found, at));
+        // (what the copy held that could not be read, left out: said)
+        const left = leftOutSaid(found.leftOut, "copy");
+        if (left) onError(left);
       } catch (e) {
         onError(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);
       }
