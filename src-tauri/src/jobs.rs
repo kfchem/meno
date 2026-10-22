@@ -55,6 +55,8 @@ const RUNNER_LOCK: &str = "runner.lock";
 const WORK: &str = "work";
 /// Held by a runner while it looks whether it is its turn: one at a time.
 const QUEUE_LOCK: &str = ".queue.lock";
+/// What this computer's jobs may use at once (`Limits`), as Settings says: written beside them, read by every runner.
+const LIMITS: &str = ".limits.json";
 
 /// How often a waiting job looks for its turn, and a running one at its program and for a stop.
 const WAIT_STEP: Duration = Duration::from_millis(400);
@@ -111,8 +113,12 @@ pub struct JobSpec {
     pub stdin: Option<String>,
     /// What it is given beside the environment its runner was started in.
     pub env: BTreeMap<String, String>,
-    /// How many jobs may run at once, as it was when this one was asked for.
-    pub slots: u32,
+    /// The cores it takes - its plugin given them, its program told (`THREADS`) - as the queue counts it.
+    #[serde(default = "one_core")]
+    pub cores: u32,
+    /// The memory it takes, in MiB, where its plugin declared it; none declared, nought: counted by its cores alone.
+    #[serde(default)]
+    pub memory: u64,
     /// When it was asked for, in milliseconds since 1970: the order jobs start in.
     pub created: u64,
     /// Programs installed beside its own, run after it in turn where it ended
@@ -185,6 +191,85 @@ fn write_record(dir: &Path, record: &JobRecord) -> std::io::Result<()> {
     let tmp = dir.join(format!("{RECORD}.{}.tmp", std::process::id()));
     fs::write(&tmp, text)?;
     fs::rename(tmp, dir.join(RECORD))
+}
+
+fn one_core() -> u32 {
+    1
+}
+
+/// What this computer's jobs may use at once (docs/WORKFLOWS-FOUNDATION.md,
+/// *This computer's runner knows its resources*): cores, and memory in MiB.
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Limits {
+    pub cores: u32,
+    pub memory: u64,
+}
+
+/// What this computer has: its cores, and its memory in MiB (nought where it could not be told).
+#[derive(Serialize, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Resources {
+    pub cores: u32,
+    pub memory: u64,
+}
+
+/// This computer's cores and memory.
+pub fn computer() -> Resources {
+    let cores = std::thread::available_parallelism().map(|n| n.get() as u32).unwrap_or(1);
+    Resources { cores, memory: total_memory() / (1024 * 1024) }
+}
+
+/// What jobs may use, Settings unsaid: all the cores, and three quarters of the memory.
+fn default_limits() -> Limits {
+    let here = computer();
+    Limits { cores: here.cores.max(1), memory: here.memory / 4 * 3 }
+}
+
+/// What the jobs in `root` may use at once, as last written there; the defaults where nothing is.
+fn limits_in(root: &Path) -> Limits {
+    fs::read_to_string(root.join(LIMITS))
+        .ok()
+        .and_then(|t| serde_json::from_str::<Limits>(&t).ok())
+        .filter(|l| l.cores >= 1)
+        .unwrap_or_else(default_limits)
+}
+
+/// Whether a job of `cores` and `memory` may start beside those running, using `used`: none running, always - a
+/// job larger than the limits runs alone, never never; else where it fits within what is left.
+fn fits(limits: Limits, used: (u32, u64), running: u32, cores: u32, memory: u64) -> bool {
+    running == 0 || (used.0 + cores.max(1) <= limits.cores && (memory == 0 || used.1 + memory <= limits.memory))
+}
+
+/// How many jobs of `spec`'s size run at once within `limits`: what a waiting one's pace is reckoned by.
+fn slots_for(limits: Limits, spec: &JobSpec) -> u32 {
+    (limits.cores / spec.cores.max(1)).max(1)
+}
+
+/// This computer's memory, in bytes: what the system says it has; nought where it could not be asked.
+#[cfg(target_os = "macos")]
+fn total_memory() -> u64 {
+    let mut bytes: u64 = 0;
+    let mut size = std::mem::size_of::<u64>();
+    let name = c"hw.memsize";
+    let ok = unsafe { libc::sysctlbyname(name.as_ptr(), (&mut bytes as *mut u64).cast(), &mut size, std::ptr::null_mut(), 0) };
+    if ok == 0 { bytes } else { 0 }
+}
+
+#[cfg(all(unix, not(target_os = "macos")))]
+fn total_memory() -> u64 {
+    // (/proc/meminfo's first line: "MemTotal:  16314764 kB")
+    fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|t| t.lines().find(|l| l.starts_with("MemTotal:")).and_then(|l| l.split_whitespace().nth(1)?.parse::<u64>().ok()))
+        .map(|kb| kb * 1024)
+        .unwrap_or(0)
+}
+
+#[cfg(windows)]
+fn total_memory() -> u64 {
+    use windows_sys::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
+    let mut status: MEMORYSTATUSEX = unsafe { std::mem::zeroed() };
+    status.dwLength = std::mem::size_of::<MEMORYSTATUSEX>() as u32;
+    if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 { status.ullTotalPhys } else { 0 }
 }
 
 fn read_spec(dir: &Path) -> Option<JobSpec> {
@@ -348,10 +433,12 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
         return 1;
     }
 
-    // its turn: as many running as were allowed, those asked for first first -
-    // looked for often from when it is at the head of the queue, and at the
-    // old step behind it, so that a queue of many costs what it did
+    // its turn: as many running as fit what jobs may use, those asked for
+    // first first - looked for often from when it is at the head of the
+    // queue, and at the old step behind it, so that a queue of many costs
+    // what it did
     let mut at_head: Option<Instant> = None;
+    let slots = dir.parent().map(|root| slots_for(limits_in(root), &spec)).unwrap_or(1);
     let mut unsure = 0;
     loop {
         if stop_asked(dir) {
@@ -367,13 +454,13 @@ pub fn run_job(dir: &Path, allowed: &dyn Fn(&JobSpec) -> Result<(), String>) -> 
             Ok(Turn::Next) => sleep_watching(dir, step_at(at_head.get_or_insert_with(Instant::now).elapsed(), WAIT_STEP)),
             Ok(Turn::Behind(ahead)) => {
                 // (how long it has been near the head, not how long it has waited: one that came there from far back is new to it)
-                let near = if near_head(ahead, spec.slots) {
+                let near = if near_head(ahead, slots) {
                     at_head.get_or_insert_with(Instant::now).elapsed()
                 } else {
                     at_head = None;
                     Duration::ZERO
                 };
-                sleep_watching(dir, behind_step(ahead, spec.slots, near))
+                sleep_watching(dir, behind_step(ahead, slots, near))
             }
             Err(e) => {
                 end(JobState::Failed, None, None, Some(format!("it could not wait its turn: {e}")));
@@ -515,9 +602,10 @@ const NEAR_MORE: u32 = 4;
 const BEHIND_MOST: Duration = Duration::from_secs(10);
 const PLACE_STEP: Duration = Duration::from_millis(300);
 
-/// Whether it is this job's turn - the first waiting, with fewer running
-/// than it allows - and, where it is, the job recorded running. Asked by one
-/// runner at a time.
+/// Whether it is this job's turn - the first waiting, and fitting beside
+/// those running within what jobs may use (`fits`): a job never starts
+/// ahead of one asked for before it, however small - and, where it is, the
+/// job recorded running. Asked by one runner at a time.
 fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Turn> {
     let root = dir.parent().ok_or_else(|| std::io::Error::other("a job's folder has no parent"))?;
     let queue = OpenOptions::new().create(true).truncate(false).write(true).open(root.join(QUEUE_LOCK))?;
@@ -530,6 +618,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
         }
     }
     let mut running = 0u32;
+    let mut used = (0u32, 0u64);
     let mut first: Option<(u64, PathBuf)> = None;
     // (those waiting before it: asked for before it, or at once and by name)
     let mine_key = (base.created, dir.to_path_buf());
@@ -546,7 +635,12 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
         }
         let Some(record) = current_record(&other) else { continue };
         match record.state {
-            JobState::Running => running += 1,
+            JobState::Running => {
+                running += 1;
+                // (one whose spec cannot be read counted as a core: what any job takes at least)
+                let (cores, memory) = read_spec(&other).map(|s| (s.cores.max(1), s.memory)).unwrap_or((1, 0));
+                used = (used.0 + cores, used.1 + memory);
+            }
             JobState::Waiting => {
                 let key = (record.created, other);
                 if key < mine_key && key.1.file_name() != dir.file_name() {
@@ -563,7 +657,7 @@ fn take_turn(dir: &Path, spec: &JobSpec, base: &JobRecord) -> std::io::Result<Tu
     if !mine {
         return Ok(Turn::Behind(ahead));
     }
-    if running >= spec.slots.max(1) {
+    if !fits(limits_in(root), used, running, spec.cores, spec.memory) {
         return Ok(Turn::Next);
     }
     write_record(dir, &JobRecord { state: JobState::Running, started: Some(now_ms()), ..base.clone() })?;
@@ -1763,8 +1857,8 @@ fn job_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
 }
 
 /// What a plugin asks to run (docs/WORKFLOWS.md, `prepare`): its program, by
-/// its name, with arguments; the files to write for it; and, from Settings,
-/// how many jobs may run at once and how many cores each may use.
+/// its name, with arguments; the files to write for it; the cores it takes,
+/// from Settings, and the memory its plugin declares.
 #[derive(Deserialize, Debug)]
 pub struct JobAsk {
     pub plugin: String,
@@ -1777,9 +1871,10 @@ pub struct JobAsk {
     #[serde(default)]
     pub stdin: Option<String>,
     #[serde(default)]
-    pub slots: Option<u32>,
-    #[serde(default)]
     pub cores: Option<u32>,
+    /// The memory it takes, in MiB, as its plugin declared it.
+    #[serde(default)]
+    pub memory: Option<u64>,
     /// Where the chemist located its program, where it is one installed separately.
     #[serde(default)]
     pub path: Option<String>,
@@ -1833,7 +1928,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         args: payload.args,
         stdin: payload.stdin,
         env: given_env(&found, net.proxy_port(), payload.cores),
-        slots: payload.slots.unwrap_or(1).clamp(1, 64),
+        cores: payload.cores.unwrap_or(1).clamp(1, 1024),
+        memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
         then,
     };
@@ -2002,6 +2098,32 @@ pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
     clear_finished(&jobs_root(&app)?)
 }
 
+/// The most memory a job may say it takes, in MiB: 64 TiB.
+const MEMORY_MOST: u64 = 64 * 1024 * 1024;
+
+/// This computer's cores and memory, for Settings to say what jobs may use of them.
+#[tauri::command]
+pub fn computer_resources() -> Resources {
+    computer()
+}
+
+/// What this computer's jobs may use at once, as Settings says (`Limits`): written beside the jobs, where every
+/// runner reads it as it looks for its turn - those waiting take it up at once. At least a core; memory within what
+/// the computer has, nought counting none.
+#[tauri::command]
+pub fn jobs_limits(app: AppHandle, cores: u32, memory: u64) -> Result<(), String> {
+    let root = jobs_root(&app)?;
+    write_limits(&root, Limits { cores: cores.clamp(1, 1024), memory: memory.min(MEMORY_MOST) }).map_err(|e| e.to_string())
+}
+
+/// Limits written whole: a runner never reads half of them.
+fn write_limits(root: &Path, limits: Limits) -> std::io::Result<()> {
+    fs::create_dir_all(root)?;
+    let tmp = root.join(format!("{LIMITS}.{}.tmp", std::process::id()));
+    fs::write(&tmp, serde_json::to_string(&limits).map_err(std::io::Error::other)?)?;
+    fs::rename(tmp, root.join(LIMITS))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2031,8 +2153,15 @@ mod tests {
         dir
     }
 
-    /// A job running a script of the system's shell.
+    /// A job running a script of the system's shell, of a core, in a queue whose jobs may use `slots` cores in all:
+    /// so many at once.
     fn shell(root: &Path, script: &str, slots: u32) -> PathBuf {
+        write_limits(root, Limits { cores: slots, memory: 0 }).unwrap();
+        sized(root, script, 1, 0)
+    }
+
+    /// A job running a script of the system's shell, taking `cores` and `memory` MiB.
+    fn sized(root: &Path, script: &str, cores: u32, memory: u64) -> PathBuf {
         #[cfg(unix)]
         let (program, flag) = ("/bin/sh".to_string(), "-c");
         #[cfg(windows)]
@@ -2044,7 +2173,8 @@ mod tests {
             args: vec![flag.into(), script.into()],
             stdin: None,
             env: BTreeMap::from([("MENO_JOB_SAYS".into(), "hello".into())]),
-            slots,
+            cores,
+            memory,
             created: now_ms(),
             then: vec![],
         };
@@ -2407,6 +2537,60 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn starts_a_job_where_its_cores_and_memory_fit_beside_those_running_and_never_one_ahead_of_its_turn() {
+        let l = Limits { cores: 8, memory: 16_000 };
+        // (nothing running: any job, a larger one than the limits included, runs alone)
+        assert!(fits(l, (0, 0), 0, 32, 64_000));
+        assert!(fits(l, (4, 8_000), 1, 4, 8_000));
+        assert!(!fits(l, (4, 8_000), 1, 5, 1_000));
+        assert!(!fits(l, (4, 8_000), 1, 2, 8_001));
+        // (a job that declares no memory is counted by its cores alone)
+        assert!(fits(l, (4, 16_000), 1, 4, 0));
+        assert_eq!(slots_for(l, &JobSpec { cores: 3, ..read_spec(&sized(&temp(), "x", 3, 0)).unwrap() }), 2);
+
+        // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
+        let root = temp();
+        write_limits(&root, Limits { cores: 6, memory: 0 }).unwrap();
+        let first = sized(&root, PAUSE, 4, 0);
+        std::thread::sleep(Duration::from_millis(5));
+        let second = sized(&root, PAUSE, 4, 0);
+        std::thread::sleep(Duration::from_millis(5));
+        let small = sized(&root, PAUSE, 1, 0);
+        let runners: Vec<_> = [&first, &second, &small]
+            .iter()
+            .map(|d| {
+                let d = (*d).clone();
+                std::thread::spawn(move || run_job(&d))
+            })
+            .collect();
+        wait_for(|| current_record(&first).is_some_and(|r| r.state == JobState::Running));
+        std::thread::sleep(Duration::from_millis(600));
+        assert_eq!(current_record(&second).map(|r| r.state), Some(JobState::Waiting));
+        assert_eq!(current_record(&small).map(|r| r.state), Some(JobState::Waiting), "it never jumps the one before it");
+        for r in runners {
+            r.join().unwrap();
+        }
+        // (each ran in the end, in the order asked for)
+        let started = |d: &Path| current_record(d).and_then(|r| r.started).unwrap();
+        assert!(started(&first) <= started(&second) && started(&second) <= started(&small));
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn takes_the_limits_settings_wrote_and_this_computer_s_where_none_are() {
+        let root = temp();
+        assert_eq!(limits_in(&root), default_limits());
+        assert!(default_limits().cores >= 1);
+        write_limits(&root, Limits { cores: 3, memory: 2048 }).unwrap();
+        assert_eq!(limits_in(&root), Limits { cores: 3, memory: 2048 });
+        // (the computer's memory told: three quarters of it, by default)
+        let here = computer();
+        assert!(here.memory > 0, "{here:?}");
+        assert_eq!(default_limits().memory, here.memory / 4 * 3);
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[cfg(unix)]
     const LONG: &str = "sleep 30 & echo $! > child.pid; wait";
     #[cfg(windows)]
@@ -2730,7 +2914,8 @@ mod tests {
             args: args.iter().map(|a| a.to_string()).collect(),
             stdin: None,
             env: given_env(found, 4567, Some(2)),
-            slots: 1,
+            cores: 1,
+            memory: 0,
             created: now_ms(),
             then: vec![],
         }

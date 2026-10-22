@@ -169,6 +169,12 @@ class Steps(unittest.TestCase):
         # (the wavefunction's file, "read from the input stream, on a separate line": after the molecule, ended by a blank line)
         self.assertEqual(text.split("\n\n")[3:], ["wavefunction.wfx", ""])
 
+    def test_declares_the_memory_it_asks_of_gaussian_for_the_queue_to_count(self):
+        # (%Mem in its units - bytes by 1024s, or 8-byte words; bare, words - as MiB, rounded up; unset, none)
+        mem = lambda memory: ask("prepare", step="energy", entries=[ENTRY], options={**step_defaults("energy"), "memory": memory})["jobs"][0].get("memory")
+        self.assertEqual([mem("16GB"), mem("500MB"), mem("1500kb"), mem("2GW"), mem("1000000")], [16384, 500, 2, 16384, 8])
+        self.assertIsNone(mem(""))
+
     def test_a_lone_atom_asked_to_be_optimised_is_run_as_sp(self):
         # (Gaussian, given Opt for one atom, stops in its optimiser)
         sodium = {"name": "sodium", "atoms": [{"el": "Na", "x": 0.0, "y": 0.0, "z": 0.0}], "bonds": [], "charge": 1, "multiplicity": 1}

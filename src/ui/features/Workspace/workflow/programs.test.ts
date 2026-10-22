@@ -72,6 +72,9 @@ describe("the jobs a plugin prepares", () => {
     const then = { ...job, program: "orca", then: [{ program: "orca_2mkl", args: ["input", "-molden"] }] };
     expect(readPrepared({ jobs: [then] }, 1)).toEqual([then]);
     expect(readPrepared({ jobs: [{ ...job, then: [] }] }, 1)).toEqual([job]);
+    // (the memory its plugin declares, in MiB, for the queue to count: a whole number within reason, else none said)
+    expect(readPrepared({ jobs: [{ ...job, memory: 12000 }] }, 1)).toEqual([{ ...job, memory: 12000 }]);
+    for (const memory of [0, -5, 1.5, "8GB", 2 ** 40]) expect(readPrepared({ jobs: [{ ...job, memory }] }, 1)).toEqual([job]);
   });
 
   it("are refused where they cannot", () => {

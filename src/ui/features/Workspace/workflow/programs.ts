@@ -80,7 +80,20 @@ export function pluginEntry(e: SetEntry): PluginEntry {
  * by its name and with its arguments (ORCA's orca_2mkl: its manifest's
  * `installed[].beside`); and the files it reads back.
  */
-export type Prepared = { entries: number[]; program: string; args: string[]; files: JobFile[]; stdin?: string; then?: Then[]; reads: string[] };
+export type Prepared = {
+  entries: number[];
+  program: string;
+  args: string[];
+  files: JobFile[];
+  stdin?: string;
+  then?: Then[];
+  reads: string[];
+  /** The memory it takes, in MiB, as its plugin declares it (ORCA's, Gaussian's, from what they are given): counted against what jobs may use. */
+  memory?: number;
+};
+
+/** The most memory a job may say it takes, in MiB: 64 TiB. */
+const MEMORY_MOST = 64 * 1024 * 1024;
 
 /** A program installed beside a job's own, run after it: by its name there, with its arguments. */
 export type Then = { program: string; args: string[] };
@@ -137,6 +150,8 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
       ...(typeof stdin === "string" ? { stdin } : {}),
       ...(then.length ? { then: then as Then[] } : {}),
       reads: [...reads],
+      // (a whole number of MiB, within reason; any other, none said)
+      ...(Number.isInteger(r?.memory) && (r!.memory as number) > 0 && (r!.memory as number) <= MEMORY_MOST ? { memory: r!.memory as number } : {}),
     });
   }
   if (covered.size !== count) return "It prepared no job for some of what came in";

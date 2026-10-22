@@ -718,6 +718,10 @@ The same for every plugin and for Meno's own parts:
     wrote, read back, to keep with the molecules read from it
     (`"wavefunction": {"kind", "file", "name"}`): given, as the output
     is, to a later step that takes its kind (a step's `files`);
+  - a job `prepare` gives may declare the memory it takes, in MiB
+    (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
+    times its processes, Gaussian's %Mem - counted against what this
+    computer's jobs may use; none declared, it is counted by its cores;
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job

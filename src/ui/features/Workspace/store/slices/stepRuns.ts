@@ -479,7 +479,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
-    const { slots, cores } = runningOf(useAppSettings.getState().calculations);
+    const { cores } = runningOf(useAppSettings.getState().calculations);
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
@@ -515,8 +515,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           files: p.files,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),
-          slots,
           cores,
+          ...(p.memory ? { memory: p.memory } : {}),
           ...(path ? { path } : {}),
         };
         jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
@@ -578,7 +578,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { ask, theirs } = renderChoices(step.kind, options);
-    const { slots, cores } = runningOf(useAppSettings.getState().calculations);
+    const { cores } = runningOf(useAppSettings.getState().calculations);
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
       const where = await lookFor(plugin.id, decl.name);
@@ -600,7 +600,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const p = prepared[0];
         if (p.files.some((f) => f.name === SCENE)) throw new Error("It prepared a job Meno cannot run");
         const path = paths.get(p.program);
-        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], slots, cores, ...(path ? { path } : {}) });
+        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
         const { page } = rendered;
         jobs.push({ id: job, entries: [i], reads: [], size: [page.maxX - page.minX, page.maxY - page.minY] });
       }

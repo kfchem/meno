@@ -213,9 +213,9 @@ describe("a step that runs a plugin's program", () => {
     const ran = st().runStep(step);
     await settle();
     await settle();
-    // prepared by the plugin with what came in, its job started - with how many may run at once, and the cores each may use
+    // prepared by the plugin with what came in, its job started - with the cores it takes
     expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], slots: 1 })]);
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"] }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)

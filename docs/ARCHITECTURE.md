@@ -672,9 +672,13 @@ closes*).
   never Meno's own, which it would hold, nor its job's, which is taken away
   as soon as the job is over - and nothing of Meno's waits on it.
 - **Jobs wait their turn.** A runner takes its turn under `jobs/.queue.lock`
-  (`File::lock`): the earliest asked for among those waiting starts when
-  fewer are running than it allows (`slots`, Settings' *Jobs at once* when
-  it was asked for).
+  (`File::lock`): the earliest asked for among those waiting starts where
+  its cores and memory (`JobSpec.cores`, `.memory`) fit beside those of
+  the jobs running within what jobs may use (`jobs/.limits.json`, written
+  by Meno from Settings; this computer's cores and three quarters of its
+  memory where there is none) - or where none runs, whatever its size.
+  One behind it never starts first. How often a waiting job looks is
+  reckoned as if as many of its size ran at once as fit.
 - **Looked at often while young** (2026-10-13). The runner looks for its
   turn every 400 ms, and at its program every 200 ms - but every 50 ms
   for the first 3 s of a program, and of a job at the head of the queue,

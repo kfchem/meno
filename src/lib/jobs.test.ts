@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { finished, followJob, liveJobsOf, runningOf, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { finished, followJob, liveJobsOf, runningOf, limitsOf, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -36,20 +36,29 @@ describe("jobs", () => {
     expect(["done", "failed", "stopped", "gone"].every((s) => finished(s as never))).toBe(true);
   });
 
-  it("runs one at once, sharing the computer's cores among those at once, unless Settings says otherwise", () => {
-    expect(runningOf({}, 8)).toEqual({ slots: 1, cores: 8 });
-    expect(runningOf({ atOnce: 3 }, 8)).toEqual({ slots: 3, cores: 2 });
-    expect(runningOf({ atOnce: 16 }, 8)).toEqual({ slots: 16, cores: 1 });
-    expect(runningOf({ atOnce: 2, cores: 6 }, 8)).toEqual({ slots: 2, cores: 6 });
-    // never more than the computer has
-    expect(runningOf({ cores: 32 }, 8)).toEqual({ slots: 1, cores: 8 });
+  it("gives a job all the cores jobs may use - one at a time - unless Settings says otherwise", () => {
+    expect(runningOf({}, 8)).toEqual({ cores: 8 });
+    expect(runningOf({ cores: 2 }, 8)).toEqual({ cores: 2 });
+    expect(runningOf({ coresAll: 6 }, 8)).toEqual({ cores: 6 });
+    // never more than jobs may use, nor than the computer has
+    expect(runningOf({ cores: 7, coresAll: 4 }, 8)).toEqual({ cores: 4 });
+    expect(runningOf({ cores: 32 }, 8)).toEqual({ cores: 8 });
+  });
+
+  it("lets jobs use all the computer's cores and three quarters of its memory, unless Settings says otherwise - never more than it has", () => {
+    const computer = { cores: 10, memory: 32 * 1024 };
+    expect(limitsOf({}, computer)).toEqual({ cores: 10, memory: 24 * 1024 });
+    expect(limitsOf({ coresAll: 4, memoryAll: 8 * 1024 }, computer)).toEqual({ cores: 4, memory: 8 * 1024 });
+    expect(limitsOf({ coresAll: 64, memoryAll: 64 * 1024 }, computer)).toEqual({ cores: 10, memory: 32 * 1024 });
+    // (its memory not told: as Settings says, and none said, none counted)
+    expect(limitsOf({}, { cores: 4, memory: 0 })).toEqual({ cores: 4, memory: 0 });
   });
 
   it("asks for a job as the backend takes it", async () => {
-    await startJob({ plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], slots: 1, cores: 4 });
+    await startJob({ plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], cores: 4, memory: 2000 });
     expect(backend.asked[0]).toEqual({
       cmd: "job_start",
-      args: { payload: { plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], slots: 1, cores: 4 } },
+      args: { payload: { plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], cores: 4, memory: 2000 } },
     });
   });
 
