@@ -396,14 +396,6 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
 export const compoundLetter = groupLetter;
 
 /**
- * A step's entry read as Meno's entry record (lib/entry, PR 1 of
- * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
- * its geometry, its species by Meno's one rule, and what has been found of
- * it as properties - its energy (in hartrees, at its geometry), its
- * degeneracy, its compound as its group, its number, its name - and the
- * molecule it was a frame of as its lineage.
- */
-/**
  * The thermochemistry an entry's calculation read, that become its
  * properties (docs/WORKFLOWS-FOUNDATION.md, *The entry*): the total free
  * energy, the total enthalpy, the zero-point energy alone (not E + ZPE), and
@@ -491,6 +483,15 @@ function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
   };
 }
 
+/**
+ * A step's entry read as Meno's entry record (lib/entry, PR 1 of
+ * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
+ * its geometry, its species by Meno's one rule, and what has been found of
+ * it as properties - its energy (in hartrees, at its geometry, by what
+ * worked it out), its calculation's thermochemistry and vibrations, its
+ * degeneracy, its compound as its group, its number, its name - and the
+ * molecule it was a frame of as its lineage.
+ */
 export function entryOfSet(e: SetEntry, id: string): Entry {
   const atoms: EntryAtom[] = e.atoms.map((a) => ({
     el: a.el,
