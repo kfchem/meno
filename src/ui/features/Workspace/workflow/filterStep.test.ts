@@ -3,6 +3,7 @@ import type { Property } from "../../../../lib/entry";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
+import { noting } from "../utils/readNotes";
 import { editedCopy } from "../utils/edit3d";
 import { setMolecules } from "./entries";
 import { inputKey, resultOf } from "./flow";
@@ -102,8 +103,10 @@ describe("a Filter step", () => {
 describe("a molecule's properties", () => {
   it("are kept in the file, a map for each frame - those that do not read left out - and none where none reads", () => {
     const m = { ...water([{ nll: nll(12) }, { nll: { value: [1, 2], unit: "none", status: "computed" } as unknown as Property, mw: { value: 18.02, unit: "none", status: "computed" } }]), id: 1 };
-    const back = readCarried3D(JSON.parse(JSON.stringify(m)))!;
-    expect(back.properties).toEqual([{ nll: nll(12) }, { mw: { value: 18.02, unit: "none", status: "computed" } }]);
+    const left = noting(() => readCarried3D(JSON.parse(JSON.stringify(m)))!);
+    expect(left.value.properties).toEqual([{ nll: nll(12) }, { mw: { value: 18.02, unit: "none", status: "computed" } }]);
+    // (the one that does not read - a list - counted, as what a file holds that does not read is)
+    expect(left.left).toEqual({ property: 1 });
     // (one per frame or none: a list of another length is not read)
     expect(readCarried3D(JSON.parse(JSON.stringify({ ...m, properties: [{ nll: nll(12) }] })))!.properties).toBeUndefined();
     expect(readCarried3D(JSON.parse(JSON.stringify({ ...m, properties: [{ x: { value: 1, unit: "furlongs", status: "computed" } }, {}] })))!.properties).toBeUndefined();

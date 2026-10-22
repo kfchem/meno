@@ -27,7 +27,7 @@ export function procedureOf(p: SavedProcedure): Procedure | null {
     saved: p.saved,
     // (its sets as frames: a step's exits keep which step and exit made them, so its wires lead on from them; what any held is not kept)
     parts: {
-      sets: read.sets.map(({ members: _h, keep: _k, notKept: _n, ...b }) => b),
+      sets: read.sets.map(({ members: _h, keep: _k, notKept: _n, put: _p, ...b }) => b),
       steps: read.steps.map(({ ran: _r, runs: _k, running: _g, ...s }) => s),
       wires: read.wires,
     },
