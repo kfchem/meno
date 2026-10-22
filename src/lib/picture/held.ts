@@ -3,9 +3,11 @@
  * by their SHA-256 - what a picture on the page is drawn from, what its
  * workspace's file keeps (`files/<sha256>`), and what a copy and a paste
  * carry it by. A workspace's file opened holds the pictures it keeps, each
- * read from it only when first wanted.
+ * read from it only when first wanted - one that does not read marked as
+ * not had (lib/doc/notHad) until it is held again.
  */
 import type { MenoFile } from "../doc/menoFile";
+import { markHad, markNotHad } from "../doc/notHad";
 import { imageInfo, isMp4, PICTURE_MEDIA, type ImageInfo, type PictureMedia } from "./image";
 
 /** A picture held: what it is known by, and what it is. */
@@ -25,6 +27,7 @@ export async function holdPicture(bytes: Uint8Array): Promise<HeldPicture | null
   if (!info) return null;
   const sha256 = await sha256OfBytes(bytes);
   if (!held.get(sha256)?.bytes) held.set(sha256, { bytes });
+  markHad(sha256);
   return { ...info, sha256 };
 }
 
@@ -33,13 +36,15 @@ export async function holdFilm(bytes: Uint8Array): Promise<{ sha256: string } | 
   if (!isMp4(bytes)) return null;
   const sha256 = await sha256OfBytes(bytes);
   if (!held.get(sha256)?.bytes) held.set(sha256, { bytes });
+  markHad(sha256);
   return { sha256 };
 }
 
 /**
  * A picture's bytes, held this session; read from its workspace's file the
  * first time - and taken only if they are what its SHA-256 says (the file
- * reads them so: lib/doc/menoFile); none where it is held nowhere.
+ * reads them so: lib/doc/menoFile); none where it is held nowhere. One its
+ * file holds damaged is marked not had.
  */
 export function pictureBytes(sha256: string): Uint8Array | null {
   const h = held.get(sha256);
@@ -49,10 +54,12 @@ export function pictureBytes(sha256: string): Uint8Array | null {
     if (!bytes) {
       // (one that does not read, or is not what it says, is held no more: not read again each time it is drawn, and free to be held from elsewhere)
       held.delete(sha256);
+      markNotHad(sha256);
       return null;
     }
     h.bytes = bytes;
     h.read = undefined;
+    markHad(sha256);
   }
   return h.bytes;
 }

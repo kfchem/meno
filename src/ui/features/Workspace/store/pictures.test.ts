@@ -97,7 +97,7 @@ describe("pictures on the page", () => {
     state().updatePicture(id, { turn: 0.5 });
     const ws = readWorkspace(workspaceText(state()));
     expect(ws?.drawn.pictures?.[0]).toMatchObject({ name: "figure.png", x: 5, y: 6, turn: 0.5, px: [120, 60] });
-    const file = readMenoFile(await workspaceFile(store.getState()));
+    const file = readMenoFile((await workspaceFile(store.getState())).bytes);
     const kept = file.files.find((f) => f.media === "image/png");
     expect(kept?.sha256).toBe(state().pictures[0].sha256);
     expect(file.data(kept!.sha256)).toEqual(pictureBytes(kept!.sha256));
@@ -123,7 +123,7 @@ describe("pictures on the page", () => {
     expect(state().picturesLaid.has(id!)).toBe(true);
     const [pasted] = state().addPictures([await held("figure.png", 10, 10, 9)], { x: 0, y: 0 });
     expect(state().picturesLaid.has(pasted)).toBe(false);
-    const file = readMenoFile(await workspaceFile(store.getState()));
+    const file = readMenoFile((await workspaceFile(store.getState())).bytes);
     expect(file.files.find((f) => f.media === "video/mp4")?.sha256).toBe(film.sha256);
     holdPicturesOf(file);
     const again = editor();
