@@ -149,6 +149,22 @@ describe("what a plugin reads back of a job", () => {
     expect(typeof energy !== "string" && energy.path).toBeFalsy();
     expect(workedOf("energy", WATER, { ...out, atoms: ["O", "H", "C"] }, ["xtb 6.7.1"])).toBe("What came back is not the molecule that went");
   });
+
+  it("gives back none of what the entry came with that is not so of what the program worked out: how it was made, what its energies were from", () => {
+    // (water made by a conformer search, its energy MMFF94's, optimised by xTB: its energy is now xTB's, and says so only)
+    const made = { ...WATER, calc: { readers: [], program: "RDKit", method: "MMFF94" }, keep: { drawnFrom: [], drawnAs: "", made: { how: [], energies: "MMFF94" } } };
+    const w = workedOf("optimise", made, out, ["xtb 6.7.1"]);
+    if (typeof w === "string") throw new Error(w);
+    expect(w.keep).toBeUndefined();
+    expect(w.calc).toMatchObject({ program: "xtb", method: "GFN2-xTB" });
+    // (a conformer search's conformers likewise - each with the search's calculation, none with the entry's own)
+    const found = conformersWorked(made, { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], WATER.xyz as number[]], energies: [-5, -4.99] }, ["crest 3.0"]);
+    if (typeof found === "string") throw new Error(found);
+    expect(found.map((f) => [f.keep, f.calc?.program])).toEqual([
+      [undefined, "CREST"],
+      [undefined, "CREST"],
+    ]);
+  });
 });
 
 describe("surfaces a job wrote, in cube files Meno reads itself", () => {

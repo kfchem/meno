@@ -276,7 +276,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
-| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
+| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 
 The first six run a program; the last five work on a set's entries
@@ -489,7 +489,14 @@ shuts (docs/PDF.md, step 5).
 ![A step's results and its log](workflows/6-results.svg)
 
 When a run is done, what it gave comes in as a result set to the right
-of the step, wired from it (decided):
+of the step, wired from it (decided). Its molecules lie in rows, left to
+right, each row as wide as the set's molecules need to lie about a
+window's shape, 3 : 2 wide to tall - but never narrower than twelve bonds
+- so that fitted to the view many read at a glance as a grid, not as a
+column one molecule wide (2026-10-22). Two or three lie in one row as
+before; from about five of a usual size, the set takes that shape. A set's ports
+are reachable whatever lies over them on the page - a molecule's chip
+beside its edge - being drawn over all of it.
 
 - **Optimise**: each entry as optimised, its path as frames, the energy
   of each frame - what an optimisation read from a file shows today;
@@ -837,7 +844,8 @@ as Settings allows; each one's log; *Stop*, for its program and
 everything it started; how each ended, recorded - and a job whose runner
 went without saying, the computer restarted, told apart. Settings,
 *Calculations*, *Jobs*: *Jobs at once*, *Cores for each*, and the
-finished jobs' files, cleared. How it works: ARCHITECTURE.md, *Jobs*.
+finished jobs' files - how many, and how much they hold - cleared. How it
+works: ARCHITECTURE.md, *Jobs*.
 
 Decided while building it, for the maintainer to confirm:
 

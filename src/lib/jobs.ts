@@ -72,6 +72,16 @@ export const stopJob = (id: string) => runnerOf(id).stop(id);
 export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
 export const clearFinishedJobs = () => runnerOf().clearFinished();
+/** What a finished job's program made taken out of its folder, its log and what it was given kept: the bytes freed. (This computer's runner's: the only one there is yet.) */
+export const trimJob = (id: string) => invoke<number>("job_trim", { id });
+/** How many bytes the finished jobs' folders hold, all together. (This computer's runner's, as `trimJob`.) */
+export const finishedJobsBytes = () => invoke<number>("jobs_finished_bytes");
+
+/** How many finished jobs' files are kept, and how much they hold where that is known: "None", "1 job, 4 MB". */
+export function keptText(kept: number, bytes: number | null): string {
+  if (kept === 0) return "None";
+  return `${kept === 1 ? "1 job" : `${kept} jobs`}${bytes == null ? "" : bytes >= 1e9 ? `, ${(bytes / 1e9).toFixed(1)} GB` : `, ${Math.max(1, Math.round(bytes / 1e6))} MB`}`;
+}
 
 /** This computer's cores, and its memory in MiB (nought where it could not be told), as its system says. */
 export const computerResources = () => invoke<{ cores: number; memory: number }>("computer_resources");

@@ -20,6 +20,7 @@ import { useDrawnLayout } from "./drawnLayoutContext";
 import { setInUse } from "../../../../lib/chem/palette";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { PdfInk } from "../store/types";
+import { NOT_HAD_COLOR, NOT_HAD_CROSS } from "./notHadCross";
 import { pageInkLook, strokesGeometry } from "./inkGeometry";
 
 /** Meno's hairline and its grey (App.css: --color-gh-line, --color-gh-gray, --color-gh-base). */
@@ -356,6 +357,8 @@ export function Page(props: {
   marks?: readonly Mark[];
   /** Writing by hand on it, in its points (docs/PRESENTING.md, *Handwriting*). */
   ink?: readonly PdfInk[];
+  /** Its PDF could not be had - damaged in its workspace's file, or not in it (lib/doc/notHad): the page crossed. */
+  notHad?: boolean;
 }) {
   const { s, lift, now, preview, tiles } = props;
   const opacity = props.opacity ?? 1;
@@ -437,6 +440,11 @@ export function Page(props: {
       <lineSegments geometry={edges} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
         <lineBasicMaterial color={LINE} transparent opacity={opacity} toneMapped={false} />
       </lineSegments>
+      {props.notHad && (
+        <lineSegments geometry={NOT_HAD_CROSS} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
+          <lineBasicMaterial color={NOT_HAD_COLOR} transparent opacity={opacity} toneMapped={false} />
+        </lineSegments>
+      )}
     </group>
   );
 }

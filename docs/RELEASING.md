@@ -58,7 +58,8 @@ before building, and a build on a computer of one's own needs it once.
 
 1. On a branch: raise the version, the same in both `package.json` and
    `src-tauri/Cargo.toml` (the app takes its version from `package.json`),
-   and merge it into `main` as usual. Before that, see which files Meno
+   bring the third-party notices up to date (`npm run notices`, see
+   *Third-party notices*, below), and merge it into `main` as usual. Before that, see which files Meno
    carries no longer since the last release, and add each to the Windows
    installer's hook (see *What an installed Meno does*, below) - each the
    installer carried, that is, as `bundle.resources` in
@@ -100,6 +101,75 @@ trusted comment must carry the version `latest.json` announces
 cannot be passed off as a newer one. The Tauri CLI writes that version
 from 2.12 on; an update signed without it is refused by every Meno from
 0.1.1 on, which is what each job's last step guards against.
+
+## Third-party notices
+
+Meno carries the licences of the software by others it is built with, in
+`src-tauri/resources/licenses/`, and shows them in Settings (General,
+*Licences*). Most are files of their own, written by hand: PDFium's and
+those of what it is built with (`PDFium-*`, docs/PDF.md), pdfium-render's,
+the typefaces' (IBM Plex, Arimo) and ACCeL's. The rest are in one file,
+`THIRD-PARTY-NOTICES.txt`, which `npm run notices`
+(`scripts/licenses/notices.mjs`) writes - offline, from what is on this
+computer:
+
+- **The npm packages in Meno's window**: the app is built as `npm run
+  build` builds it, into a folder of its own (`dist/` is left alone), and
+  every module that goes into its output - the workers' too, and the style
+  sheets Tailwind's come in by - is put down to the package it is in.
+  Vite's and Rolldown's helpers that the build writes in are theirs.
+  A package that is installed but not in the output (a type package, a
+  build tool, one whose code is shaken out) is not named.
+- **The Rust crates built into Meno's program**: what a build for each
+  system Meno is built for links (`TARGETS`: the Mac on Apple silicon and
+  Intel, and 64-bit Windows) - `cargo tree --offline -e normal --target`,
+  Meno's normal dependencies and theirs, proc-macros among them, not build
+  scripts' or tests', with features unified as a build unifies them - and
+  the systems taken together. (Not `cargo metadata`'s graph: it turns on
+  every feature any user of a crate asks for, build scripts' and tests'
+  among them, and so names crates no build links.)
+
+For each: its name, version and licence as its manifest gives them, where
+its source is kept, and every licence and notice file at the top of its
+folder (`LICENSE*`, `LICENCE*`, `COPYING*`, `NOTICE*`, `COPYRIGHT*`,
+`UNLICENSE*`), in full; a text already given is named, not repeated. A
+crate under a licence that asks for its source to be offered (the MPL 2.0:
+cssparser, selectors and others) also says where: its repository, and its
+version on crates.io. A crate with no licence file of its own is given its
+licence's standard text only where it comes with another crate here and
+names no one (the Apache License 2.0's, the MPL 2.0's), and says where it
+was taken from. One under a licence whose text carries its authors' own
+copyright line (MIT, BSD) is given the text its repository holds, read
+from its published page at the commit its version was published from (the
+crate's `.cargo_vcs_info.json`) - a text read as documentation is, never a
+package or archive fetched - kept in `scripts/licenses/upstream/` and named,
+with where and when it was read, in `scripts/licenses/upstream.json`; so is
+the licence of what such a crate carries without its licence (Microsoft's
+WebView2 SDK, whose loader webview2-com-sys links in on Windows). The
+script lists what it gave as it runs, with every licence that asks more
+than a notice; the test fails while any crate has no text, or a text read
+is for a version no longer built in.
+
+Run it when a dependency changes, and before each release. Beside the
+notices it writes `scripts/licenses/bundled.json` - each package's name,
+version and licence, and the crates in `Cargo.lock` that are not built in -
+which `scripts/licenses/notices.test.mjs` checks, in `npm test`:
+
+- it builds the window again and fails if the npm packages in it, their
+  versions or licences are not those recorded, or if `package-lock.json`
+  installs another version of one;
+- it fails if `Cargo.lock` holds a crate, or a version of one, that is
+  neither recorded as built in nor as left out - any crate added, removed
+  or updated;
+- it fails if a package recorded has no notice in the file.
+
+What it cannot see: a crate already in `Cargo.lock` that a change of
+features or of systems brings into the program or takes out of it, with
+the lock unchanged (Cargo's graph is not worked out in the test, as the
+frontend job has neither Cargo nor the crates' sources); and code by others
+copied into Meno's own sources or carried in a package's files without its
+own licence file, which the notices' head and `NOTES` in the script give
+by hand.
 
 ## The Windows installer
 

@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { finished, followJob, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { finished, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -113,5 +113,15 @@ describe("a plugin's jobs, as it is taken away", () => {
     await stopJobsAndWait(["x"], { stop: async () => {}, look: async (id) => job(id, "xtb", "running"), pause: async () => void waited++, most: 1000 });
     expect(waited).toBe(4);
     await stopJobsAndWait(["y"], { stop: () => Promise.reject(new Error("no")), look: () => Promise.reject(new Error("gone")), pause: async () => {} });
+  });
+});
+
+describe("the finished jobs' files, as Settings says them", () => {
+  it("says how many, and how much they hold where that is known", () => {
+    expect(keptText(0, 0)).toBe("None");
+    expect(keptText(1, 4_200_000)).toBe("1 job, 4 MB");
+    expect(keptText(2, 1000)).toBe("2 jobs, 1 MB");
+    expect(keptText(12, 1_430_000_000)).toBe("12 jobs, 1.4 GB");
+    expect(keptText(3, null)).toBe("3 jobs");
   });
 });
