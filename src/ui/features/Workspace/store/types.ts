@@ -1,3 +1,4 @@
+import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
@@ -753,6 +754,8 @@ export type Drawn = Model & {
   inks?: Ink[];
   /** Catalytic cycles carried (lib/chem/cycle). */
   cycles?: Cycle[];
+  /** What the copy held that could not be read, and was left out (utils/readNotes): said as it is pasted. */
+  leftOut?: LeftOut;
 };
 
 export type EditorState = {
@@ -1722,6 +1725,17 @@ export type EditorState = {
    * until it has been saved once.
    */
   savedPath: string | null;
+  /**
+   * What the workspace's file held, as it was opened, that could not be
+   * read and was left out (utils/readNotes) - said on every save, for none
+   * of it is in the file saved - and whether the file it was opened from
+   * has been kept beside the first one saved over it (`kept`).
+   */
+  leftOnOpen: { left: LeftOut; kept: boolean } | null;
+  /** What opening a workspace left out, as `leftOnOpen` keeps it; null for none. */
+  markLeftOnOpen: (left: LeftOut | null) => void;
+  /** The file it was opened from is kept beside the first one saved over it. */
+  markLeftKept: () => void;
   /**
    * The file last opened over what the canvas held - where it is, where
    * Open said, else its name: what Save As suggests, beside it, the canvas

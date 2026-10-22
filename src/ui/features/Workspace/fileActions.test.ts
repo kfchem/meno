@@ -12,6 +12,7 @@ import {
   suggestedExportPath,
   suggestedSavePath,
   writtenWhere,
+  keepsOld,
 } from "./fileActions";
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
 import { heldElsewhere } from "../../../lib/doc/savers";
@@ -570,6 +571,22 @@ describe("a workspace saved", () => {
     const plain = disk({ "/w/a.meno": "PK old" });
     expect((await writtenWhere("/w/a.meno", bytes, plain)).old).toBeNull();
     expect([...plain.written.keys()]).toEqual(["/w/a.meno"]);
+  });
+});
+
+describe("a workspace that left something out as it opened, saved", () => {
+  const left = { left: { picture: 1 }, kept: false };
+  it("keeps the file it was opened from beside the first save over it - its only copy of what was left out", () => {
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, left)).toBe(true);
+    // (not once kept: the file saved then holds nothing of it)
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, { ...left, kept: true })).toBe(false);
+  });
+  it("keeps no other file, and none where nothing was left out", () => {
+    expect(keepsOld("/w/b.meno", "/w/a.meno", false, left)).toBe(false);
+    expect(keepsOld("/w/a.meno", null, false, left)).toBe(false);
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, null)).toBe(false);
+    // (as before: a file it last saved still holding one it cannot keep)
+    expect(keepsOld("/w/a.meno", "/w/a.meno", true, null)).toBe(true);
   });
 });
 
