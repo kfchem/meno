@@ -109,6 +109,28 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(r["result"]["smiles"], "N[C@@H](Cc1ccc(Cl)cc1)C(=O)O")
 
+    def test_writes_a_reaction_smiles_reactants_agents_products(self):
+        # (an RXN file as Meno writes one - "rrrpppaaa", each molecule a $MOL - acetic acid and ethanol to ethyl
+        # acetate and water over sulfuric acid; the (R)-CHFClBr wedge as a reactant keeps its centre)
+        def rxn(reactants, products, agents):
+            head = ["$RXN", "", "", "", f"{len(reactants):3d}{len(products):3d}{len(agents):3d}"]
+            return "\n".join(head) + "\n" + "".join("$MOL\n" + b for b in reactants + products + agents)
+        acid = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("O", 2.6, 0), ("O", 1.3, 2.25)], [(0, 1, 1, None), (1, 2, 1, None), (1, 3, 2, None)])
+        ethanol = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("O", 2.6, 0)], [(0, 1, 1, None), (1, 2, 1, None)])
+        ester = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("O", 1.3, 2.25), ("O", 2.6, 0), ("C", 3.9, 0.75), ("C", 5.2, 0)], [(0, 1, 1, None), (1, 2, 2, None), (1, 3, 1, None), (3, 4, 1, None), (4, 5, 1, None)])
+        water = v2000([("O", 0, 0)], [])
+        acid_s = v2000([("S", 0, 0), ("O", 1.4, 0), ("O", -1.4, 0), ("O", 0, 1.4), ("O", 0, -1.4)], [(0, 1, 1, None), (0, 2, 1, None), (0, 3, 2, None), (0, 4, 2, None)])
+        r = ask("rxn_to_smiles", rxnblock=rxn([acid, ethanol], [ester, water], [acid_s]))
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["result"]["smiles"], "CC(=O)O.CCO>O=S(=O)(O)O>CCOC(C)=O.O")
+        chfclbr = v2000(
+            [("C", 0, 0), ("F", 0, 1.5), ("Cl", 1.3, -0.75), ("Br", -1.3, -0.75), ("H", 0.4, -1.4)],
+            [(0, 1, 1, None), (0, 2, 1, None), (0, 3, 1, None), (0, 4, 1, "up")],
+        )
+        smiles = ask("rxn_to_smiles", rxnblock=rxn([chfclbr], [water], []))["result"]["smiles"]
+        self.assertEqual(smiles.split(">>")[0], ask("to_smiles", molblock=chfclbr)["result"]["smiles"])
+        self.assertIn("@", smiles)
+
     def test_writes_a_smiles_without_an_h_drawn_to_carry_a_wedge(self):
         # (R)-CHFClBr's H drawn, on a wedge
         block = v2000(

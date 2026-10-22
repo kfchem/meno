@@ -5,7 +5,7 @@ import { writeRxnfile, type WriterModel } from "../../../../lib/chem/molWriter";
 import { buildEditorModelFromRXN } from "../../../../utils/importers";
 import sample from "../../../../samples/esterification.rxn?raw";
 import { drawnOf } from "../utils/io";
-import { notOneReaction, reactionArrows, reactionFileText } from "./reactionFile";
+import { notOneReaction, reactionArrows, reactionFileText, reactionForSmiles } from "./reactionFile";
 
 const L = NOMINAL_BOND_LENGTH;
 const chain = (els: string[]): WriterModel => ({
@@ -99,5 +99,31 @@ describe("a drawn reaction, saved as an RXN file", () => {
     expect(() => reactionFileText({ ...drawn, arrows: [...drawn.arrows!, { ...drawn.arrows![0], id: 2 }] })).toThrow(
       /one reaction, and the drawing has 2 arrows/,
     );
+  });
+});
+
+describe("a drawn reaction, copied as SMILES (reactionForSmiles)", () => {
+  it("is its reaction as its RXN file holds it - the worker writes it reactants>agents>products - never a mixture", () => {
+    const { drawn } = opened(fischer);
+    const made = reactionForSmiles(drawn);
+    expect(made && "rxn" in made ? made.rxn : made).toBe(reactionFileText(drawn));
+  });
+
+  it("is a SMILES of the molecules where the drawing shows no reaction", () => {
+    const { drawn } = opened(fischer);
+    expect(reactionForSmiles({ ...drawn, arrows: [] })).toBeNull();
+  });
+
+  it("says why where it holds no one reaction to write: two arrows, or nothing on one side", () => {
+    const { drawn } = opened(sample);
+    expect(reactionForSmiles({ ...drawn, arrows: [...drawn.arrows!, { ...drawn.arrows![0], id: 2 }] })).toEqual({
+      why: "a reaction SMILES holds one reaction, and the selection has 2 arrows: select one reaction",
+    });
+    // (the products taken away: the arrow has nothing after it)
+    const tail = drawn.arrows![0].x;
+    const before = drawn.atoms.filter((a) => a.x < tail);
+    const ids = new Set(before.map((a) => a.id));
+    const oneSided = { ...drawn, atoms: before, bonds: drawn.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)), pluses: [] };
+    expect(reactionForSmiles(oneSided)).toEqual({ why: "the arrow has nothing after it - no product to write as a reaction" });
   });
 });

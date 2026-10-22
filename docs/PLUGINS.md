@@ -682,7 +682,9 @@ The same for every plugin and for Meno's own parts:
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {smiles}` and `to_smiles {molblock}` (SMILES); `analyse {molblock}`
+    {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
+    reaction as an RXN file holds it, as a reaction SMILES) (SMILES);
+    `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
