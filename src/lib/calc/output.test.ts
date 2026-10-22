@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcLine, calcOf, levelOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
+import { calcLine, calcOf, imaginaryWords, levelOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
 import { combine, whoReads, checked } from "./read";
 import { READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { kindById, registered } from "../io/kinds";
@@ -51,6 +51,16 @@ describe("what a reader hands back", () => {
   it("leaves out what the output does not say", () => {
     const c = calcOf({ atoms: ["H", "H"], frames: [[0, 0, 0, 0, 0, 0.74]], program: "xTB", method: "  ", charge: null }, ["cclib 1.9rc1"]);
     expect(c).toEqual({ readers: ["cclib 1.9rc1"], program: "xTB" });
+  });
+
+  it("keeps the imaginary frequencies the program judged it has, in plain words - and what it warned of - read back from a file as they were", () => {
+    const saddle = calcOf({ ...water, imaginary: [-382.63], warnings: [{ kind: "hessian-not-stationary", text: "Hessian on incompletely optimized geometry!" }] }, ["xtb 6.7.1"]);
+    expect(saddle.imaginary).toEqual([-382.63]);
+    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm-1");
+    expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm-1");
+    expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
+    // (judged none, or not numbers below 0: no mark)
+    for (const imaginary of [[], [382.63], [Number.NaN], null]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
   });
 
   it("reads back from a file as it was kept, and not where it does not read", () => {

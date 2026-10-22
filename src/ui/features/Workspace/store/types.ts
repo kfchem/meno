@@ -1,3 +1,4 @@
+import type { Failure, FailureKind } from "../workflow/failures";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
@@ -409,6 +410,18 @@ export type Molecule3D = {
   at: { x: number; y: number; z?: number };
   /** The rest of a file's frames (a trajectory, conformers): x, y, z of every atom, frame by frame. */
   frames?: number[][];
+  /**
+   * Why a program step could not do it, frame by frame (null, a frame it
+   * did): what a step's Failed exit holds (workflow/failures) - kept with
+   * it, its chip saying it in plain words.
+   */
+  failed?: (Failure | null)[];
+  /**
+   * A conformer set's: the imaginary frequencies each conformer's
+   * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame
+   * by frame - null, none. A single geometry's are its calculation's own.
+   */
+  imaginary?: (number[] | null)[];
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
@@ -618,6 +631,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A result set of structures drawn: the atoms, by id, its step put on the
+   * page as it last ran - all it takes away when the step runs again. A
+   * structure the chemist joined to one of them by a bond keeps its own
+   * atoms.
+   */
+  put?: number[];
+  /**
    * A result set of more entries than are laid out on the page
    * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
    * `LARGE_SET`): what the step gave, held in the set itself, in the step's
@@ -649,12 +669,21 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  */
 export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunKeptResults };
 /**
- * What an earlier run gave, as its exits' sets held it: the molecules its
- * first exit held, those its second held, and what kind of set they make -
- * with how many of each did not read from a file, and were left out
- * (`unread`, `restUnread`).
+ * What a run gave, as its exits' sets hold it and an earlier run kept
+ * keeps it: the molecules its first exit held, those its second held, and
+ * what kind of set they make - with how many of each did not read from a
+ * file, and were left out (`unread`, `restUnread`). Where they are
+ * structures drawn, `drawn` holds them instead, each as drawn - its atoms,
+ * its bonds and where they lie - and the two lists of molecules are empty.
  */
-export type RunKeptResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind; unread?: number; restUnread?: number };
+export type RunKeptResults = {
+  molecules: Omit<Molecule3D, "id" | "at">[];
+  rest: Omit<Molecule3D, "id" | "at">[];
+  holds: SetKind;
+  unread?: number;
+  restUnread?: number;
+  drawn?: { made: Model[]; rest: Model[] };
+};
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its
@@ -676,6 +705,8 @@ export type StepRunning = {
   kind?: StepKind;
   /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
   over?: string;
+  /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
+  refused?: { entry: number; kind: FailureKind; why: string }[];
 };
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {

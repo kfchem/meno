@@ -36,6 +36,11 @@ export function holdCollection(doc: WorkspaceDocument, id: number, collection: N
   return withSet(doc, id, ({ unread: _u, ...b }) => ({ ...b, members: [], collection, ...(unread ? { unread } : {}) }));
 }
 
+/** A result set of structures drawn with the atoms its step put on the page (`WorkflowSet.put`) - none, where it put none. */
+export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly number[]): WorkspaceDocument {
+  return withSet(doc, id, ({ put: _was, ...b }) => (atoms.length ? { ...b, put: [...atoms] } : b));
+}
+
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
 export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);

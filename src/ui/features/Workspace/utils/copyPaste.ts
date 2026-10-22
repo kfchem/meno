@@ -25,7 +25,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { readCalc } from "../../../../lib/calc/output";
+import { imaginaryOf, readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -34,6 +34,7 @@ import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { magnificationWithin } from "./magnified";
 import type { Style3D } from "../../../../lib/chem/style3d";
+import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
 
 type Pt = { x: number; y: number };
 
@@ -684,10 +685,29 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
     ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
+    ...(failedOf(m.failed, 1 + frames.length) ? { failed: failedOf(m.failed, 1 + frames.length) } : {}),
+    ...(imaginaryFrames(m.imaginary, 1 + frames.length) ? { imaginary: imaginaryFrames(m.imaginary, 1 + frames.length) } : {}),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** Why each of a molecule's frames failed in the step that made it, where one did - one for each, null where it did not - of core's kinds (workflow/failures). */
+function failedOf(given: unknown, frames: number): (Failure | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== frames) return undefined;
+  const out = given.map((f): Failure | null => {
+    const g = f as { kind?: unknown; why?: unknown } | null;
+    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
+  });
+  return out.some(Boolean) ? out : undefined;
+}
+
+/** A conformer set's imaginary frequencies, one list or null for each frame, as `CalcInfo.imaginary` takes them. */
+function imaginaryFrames(given: unknown, frames: number): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== frames) return undefined;
+  const out = given.map((f) => imaginaryOf(f) ?? null);
+  return out.some(Boolean) ? out : undefined;
 }
 
 /** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */
