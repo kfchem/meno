@@ -103,11 +103,13 @@ export const ENERGY_UNITS = ["hartree", "eV", "kcal/mol", "kJ/mol"] as const;
 export type XyzEnergyDecl = { id: string; pattern: string; unit: (typeof ENERGY_UNITS)[number] };
 /**
  * An XYZ file a plugin's program writes whose frames are an optimisation's
- * steps, which of them converged not said in it (docs/FILE-IO.md): its id,
- * and its file's name - `*` any run of characters - as the program's
- * documentation or its own output names it.
+ * steps, which of them converged not said in it (docs/FILE-IO.md): its id;
+ * its file's name - `*` any run of characters - as the program's
+ * documentation or its own output names it; and what each of its frames'
+ * comment lines says, a pattern - so that the file is known renamed too.
+ * One or both.
  */
-export type XyzStepsDecl = { id: string; file: string };
+export type XyzStepsDecl = { id: string; file?: string; comment?: string };
 
 /**
  * A look a render plugin declares (docs/RENDER.md, docs/PLUGINS.md): its id, what the card calls it, a short description,
@@ -357,22 +359,41 @@ function kindOf(v: unknown): KindDecl | null {
 }
 
 /** A program's name, as a job is given it: a name, not a path. */
-/** The XYZ files a plugin says are an optimisation's steps: an id, and a file's name of letters, digits, `.`, `_`, `-` and `*` - what is not that is left out. */
+/**
+ * The XYZ files a plugin says are an optimisation's steps: an id, and a
+ * file's name of letters, digits, `.`, `_`, `-` and `*`, or a pattern of
+ * its comment lines that compiles, or both - what is not that is left out.
+ */
 function acceptXyzSteps(v: unknown): XyzStepsDecl[] {
   const out: XyzStepsDecl[] = [];
   for (const raw of list(v)) {
     const r = raw as Record<string, unknown> | null;
-    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id) || typeof r.file !== "string" || !/^[A-Za-z0-9._*-]{1,80}$/.test(r.file) || !/[A-Za-z0-9]/.test(r.file)) continue;
-    out.push({ id: r.id, file: r.file });
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
+    const file = typeof r.file === "string" && /^[A-Za-z0-9._*-]{1,80}$/.test(r.file) && /[A-Za-z0-9]/.test(r.file) ? r.file : undefined;
+    let comment = typeof r.comment === "string" && r.comment.length <= 200 ? r.comment : undefined;
+    try {
+      if (comment) new RegExp(comment);
+    } catch {
+      comment = undefined;
+    }
+    if (!file && !comment) continue;
+    out.push({ id: r.id, ...(file ? { file } : {}), ...(comment ? { comment } : {}) });
     if (out.length >= 8) break;
   }
   return out;
 }
 
-/** Whether a file's name is the one a plugin's `xyzSteps` names: `*` any run of characters, the rest as it is, any case. */
-export function xyzStepsFile(name: string, decl: Pick<XyzStepsDecl, "file">): boolean {
-  const pattern = decl.file.split("*").map((p) => p.replace(/\./g, "\\.")).join(".*");
-  return new RegExp(`^${pattern}$`, "i").test(name);
+/**
+ * Whether an XYZ file of more than one frame is the one a plugin's
+ * `xyzSteps` names: by its name - `*` any run of characters, the rest as it
+ * is, any case - or by its frames' comment lines, each one as the pattern
+ * says.
+ */
+export function xyzStepsFile(name: string, comments: readonly string[], decl: XyzStepsDecl): boolean {
+  if (decl.file && new RegExp(`^${decl.file.split("*").map((p) => p.replace(/\./g, "\\.")).join(".*")}$`, "i").test(name)) return true;
+  if (!decl.comment || comments.length < 2) return false;
+  const pattern = new RegExp(decl.comment);
+  return comments.every((c) => pattern.test(c));
 }
 /** The ways a plugin says its program writes an XYZ frame's energy: an id, and a pattern that compiles and has one capture group - what is not that is left out. */
 function acceptXyzEnergies(v: unknown): XyzEnergyDecl[] {

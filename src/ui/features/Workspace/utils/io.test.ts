@@ -183,22 +183,24 @@ describe("files of 3D structures", () => {
     expect(r.molecules3d![0].framesLeftOut).toBe(1);
   });
 
-  it("open an optimisation's steps, as a plugin names its program's file of them: no frame an entry, convergence not stated in it", async () => {
-    // (xtb 6.7.1 writes an optimisation's steps to xtbopt.log, ORCA 6.1.1 to <name>_trj.xyz: which converged is said in their outputs, not there)
-    registerKinds(MANIFESTS.filter((m) => ["xtb", "orca"].includes(m.id)));
-    try {
-    const steps = "3\n energy: -5.0687 gnorm: 0.0652 xtb: 6.7.1\nO 0 0 0\nH 0.99 0 0\nH -0.3 0.95 0\n3\n energy: -5.0705 gnorm: 0.0003 xtb: 6.7.1\nO 0 0 0\nH 0.96 0 0\nH -0.24 0.93 0\n";
-    for (const name of ["xtbopt.log", "opt_trj.xyz", "OSCAN_TRJ.XYZ"]) {
-      const m = (await processFileContent(name, steps)).molecules3d![0];
+  it("open an optimisation's steps, as a plugin knows its program's file of them - renamed too: no frame an entry, convergence not stated in it", async () => {
+    // (xtb 6.7.1 writes an optimisation's steps to xtbopt.log, ORCA 6.1.1 to <name>_trj.xyz, each frame's comment line
+    // as below: which converged is said in their outputs, not there)
+    registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
+    const water = (comment: string, x: number) => `3\n${comment}\nO 0 0 0\nH ${x} 0 0\nH -0.24 0.93 0\n`;
+    const xtb = water(" energy: -5.068684795763 gnorm: 0.065230900969 xtb: 6.7.1 (edcfbbe)", 0.99) + water(" energy: -5.070539 gnorm: 0.000312 xtb: 6.7.1 (edcfbbe)", 0.96);
+    const orca = water("Coordinates from ORCA-job opt E -76.02", 0.99) + water("Coordinates from ORCA-job opt E -76.03", 0.96);
+    // (ORCA's relaxed scan's points, each converged, and a conformer search's: ensembles)
+    const scan = water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 1 E -113.549190716119", 0.99) + ">\n" + water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 2 E -113.545986", 0.96);
+    const crest = water("        -5.07053900", 0.96) + water("        -5.06871200", 0.99);
+    const opened = async (name: string, text: string) => (await processFileContent(name, text)).molecules3d![0];
+    for (const [name, text] of [["xtbopt.log", xtb], ["opt.log", xtb], ["water_xtbopt.log", xtb], ["opt_trj.xyz", orca], ["OPT_TRJ.XYZ", crest], ["steps.xyz", orca]]) {
+      const m = await opened(name, text);
       expect([m.entryFrames, m.noEntryWhy, entriesIn(m)], name).toEqual([[], "unstated", 0]);
     }
-    // (an ensemble - a scan's points, a conformer search's - every frame an entry, as before)
-    for (const name of ["oscan.allxyz", "crest_conformers.xyz", "xtbopt.xyz"]) {
-      const m = (await processFileContent(name, steps)).molecules3d![0];
-      expect([m.entryFrames, entriesIn(m)], name).toEqual([undefined, 2]);
-    }
-    } finally {
-      registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
+    for (const [name, text] of [["oscan.allxyz", scan], ["crest_conformers.xyz", crest], ["ensemble.xyz", crest], ["xtbopt.xyz", water(" energy: -5.0705 gnorm: 0.0003 xtb: 6.7.1", 0.96)]]) {
+      const m = await opened(name, text);
+      expect([m.entryFrames, entriesIn(m)], name).toEqual([undefined, name === "xtbopt.xyz" ? 1 : 2]);
     }
   });
 

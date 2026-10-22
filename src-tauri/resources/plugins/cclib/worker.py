@@ -468,10 +468,12 @@ def gaussian_ghosts(text):
     return ghosts
 
 
-def run_of(text, program):
+def run_of(text, program, followed=False):
     """How the run went, as the program says in its output: "normal" where it came to its end, "error" where it
     stopped on one - and why, in its words - or "cut" where it says neither, cut short or still running; and
-    whether each SCF it ran converged, in order. All unknown for a program not read here."""
+    whether each SCF it ran converged, in order. All unknown for a program not read here. `followed`: a job of a
+    file of several that another follows - ORCA's ($new_job), which says it came to its end once, at the end of
+    the file, so that a job it went on from did; Gaussian's own Link1 jobs each say it, and are held to it."""
     if program == "gaussian":
         lines = [line.strip() for line in text.split("\n") if line.strip()]
         why = None
@@ -493,7 +495,7 @@ def run_of(text, program):
         m = re.search(r"Error \([^)]*\):\s*(.+)", text)
         if "ORCA finished by error termination" in text:
             why = m.group(1).strip() if m else re.search(r"ORCA finished by error termination[^\n]*", text).group(0).strip()
-        ended = "error" if why else "normal" if "ORCA TERMINATED NORMALLY" in text else "cut"
+        ended = "error" if why else "normal" if "ORCA TERMINATED NORMALLY" in text or followed else "cut"
         scf = [not m.group(1) for m in re.finditer(r"SCF (NOT )?CONVERGED AFTER", text)]
         return ended, why, scf
     if program == "xtb":
@@ -572,10 +574,7 @@ def op_read(m):
                 frames.append([float(v) for xyz in step for v in xyz])
     # how the run went: the energies of SCFs that did not converge not given - and, where it stopped before its
     # end, the geometries after the last it worked out an energy for left out
-    ended, why, scf = run_of(text, program)
-    # (a job the program went on from to the next came to its end: ORCA says so once, at the end of the file)
-    if ended == "cut" and m.get("followed"):
-        ended = "normal"
+    ended, why, scf = run_of(text, program, bool(m.get("followed")))
     found = len(getattr(data, "scfenergies", None) if has(data, "scfenergies") else [])
     good = found
     if scf is not None and False in scf:

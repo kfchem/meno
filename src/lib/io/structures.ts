@@ -231,9 +231,10 @@ export function readStructures(kind: StructureKind, filename: string, content: s
           ...(rest.length && energies?.length === kept.size ? { energies } : {}),
           ...(filename ? { name: filename } : {}),
           ...(kept.size < whole.total ? { framesLeftOut: whole.total - kept.size } : {}),
-          // (a file a program writes of an optimisation's steps, as its plugin names it: which converged it does
+          // (a file a program writes of an optimisation's steps, as its plugin knows it - by its name, or what its
+          // frames' comment lines say, renamed too: which converged it does
           // not say - its output does - so none is an entry, and that is said)
-          ...(rest.length && filename && xyzSteps().some((d) => xyzStepsFile(filename, d)) ? { entryFrames: [], noEntryWhy: "unstated" as const } : {}),
+          ...(rest.length && xyzSteps().some((d) => xyzStepsFile(filename, xyzComments(content), d)) ? { entryFrames: [], noEntryWhy: "unstated" as const } : {}),
           ...togetherIn(first),
         },
       ],

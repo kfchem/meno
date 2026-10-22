@@ -51,6 +51,25 @@ class HowTheRunWent(unittest.TestCase):
         self.assertEqual(worker.run_of(error, "orca"), ("error", "unfortunately, the SCF has not converged.", [False]))
         self.assertEqual(worker.run_of("O   R   C   A\n SCF CONVERGED AFTER   9 CYCLES\n", "orca")[0], "cut")
 
+    def test_a_job_another_follows_came_to_its_end_in_orca_s_file_alone(self):
+        # (ORCA 6.1.1, an optimisation then a single point by $new_job: "ORCA TERMINATED NORMALLY" once, at the end)
+        orca = ("O   R   C   A\n"
+                "                 $$$$$$$$$$$$$$$$  JOB NUMBER  1 $$$$$$$$$$$$$$\n SCF CONVERGED AFTER   9 CYCLES\n"
+                "                 $$$$$$$$$$$$$$$$  JOB NUMBER  2 $$$$$$$$$$$$$$\n SCF CONVERGED AFTER   7 CYCLES\n"
+                "                             ****ORCA TERMINATED NORMALLY****\n")
+        jobs = worker.job_texts(orca)
+        self.assertEqual([worker.run_of(t, "orca", k < len(jobs) - 1)[0] for k, t in enumerate(jobs)], ["normal", "normal"])
+        # (one that stopped on an error stays so, followed or not)
+        error = "O   R   C   A\nORCA finished by error termination in LEANSCF\n"
+        self.assertEqual(worker.run_of(error, "orca", True)[0], "error")
+        # (Gaussian's Link1 jobs each say their own end: a job without it stays cut, though another follows it)
+        gaussian = (" Entering Gaussian System, Link 0=g16\n Initial command:\n SCF Done:  E(RHF) =  -75.98\n"
+                    " Initial command:\n SCF Done:  E(RHF) =  -75.99\n Normal termination of Gaussian 16.\n")
+        jobs = worker.job_texts(gaussian)
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual([worker.run_of(t, "gaussian", k < len(jobs) - 1)[0] for k, t in enumerate(jobs)], ["cut", "normal"])
+        self.assertEqual(worker.run_of(" Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n", "gaussian", True)[0], "cut")
+
     def test_xtb_and_a_program_not_read_for_it(self):
         error = " -2- Geometry optimization failed\n -1- xtb_geoopt: Geometry optimization did not converge\n abnormal termination of xtb\n"
         self.assertEqual(worker.run_of(error, "xtb")[:2], ("error", "Geometry optimization failed"))

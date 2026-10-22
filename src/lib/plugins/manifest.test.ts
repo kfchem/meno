@@ -51,10 +51,25 @@ describe("a plugin's manifest", () => {
     // (an XYZ file of an optimisation's steps: an id and a file's name, `*` any run; what is not that is left out)
     const steps = acceptManifest({
       ...good,
-      xyzSteps: [{ id: "opt", file: "xtbopt.log" }, { id: "trj", file: "*_trj.xyz" }, { id: "path", file: "../x.xyz" }, { id: "any", file: "*" }, { id: "Bad", file: "a.xyz" }, { id: "none" }],
+      xyzSteps: [
+        { id: "opt", file: "xtbopt.log", comment: "^\\s*energy:\\s*-?\\d+\\.\\d+\\s+gnorm:" },
+        { id: "trj", file: "*_trj.xyz" },
+        { id: "said", comment: "^Coordinates from \\S+ E\\s" },
+        { id: "path", file: "../x.xyz" },
+        { id: "any", file: "*" },
+        { id: "broken", comment: "([unclosed" },
+        { id: "Bad", file: "a.xyz" },
+        { id: "none" },
+      ],
     })!.xyzSteps;
-    expect(steps).toEqual([{ id: "opt", file: "xtbopt.log" }, { id: "trj", file: "*_trj.xyz" }]);
-    expect(["opt_trj.xyz", "A_TRJ.XYZ", "opt.xyz", "opt_trj.xyz.bak", "xtbopt.log", "xtbopt.xyz", "xtboptXlog"].map((n) => steps.some((d) => xyzStepsFile(n, d)))).toEqual([true, true, false, false, true, false, false]);
+    expect(steps.map((d) => d.id)).toEqual(["opt", "trj", "said"]);
+    const known = (name: string, comments: string[] = []) => steps.some((d) => xyzStepsFile(name, comments, d));
+    expect(["opt_trj.xyz", "A_TRJ.XYZ", "opt.xyz", "opt_trj.xyz.bak", "xtbopt.log", "xtbopt.xyz", "xtboptXlog"].map((n) => known(n))).toEqual([true, true, false, false, true, false, false]);
+    // (by what each frame's comment line says, whatever its name; one frame, or one line otherwise, not)
+    expect(known("opt.log", [" energy: -5.06 gnorm: 0.06", " energy: -5.07 gnorm: 0.0003"])).toBe(true);
+    expect(known("opt.log", [" energy: -5.06 gnorm: 0.06"])).toBe(false);
+    expect(known("opt.log", [" energy: -5.06 gnorm: 0.06", "  -5.07"])).toBe(false);
+    expect(known("x.xyz", ["Coordinates from job E -1", "Coordinates from job E -2"])).toBe(true);
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)

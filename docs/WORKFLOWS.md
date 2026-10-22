@@ -444,9 +444,10 @@ Conformers go through a workflow as any set does (decided):
       marks that are not one to each geometry ("convergence not stated in
       this file");
     - an XYZ file a program writes of an **optimisation's steps**, as its
-      plugin names it (`xyzSteps`: xtb's `xtbopt.log`, ORCA's
-      `*_trj.xyz`): which converged is said in the program's output, not
-      there ("convergence not stated in this file");
+      plugin knows it (`xyzSteps`) - by its name (xtb's `xtbopt.log`,
+      ORCA's `*_trj.xyz`) or, renamed, by what each frame's comment line
+      says: which converged is said in the program's output, not there
+      ("convergence not stated in this file");
     - a workspace whose record of which are entries does not read ("which
       are could not be read").
 
