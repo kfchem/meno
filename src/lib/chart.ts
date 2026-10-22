@@ -16,7 +16,7 @@ export type Axis = { name: string; unit: Unit | "none"; by?: By; at?: At };
 /** A point: its values, its row in the table (from 0), and the entry it is of, where the table has a column of entries. */
 export type ChartPoint = { x: number; y: number; row: number; entry?: string };
 
-export type ChartValue = { x: Axis; y: Axis; points: ChartPoint[]; left: { count: number; why: string }[] };
+export type ChartValue = { kind: "points"; x: Axis; y: Axis; points: ChartPoint[]; left: { count: number; why: string }[] };
 
 /** An axis as its label says it: its name, its unit in brackets. */
 export const axisLabel = (a: Axis) => (a.unit === "none" ? a.name : `${a.name} (${a.unit})`);
@@ -59,7 +59,7 @@ export function chartOfTable(table: Table, x?: string, y?: string): ChartValue |
     points.push({ x: vx as number, y: vy as number, row, ...(typeof entry === "string" ? { entry } : {}) });
   });
   const left = [...(noX ? [{ count: noX, why: `with no ${px.c.name}` }] : []), ...(noY ? [{ count: noY, why: `with no ${py.c.name}` }] : [])];
-  return { x: axis(px.c), y: axis(py.c), points, left };
+  return { kind: "points", x: axis(px.c), y: axis(py.c), points, left };
 }
 
 /**
@@ -90,7 +90,7 @@ export function chartSaid(c: ChartValue): string {
 }
 
 /** An axis as a workspace's file keeps it, read back; none where it does not read. */
-function axisIn(v: unknown): Axis | undefined {
+export function axisIn(v: unknown): Axis | undefined {
   const a = v as { name?: unknown; unit?: unknown; by?: unknown; at?: unknown } | null;
   if (!a || typeof a.name !== "string" || !(a.unit === "none" || (typeof a.unit === "string" && isUnit(a.unit)))) return undefined;
   const by = fieldsIn<By>(a.by);
@@ -110,5 +110,5 @@ export function chartIn(v: unknown): ChartValue | undefined {
     points.push({ x: p.x!, y: p.y!, row: p.row!, ...(typeof p.entry === "string" ? { entry: p.entry } : {}) });
   }
   const left = Array.isArray(c.left) ? (c.left as { count?: unknown; why?: unknown }[]).flatMap((l) => (Number.isInteger(l?.count) && (l.count as number) > 0 && typeof l.why === "string" ? [{ count: l.count as number, why: l.why }] : [])) : [];
-  return { x, y, points, left };
+  return { kind: "points", x, y, points, left };
 }

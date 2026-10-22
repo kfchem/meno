@@ -8,6 +8,7 @@ import type { Member, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wi
 import { readCarried3D } from "../utils/copyPaste";
 import { numberIn, tableIn } from "../../../../lib/table";
 import { chartIn } from "../../../../lib/chart";
+import { diagramIn } from "../../../../lib/energyDiagram";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
@@ -69,7 +70,7 @@ function readSet(v: unknown): WorkflowSet | null {
     ...(() => {
       const table = b.table != null ? tableIn(b.table) : undefined;
       const number = b.number != null ? numberIn(b.number) : undefined;
-      const chart = b.chart != null ? chartIn(b.chart) : undefined;
+      const chart = b.chart == null ? undefined : (b.chart as { kind?: unknown }).kind === "diagram" ? diagramIn(b.chart) : chartIn(b.chart);
       return { ...(table ? { table } : {}), ...(number ? { number } : {}), ...(chart ? { chart } : {}) };
     })(),
     // (a result set kept out of its file, and what it held when it was saved)

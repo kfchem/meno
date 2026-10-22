@@ -2,8 +2,9 @@ import clsx from "clsx";
 import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import type { ChartPoint } from "../../../../lib/chart";
+import type { DiagramLevel } from "../../../../lib/energyDiagram";
 import { CHART_PX, NAME_DOWN, SET_PAD, PX, TABLE_PX } from "./look";
-import { ChartBody, NumberBody, TableBody } from "./ValueBody";
+import { ChartBody, DiagramBody, NumberBody, TableBody } from "./ValueBody";
 import { HAIR, Port, type PortLook } from "./StepCard";
 
 /** How wide the band along a frame's edge is that a press takes to size it, in px. */
@@ -31,8 +32,8 @@ export type SetFrameProps = {
   onRename?: (name: string) => void;
   /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame, where its molecules would lie. */
   summary?: { count: string; nouns: string };
-  /** A chart it holds: a point pressed - its entry shown, where it is one on the page. */
-  onPoint?: (p: ChartPoint) => void;
+  /** A chart it holds: a point or a level pressed - the entry it is of shown, where that is on the page. */
+  onEntry?: (entry: string | undefined) => void;
 };
 
 const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -123,7 +124,11 @@ export default function SetFrame(p: SetFrameProps) {
         >
           {p.set.chart ? (
             <div className="origin-top-left" style={{ width: CHART_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / CHART_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / CHART_PX.h)})` }}>
-              <ChartBody chart={p.set.chart} {...(p.onPoint ? { onPoint: p.onPoint } : {})} />
+              {p.set.chart.kind === "diagram" ? (
+                <DiagramBody diagram={p.set.chart} {...(p.onEntry ? { onLevel: (l: DiagramLevel) => p.onEntry!(l.lowest.entry) } : {})} />
+              ) : (
+                <ChartBody chart={p.set.chart} {...(p.onEntry ? { onPoint: (pt: ChartPoint) => p.onEntry!(pt.entry) } : {})} />
+              )}
             </div>
           ) : p.set.table ? (
             <div className="origin-top-left" style={{ width: TABLE_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / TABLE_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / TABLE_PX.h)})` }}>

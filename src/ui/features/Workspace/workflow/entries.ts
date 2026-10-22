@@ -188,10 +188,13 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   const holds = holdsOf(page, set);
   const { structures, pictures } = setMembers(page, set);
   if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
-  // (a table's rows; a number, one; a chart's points)
+  // (a table's rows; a number, one; a chart's points, or a diagram's levels)
   if (holds === "table") return { holds, entries: set.table?.rows.length ?? 0, compounds: set.table?.rows.length ?? 0 };
   if (holds === "number") return { holds, entries: set.number ? 1 : 0, compounds: set.number ? 1 : 0 };
-  if (holds === "chart") return { holds, entries: set.chart?.points.length ?? 0, compounds: set.chart?.points.length ?? 0 };
+  if (holds === "chart") {
+    const n = !set.chart ? 0 : set.chart.kind === "diagram" ? set.chart.levels.length : set.chart.points.length;
+    return { holds, entries: n, compounds: n };
+  }
   const molecules = setMolecules(page, set);
   const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
   const entries = structures.length + frames;

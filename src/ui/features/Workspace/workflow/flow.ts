@@ -103,19 +103,23 @@ export function tableWired(doc: Flow, step: number, port?: string): Table | null
  * What comes into a step as a table (lib/table, docs/WORKFLOWS.md
  * *Tables*): the table a set holds; or molecules in 3D seen as one, an
  * entry a row (`moleculesAsTable`) - named for the molecule and frame it is
- * ("molecule:3#2"), and its energy with the program and level that worked
- * it out, where the molecule's calculation says them. None where nothing
- * comes in, or what does is structures drawn, pictures or a chart.
+ * ("molecule:3#2"), its molecule's title where it has one, and its energy
+ * with the program and level that worked it out, where the molecule's
+ * calculation says them. None where nothing comes in, or what does is
+ * structures drawn, pictures or a chart.
  */
 export function tableInto(doc: Flow, step: number, port?: string): Table | null {
   const table = tableWired(doc, step, port);
   if (table) return table;
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
+  const titles = new Map(input.molecules.flatMap((m) => (m.title ? [[m.id, m.title] as const] : [])));
   const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
   return moleculesAsTable(
     setEntries(input.molecules, input.holds).map((e: SetEntry) => {
-      const entry = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
+      const made = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
+      const title = e.from != null ? titles.get(e.from) : undefined;
+      const entry = title ? { ...made, properties: { title: { value: title, unit: "none" as const, status: "computed" as const }, ...made.properties } } : made;
       const energy = entry.properties.energy;
       const how = e.from != null ? by.get(e.from) : undefined;
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
@@ -226,13 +230,28 @@ function drawnKey(model: Model, ids: readonly number[]): string {
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
+  const ports = inputsOf(step.kind);
+  // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
+  if (ports.length > 1) {
+    const keys = ports.map((p) => portKey(doc, step.id, p.id, true));
+    if (keys[0] == null) return "";
+    return hash(keys.map((k) => k ?? "-").join("|"), hash(`${step.kind}|${by}|${options}`)).toString(36);
+  }
+  return portKey(doc, step.id, undefined, false, `${step.kind}|${by}|${options}`) ?? "";
+}
+
+/** A key for what comes into one of a step's inputs - a table's columns and rows, molecules' atoms, places and energies, structures as drawn - and `named`, the names its molecules go by; none where nothing does. */
+function portKey(doc: Flow, step: number, port: string | undefined, named: boolean, prefix = ""): string | null {
   // (a table: its columns and rows, as they are)
-  const table = tableWired(doc, step.id);
-  if (table) return hash(tableText(table), hash(`table|${step.kind}|${by}|${options}`)).toString(36);
-  const input = inputOf(doc, step.id);
-  if (!input) return "";
-  let h = hash(`${input.holds}|${step.kind}|${by}|${options}`);
-  for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
+  const table = tableWired(doc, step, port);
+  if (table) return hash(tableText(table), hash(`table|${prefix}`)).toString(36);
+  const input = inputOf(doc, step, port);
+  if (!input) return null;
+  let h = hash(`${input.holds}|${prefix}`);
+  for (const m of input.molecules) {
+    for (const text of keyTexts(m)) h = hash(text, h);
+    if (named) h = hash(`${m.title ?? ""}|${m.name ?? ""}`, h);
+  }
   for (const s of input.structures) h = hash(drawnKey(doc.model, s), h);
   return h.toString(36);
 }

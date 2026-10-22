@@ -4,6 +4,7 @@
  * options where Meno does it. Plugins fill kinds; they bring none of their
  * own.
  */
+import { deltaOf } from "../../../../lib/energyDiagram";
 import { numberText } from "../../../../lib/calc/results";
 import type { Option } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -30,7 +31,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "chart";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "chart" | "levels";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -161,6 +162,25 @@ export const KINDS: readonly KindInfo[] = [
       { id: "y", label: "Up", type: "text", default: "" },
     ],
     how: (v) => (v.x || v.y ? `${v.y || "the second column of numbers"} against ${v.x || "the first"}` : "The first two columns of numbers"),
+  },
+  {
+    // (docs/WORKFLOWS.md, *Energy diagrams*: each level a molecule's name, at its lowest, relative to one - joined as a table says, or each to the next)
+    kind: "energy-diagram",
+    name: "Energy diagram",
+    icon: "levels",
+    takes: ["molecules", "conformers", "table"],
+    gives: "chart",
+    runs: "entries",
+    made: "Energy diagram",
+    inputs: [
+      { id: "levels", name: "Levels", takes: ["molecules", "conformers"] },
+      { id: "connects", name: "Connects", takes: ["table"] },
+    ],
+    options: [
+      { id: "quantity", label: "Energy", type: "text", default: "energy" },
+      { id: "reference", label: "Relative to", type: "text", default: "" },
+    ],
+    how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${v.reference || "the first"}`,
   },
 ];
 

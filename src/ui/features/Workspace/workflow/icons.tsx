@@ -1,5 +1,6 @@
 import {
   ArrowTrendingDownIcon,
+  Bars3CenterLeftIcon,
   BoltIcon,
   ChartBarIcon,
   CloudIcon,
@@ -36,6 +37,7 @@ const ICONS: Record<StepIcon, Icon> = {
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
   chart: PresentationChartLineIcon,
+  levels: Bars3CenterLeftIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

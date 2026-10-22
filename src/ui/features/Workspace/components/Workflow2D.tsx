@@ -23,7 +23,6 @@ import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf } from "../workflow/flow";
-import type { ChartPoint } from "../../../../lib/chart";
 import { exitOf, howOf, inputsOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -606,7 +605,7 @@ export default function Workflow2D() {
             : count.holds === "number" && b.number
               ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
             : count.holds === "chart"
-              ? plural(count.entries, "point")
+              ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
             : count.holds === "pictures"
               ? plural(count.entries, "picture")
               : count.holds === "structures"
@@ -703,7 +702,7 @@ export default function Workflow2D() {
             onContextMenu={menuOf("set", b.id)}
             onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
-            {...(b.chart ? { onPoint: (pt: ChartPoint) => showEntry(pt.entry) } : {})}
+            {...(b.chart ? { onEntry: showEntry } : {})}
           />
         </div>
       );
