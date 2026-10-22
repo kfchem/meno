@@ -770,7 +770,7 @@ any plugin (`resources/plugins/rdkit/`, its environment `plugin-rdkit`).
 A worker is a sidecar, started by `lib/roles/worker.ts` (`chemWorker(role)`:
 the plugin chosen for the role in Settings, else the first that fills it)
 and asked through `lib/roles/client.ts`: JSON lines, a fixed set of
-requests (to_smiles, from_smiles, analyse, read_picture, and for 3D
+requests (to_smiles, rxn_to_smiles, from_smiles, analyse, read_picture, and for 3D
 open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
 a render is a job, `render/renders.ts`; the worker says its version in its
 first line, ready), MOL blocks in (written by
