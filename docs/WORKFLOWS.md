@@ -490,9 +490,11 @@ shuts (docs/PDF.md, step 5).
 
 When a run is done, what it gave comes in as a result set to the right
 of the step, wired from it (decided). Its molecules lie in rows, left to
-right: a few in rows up to twelve bonds wide, as before; many in a grid
-about a window's shape, 3 : 2, so that fitted to the view they read at a
-glance - not in a column one molecule wide (2026-10-22). A set's ports
+right, each row as wide as the set's molecules need to lie about a
+window's shape, 3 : 2 wide to tall - but never narrower than twelve bonds
+- so that fitted to the view many read at a glance as a grid, not as a
+column one molecule wide (2026-10-22). Two or three lie in one row as
+before; from about five of a usual size, the set takes that shape. A set's ports
 are reachable whatever lies over them on the page - a molecule's chip
 beside its edge - being drawn over all of it.
 
