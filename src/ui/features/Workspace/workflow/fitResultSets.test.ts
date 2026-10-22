@@ -8,6 +8,7 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { setMembers, type Frame } from "./entries";
 import { BETWEEN, SET_TOP } from "./look";
 import { addSet, addStep } from "./model";
+import { resultOf } from "./flow";
 import { chipWide, fitResultSets, placeResults, type RunWith } from "./run";
 import { style3dIn } from "../../../../lib/chem/workspaceStyle3d";
 
@@ -67,6 +68,23 @@ describe("a result set its molecules no longer fit", () => {
     const fresh = resultSet(2.5);
     expect(big.molecules3d!.map((m) => m.at)).toEqual(fresh.molecules3d!.map((m) => m.at));
     expect(grown).toMatchObject({ x0: fresh.sets![0].x0, x1: fresh.sets![0].x1, y0: fresh.sets![0].y0, y1: fresh.sets![0].y1 });
+  });
+
+  it("takes its step's Failed set down with it, under it as it was made, as a run does", () => {
+    const failedOf = (d: WorkspaceDocument) => resultOf(d, d.steps![0].id, "failed")!;
+    const small = resultSet(1);
+    const was = failedOf(small);
+    expect(was.y1).toBeLessThanOrEqual(small.sets![0].y0 - BETWEEN + 1e-9);
+    const big = fitResultSets(small, reaching(2.5));
+    const grown = big.sets![0];
+    expect(grown.y0).toBeLessThan(was.y1);
+    // (moved straight down, as tall as it was, clear of the set it is under)
+    const now = failedOf(big);
+    expect([now.x0, now.x1]).toEqual([was.x0, was.x1]);
+    expect(now.y1 - now.y0).toBeCloseTo(was.y1 - was.y0);
+    expect(now.y1).toBeCloseTo(grown.y0 - BETWEEN);
+    // (a run in that look leaves it where the widened set does)
+    expect(failedOf(resultSet(2.5)).y1).toBeCloseTo(now.y1);
   });
 
   it("is left as it is where they fit - and a smaller look leaves it as wide as it is", () => {

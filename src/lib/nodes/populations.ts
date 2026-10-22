@@ -19,6 +19,14 @@
  * been perceived and fully specified (lib/entry `stereoIdentity`), and all
  * of a group's the same; else the whole group goes out of *failed*, saying
  * which - never summed with a warning.
+ *
+ * Nor is one that is no minimum: an entry its calculation judged to have an
+ * imaginary frequency (`imaginary`) - a saddle point, whose free energy is
+ * not a conformer's - goes out of *failed*, and its group with it, for the
+ * chemist to take it out first (the maintainer, 2026-10-22: each program's
+ * own judgement of which are imaginary). A geometry whose optimisation did
+ * not converge never comes this far: its step gave it out of its own
+ * *failed* exit.
  */
 import { boltzmann } from "../boltzmann";
 import { stereoIdentity, type Entry, type EntryStereo, type Property } from "../entry";
@@ -39,6 +47,9 @@ function ownProblem(e: Entry, kelvin: number): string | null {
   const at = e.properties[PROPERTY.freeEnergy].at?.kelvin;
   if (at == null) return "its free energy does not say the temperature it was worked out at";
   if (Math.abs(at - kelvin) > SAME_KELVIN) return `its free energy is at ${at} K, not ${kelvin} K`;
+  const imaginary = e.properties[PROPERTY.imaginary];
+  if (imaginary && typeof imaginary.value === "number" && imaginary.value > 0)
+    return `it has ${imaginary.value} imaginary frequenc${imaginary.value === 1 ? "y" : "ies"}: it is no minimum - take it out first`;
   const unknown = configurationUnknown(e.stereo);
   if (unknown) return unknown;
   const d = e.properties[PROPERTY.degeneracy];

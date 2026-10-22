@@ -250,9 +250,11 @@ pointer does; put back by an undo, they glide back.
 - *Delete set* (right-click its tab) takes the frame away and leaves what
   it held; a set left empty stays, empty, until it is deleted;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
-  are not written to the workspace's file - only how many it held and
-  their collection's hash - and opened again, the set says *Not kept*
-  with that count.
+  and structures drawn are not written to the workspace's file - only how
+  many it held and their collection's hash - and opened again, the set
+  says *Not kept* with that count. This covers what the set holds now.
+  The step's earlier runs, kept in the step with what each gave, are
+  written as they are, whatever the set says.
 
 A set's entries are its members, in their order. A set the chemist makes is a
 **compound set**: each entry a compound of its own, however alike two
@@ -334,6 +336,17 @@ one of the kinds of calculation it does (decided: 16):
   conversion taken on purpose.
 - **Only what is added is there.** With no plugin added, the panel shows
   Meno's line alone; nothing is shown of plugins not added.
+- **A wire let go on an input that does not take it** is not made, and
+  the step's card says why where its state is: "It takes a conformer set,
+  not molecules in 3D" (2026-10-22). It says so until a wire is drawn
+  again. A conformer set of one conformer is a conformer set all the
+  same, and goes where conformer sets go (the maintainer, 2026-10-21).
+  A set mixing conformer sets with other molecules in 3D goes into no
+  step - a scan's frames are not conformers, nor a conformer set's
+  conformers compounds - and the card names those that are no conformer
+  set ("It mixes conformer sets with other molecules in 3D: scan.log is
+  no conformer set"), at the wire or, where one came into the set after
+  it was wired, at its run.
 - **A wire let go on empty space** opens Quick Add already at
   *Calculations*, showing only the kinds that take what the wire
   carries - and a plugin only where it does one of them.
@@ -468,7 +481,7 @@ once (*Several at once*).
 | Waiting | a clock, grey | *Waiting · 2nd* - its place in the queue |
 | Running | turning, the base colour | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
 | Done | a tick, the base colour | *2:03 · E −42.108710 Eh* (its electronic energy), or *81 of 81*, or *23 kept* - how long, and the number the step is for |
-| Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
+| Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why, where nothing was done. Where some entries were, the step is done: *78 of 81 · 3 of 81 failed (2: not converged; 1: refused)* |
 | Stopped | a stop, grey | *Stopped after 0:31* |
 | Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it (its atoms with their charges, radicals and isotopes, their places, its frames), changed since its run; its results stay as they are |
 
@@ -507,10 +520,19 @@ beside its edge - being drawn over all of it.
 - **Energy window**, **Duplicates**: the entries kept out of the first
   exit, the rest out of the second;
 - **Populations**: the same entries, with their populations;
+- where compounds have one conformer each, so that a window or shares
+  over them do nothing, *Energy window* and *Populations* say so after
+  their line: "2 of 2 kept · each compound has one conformer", or "1
+  compound has one conformer" where others have more (2026-10-22);
 - **As conformers**: the same entries, as a conformer set.
 
 They are calculation results as Meno knows them: the frames chip,
 pointing at atoms, the lists. Each exit's set feeds the next step.
+
+A step of Meno's own can also give structures drawn, in 2D (*Structures
+drawn as results*, below): its exits' sets then hold structures on the
+page, each as the step drew it, and feed a step that takes structures
+drawn - *Conformers* - as a set the chemist drew does.
 
 **A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
 set shows*): up to 50 entries are laid out on the page, as above. An exit
@@ -524,8 +546,15 @@ of theirs that does not read is left out and counted, and the frame says
 how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
-each exit's set once it is shown again. They are summed up in the frame with a sample of their
-structures and histograms in the steps that follow (6c).
+each exit's set once it is shown again. Its molecules are on no page,
+so deleting the set deletes them: its frame says so ("On no page:
+deleting the set deletes them"), and so does its menu, in words, last
+("Delete set and the 118 molecules it holds"), before it happens
+(2026-10-22). Deleted by the Delete key it is asked about first, as a
+step running is - and so it is in a selection deleted: the rest goes, and
+it is asked about. A cut leaves it in place, since a copy does not carry
+its molecules, and says so. They are summed up in the frame with a sample
+of their structures and histograms in the steps that follow (6c).
 
 *Open as a table*, on the set's menu or under its summary, reads them in
 the column beside the texts and PDFs, a tab of their own named as the
@@ -643,8 +672,9 @@ states an undo goes back to as well.
   come in, as if Meno had been open; still running - shown running, with
   the time since they started; gone without finishing (the computer was
   restarted, say) - *Stopped*, with their logs. Where some are gone and
-  others done, those done come in and the others are counted failed:
-  *1 of 3 failed · It stopped without finishing*.
+  others done, those done come in and the others go out of the step's
+  *Failed* exit: *2 of 3 · 1 of 3 failed (1: stopped before it
+  finished)*.
 - A workspace never saved keeps its jobs with the unsaved workspace Meno
   reopens; closed without saving, its jobs are stopped - said in the
   dialog that asks about saving.
@@ -846,7 +876,12 @@ Decided while building it, for the maintainer to confirm:
   the same order: a structure there twice is the same structure. In a
   conformer set, within each compound, lowest energy first.
 - **Deleting a step keeps the set it made**, with what it holds - a set
-  like any the chemist made, so a compound set.
+  like any the chemist made, so a compound set. A large set it made keeps
+  the molecules it holds itself (2026-10-22): they are on no page, and
+  the set takes in nothing dropped into its frame. A set kept out of the
+  file (*Don't keep in the file*) is kept in it in full from then on, its
+  molecules with their outputs: the step that could make them again is
+  gone, and a chemist's set is always kept.
 - **The look, after review** (2026-10-08): frames, tabs, cards and ports
   in Meno's palette and its cards' hairline borders, a hair on the screen
   at any zoom; wires a hair and a quarter; Heroicons' outline icons for
@@ -1310,6 +1345,9 @@ Decided while building it, for the maintainer to confirm:
   kind, who does it, its options - and has not run (its runs and their
   jobs are the step's own). A result set copied with the step that made
   it is that step's still; copied without it, it is a set like any other.
+  Either way it goes without the molecules a large set holds itself -
+  with its step, it is empty until the step runs again; alone, an empty
+  frame - so they are never copied twice (2026-10-22).
 - **A running step is left out** when a selection is deleted or cut; it
   is asked about on its own, as before.
 - **A procedure keeps the sets the chemist drew**, as empty frames for
@@ -1344,11 +1382,33 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   once, for its largest, and it is held by its top left corner, so that
   nothing in it moves as the panel grows (`quickAddPlace.ts`).
 - **No *3D structure* step**: *Conformers* takes structures drawn - RDKit's
-  search, in its worker, as *3D structures* on the canvas makes them (the
-  first stereoisomer, where the drawing leaves one open), with the step's
+  search, in its worker, as *3D structures* on the canvas makes them, with the step's
   own options - and *Choose one*, Meno's, takes one conformer of each
   compound. A plugin's step says in its manifest what it takes where it
   takes less than its kind (`takes`: CREST's search starts from 3D).
+- **A structure drawn whose stereo is left open is not made** by
+  *Conformers* (2026-10-22), where what is open could go more than one
+  way: a stereocentre or a double bond that could have a configuration and
+  is drawn without one (the roles' `open_stereo`), giving two or more
+  stereoisomers that can be made in 3D, or an allene's axis, whose
+  stereoisomers RDKit does not count. The canvas's *3D structure* asks
+  which is meant; a step cannot ask, and never chooses. The others are
+  made, and the step's line names those not made by their places
+  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*); where
+  none is made, the step fails, saying so. Until then the first
+  stereoisomer was made without a word.
+  - **A bridgehead its rings fix is no choice.** Adamantane's, cubane's or
+    norbornane's open centres give one stereoisomer that can be made in
+    3D (RDKit's enumeration with its embedding tried, seeded by the
+    isomer), so it is made, nothing said. Unwedged camphor gives two, and
+    is not.
+  - **Where no stereoisomer holds in 3D** (a strained cage's), the
+    structure is made as the embedding places it, and the line says so
+    (*structure 3 of 4 made with its stereo free: no stereoisomer of it
+    holds in 3D*).
+  - Not seen: a metal's centre (square-planar platinum) and an axis of
+    hindered rotation (a biaryl's); they are made as the embedding places
+    them.
 
 Decided while building it, for the maintainer to confirm:
 
@@ -1434,6 +1494,122 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### Failed entries (2026-10-22)
+
+Foundation PR 8c (WORKFLOWS-FOUNDATION.md, *Failed entries, and running
+them again*; the maintainer's rulings of 2026-10-22):
+
+- **A calculation's second exit is *Failed*** (Optimise, Energy,
+  Frequencies, NCI; a conformer search's takes the molecules it could not
+  search). Its set is made with the step, under the first, and moves
+  down with it as the first grows.
+- **A step is done where anything was.** What it could not do goes out of
+  *Failed*, each entry as it came in - or as far as it came - saying why;
+  what follows runs on what was done. It fails only where nothing was,
+  saying why in the program's own words. The line counts the failures
+  by kind: *1 of 3 failed (1: not converged)*.
+- **The kinds of failure are core's**: not started, stopped before it
+  finished, the program stopped with an error, refused, another molecule
+  came back, no geometry came back, not converged - and *failed* for any
+  other. A plugin names one of them; its own words are always kept beside.
+- **An optimisation that did not converge is not done** (until
+  2026-10-22 it was passed on as a minimum): its path and the last
+  geometry it reached go out of *Failed*, the failure on that geometry,
+  so that *Take frames* can take it on.
+- **A plugin may refuse one entry alone** as it prepares the others'
+  jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
+  refused, with why. Kept with the workspace while the others run.
+- **A warning never moves an entry.** A calculation's warnings - a kind
+  core knows (*frequencies at a geometry not fully optimised*: xtb's
+  "Hessian on incompletely optimized geometry!"), else *other*, with the
+  program's words - are kept with the molecule, said on its chip, and
+  counted on the step's line: *3 with warnings*.
+- **The chip says it.** A molecule that failed says why on its chip, in
+  the attention colour, and its warnings how many; opened, each in full.
+- **A structure that is no minimum is marked so** with the imaginary
+  frequencies its program judged it has - xtb's "significant" ones,
+  Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
+  on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
+  keeps each conformer's.
+- **Populations refuses a group with one that is no minimum** - its
+  optimisation not converged, or marked with an imaginary frequency -
+  naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
+  minimum - take it out first*. *Energy window* refuses one not
+  converged the same; a saddle point's mark would refuse it where the
+  window is on free energies, which it is not yet.
+- **The entry record says it too**: `imaginary`, how many imaginary
+  frequencies its calculation judged it has, where it judged any; one
+  that failed carries its reason as its status. *Populations* on free
+  energies (`lib/nodes/populations`) fails a group with one that is no
+  minimum, as Meno's does, each entry saying why.
+- **Meno's steps on energies refuse what they cannot use**: an *Energy
+  window* below 0 kcal/mol, or no number, as *Populations* refuses a
+  temperature of 0 K or below; and an energy that is no number (NaN,
+  infinite) is taken as none - by *Energy window*, *Populations*,
+  *Choose one* and *Duplicates*' order alike.
+
+A workspace saved before this opens as it was: a calculation in it has
+no *Failed* set until it next runs, when it is given one.
+
+### Structures drawn as results (2026-10-21)
+
+Enumerate P2 (WORKFLOWS-FOUNDATION.md, *Enumerate*): structures drawn, in
+2D, as what passes into Meno's own steps and comes out of them, beside
+molecules in 3D. *Enumerate* (P3) is the first step to use it.
+
+- **In.** A set of structures drawn comes into a step of Meno's as its
+  entries, each the structure as it is drawn: its atoms and bonds, where
+  they lie, its wedges and labels (`workflow/run` `drawnEntries`, an entry
+  a `DrawnEntry`). Never made 3D here: a step after it does that, as
+  everywhere else.
+- **Out.** Such a step's outcome holds structures drawn (`DrawnOutcome`):
+  those it kept, and those it set aside. Each exit's set holds its own,
+  on the page and in the step's order, each moved whole to its place in
+  the set, laid out as a run lays its results by its atoms' box. Each is a
+  structure of its own, its atoms, bonds and groups numbered afresh, as a
+  paste is. So a step may give many in one numbering, as Enumerate gives
+  its products in their template's, and they stay apart. Any of them
+  that is a record of a stack comes out a structure in its own right. The
+  set says it holds structures drawn, and wires on as a set of them does.
+- **Run again**, the step takes away what it put in its sets, and
+  nothing else, and the new ones take their place, the set's top left
+  where it was. Each set keeps which atoms its step put on the page
+  (`WorkflowSet.put`), and those atoms, with their bonds, are all that go:
+  - a structure of the chemist's joined to one of them by a bond keeps
+    its own atoms, even a carbon then left without a bond;
+  - a structure dropped into the frame is none of the set's (a result set
+    takes in nothing: *Members are explicit*), and stays where it is;
+  - a structure of the chemist's drawn elsewhere is untouched.
+
+  A file keeps those atoms by id, as it keeps members, but only those it
+  writes: a set kept out of the file keeps none, since their ids could be
+  another atom's once the file opens and numbering goes on. A pasted step
+  or procedure keeps none either.
+- **Kept and shown again.** A run kept keeps its structures as they
+  stand when the next run takes their place, an atom moved by hand
+  meanwhile with them (`RunResults.drawn`, one type for the store, the run
+  and the file). Shown again, they come back in the step's sets.
+- **In the file**, a run kept keeps them as the page's drawing is kept,
+  and reads them back as it is read (`readDrawn`). A structure that does
+  not read is left out, as a molecule is. A result set kept out of the
+  file (*Don't keep in the file*) leaves out the structures it holds now,
+  as well as its molecules, saying how many it held. The step's earlier
+  runs are still written with what each gave, structures and molecules
+  alike: the set's choice does not reach them yet.
+- **A molecule in 3D made from one of them** (by *3D structure*, or a
+  *Conformers* step after it) keeps its link to that drawing by its atoms.
+  Where the set was kept out of the file, those atoms are not in it, so
+  the molecule opens with its link to the drawing gone, as when the
+  drawing is deleted.
+
+None of Meno's steps takes structures drawn yet, so a wire from a set of
+them to one is refused, as before. P3 adds *Enumerate*, the first.
+
+Not yet: a large set of structures drawn. *A large result set* holds more
+than 50 molecules in 3D in the set itself, off the page; structures drawn
+are all put on the page however many there are. Enumerate, which can make
+up to 10,000, holds them in its set the same way (P3b).
 
 ## Questions
 

@@ -4,6 +4,7 @@ import { abbreviationOf } from "./abbreviations";
 import { placedAbbreviation } from "./abbreviationPlace";
 import type { AbbreviationStructure, AtomChem, BondChem, Radical, SgroupMark } from "./molecule";
 import { ELEMENTS } from "./elements";
+import { TABLE_MASS } from "./ctfile";
 import { atTrueSize } from "./magnified2d";
 import { greatest, least } from "./lists";
 import { isMetal } from "../layout/perceive";
@@ -417,6 +418,23 @@ function propertyLines(model: WriterModel, sups: Sup[] = [], aliases = new Map<n
   return lines;
 }
 
+/**
+ * An atom's mass difference and charge as a V2000 atom block's dd and ccc
+ * fields hold them, where they are in those fields' old range - mass
+ * difference -3 to 4 from the table's (`TABLE_MASS`), charge -3 to 3, or a
+ * doublet radical - and 0 otherwise: written there as well as in M  ISO,
+ * M  CHG and M  RAD, as "CTfile Formats" (Chemistry 2026, p. 66) asks of
+ * every writer, so that a reader of the atom block alone sees them too.
+ */
+export function oldRangeFields(a: { el: string; charge?: number; radical?: Radical; isotope?: number }): { dd: number; ccc: number } {
+  const table = TABLE_MASS[a.el];
+  const d = a.isotope && table ? a.isotope - table : 0;
+  const c = a.charge ?? 0;
+  // (one field for both: a charged radical's is said by the properties' lines alone)
+  const ccc = c && a.radical ? 0 : c >= -3 && c <= 3 && c !== 0 ? 4 - c : !c && a.radical === "doublet" ? 4 : 0;
+  return { dd: d >= -3 && d <= 4 ? d : 0, ccc };
+}
+
 /** V2000's atom block fields after the symbol: dd ccc sss hhh bbb vvv HHH rrr iii mmm nnn eee. */
 function atomFields(a: WriterAtom): string {
   // a query hydrogen count is one more than the count; a valence of none, 15
@@ -424,8 +442,9 @@ function atomFields(a: WriterAtom): string {
   const vvv = a.valence == null ? 0 : a.valence === 0 ? 15 : a.valence;
   // the reaction's: mapping, inversion (1) or retention (2), exact change
   const nnn = a.invRet === "invert" ? 1 : a.invRet === "retain" ? 2 : 0;
-  return [0, 0, 0, hhh, 0, vvv, 0, 0, 0, a.map ?? 0, nnn, a.exactChange ? 1 : 0]
-    .map((v, i) => (i === 0 ? " 0" : i3(v)))
+  const { dd, ccc } = oldRangeFields(a);
+  return [dd, ccc, 0, hhh, 0, vvv, 0, 0, 0, a.map ?? 0, nnn, a.exactChange ? 1 : 0]
+    .map((v, i) => (i === 0 ? String(v).padStart(2) : i3(v)))
     .join("");
 }
 
@@ -791,7 +810,10 @@ export function writeMolfile3d(
     return lines.flatMap(fitV3000).join("\n") + "\n";
   }
   const lines = [...head, `${i3(atoms.length)}${i3(bonds.length)}  0  0  0  0  0  0  0  0999 V2000`];
-  for (const a of atoms) lines.push(`${f10(a.x)}${f10(a.y)}${f10(a.z)} ${a.el.padEnd(3)} 0  0  0  0  0  0  0  0  0  0  0  0`);
+  for (const a of atoms) {
+    const { dd, ccc } = oldRangeFields(a);
+    lines.push(`${f10(a.x)}${f10(a.y)}${f10(a.z)} ${a.el.padEnd(3)}${String(dd).padStart(2)}${i3(ccc)}  0  0  0  0  0  0  0  0  0  0`);
+  }
   for (const b of bonds) lines.push(`${i3(b.a1 + 1)}${i3(b.a2 + 1)}${i3(b.order)}  0  0  0  0`);
   // (eight to a line)
   const props = (tag: string, pairs: [number, number][]) => {

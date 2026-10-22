@@ -129,7 +129,10 @@ describe("a set read in the column", () => {
     st().stopReadingSetTable(set.id);
     expect(st().textsOpen).toBe(false);
     st().readSetTable(set.id);
+    // (asked about first - its molecules go with it - and its table still read until it is said yes to)
     st().removeSet(set.id);
+    expect([st().askDeleteSet, st().setsRead, st().setTableShown]).toEqual([[set.id], [set.id], set.id]);
+    st().removeSet(set.id, true);
     expect([st().setsRead, st().setTableShown]).toEqual([[], null]);
   });
 

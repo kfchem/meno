@@ -108,6 +108,8 @@ export default function SetFrame(p: SetFrameProps) {
         >
           <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
           <span className="text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+          {/* (held in the set alone: deleting it deletes them - said before it happens) */}
+          <span className="mt-1 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
           {p.onOpenTable && (
             <button
               onPointerDown={(e) => e.stopPropagation()}

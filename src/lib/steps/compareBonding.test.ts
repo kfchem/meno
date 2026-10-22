@@ -36,7 +36,7 @@ describe("Compare bonding", () => {
     if ("failed" in r) throw new Error(r.failed);
     expect(r.same).toBe(false);
     expect(r.differences).toEqual([
-      expect.stringMatching(/^C1-C11 is bonded in the reference, not here: \d+\.\d\d Å apart, past 1\.65 Å/),
+      expect.stringMatching(/^C1-C11 is bonded in the reference, not here: \d+\.\d\d Å apart, past 1\.80 Å/),
       expect.stringMatching(/^C4-C12 is bonded in the reference, not here/),
     ]);
   });

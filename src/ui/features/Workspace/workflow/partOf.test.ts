@@ -96,13 +96,13 @@ describe("a part of a search's conformers", () => {
     const entry: SetEntry = setEntries([part], "conformers")[0];
     const xyz = [...entry.xyz];
     const optimised = workedOf("optimise", entry, { schema: 1, program: "a program", atoms: ["O", "H", "H"], frames: [xyz], energies: [-76] }, ["a program"]);
-    expect(typeof optimised !== "string" && optimised.partOf).toBe(true);
+    expect("xyz" in optimised && optimised.partOf).toBe(true);
   });
 
   it("is not what a conformer search finds anew from one of them: those it found are the compound's, whole", () => {
     const entry = setEntries([waters([0, 1], { partOf: true })], "conformers")[0];
     const found = conformersWorked(entry, { schema: 1, program: "search", atoms: ["O", "H", "H"], frames: [[...entry.xyz], [...entry.xyz]], energies: [-1, -0.99] }, ["search"]);
-    expect(typeof found !== "string" && found.map((w) => w.partOf)).toEqual([undefined, undefined]);
+    expect(Array.isArray(found) && found.map((w) => w.partOf)).toEqual([undefined, undefined]);
   });
 
   it("shows the shares a Populations step worked out of it, saying at what temperature", () => {

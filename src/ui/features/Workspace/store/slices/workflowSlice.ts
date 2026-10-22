@@ -82,14 +82,18 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         const nothing = next == null && prev.pdfShown == null && !prev.texts.some((t) => t.id === prev.textShown && t.reading !== false) && !prev.textsLost.some((t) => t.id === prev.textShown);
         return { ...prev, setsRead, setTableShown: next, ...(nothing ? { textsOpen: false } : {}) };
       }),
-    removeSet: (id: number) => {
-      if (doc.edit("delete set", (d) => wf.removeSet(d, id)))
+    removeSet: (id: number | readonly number[], asked = false) => {
+      const ids = typeof id === "number" ? [id] : [...id];
+      // (one that holds its molecules itself, on no page, is asked about first: they go with it)
+      if (!asked && ids.some((x) => doc.getState().sets?.find((b) => b.id === x)?.collection?.length)) return set({ askDeleteSet: ids });
+      if (doc.edit(ids.length > 1 ? "delete sets" : "delete set", (d) => ids.reduce((n, x) => wf.removeSet(n, x), d)))
         set((prev: EditorState) => ({
           ...prev,
-          setsRead: prev.setsRead.filter((s) => s !== id),
-          setTableShown: prev.setTableShown === id ? null : prev.setTableShown,
-          hoveredSet: prev.hoveredSet === id ? null : prev.hoveredSet,
-          chosenSet: prev.chosenSet === id ? null : prev.chosenSet,
+          askDeleteSet: null,
+          setsRead: prev.setsRead.filter((s) => !ids.includes(s)),
+          setTableShown: prev.setTableShown != null && ids.includes(prev.setTableShown) ? null : prev.setTableShown,
+          hoveredSet: prev.hoveredSet != null && ids.includes(prev.hoveredSet) ? null : prev.hoveredSet,
+          chosenSet: prev.chosenSet != null && ids.includes(prev.chosenSet) ? null : prev.chosenSet,
         }));
     },
     addStep: (kind: StepKind, by: string, x: number, y: number) => {

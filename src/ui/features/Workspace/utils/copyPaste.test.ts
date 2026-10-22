@@ -137,7 +137,7 @@ describe("a reaction, copied and pasted", () => {
 
   it("reads a record's structures though its arrows do not read", () => {
     const text = JSON.stringify({ format: "meno-structure", version: 1, atoms: [atom(1, 0, 0)], bonds: [], arrows: [{ id: 1, x: "a" }] });
-    expect(readRecord(text)).toEqual({ atoms: [atom(1, 0, 0)], bonds: [] });
+    expect(readRecord(text)).toEqual({ atoms: [atom(1, 0, 0)], bonds: [], leftOut: { arrow: 1 } });
   });
 
   it("is centred as a whole, arrow and plus moved with it", () => {
@@ -217,10 +217,13 @@ describe("molecules in 3D on the clipboard", () => {
       bonds: [],
       molecules3d: [{ ...water3d, drawnFrom: [10, null], drawnAs: "O", stereo: { atoms: { 7: "R" }, bonds: {} } }],
     });
-    const back = readRecord(text)!.molecules3d![0];
+    const read = readRecord(text)!;
+    const back = read.molecules3d![0];
     expect(back.drawnFrom).toBeUndefined();
     expect(back.drawnAs).toBeUndefined();
-    expect(back.stereo).toBeUndefined();
+    // (the label of an atom it does not have left out alone, and said)
+    expect(back.stereo).toEqual({ atoms: {}, bonds: {} });
+    expect(read.leftOut).toEqual({ stereo: 1 });
     expect(back.atoms).toHaveLength(3);
   });
 
@@ -383,6 +386,7 @@ describe("a record with what is no entry in its lists", () => {
   };
   const lists = placesIn(WHOLE).filter((p) => Array.isArray(valueAt(p)));
   const isEntry = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
+  const unsaid = (d: ReturnType<typeof readRecord>) => (d ? (({ leftOut: _, ...rest }) => rest)(d) : d);
 
   it("reads, carrying one of everything", () => {
     const d = readRecord(JSON.stringify(WHOLE))!;
@@ -406,7 +410,8 @@ describe("a record with what is no entry in its lists", () => {
             ? null
             : readRecord(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
       // (put last: a sheet is numbered by its place in the list)
-      for (const stray of STRAYS) expect(readRecord(edited(path, (holder, k) => (holder[k] as unknown[]).push(stray))), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+      // (what it left out said apart: utils/readNotes)
+      for (const stray of STRAYS) expect(unsaid(readRecord(edited(path, (holder, k) => (holder[k] as unknown[]).push(stray)))), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(unsaid(expected));
     }
   }, 60_000);
 
