@@ -336,7 +336,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
     kept: [...entries],
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
-    said: `${plural(compounds, "compound")} at ${kelvin} K`,
+    // (from the electronic energy, which is all a set's entries carry today: said, so that its shares are not read as free energies' shares - the Populations node of lib/nodes weights G)
+    said: `${plural(compounds, "compound")} at ${kelvin} K, from electronic energies`,
   };
 }
 
