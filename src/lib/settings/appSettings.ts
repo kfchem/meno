@@ -67,17 +67,19 @@ export type SavedProcedure = { id: string; name: string; saved: number; flow: { 
 
 /** How a workflow's steps run (Settings, Calculations). Each kind's default options, done by each, are kept with the options (`options`, as "step:<who>:<kind>"), set there alone. */
 export type CalculationSettings = {
-  /** How many jobs run at once on this computer (lib/jobs); unset, one. */
-  atOnce?: number;
-  /** How many cores each job may use; unset, the computer's shared among those at once (lib/jobs `runningOf`). */
+  /** How many cores each job takes; unset, all those jobs may use (lib/jobs `runningOf`). */
   cores?: number;
+  /** How many cores this computer's jobs may use at once, in all; unset, all its cores (lib/jobs `limitsOf`). */
+  coresAll?: number;
+  /** How much memory this computer's jobs may use at once, in all, in MiB; unset, three quarters of its memory. */
+  memoryAll?: number;
   /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
   largeWorkspaceMB?: number;
 };
 
-/** The most jobs at once, and cores for each, Settings takes. */
-export const JOBS_AT_ONCE_MOST = 64;
+/** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
+export const MEMORY_MOST = 64 * 1024 * 1024;
 /** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this - the most a workspace's file may come to at all. */
 export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 
@@ -211,14 +213,15 @@ export function acceptAppSettings(raw: unknown): AppSettings {
   };
 }
 
-/** How a workflow's jobs run, as the file holds it: how many at once, and cores for each, whole numbers within reason. */
+/** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { atOnce?: unknown; cores?: unknown; largeWorkspaceMB?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
-  const atOnce = whole(r?.atOnce, JOBS_AT_ONCE_MOST);
   const cores = whole(r?.cores, CORES_MOST);
+  const coresAll = whole(r?.coresAll, CORES_MOST);
+  const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
   const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
-  return { ...(atOnce ? { atOnce } : {}), ...(cores ? { cores } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
+  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */

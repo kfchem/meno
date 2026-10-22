@@ -28,6 +28,7 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
+import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE, stereoPictureItems } from "./chem/marks";
@@ -110,6 +111,17 @@ export type SaveWays = {
   /** Whether the file at a one true path, there now, is to be kept beside the new one: the file last saved to, still holding something the new one cannot keep (`SavedFile`'s `lastHolds`). */
   keepOld?: (path: string) => boolean;
 };
+
+/**
+ * Whether the file at a one true path (`real`), there now, is to be kept
+ * beside a workspace's new one: the file it was last saved to, or opened
+ * from (`savedPath`), where it still holds something of a file the new one
+ * cannot keep (`lastHolds`), or - the first time it is saved over - what
+ * could not be read as it opened (`leftOnOpen`): its only copy.
+ */
+export function keepsOld(real: string, savedPath: string | null, lastHolds: boolean, leftOnOpen: EditorState["leftOnOpen"]): boolean {
+  return (lastHolds || (!!leftOnOpen && !leftOnOpen.kept)) && real === savedPath;
+}
 
 /**
  * A workspace's file written to `path`, as Save or Save As has it; where it
@@ -567,7 +579,9 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         const jobs = await jobsToKeep(store.getState().steps ?? []);
         // (a job file past what a workspace's file keeps of one: asked about first - never written to be refused)
         const file = jobs.largest > MOST_FILE ? null : await workspaceFile(store.getState(), jobs);
-        return { written, savedPath, jobs, file };
+        // (what its file held that could not be read as it opened: not in this one - so the file it was opened from, the first time it is saved over, kept beside it)
+        const { leftOnOpen } = store.getState();
+        return { written, savedPath, leftOnOpen, jobs, file };
       };
       let at = await made();
       // (past the size Settings says, as the file it replaces was not: asked - never anything left out unasked - docs/FILE-IO.md, *A step's jobs*)
@@ -591,15 +605,18 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
           // (never a file another tab saves to)
           heldBy: (real) => heldElsewhere(real, tabId),
           // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
-          keepOld: (real) => lastHolds && real === at.savedPath,
+          keepOld: (real) => keepsOld(real, at.savedPath, lastHolds, at.leftOnOpen),
         },
         // (its steps' job files, added from their folders as it is written)
         at.jobs.appended,
       );
       store.getState().markSavedAs(kept, at.written);
+      store.getState().markLeftKept();
       naming.current?.(fileNameOf(kept));
-      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed)
-      setError(notKeptSaid(notKept, old && fileNameOf(old)));
+      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed; and, each time, what was left out as it opened)
+      const keptAs = old && fileNameOf(old);
+      const said = [notKeptSaid(notKept, keptAs), leftOutSavedSaid(at.leftOnOpen?.left, notKept.length ? null : keptAs)].filter(Boolean);
+      setError(said.length ? said.join(" ") : null);
       return true;
     },
     [store, tabId],

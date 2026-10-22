@@ -44,7 +44,7 @@ import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
 import { showGuidesDue, useGuide } from "./lib/plugins/guides";
 import GuideCard from "./ui/guide/GuideCard";
-import { fileNow, stopJob } from "./lib/jobs";
+import { computerResources, fileNow, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
 import { madeStoreOf } from "./ui/features/Workspace/store";
 import { stopRenders } from "./ui/features/Workspace/render/renders";
@@ -118,6 +118,24 @@ export default function App() {
   // step they fill offered in Quick Add.
   useEffect(() => {
     if (isTauri()) void addedReaders([...READERS, ...ALL_PLUGINS.filter((p) => !READERS.some((r) => r.id === p.id))]).catch(() => {});
+  }, []);
+
+  // What this computer's jobs may use, as Settings says, told to its runner
+  // as Meno starts and whenever Settings changes it: those waiting take it
+  // up at once (lib/jobs `limitsOf`).
+  useEffect(() => {
+    if (!isTauri()) return;
+    let computer: { cores: number; memory: number } | null = null;
+    const tell = () => {
+      if (computer) void writeJobLimits(limitsOf(useAppSettings.getState().calculations, computer)).catch(() => {});
+    };
+    computerResources().then((c) => {
+      computer = c;
+      tell();
+    }, () => {});
+    return useAppSettings.subscribe((s, was) => {
+      if (s.calculations !== was.calculations) tell();
+    });
   }, []);
 
   // The application's settings - the drawing style among them - read once,

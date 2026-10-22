@@ -21,13 +21,13 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
-import { canWire, givesOf, stateOf } from "../workflow/flow";
-import { exitOf, howOf, inputsOf, kindInfo, madeName, optionsOf } from "../workflow/kinds";
+import { canWire, givesOf, stateOf, wireRefusal } from "../workflow/flow";
+import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PORTS_Z, portDown, PX, shuttingCard, underCard } from "../workflow/look";
-import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
+import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -249,6 +249,7 @@ export default function Workflow2D() {
     toldOpen.current(openStep);
   }, [openStep]);
   const wireDrag = useEditor((s) => s.wireDrag);
+  const wireRefused = useEditor((s) => s.wireRefused);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
   const turns3d = useEditor((s) => s.turns3d);
@@ -387,12 +388,20 @@ export default function Workflow2D() {
     return onSomething ? null : "empty";
   };
 
+  /** A wire let go on a step's input: made, where it takes what the wire gives - else not, and the card says why. */
+  const wireTo = (from: WireEnd, step: number, port: string) => {
+    const st = store.getState();
+    const why = wireRefusal(st, from, step, port);
+    if (why) st.setWorkflowView({ wireRefused: { step, said: why } });
+    else st.connect(from, step, port);
+  };
+
   /** A wire drawn out of a set: into a step's input, or - let go on empty space - Quick Add there, at the steps that take it. */
   const drawFrom = (e: ReactPointerEvent, from: WireEnd) => {
     if (e.button !== 0) return;
     // (pictures - a Render step's - no step takes: no wire is drawn out of them)
     if (givesOf(store.getState(), from) === "pictures") return;
-    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) } });
+    store.getState().setWorkflowView({ wireDrag: { from, at: worldOf(e.clientX, e.clientY) }, wireRefused: null });
     follow(
       e,
       (at) => store.getState().setWorkflowView({ wireDrag: { from, at } }),
@@ -401,7 +410,7 @@ export default function Workflow2D() {
         st.setWorkflowView({ wireDrag: null });
         if (!moved) return;
         const there = dropTarget(ev);
-        if (there && there !== "empty" && "take" in there) st.connect(from, there.take.step, there.take.port);
+        if (there && there !== "empty" && "take" in there) wireTo(from, there.take.step, there.take.port);
         else if (there === "empty") {
           const r = (gl.domElement.parentElement ?? gl.domElement).getBoundingClientRect();
           st.setQuickAdd({ at: worldOf(ev.clientX, ev.clientY), x: ev.clientX - r.left, y: ev.clientY - r.top, within: { width: r.width, height: r.height }, wire: from });
@@ -417,7 +426,7 @@ export default function Workflow2D() {
     const was = st.wires.find((w) => w.to.step === step && w.to.port === port);
     const at = worldOf(e.clientX, e.clientY);
     const drag = (p: Pt) => (was ? { from: was.from, at: p, was: was.id } : { to: { step, port }, at: p });
-    st.setWorkflowView({ wireDrag: drag(at) });
+    st.setWorkflowView({ wireDrag: drag(at), wireRefused: null });
     follow(
       e,
       (p) => store.getState().setWorkflowView({ wireDrag: drag(p) }),
@@ -427,9 +436,12 @@ export default function Workflow2D() {
         if (!moved) return;
         const there = dropTarget(ev);
         if (was) {
-          if (there && there !== "empty" && "take" in there) s.rewire(was.id, there.take.step, there.take.port);
-          else s.removeWire(was.id);
-        } else if (there && there !== "empty" && "give" in there) s.connect(there.give, step, port);
+          if (there && there !== "empty" && "take" in there) {
+            const why = wireRefusal(s, was.from, there.take.step, there.take.port);
+            if (why) s.setWorkflowView({ wireRefused: { step: there.take.step, said: why } });
+            else s.rewire(was.id, there.take.step, there.take.port);
+          } else s.removeWire(was.id);
+        } else if (there && there !== "empty" && "give" in there) wireTo(there.give, step, port);
       },
     );
   };
@@ -605,7 +617,6 @@ export default function Workflow2D() {
       new Map(
         sets.map((b) => {
           const count = countOf(flow, b);
-          const made = b.made ? steps.find((s) => s.id === b.made!.step) : undefined;
           // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
           // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
           const counted = b.notKept && !count.entries
@@ -628,10 +639,7 @@ export default function Workflow2D() {
                 nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
               }
             : undefined;
-          // (its name: a step's first exit is named as the kind names what it makes; another exit, by its own name)
-          const exit = made && b.made ? exitOf(made.kind, b.made.exit) : undefined;
-          const name = made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (b.name ?? "Input");
-          return [b.id, { name, count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
+          return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
     [flow, sets, steps],
@@ -690,7 +698,7 @@ export default function Workflow2D() {
             set={{ ...b, ...f }}
             name={info.name}
             count={info.count}
-            {...(info.summary ? { summary: info.summary } : {})}
+            {...(info.summary ? { summary: info.summary, onOpenTable: () => store.getState().readSetTable(b.id) } : {})}
             hovered={hoveredSet === b.id}
             chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
@@ -720,6 +728,7 @@ export default function Workflow2D() {
             state={run?.waiting ? "waiting" : (states.get(s.id) ?? "ready")}
             run={run?.view}
             missing={missingFor(s)}
+            {...(wireRefused?.step === s.id ? { refused: wireRefused.said } : {})}
             compact={compact}
             selected={selFlow.steps.has(s.id)}
             open={openStep === s.id}

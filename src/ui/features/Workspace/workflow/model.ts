@@ -36,6 +36,11 @@ export function holdCollection(doc: WorkspaceDocument, id: number, collection: N
   return withSet(doc, id, ({ unread: _u, ...b }) => ({ ...b, members: [], collection, ...(unread ? { unread } : {}) }));
 }
 
+/** A result set of structures drawn with the atoms its step put on the page (`WorkflowSet.put`) - none, where it put none. */
+export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly number[]): WorkspaceDocument {
+  return withSet(doc, id, ({ put: _was, ...b }) => (atoms.length ? { ...b, put: [...atoms] } : b));
+}
+
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
 /** A step's jobs' raw outputs kept in the workspace's file, or not (*Don't keep raw outputs*, workflow/keptJobs). */
 export function keepRawOutputs(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
@@ -191,22 +196,27 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
 
 /**
  * `doc` without a step and the wires into it. A set its exits made that
- * holds something stays, with what it holds - a set like any the chemist
+ * holds something - molecules on the page, or a large set's own
+ * (`collection`) - stays, with what it holds: a set like any the chemist
  * drew (of conformers, where its molecules' frames are a conformer search's:
- * entries `holdsOf`) - and the wires out of it with it; one that holds
+ * entries `holdsOf`), and the wires out of it with it; one that holds
  * nothing - its step never ran, or gave nothing there - goes with the step,
  * and the wires out of it: an empty frame the chemist never drew is not
- * left behind.
+ * left behind. A set that stays and was kept out of the workspace's file
+ * (*Don't keep in the file*) is kept in it in full from then on: the step
+ * that could make its molecules again is gone, and a chemist's set is
+ * always kept.
  */
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
   if (steps.length === (doc.steps ?? []).length) return doc;
-  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length).map((b) => b.id));
+  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length && !b.collection?.length && !b.unread).map((b) => b.id));
   return {
     ...doc,
     steps,
     wires: (doc.wires ?? []).filter((w) => w.to.step !== id && !empty.has(w.from.set)),
-    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, ...rest }) => rest)(b) : b)),
+    // (a set it made, kept, a chemist's - and kept in the file in full, its *Don't keep in the file* gone with the step that could make it again, and the atoms it put on the page the chemist's, no run to take them away)
+    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, keep: _k, put: _p, ...rest }) => rest)(b) : b)),
   };
 }
 
@@ -293,8 +303,8 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     list.sort((p, q) => keyOf(p.member) - keyOf(q.member));
     // what the edit took out
     let kept = prior ? list.filter((p) => !(p.wasIn && !inside(set, p.at))) : list;
-    // what the edit brought into a chemist's set, each at its place in reading order
-    if (!set.made && prior) {
+    // what the edit brought into a chemist's set, each at its place in reading order - but one that holds its molecules itself (a large set its step left), which takes in nothing
+    if (!set.made && !set.collection && prior) {
       const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));
       const heldAtoms = new Set(held.structures.flat());
       const add = (member: Member, at: { x: number; y: number }, w: { x: number; y: number } | null | undefined) => {

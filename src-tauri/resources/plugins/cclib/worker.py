@@ -331,6 +331,45 @@ def vibrations(data, n):
 # --- an output as the program left it: cut short, stopped by an error, with ghost atoms ---
 
 
+# a Gaussian archive entry: begun by "1\1\" (or "1|1|") at a line's start, over the lines it wraps onto - each
+# begun by a space - up to the "@" that ends it
+GAUSSIAN_ARCHIVE = re.compile(r"^ 1([\\|])1\1.*?@", re.M | re.S)
+# a frequency ORCA marks as imaginary in its list of them: "   6:     -382.63 cm**-1 ***imaginary mode***"
+ORCA_IMAGINARY = re.compile(r"^\s*\d+:\s+(-\d+(?:\.\d*)?)\s+cm\*\*-1\s+\*\*\*imaginary mode\*\*\*", re.M)
+
+
+def gaussian_nimag(text):
+    """How many imaginary frequencies Gaussian itself counted, as the last archive entry that says it
+    (NImag=n): None where none says - a job without frequencies."""
+    count = None
+    for m in GAUSSIAN_ARCHIVE.finditer(text or ""):
+        sep = m.group(1)
+        joined = "".join(line[1:] if line.startswith(" ") else line for line in m.group(0).splitlines())
+        n = re.search(re.escape(sep) + r"NImag=(\d+)" + re.escape(sep), joined)
+        if n:
+            count = int(n.group(1))
+    return count
+
+
+def imaginary_of(data, text, program):
+    """The imaginary frequencies the program itself judged its last geometry has, in cm-1, negative: Gaussian's -
+    as many as its NImag counts, the most negative of those cclib read - and ORCA's, those it marks so in its last
+    list of frequencies. None where it did not judge: no frequencies, or another program."""
+    if program == "gaussian":
+        n = gaussian_nimag(text)
+        if n is None or not has(data, "vibfreqs"):
+            return None
+        return sorted(float(f) for f in data.vibfreqs if math.isfinite(float(f)) and float(f) < 0)[:n]
+    if program == "orca":
+        at = (text or "").rfind("VIBRATIONAL FREQUENCIES")
+        if at < 0:
+            return None
+        section = text[at:]
+        end = section.find("NORMAL MODES")
+        return [float(v) for v in ORCA_IMAGINARY.findall(section[: end if end > 0 else len(section)])]
+    return None
+
+
 def parsed(text, suffix):
     """What cclib reads of `text`, from a file of its own named with `suffix`, then let go."""
     fd, path = tempfile.mkstemp(suffix=suffix)
@@ -607,6 +646,10 @@ def op_read(m):
         + vibrations(data, len(atoms))
         + orbitals(data)
     )
+    # (the imaginary frequencies, as the program itself judged them: a mark that it is no minimum)
+    imaginary = imaginary_of(data, text, program)
+    if imaginary is not None:
+        result["imaginary"] = imaginary
     # (a Gaussian reaction path's points in the order of its reaction coordinate, as its own summary lists them)
     order = irc_order(text, len(frames)) if path_kind(data, text) == "irc" else None
     if order:

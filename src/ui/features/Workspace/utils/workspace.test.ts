@@ -394,7 +394,8 @@ describe("a workspace with what is no entry in its lists", () => {
             expect(holder[counter], `${path.join(".")} holding ${JSON.stringify(stray)}`).toBe(1);
             delete holder[counter];
           }
-          expect(read, `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+          // (what it left out said apart: utils/readNotes)
+          expect(read && (({ leftOut: _, ...rest }) => rest)(read), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected && (({ leftOut: _, ...rest }) => rest)(expected));
           expect(workspaceProblem(text)).toBe(expected ? null : "it is not a workspace Meno reads");
         }
     }
@@ -492,6 +493,30 @@ describe("a workspace's sets, saved (version 2)", () => {
     expect(saved.sets[0].members).toEqual([{ structure: [1, 2, 3] }, { molecule: 0 }]);
     const ws = readWorkspace(JSON.stringify(saved))!;
     expect(ws.workflow!.sets[1].notKept).toEqual({ count: 1, hash });
+  });
+
+  it("of a result set of structures drawn kept out of the file: its structures not written, the page's others written as they are", () => {
+    const { doc, st } = canvas();
+    // (a second structure, apart from the first: a step's, held by its result set, kept out of the file)
+    const n = st().addAtom(20, 0, "N");
+    const o = st().addAtom(21.8, 0, "O");
+    st().addBond(n, o, 2);
+    doc.edit("sets", (d) => {
+      const next = addSet(d, { x0: 19, y0: -1, x1: 23, y1: 1 });
+      return { ...next, sets: next.sets!.map((b) => ({ ...b, made: { step: 9, exit: "out", holds: "structures" as const }, keep: false as const, members: [{ structure: [n, o] }], put: [n, o] })) };
+    });
+    const hash = collectionHash(st(), st().sets[0]);
+    const saved = JSON.parse(workspaceText(st()));
+    expect(saved.atoms.map((a: { el: string }) => a.el)).toEqual(["C", "C", "O"]);
+    expect(saved.bonds).toHaveLength(2);
+    expect(saved.sets[0].members).toBeUndefined();
+    expect(saved.sets[0].notKept).toEqual({ count: 1, hash });
+    // (nor which atoms its step put there: not written, their ids could be another's once the file opens and numbering goes on)
+    expect(saved.sets[0].put).toBeUndefined();
+    // (opened, nothing of it is on the page: the set says how many it held)
+    const ws = readWorkspace(JSON.stringify(saved))!;
+    expect(ws.drawn.atoms.map((a) => a.el)).toEqual(["C", "C", "O"]);
+    expect(ws.workflow!.sets[0].notKept).toEqual({ count: 1, hash });
   });
 
   it("of a file of version 1 - sets that did not keep members - are what lies inside each frame as it opens", () => {

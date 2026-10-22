@@ -41,7 +41,7 @@ describe("the settings file", () => {
       canvas: { resolution: "display" as const },
       labels: { smart: false },
       words: { smart: false },
-      calculations: { atOnce: 2, cores: 4 },
+      calculations: { cores: 4, coresAll: 8, memoryAll: 12288 },
       procedures: [{ id: "p-1", name: "Optimise, then energies", saved: 1, flow: { sets: [{ id: 1, x0: 0, y0: -4, x1: 4, y1: 0 }], steps: [{ id: 2, kind: "optimise", x: 6, y: 0 }], wires: [{ id: 3, from: { set: 1 }, to: 2 }] } }],
       colours: { use: "set-1", sets: [{ id: "set-1", name: "Talk slides", colours: ["#cd4560", "#317689", "#2a9d8f"] }] },
     };
@@ -68,10 +68,10 @@ describe("the settings file", () => {
     expect(acceptAppSettings({}).files).toEqual({ read: {}, also: {} });
     // which way the wheel zooms: in, upwards, unless the file says out
     expect(acceptAppSettings({ pointer: { wheelUp: "sideways" } }).pointer).toEqual({ wheelUp: "in" });
-    // jobs at once and cores for each: whole numbers, at least one, within reason
-    expect(acceptAppSettings({ calculations: { atOnce: 0, cores: 2.5 } }).calculations).toEqual({});
-    expect(acceptAppSettings({ calculations: { atOnce: 65, cores: "8" } }).calculations).toEqual({});
-    expect(acceptAppSettings({ calculations: { atOnce: 3, cores: 16 } }).calculations).toEqual({ atOnce: 3, cores: 16 });
+    // cores for each, and the cores and memory jobs may use: whole numbers, at least one, within reason
+    expect(acceptAppSettings({ calculations: { cores: 2.5, coresAll: 0, memoryAll: -1 } }).calculations).toEqual({});
+    expect(acceptAppSettings({ calculations: { cores: "8", coresAll: 1025 } }).calculations).toEqual({});
+    expect(acceptAppSettings({ calculations: { cores: 16, coresAll: 32, memoryAll: 24576 } }).calculations).toEqual({ cores: 16, coresAll: 32, memoryAll: 24576 });
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 0 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
     // (past the most a workspace's file may come to at all: not taken)
@@ -163,7 +163,8 @@ describe("the settings file holds only what the user changed (the maintainer, 20
     ["once", { canvas: { resolution: 1 } }],
     ["labels as typed", { labels: { smart: false } }],
     ["words as typed", { words: { smart: false } }],
-    ["jobs at once", { calculations: { atOnce: 2 } }],
+    ["cores jobs may use", { calculations: { coresAll: 2 } }],
+    ["memory jobs may use", { calculations: { memoryAll: 4096 } }],
     ["a larger workspace before a save says so", { calculations: { largeWorkspaceMB: 800 } }],
     ["pictures at another resolution", { pictures: { dpi: 300 } }],
   ];
