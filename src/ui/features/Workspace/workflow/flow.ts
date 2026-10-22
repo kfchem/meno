@@ -4,7 +4,7 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnRecord, Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers, setMolecules } from "./entries";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
@@ -78,16 +78,16 @@ export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE
   return inputsOf(step.kind).length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
 }
 
-/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
-export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][] } | null {
+/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn - each with its record, where it has one - in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
+export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[] } | null {
   const from = wireInto(doc, step, port)?.from;
   if (!from) return null;
   const set = findSet(doc, from.set);
   if (!set) return null;
   const holds = holdsOf(doc, set);
   if (holds === "pictures") return null;
-  const { structures } = setMembers(doc, set);
-  return { holds, molecules: setMolecules(doc, set), structures };
+  const { structures, records } = setMembers(doc, set);
+  return { holds, molecules: setMolecules(doc, set), structures, records };
 }
 
 /** FNV-1a over a string: a short key for what came into a step. */

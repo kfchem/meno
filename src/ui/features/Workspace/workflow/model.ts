@@ -6,7 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
-import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
+import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structureMember, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
 import { SET_PAD, SET_TOP } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
@@ -262,10 +262,11 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean };
     const nowAt = new Map(now.structures.map((s) => [s.ids[0], s]));
     const list: Placed[] = [
-      ...held.structures.map((ids) => {
+      ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
         const w = wasMiddle(ids);
-        return { member: { structure: ids } as Member, at, wasIn: !!(prior && w && inside(prior, w)) };
+        // (with its record: a step's, which a structure keeps however it moves)
+        return { member: structureMember(ids, held.records[i]), at, wasIn: !!(prior && w && inside(prior, w)) };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
