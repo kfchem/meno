@@ -1468,9 +1468,11 @@ question N):
   adopted*), and its run keeps each job adopted with when; all of it kept
   with the workspace.
 
-Not yet: the molecules an adopted job gave marked as such wherever they
-are shown (today, its step's line says it); and a job folder found
-without its record, which is still taken as *gone*.
+  What an adopted job gave says so in its calculation (`adopted`, with
+  when), so its line begins *adopted output* wherever it is shown.
+
+Not yet: a job folder found without its record, which is still taken as
+*gone*.
 
 ## Questions
 

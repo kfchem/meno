@@ -821,7 +821,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         whys.push(why);
       };
       const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
+      // (where each job's results begin among those worked: those of a job adopted marked so, below)
+      const begins: { from: number; adopted?: number }[] = [];
       for (const [k, j] of run.jobs.entries()) {
+        begins.push({ from: worked.length, ...(run.adopted?.[j.id] != null ? { adopted: run.adopted[j.id] } : {}) });
         const mine = j.entries.map((i) => entries[i]);
         if (lost[k]) {
           fails(j.entries.length, "It stopped without finishing");
@@ -920,6 +923,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           else worked.push(...(Array.isArray(made) ? made : [made]));
         }
       }
+      // (what a job adopted gave says so in its calculation, wherever that is shown: never taken for checked)
+      begins.forEach((b, k) => {
+        if (b.adopted == null) return;
+        for (let w = b.from; w < (begins[k + 1]?.from ?? worked.length); w++) {
+          const c = worked[w].calc;
+          if (c) worked[w] = { ...worked[w], calc: { ...c, adopted: b.adopted } };
+        }
+      });
       const ok = !whys.length && worked.length > 0;
       // (a search says how many conformers it found, of how many compounds)
       const found =

@@ -53,6 +53,12 @@ describe("what a reader hands back", () => {
     expect(c).toEqual({ readers: ["cclib 1.9rc1"], program: "xTB" });
   });
 
+  it("says an adopted output is one first, and reads back as it was - when with it", () => {
+    const adopted = { ...calcOf(water, ["cclib 1.9rc1"]), adopted: 1_760_000_000_000 };
+    expect(calcLine(adopted)).toBe(`adopted output \u00b7 ${calcLine(calcOf(water, ["cclib 1.9rc1"]))}`);
+    expect(readCalc(JSON.parse(JSON.stringify(adopted)), 3, 2)).toEqual(adopted);
+  });
+
   it("reads back from a file as it was kept, and not where it does not read", () => {
     const kept = calcOf(water, ["cclib 1.9rc1"]);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)).toEqual(kept);

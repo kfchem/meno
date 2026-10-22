@@ -99,6 +99,8 @@ export type CalcInfo = {
   wavefunction?: CalcSource;
   /** The readers chosen to read it as well that could not, each by id, and why (lib/calc/read). */
   unread?: { from: string; why: string }[];
+  /** When the chemist adopted the output it was read from - one Meno could not account for, taken on purpose (lib/jobKeys) - ms since 1970. */
+  adopted?: number;
 };
 
 /**
@@ -199,11 +201,13 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
     sourceOf(c.source),
     unread,
   );
+  // (adopted, with when: kept as it was)
+  const adopted = isNum(c.adopted) ? { adopted: c.adopted } : {};
   // (its wavefunction, kept by Meno: never found where it was, so no place)
   const wavefunction = sourceOf(c.wavefunction);
-  if (!wavefunction) return calc;
+  if (!wavefunction) return { ...calc, ...adopted };
   const { path: _, ...kept } = wavefunction;
-  return { ...calc, wavefunction: kept };
+  return { ...calc, ...adopted, wavefunction: kept };
 }
 
 /**
@@ -213,6 +217,12 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
  * What the output does not say is left out.
  */
 export function calcLine(c: CalcInfo): string {
+  // (output Meno could not account for, adopted by the chemist: said first, wherever it is shown)
+  if (c.adopted != null) return ["adopted output", calcLineOf(c)].filter(Boolean).join(" · ");
+  return calcLineOf(c);
+}
+
+function calcLineOf(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
   const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
   const method = levelOf(c);

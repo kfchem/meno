@@ -144,6 +144,7 @@ import { useInstalled } from "../../../../lib/plugins/installed";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
 import { readWorkflow } from "../workflow/saved";
 import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace";
+import { calcLine } from "../../../../lib/calc/output";
 import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
@@ -794,6 +795,10 @@ describe("a step that runs a plugin's program", () => {
     expect(both.said).toMatch(/ \u00b7 2 adopted$/);
     expect(Object.keys(both.adopted!)).toEqual([idOf(1), idOf(2)]);
     expect(st().molecules3d).toHaveLength(4);
+    // (what they gave says so, wherever its calculation is shown)
+    const made = setMembers(st(), resultOf(st(), step)!).molecules.map((m) => st().molecules3d.find((x) => x.id === m)!);
+    expect(made.map((m) => m.calc?.adopted)).toEqual([both.adopted![idOf(1)], both.adopted![idOf(2)]]);
+    expect(calcLine(made[0].calc!)).toMatch(/^adopted output \u00b7 xtb 6\.7\.1/);
     // (a job never stopped on is not adopted)
     await st().adoptJob(step, idOf(9));
     expect(st().steps.find((s) => s.id === step)!.ran).toBe(both);
