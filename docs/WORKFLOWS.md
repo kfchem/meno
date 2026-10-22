@@ -250,9 +250,11 @@ pointer does; put back by an undo, they glide back.
 - *Delete set* (right-click its tab) takes the frame away and leaves what
   it held; a set left empty stays, empty, until it is deleted;
 - *Don't keep in the file* (right-click a result set's tab): its molecules
-  are not written to the workspace's file - only how many it held and
-  their collection's hash - and opened again, the set says *Not kept*
-  with that count.
+  and structures drawn are not written to the workspace's file - only how
+  many it held and their collection's hash - and opened again, the set
+  says *Not kept* with that count. This covers what the set holds now.
+  The step's earlier runs, kept in the step with what each gave, are
+  written as they are, whatever the set says.
 
 A set's entries are its members, in their order. A set the chemist makes is a
 **compound set**: each entry a compound of its own, however alike two
@@ -511,6 +513,11 @@ beside its edge - being drawn over all of it.
 
 They are calculation results as Meno knows them: the frames chip,
 pointing at atoms, the lists. Each exit's set feeds the next step.
+
+A step of Meno's own can also give structures drawn, in 2D (*Structures
+drawn as results*, below): its exits' sets then hold structures on the
+page, each as the step drew it, and feed a step that takes structures
+drawn - *Conformers* - as a set the chemist drew does.
 
 **A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
 set shows*): up to 50 entries are laid out on the page, as above. An exit
@@ -1404,6 +1411,65 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### Structures drawn as results (2026-10-21)
+
+Enumerate P2 (WORKFLOWS-FOUNDATION.md, *Enumerate*): structures drawn, in
+2D, as what passes into Meno's own steps and comes out of them, beside
+molecules in 3D. *Enumerate* (P3) is the first step to use it.
+
+- **In.** A set of structures drawn comes into a step of Meno's as its
+  entries, each the structure as it is drawn: its atoms and bonds, where
+  they lie, its wedges and labels (`workflow/run` `drawnEntries`, an entry
+  a `DrawnEntry`). Never made 3D here: a step after it does that, as
+  everywhere else.
+- **Out.** Such a step's outcome holds structures drawn (`DrawnOutcome`):
+  those it kept, and those it set aside. Each exit's set holds its own,
+  on the page and in the step's order, each moved whole to its place in
+  the set, laid out as a run lays its results by its atoms' box. Each is a
+  structure of its own, its atoms, bonds and groups numbered afresh, as a
+  paste is. So a step may give many in one numbering, as Enumerate gives
+  its products in their template's, and they stay apart. Any of them
+  that is a record of a stack comes out a structure in its own right. The
+  set says it holds structures drawn, and wires on as a set of them does.
+- **Run again**, the step takes away what it put in its sets, and
+  nothing else, and the new ones take their place, the set's top left
+  where it was. Each set keeps which atoms its step put on the page
+  (`WorkflowSet.put`), and those atoms, with their bonds, are all that go:
+  - a structure of the chemist's joined to one of them by a bond keeps
+    its own atoms, even a carbon then left without a bond;
+  - a structure dropped into the frame is none of the set's (a result set
+    takes in nothing: *Members are explicit*), and stays where it is;
+  - a structure of the chemist's drawn elsewhere is untouched.
+
+  A file keeps those atoms by id, as it keeps members, but only those it
+  writes: a set kept out of the file keeps none, since their ids could be
+  another atom's once the file opens and numbering goes on. A pasted step
+  or procedure keeps none either.
+- **Kept and shown again.** A run kept keeps its structures as they
+  stand when the next run takes their place, an atom moved by hand
+  meanwhile with them (`RunResults.drawn`, one type for the store, the run
+  and the file). Shown again, they come back in the step's sets.
+- **In the file**, a run kept keeps them as the page's drawing is kept,
+  and reads them back as it is read (`readDrawn`). A structure that does
+  not read is left out, as a molecule is. A result set kept out of the
+  file (*Don't keep in the file*) leaves out the structures it holds now,
+  as well as its molecules, saying how many it held. The step's earlier
+  runs are still written with what each gave, structures and molecules
+  alike: the set's choice does not reach them yet.
+- **A molecule in 3D made from one of them** (by *3D structure*, or a
+  *Conformers* step after it) keeps its link to that drawing by its atoms.
+  Where the set was kept out of the file, those atoms are not in it, so
+  the molecule opens with its link to the drawing gone, as when the
+  drawing is deleted.
+
+None of Meno's steps takes structures drawn yet, so a wire from a set of
+them to one is refused, as before. P3 adds *Enumerate*, the first.
+
+Not yet: a large set of structures drawn. *A large result set* holds more
+than 50 molecules in 3D in the set itself, off the page; structures drawn
+are all put on the page however many there are. Enumerate, which can make
+up to 10,000, holds them in its set the same way (P3b).
 
 ## Questions
 
