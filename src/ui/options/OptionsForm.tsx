@@ -1,19 +1,28 @@
 import { MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
 
-/** Lines of text, each with what it was read as beside it, on the same line (`LinesOption.readAs`). */
+/** The most lines a box of lines shows at once: past them, the box and what each line was read as scroll together. */
+const MOST_ROWS = 16;
+
+/**
+ * Lines of text, each with what it was read as beside it, on the same line
+ * (`LinesOption.readAs`): a line never wraps, so each reading stays beside
+ * its own; a long one scrolls across.
+ */
 function LinesField({ option, value, onChange }: { option: LinesOption; value: string; onChange: (v: string) => void }) {
   const read = option.readAs?.(value) ?? [];
   const rows = Math.max(option.rows ?? 4, value.split(/\r?\n/).length);
   return (
     <label className="block">
       <span className="block text-xs text-gh-gray mb-1">{option.label}</span>
-      <span className="flex gap-2">
+      {/* (20 px a line, as leading-5, and the box's own padding) */}
+      <span className="flex gap-2 overflow-y-auto" style={{ maxHeight: MOST_ROWS * 20 + 10 }}>
         <textarea
           value={value}
           rows={rows}
+          wrap="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
-          className="w-40 shrink-0 resize-none rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
+          className="w-40 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
         />
         {read.length > 0 && (
           <span aria-label="Read as" className="min-w-0 flex-1 py-1 text-xs leading-5">

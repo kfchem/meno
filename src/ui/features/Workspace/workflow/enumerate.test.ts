@@ -196,6 +196,8 @@ describe("Enumerate as a step", () => {
     expect(canWire(doc, { set: 1 }, step)).toBe(true);
     const ran = runStep(doc, step, W);
     expect(ran.steps![0].ran).toMatchObject({ ok: true, said: expect.stringMatching(/^3 made · 1 aside · Duplicates judged by Meno's identity/) });
+    // (run here with nothing asked first: neither its valence nor its configurations left open looked at - each said, never claimed)
+    expect(ran.steps![0].ran!.said).toMatch(/ · Valence not checked · Configurations left open not looked for$/);
     expect(entries(ran, step, "out")).toEqual([
       { number: 1, how: "R1 = Me, R2 = Me" },
       { number: 2, how: "R1 = Me, R2 = Cl" },

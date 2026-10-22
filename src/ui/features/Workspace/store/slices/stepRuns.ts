@@ -193,10 +193,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       checked = flagged ? `Valence checked by ${by.name}` : `Valence not checked: ${by.name} could not be asked`;
     } else checked = "Valence not checked: no plugin does the checks";
     const now = doc.getState();
-    const still = stepOf(now, id);
-    if (!still) return;
-    const made = runMenoDrawn("enumerate", entries, still.options, now.style, [checked]);
-    const outcome = made.ok ? { ...made, said: `${made.said} \u00b7 ${await leftOpen(id, at, made.kept)}` } : made;
+    if (!stepOf(now, id)) return;
+    // (made from the lists as they were checked: typed on meanwhile, they are what the card then says has changed)
+    const made = runMenoDrawn("enumerate", entries, step.options, now.style, [checked]);
+    menoStops.delete(id);
+    const open = made.ok ? await leftOpen(id, at, made.kept) : "";
+    // (stopped while its products were asked about: nothing put in, and the step says so, as Meno's say it)
+    if (open == null) {
+      menoStops.delete(id);
+      const still = stepOf(doc.getState(), id);
+      if (!still) return;
+      const took = Date.now() - at;
+      const as = { kind: still.kind, ...(step.options ? { options: step.options } : {}) };
+      return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
+    }
+    const outcome = made.ok ? { ...made, said: `${made.said} \u00b7 ${open}` } : made;
     doc.edit("run", (x) => ranAs(x, id, outcome, key, { ...w, byOf, now: at }));
   }
 
@@ -207,9 +218,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * a structure's stereoisomers, where one is at hand without setting one
    * up: counted, and named by number. Made all the same: such a product is
    * a real structure, its configuration open. Its card says how many it has
-   * been through as it asks.
+   * been through as it asks; stopped, it stops asking, and says none (null).
    */
-  async function leftOpen(id: number, at: number, kept: readonly DrawnEntry[]): Promise<string> {
+  async function leftOpen(id: number, at: number, kept: readonly DrawnEntry[]): Promise<string | null> {
     const by = rolePlugin("stereoisomers");
     if (!by || !(await chemAtHand("stereoisomers"))) return "Configurations left open not looked for: no plugin finds stereoisomers";
     const working = (patch: { done: number } | null) =>
@@ -220,25 +231,30 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         return { ...prev, menoWorking: rest };
       });
     const open: number[] = [];
+    // (those that could not be written for it to read: never counted as having none open)
+    const unasked: number[] = [];
     working({ done: 0 });
     try {
       const chem = await chemWorker("stereoisomers");
       for (const [k, e] of kept.entries()) {
+        if (menoStops.has(id)) return null;
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
         if (block) {
           const found = await chem.request("open_stereo", { molblock: block.molblock });
           if (found.atoms.length || found.bonds.length) open.push(recordNumber(e.record) ?? k + 1);
-        }
+        } else unasked.push(recordNumber(e.record) ?? k + 1);
         if (k % 25 === 24) working({ done: k + 1 });
       }
     } catch {
+      if (menoStops.has(id)) return null;
       return `Configurations left open not looked for: ${by.name} could not be asked`;
     } finally {
       working(null);
     }
-    if (!open.length) return `No configuration left open (${by.name})`;
-    const named = open.length > 12 ? `${open.slice(0, 12).join(", ")} and ${open.length - 12} more` : open.join(", ");
-    return `${open.length} with a configuration left open: ${named} (${by.name})`;
+    const listed = (ns: number[]) => (ns.length > 12 ? `${ns.slice(0, 12).join(", ")} and ${ns.length - 12} more` : ns.join(", "));
+    const notAsked = unasked.length ? ` \u00b7 ${unasked.length} not looked at, as ${by.name} could not be given ${unasked.length === 1 ? "it" : "them"}: ${listed(unasked)}` : "";
+    if (!open.length) return `No configuration left open${unasked.length ? " in those looked at" : ""} (${by.name})${notAsked}`;
+    return `${open.length} with a configuration left open: ${listed(open)} (${by.name})${notAsked}`;
   }
 
   /** Meno's steps working in turns asked to stop: given up at their next turn. */

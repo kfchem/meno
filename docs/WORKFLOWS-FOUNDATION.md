@@ -717,8 +717,8 @@ why, naming the line or the atom:
 - more than one structure in *template*;
 - **more than 10,000 combinations**, said with the count: *5 lists of 50
   make 312,500,000 combinations; Enumerate makes at most 10,000*. Every
-  product is drawn, read back against its structure, and kept in the
-  workspace file. At the speed measured for laying out many structures at
+  product is drawn, judged against the others by identity, and kept in
+  the workspace file. At the speed measured for laying out many structures at
   once (#507: 1,000 in 9 to 15 s across eight workers), 10,000 take
   minutes and more take hours. A set past that is more than can be looked
   over, and is a sign the lists should be cut or the work done in steps.
@@ -879,8 +879,9 @@ reader:
   as written;
 - **the symmetric template above**: four combinations, three made, one
   aside as *Same as 2*, with the count on the set;
-- **a stereocentre drawn next to an R**: the arrangement kept, and R and S
-  read from the products by the checks where they are at hand;
+- **a stereocentre drawn next to an R**: the arrangement kept, each
+  product's configurations checked against RDKit's reading of its drawing
+  (the fixture, *The rule is tested against another canonicaliser*);
 - **R1 = H** next to a wedge: the same identity as the compound drawn
   without the H, its configuration carried to the atom it is on;
 - **each kind of hydrogen kept as an atom** in the list above: one test

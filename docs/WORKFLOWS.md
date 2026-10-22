@@ -1540,9 +1540,15 @@ the build settled:
   test checks that each product is that compound, configurations
   included, and that the products set aside as *Same as n* are exactly
   those whose SMILES are product n's. No case differs by design so far.
-- **Not yet.** A set held off the page can't yet be opened as a table or
-  shown as a grid of its structures (6b, 6c). Its frame says how many it
-  holds. *Substituent swap* and *Scaffold swap* come after.
+- **Not yet.**
+  - A set held off the page can't yet be opened as a table or shown as a
+    grid of its structures (6b, 6c). Its frame says how many it holds.
+  - Copied without its step, such a set pastes as an empty frame of the
+    chemist's: what it holds is on no page to copy along.
+  - The series' core is by its atoms' places in each product as made. A
+    product edited by hand afterwards can leave them out of step; nothing
+    reads the core yet.
+  - *Substituent swap* and *Scaffold swap* come after.
 
 ## Questions
 
