@@ -1,0 +1,126 @@
+/**
+ * A large result set summed up in its frame (docs/WORKFLOWS-FOUNDATION.md,
+ * *What a set shows*: more than 50 entries, "a grid of a sample of its
+ * structures ... and histograms of the properties chosen"): which of its
+ * molecules are drawn, and how its entries' energies spread - each said with
+ * how many it is of, what it is of, and what worked it out.
+ */
+import { factor } from "../../../../lib/units";
+import type { Molecule3D } from "../store/types";
+import { framesOf } from "./entries";
+import { energiesBy } from "./run";
+
+/** How many of a set's structures its frame draws: a grid of four by three. */
+export const SAMPLE = 12;
+
+/** One structure the frame draws: the set's molecule, by its place, and the frame of it drawn. */
+export type Sampled = { molecule: number; frame: number };
+
+/** What of a molecule in 3D the summary reads. */
+type Of3D = Pick<Molecule3D, "frames" | "path" | "energies" | "calc" | "made">;
+
+/**
+ * The structures a large set's frame draws, and what they are of: in a
+ * conformer set, each compound once - its first conformer, since a drawing
+ * shows its constitution and configuration, which its conformers share -
+ * the first `SAMPLE` compounds in the step's order; in a set of molecules,
+ * the first `SAMPLE` molecules, each as it ends (a path, its last frame).
+ */
+export function sampleOf(molecules: readonly Of3D[], holds: "molecules" | "conformers"): { picks: Sampled[]; of: number; said: string } {
+  const picks = molecules.slice(0, SAMPLE).map((m, i) => ({ molecule: i, frame: holds === "conformers" || !m.path ? 0 : framesOf(m) - 1 }));
+  const n = molecules.length;
+  const noun = holds === "conformers" ? (n === 1 ? "compound" : "compounds") : n === 1 ? "molecule" : "molecules";
+  const said =
+    picks.length === n ? `${holds === "conformers" ? "Each compound" : "Each molecule"}, drawn once` : `The first ${picks.length} of ${n.toLocaleString("en-US")} ${noun}, in the step's order${holds === "conformers" ? ", each drawn once" : ""}`;
+  return { picks, of: n, said };
+}
+
+/** Kilocalories per mole in a hartree (Meno's units table: CODATA 2018). */
+const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
+
+/**
+ * How many bins a histogram of `n` values has: Sturges's rule, the number
+ * of bits it takes to count them and one more - ⌈log₂ n⌉ + 1 (H. A.
+ * Sturges, "The choice of a class interval", J. Am. Stat. Assoc. 21 (1926)
+ * 65-66). One, for a single value.
+ */
+export function sturges(n: number): number {
+  return n <= 1 ? 1 : Math.ceil(Math.log2(n)) + 1;
+}
+
+/** One bar of a histogram: the values in [from, to) - the last bar's `to` taken in too - and how many there are. */
+export type Bin = { from: number; to: number; count: number };
+
+/** `values` counted into `sturges(n)` bins of one width from the least to the greatest: all in one, where they are all one value. */
+export function binned(values: readonly number[]): Bin[] {
+  if (!values.length) return [];
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const v of values) {
+    if (v < lo) lo = v;
+    if (v > hi) hi = v;
+  }
+  const k = hi > lo ? sturges(values.length) : 1;
+  const w = hi > lo ? (hi - lo) / k : 0;
+  const bins: Bin[] = Array.from({ length: k }, (_, i) => ({ from: lo + i * w, to: i === k - 1 ? hi : lo + (i + 1) * w, count: 0 }));
+  for (const v of values) bins[w > 0 ? Math.min(k - 1, Math.floor((v - lo) / w)) : 0].count++;
+  return bins;
+}
+
+/** What worked a molecule's energies out, in the words of what did: its calculation's program and level, or the plugin's that made it; none where nothing says. */
+export function energiesFrom(m: Pick<Molecule3D, "calc" | "energies" | "made">): string | undefined {
+  return energiesBy([m]) ?? m.made?.energies;
+}
+
+/**
+ * A large set's entries as a histogram: in a conformer set, each
+ * conformer's energy above its compound's lowest, in kcal/mol - each
+ * counted once, as the set holds it - of those whose energies one method
+ * worked out (the first the set says, in the step's order): those by
+ * another, and those with no energy, counted and said, not drawn. In a set
+ * of molecules, none: the energies of different compounds are not set
+ * against one another.
+ */
+export type Chart =
+  | {
+      quantity: string;
+      unit: string;
+      by: string;
+      bins: Bin[];
+      counted: number;
+      /** Entries left out of it, and why. */
+      left: { count: number; why: string }[];
+    }
+  | { none: string };
+
+export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "conformers"): Chart {
+  if (holds !== "conformers") return { none: "No energies charted: they are of different compounds" };
+  let by: string | undefined;
+  const values: number[] = [];
+  let other = 0;
+  let without = 0;
+  for (const m of molecules) {
+    const n = framesOf(m);
+    const energies = m.energies?.length === n ? m.energies : undefined;
+    if (!energies) {
+      without += n;
+      continue;
+    }
+    // (a compound's energies, worked out one way: its lowest among them, each above it)
+    const from = energiesFrom(m) ?? "not stated";
+    by ??= from;
+    if (from !== by) {
+      other += n;
+      continue;
+    }
+    let lowest = Infinity;
+    for (const e of energies) if (e < lowest) lowest = e;
+    for (const e of energies) values.push((e - lowest) * KCAL_PER_HARTREE);
+  }
+  if (!values.length) return { none: "No energies to chart" };
+  const left = [
+    ...(other ? [{ count: other, why: "worked out another way" }] : []),
+    ...(without ? [{ count: without, why: "with no energy" }] : []),
+  ];
+  return { quantity: "ΔE above each compound's lowest", unit: "kcal/mol", by: by!, bins: binned(values), counted: values.length, left };
+}

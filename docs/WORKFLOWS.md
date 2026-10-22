@@ -518,8 +518,35 @@ how many ("51 compounds · 2 not read") until the step runs again; saved
 again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
 each exit's set once it is shown again. They are opened as a table in the column, and put on the page from
-there, in the steps that follow (6b), and summed up in the frame with a
-sample of their structures and histograms (6c).
+there, in the step that follows (6b).
+
+**Its frame sums it up** (2026-10-22, docs/WORKFLOWS-FOUNDATION.md, *What
+a set shows*): what it holds, a grid of a sample of its structures, and a
+chart of its energies - each saying what it is of.
+- **The sample**: in a conformer set, each compound once - its first
+  conformer, since a drawing shows what its conformers share - the first
+  twelve compounds in the step's order; in a set of molecules, the first
+  twelve, each as it ends. A line under the grid says which ("The first
+  12 of 40 compounds, in the step's order, each drawn once").
+- **Drawn by Meno's engine**, as a molecule in 3D is drawn as a formula:
+  the plugin that draws molecules wedges its heavy atoms as it is in 3D,
+  and Meno lays them all out at once (docs/LAYOUT-2D.md, *Many at
+  once*), lined up on what they share, each read back against the
+  molecule it was given. One that does not show it as given is marked
+  *Not as given*, saying how on hover; one that could not be drawn says
+  *Not drawn*, and why on hover - never left out. All are drawn at one
+  scale, so their bonds are alike.
+- **The chart**: in a conformer set, each conformer's energy above its
+  compound's lowest, in kcal/mol, of the energies one method worked out
+  - the first the set says - each conformer counted once. Its line says
+  the quantity, the unit, the method and how many; those worked out
+  another way, and those with no energy, are counted and said, not
+  charted. Its bars are binned by Sturges's rule (⌈log₂ n⌉ + 1 bins,
+  Sturges 1926), and each says its range and count on hover. A set of
+  molecules has no chart: the energies of different compounds are not
+  set against one another.
+- The summary is drawn at its own size in a new frame, and smaller in a
+  frame made smaller, by hand or before it was this large.
 
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
