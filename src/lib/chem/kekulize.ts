@@ -39,17 +39,26 @@ type Role = "needs" | "may" | "never";
 const QUERY_ATOMS = new Set(["A", "Q", "*", "L"]);
 
 /** Per bond, the order to draw it with: 1, 2 or 3. */
-export function kekuleOrders(
-  atoms: readonly KekuleAtom[],
-  bonds: readonly KekuleBond[],
-): (1 | 2 | 3)[] {
+export function kekuleOrders(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): (1 | 2 | 3)[] {
+  return kekulized(atoms, bonds).orders;
+}
+
+/**
+ * Per bond, the order to draw it with (`kekuleOrders`); and the atoms read
+ * as carrying an H the input did not state, where another atom of their
+ * ring system could have carried it instead (`hChosen`, by index): which
+ * nitrogen of an imidazole, a tetrazole, a purine or a porphine has it is
+ * Meno's choice there, and not the input's (the maintainer, 2026-10-22: to
+ * be said where the structure is shown).
+ */
+export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBond[]): { orders: (1 | 2 | 3)[]; hChosen: number[] } {
   const out: (1 | 2 | 3)[] = bonds.map((b) =>
     b.order === 2 ? 2 : b.order === 3 ? 3 : 1,
   );
   const aromatic = bonds
     .map((b, i) => (b.order === AROMATIC_BOND ? i : -1))
     .filter((i) => i >= 0);
-  if (aromatic.length === 0) return out;
+  if (aromatic.length === 0) return { orders: out, hChosen: [] };
 
   const degree = new Array<number>(atoms.length).fill(0);
   const hasMultiple = new Array<boolean>(atoms.length).fill(false);
@@ -113,8 +122,14 @@ export function kekuleOrders(
     .filter((i) => roles[i] === "may" && !QUERY_ATOMS.has(atoms[i]?.el ?? "") && partners[i].length > 0)
     .sort(byRank);
 
-  // Hückel's rule: a ring, or a fused ring system, is aromatic with 4N + 2
-  // pi electrons - counted as the RDKit Book counts them ("The RDKit
+  // Hückel's rule: as IUPAC defines it (Gold Book H02867, "Hückel (4n + 2)
+  // rule", doi:10.1351/goldbook.H02867, from PAC 66, 1077 (1994), p. 1122),
+  // it is of a monocyclic, planar or nearly planar system with 4n + 2 pi
+  // electrons, and is generally held to n = 0 to 5. Meno goes beyond that
+  // on purpose: it applies the count to each ring system as a whole, fused
+  // rings included (a purine, a porphine), and sets no upper bound on n - a
+  // porphine's 18 is n = 4, and a larger system is counted the same way.
+  // Electrons are counted as the RDKit Book counts them ("The RDKit
   // Aromaticity Model", rdkit.org/docs/RDKit_Book.html, the 2026.09.1
   // documentation, read 2026-10-21): c 1, n 1, an n with a third neighbour
   // or its H 2, o, s, se, te 2, a ring atom's exocyclic double bond to O or
@@ -295,7 +310,16 @@ export function kekuleOrders(
     const { a1, a2 } = bonds[i];
     out[i] = matched[a1] === i && matched[a2] === i ? 2 : 1;
   }
-  return out;
+  // (a neutral N or P of two bonds whose H the input did not state, left without its double bond, carries one;
+  // where others of its ring system could have carried it, which does is a choice made here)
+  const carriers = willing.filter((i) => ["N", "P"].includes(canonical(atoms[i]?.el ?? "")) && degree[i] === 2 && (atoms[i]?.charge ?? 0) === 0 && atoms[i]?.hs == null);
+  const hChosen: number[] = [];
+  for (const k of new Set(carriers.map((i) => system[i]))) {
+    const here = carriers.filter((i) => system[i] === k);
+    const left = here.filter((i) => matched[i] < 0);
+    if (left.length && left.length < here.length) hChosen.push(...left);
+  }
+  return { orders: out, hChosen: hChosen.sort((p, q) => p - q) };
 }
 
 function canonical(el: string): string {

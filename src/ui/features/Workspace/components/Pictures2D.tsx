@@ -2,9 +2,10 @@
  * Pictures on the page (docs/PDF.md, *A picture*): each drawn as it is,
  * turned and as large as it is made, under the drawing and over the PDFs,
  * in the order they were put there - a light grey sheet until it has been
- * decoded - and lit round while the pointer is on it. A film (a render's,
- * docs/RENDER.md) plays as it lies there, over and over, without sound,
- * until it is paused from its menu.
+ * decoded, crossed where it cannot be had (lib/doc/notHad) - and lit round
+ * while the pointer is on it. A film (a render's, docs/RENDER.md) plays as
+ * it lies there, over and over, without sound, until it is paused from its
+ * menu.
  *
  * A press on one is as on empty space: a drag moves the view. Held still a
  * moment, it is taken hold of - lit from the pointer out, as a structure
@@ -23,6 +24,8 @@ import type { PictureFrom, PictureItem } from "../store/types";
 import { pictureBytes } from "../../../../lib/picture/held";
 import { isFilm } from "../../../../lib/picture/image";
 import { filmTexture, textures, type Shared } from "./pictureTextures";
+import { NOT_HAD_COLOR, NOT_HAD_CROSS } from "./notHadCross";
+import { useNotHad } from "../../../../lib/doc/notHad";
 import { ALPHA, COLORS } from "../../../theme/colors";
 import { TAU, follow } from "../../../theme/motion";
 import { setCursor } from "../../../theme/cursors";
@@ -73,18 +76,29 @@ const HANDLE_LINE = new THREE.MeshBasicMaterial({ color: COLORS.highlight, depth
 
 type Pt = { x: number; y: number };
 
-/** A picture's texture: none until it is decoded - `came` called then - or where its bytes are held nowhere. A film's draws a frame of the page for each of its own (`invalidate`). */
-function useTexture(p: Pick<PictureItem, "sha256" | "media">, gl: THREE.WebGLRenderer, invalidate: () => void): THREE.Texture | null {
+/**
+ * A picture's texture: none until it is decoded - `came` called then - or
+ * where its bytes are held nowhere; decoded once they are, where they come
+ * to be had (`notHad` gone: lib/doc/notHad). A film's draws a frame of the
+ * page for each of its own (`invalidate`).
+ */
+function useTexture(p: Pick<PictureItem, "sha256" | "media">, gl: THREE.WebGLRenderer, invalidate: () => void, notHad: boolean): THREE.Texture | null {
   const [, setCame] = useState(0);
   const key = p.sha256;
   useEffect(() => {
     let entry = textures.get(key);
     let release: (() => void) | undefined;
+    // (held nowhere when it was first wanted, had now - the same picture put down again: decoded afresh)
+    if (entry?.unhad && !notHad && !entry.users) {
+      textures.delete(key);
+      entry = undefined;
+    }
     if (!entry) {
       const made: Shared = { texture: null, users: 0, waiting: new Set() };
       textures.set(key, made);
       entry = made;
       const bytes = pictureBytes(key);
+      if (!bytes) made.unhad = true;
       if (bytes && isFilm(p.media)) release = filmTexture(made, bytes);
       else if (bytes) {
         createImageBitmap(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: p.media }), { imageOrientation: "flipY" })
@@ -123,7 +137,7 @@ function useTexture(p: Pick<PictureItem, "sha256" | "media">, gl: THREE.WebGLRen
         image?.close?.();
       }, 1000);
     };
-  }, [key, p.media, gl, invalidate]);
+  }, [key, p.media, gl, invalidate, notHad]);
   return textures.get(key)?.texture ?? null;
 }
 
@@ -231,7 +245,9 @@ const Picture = memo(function Picture({
   // (the canvas's state taken a part at a time: the whole of it would draw every picture again as any of it changed)
   const gl = useThree((s) => s.gl);
   const invalidate = useThree((s) => s.invalidate);
-  const texture = useTexture(p, gl, invalidate);
+  // (one that could not be had - damaged in its workspace's file, or not in it - crossed, until it is had again or taken away)
+  const notHad = useNotHad((s) => s.shas.has(p.sha256));
+  const texture = useTexture(p, gl, invalidate, notHad);
   // the light round it while the pointer is on it, coming and going - there only as long as it is, as are the rings below
   // (each part there for every picture was a part to take away as thousands were deleted, each taking longer for them all)
   const [glowing, setGlowing] = useState(false);
@@ -363,6 +379,11 @@ const Picture = memo(function Picture({
         {/* (a PNG's transparency kept: the page shows through a render's transparent background) */}
         {texture ? <meshBasicMaterial key="decoded" map={texture} toneMapped={false} transparent={p.media === "image/png"} /> : <meshBasicMaterial key="unread" color={UNREAD} toneMapped={false} />}
       </mesh>
+      {notHad && !texture && (
+        <lineSegments geometry={NOT_HAD_CROSS} scale={[p.w, p.h, 1]} position={[0, 0, Z_STEP / 4]}>
+          <lineBasicMaterial color={NOT_HAD_COLOR} toneMapped={false} />
+        </lineSegments>
+      )}
       {ringed && figures.map((f) => <SpotRing key={f.page ?? "own"} p={p} from={f} />)}
       {held && <HeldLight b={{ x0: -p.w / 2, x1: p.w / 2, y0: -p.h / 2, y1: p.h / 2 }} at={held} held={held} now={now} z={Z_STEP / 2} />}
     </group>

@@ -1,3 +1,4 @@
+import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
@@ -45,6 +46,8 @@ import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
+import { pdbLeavesOut } from "../../../lib/chem/pdb";
+import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
@@ -203,6 +206,7 @@ import { titled } from "../../../lib/calc/sources";
 import { missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
+import { heldOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -963,6 +967,8 @@ function WorkspaceContent({
   const inkMode = useEditor((s) => s.inkMode);
   const endInk = useCallback(() => store.getState().setInkMode(null), [store]);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
+  const askDeleteSet = useEditor((s) => s.askDeleteSet);
+  const setsNow = useEditor((s) => s.sets);
   // An undo or a redo that would take away a running step is held, and asks
   // first what deleting it asks (heard before the app's own undo, App.tsx)
   const askUndo = useEditor((s) => s.askUndo);
@@ -1413,12 +1419,12 @@ function WorkspaceContent({
     });
   };
 
-  const alert = importError?.text ?? files.error ?? chemError;
-  const dismissAlert = importError
-    ? dismissImportError
-    : files.error
-      ? files.dismissError
-      : () => setChemError(null);
+  // (each in a line of its own, dismissed by itself: utils/alerts)
+  const alerts = canvasAlerts({
+    import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
+    files: { text: files.error, dismiss: files.dismissError },
+    chem: { text: chemError, dismiss: () => setChemError(null) },
+  });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
@@ -1480,6 +1486,7 @@ function WorkspaceContent({
   // S, its texts, its style, its workflow - on the right-click menu on empty
   // space; the keys say the same. (Save is the title bar's, and Ctrl/Cmd+S.)
   const texts = useEditor((s) => s.texts);
+  const lostTexts = useEditor((s) => s.textsLost.length > 0);
   const steps = useEditor((s) => s.steps);
   const textsOpen = useEditor((s) => s.textsOpen);
   const reading = useEditor((s) => s.pdfs.some((p) => p.reading));
@@ -1499,7 +1506,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    ...(texts.length || reading
+    ...(texts.length || lostTexts || reading
       ? [
           textsOpen
             ? { name: "Hide texts", keys: "", run: () => store.getState().closeTexts() }
@@ -1510,7 +1517,7 @@ function WorkspaceContent({
                   // (the PDF it showed, rising into it again; or the text)
                   const st = store.getState();
                   if (st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown && p.reading)) st.readPdf(st.pdfShown);
-                  else if (st.texts.length) st.showText(st.textShown ?? st.texts[0].id);
+                  else if (st.texts.length || st.textsLost.length) st.showText(st.textShown ?? (st.texts[0] ?? st.textsLost[0]).id);
                   else if (st.pdfs.some((p) => p.reading)) st.readPdf(st.pdfs.find((p) => p.reading)!.id);
                 },
               },
@@ -1546,31 +1553,34 @@ function WorkspaceContent({
       onPointerUpCapture={onRightUp}
     >
       {/* Import error */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex flex-col items-center gap-2 pointer-events-none">
       <AnimatePresence>
-      {alert && (
+      {alerts.map((a) => (
         <motion.div
-          key="alert"
+          key={a.key}
+          layout
           {...RISE}
           role="alert"
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
+          className="pointer-events-auto flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
-          <span className="break-words">{alert}</span>
-          {importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          <span className="break-words">{a.text}</span>
+          {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
           <button
             aria-label="Dismiss"
             title="Dismiss"
             onClick={(e) => {
               e.stopPropagation();
-              dismissAlert();
+              a.dismiss();
             }}
             className="h-4 w-4 shrink-0 rounded-full hover:bg-gh-line"
           >
             <XMarkIcon className="h-4 w-4" />
           </button>
         </motion.div>
-      )}
+      ))}
       </AnimatePresence>
+      </div>
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
@@ -1726,6 +1736,7 @@ function WorkspaceContent({
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
               return chosen.length ? knownOfMolecules(chosen, style3dOf(store.getState())) : {};
             }}
+            said={(id) => (id === "pdb" ? pdbLeavesOut((exporting.part.part.molecules3d ?? []).flatMap((m) => m.atoms)) : id === "xyz" ? xyzLeavesOut(exporting.part.part.molecules3d ?? []) : null)}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {
               setExporting(null);
@@ -1830,6 +1841,21 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {askDeleteSet != null && askDeleteSet.every((id) => setsNow.some((b) => b.id === id)) && (
+          <ConfirmDiscard
+            title={
+              askDeleteSet.length === 1
+                ? `Delete the set and the ${heldOwn(store.getState(), setsNow.find((b) => b.id === askDeleteSet[0])!) ?? "molecules"} it holds?`
+                : `Delete ${askDeleteSet.length} sets and the molecules they hold?`
+            }
+            message={`They are on no page: they go with ${askDeleteSet.length === 1 ? "the set" : "the sets"}. Undo brings them back until the workspace is closed.`}
+            discardLabel={askDeleteSet.length === 1 ? "Delete set" : "Delete sets"}
+            onCancel={() => store.getState().setWorkflowView({ askDeleteSet: null })}
+            onDiscard={() => store.getState().removeSet(askDeleteSet, true)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {askUndo != null && (
           <ConfirmDiscard
             title={askUndo.steps > 1 ? "Delete steps that are running?" : "Delete a step that is running?"}
@@ -1928,7 +1954,8 @@ function WorkspaceContent({
             else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
             else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
-            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
+            // (the menu says what goes with a set that holds its molecules itself: asked there, in its words)
+            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id, true);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
             else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
             else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
@@ -1979,6 +2006,17 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          onOpenAsTable={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.collection ? () => store.getState().readSetTable(set.id) : undefined;
+          })()}
+          setHoldsOwn={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const st = store.getState();
+            const set = st.sets.find((b) => b.id === menu.id);
+            return set?.collection?.length ? heldOwn(st, set) : undefined;
+          })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const set = store.getState().sets.find((b) => b.id === menu.id);
@@ -2617,7 +2655,7 @@ function TabFiles({
   children: (files: FileActions) => ReactNode;
 }) {
   // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
-  const files = useFileActions(nameTab);
+  const files = useFileActions(nameTab, tabId);
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
@@ -2628,6 +2666,8 @@ function TabFiles({
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const intent = saveIntent(e);
+      // (the keys held: saved once, as they were pressed - and still not the webview's)
+      if (!intent && e.repeat && saveIntent({ key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey })) e.preventDefault();
       if (!intent) return;
       e.preventDefault();
       void (intent === "save" ? save() : saveAs());

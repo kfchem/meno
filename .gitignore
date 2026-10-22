@@ -27,6 +27,7 @@ dist-ssr
 
 .depiction/
 .layout/
+.identity/
 .roundtrip/
 
 # Python's bytecode, from running the workers or their tests

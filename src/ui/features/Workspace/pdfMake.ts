@@ -4,7 +4,7 @@
  * make several one, and write a PDF held to a file.
  */
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../lib/io/writeDocument";
 import { COMBINED_NAME, allPages, makePdf, readingOrder, unusedName } from "../../../lib/pdf/make";
 import { pdfRoom } from "../../../lib/pdf/layout";
 import { pdfBytes, type HeldPdf } from "../../../lib/pdf/reader";
@@ -29,5 +29,5 @@ export async function savePdfFile(p: Pick<PdfItem, "name" | "sha256">): Promise<
   const picked = await saveDialog({ title: "Save as PDF", defaultPath: p.name, filters: [{ name: "PDF", extensions: ["pdf"] }] });
   if (!picked) return;
   const path = picked.toLowerCase().endsWith(".pdf") ? picked : `${picked}.pdf`;
-  await writeFile(path, await pdfBytes(p.sha256));
+  await writeDocument(path, await pdfBytes(p.sha256));
 }
