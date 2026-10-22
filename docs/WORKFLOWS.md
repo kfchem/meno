@@ -1473,7 +1473,8 @@ All of it is optional. A structure the chemist drew has none.
 - **In the file** it is written with the member, and read back as data
   (`readDrawnRecord`): a property whose value is not a number, a text or
   true/false, whose unit is not in the units table, or whose status is
-  not one of lib/entry's is left out, and so is anything that says what
+  not one of lib/entry's is left out, counted and said as the file opens
+  (FILE-IO.md, *What does not read*), and so is anything that says what
   worked it out but is not one of `By`'s parts. A record left with
   nothing is none.
 

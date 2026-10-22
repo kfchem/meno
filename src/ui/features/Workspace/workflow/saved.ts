@@ -11,6 +11,7 @@ import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { RUNS_KEPT } from "./model";
 import { readDrawnRecord, structureMember } from "./entries";
+import { leftOut, readEach } from "../utils/readNotes";
 
 export type SavedWorkflow = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wire[] };
 
@@ -29,19 +30,26 @@ const isName = (v: unknown): v is string => typeof v === "string" && /^[a-z][a-z
  */
 function membersIn(v: unknown): Member[] | undefined {
   if (!Array.isArray(v)) return undefined;
-  return v.flatMap((m: { structure?: unknown; record?: unknown; molecule?: unknown; picture?: unknown }): Member[] => {
+  return readEach(v, (x): Member | null => {
+    const m = x as { structure?: unknown; record?: unknown; molecule?: unknown; picture?: unknown } | null;
     // (a structure with its record, where a step gave it one: read as data, what does not read left out)
-    if (Array.isArray(m?.structure) && m.structure.length && m.structure.every((id) => isId(id))) return [structureMember(m.structure as number[], readDrawnRecord(m.record))];
-    if (Number.isInteger(m?.molecule) && (m.molecule as number) >= 0) return [{ molecule: m.molecule as number }];
-    if (Number.isInteger(m?.picture) && (m.picture as number) >= 0) return [{ picture: m.picture as number }];
-    return [];
-  });
+    if (Array.isArray(m?.structure) && m.structure.length && m.structure.every((id) => isId(id))) return structureMember(m.structure as number[], readDrawnRecord(m.record));
+    if (Number.isInteger(m?.molecule) && (m!.molecule as number) >= 0) return { molecule: m!.molecule as number };
+    if (Number.isInteger(m?.picture) && (m!.picture as number) >= 0) return { picture: m!.picture as number };
+    return null;
+  }, "member");
 }
 
 function readSet(v: unknown): WorkflowSet | null {
   const b = v as Partial<Record<keyof WorkflowSet, unknown>> | null;
   if (!b || !isId(b.id) || !isNum(b.x0) || !isNum(b.y0) || !isNum(b.x1) || !isNum(b.y1)) return null;
   const made = b.made as { step?: unknown; exit?: unknown; holds?: unknown } | undefined;
+  const madeRead =
+    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures")
+      ? { step: made.step, exit: made.exit, ...(made.holds != null ? { holds: made.holds as SetHolds } : {}) }
+      : undefined;
+  // (one that says it was made by a step, but not by which as it reads: a set like any other - and said)
+  if (made !== undefined && !madeRead) leftOut("made");
   return {
     id: b.id,
     x0: Math.min(b.x0, b.x1),
@@ -49,9 +57,7 @@ function readSet(v: unknown): WorkflowSet | null {
     x1: Math.max(b.x0, b.x1),
     y1: Math.max(b.y0, b.y1),
     // (a step's exit: which step and exit made it - and what it holds, once its step has run; not run yet, nothing)
-    ...(made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures")
-      ? { made: { step: made.step, exit: made.exit, ...(made.holds != null ? { holds: made.holds as SetHolds } : {}) } }
-      : {}),
+    ...(madeRead ? { made: madeRead } : {}),
     // (the name the chemist gave it, where they gave one)
     ...(typeof b.name === "string" && b.name.trim() ? { name: b.name } : {}),
     ...(() => {
@@ -167,19 +173,18 @@ function readKept(v: unknown): StepRunKept | null {
 function readRunning(v: unknown): StepRunning | undefined {
   const r = v as { at?: unknown; input?: unknown; options?: unknown; jobs?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.input !== "string" || !Array.isArray(r.jobs)) return undefined;
-  const jobs = r.jobs.flatMap((j: { id?: unknown; entries?: unknown; reads?: unknown; size?: unknown } | null): StepJob[] =>
-    typeof j?.id === "string" && JOB.test(j.id) && Array.isArray(j.entries) && j.entries.every((i) => Number.isInteger(i) && i >= 0)
-      ? [
-          {
+  const jobs = readEach(r.jobs, (x): StepJob | null => {
+    const j = x as { id?: unknown; entries?: unknown; reads?: unknown; size?: unknown } | null;
+    return typeof j?.id === "string" && JOB.test(j.id) && Array.isArray(j.entries) && j.entries.every((i) => Number.isInteger(i) && i >= 0)
+      ? {
             id: j.id,
             entries: j.entries as number[],
             reads: Array.isArray(j.reads) ? j.reads.filter((n): n is string => typeof n === "string" && IN_FOLDER.test(n)) : [],
             // (a Render's: the size its picture takes on the page)
             ...(Array.isArray(j.size) && j.size.length === 2 && j.size.every((n) => isNum(n) && n > 0) ? { size: [j.size[0], j.size[1]] as [number, number] } : {}),
-          },
-        ]
-      : [],
-  );
+          }
+      : null;
+  }, "job");
   const kind = (r as { kind?: unknown }).kind;
   return jobs.length ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}) } : undefined;
 }
@@ -190,7 +195,7 @@ function readStep(v: unknown): WorkflowStep | null {
   const options = optionsIn(s.options);
   const ran = readRan(s.ran);
   const running = readRunning(s.running);
-  const runs = (Array.isArray(s.runs) ? s.runs : []).map(readKept).filter((k): k is StepRunKept => k != null).slice(0, RUNS_KEPT);
+  const runs = readEach(s.runs, readKept, "run").slice(0, RUNS_KEPT);
   return {
     id: s.id,
     kind: s.kind as StepKind,
@@ -218,21 +223,21 @@ function readTo(v: unknown): WireTo | null {
 export function readWorkflow(data: unknown): SavedWorkflow | undefined {
   const r = data as { sets?: unknown; steps?: unknown; wires?: unknown } | null;
   const seen = new Set<number>();
-  const fresh = <T extends { id: number }>(t: T | null): t is T => !!t && !seen.has(t.id) && !!seen.add(t.id);
-  const sets = (Array.isArray(r?.sets) ? r.sets : []).map(readSet).filter(fresh);
-  const steps = (Array.isArray(r?.steps) ? r.steps : []).map(readStep).filter(fresh);
+  // (one whose id is another's already - of any kind - is left out, and said)
+  const fresh = <T extends { id: number }>(t: T | null): T | null => (t && !seen.has(t.id) && !!seen.add(t.id) ? t : null);
+  const sets = readEach(r?.sets, (v) => fresh(readSet(v)), "set");
+  const steps = readEach(r?.steps, (v) => fresh(readStep(v)), "step");
   const setIds = new Set(sets.map((b) => b.id));
   const stepIds = new Set(steps.map((s) => s.id));
-  const wires = (Array.isArray(r?.wires) ? r.wires : [])
-    .map((w: { id?: unknown; from?: unknown; to?: unknown }): Wire | null => {
-      const from = readEnd(w?.from);
-      const to = readTo(w?.to);
-      if (!w || !isId(w.id) || !from || !to || !stepIds.has(to.step) || !setIds.has(from.set)) return null;
-      return { id: w.id, from, to };
-    })
-    .filter(fresh);
-  // (a set made by a step not there is a set like any other)
-  const kept = sets.map((b) => (b.made && !stepIds.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b));
+  const wires = readEach(r?.wires, (v) => {
+    const w = v as { id?: unknown; from?: unknown; to?: unknown } | null;
+    const from = readEnd(w?.from);
+    const to = readTo(w?.to);
+    if (!w || !isId(w.id) || !from || !to || !stepIds.has(to.step) || !setIds.has(from.set)) return null;
+    return fresh({ id: w.id, from, to } as Wire);
+  }, "wire");
+  // (a set made by a step not there is a set like any other - and said)
+  const kept = sets.map((b) => (b.made && !stepIds.has(b.made.step) ? (leftOut("made"), (({ made: _m, ...rest }) => rest)(b)) : b));
   return kept.length || steps.length ? { sets: kept, steps, wires } : undefined;
 }
 

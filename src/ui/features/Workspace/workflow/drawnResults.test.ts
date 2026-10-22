@@ -7,6 +7,7 @@ import { runMenoDrawn } from "./meno";
 import { addSet, addStep, connect, membersSettled } from "./model";
 import { drawnEntries, keepRun, placeResults, resultsNow, runStep, showRun, type RunResults, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
+import { noting } from "../utils/readNotes";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 
@@ -284,8 +285,8 @@ describe("structures drawn, each with its record", () => {
     expect(saved.steps[0].runs![0].results!.drawn!.rest[0].record).toEqual(aside);
   });
 
-  it("are read as data: what of a record does not read is left out, and a record of nothing is none", () => {
-    expect(
+  it("are read as data: what of a record does not read is left out - each property counted - and a record of nothing is none", () => {
+    const { value, left } = noting(() =>
       readDrawnRecord({
         from: ["a", "b"],
         properties: {
@@ -298,7 +299,9 @@ describe("structures drawn, each with its record", () => {
         },
         status: { aside: "a radical" },
       }),
-    ).toEqual({
+    );
+    expect(left).toEqual({ property: 4 });
+    expect(value).toEqual({
       from: ["a", "b"],
       properties: {
         kept: { value: 1.5, unit: "kcal/mol", status: "computed", by: { step: "3" } },

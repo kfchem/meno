@@ -1,4 +1,5 @@
 import { editorLayoutOptions } from "../../layoutOptions";
+import { leftTogether } from "../../utils/readNotes";
 import { styleOf } from "../../../../../lib/chem/style";
 import { wordsSet } from "../../../../../lib/chem/captions";
 import { labelSetOf } from "../../../../../lib/chem/layout2d";
@@ -492,7 +493,9 @@ export const createModelSlice = (
     });
     // (and its column showing the text or the PDF it showed, or closed)
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null }));
+    // (what its file held that could not be read: said on every save - and, opened as the document, its file kept beside the first saved over it; opened into one, never its file to keep)
+    const leftOnOpen = start ? (ws.leftOut ? { left: ws.leftOut, kept: false } : null) : ws.leftOut ? { left: leftTogether(get().leftOnOpen?.left, ws.leftOut), kept: true } : get().leftOnOpen;
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */

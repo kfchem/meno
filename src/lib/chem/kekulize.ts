@@ -122,8 +122,14 @@ export function kekulized(atoms: readonly KekuleAtom[], bonds: readonly KekuleBo
     .filter((i) => roles[i] === "may" && !QUERY_ATOMS.has(atoms[i]?.el ?? "") && partners[i].length > 0)
     .sort(byRank);
 
-  // Hückel's rule: a ring, or a fused ring system, is aromatic with 4N + 2
-  // pi electrons - counted as the RDKit Book counts them ("The RDKit
+  // Hückel's rule: as IUPAC defines it (Gold Book H02867, "Hückel (4n + 2)
+  // rule", doi:10.1351/goldbook.H02867, from PAC 66, 1077 (1994), p. 1122),
+  // it is of a monocyclic, planar or nearly planar system with 4n + 2 pi
+  // electrons, and is generally held to n = 0 to 5. Meno goes beyond that
+  // on purpose: it applies the count to each ring system as a whole, fused
+  // rings included (a purine, a porphine), and sets no upper bound on n - a
+  // porphine's 18 is n = 4, and a larger system is counted the same way.
+  // Electrons are counted as the RDKit Book counts them ("The RDKit
   // Aromaticity Model", rdkit.org/docs/RDKit_Book.html, the 2026.09.1
   // documentation, read 2026-10-21): c 1, n 1, an n with a third neighbour
   // or its H 2, o, s, se, te 2, a ring atom's exocyclic double bond to O or
