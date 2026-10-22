@@ -800,7 +800,9 @@ The same for every plugin and for Meno's own parts:
     one kept, it says so beside them - `"counted": [{"entry": 0,
     "degeneracy": 2, "mirror": [...]}]`, the atoms the mirror image swaps
     as a permutation - and an entry given carries its `degeneracy`, where
-    it has one.
+    it has one. `"capped": 2` says how many compounds it took atom against
+    atom, their ways onto themselves too many to try: a duplicate of one
+    could be missed, and the step says so.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,

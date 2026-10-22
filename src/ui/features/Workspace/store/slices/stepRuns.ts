@@ -19,10 +19,11 @@ import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
+import { cappedSaid } from "../../workflow/sameConformer";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readCounted, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -455,12 +456,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
     let counted = new Map<number, { degeneracy: number; mirror: number[] }>();
+    let capped = 0;
     try {
       const client = await pluginClient(plugin);
       const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
       const raw = await client.run(step.kind, given, options, input.holds);
       kept = readKept(raw, entries.length);
       if (typeof kept !== "string") counted = readCounted(raw, kept, entries.map((e) => e.atoms.length));
+      capped = readCapped(raw);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -474,7 +477,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       id,
       entries.flatMap((e, i) => (!keep.has(i) ? [] : counted.has(i) ? [{ ...e, ...counted.get(i)! }] : counting ? [{ ...e, degeneracy: e.degeneracy ?? 1 }] : [e])),
       givesFor(step.kind, input.holds),
-      { at, ok: true, said: `${keep.size} of ${entries.length} kept${twins}`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
+      { at, ok: true, said: `${keep.size} of ${entries.length} kept${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
       entries.filter((_, i) => !keep.has(i)),
     );
   }

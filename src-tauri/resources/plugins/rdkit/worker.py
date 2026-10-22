@@ -2112,9 +2112,13 @@ def op_run(m):
         groups.setdefault(key, []).append(i)
     kept = []
     counted = {}
+    # (compounds with too many ways onto themselves to try, taken atom against atom: a duplicate of one could be
+    #  missed - how many, said)
+    capped = 0
     for members in groups.values():
         energy = lambda i: entries[i].get("energy") if isinstance(entries[i].get("energy"), (int, float)) else float("inf")
         same = Sameness(mols[members[0]])
+        capped += same.capped and len(members) > 1
         place = lambda i: mols[i].GetConformer().GetPositions()
         mine = []
         for i in sorted(members, key=lambda i: (energy(i), i)):
@@ -2136,7 +2140,7 @@ def op_run(m):
                     continue
             mine.append(i)
         kept += mine
-    return {"kept": sorted(kept), **({"counted": [counted[k] for k in sorted(counted)]} if counting else {})}
+    return {"kept": sorted(kept), **({"counted": [counted[k] for k in sorted(counted)]} if counting else {}), **({"capped": int(capped)} if capped else {})}
 
 
 OPS = {

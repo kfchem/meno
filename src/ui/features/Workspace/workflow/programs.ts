@@ -330,6 +330,12 @@ export function readCounted(raw: unknown, kept: readonly number[], atoms: readon
   return out;
 }
 
+/** How many compounds a plugin's Duplicates took atom against atom, their ways onto themselves too many to try (`capped`): 0 where it says none, or not as it should. */
+export function readCapped(raw: unknown): number {
+  const n = (raw as { capped?: unknown } | null)?.capped;
+  return Number.isInteger(n) && (n as number) > 0 ? (n as number) : 0;
+}
+
 /** What a step says of a program installed separately that is found nowhere: where to say where it is. */
 export const notFound = (label: string) => `${label} is not found: locate it in Settings, Plugins`;
 

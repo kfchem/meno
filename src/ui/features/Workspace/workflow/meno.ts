@@ -11,7 +11,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, unlikeMade, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
-import { SAME_CONFORMER, Sameness } from "./sameConformer";
+import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
@@ -238,8 +238,11 @@ function* duplicates(entries: readonly SetEntry[], holds: SetKind, mirrors: Mirr
   const kept = new Map<SetEntry, { degeneracy: number; mirror?: number[] }>();
   let done = 0;
   let counted = 0;
+  // (compounds with too many ways onto themselves to try, taken atom against atom: a duplicate of one could be missed - said)
+  let capped = 0;
   for (const g of groups) {
     const same = new Sameness(g[0].atoms, g[0].bonds, g[0].xyz);
+    if (same.capped && g.length > 1) capped++;
     const here: { e: SetEntry; sig: Float64Array }[] = [];
     for (const e of energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g) {
       if (done > 0 && due()) yield done;
@@ -269,7 +272,7 @@ function* duplicates(entries: readonly SetEntry[], holds: SetKind, mirrors: Mirr
   });
   const aside = entries.filter((e) => !kept.has(e));
   const twins = counted ? ` · ${counted} mirror image${counted === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
-  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${twins}` };
+  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}` };
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");

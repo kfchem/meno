@@ -662,6 +662,29 @@ class SameConformer(unittest.TestCase):
         out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {"mirrors": "counted"}, "holds": "molecules"})
         self.assertEqual(out, {"kept": [0, 1], "counted": []})
 
+    def test_duplicates_says_where_it_could_miss_one_past_the_ways_it_tries(self):
+        import math
+        # (a centre with 7 two-carbon arms: 7! = 5,040 ways onto itself, past the 1,000 tried - its atoms taken against
+        #  their own alone; the same conformer, two arms' labels swapped, is missed, and that is said)
+        arms = 7
+        atoms, bonds, xyz = [("W", (0.0, 0.0, 0.0))], [], []
+        for k in range(arms):
+            t = 2 * math.pi * k / arms + 0.1 * k * k
+            z = math.cos(1 + k)
+            r = math.sqrt(1 - z * z)
+            d = (r * math.cos(t), r * math.sin(t), z)
+            atoms += [("C", tuple(2.1 * v for v in d)), ("C", tuple(3.6 * v + 0.3 * (k % 2) for v in d))]
+            bonds += [(0, 1 + 2 * k), (1 + 2 * k, 2 + 2 * k)]
+        order = [0, 3, 4, 1, 2] + list(range(5, 1 + 2 * arms))
+        def entry(places):
+            return {"atoms": [{"el": el, "x": p[0], "y": p[1], "z": p[2]} for el, p in zip([a for a, _ in atoms], places)],
+                    "bonds": [{"a1": i, "a2": j, "order": 1} for i, j in bonds], "compound": 0, "energy": 0.0}
+        given = [entry([p for _, p in atoms]), entry([atoms[i][1] for i in order])]
+        out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {}, "holds": "conformers"})
+        self.assertEqual(out, {"kept": [0, 1], "capped": 1})
+        # (one of it alone: nothing to miss, nothing said)
+        self.assertEqual(self.worker.op_run({"step": "duplicates", "entries": given[:1], "options": {}, "holds": "conformers"}), {"kept": [0]})
+
     def test_bound_is_never_above_the_rmsd(self):
         import numpy as np
         mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))

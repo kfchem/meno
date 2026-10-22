@@ -128,3 +128,33 @@ describe("Duplicates, on the one definition", () => {
     });
   });
 });
+
+describe("past the ways it tries", () => {
+  // (a centre with 7 two-carbon arms: 7! = 5,040 ways onto itself, past the 1,000 tried - its atoms taken against
+  //  their own alone)
+  const ARMS = 7;
+  const atoms = [{ el: "W" }, ...Array.from({ length: 2 * ARMS }, () => ({ el: "C" }))];
+  const bonds = Array.from({ length: ARMS }, (_, k) => [{ a1: 0, a2: 1 + 2 * k, order: 1 }, { a1: 1 + 2 * k, a2: 2 + 2 * k, order: 1 }]).flat();
+  const xyz = [0, 0, 0];
+  for (let k = 0; k < ARMS; k++) {
+    // (each arm its own way out, none alike)
+    const t = (2 * Math.PI * k) / ARMS + 0.1 * k * k;
+    const z = Math.cos(1 + k);
+    const r = Math.sqrt(1 - z * z);
+    const d = [r * Math.cos(t), r * Math.sin(t), z];
+    xyz.push(...d.map((v) => 2.1 * v), ...d.map((v) => 3.6 * v + 0.3 * (k % 2)));
+  }
+  // (the same conformer, two arms' labels swapped)
+  const swapped = renumbered(xyz, [0, 3, 4, 1, 2, ...Array.from({ length: 2 * ARMS - 4 }, (_, i) => 5 + i)]);
+
+  it("misses a duplicate it cannot try every way - and says so on the step's line", () => {
+    const same = new Sameness(atoms, bonds, xyz);
+    expect(same.capped).toBe(true);
+    expect(same.same(xyz, swapped)).toBe(false);
+    const m = { id: 1, at: { x: 0, y: 0 }, atoms: atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })), bonds, frames: [swapped], energies: [0, 0], conformerSet: true as const };
+    const out = runMeno("duplicates", setEntries([m], "conformers"), "conformers");
+    expect(out.said).toBe("2 of 2 kept · 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed");
+    // (one of it alone: nothing to miss, nothing said)
+    expect(runMeno("duplicates", setEntries([{ ...m, frames: [], energies: [0] }], "conformers"), "conformers").said).toBe("1 of 1 kept");
+  });
+});

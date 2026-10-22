@@ -1392,6 +1392,11 @@ The maintainer's rulings of 2026-10-21 and 2026-10-22:
   plugin's conformers use the same). The ways are those of its atoms but
   the hydrogens hanging on one atom, at most 1,000; those hydrogens are
   matched to the nearest of their kind once the rest are laid over.
+  Past 1,000 ways - a centre with seven alike arms has 5,040 - its atoms
+  are taken against their own alone: a duplicate can then be missed,
+  never two different conformers made one, and *Duplicates* says so on
+  its line: *1 compound has more than 1,000 symmetric ways: duplicates of
+  it could be missed*.
   Meno's *Duplicates* has no threshold of its own any more (it was 0.125
   Å, its atoms in their own order).
 - **A conformer's mirror image**, in an achiral molecule, is kept apart by

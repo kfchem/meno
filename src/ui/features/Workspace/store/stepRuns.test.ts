@@ -933,6 +933,10 @@ describe("a plugin's conformer search, and its duplicates", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
     // (the one set aside, in the step's second exit's set)
     expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
+    // (compounds it took atom against atom, too many ways onto themselves to try: said, a duplicate of one could be missed)
+    worker.run.mockImplementationOnce(async () => ({ kept: [0, 1], capped: 1 }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "2 of 2 kept \u00b7 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed" });
   });
 
   it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {

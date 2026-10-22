@@ -25,6 +25,10 @@ export const SAME_CONFORMER = 0.01;
 /** The most ways of mapping a molecule onto itself tried; past it, fewer atoms are mapped, or none. */
 export const ALIKE_WAYS = 1000;
 
+/** What a step says where `n` compounds' ways passed `ALIKE_WAYS`: their atoms were taken atom against atom, so a duplicate could be missed - never two made one. */
+export const cappedSaid = (n: number) =>
+  `${n} compound${n === 1 ? " has" : "s have"} more than ${ALIKE_WAYS.toLocaleString("en")} symmetric ways: duplicates of ${n === 1 ? "it" : "them"} could be missed`;
+
 type Atom = { el: string; charge?: number; isotope?: number };
 type Bond = { a1: number; a2: number; order: number };
 
@@ -169,7 +173,11 @@ export class Sameness {
     );
   }
 
-  /** Each atom that hangs on one of the core taken to the nearest free one of its kind on the atom that one is taken to (`to`, filled in); false where those do not hang alike. */
+  /**
+   * Each atom that hangs on one of the core taken to the nearest free one of its kind on the atom that one is taken
+   * to (`to`, filled in); false where those do not hang alike. (Greedy, not the best match: it can only find two
+   * conformers apart that are the same, never make two different ones the same.)
+   */
   private hang(laid: Float64Array, b: readonly number[], to: number[]): boolean {
     for (const [i, kinds] of this.hanging) {
       const theirs = this.hanging.get(to[i]);
