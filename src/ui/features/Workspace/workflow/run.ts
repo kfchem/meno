@@ -12,14 +12,15 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { sharesOf } from "../utils/molecule3d";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
-import { addSet, heldPut, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, heldPut, holdCollection, holdMembers, moveSet, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -90,6 +91,9 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
   const input = inputOf(doc, step.id);
   if (!input) return "Nothing comes into it";
+  // (a set that came to mix conformer sets with other molecules after it was wired)
+  const mixed = input.holds === "molecules" && from && !findSet(doc, from.set)?.made ? plainAmong(input.molecules) : null;
+  if (mixed) return mixed;
   if (!takesBy(step.kind, by, input.holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
   return null;
@@ -296,12 +300,30 @@ export function placeResults(
   const { molecules: made, rest, holds, unread, restUnread } = results;
   const exits = exitsOf(step.kind);
   if (holds === "structures") {
-    doc = fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? []);
+    doc = keepExitsUnder(fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? []), step);
     return exits[1] ? fillDrawn(doc, step, exits[1].id, results.drawn?.rest ?? []) : doc;
   }
-  doc = fillExit(doc, step, exits[0].id, made, holds, unread, w, turns);
+  doc = keepExitsUnder(fillExit(doc, step, exits[0].id, made, holds, unread, w, turns), step);
   // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
   if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  return doc;
+}
+
+/**
+ * `doc` with a step's later exits' sets kept under its first, as they were
+ * made (`withExits`): each moved down, with what it holds, where the one
+ * above it has grown onto it - never up, nor sideways.
+ */
+function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | "kind">): WorkspaceDocument {
+  const exits = exitsOf(step.kind);
+  let above = resultOf(doc, step.id, exits[0].id);
+  for (const exit of exits.slice(1)) {
+    const b = resultOf(doc, step.id, exit.id);
+    if (!above || !b) break;
+    const reach = above.y0 - BETWEEN;
+    if (b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN) doc = moveSet(doc, b.id, 0, reach - b.y1);
+    above = resultOf(doc, step.id, exit.id);
+  }
   return doc;
 }
 
@@ -484,7 +506,7 @@ export function placeAsSet(
  * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
  * wider than a water).
  */
-function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack">>, e: Frame): Frame & { chip: number } {
+function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
   const half = chipWide(m) / 2;
   return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
@@ -497,13 +519,13 @@ function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | 
  * geometry's shows only while it is pointed at, over what is beside it:
  * none.
  */
-export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack">>): number {
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>): number {
   const n = framesOf(m);
   // (a single geometry called by its name: its name, and its energy where it has one)
   if (n < 2) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
   const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
   const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
-  const shares = m.shares?.length === n || (m.conformerSet && m.energies?.length === n) ? " · 100%" : "";
+  const shares = sharesOf(m) ? " · 100%" : "";
   return `${numbered}${n} / ${n}${energies}${shares}`.length * CHIP_CHAR + CHIP_SIDES;
 }
 
@@ -577,10 +599,14 @@ export function fitResultSets(
     if (within && apart) continue;
     const least = Math.max(LEAST_W, set.x1 - set.x0 - 2 * SET_PAD);
     const frameOf = (l: { width: number; height: number }) => frameAt(set.x0, set.y1, l.width, Math.max(l.height, set.y1 - set.y0));
+    // (its step's other exits' sets are no hindrance: they move down with it)
+    const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === set.made!.step).map((b) => b.id));
     let lay = laidOut(rooms, least);
-    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
+    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member, sets: siblings })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
     doc = moveMolecules3d(doc, ms.map((m, i) => ({ id: m.id, at: { x: set.x0 + lay.at[i].x, y: set.y1 + lay.at[i].y } })));
     doc = resizeSet(doc, set.id, frameOf(lay));
+    const step = doc.steps?.find((s) => s.id === set.made!.step);
+    if (step) doc = keepExitsUnder(doc, step);
   }
   return doc;
 }
@@ -602,11 +628,11 @@ export function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: numb
 /**
  * Whether a frame keeps `BETWEEN` clear of what is on the page - its sets,
  * its steps' cards, its structures and its molecules in 3D - but for the
- * set `self` and the molecules it holds.
+ * set `self`, the molecules it holds and the sets `self.sets`.
  */
-function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number> }): boolean {
+function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number>; sets?: ReadonlySet<number> }): boolean {
   const taken: Frame[] = [
-    ...(doc.sets ?? []).filter((b) => b.id !== self?.set),
+    ...(doc.sets ?? []).filter((b) => b.id !== self?.set && !self?.sets?.has(b.id)),
     ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
   ];
   const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules.has(m.id)).map((m) => m.at)];
@@ -633,6 +659,9 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
   return { calc: { readers: [], ...(e.charge != null ? { charge: e.charge } : {}), ...(e.multiplicity != null ? { multiplicity: e.multiplicity } : {}) } };
 }
 
+/** The imaginary frequencies an entry was judged to have: its own, or - one a program step just made - its calculation's. */
+const imaginaryOfEntry = (e: SetEntry): number[] | undefined => e.imaginary ?? (e as Worked).calc?.imaginary;
+
 function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   // (the shares a step worked out - Meno's Populations - else those the program that found them gave)
@@ -650,6 +679,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(e.name ? { name: e.name } : {}),
         // (its properties, as its last frame's: none for a path's frames before it)
         ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties] } : {}),
+        ...(e.partOf ? { partOf: true as const } : {}),
+        // (why a program step could not do it, where one could not: its Failed exit's - of its last frame, a path's own
+        //  frames before it none)
+        ...(e.failed ? { failed: [...(path ?? []).map(() => null), e.failed] } : {}),
         ...e.keep,
       };
     });
@@ -679,9 +712,15 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       ...(shares ? { shares } : {}),
       ...(degeneracies ? { degeneracies } : {}),
       ...(properties ? { properties } : {}),
-      ...(calc ? { calc: { ...calc, results: undefined, source: undefined } } : speciesKept(first)),
+      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
+      ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
+      // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
+      ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
+      ...(g.some((e) => e.failed) ? { failed: g.map((e) => e.failed ?? null) } : {}),
+      // (each conformer's imaginary frequencies, as its calculation judged them)
+      ...(g.some((e) => imaginaryOfEntry(e)) ? { imaginary: g.map((e) => imaginaryOfEntry(e) ?? null) } : {}),
       ...(alike ? keptAlike(g) : {}),
     };
   });

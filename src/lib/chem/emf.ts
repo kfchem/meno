@@ -90,7 +90,7 @@ const PLUS_COMMENT = 0x2b464d45;
 /** The metafile signature and the GDI+ version the records are written for (1.1). */
 const PLUS_VERSION = 0xdbc01002;
 const PLUS_OBJECT = { PEN: 2, IMAGE: 5, FONT: 6, IMAGE_ATTRIBUTES: 8 } as const;
-/** An EMF+ object record's flag saying its object goes on in the next; and how much of an object one record takes. */
+/** An EMF+ object record's flag saying its object goes on in the next; and how much of an object one record takes (a multiple of 4, so that every part's data is whole words: `largeObject`). */
 const CONTINUED = 0x8000;
 const OBJECT_PART = 0xfff0;
 /** The high bit of a drawing record's flags: its brush is a colour given in place. */
@@ -304,15 +304,24 @@ export function layoutEmf(
     return id;
   };
   // an object too large for one record - a picture - goes in parts, each
-  // record saying how large the whole is
+  // record saying how large the whole is ([MS-EMFPLUS] 2.3.5.1, EmfPlusObject:
+  // "Once TotalObjectSize number of bytes has been read, the next EMF+ record
+  // will not be treated as part of the continuing object"). Each part's data
+  // is 32-bit aligned (DataSize), so the whole is padded to a word before it
+  // is split and the total counts the padding: the parts' data then add up to
+  // it exactly. A total short of the parts' sum by the padding is what
+  // PowerPoint's PDF export refused (2026-10-21, on Windows); a PNG reads to
+  // its last chunk and ignores the zeros after it.
   const largeObject = (key: string, type: number, data: Uint8Array) => {
     if (data.length <= OBJECT_PART) return object(key, type, data.length, (v) => new Uint8Array(v.buffer, v.byteOffset, data.length).set(data));
     const id = Math.min(objects.size, PLUS_SLOTS - 1);
     for (const [k, i] of objects) if (i === id) objects.delete(k);
-    for (let at = 0; at < data.length; at += OBJECT_PART) {
-      const part = data.subarray(at, at + OBJECT_PART);
+    const whole = new Uint8Array(data.length + ((4 - (data.length % 4)) % 4));
+    whole.set(data);
+    for (let at = 0; at < whole.length; at += OBJECT_PART) {
+      const part = whole.subarray(at, at + OBJECT_PART);
       w.plus(PLUS.OBJECT, CONTINUED | (type << 8) | id, 4 + part.length, (v) => {
-        v.setUint32(0, data.length, true);
+        v.setUint32(0, whole.length, true);
         new Uint8Array(v.buffer, v.byteOffset + 4, part.length).set(part);
       });
     }

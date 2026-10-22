@@ -1071,6 +1071,8 @@ pub fn run() {
             jobs::job_stop,
             jobs::job_remove,
             jobs::jobs_clear_finished,
+            jobs::computer_resources,
+            jobs::jobs_limits,
             jobs::job_trim,
             jobs::jobs_finished_bytes
         ])

@@ -104,6 +104,8 @@ export const PROPERTY = {
   energy: "energy",
   freeEnergy: "thermo.free-energy",
   degeneracy: "degeneracy",
+  /** How many imaginary frequencies its calculation judged it has: one that has any is no minimum. */
+  imaginary: "imaginary",
   group: "group",
   population: "population",
 } as const;
