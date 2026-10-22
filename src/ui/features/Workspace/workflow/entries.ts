@@ -9,6 +9,7 @@ import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
+import { groupLetter } from "../../../../lib/nodes/base";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
@@ -159,10 +160,12 @@ export function lyingIn(page: Page, set: Frame): { structures: number[][]; molec
 /**
  * Whether a molecule's frames are one compound's conformers wherever it
  * is: those a conformer search made - Meno's own (*3D structures*), or a
- * workflow's - which say so (`conformerSet`), where it has more than one
- * (the maintainer, 2026-10-08). A file's many geometries are not.
+ * workflow's - which say so (`conformerSet`) (the maintainer, 2026-10-08):
+ * one conformer found included, a set in which one happened to be found,
+ * not another kind of thing (the maintainer, 2026-10-21). A file's many
+ * geometries are not.
  */
-export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) => m.conformerSet === true && framesOf(m) > 1;
+export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.conformerSet === true;
 
 /**
  * What a set holds: what made it says - a Render step's, pictures; made by
@@ -295,11 +298,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   return out;
 }
 
-/** A compound's letter, by its place among a set's: a to z, then aa, ab... */
-export function compoundLetter(i: number): string {
-  const a = "abcdefghijklmnopqrstuvwxyz";
-  return i < 26 ? a[i] : compoundLetter(Math.floor(i / 26) - 1) + a[i % 26];
-}
+/** A compound's letter, by its place among a set's: a to z, then aa, ab... (lib/nodes `groupLetter`, one rule for both). */
+export const compoundLetter = groupLetter;
 
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
