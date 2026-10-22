@@ -220,14 +220,14 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(ask("open_stereo", molblock=flat)["result"], {"atoms": [1], "bonds": [], "isomers": 2})
 
     def test_makes_conformers_as_its_options_say_and_says_how(self):
-        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "same": 0.3, "seed": 7})["result"]["isomers"][0]
+        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
         self.assertEqual(made["field"], "MMFF94s")
         how = {r["label"]: r["text"] for r in made["how"]}
         self.assertEqual(how["Embedded"], "ETKDG v3")
         self.assertEqual(how["Random seed"], "7")
         self.assertEqual(how["Optimised"], "MMFF94s, at most 300 steps")
-        self.assertRegex(how["Kept"], r"^\d+ of 5 sought$")
-        self.assertEqual(how["Alike within"], "0.3 \u00c5 (heavy atoms' RMSD)")
+        self.assertRegex(how["Kept"], r"^\d+ of 5 embedded \(5 sought\)")
+        self.assertEqual(how["The same within"], "0.01 \u00c5, all atoms (H included), over its symmetries")
         self.assertTrue(how["Made by"].startswith("RDKit "))
         self.assertLessEqual(len(made["frames"]), 5)
         # (what it may not be, kept to what it may: a force field it does not know, the default)

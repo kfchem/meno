@@ -1008,11 +1008,10 @@ docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in and no energies
-given; a ring bound through all its atoms, written as a multi-centre bond
-by `chem/etaBound.ts`, held over its metal; the same shape twice kept once,
-over the ways the molecule maps onto itself as well as atom against atom
-(PLUGINS.md, *The same shape with equivalent atoms swapped*);
+type for it, a lighter metal of its group standing in, ordering them, and
+no energies given; a ring bound through all its atoms, written as a
+multi-centre bond by `chem/etaBound.ts`, held over its metal; the same
+conformer twice kept once (PLUGINS.md, *The same conformer*);
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
