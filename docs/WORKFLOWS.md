@@ -1580,6 +1580,13 @@ them again*; the maintainer's rulings of 2026-10-22):
   minimum - take it out first*. *Energy window* refuses one not
   converged the same; a saddle point's mark would refuse it where the
   window is on free energies, which it is not yet.
+- **A conformer set's chip shows no shares** where a frame is no minimum,
+  the same two marks, rather than Boltzmann shares of an energy that is
+  none (utils/molecule3d `sharesWithheld`); opened, it says why, naming
+  the frame: *#2 is not converged: it is no minimum, so no shares are
+  given*. Shares a *Populations* step gave before the mark are not shown
+  either. Another failure (stopped, refused) is no judgement of a
+  minimum, and leaves the shares as they were.
 - **The entry record says it too**: `imaginary`, how many imaginary
   frequencies its calculation judged it has, where it judged any; one
   that failed carries its reason as its status. *Populations* on free

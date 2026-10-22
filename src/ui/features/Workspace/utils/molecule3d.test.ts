@@ -31,6 +31,7 @@ import {
   notesOf,
   populations,
   sharesOf,
+  sharesWithheld,
   widestWay,
   type Turning3D,
   spotFollowed,
@@ -596,6 +597,20 @@ describe("the shares a conformer set's chip shows", () => {
     expect(sharesOf({ ...set, conformerSet: false })).toBeUndefined();
     // (nor where its energies are not a frame's each)
     expect(sharesOf({ ...set, energies: [-0.5] })).toBeUndefined();
+  });
+
+  it("are none where a frame is no minimum - not converged, or judged to have an imaginary frequency - which is named, by its number", () => {
+    const notConverged = { ...set, failed: [null, { kind: "not-converged" as const, why: "100 cycles" }] };
+    expect(sharesOf(notConverged)).toBeUndefined();
+    expect(sharesWithheld(notConverged)).toBe("#2 is not converged: it is no minimum, so no shares are given");
+    const saddle = { ...set, imaginary: [[-382.6], null], numbers: [4, 7] };
+    expect(sharesOf(saddle)).toBeUndefined();
+    expect(sharesWithheld(saddle)).toBe("#4 has 1 imaginary frequency, 382.6i cm-1: it is no minimum, so no shares are given");
+    // (nor those a Populations step worked out before)
+    expect(sharesOf({ ...saddle, shares: [0.6, 0.4] })).toBeUndefined();
+    // (another failure is no judgement of a minimum: shares as before)
+    expect(sharesOf({ ...set, failed: [null, { kind: "stopped" as const, why: "stopped" }] })).toEqual([0.25, 0.75]);
+    expect(sharesWithheld(set)).toBeNull();
   });
 });
 
