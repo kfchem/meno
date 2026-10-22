@@ -1958,7 +1958,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {(solid.frames.length > 1 || m.conformerSet || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
-          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m)) && !props.stacked ? (
+          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
@@ -1983,6 +1983,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               said={m.said}
               area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}
+              {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
+              {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>

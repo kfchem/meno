@@ -5,6 +5,7 @@ import { factor } from "../../../../lib/units";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
 import { greatest, least } from "../../../../lib/chem/lists";
+import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -64,6 +65,9 @@ export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
   );
 }
 
+/** Words begun with a capital, as a label is. */
+const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** The chip itself, as it lies on the page (Frames3D). */
 export function FramesChip({
   count,
@@ -82,6 +86,8 @@ export function FramesChip({
   said: fromText,
   area,
   title,
+  failed,
+  warnings,
 }: {
   count: number;
   frame: number;
@@ -117,6 +123,10 @@ export function FramesChip({
    * energy - its notes opened by a click.
    */
   title?: string;
+  /** Why each frame failed in the step that made it, where one did (workflow/failures): the one told said on it. */
+  failed?: readonly (Failure | null)[];
+  /** What its calculation warned of: counted on it, each said in full with the rest, opened. A warning moves nothing. */
+  warnings?: readonly Warning[];
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -213,6 +223,11 @@ export function FramesChip({
   const madeRows = made ? [...(made.method ? [{ label: "Method", text: made.method }] : []), ...made.how] : [];
   if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })) });
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
+  // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
+  const failure = failed?.[told] ?? undefined;
+  const marks = [failure ? FAILURE_WORDS[failure.kind] : "", warnings?.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : ""].filter(Boolean).join(" · ");
+  if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
+  if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => chipLine([about ?? "", energy != null ? absolute(energy) : ""], results);
   // how far it has risen to stay within the canvas, followed each frame
   // while it is open, and until it is back down
@@ -320,6 +335,7 @@ export function FramesChip({
                   {title && <span className="text-gh-black inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
                   {title && line(energies?.[0]) ? " · " : ""}
                   {line(energies?.[0])}
+                  {marks && <span className="text-accel-accent">{title || line(energies?.[0]) ? " · " : ""}{marks}</span>}
                 </>
               ) : (
                 <>
@@ -328,6 +344,7 @@ export function FramesChip({
                   {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
                   {above && <span className="text-gh-black"> · {relative(above[told])}</span>}
                   {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
+                  {marks && <span className="text-accel-accent"> · {marks}</span>}
                 </>
               )}
             </div>

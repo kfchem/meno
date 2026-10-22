@@ -739,6 +739,39 @@ describe("a step that runs a plugin's program", () => {
     expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why }]]);
   });
 
+  it("sends an optimisation that did not converge out of its Failed exit - its path and the last geometry it reached, never passed on as done - kept so when saved", async () => {
+    const { st, step } = waters(2);
+    const base = worker.collect.getMockImplementation()!;
+    worker.collect.mockImplementationOnce(base).mockImplementationOnce(async (...args: Parameters<typeof base>) => {
+      const r = (await base(...args)) as { outputs: { optimised: boolean }[] };
+      return { outputs: r.outputs.map((o) => ({ ...o, optimised: false })) };
+    });
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 2 \u00b7 1 of 2 failed (1: not converged)" });
+    const done = setMembers(st(), resultOf(st(), step)!).molecules;
+    const failedIds = setMembers(st(), resultOf(st(), step, "failed")!).molecules;
+    expect([done.length, failedIds.length]).toEqual([1, 1]);
+    const failed = st().molecules3d.find((m) => m.id === failedIds[0])!;
+    // (its path, ending at the last geometry it reached - the failure that one's)
+    expect(failed.frames).toHaveLength(1);
+    expect(failed.failed).toEqual([null, { kind: "not-converged", why: "The optimisation did not converge" }]);
+    // (taken on from its Failed exit: one entry, the last geometry, saying why)
+    expect(setEntries([failed], "molecules").map((e) => e.failed)).toEqual([{ kind: "not-converged", why: "The optimisation did not converge" }]);
+    // (saved and opened again, as it was)
+    const saved = readWorkspace(workspaceText(st()))!;
+    const doc2 = createWorkspaceDocument();
+    const store2 = createEditorStore(doc2);
+    connectStoreToDocument(store2, doc2);
+    store2.getState().openWorkspace(saved, true);
+    expect(store2.getState().molecules3d.map((m) => m.failed ?? null)).toEqual(st().molecules3d.map((m) => m.failed ?? null));
+  });
+
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);

@@ -529,8 +529,9 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
-        // (why a program step could not do it, where one could not: its Failed exit's)
-        ...(e.failed ? { failed: [e.failed] } : {}),
+        // (why a program step could not do it, where one could not: its Failed exit's - of its last frame, a path's own
+        //  frames before it none)
+        ...(e.failed ? { failed: [...(path ?? []).map(() => null), e.failed] } : {}),
         ...e.keep,
       };
     });
