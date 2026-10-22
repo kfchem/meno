@@ -79,6 +79,13 @@ describe("a large set its step leaves", () => {
     expect(readWorkspace(JSON.stringify(saved))!.workflow!.sets.find((b) => b.id === rest)?.collection).toHaveLength(118);
   });
 
+  it("of structures drawn, keeps them the chemist's once its step is gone: no run is left to take them away", () => {
+    let doc = addStep(emptyWorkspaceDocument(), "duplicates", 0, 0, {});
+    const step = doc.steps![0].id;
+    doc = { ...doc, sets: [{ id: 5, x0: 0, y0: 0, x1: 2, y1: 2, made: { step, exit: "out" }, members: [{ structure: [1, 2] }], put: [1, 2] }] };
+    expect(removeStep(doc, step).sets).toEqual([{ id: 5, x0: 0, y0: 0, x1: 2, y1: 2, members: [{ structure: [1, 2] }] }]);
+  });
+
   it("is asked about before it is deleted by a key or a selection - not by its menu, which says it in words - and a set on the page is not", () => {
     const page = createWorkspaceDocument();
     const st = createEditorStore(page);

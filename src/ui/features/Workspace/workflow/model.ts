@@ -36,6 +36,11 @@ export function holdCollection(doc: WorkspaceDocument, id: number, collection: N
   return withSet(doc, id, ({ unread: _u, ...b }) => ({ ...b, members: [], collection, ...(unread ? { unread } : {}) }));
 }
 
+/** A result set of structures drawn with the atoms its step put on the page (`WorkflowSet.put`) - none, where it put none. */
+export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly number[]): WorkspaceDocument {
+  return withSet(doc, id, ({ put: _was, ...b }) => (atoms.length ? { ...b, put: [...atoms] } : b));
+}
+
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
 export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
@@ -198,8 +203,8 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
     ...doc,
     steps,
     wires: (doc.wires ?? []).filter((w) => w.to.step !== id && !empty.has(w.from.set)),
-    // (a set it made, kept, a chemist's - and kept in the file in full, its *Don't keep in the file* gone with the step that could make it again)
-    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, keep: _k, ...rest }) => rest)(b) : b)),
+    // (a set it made, kept, a chemist's - and kept in the file in full, its *Don't keep in the file* gone with the step that could make it again, and the atoms it put on the page the chemist's, no run to take them away)
+    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, keep: _k, put: _p, ...rest }) => rest)(b) : b)),
   };
 }
 
