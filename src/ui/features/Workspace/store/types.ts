@@ -618,6 +618,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A result set of structures drawn: the atoms, by id, its step put on the
+   * page as it last ran - all it takes away when the step runs again. A
+   * structure the chemist joined to one of them by a bond keeps its own
+   * atoms.
+   */
+  put?: number[];
+  /**
    * A result set of more entries than are laid out on the page
    * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
    * `LARGE_SET`): what the step gave, held in the set itself, in the step's
@@ -649,12 +656,21 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  */
 export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunKeptResults };
 /**
- * What an earlier run gave, as its exits' sets held it: the molecules its
- * first exit held, those its second held, and what kind of set they make -
- * with how many of each did not read from a file, and were left out
- * (`unread`, `restUnread`).
+ * What a run gave, as its exits' sets hold it and an earlier run kept
+ * keeps it: the molecules its first exit held, those its second held, and
+ * what kind of set they make - with how many of each did not read from a
+ * file, and were left out (`unread`, `restUnread`). Where they are
+ * structures drawn, `drawn` holds them instead, each as drawn - its atoms,
+ * its bonds and where they lie - and the two lists of molecules are empty.
  */
-export type RunKeptResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind; unread?: number; restUnread?: number };
+export type RunKeptResults = {
+  molecules: Omit<Molecule3D, "id" | "at">[];
+  rest: Omit<Molecule3D, "id" | "at">[];
+  holds: SetKind;
+  unread?: number;
+  restUnread?: number;
+  drawn?: { made: Model[]; rest: Model[] };
+};
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its

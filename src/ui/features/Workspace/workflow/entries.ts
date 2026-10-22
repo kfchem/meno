@@ -224,6 +224,15 @@ export function setMolecules(page: Page, set: Frame & Pick<WorkflowSet, "members
   return setMembers(page, set).molecules.map((id) => byId.get(id)!);
 }
 
+/**
+ * One entry of a set of structures drawn, as Meno's own steps take it and
+ * give it (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*): its place among the
+ * set's, from 0, and the structure as it is drawn - its atoms and bonds,
+ * where they lie on the page, its wedges, labels and all - in 2D. Never
+ * made 3D here: a step after it does that, as everywhere else.
+ */
+export type DrawnEntry = { place: number; drawn: Model };
+
 /** One entry of a set of molecules in 3D, as a step takes it: its compound by its place among the set's, its number among that compound's conformers, its atoms and bonds, its geometry, its energy. */
 export type SetEntry = {
   compound: number;

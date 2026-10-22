@@ -8,8 +8,8 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, unlikeMade, type SetEntry } from "./entries";
-import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
+import { compoundLetter, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
@@ -19,14 +19,18 @@ import { factor } from "../../../../lib/units";
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 
 /** What a step did: the entries it kept - with their shares, where it found them - and those it set aside, as a set that holds `holds`; or why it could not. */
-export type Outcome =
-  | { ok: true; holds: SetKind; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
+export type Outcome = Outcome3D | DrawnOutcome;
+/** What a step did on molecules in 3D (`Outcome`). */
+export type Outcome3D =
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
   | { ok: false; said: string };
+/** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
+export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string } | { ok: false; said: string };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`). */
-export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: SetKind, own?: OptionValues, energiesBy?: string): Outcome {
+export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string): Outcome3D {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
@@ -46,6 +50,20 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
 }
 
 /**
+ * A Meno step of `kind` on structures drawn, each as drawn: what it keeps,
+ * and what it sets aside, as structures drawn. None of Meno's steps works
+ * on structures drawn yet; *Enumerate* is the first (docs/WORKFLOWS-FOUNDATION.md,
+ * *Enumerate*, P3).
+ */
+export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[]): DrawnOutcome {
+  if (!entries.length) return { ok: false, said: "Nothing came in" };
+  switch (kind) {
+    default:
+      return { ok: false, said: "Meno does not do this itself on structures drawn" };
+  }
+}
+
+/**
  * How a step done in turns goes: each turn as long as `slice` by the clock
  * `now` (milliseconds), the turns let go between (`pause`), told how many
  * entries it has been through at most every `tell` (`onDone`), and given
@@ -60,7 +78,7 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
  * stopped: null. The other steps take no time to speak of, and are done
  * at once.
  */
-export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: SetKind, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome | null> {
+export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome3D | null> {
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   const now = how.now ?? (() => performance.now());
@@ -165,7 +183,7 @@ export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]>
  * perceived, or a centre left unspecified - is no conformer of a known
  * compound; constitution alone would sum diastereomers.
  */
-function asConformers(entries: readonly SetEntry[]): Outcome {
+function asConformers(entries: readonly SetEntry[]): Outcome3D {
   const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
   if (unknown >= 0) {
     const st = entries[unknown].stereo;
@@ -188,10 +206,10 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   return [...out.values()];
 }
 
-const NO_ENERGY: Outcome = { ok: false, said: "Not every entry has an energy" };
+const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" };
 
 /** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
-function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
+function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
@@ -211,7 +229,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
  * twice is the same structure, not two compounds. Never two of different
  * charge or spin: they are different species, however alike in shape.
  */
-function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, due: () => boolean): Generator<number, Outcome> {
+function* duplicates(entries: readonly SetEntry[], holds: Holds3D, most: number, due: () => boolean): Generator<number, Outcome3D> {
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
   const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every((e) => e.energy != null);
@@ -319,7 +337,7 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
 }
 
 /** Each conformer's Boltzmann population within its compound at `kelvin`. */
-function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
+function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
   if (entries.some((e) => e.energy == null)) return NO_ENERGY;
   // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
   if (!(kelvin > 0)) return { ok: false, said: "The temperature must be above 0 K" };
@@ -348,7 +366,7 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
  * names the one chosen, of how many, and what the energies it was ranked
  * by are (`by`: the program and method that worked them out).
  */
-function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome {
+function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome3D {
   if (number == null && entries.some((e) => e.energy == null)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
