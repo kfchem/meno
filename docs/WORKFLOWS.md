@@ -1759,6 +1759,11 @@ each entry's number, then its energy).
   says it has changed when the table - its columns and rows - its options
   or what comes into it has. An earlier run's chart is not kept among its
   runs: shown again, the set holds the chart it holds now.
+- Seen as a table, molecules are each read as they are - a conformer
+  set's frames as its conformers, another molecule's frames each an entry
+  of its own - so a set mixing the two goes into Chart, which a step that
+  works on entries refuses (*A wire let go on an input that does not take
+  it*; kinds `readsAsTable`).
 
 ## Questions
 

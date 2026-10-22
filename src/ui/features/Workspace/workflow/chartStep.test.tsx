@@ -109,6 +109,40 @@ describe("a Chart step", () => {
     expect([entryOnPage(doc, "molecule:1#2"), entryOnPage(doc, "molecule:9#0"), entryOnPage(doc, "C1"), entryOnPage(doc, undefined)]).toEqual([{ molecule: 1, frame: 2 }, null, null, null]);
   });
 
+  it("takes a set mixing a conformer set with a molecule of one geometry - seen as a table, each as it is - which a step on entries refuses", () => {
+    const one = (x: number, energies: number[], set: boolean): Omit<Molecule3D, "id"> => ({
+      at: { x, y: 0 },
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.96, y: 0, z: 0 },
+        { el: "H", x: -0.24, y: 0.93, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      ...(energies.length > 1 ? { frames: energies.slice(1).map(() => [0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0]) } : {}),
+      energies,
+      ...(set ? { conformerSet: true } : {}),
+    });
+    let doc = addMolecule3d(emptyWorkspaceDocument(), one(0, [-5.07, -5.08], true));
+    doc = addMolecule3d(doc, one(2, [-5.1], false));
+    doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
+    doc = addStep(doc, "chart", 10, 0);
+    doc = addStep(doc, "energy-window", 10, 10);
+    expect([canWire(doc, { set: 1 }, 2), canWire(doc, { set: 1 }, 3)]).toEqual([true, false]);
+    doc = connect(doc, { set: 1 }, 2);
+    // (the conformer set's two, numbered as its conformers; the molecule's one, its own)
+    const t = tableInto(doc, 2)!;
+    const at = (name: string) => t.columns.findIndex((c) => c.name === name);
+    expect(t.rows.map((r) => [r[0], r[at("group")], r[at("number")]])).toEqual([
+      ["molecule:1#0", "a", 1],
+      ["molecule:1#1", "a", 2],
+      ["molecule:2#0", "b", 1],
+    ]);
+    expect(runStep(doc, 2, W).steps!.find((s) => s.id === 2)!.ran).toMatchObject({ ok: true, said: "3 points" });
+  });
+
   it("takes no structures drawn, and says what it takes", () => {
     let doc = emptyWorkspaceDocument();
     doc = { ...doc, model: { ...doc.model, atoms: [{ id: 1, el: "C", x: 0, y: 0 } as WorkspaceDocument["model"]["atoms"][number]] } };

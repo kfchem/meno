@@ -6,10 +6,10 @@
 import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
-import { entryOfSet, holdsOf, plainAmong, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
+import { conformersOfOne, entryOfSet, holdsOf, plainAmong, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import { moleculesAsTable, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takenBy, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
@@ -87,8 +87,8 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   // (pictures - a Render step's - and charts no step takes)
   if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
   if (holds == null) return null;
-  // (a set mixing conformer sets with other molecules, which no step takes: which are the others)
-  const mixed = holds === "molecules" && !set.made ? plainAmong(setMolecules(doc, set)) : null;
+  // (a set mixing conformer sets with other molecules, which no step takes as its entries: which are the others - one read as a table takes it, each molecule as it is)
+  const mixed = holds === "molecules" && !set.made && !readsAsTable(step.kind, port) ? plainAmong(setMolecules(doc, set)) : null;
   if (mixed) return mixed;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
   const several = inputsOf(step.kind).length > 1;
@@ -132,8 +132,15 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
   const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
+  // (each molecule as it is - a conformer set's frames its conformers, another's each an entry of its own - in a set that mixes them too)
+  let compounds = 0;
+  const entries = input.molecules.flatMap((m) => {
+    const es = setEntries([m], conformersOfOne(m) ? "conformers" : "molecules").map((e) => ({ ...e, compound: compounds + e.compound }));
+    compounds += new Set(es.map((e) => e.compound)).size;
+    return es;
+  });
   return moleculesAsTable(
-    setEntries(input.molecules, input.holds).map((e: SetEntry) => {
+    entries.map((e: SetEntry) => {
       const entry = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
       const energy = entry.properties.energy;
       const how = e.from != null ? by.get(e.from) : undefined;

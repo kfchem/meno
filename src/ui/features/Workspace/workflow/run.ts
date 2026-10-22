@@ -17,7 +17,7 @@ import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entri
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto } from "./flow";
 import { chartOfTable, chartSaid } from "../../../../lib/chart";
-import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
@@ -97,7 +97,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const holds = input?.holds ?? (tableWired(doc, step.id) ? "table" : null);
   if (!holds) return "Nothing comes into it";
   // (a set that came to mix conformer sets with other molecules after it was wired)
-  const mixed = input?.holds === "molecules" && from && !findSet(doc, from.set)?.made ? plainAmong(input.molecules) : null;
+  const mixed = input?.holds === "molecules" && from && !findSet(doc, from.set)?.made && !readsAsTable(step.kind, ONE_INPUT) ? plainAmong(input.molecules) : null;
   if (mixed) return mixed;
   if (!takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";

@@ -252,6 +252,9 @@ export function portOf(kind: StepKind, port: string): StepPort {
   return inputs.find((p) => p.id === port) ?? inputs[0];
 }
 
+/** Whether an input reads what comes in as a table (lib/table `moleculesAsTable`) - each molecule as it is, a conformer set's frames its conformers - rather than as a step's entries: one that takes a table. A set mixing conformer sets with other molecules goes into it. */
+export const readsAsTable = (kind: StepKind, port: string): boolean => portOf(kind, port).takes.includes("table");
+
 /** The exit of `kind` named `exit`, or its first where `exit` is not one of its own. */
 export function exitOf(kind: StepKind, exit: string): StepExit {
   const exits = exitsOf(kind);
