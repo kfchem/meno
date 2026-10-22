@@ -1446,6 +1446,35 @@ columns or more, every row - offers *Put on the page as a table* on its
 menu: a set holding it, named for the text, beside it. Prose is not
 offered.
 
+### Charts (2026-10-22)
+
+**Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
+takes a table - or molecules or conformer sets, seen as one - and gives a
+chart, one column of numbers against another, in a set of its own to the
+right of it. Its options name the columns, *Across* and *Up*; none named,
+it takes the first two columns of numbers (molecules seen as a table:
+each entry's number, then its energy).
+- A point for each row with a number in both; **a row without is counted
+  and said**, by what it lacks ("4 points · 1 row left (1 with no
+  measured)"). A column named that is not there, or is no column of
+  numbers, or a table with fewer than two such: the step says why, and
+  makes nothing.
+- Each axis is labelled with its column's name, unit, and what worked its
+  numbers out where that is known ("energy (Eh) · xtb · GFN2-xTB · gas
+  phase"). The ticks are 1, 2 or 5 times a power of ten, about five of
+  them, from below the least value to above the greatest.
+- A point pointed at says its row and its two values; pressed, where it is
+  of a molecule on the page, that molecule is chosen at its frame.
+- Its set's count line says its points. It is kept in the workspace's
+  file. A chart goes into no step.
+- A point dragged reports where to in the axes' own units (`ChartBody`
+  `onPointDrag`) - the place a step that works with it starts from. Nothing
+  on the page takes it yet.
+- Run again, it charts what comes in now, in the set it made before; it
+  says it has changed when the table - its columns and rows - its options
+  or what comes into it has. An earlier run's chart is not kept among its
+  runs: shown again, the set holds the chart it holds now.
+
 ## Questions
 
 None left open in what is built (2026-10-08): the seven steps are built

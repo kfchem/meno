@@ -6,7 +6,9 @@
 import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
-import { holdsOf, setMembers, setMolecules } from "./entries";
+import { entryOfSet, holdsOf, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
+import { moleculesAsTable, type Table } from "../../../../lib/table";
+import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind, isSetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
@@ -89,6 +91,52 @@ export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKin
   if (!isSetKind(holds)) return null;
   const { structures } = setMembers(doc, set);
   return { holds, molecules: setMolecules(doc, set), structures };
+}
+
+/** The table a set holds that comes into a step - read from a file, or a step's: none where what comes in holds none. */
+export function tableWired(doc: Flow, step: number, port?: string): Table | null {
+  const from = wireInto(doc, step, port)?.from;
+  return (from && findSet(doc, from.set)?.table) || null;
+}
+
+/**
+ * What comes into a step as a table (lib/table, docs/WORKFLOWS.md
+ * *Tables*): the table a set holds; or molecules in 3D seen as one, an
+ * entry a row (`moleculesAsTable`) - named for the molecule and frame it is
+ * ("molecule:3#2"), and its energy with the program and level that worked
+ * it out, where the molecule's calculation says them. None where nothing
+ * comes in, or what does is structures drawn, pictures or a chart.
+ */
+export function tableInto(doc: Flow, step: number, port?: string): Table | null {
+  const table = tableWired(doc, step, port);
+  if (table) return table;
+  const input = inputOf(doc, step, port);
+  if (!input || input.holds === "structures") return null;
+  const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
+  return moleculesAsTable(
+    setEntries(input.molecules, input.holds).map((e: SetEntry) => {
+      const entry = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
+      const energy = entry.properties.energy;
+      const how = e.from != null ? by.get(e.from) : undefined;
+      return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
+    }),
+  );
+}
+
+/** The molecule in 3D on the page, and its frame, a row of molecules seen as a table is of (`tableInto`): none where it names none, or that molecule is not on the page. */
+export function entryOnPage(doc: Pick<Flow, "molecules3d">, entry: string | undefined): { molecule: number; frame: number } | null {
+  const m = entry != null ? /^molecule:(\d+)#(\d+)$/.exec(entry) : null;
+  if (!m) return null;
+  const molecule = Number(m[1]);
+  return (doc.molecules3d ?? []).some((x) => x.id === molecule) ? { molecule, frame: Number(m[2]) } : null;
+}
+
+/** A table's columns and rows as text, for a step's key: worked out once for each table - a table changed is a new one. */
+const tableTexts = new WeakMap<Table, string>();
+function tableText(t: Table): string {
+  let text = tableTexts.get(t);
+  if (text == null) tableTexts.set(t, (text = JSON.stringify([t.columns, t.rows])));
+  return text;
 }
 
 /** FNV-1a over a string: a short key for what came into a step. */
@@ -177,9 +225,13 @@ function drawnKey(model: Model, ids: readonly number[]): string {
 
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
+  const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
+  // (a table: its columns and rows, as they are)
+  const table = tableWired(doc, step.id);
+  if (table) return hash(tableText(table), hash(`table|${step.kind}|${by}|${options}`)).toString(36);
   const input = inputOf(doc, step.id);
   if (!input) return "";
-  let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
+  let h = hash(`${input.holds}|${step.kind}|${by}|${options}`);
   for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
   for (const s of input.structures) h = hash(drawnKey(doc.model, s), h);
   return h.toString(36);

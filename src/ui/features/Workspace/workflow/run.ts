@@ -12,12 +12,13 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, LARGE_SET, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
-import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
+import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto } from "./flow";
+import { chartOfTable, chartSaid } from "../../../../lib/chart";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, holdChart, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -54,6 +55,8 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const why = whyNot(doc, step, by);
   if (why) return fail(why);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
+  // (a chart: a table's columns, one against the other)
+  if (step.kind === "chart") return chartRun(doc, step, w, key);
   if (!input) return fail("Nothing comes into it");
   const outcome = runMeno(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds, step.options, energiesBy(input.molecules));
   return ranAs(doc, id, outcome, key, w);
@@ -83,11 +86,41 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const before = from ? findSet(doc, from.set)?.made?.step : undefined;
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
-  const input = inputOf(doc, step.id);
-  if (!input) return "Nothing comes into it";
-  if (!takesBy(step.kind, by, input.holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
+  const holds = inputOf(doc, step.id)?.holds ?? (tableWired(doc, step.id) ? "table" : null);
+  if (!holds) return "Nothing comes into it";
+  if (!takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
   return null;
+}
+
+/**
+ * `doc` with a Chart step run (docs/WORKFLOWS.md, *Charts*): what comes in
+ * seen as a table (flow `tableInto`), the columns its options name - or its
+ * first two of numbers - one against the other (lib/chart `chartOfTable`),
+ * in its result set: made to the right of it, or the one it made before.
+ * Why not, where it cannot be.
+ */
+function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: string): WorkspaceDocument {
+  const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
+  const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
+  const table = tableInto(doc, step.id);
+  if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
+  const o = step.options ?? {};
+  const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
+  if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));
+  doc = keepRun(doc, step);
+  const exit = exitsOf(step.kind)[0].id;
+  const madeBy = { step: step.id, exit, holds: "chart" as const };
+  const was = resultOf(doc, step.id, exit);
+  // (what it held before - a frame of a step not run yet holds nothing - gone; the frame as large as a chart is drawn)
+  if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const frame = was ? frameAt(was.x0, was.y1, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, CHART_SET.w, CHART_SET.h);
+  if (was) doc = holdChart(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, chart);
+  else {
+    const id = doc.nextWorkflowId ?? 1;
+    doc = holdChart(markMade(addSet(doc, frame, madeBy), id, madeBy), id, chart);
+  }
+  return setRan(doc, step.id, said(true, chartSaid(chart)));
 }
 
 /**

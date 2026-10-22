@@ -30,7 +30,7 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
 }
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer";
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "chart";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -146,6 +146,21 @@ export const KINDS: readonly KindInfo[] = [
       { id: "number", label: "Its number", type: "number", default: 1, min: 1, step: 1 },
     ],
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
+  },
+  {
+    kind: "chart",
+    name: "Chart",
+    icon: "chart",
+    // (a table - or molecules, seen as one: lib/table moleculesAsTable)
+    takes: ["table"],
+    gives: "chart",
+    runs: "entries",
+    made: "Chart",
+    options: [
+      { id: "x", label: "Across", type: "text", default: "" },
+      { id: "y", label: "Up", type: "text", default: "" },
+    ],
+    how: (v) => (v.x || v.y ? `${v.y || "the second column of numbers"} against ${v.x || "the first"}` : "The first two columns of numbers"),
   },
 ];
 

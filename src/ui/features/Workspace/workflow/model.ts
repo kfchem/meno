@@ -3,13 +3,14 @@
  * steps and wires, numbered from one counter - each change an edit to the
  * document, so that undo takes it back and Save keeps it.
  */
+import type { ChartValue } from "../../../../lib/chart";
 import type { Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
-import { PX, SET_PAD, SET_TOP, TABLE_PX } from "./look";
+import { CHART_PX, PX, SET_PAD, SET_TOP, TABLE_PX } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
 import { exitsOf, inputsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
@@ -50,6 +51,14 @@ export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[
 /** A step's result set holding what the step made itself, in its order (`WorkflowSet.collection`): none of the page's molecules among its members. */
 export function holdCollection(doc: WorkspaceDocument, id: number, collection: NonNullable<WorkflowSet["collection"]>, unread?: number): WorkspaceDocument {
   return withSet(doc, id, ({ unread: _u, ...b }) => ({ ...b, members: [], collection, ...(unread ? { unread } : {}) }));
+}
+
+/** How large a set holding a chart is made, on the page: its axes, labels and points. */
+export const CHART_SET = { w: CHART_PX.w * PX + 2 * SET_PAD, h: SET_TOP + CHART_PX.h * PX + SET_PAD };
+
+/** A step's result set holding a chart it made (`WorkflowSet.chart`): nothing on the page among its members, and no molecules of its own. */
+export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue): WorkspaceDocument {
+  return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));
 }
 
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */

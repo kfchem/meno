@@ -412,11 +412,11 @@ const chem = {
 
 // --- the property ------------------------------------------------------------------
 
-/** Each kind of step and who fills it: every plugin the catalogue says fills it, and Meno. Render gives pictures, which have no charge. */
+/** Each kind of step and who fills it: every plugin the catalogue says fills it, and Meno. Render gives pictures, and Chart a chart, which have no charge. */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -495,9 +495,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - Render alone left out here: it gives pictures)
+    // (each kind Meno defines filled by something - Render and Chart alone left out here: they give pictures and a chart)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["render"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["render", "chart"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

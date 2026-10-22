@@ -343,7 +343,7 @@ const isCell = (c: unknown): c is Cell => c === null || typeof c === "string" ||
 const isText = (v: unknown): v is string => typeof v === "string";
 
 /** What a file kept of what worked a number out, or where: its text fields as they are; none where nothing reads. */
-function fieldsIn<T extends object>(v: unknown, numbers: readonly string[] = []): T | undefined {
+export function fieldsIn<T extends object>(v: unknown, numbers: readonly string[] = []): T | undefined {
   if (!v || typeof v !== "object") return undefined;
   const out: Record<string, string | number> = {};
   for (const [k, x] of Object.entries(v)) if (isText(x) || (numbers.includes(k) && typeof x === "number" && Number.isFinite(x))) out[k] = x;

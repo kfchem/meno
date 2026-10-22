@@ -60,6 +60,8 @@ export const SET_PAD = 14 * PX;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
+/** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
+export const CHART_PX = { w: 360, h: 260 };
 export const NAME_DOWN = 18 * PX;
 /** A result set's distance from its step, and between molecules in it. */
 export const GAP = 64 * PX;

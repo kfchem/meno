@@ -7,6 +7,7 @@ import {
   CursorArrowRaysIcon,
   FunnelIcon,
   PhotoIcon,
+  PresentationChartLineIcon,
   QueueListIcon,
   RectangleGroupIcon,
   SignalIcon,
@@ -34,6 +35,7 @@ const ICONS: Record<StepIcon, Icon> = {
   bars: ChartBarIcon,
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
+  chart: PresentationChartLineIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

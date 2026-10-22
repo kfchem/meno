@@ -1,5 +1,8 @@
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
+import { axisLabel, chartSaid, ticksOf, type Axis, type ChartPoint, type ChartValue } from "../../../../lib/chart";
+import { CHART_PX } from "./look";
 
 /** How many of a table's rows its frame shows. */
 const SHOWN_ROWS = 6;
@@ -68,6 +71,125 @@ export function NumberBody({ number }: { number: NumberValue }) {
         {number.unit !== "none" && <span className="ml-1 text-sm text-gh-gray">{number.unit}</span>}
       </span>
       <span className="text-[10px] text-gh-gray">{how || "What worked it out: not stated"}</span>
+    </div>
+  );
+}
+
+/** What worked an axis's numbers out, as its label says it: the program, model or plugin and the method, and the temperature; none where none is known. */
+const howOf = (a: Pick<Axis, "by" | "at">) => [a.by?.program ?? a.by?.model ?? a.by?.plugin, a.by?.method, a.at?.kelvin != null ? `${a.at.kelvin} K` : undefined].filter(Boolean).join(" \u00b7 ");
+
+/** An axis's label in full: its name and unit, and what worked its numbers out. */
+const labelOf = (a: Axis) => [axisLabel(a), howOf(a)].filter(Boolean).join(" \u00b7 ");
+
+/** Where a chart's points are drawn inside its frame, in px: room below for the across axis's numbers and label and what it is - and left, for the up axis's label and its widest number (`DIGIT` each character). */
+const PLOT = { right: 12, top: 6, bottom: 50, label: 22 };
+const DIGIT = 6.2;
+/** A point's radius, in px; how far a press moves before it is a drag. */
+const DOT = 3;
+const DRAG = 4;
+
+/**
+ * A set holding a chart, inside its frame (docs/WORKFLOWS.md, *Charts*):
+ * one column against the other, each axis with its numbers, its name and
+ * unit and what worked it out; a point for each row with both, said - its
+ * row and values - while it is pointed at, its entry shown where it is
+ * pressed (`onPoint`); and how many points there are, and how many rows
+ * were left and why, never hidden. A point dragged (`onPointDrag`) tells
+ * where to, in the axes' own units - for what is to work with it; nothing
+ * on the page does yet.
+ */
+export function ChartBody({ chart, onPoint, onPointDrag }: { chart: ChartValue; onPoint?: (p: ChartPoint) => void; onPointDrag?: (p: ChartPoint, to: { x: number; y: number }) => void }) {
+  const [pointed, setPointed] = useState<ChartPoint | null>(null);
+  const pressed = useRef<{ p: ChartPoint; x: number; y: number; moved: boolean } | null>(null);
+  const xs = chart.points.map((p) => p.x);
+  const ys = chart.points.map((p) => p.y);
+  const tx = ticksOf(xs.length ? Math.min(...xs) : 0, xs.length ? Math.max(...xs) : 1);
+  const ty = ticksOf(ys.length ? Math.min(...ys) : 0, ys.length ? Math.max(...ys) : 1);
+  const left = PLOT.label + Math.ceil(DIGIT * Math.max(...ty.ticks.map((t) => numberText(t).length))) + 8;
+  const w = CHART_PX.w - left - PLOT.right;
+  const h = CHART_PX.h - PLOT.top - PLOT.bottom;
+  const px = (v: number) => ((v - tx.from) / (tx.to - tx.from)) * w;
+  const py = (v: number) => h - ((v - ty.from) / (ty.to - ty.from)) * h;
+  const rowsLeft = chart.left.reduce((n, l) => n + l.count, 0);
+  const said = pointed
+    ? `Row ${pointed.row + 1} \u00b7 ${chart.x.name} ${numberText(pointed.x)}${chart.x.unit === "none" ? "" : ` ${chart.x.unit}`} \u00b7 ${chart.y.name} ${numberText(pointed.y)}${chart.y.unit === "none" ? "" : ` ${chart.y.unit}`}`
+    : chartSaid(chart);
+  const down = (p: ChartPoint, e: ReactPointerEvent) => {
+    e.stopPropagation();
+    pressed.current = { p, x: e.clientX, y: e.clientY, moved: false };
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+  };
+  const move = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const at = pressed.current;
+    if (!at) return;
+    if (!at.moved && Math.hypot(e.clientX - at.x, e.clientY - at.y) < DRAG) return;
+    at.moved = true;
+    if (!onPointDrag) return;
+    // (where to, in the axes' units: the page's zoom taken out by the plot's own size on screen)
+    const r = e.currentTarget.getBoundingClientRect();
+    const fx = (e.clientX - r.left) / r.width;
+    const fy = (e.clientY - r.top) / r.height;
+    onPointDrag(at.p, { x: tx.from + fx * (tx.to - tx.from), y: ty.to - fy * (ty.to - ty.from) });
+  };
+  const up = () => {
+    const at = pressed.current;
+    pressed.current = null;
+    if (at && !at.moved) onPoint?.(at.p);
+  };
+  return (
+    <div className="relative text-[10px] leading-3 text-gh-gray tabular-nums" style={{ width: CHART_PX.w, height: CHART_PX.h }} data-set-chart="">
+      <svg
+        className="absolute overflow-visible"
+        style={{ left: left, top: PLOT.top, pointerEvents: "auto" }}
+        width={w}
+        height={h}
+        viewBox={`0 0 ${w} ${h}`}
+        onPointerMove={move}
+        onPointerUp={up}
+        onPointerCancel={() => (pressed.current = null)}
+      >
+        <rect x={0} y={0} width={w} height={h} className="fill-none stroke-gh-line" strokeWidth={1} />
+        {tx.ticks.map((t) => (
+          <line key={`x${t}`} x1={px(t)} x2={px(t)} y1={h} y2={h + 4} className="stroke-gh-gray" strokeWidth={1} />
+        ))}
+        {ty.ticks.map((t) => (
+          <line key={`y${t}`} x1={-4} x2={0} y1={py(t)} y2={py(t)} className="stroke-gh-gray" strokeWidth={1} />
+        ))}
+        {chart.points.map((p, i) => (
+          <circle
+            key={i}
+            cx={px(p.x)}
+            cy={py(p.y)}
+            r={pointed === p ? DOT + 1.5 : DOT}
+            className={pointed === p ? "fill-accel-base" : "fill-accel-base/70"}
+            style={{ cursor: onPoint ? "pointer" : undefined }}
+            onPointerEnter={() => setPointed(p)}
+            onPointerLeave={() => setPointed((q) => (q === p ? null : q))}
+            onPointerDown={(e) => down(p, e)}
+          />
+        ))}
+      </svg>
+      {/* (the axes' numbers and labels in HTML: SVG text is not drawn on the page's layer) */}
+      {tx.ticks.map((t) => (
+        <span key={`x${t}`} className="absolute -translate-x-1/2" style={{ left: left + px(t), top: PLOT.top + h + 6 }}>
+          {numberText(t)}
+        </span>
+      ))}
+      {ty.ticks.map((t) => (
+        <span key={`y${t}`} className="absolute -translate-y-1/2 text-right" style={{ right: CHART_PX.w - left + 6, top: PLOT.top + py(t) }}>
+          {numberText(t)}
+        </span>
+      ))}
+      <span className="absolute -translate-x-1/2 whitespace-nowrap text-gh-black" style={{ left: left + w / 2, top: PLOT.top + h + 20 }} data-axis="x">
+        {labelOf(chart.x)}
+      </span>
+      <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: PLOT.top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
+        {labelOf(chart.y)}
+      </span>
+      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={chart.left.map((l) => `${l.count} ${l.count === 1 ? "row" : "rows"} ${l.why}`).join("\n") || undefined}>
+        {said}
+        {!pointed && rowsLeft ? ` (${chart.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}
+      </span>
     </div>
   );
 }
