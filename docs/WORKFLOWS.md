@@ -1588,7 +1588,11 @@ All of it is optional. A structure the chemist drew has none.
   configuration the drawing shows - not how it is drawn: not where it
   lies, which bonds are wedged or which way, whether an H is drawn, nor
   whether a group is written by its label. Clean-up, which draws the same
-  structure afresh, keeps a record as it is.
+  structure afresh, keeps a record as it is. Where its wedges cannot be
+  read (drawn crossed, or on an atom with a lone pair) or its identity is
+  not worked out in full, the identity does not hold its configuration, so
+  the drawing's own key is in `of` too: any change to the drawing is taken
+  for a change of structure.
   Edited since - an atom, a charge, a mass or a bond changed, an atom
   taken away or added, the configuration turned to its mirror image, a
   group's label or what it holds changed, joined to a structure of the

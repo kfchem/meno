@@ -178,7 +178,9 @@ export function membersOf(found: {
  * not how: not where it lies, which wedges say it, whether an H is drawn,
  * nor whether a group is written by its label. So Clean-up, which draws
  * the same structure afresh, keeps a record's properties; a changed atom,
- * charge, bond, or configuration - its mirror image - does not.
+ * charge, bond, or configuration - its mirror image - does not. Where its
+ * wedges cannot be read, or its identity not worked out in full, the
+ * drawing itself is in the key too: any change to it is taken for one.
  */
 export function drawnHash(model: Model, ids: readonly number[]): string {
   // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
@@ -186,7 +188,10 @@ export function drawnHash(model: Model, ids: readonly number[]): string {
   const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
   let key = identities.get(drawn);
   if (key == null) {
-    key = hash(identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids)))).text).toString(36);
+    // (wedges identity cannot read - crossed, or on an atom with a lone pair - or a search it could not finish: its configuration
+    // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
+    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
+    key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
     if (identities.size >= IDENTITIES_KEPT) identities.clear();
     identities.set(drawn, key);
   }

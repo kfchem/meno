@@ -154,4 +154,30 @@ describe("a structure drawn's record, through Clean-up", () => {
     // (what OAc stands for, held: the same group)
     expect(bare(relabelled((a) => ({ ...a, abbrev: placedAbbreviation("OAc", null, NOMINAL_BOND_LENGTH)! })))).toEqual(sampled);
   });
+
+  it("where its wedges cannot be read, is of the drawing itself: a wedge changed there is a change, moved whole it is not", () => {
+    // (a carbon with four groups, a wedge and a hash in line: no configuration identity can read)
+    const crossed: Model = {
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+        { id: 2, el: "F", x: 1.5, y: 0, r: 0.9 },
+        { id: 3, el: "Cl", x: -1.5, y: 0, r: 0.9 },
+        { id: 4, el: "Br", x: 0, y: 1.5, r: 0.9 },
+        { id: 5, el: "I", x: 0, y: -1.5, r: 0.9 },
+      ],
+      bonds: [
+        { id: 6, a: 1, b: 2, order: 1, stereo: "up" },
+        { id: 7, a: 1, b: 3, order: 1, stereo: "down" },
+        { id: 8, a: 1, b: 4, order: 1, stereo: "up" },
+        { id: 9, a: 1, b: 5, order: 1, stereo: "down" },
+      ],
+    };
+    const before = given([{ ...crossed, record: sampled }]);
+    const ids = setMembers(before, resultOf(before, before.steps![0].id)!).structures[0];
+    const edited = (model: Model) => records(membersSettled({ ...before, model }, before))[0];
+    // (two wedges turned over: identity reads no configuration either way, but the drawing says another)
+    const turned = new Set(before.model.bonds.filter((b) => ids.includes(b.a) && (b.stereo === "up" || b.stereo === "down")).slice(0, 2).map((b) => b.id));
+    expect(edited({ ...before.model, bonds: before.model.bonds.map((b) => (turned.has(b.id) ? { ...b, stereo: b.stereo === "up" ? ("down" as const) : ("up" as const) } : b)) })).toEqual({ from: ["seed-1"], stale: BEFORE_THE_EDIT });
+    expect(bare(edited({ ...before.model, atoms: before.model.atoms.map((a) => (ids.includes(a.id) ? { ...a, x: a.x + 0.4, y: a.y - 0.3 } : a)) }))).toEqual(sampled);
+  });
 });
