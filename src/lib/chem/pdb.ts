@@ -513,3 +513,22 @@ function symbolFor(el: string, isotope?: number): string {
   if (sym === "H") for (const [own, mass] of HYDROGENS) if (mass === isotope) return own;
   return sym;
 }
+
+/**
+ * What a PDB file cannot hold of atoms to be written (`writePdb`), in plain
+ * words - its mass numbers but hydrogen's D and T, and charges past 9 either
+ * way, which its columns 79-80 cannot hold - and how many atoms lose each;
+ * null where it holds everything. The format's own limit: said, not got
+ * round (the maintainer, 2026-10-22: nothing silent).
+ */
+export function pdbLeavesOut(atoms: readonly Pick<PdbWriteAtom, "el" | "isotope" | "charge">[]): string | null {
+  const own = (a: Pick<PdbWriteAtom, "el" | "isotope">) => symbol(a.el) === "H" && [...HYDROGENS.values()].includes(a.isotope ?? 0);
+  const isotopes = atoms.filter((a) => a.isotope && !own(a));
+  const charges = atoms.filter((a) => a.charge && Math.abs(a.charge) > 9);
+  const n = (k: number, what: string) => (k === 1 ? `1 atom's ${what}` : `${k} atoms' ${what}s`);
+  const parts = [
+    ...(isotopes.length ? [`${n(isotopes.length, "isotope")} (${[...new Set(isotopes.map((a) => `${a.isotope}${symbol(a.el) ?? a.el}`))].join(", ")}) - it holds hydrogen's D and T only`] : []),
+    ...(charges.length ? [`${n(charges.length, "charge")} - it holds charges up to 9 either way`] : []),
+  ];
+  return parts.length ? `A PDB file cannot hold ${parts.join("; or ")}: left out.` : null;
+}
