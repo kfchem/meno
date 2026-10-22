@@ -665,7 +665,7 @@ export type StepRunning = {
   options: OptionValues;
   jobs: StepJob[];
   kind?: StepKind;
-  /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words - each runs alone. */
+  /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
   over?: string;
 };
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */

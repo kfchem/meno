@@ -564,10 +564,13 @@ states an undo goes back to as well.
   declares (ORCA's %maxcore for each process, Gaussian's %Mem); one that
   declares none is counted by its cores alone. So a small job waits behind
   a large one that does not fit yet, though it would fit itself: the
-  order is kept, and nothing is starved. A job larger than the limits,
-  though no larger than the computer, runs alone, and its step says so (*1
-  job asks for more memory (30.0 GB) than jobs may use (24.0 GB): it runs
-  alone*); one larger than the computer - more cores or memory than it
+  order is kept, and nothing is starved. A job asking for more memory than
+  the limits, though no more than the computer has, starts once no job
+  that declares memory runs, and none that declares memory starts beside
+  it - one that declares none still may, where cores allow - and its step
+  says so (*1 job asks for more memory (30.0 GB) than jobs may use (24.0
+  GB): nothing else that declares memory runs beside it*); one larger than
+  the computer - more cores or memory than it
   has - is refused, saying so, never started to swap or fail inside its
   program.
 - **A step on many entries makes one job for each** (decided), queued as

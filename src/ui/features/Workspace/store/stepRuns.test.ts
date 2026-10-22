@@ -714,7 +714,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 Some atoms are very close" });
   });
 
-  it("says where a job asks for more memory than jobs may use - it runs alone - kept with the workspace while it runs", async () => {
+  it("says where a job asks for more memory than jobs may use - nothing else that declares memory runs beside it - kept with the workspace while it runs", async () => {
     const { st, step } = waters(2);
     const job = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...job, memory: 30 * 1024 }, { entries: [1], ...job, memory: 1000 }] }) as never);
@@ -722,7 +722,7 @@ describe("a step that runs a plugin's program", () => {
     await settle();
     await settle();
     expect(asked.started.map((a) => a.memory)).toEqual([30 * 1024, 1000]);
-    const over = "1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): it runs alone";
+    const over = "1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside it";
     expect(st().steps.find((s) => s.id === step)!.running?.over).toBe(over);
     end(1);
     end(2);

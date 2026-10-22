@@ -54,11 +54,11 @@ describe("jobs", () => {
     expect(limitsOf({}, { cores: 4, memory: 0 })).toEqual({ cores: 4, memory: 0 });
   });
 
-  it("says where a step's jobs ask for more memory than jobs may use: each runs alone", () => {
+  it("says where a step's jobs ask for more memory than jobs may use: nothing else that declares memory runs beside one", () => {
     const limits = { memory: 24 * 1024 };
     expect(overLimits([{ memory: 12000 }, {}], limits)).toBeNull();
-    expect(overLimits([{ memory: 30 * 1024 }, { memory: 12000 }], limits)).toBe("1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): it runs alone");
-    expect(overLimits([{ memory: 30 * 1024 }, { memory: 28 * 1024 }], limits)).toBe("2 jobs ask for more memory (30.0 GB) than jobs may use (24.0 GB): each runs alone");
+    expect(overLimits([{ memory: 30 * 1024 }, { memory: 12000 }], limits)).toBe("1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside it");
+    expect(overLimits([{ memory: 30 * 1024 }, { memory: 28 * 1024 }], limits)).toBe("2 jobs ask for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside each");
     // (no limit on memory: nothing to say)
     expect(overLimits([{ memory: 30 * 1024 }], { memory: 0 })).toBeNull();
   });
