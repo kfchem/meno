@@ -7,6 +7,7 @@ import { labelPtOf } from "./restyle";
 import { chemMolblock } from "../../../lib/roles/molblock";
 import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
+import { reactionForSmiles } from "./chem/reactionFile";
 import { structureOnClipboard } from "./chem/fromClipboard";
 import { leftOutSaid } from "./utils/readNotes";
 import { drawnOf } from "./fileActions";
@@ -231,8 +232,14 @@ export function useClipboardActions(
         const p = part()?.part;
         if (!p?.atoms.length) return;
         try {
+          // (a reaction as a reaction SMILES - never its molecules as one mixture; one it cannot be, said why)
+          const reaction = reactionForSmiles(p);
+          if (reaction && "why" in reaction) {
+            onError(`Copy as SMILES: ${reaction.why}.`);
+            return;
+          }
           const c = await chemWorker("smiles");
-          const { smiles } = await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
+          const { smiles } = reaction ? await c.request("rxn_to_smiles", { rxnblock: reaction.rxn }) : await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
           await writeClipboard([{ flavor: "text", text: smiles }]);
         } catch (e) {
           onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);

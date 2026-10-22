@@ -48,11 +48,50 @@ const KNOWN: readonly (readonly [RegExp, (m: RegExpExecArray) => string])[] = [
 
 const cut = (s: string, most: number) => (s.length > most ? `${s.slice(0, most)}…` : s);
 
+/**
+ * What a message quotes in single quotes: from a quote with no letter or
+ * digit before it to the first with none after it (reading 'foo'), so that
+ * the apostrophe of can't or Meno's neither begins nor ends one, and one
+ * inside what is quoted ('O'Brien's') does not end it early.
+ */
+const SINGLE_QUOTED = /(?<![\p{L}\p{N}])'[\s\S]*?'(?![\p{L}\p{N}])/gu;
+
+/** Every mark a message may quote with: straight, curly and angle quotes, and a backtick. */
+const QUOTE_MARKS = /['"`\u2018\u2019\u201C\u201D\u00AB\u00BB\u2039\u203A]/gu;
+
+/** Whether the mark at `k` is a word's apostrophe: straight or curly, after a letter, before a contraction's or possessive's ending and nothing more of the word (can't, Meno's, we'll). */
+const isApostrophe = (line: string, k: number) =>
+  (line[k] === "'" || line[k] === "\u2019") && /\p{L}/u.test(line[k - 1] ?? "") && /^(s|t|re|ll|ve|d|m)(?![\p{L}\p{N}])/u.test(line.slice(k + 1));
+
+/**
+ * A line with what it quotes left out, failing closed: after its quoted
+ * spans are left out, a quote mark still in it that is no word's
+ * apostrophe - one never closed, one after a letter that is no
+ * contraction's, an inner one past its span, a curly quote or a backtick -
+ * and the line is cut from its first quote mark to its end.
+ */
+function closedLine(line: string): string {
+  const left = line.replace(/'…'|"…"/g, "");
+  const stray = [...left.matchAll(QUOTE_MARKS)].some((m) => !isApostrophe(left, m.index));
+  if (!stray) return line;
+  const first = [...line.matchAll(QUOTE_MARKS)].find((m) => !isApostrophe(line, m.index));
+  return first ? `${line.slice(0, first.index)}…` : line;
+}
+
+/** A message with what it quotes left out, in double quotes and in single (`SINGLE_QUOTED`), and failing closed on any quote mark left (`closedLine`): "foo" cannot be parsed as a URL, Failed to execute 'foo' on 'Document'. */
+const unquoted = (s: string) =>
+  s
+    .replace(/"[^"]*"/g, '"…"')
+    .replace(SINGLE_QUOTED, "'…'")
+    .split("\n")
+    .map(closedLine)
+    .join("\n");
+
 /** One thing logged, as the log has it. */
 function partOf(a: unknown): string {
   if (a instanceof Error) {
-    // (of a message kept, what it quotes in double quotes left out: "foo" cannot be parsed as a URL)
-    const head = CODE_ERRORS.has(a.name) ? `${a.name}: ${cut(a.message.replace(/"[^"]*"/g, '"…"'), 300)}` : a.name;
+    // (of a message kept, what it quotes left out)
+    const head = CODE_ERRORS.has(a.name) ? `${a.name}: ${cut(unquoted(a.message), 300)}` : a.name;
     // (a stack that begins with the error's name and message, as some engines
     // write it, without them - a message of several lines whole - and then
     // only its frames: at f (app.js:1:2), f@app.js:1:2)

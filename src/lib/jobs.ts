@@ -68,6 +68,16 @@ export const stopJob = (id: string) => invoke<void>("job_stop", { id });
 export const removeJob = (id: string) => invoke<void>("job_remove", { id });
 /** Every finished job's folder taken away: how many. */
 export const clearFinishedJobs = () => invoke<number>("jobs_clear_finished");
+/** What a finished job's program made taken out of its folder, its log and what it was given kept: the bytes freed. */
+export const trimJob = (id: string) => invoke<number>("job_trim", { id });
+/** How many bytes the finished jobs' folders hold, all together. */
+export const finishedJobsBytes = () => invoke<number>("jobs_finished_bytes");
+
+/** How many finished jobs' files are kept, and how much they hold where that is known: "None", "1 job, 4 MB". */
+export function keptText(kept: number, bytes: number | null): string {
+  if (kept === 0) return "None";
+  return `${kept === 1 ? "1 job" : `${kept} jobs`}${bytes == null ? "" : bytes >= 1e9 ? `, ${(bytes / 1e9).toFixed(1)} GB` : `, ${Math.max(1, Math.round(bytes / 1e6))} MB`}`;
+}
 
 /** A plugin's jobs that wait or run: those taking it away would stop. */
 export async function liveJobsOf(plugin: string, list: () => Promise<Job[]> = listJobs): Promise<Job[]> {

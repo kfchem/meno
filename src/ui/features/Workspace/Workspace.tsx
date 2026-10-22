@@ -46,6 +46,8 @@ import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
+import { pdbLeavesOut } from "../../../lib/chem/pdb";
+import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
 import { partOf } from "./utils/completeness";
@@ -1729,6 +1731,7 @@ function WorkspaceContent({
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
               return chosen.length ? knownOfMolecules(chosen, style3dOf(store.getState())) : {};
             }}
+            said={(id) => (id === "pdb" ? pdbLeavesOut((exporting.part.part.molecules3d ?? []).flatMap((m) => m.atoms)) : id === "xyz" ? xyzLeavesOut(exporting.part.part.molecules3d ?? []) : null)}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {
               setExporting(null);

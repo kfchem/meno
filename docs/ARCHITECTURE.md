@@ -101,6 +101,10 @@ src-tauri/
                           Meno names none of them (docs/PLUGINS.md). uv and pixi are not
                           bundled but fetched the first time an environment needs one,
                           pinned by version and SHA-256 (src/tools.rs)
+  resources/licenses/     the licences of what Meno is built with and carries, shown in Settings (General,
+                          Licences): THIRD-PARTY-NOTICES.txt, every npm package and crate built in, written
+                          by scripts/licenses/notices.mjs (docs/RELEASING.md, *Third-party notices*); and
+                          PDFium's, pdfium-render's, the typefaces' and ACCeL's, each in a file of its own
 site/                     the website, kfchem.github.io/meno: plain HTML, CSS and JS, no build. The
                           Pages workflow (.github/workflows/pages.yml) writes the latest release
                           into it (scripts/site/release.mjs); scripts/site/wordmark.mjs draws the
@@ -272,10 +276,15 @@ went before, to stderr and the page's console.
 - **Nothing from documents, nor files' names**: a line says what went
   wrong. Of an error it has the name and the stack's frames; the message
   only of a `TypeError`, `ReferenceError` or `RangeError` - the engine's,
-  about the code that ran - and of that, what it quotes in double quotes
-  left out, as any other message may quote what was read (a file's text, a
-  SMILES, a name). Of words logged it has only Meno's own messages (`KNOWN`
-  in `lib/log.ts`, a tab's name in them left out), any others as `[text]`;
+  about the code that ran - and of that, what it quotes in double or single
+  quotes left out (a single quote only with no letter or digit on its outer
+  side, so that the apostrophe of can't or Meno's is kept), as any other
+  message may quote what was read (a file's text, a SMILES, a name); and,
+  failing closed, a line with any quote mark left after that - one never
+  closed, one after a letter that is no contraction's, a curly quote, a
+  backtick - cut from its first quote mark to its end. Of
+  words logged it has only Meno's own messages (`KNOWN` in `lib/log.ts`, a
+  tab's name in them left out), any others as `[text]`;
   a number as it is; and of any other thing only what it is (`[Object]`,
   `[Map]`). A message newly logged by Meno's code is added to `KNOWN`.
 - **Under 5 MB**: past that the log is begun again, the one before kept as
@@ -704,6 +713,13 @@ closes*).
   job has (`.taken-…`), then removing it: one a program still holds a file
   in (Windows) is never left half there as a job - nor read as one in the
   queue; what was left goes at the next clearing.
+- **What a finished job made can be taken out of its folder** alone
+  (`job_trim`): every file in its work folder it was not given - its
+  spec lists those (`given`) - and the folders that leaves empty; its
+  log, its record and its input stay, to be read. A failed render's is,
+  as it fails: a film's frames, which the job can make again, are
+  hundreds of megabytes at 1080p. Settings says how much the finished
+  jobs' folders hold (`jobs_finished_bytes`).
 - **Gone is told by a lock, not a process id.** The runner holds
   `runner.lock` for as long as it is there; a record that says waiting or
   running whose lock nobody holds was left by a runner that went without
@@ -754,7 +770,7 @@ any plugin (`resources/plugins/rdkit/`, its environment `plugin-rdkit`).
 A worker is a sidecar, started by `lib/roles/worker.ts` (`chemWorker(role)`:
 the plugin chosen for the role in Settings, else the first that fills it)
 and asked through `lib/roles/client.ts`: JSON lines, a fixed set of
-requests (to_smiles, from_smiles, analyse, read_picture, and for 3D
+requests (to_smiles, rxn_to_smiles, from_smiles, analyse, read_picture, and for 3D
 open_stereo, conformers, drawing_of, orders_from_smiles and add_hydrogens;
 a render is a job, `render/renders.ts`; the worker says its version in its
 first line, ready), MOL blocks in (written by
@@ -1008,11 +1024,10 @@ docs/WORKSPACE.md): `open_stereo` says what its drawing leaves open, which
 Meno asks about first; `conformers` makes each stereoisomer asked for
 (ETKDG, then MMFF94 or UFF, on every core - a metal's bonds embedded at
 their covalent lengths and the metal typed for UFF, or, where UFF has no
-type for it, a lighter metal of its group standing in and no energies
-given; a ring bound through all its atoms, written as a multi-centre bond
-by `chem/etaBound.ts`, held over its metal; the same shape twice kept once,
-over the ways the molecule maps onto itself as well as atom against atom
-(PLUGINS.md, *The same shape with equivalent atoms swapped*);
+type for it, a lighter metal of its group standing in, ordering them, and
+no energies given; a ring bound through all its atoms, written as a
+multi-centre bond by `chem/etaBound.ts`, held over its metal; the same
+conformer twice kept once (PLUGINS.md, *The same conformer*);
 lowest first, each laid over the first, with every centre's CIP label; of
 two enantiomers, the one whose SMILES comes first is made and the other is
 its mirror image). Both take `like`, a molecule in 3D made before from the
@@ -1339,6 +1354,7 @@ closing quits Meno once they have been asked to stop.
 | `job_state`, `jobs_list` | `lib/jobs.ts` | A job's record, or every job's - *gone* where its runner went without saying how it ended. |
 | `job_log`, `job_files`, `job_read`, `job_folder` | `lib/jobs.ts` | A job's log from a byte on; the files in its folder, one read; where they are. |
 | `job_stop`, `job_remove`, `jobs_clear_finished` | `lib/jobs.ts` | A job asked to stop; a finished job's folder taken away, or every finished one's. |
+| `job_trim`, `jobs_finished_bytes` | `lib/jobs.ts` | What a finished job made taken out of its folder, its log and input kept; the bytes every finished job's folder holds. |
 
 Events: `uv:log`, `uv:err` (plain strings); `ext:stdout`, `ext:stderr`,
 `ext:exit` (JSON strings `{ id, line? }`). `ext:exit` is emitted exactly once
@@ -1518,8 +1534,10 @@ to be able to work with nothing going out at all.
   consent named". Each connection - host, bytes each way, times, outcome -
   goes to the window as it happens (`net:connection`, every half second
   while open) and to `network-log.jsonl` in the app's data folder when it
-  ends. A child that may not use the network - a plugin's worker, a job -
-  is pointed at the proxy with no task, so whatever it reaches for is
+  ends; like Meno's log, it is kept under 5 MB, begun again past that with
+  the one before kept as `network-log.jsonl.1`, one only. A child that may
+  not use the network - a plugin's worker, a job - is pointed at the proxy
+  with no task, so whatever it reaches for is
   refused and on the record. What Meno fetches itself is a task too, under
   the purpose of what asked for it: uv and pixi the first time an
   environment needs one (`tools.rs`), a plugin's downloads as it is set up
