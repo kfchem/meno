@@ -5,6 +5,21 @@ in Node, without the app's Vite plugins. What they cannot reach - the
 canvas, the webview, the plugins' Python - is checked by hand or with the
 GUI harness (`scripts/gui`).
 
+## On Windows too
+
+CI runs the whole suite on Linux and again on Windows (`.github/workflows/ci.yml`,
+*Frontend tests on Windows*), since Windows is the primary target and some
+faults show only there. Two to keep in mind when writing a test:
+
+- **Paths.** `node:path` writes Windows paths with backslashes. A path
+  compared with one written in the test, or in a list, is put in one form
+  first (`relative(root, file).split(sep).join("/")`).
+- **Processor time.** Windows counts `process.cpuUsage()` in steps of about
+  15.6 ms, so a run quicker than that reads as 0 ms or as one step. A test
+  that compares processor times repeats a quick run until enough time has
+  gone to read it, and shares the time out (`slower` in
+  `chem/cleanUp.test.ts`).
+
 ## Timeouts
 
 A test's timeout is there to stop a test that hangs, never one that is

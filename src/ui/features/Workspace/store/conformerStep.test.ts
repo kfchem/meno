@@ -157,11 +157,11 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {
     useAppSettings.setState((s) => ({ ...s, options: { ...s.options, "role:conformers": { count: 12, field: "UFF" } } }));
     await searched();
-    expect(asked[0].options).toMatchObject({ sought: "needed", count: 12, field: "UFF", iters: 2000, same: 0.5, seed: 19781 });
+    expect(asked[0].options).toMatchObject({ sought: "needed", count: 12, field: "UFF", iters: 2000, seed: 19781 });
     // (offered on the step's card as its own, those chosen in Settings its defaults - how many sought among
     //  them: as many as the molecule needs, or a number, which is shown only when a number is asked for)
     const offered = optionsFor("conformers", "rdkit");
-    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "same", "seed"]);
+    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
   });
 
