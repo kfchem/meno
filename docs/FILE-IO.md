@@ -897,6 +897,12 @@ work.meno (zip)
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
     results and its notes of what could not be read.
+  - **Marks of which frames failed, or are no minimum, fail closed.** A
+    molecule's marks of failure or of imaginary frequencies that do not
+    read - not one for each frame, or one that is neither a mark nor
+    none - leave the molecule out, said ("whose marks of failed frames
+    did not read"). Dropping the marks alone would show its frames as
+    fine, and a step after it would weigh them as minima.
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of

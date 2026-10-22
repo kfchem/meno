@@ -704,6 +704,14 @@ export function readCarried3D(given: unknown): Carried3D | null {
   // (a ligand's atoms whose orders are unknown: each that is one of its own kept, any other said - never all dropped for one)
   const unknownOrders = Array.isArray(m.unknownOrders) ? m.unknownOrders.filter(index) : [];
   if (m.unknownOrders !== undefined && (!Array.isArray(m.unknownOrders) || unknownOrders.length < m.unknownOrders.length)) leftOut("bondOrders");
+  // (which frames failed, and which are no minimum: marks that do not read leave out the molecule - said - never its frames
+  // shown as fine, which a step after it would weigh as minima)
+  const failed = failedOf(m.failed, keep);
+  const imaginary = imaginaryFrames(m.imaginary, keep);
+  if (failed === null || imaginary === null) {
+    leftOut("frameMarks");
+    return null;
+  }
   return {
     atoms: atoms as Carried3D["atoms"],
     bonds: bonds as Carried3D["bonds"],
@@ -746,31 +754,41 @@ export function readCarried3D(given: unknown): Carried3D | null {
       const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
       return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
     })(),
-    ...(() => {
-      const failed = failedOf(m.failed, keep);
-      const imaginary = imaginaryFrames(m.imaginary, keep);
-      return { ...(failed ? { failed } : {}), ...(imaginary ? { imaginary } : {}) };
-    })(),
+    ...(failed ? { failed } : {}),
+    ...(imaginary ? { imaginary } : {}),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
 }
 
-/** Why each of a molecule's frames failed in the step that made it, where one did - one for each, null where it did not - of core's kinds (workflow/failures); of the frames kept, those left out with theirs. */
-function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | undefined {
-  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
-  const out = given.filter((_, i) => keep[i]).map((f): Failure | null => {
-    const g = f as { kind?: unknown; why?: unknown } | null;
-    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
+/**
+ * Why each of a molecule's frames failed in the step that made it, where one
+ * did - one for each, null where it did not - of core's kinds
+ * (workflow/failures); of the frames kept, those left out with theirs. None
+ * where none is marked; null where the marks do not read - not one for each
+ * frame, or one that is neither a failure nor null.
+ */
+function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((f): Failure | null | undefined => {
+    if (f === null) return null;
+    const g = f as { kind?: unknown; why?: unknown };
+    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : undefined;
   });
+  if (read.some((f) => f === undefined)) return null;
+  const out = (read as (Failure | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
 }
 
-/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them. */
-function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | undefined {
-  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
-  const out = given.filter((_, i) => keep[i]).map((f) => imaginaryOf(f) ?? null);
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them: none where none is marked; null where the marks do not read (`failedOf`). */
+function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((f) => (f === null || (Array.isArray(f) && !f.length) ? null : (imaginaryOf(f) ?? undefined)));
+  if (read.some((f) => f === undefined)) return null;
+  const out = (read as (number[] | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
 }
 

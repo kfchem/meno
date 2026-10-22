@@ -102,6 +102,23 @@ describe("a conformer that does not read", () => {
     expect(m.imaginary).toEqual([null, [-42], null]);
   });
 
+  it("whose marks of failure do not read leaves its molecule out, said - never its frames shown as fine", () => {
+    const two = (more: object) => molecule(0, { frames: [frame(0.01)], energies: [-1, -2], ...more });
+    const read = (more: object) => readWorkspace(workspace({ molecules3d: [two(more)] }))!;
+    // (one mark for two frames; a mark that is neither a failure nor none; imaginary frequencies that are no list)
+    for (const more of [{ failed: [{ kind: "not-converged", why: "it did not converge" }] }, { failed: [null, { kind: "not-converged" }] }, { imaginary: [null, "382.6i"] }, { imaginary: [[-382.6]] }]) {
+      const r = read(more);
+      expect(r.drawn.molecules3d ?? [], JSON.stringify(more)).toEqual([]);
+      expect(r.leftOut, JSON.stringify(more)).toEqual({ frameMarks: 1, molecule3d: 1 });
+    }
+    // (marks that read, none among them, or an empty list for a frame with none: read, nothing said)
+    for (const more of [{ failed: [null, null] }, { imaginary: [[], null] }, { imaginary: [null, [-382.6]] }]) {
+      const r = read(more);
+      expect(r.drawn.molecules3d, JSON.stringify(more)).toHaveLength(1);
+      expect(r.leftOut ?? {}, JSON.stringify(more)).toEqual({});
+    }
+  });
+
   it("is counted with the frames its file left out, and said", () => {
     expect(m.framesLeftOut).toBe(1);
     expect(read.leftOut).toEqual({ frame: 1 });
