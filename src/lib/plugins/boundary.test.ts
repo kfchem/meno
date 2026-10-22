@@ -13,7 +13,7 @@
 import { describe, expect, it } from "vitest";
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { join, relative } from "node:path";
+import { basename, join, relative, sep } from "node:path";
 
 const ROOT = join(__dirname, "../../..");
 const PLUGINS = join(ROOT, "src-tauri/resources/plugins");
@@ -178,7 +178,7 @@ function sources(): { file: string; lang: "ts" | "rs" }[] {
   if (git) {
     for (const file of git) {
       const lang = file.endsWith(".rs") ? "rs" : "ts";
-      if (kept(file.split("/").pop() ?? file, lang)) out.push({ file, lang });
+      if (kept(basename(file), lang)) out.push({ file, lang });
     }
     return out;
   }
@@ -215,7 +215,8 @@ describe("the boundary between core and plugins", () => {
         if (at >= 0) text = text.slice(0, at);
       }
       for (const lit of new Set(literalsOf(text, lang))) {
-        const where = relative(ROOT, file);
+        // (the path as ALLOWED writes it, with forward slashes on Windows too)
+        const where = relative(ROOT, file).split(sep).join("/");
         if (names.has(lit) && !allowed(lit, where)) hits.push(`${where}: "${lit}" - declared by ${names.get(lit)!.join(", ")}`);
       }
     }

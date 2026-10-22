@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../lib/io/writeDocument";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { useReaders } from "../../../lib/calc/workers";
 import { ProcedureGlyph } from "../Workspace/workflow/icons";
@@ -33,7 +33,7 @@ export default function ProcedureSettings() {
     try {
       const picked = await saveDialog({ title: "Save procedure", defaultPath: procedureFileName(p.name), filters: [{ name: "Meno workspace", extensions: ["meno"] }] });
       if (!picked) return;
-      await writeFile(/\.meno$/i.test(picked) ? picked : `${picked}.meno`, await procedureWorkspace(p));
+      await writeDocument(/\.meno$/i.test(picked) ? picked : `${picked}.meno`, await procedureWorkspace(p));
     } catch (e) {
       setProblem(`The procedure could not be saved: ${e instanceof Error ? e.message : String(e)}`);
     }

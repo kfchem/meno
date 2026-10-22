@@ -214,6 +214,8 @@ Meno reads and draws PDFs with PDFium, © The PDFium Authors, licensed under the
 
 Meno's reaction atom mapper (`src/lib/chem/accelMapper.ts`) is ported from ACCeL, © 2021 Keisuke Fukaya, licensed under the MIT License, with its author's permission; see [`src-tauri/resources/licenses/ACCeL-MIT.txt`](./src-tauri/resources/licenses/ACCeL-MIT.txt), which the app carries with it.
 
+The npm packages in Meno's window and the Rust crates built into its program are each under their own licence; their names, versions, licences and notices are in [`src-tauri/resources/licenses/THIRD-PARTY-NOTICES.txt`](./src-tauri/resources/licenses/THIRD-PARTY-NOTICES.txt), which the app carries and shows, with the files above, in Settings (General, Licences).
+
 The Blender plugin (`src-tauri/resources/plugins/blender/`), which renders pictures and films of molecules with Blender, is licensed under the **GNU General Public License, version 3 or later**, as a script using Blender's Python API must be; see [`src-tauri/resources/plugins/blender/LICENSE`](./src-tauri/resources/plugins/blender/LICENSE). It stands apart from the rest of Meno, which takes nothing from it and speaks to it only through files and arguments. Blender itself, under its own licence (GPL-3.0-or-later), is never shipped with Meno: its official build is fetched by Meno as the plugin is set up, for Meno's own use, as [`docs/PLUGINS.md`](./docs/PLUGINS.md) (*A program Meno fetches*) sets out.
 
 ## Acknowledgments

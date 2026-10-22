@@ -1,12 +1,10 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { appDataDir } from "@tauri-apps/api/path";
 import {
   BaseDirectory,
   exists,
-  mkdir,
   readTextFile,
-  writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { writeAppFile } from "../io/writeDocument";
 import { create } from "zustand";
 import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem/style";
 import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
@@ -440,9 +438,9 @@ async function readSettingsText(): Promise<string | null> {
 
 async function writeSettingsText(text: string): Promise<void> {
   if (isTauri()) {
-    // The folder is there once the app has run, but not on a first launch.
-    await mkdir(await appDataDir(), { recursive: true }).catch(() => undefined);
-    await writeTextFile(FILE, text, { baseDir: BaseDirectory.AppData });
+    // (whole, or not at all: a file left half written would lose every
+    // setting; the folder made, on a first launch, as it is written)
+    await writeAppFile(FILE, text, "data");
     return;
   }
   globalThis.localStorage?.setItem(STORAGE_KEY, text);
