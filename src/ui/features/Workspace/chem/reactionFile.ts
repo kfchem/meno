@@ -96,7 +96,7 @@ function withMapMarks(drawn: Drawn, arrow: Pick<NonNullable<Drawn["arrows"]>[num
 export function reactionForSmiles(drawn: Drawn): { rxn: string } | { why: string } | null {
   const arrows = reactionArrows(drawn);
   if (!arrows.length) return null;
-  if (arrows.length > 1) return { why: `a reaction SMILES holds one reaction, and the selection has ${arrows.length} arrows: select one reaction` };
+  if (arrows.length > 1) return { why: `a reaction SMILES holds one reaction, and the selection has ${arrows.length} arrows: copy its steps one at a time` };
   const flat = forFlatReaders(drawn);
   const roles = reactionRoles(flat, arrows[0], drawn.pluses ?? [], NOMINAL_BOND_LENGTH);
   if (!roles.reactants.length || !roles.products.length)

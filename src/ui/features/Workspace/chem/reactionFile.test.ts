@@ -109,6 +109,15 @@ describe("a drawn reaction, copied as SMILES (reactionForSmiles)", () => {
     expect(made && "rxn" in made ? made.rxn : made).toBe(reactionFileText(drawn));
   });
 
+  it("holds H2 as a reactant of its own: its two hydrogens a molecule, not hydrogens of another", () => {
+    // (ethene and H2 to ethane: the worker writes it C=C.[H][H]>>CC - scripts/chem/test_chem_worker.py)
+    const hydrogenation = writeRxnfile({ reactants: [chain(["C", "C"]), chain(["H", "H"])], products: [chain(["C", "C"])], reagents: [] });
+    const made = reactionForSmiles(opened(hydrogenation).drawn);
+    const back = readRxnfile(made && "rxn" in made ? made.rxn : "");
+    expect(back.reactants.map((m) => m.atoms.map((a) => a.symbol).join(""))).toEqual(["CC", "HH"]);
+    expect(back.reactants[1].bonds).toHaveLength(1);
+  });
+
   it("is a SMILES of the molecules where the drawing shows no reaction", () => {
     const { drawn } = opened(fischer);
     expect(reactionForSmiles({ ...drawn, arrows: [] })).toBeNull();
@@ -117,7 +126,7 @@ describe("a drawn reaction, copied as SMILES (reactionForSmiles)", () => {
   it("says why where it holds no one reaction to write: two arrows, or nothing on one side", () => {
     const { drawn } = opened(sample);
     expect(reactionForSmiles({ ...drawn, arrows: [...drawn.arrows!, { ...drawn.arrows![0], id: 2 }] })).toEqual({
-      why: "a reaction SMILES holds one reaction, and the selection has 2 arrows: select one reaction",
+      why: "a reaction SMILES holds one reaction, and the selection has 2 arrows: copy its steps one at a time",
     });
     // (the products taken away: the arrow has nothing after it)
     const tail = drawn.arrows![0].x;

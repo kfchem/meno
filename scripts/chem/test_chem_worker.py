@@ -130,6 +130,13 @@ class ChemWorkerTest(unittest.TestCase):
         smiles = ask("rxn_to_smiles", rxnblock=rxn([chfclbr], [water], []))["result"]["smiles"]
         self.assertEqual(smiles.split(">>")[0], ask("to_smiles", molblock=chfclbr)["result"]["smiles"])
         self.assertIn("@", smiles)
+        # (H2 as a reactant - its two hydrogens drawn, a molecule of its own, not taken away as hydrogens are -
+        # and a lone metal as the agent: ethene hydrogenated over palladium)
+        ethene = v2000([("C", 0, 0), ("C", 1.3, 0)], [(0, 1, 2, None)])
+        h2 = v2000([("H", 0, 0), ("H", 0.74, 0)], [(0, 1, 1, None)])
+        ethane = v2000([("C", 0, 0), ("C", 1.5, 0)], [(0, 1, 1, None)])
+        palladium = v2000([("Pd", 0, 0)], [])
+        self.assertEqual(ask("rxn_to_smiles", rxnblock=rxn([ethene, h2], [ethane], [palladium]))["result"]["smiles"], "C=C.[H][H]>[Pd]>CC")
 
     def test_writes_a_smiles_without_an_h_drawn_to_carry_a_wedge(self):
         # (R)-CHFClBr's H drawn, on a wedge
