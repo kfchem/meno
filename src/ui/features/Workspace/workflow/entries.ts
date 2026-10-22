@@ -276,6 +276,8 @@ export type SetEntry = {
   /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
   imaginary?: number[];
   name?: string;
+  /** It is one of only a part of its compound's conformers that came from a search (`Molecule3D.partOf`): what a step makes of it is a part too. */
+  partOf?: true;
   /**
    * What the calculation it was read from says - the program, the method
    * its energy is of - and what its molecule keeps besides (`keptOf`): the
@@ -416,6 +418,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(m.partOf ? { partOf: true as const } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)

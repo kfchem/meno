@@ -548,14 +548,66 @@ again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
 each exit's set once it is shown again. Its molecules are on no page,
 so deleting the set deletes them: its frame says so ("On no page:
-deleting the set deletes them"), and so does its menu, in words, last ("Delete
-set and the 118 molecules it holds"), before it happens (2026-10-22).
-Deleted by the Delete key it is asked about first, as a step running is
-- and so it is in a selection deleted: the rest goes, and it is asked
-about. A cut leaves it in place, since a copy does not carry its
-molecules, and says so. They are opened as a table in the column, and put on the page from
-there, in the steps that follow (6b), and summed up in the frame with a
-sample of their structures and histograms (6c).
+deleting the set deletes them"), and so does its menu, in words, last
+("Delete set and the 118 molecules it holds"), before it happens
+(2026-10-22). Deleted by the Delete key it is asked about first, as a
+step running is - and so it is in a selection deleted: the rest goes, and
+it is asked about. A cut leaves it in place, since a copy does not carry
+its molecules, and says so. They are summed up in the frame with a sample
+of their structures and histograms in the steps that follow (6c).
+
+*Open as a table*, on the set's menu or under its summary, reads them in
+the column beside the texts and PDFs, a tab of their own named as the
+set is (2026-10-21):
+- A row for each entry, in the step's order: its place; in a conformer
+  set its compound's letter and its number among that compound's
+  conformers; its name; its energy in hartrees; in a conformer set its
+  energy above its compound's lowest, in kcal/mol; how many forms of it
+  the search found alike, where it said; and *From*, what worked its
+  energy out ("not stated" where nothing says). No share is shown: a
+  share needs a temperature, and the set does not hold one.
+- Pressing a column's name sorts by it, again the other way; rows with no
+  value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
+- Rows are chosen as in a list (a click; ⌘ or Ctrl to add or take one;
+  Shift for those between, as sorted). *Put on the page* puts those chosen
+  beside the set as a set of their own, "From" the set's name, in the
+  set's order: each one geometry with its energy and what worked it out,
+  and of its calculation only what is of that frame. A compound's
+  conformers chosen stay one conformer set, so that the new set counts
+  them as the step's did ("2 compounds · 5"). Where some of the
+  compound's conformers are left out, the set is a part of a search
+  (below), and the table shows no energy above the compound's lowest,
+  which may not be among them. All of a compound's conformers chosen are
+  the whole set, its shares with it.
+- The tab closes as a text's does, and goes when its set is deleted. It
+  is the view's, not saved with the workspace.
+
+**A part of a search** (decided 2026-10-21): a conformer set's chip shows
+each conformer's share of its compound - as a *Populations* step worked
+it out, or else by Boltzmann at room temperature over its frames. Over
+only some of a search's conformers, such shares would be worked out again
+over those alone, and are not the compound's populations. So a molecule
+that is only a part of a search's conformers, or one of them, is marked
+so (`partOf`), and its chip shows no shares:
+- those chosen from a set's table, some of a compound's left out;
+- what an *Energy window* splits from a compound, in either exit (a
+  compound all within it is whole);
+- what *Choose one* chooses from several conformers, and the rest;
+- the copies *Duplicates* takes out of a conformer set (*Alike*). What it
+  keeps is the compound as it came, its copies merged into those kept -
+  whole, unless what came in was a part. Out of a compound set, the
+  copies are of a structure there twice, of no search, and not marked;
+- whatever any step makes of a part: an optimisation of it, a step of
+  Meno's on it, *As conformers* grouping it with others.
+
+A conformer search run from one of them finds the compound's conformers
+anew, whole. Shares a *Populations* step worked out are always shown: it
+says at what temperature, and they are of what it was given - given a
+part, it says that too, for they are not the compound's populations ("1
+compound at 298.15 K, from electronic energies · shares over the 5
+conformers given, part of a search"). (Until
+2026-10-21 Meno showed shares worked out again over what these steps
+kept.)
 
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,

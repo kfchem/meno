@@ -261,6 +261,13 @@ describe("a menu's rules", () => {
 });
 
 describe("a set's menu", () => {
+  it("opens a large result set as a table in the column, first - and offers it for no other set", () => {
+    const set = target({ kind: "set", id: 4 });
+    const large = menu(set, { onOpenAsTable: none, keepInFile: { kept: true, set: none } }).listed;
+    expect(large[0]).toBe("Open as a table");
+    expect(menu(set, { keepInFile: { kept: true, set: none } }).listed).not.toContain("Open as a table");
+  });
+
   it("says what goes with a set that holds its molecules itself, before it is deleted", () => {
     const set = target({ kind: "set", id: 7 });
     // (in words, listed - not an icon whose name shows only on hover)

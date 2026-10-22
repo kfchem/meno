@@ -222,7 +222,14 @@ const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" 
 /** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
 const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
 
-/** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
+/** Entries as a part of their compound's conformers (`SetEntry.partOf`). */
+const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? e : { ...e, partOf: true as const }));
+
+/**
+ * Each compound's conformers within `kcal` of its lowest; the rest set
+ * aside. A compound split between the two, a part of it in each
+ * (`partOf`); one all within, whole as it came.
+ */
 function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
   if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
@@ -235,7 +242,10 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
     const lowest = least(g.map((e) => e.energy!));
-    for (const e of g) ((e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9 ? kept : aside).push(e);
+    const within = g.filter((e) => (e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9);
+    const out = g.filter((e) => !within.includes(e));
+    kept.push(...(out.length ? asPart(within) : within));
+    aside.push(...asPart(out));
   }
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
 }
@@ -248,6 +258,9 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
  * with those of the same atoms in the same order - a structure there
  * twice is the same structure, not two compounds. Never two of different
  * charge or spin: they are different species, however alike in shape.
+ * In a conformer set, those set aside are a part of their compound's
+ * conformers (`partOf`); those kept, the compound as it came, its copies
+ * merged. In a compound set they are copies of a structure, of no search.
  */
 function* duplicates(entries: readonly SetEntry[], holds: Holds3D, most: number, due: () => boolean): Generator<number, Outcome3D> {
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
@@ -267,9 +280,11 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, most: number,
     }
     before += g.length;
   }
-  // (in the order they came)
+  // (in the order they came: those kept, the compound as it was, its copies merged into them; those alike, the copies taken out - in a
+  // conformer set, a part of its compound's conformers; in a compound set, copies of a structure, of no search, as they came)
   const kept = entries.filter((e) => keptSet.has(e));
-  const aside = entries.filter((e) => !keptSet.has(e));
+  const alike = entries.filter((e) => !keptSet.has(e));
+  const aside = holds === "conformers" ? asPart(alike) : alike;
   return { ok: true, holds, kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
 }
 
@@ -371,7 +386,11 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
   return e ? `${name(e)} has ${imaginaryWords(e.imaginary!)}: it is no minimum - take it out first` : null;
 }
 
-/** Each conformer's Boltzmann population within its compound at `kelvin`. */
+/**
+ * Each conformer's Boltzmann population within its compound at `kelvin`.
+ * Of a part of a search's conformers (`partOf`), shares over those given,
+ * and it says so: they are not the compound's populations.
+ */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
   if (!entries.every(hasEnergy)) return NO_ENERGY;
   // (a saddle point's energy weighed as a minimum's would be a population of nothing: refused, naming it)
@@ -385,7 +404,14 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
     const w = boltzmann(g.map((e) => e.energy!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
     g.forEach((e, i) => shares.set(e, w[i]));
   }
-  const compounds = byCompound(entries).length;
+  const groups = byCompound(entries);
+  // (shares over a part of a search's conformers are not the compound's populations: said so, next to the temperature)
+  const parts = groups.filter((g) => g.some((e) => e.partOf));
+  const over = !parts.length
+    ? ""
+    : groups.length === 1
+      ? ` · shares over the ${plural(entries.length, "conformer")} given, part of a search`
+      : ` · ${parts.length} of them part of a search, shares over the conformers given`;
   return {
     ok: true,
     holds: "conformers",
@@ -393,14 +419,15 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
     // (from the electronic energy, which is all a set's entries carry today: said, so that its shares are not read as free energies' shares - the Populations node of lib/nodes weights G)
-    said: `${plural(compounds, "compound")} at ${kelvin} K, from electronic energies${onesSaid(entries)}`,
+    said: `${plural(groups.length, "compound")} at ${kelvin} K, from electronic energies${onesSaid(entries)}${over}`,
   };
 }
 
 /**
  * One conformer of each compound, chosen on purpose (docs/WORKFLOWS.md,
  * *Kinds of step*): its lowest in energy - or, given `number`, the one of
- * that number - as a compound of its own; the rest set aside. What it says
+ * that number - as a compound of its own; the rest set aside, each a part
+ * of its compound's conformers where it had more than one. What it says
  * names the one chosen, of how many, and what the energies it was ranked
  * by are (`by`: the program and method that worked them out).
  */
@@ -412,8 +439,9 @@ function chooseOne(entries: readonly SetEntry[], number: number | null, by?: str
   for (const g of groups) {
     const chosen = number == null ? g.reduce((a, b) => (b.energy! < a.energy! ? b : a)) : g.find((e) => e.number === number);
     if (!chosen) return { ok: false, said: `${compoundLetter(g[0].compound)} has no conformer ${number}` };
-    kept.push({ ...chosen, compound: kept.length });
-    aside.push(...g.filter((e) => e !== chosen));
+    // (one of several, and the others: each a part of the compound's conformers)
+    kept.push({ ...chosen, compound: kept.length, ...(g.length > 1 ? { partOf: true as const } : {}) });
+    aside.push(...asPart(g.filter((e) => e !== chosen)));
   }
   const which = number == null ? "lowest" : "chosen";
   const said =
