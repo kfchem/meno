@@ -80,7 +80,8 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(d.molecules3d).toHaveLength(3);
     d = ran(waters(70), "molecules", d);
     expect(d.molecules3d ?? []).toHaveLength(0);
-    expect(d.sets).toHaveLength(1);
+    // (the step's set, and its Failed one)
+    expect(d.sets).toHaveLength(2);
     expect(d.sets![0].collection).toHaveLength(70);
     d = ran(waters(2), "molecules", d);
     expect(d.molecules3d).toHaveLength(2);
@@ -165,7 +166,8 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     connectStoreToDocument(store, doc);
     const read = waters(51).map((m, k) => (k === 30 ? { ...m, calc: { readers: ["meno"], source, wavefunction } } : m));
     doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
-    const bytes = await workspaceFile(store.getState());
+    const { bytes, notKept } = await workspaceFile(store.getState());
+    expect(notKept).toEqual([]);
     const file = readMenoFile(bytes);
     expect(file.files.map((f) => f.name).sort()).toEqual(["run.molden", "run.out"]);
     expect(file.workspace).not.toContain("/data/large/run.out");
@@ -173,7 +175,22 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
     expect(ws.workflow!.sets[0].collection![30].calc!.source).toEqual({ name: "run.out", sha256: source.sha256, kind: "orca" });
     // (kept out of the file, nor are its outputs)
     doc.edit("keep", (d) => keepSet(d, d.sets![0].id, false));
-    expect(readMenoFile(await workspaceFile(store.getState())).files).toEqual([]);
+    expect(readMenoFile((await workspaceFile(store.getState())).bytes).files).toEqual([]);
+  });
+
+  it("names in what a save says an output of its collection's molecules held nowhere - never saved as if it were there", async () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    // (an output known by its SHA-256 alone: read from a file, held no more)
+    const source = { name: "gone.out", sha256: "0".repeat(64), kind: "orca" };
+    const read = waters(51).map((m, k) => (k === 7 ? { ...m, calc: { readers: ["meno"], source } } : m));
+    doc.edit("run", (d) => ran(read, "molecules", addStep(d, "optimise", 0, 0, {}, "xtb")));
+    const { bytes, notKept } = await workspaceFile(store.getState());
+    expect(notKept).toEqual(["gone.out"]);
+    expect(readMenoFile(bytes).files).toEqual([]);
+    // (still said where it lay, by what it is known by)
+    expect(readWorkspace(workspaceOfFile(bytes)!)!.workflow!.sets[0].collection![7].calc!.source).toMatchObject({ name: "gone.out", sha256: source.sha256 });
   });
 
   it("counts the molecules of an earlier run kept that do not read from a file, says so on the card's row, and in the set once it is shown again", () => {

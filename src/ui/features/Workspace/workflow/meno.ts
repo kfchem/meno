@@ -8,26 +8,32 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, unlikeMade, type SetEntry } from "./entries";
-import { kindInfo, optionsOf, type SetKind, type StepKind } from "./kinds";
+import { compoundLetter, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
+import { imaginaryWords } from "../../../../lib/calc/output";
+import { FAILURE_WORDS } from "./failures";
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 
 /** What a step did: the entries it kept - with their shares, where it found them - and those it set aside, as a set that holds `holds`; or why it could not. */
-export type Outcome =
-  | { ok: true; holds: SetKind; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
+export type Outcome = Outcome3D | DrawnOutcome;
+/** What a step did on molecules in 3D (`Outcome`). */
+export type Outcome3D =
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
   | { ok: false; said: string };
+/** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
+export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string } | { ok: false; said: string };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** A Meno step of `kind` on `entries`, of a set that holds `holds`, with its options (over its kind's defaults) - and what their energies are, where it ranks by them (`energiesBy`). */
-export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: SetKind, own?: OptionValues, energiesBy?: string): Outcome {
+export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string): Outcome3D {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   switch (kind) {
@@ -47,6 +53,20 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Set
 }
 
 /**
+ * A Meno step of `kind` on structures drawn, each as drawn: what it keeps,
+ * and what it sets aside, as structures drawn. None of Meno's steps works
+ * on structures drawn yet; *Enumerate* is the first (docs/WORKFLOWS-FOUNDATION.md,
+ * *Enumerate*, P3).
+ */
+export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[]): DrawnOutcome {
+  if (!entries.length) return { ok: false, said: "Nothing came in" };
+  switch (kind) {
+    default:
+      return { ok: false, said: "Meno does not do this itself on structures drawn" };
+  }
+}
+
+/**
  * How a step done in turns goes: each turn as long as `slice` by the clock
  * `now` (milliseconds), the turns let go between (`pause`), told how many
  * entries it has been through at most every `tell` (`onDone`), and given
@@ -61,7 +81,7 @@ export type Turns = { onDone?: (done: number) => void; pause?: () => Promise<voi
  * stopped: null. The other steps take no time to speak of, and are done
  * at once.
  */
-export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: SetKind, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome | null> {
+export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[], holds: Holds3D, own?: OptionValues, energiesBy?: string, how: Turns = {}): Promise<Outcome3D | null> {
   if (kind !== "duplicates" || !entries.length) return runMeno(kind, entries, holds, own, energiesBy);
   const options = optionsOf(kindInfo(kind).options ?? [], own);
   const now = how.now ?? (() => performance.now());
@@ -166,7 +186,7 @@ export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]>
  * perceived, or a centre left unspecified - is no conformer of a known
  * compound; constitution alone would sum diastereomers.
  */
-function asConformers(entries: readonly SetEntry[]): Outcome {
+function asConformers(entries: readonly SetEntry[]): Outcome3D {
   const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
   if (unknown >= 0) {
     const st = entries[unknown].stereo;
@@ -189,18 +209,46 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   return [...out.values()];
 }
 
-const NO_ENERGY: Outcome = { ok: false, said: "Not every entry has an energy" };
+/** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
+function onesSaid(entries: readonly SetEntry[]): string {
+  const groups = byCompound(entries);
+  const ones = groups.filter((g) => g.length === 1).length;
+  if (!ones) return "";
+  if (ones === groups.length) return groups.length === 1 ? " · the compound has one conformer" : " · each compound has one conformer";
+  return ` · ${ones === 1 ? "1 compound has" : `${ones} compounds have`} one conformer`;
+}
 
-/** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
-function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
-  if (entries.some((e) => e.energy == null)) return NO_ENERGY;
+const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" };
+
+/** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
+const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
+
+/** Entries as a part of their compound's conformers (`SetEntry.partOf`). */
+const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? e : { ...e, partOf: true as const }));
+
+/**
+ * Each compound's conformers within `kcal` of its lowest; the rest set
+ * aside. A compound split between the two, a part of it in each
+ * (`partOf`); one all within, whole as it came.
+ */
+function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
+  // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
+  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
+  //  frequencies are another matter: they would refuse it where the window is on free energies, which it is not)
+  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged"));
+  if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
     const lowest = least(g.map((e) => e.energy!));
-    for (const e of g) ((e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9 ? kept : aside).push(e);
+    const within = g.filter((e) => (e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9);
+    const out = g.filter((e) => !within.includes(e));
+    kept.push(...(out.length ? asPart(within) : within));
+    aside.push(...asPart(out));
   }
-  return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept` };
+  return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
 }
 
 /** How Duplicates takes a conformer's mirror image, in an achiral molecule: kept apart (the default), or counted in its twin. */
@@ -226,15 +274,19 @@ const mirrorsOf = (options: OptionValues): Mirrors => (options.mirrors === "coun
  * atom can still be made. Only of one stereoisomer - a chiral molecule's
  * mirror image is its enantiomer, never counted in - so each entry's must
  * be known, or nothing is done.
+ *
+ * In a conformer set, those set aside are a part of their compound's
+ * conformers (`partOf`); those kept, the compound as it came, its copies
+ * merged. In a compound set they are copies of a structure, of no search.
  */
-function* duplicates(entries: readonly SetEntry[], holds: SetKind, mirrors: Mirrors, due: () => boolean): Generator<number, Outcome> {
+function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean): Generator<number, Outcome3D> {
   if (mirrors === "counted") {
     const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
     if (unknown >= 0) return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: a mirror image is counted in only where it is the same stereoisomer` };
   }
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
   const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
-  const energies = entries.every((e) => e.energy != null && Number.isFinite(e.energy));
+  const energies = entries.every(hasEnergy);
   const kept = new Map<SetEntry, { degeneracy: number; mirror?: number[] }>();
   let done = 0;
   let counted = 0;
@@ -270,9 +322,12 @@ function* duplicates(entries: readonly SetEntry[], holds: SetKind, mirrors: Mirr
     const k = kept.get(e)!;
     return mirrors === "counted" ? { ...e, degeneracy: k.degeneracy, ...(k.mirror ? { mirror: k.mirror } : {}) } : e;
   });
-  const aside = entries.filter((e) => !kept.has(e));
+  // (those alike, the copies taken out - in a conformer set, a part of its compound's conformers; in a compound set, copies of a
+  // structure, of no search, as they came)
+  const alike = entries.filter((e) => !kept.has(e));
+  const aside = holds === "conformers" ? asPart(alike) : alike;
   const twins = counted ? ` · ${counted} mirror image${counted === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
-  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}` };
+  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${onesSaid(entries)}${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}` };
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
@@ -359,18 +414,47 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
   return p.length ? Math.sqrt(sum / p.length) : 0;
 }
 
-/** Each conformer's Boltzmann population within its compound at `kelvin`. */
-function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
-  if (entries.some((e) => e.energy == null)) return NO_ENERGY;
-  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
-  if (!(kelvin > 0)) return { ok: false, said: "The temperature must be above 0 K" };
+/**
+ * Why `entries` cannot be weighed against one another by their energies,
+ * where one is no minimum: the first whose optimisation did not converge,
+ * or that its calculation judged has an imaginary frequency, named with
+ * it, for the chemist to take it out (the maintainer, 2026-10-22: each
+ * program's own judgement of which are imaginary). Null where none is.
+ */
+export function notAllMinima(entries: readonly SetEntry[]): string | null {
+  const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+  const unconverged = entries.find((x) => x.failed?.kind === "not-converged");
+  if (unconverged) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum - take it out first`;
+  const e = entries.find((x) => x.imaginary?.length);
+  return e ? `${name(e)} has ${imaginaryWords(e.imaginary!)}: it is no minimum - take it out first` : null;
+}
+
+/**
+ * Each conformer's Boltzmann population within its compound at `kelvin`.
+ * Of a part of a search's conformers (`partOf`), shares over those given,
+ * and it says so: they are not the compound's populations.
+ */
+function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
+  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  // (a saddle point's energy weighed as a minimum's would be a population of nothing: refused, naming it)
+  const saddle = notAllMinima(entries);
+  if (saddle) return { ok: false, said: saddle };
+  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most - and none at no number of kelvins, or infinitely many)
+  if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
     // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)
     const w = boltzmann(g.map((e) => e.energy!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
     g.forEach((e, i) => shares.set(e, w[i]));
   }
-  const compounds = byCompound(entries).length;
+  const groups = byCompound(entries);
+  // (shares over a part of a search's conformers are not the compound's populations: said so, next to the temperature)
+  const parts = groups.filter((g) => g.some((e) => e.partOf));
+  const over = !parts.length
+    ? ""
+    : groups.length === 1
+      ? ` · shares over the ${plural(entries.length, "conformer")} given, part of a search`
+      : ` · ${parts.length} of them part of a search, shares over the conformers given`;
   return {
     ok: true,
     holds: "conformers",
@@ -378,27 +462,29 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
     // (from the electronic energy, which is all a set's entries carry today: said, so that its shares are not read as free energies' shares - the Populations node of lib/nodes weights G)
-    said: `${plural(compounds, "compound")} at ${kelvin} K, from electronic energies`,
+    said: `${plural(groups.length, "compound")} at ${kelvin} K, from electronic energies${onesSaid(entries)}${over}`,
   };
 }
 
 /**
  * One conformer of each compound, chosen on purpose (docs/WORKFLOWS.md,
  * *Kinds of step*): its lowest in energy - or, given `number`, the one of
- * that number - as a compound of its own; the rest set aside. What it says
+ * that number - as a compound of its own; the rest set aside, each a part
+ * of its compound's conformers where it had more than one. What it says
  * names the one chosen, of how many, and what the energies it was ranked
  * by are (`by`: the program and method that worked them out).
  */
-function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome {
-  if (number == null && entries.some((e) => e.energy == null)) return NO_ENERGY;
+function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome3D {
+  if (number == null && !entries.every(hasEnergy)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const groups = byCompound(entries);
   for (const g of groups) {
     const chosen = number == null ? g.reduce((a, b) => (b.energy! < a.energy! ? b : a)) : g.find((e) => e.number === number);
     if (!chosen) return { ok: false, said: `${compoundLetter(g[0].compound)} has no conformer ${number}` };
-    kept.push({ ...chosen, compound: kept.length });
-    aside.push(...g.filter((e) => e !== chosen));
+    // (one of several, and the others: each a part of the compound's conformers)
+    kept.push({ ...chosen, compound: kept.length, ...(g.length > 1 ? { partOf: true as const } : {}) });
+    aside.push(...asPart(g.filter((e) => e !== chosen)));
   }
   const which = number == null ? "lowest" : "chosen";
   const said =

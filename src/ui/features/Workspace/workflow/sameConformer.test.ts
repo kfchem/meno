@@ -154,7 +154,7 @@ describe("past the ways it tries", () => {
     const m = { id: 1, at: { x: 0, y: 0 }, atoms: atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] })), bonds, frames: [swapped], energies: [0, 0], conformerSet: true as const };
     const out = runMeno("duplicates", setEntries([m], "conformers"), "conformers");
     expect(out.said).toBe("2 of 2 kept · 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed");
-    // (one of it alone: nothing to miss, nothing said)
-    expect(runMeno("duplicates", setEntries([{ ...m, frames: [], energies: [0] }], "conformers"), "conformers").said).toBe("1 of 1 kept");
+    // (one of it alone: nothing to miss, nothing said of the ways - only that it is one)
+    expect(runMeno("duplicates", setEntries([{ ...m, frames: [], energies: [0] }], "conformers"), "conformers").said).toBe("1 of 1 kept · the compound has one conformer");
   });
 });

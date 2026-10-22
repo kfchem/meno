@@ -56,8 +56,9 @@ objc2-app-kit = { version = "0.3.1", default-features = false, features = ["std"
 objc2-foundation = { version = "0.3.1", default-features = false, features = ["std", "NSArray", "NSData", "NSGeometry", "NSString", "NSURL"] }
 
 [target.'cfg(windows)'.dependencies]
-# (and jobs.rs: a job's program, and what it starts, in a job object)
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_System_DataExchange", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_Threading", "Win32_UI_Shell"] }
+# (and jobs.rs: a job's program, and what it starts, in a job object; savefile.rs:
+# a saved file put in place over the old by ReplaceFileW)
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_DataExchange", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_UI_Shell"] }
 # Structures as OLE objects in Office documents (src/ole.rs): the COM
 # server's interfaces. The version the webview's crates already use.
 windows-core = "0.61" # (what `#[implement]` expands to names it)

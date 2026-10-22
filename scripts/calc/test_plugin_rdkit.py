@@ -1134,3 +1134,68 @@ class Configurations(unittest.TestCase):
         out = self.worker.op_configurations({"molblocks": ["not a MOL block", good]})["molecules"]
         self.assertIn("error", out[0])
         self.assertIn("key", out[1])
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class OpenStereo(unittest.TestCase):
+    """What a structure drawn leaves open, and how many ways it can go in 3D (`op_open_stereo`): a step that cannot
+    ask which is meant refuses only where there is a choice - a bridgehead its rings fix is none - and never
+    misses an allene's axis, whose stereoisomers RDKit does not count."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def drawn(self, smiles, hydrogens=False):
+        """`smiles` as a drawing: laid out in 2D, wedged where the SMILES gives a configuration."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles(smiles)
+        if hydrogens:
+            mol = Chem.AddHs(mol)
+        AllChem.Compute2DCoords(mol)
+        return self.worker.op_open_stereo({"molblock": Chem.MolToMolBlock(mol)})
+
+    def test_a_cage_or_bridged_ring_its_rings_fix_is_one_way_only(self):
+        for name, smiles, centres in [
+            ("adamantane", "C1C2CC3CC1CC(C2)C3", 4),
+            ("cubane", "C12C3C4C1C5C2C3C45", 8),
+            ("norbornane", "C1CC2CCC1C2", 2),
+            ("bicyclo[1.1.0]butane", "C1C2C1C2", 2),
+        ]:
+            got = self.drawn(smiles)
+            # (its bridgeheads are open, as drawn - and give one stereoisomer that can be made, so there is nothing to choose)
+            self.assertEqual(len(got["atoms"]), centres, name)
+            self.assertEqual((got["isomers"], got["cumulenes"], got["free"]), (1, [], False), name)
+
+    def test_what_could_go_more_than_one_way_is_counted_so(self):
+        # (camphor unwedged: its two enantiomers; 5-methylnorbornene, the methyl alone wedged: exo or endo, through the bridgeheads)
+        for name, smiles in [("camphor", "CC1(C)C2CCC1(C)C(=O)C2"), ("5-methylnorbornene", "C[C@H]1CC2C=CC1C2"), ("2-butanol", "CC(O)CC")]:
+            self.assertEqual(self.drawn(smiles)["isomers"], 2, name)
+        # (the same, every centre wedged: nothing open)
+        self.assertEqual(self.drawn("C[C@@H]1C[C@@H]2C=C[C@H]1C2"), {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "free": False})
+
+    def test_an_allenes_axis_left_open_is_said_as_cumulated(self):
+        got = self.drawn("CC=C=CC")
+        self.assertEqual(got["bonds"], [1, 2])
+        self.assertEqual(got["cumulenes"], [1, 2])
+        # (not counted: RDKit's enumeration does not give an allene's two forms - why the cumulated bonds are said)
+        self.assertEqual(got["isomers"], 1)
+
+    def test_a_cage_no_stereoisomer_of_which_embeds_is_made_with_its_stereo_free(self):
+        # (2-methylbicyclo[1.1.1]pentane: its bridgeheads and the methyl's carbon open, and no stereoisomer RDKit gives of
+        #  them embeds with its stereo held - made all the same, as the embedding places it)
+        from rdkit.Chem import AllChem
+
+        for hydrogens in (False, True):
+            got = self.drawn("C1C2CC1C2C", hydrogens)
+            self.assertEqual((got["isomers"], got["free"]), (1, True), hydrogens)
+        mol = Chem.MolFromSmiles("C1C2CC1C2C")
+        AllChem.Compute2DCoords(mol)
+        made = self.worker.op_conformers({"molblock": Chem.MolToMolBlock(mol), "isomers": "one", "count": 1})["isomers"]
+        self.assertEqual(len(made), 1)
+        self.assertTrue(made[0]["frames"])
+        # (prismane: free too - and no 3D structure of it at all, which the step says as it says any it cannot make)
+        self.assertTrue(self.drawn("C12C3C4C1C3C24")["free"])
