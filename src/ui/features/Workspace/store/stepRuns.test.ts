@@ -712,6 +712,29 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 Some atoms are very close" });
   });
 
+  it("keeps what a conformer stands for through an optimisation: its degeneracy, and its mirror image's atoms where Duplicates counted one in", async () => {
+    const { doc, st, step } = editor();
+    // (water as a conformer set of two, the first standing for its mirror image too - its hydrogens swapped)
+    doc.edit("conformers", (d) => ({
+      ...d,
+      molecules3d: d.molecules3d!.map((m) => ({ ...m, frames: [[0, 0, 0.01, 0, 0.77, 0.6, 0, -0.75, 0.58]], conformerSet: true, degeneracies: [2, 1], mirrors: [[0, 2, 1], null] })),
+    }));
+    expect(setEntries(st().molecules3d, "conformers").map((e) => [e.degeneracy, e.mirror ?? null])).toEqual([
+      [2, [0, 2, 1]],
+      [1, null],
+    ]);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(out.map((m) => [m.degeneracies, m.mirrors])).toEqual([[[2, 1], [[0, 2, 1], null]]]);
+  });
+
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);

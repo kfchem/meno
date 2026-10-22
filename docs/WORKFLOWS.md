@@ -274,7 +274,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | NCI | a cloud | molecules in 3D | each with its non-covalent interactions as a surface coloured by their strength (NCI.md) - the same kind of set |
 | Render | a picture | molecules in 3D | a set of pictures: each entry a picture of its own (RENDER.md, *Render as a step*); no step takes pictures |
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
-| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
+| Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
@@ -783,9 +783,11 @@ Decided while building it, for the maintainer to confirm:
   7* stays *a · 7* (a molecule's `numbers`, shown in its frames chip as
   *#7*). A *Populations* step's shares are the molecule's own and are
   what its chip shows, in place of room temperature's.
-- **Duplicates in a compound set** compares entries of the same atoms in
-  the same order: a structure there twice is the same structure. In a
-  conformer set, within each compound, lowest energy first.
+- **Duplicates in a compound set** compares entries of the same atoms,
+  bonded alike, in the same order: a structure there twice is the same
+  structure. In a conformer set, within each compound, lowest energy
+  first. Alike is the one definition of the same conformer (*The same
+  conformer*, below).
 - **Deleting a step keeps the set it made**, with what it holds - a set
   like any the chemist made, so a compound set.
 - **The look, after review** (2026-10-08): frames, tabs, cards and ports
@@ -1374,6 +1376,35 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### The same conformer (2026-10-22)
+
+The maintainer's rulings of 2026-10-21 and 2026-10-22:
+
+- **One definition, app-wide**: two geometries of one molecule are one
+  conformer where all its atoms, hydrogens included, lie within 0.01 Å
+  RMSD of each other - the maintainer's standard for structures fed to
+  quantum calculations, which keeps OH and NH rotamers apart - at its
+  least over the ways the molecule maps onto itself, laid over by turning
+  and moving, never by reflecting (`workflow/sameConformer`; the RDKit
+  plugin's conformers use the same). The ways are those of its atoms but
+  the hydrogens hanging on one atom, at most 1,000; those hydrogens are
+  matched to the nearest of their kind once the rest are laid over.
+  Meno's *Duplicates* has no threshold of its own any more (it was 0.125
+  Å, its atoms in their own order).
+- **A conformer's mirror image**, in an achiral molecule, is kept apart by
+  default: an average by atom over both needs both - enantiotopic atoms
+  (methoxycyclohexane's C2 and C6) swap values between them. *Duplicates*
+  can count it in instead (*Mirror images: Counted in*): the one kept
+  stands for both, its degeneracy 2, and keeps the atoms the mirror image
+  swaps (`mirror`: its atom i is atom `mirror[i]` of the mirror image) -
+  carried by every step after it, an optimisation's included. The step
+  says *1 mirror image counted in (degeneracy 2)*; *Populations* counts
+  it twice. An average by atom over conformers takes the mirror image's
+  values by the permutation, and one that cannot refuses such a set,
+  saying why (none is built yet). Counting in asks which stereoisomer
+  each entry is first, and refuses where one is not known: a chiral
+  molecule's mirror image is its enantiomer, never counted in.
 
 ## Questions
 

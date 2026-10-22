@@ -136,7 +136,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const why = whyNot(d, step, by);
     if (why) return void fail(id, why, at, key);
     // (which stereoisomer each entry is, where the kind needs it known: asked first, every entry its own)
-    if (by === "meno" && kindInfo(step.kind).perceives === "configurations") {
+    const kind = kindInfo(step.kind);
+    if (by === "meno" && kind.perceives === "configurations" && (kind.perceivesWith?.(optionsOf(kind.options ?? [], step.options)) ?? true)) {
       const input = inputOf(d, id);
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }

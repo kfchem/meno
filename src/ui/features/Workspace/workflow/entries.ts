@@ -243,6 +243,13 @@ export type SetEntry = {
   multiplicity?: number;
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
+  /**
+   * Where its mirror image was counted in (Duplicates, its degeneracy
+   * counting both): the atoms the mirror image swaps - its atom i plays the
+   * part of atom `mirror[i]` in its mirror image. An average by atom over its
+   * conformers takes the mirror image's values so; one that cannot refuses.
+   */
+  mirror?: number[];
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
   name?: string;
@@ -380,6 +387,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(energies ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
+        ...(m.mirrors?.length === n && m.mirrors[f] ? { mirror: m.mirrors[f]! } : {}),
         ...(m.name ? { name: m.name } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
         keep,
@@ -416,6 +424,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     number: { value: e.number, unit: "none", status: "computed" },
     ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, status: "computed" as const } } : {}),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
   };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };

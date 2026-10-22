@@ -684,10 +684,20 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
     ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
     ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
+    ...(mirrorsOf(m.mirrors, 1 + frames.length, n) ? { mirrors: mirrorsOf(m.mirrors, 1 + frames.length, n) } : {}),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** A conformer set's mirror images counted in, frame by frame: each a permutation of its `atoms` atoms, or null. */
+function mirrorsOf(given: unknown, frames: number, atoms: number): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== frames) return undefined;
+  const isPermutation = (p: unknown): p is number[] =>
+    Array.isArray(p) && p.length === atoms && p.every((i) => Number.isInteger(i) && i >= 0 && i < atoms) && new Set(p).size === atoms;
+  const out = given.map((p) => (isPermutation(p) ? [...p] : null));
+  return out.some(Boolean) ? out : undefined;
 }
 
 /** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */
