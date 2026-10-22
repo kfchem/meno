@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { axisLabel, chartOfTable, ticksOf } from "./chart";
 import { moleculesAsTable, readTable } from "./table";
-import type { Entry } from "./entry";
+import { geometryKey, type Entry } from "./entry";
 
 const SHIFTS = readTable("atom,shift calc (none),shift measured (none),assigned\nC1,128.4,128.5,yes\nC2,129.1,128.9,yes\nC3,126.0,n/a,no\nC4,137.6,137.8,yes\nC5,21.3,21.4,yes\n");
 
@@ -32,11 +32,12 @@ describe("a table charted", () => {
       id,
       from: [],
       structure: { atoms: [{ el: "O" }], bonds: [] },
-      geometry: { kind: "none" },
+      // (worked out at its own geometry: one column each, named as the property is)
+      geometry: { kind: "3d", xyz: [0, 0, 0] },
       species: { charge: 0, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } },
       properties: {
-        energy: { value: e, unit: "Eh", by: { program: "p", method: "m" }, at: { geometry: "g" }, status: "computed" },
-        gap: { value: g, unit: "eV", by: { program: "p", method: "m" }, at: { geometry: "g" }, status: "computed" },
+        energy: { value: e, unit: "Eh", by: { program: "p", method: "m" }, at: { geometry: geometryKey([0, 0, 0]) }, status: "computed" },
+        gap: { value: g, unit: "eV", by: { program: "p", method: "m" }, at: { geometry: geometryKey([0, 0, 0]) }, status: "computed" },
       },
       status: "done",
     });

@@ -146,12 +146,14 @@ export type StepCardProps = {
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
-  /** Its inputs, in the kind's order, each lit or not as a wire is drawn: one port each down its left side, named where there is more than one. What it gives is its exits' sets, beside it - it has no port of its own for that. */
+  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
   /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
   missing?: string;
+  /** A wire just let go on it that it does not take: why, in plain words (flow `wireRefusal`), said where its state is. */
+  refused?: string;
   /** The options it takes, as who does it declares them; and their values. */
   optionList: readonly Option[];
   options: OptionValues;
@@ -165,7 +167,6 @@ export type StepCardProps = {
   /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
   onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
-  onTakeDown: (e: ReactPointerEvent, port: string) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
 };
@@ -180,7 +181,7 @@ export type StepCardProps = {
  * does it fills - and its options.
  */
 export default function StepCard(p: StepCardProps) {
-  const line = stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
   // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
   const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
@@ -304,16 +305,6 @@ export default function StepCard(p: StepCardProps) {
         )}
         </AnimatePresence>
       </div>
-      {p.inputs.map((input, k) => (
-        <Port
-          key={input.id}
-          look={input.look}
-          label={p.inputs.length > 1 ? `${input.name} into ${p.info.name}` : `Into ${p.info.name}`}
-          data={{ "data-take": `${p.step.id}:${input.id}` }}
-          onPointerDown={(e) => p.onTakeDown(e, input.id)}
-          style={{ left: 0, top: portDown(k) / PX }}
-        />
-      ))}
       {/* (an input's name, where there is more than one: outside the card, level with its port) */}
       {p.inputs.length > 1 &&
         p.inputs.map((input, k) => (

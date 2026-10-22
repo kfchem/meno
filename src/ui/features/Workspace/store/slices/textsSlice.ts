@@ -22,7 +22,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
       // (one with a sheet: into the column from its sheet, as it opens)
       const lastSheet = onPage && last != null && next.texts?.find((t) => t.id === last)?.at;
       if (next !== doc.getState()) doc.edit(texts.length > 1 ? "open texts" : "open text", () => next);
-      set({ textShown: last, textsOpen: last != null, ...(lastSheet ? { textFlight: { id: last!, to: "column" as const, start: performance.now() } } : {}) });
+      set({ textShown: last, textsOpen: last != null, setTableShown: null, ...(lastSheet ? { textFlight: { id: last!, to: "column" as const, start: performance.now() } } : {}) });
     },
     newText: (onPage?: { x: number; y: number }) => {
       getState().addTexts([{ name: "", text: "" }], onPage);
@@ -32,12 +32,13 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
     editText: (id: number, text: string) =>
       doc.edit("type text", (d) => ops.editText(d, id, text), { coalesceKey: `text:${id}` }),
     removeText: (id: number) => doc.edit("close text", (d) => ops.removeText(d, id)),
+    removeLostText: (id: number) => doc.edit("close text", (d) => ops.removeLostText(d, id)),
     removeTexts: (ids: Iterable<number>) => {
       const gone = new Set(ids);
       doc.edit(gone.size > 1 ? "delete texts" : "delete text", (d) => ops.removeTexts(d, gone));
       set((prev: EditorState) => ({ ...prev, selTexts: new Set([...prev.selTexts].filter((id) => !gone.has(id))), hoveredText: prev.hoveredText != null && gone.has(prev.hoveredText) ? null : prev.hoveredText }));
     },
-    showText: (id: number) => set({ textShown: id, textsOpen: true, pdfShown: null }),
+    showText: (id: number) => set({ textShown: id, textsOpen: true, pdfShown: null, setTableShown: null }),
     // (read in the column: its tab there, as a PDF's is - not a step to undo; store/index shows it, as one come)
     readText: (id: number) => {
       const t = doc.getState().texts?.find((x) => x.id === id);
@@ -49,6 +50,7 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
         textShown: id,
         textsOpen: true,
         pdfShown: null,
+        setTableShown: null,
         ...(t.at && !(prev.textsOpen && prev.textShown === id && prev.pdfShown == null) ? { textFlight: { id, to: "column" as const, start: performance.now() } } : {}),
       }));
     },

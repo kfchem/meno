@@ -1,10 +1,13 @@
 import PageHtml from "./PageHtml";
+import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
 import { greatest, least } from "../../../../lib/chem/lists";
+import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
+import { imaginaryWords } from "../../../../lib/calc/output";
 
 /** The bars' and the slider's width, the bars' height, and the room either side, in pixels. */
 const WIDTH = 196;
@@ -17,7 +20,6 @@ const LEAST_BAR = 3;
 /** How long a single geometry's chip stays once its molecule is let go - time to reach it - in milliseconds. */
 const LINGER_MS = 400;
 /** The chip kept clear of the canvas's lower edge, in pixels. */
-const EDGE = 8;
 /** How far below its molecule it hangs, in page pixels (workflow/look CHIP makes room for it). */
 const GAP = 10;
 
@@ -64,6 +66,9 @@ export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
   );
 }
 
+/** Words begun with a capital, as a label is. */
+const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** The chip itself, as it lies on the page (Frames3D). */
 export function FramesChip({
   count,
@@ -82,6 +87,9 @@ export function FramesChip({
   said: fromText,
   area,
   title,
+  failed,
+  warnings,
+  imaginary,
 }: {
   count: number;
   frame: number;
@@ -117,6 +125,12 @@ export function FramesChip({
    * energy - its notes opened by a click.
    */
   title?: string;
+  /** Why each frame failed in the step that made it, where one did (workflow/failures): the one told said on it. */
+  failed?: readonly (Failure | null)[];
+  /** What its calculation warned of: counted on it, each said in full with the rest, opened. A warning moves nothing. */
+  warnings?: readonly Warning[];
+  /** The imaginary frequencies each frame's calculation judged it has, in cm-1 (null, none): the one told's said on it - a mark that it is no minimum. */
+  imaginary?: readonly (readonly number[] | null)[];
 }) {
   const [hovered, setHovered] = useState(false);
   // (what it says pointed at: the details above it - not its bars or its
@@ -213,26 +227,49 @@ export function FramesChip({
   const madeRows = made ? [...(made.method ? [{ label: "Method", text: made.method }] : []), ...made.how] : [];
   if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })) });
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
+  // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
+  const failure = failed?.[told] ?? undefined;
+  const saddle = imaginary?.[told];
+  const marks = [
+    failure ? FAILURE_WORDS[failure.kind] : "",
+    saddle?.length ? imaginaryWords(saddle) : "",
+    warnings?.length ? `${warnings.length} warning${warnings.length === 1 ? "" : "s"}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  if (failure) details.unshift({ group: "Failed", rows: [{ label: upper(FAILURE_WORDS[failure.kind]), text: failure.why }] });
+  if (warnings?.length) details.push({ group: "Warnings", rows: warnings.map((w) => ({ label: upper(WARNING_WORDS[w.kind]), text: w.text })) });
   const line = (energy?: number) => chipLine([about ?? "", energy != null ? absolute(energy) : ""], results);
-  // how far it has risen to stay within the canvas, followed each frame
-  // while it is open, and until it is back down
+  // how far it has risen, and slid aside, to stay within the canvas -
+  // its details as wide as they are, by a molecule at its edge - followed
+  // each frame while it is open, and until it is back in place
   const chipEl = useRef<HTMLDivElement>(null);
   const [lift, setLift] = useState(0);
   const lifted = useRef(0);
+  const [slide, setSlide] = useState(0);
+  const slid = useRef(0);
   useEffect(() => {
-    if (!area || (!full && lifted.current === 0)) return;
+    if (!area || (!full && lifted.current === 0 && slid.current === 0)) return;
     let id = 0;
     const fit = () => {
       const el = chipEl.current;
       if (el) {
-        const over = el.getBoundingClientRect().bottom + EDGE - area.getBoundingClientRect().bottom;
+        const r = el.getBoundingClientRect();
+        const a = area.getBoundingClientRect();
+        const over = r.bottom + EDGE - a.bottom;
         const next = Math.max(0, Math.round(lifted.current + over));
         if (next !== lifted.current) {
           lifted.current = next;
           setLift(next);
         }
+        // (from where it would stand, not slid)
+        const aside = asideOf(r.left + slid.current, r.right + slid.current, a.left, a.right);
+        if (aside !== slid.current) {
+          slid.current = aside;
+          setSlide(aside);
+        }
       }
-      if (full || lifted.current > 0) id = requestAnimationFrame(fit);
+      if (full || lifted.current > 0 || slid.current !== 0) id = requestAnimationFrame(fit);
     };
     fit();
     return () => cancelAnimationFrame(id);
@@ -241,7 +278,8 @@ export function FramesChip({
     <div
       ref={root}
       className={`meno-page-chip meno-control-chip flex flex-col items-center select-none ${(!single && !expanded) || (single && (about || madeRows.length || fromText?.length)) ? "cursor-pointer" : ""}`}
-      style={{ transform: `translate(-50%, calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0" }}
+      // (the pointer goes through it but for what it shows: a chip hidden keeps its size, and would hide what lies under it - a set's port, a step's card)
+      style={{ transform: `translate(calc(-50% - ${slide}px), calc(${GAP}px * var(--page, 1) - ${lift}px)) scale(var(--page, 1))`, transformOrigin: "50% 0", pointerEvents: "none" }}
       onClick={() => {
         if (!single && !expanded) setExpanded(true);
         else if (single && (about || madeRows.length || fromText?.length)) setPinned((v) => !v);
@@ -259,7 +297,7 @@ export function FramesChip({
             className="rounded-2xl border border-gh-line bg-white/85 backdrop-blur shadow-sm py-1 flex flex-col items-center overflow-hidden transition-[width,opacity] duration-200 ease-out"
             style={{
               opacity: shown ? (full ? 1 : 0.75) : 0,
-              pointerEvents: shown ? undefined : "none",
+              pointerEvents: shown ? "auto" : "none",
               width: Math.max(full ? Math.max(width, saidWidth) : saidWidth, reading && details.length > 0 ? detailsWidth : 0) + 2 * SIDE,
             }}
           >
@@ -308,7 +346,8 @@ export function FramesChip({
             </div>
             <div
               ref={said}
-              className="w-max text-[11px] leading-[18px] text-gh-gray tabular-nums whitespace-nowrap"
+              // (a line too long - a model's provenance, said whole - goes on to more lines, no wider than the details are, centred)
+              className={`w-max text-[11px] leading-[18px] text-gh-gray tabular-nums ${single ? "max-w-[20rem] text-center [overflow-wrap:anywhere]" : "whitespace-nowrap"}`}
               onClick={(e) => {
                 if (!expanded) return;
                 e.stopPropagation();
@@ -320,6 +359,7 @@ export function FramesChip({
                   {title && <span className="text-gh-black inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
                   {title && line(energies?.[0]) ? " · " : ""}
                   {line(energies?.[0])}
+                  {marks && <span className="text-accel-accent">{title || line(energies?.[0]) ? " · " : ""}{marks}</span>}
                 </>
               ) : (
                 <>
@@ -328,6 +368,7 @@ export function FramesChip({
                   {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
                   {above && <span className="text-gh-black"> · {relative(above[told])}</span>}
                   {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
+                  {marks && <span className="text-accel-accent"> · {marks}</span>}
                 </>
               )}
             </div>
@@ -348,7 +389,7 @@ export function FramesChip({
           </div>
         </div>
       )}
-      {below}
+      {below && <div style={{ pointerEvents: "auto" }}>{below}</div>}
     </div>
   );
 }

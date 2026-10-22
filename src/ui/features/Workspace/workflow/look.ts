@@ -17,6 +17,25 @@ export const HTML_DISTANCE = PX * 400;
  * step's card opened, its form growing down over the cards below it, which
  * are drawn later and so over it otherwise.
  */
+/**
+ * The ports' layer's place among what is laid over the page (drei's Html
+ * `zIndexRange`): over the molecules' chips (20-30), their pointed cards
+ * (30-40) and the marks of magnified drawings (25-35) - so that a port is
+ * pressed, lit and let go on whatever lies over it. The sets and steps
+ * themselves stay at 18, under what the molecules say.
+ */
+export const PORTS_Z = 45;
+
+/**
+ * Whether a port at `p` lies under a step's card opened over the rest
+ * (`card`, its frame on the page): its circle, `r` across from its middle,
+ * reaching inside it. Such a port is not drawn - the card is over it, and
+ * takes the press - though the ports lie over all else.
+ */
+export function underCard(p: { x: number; y: number }, card: { x0: number; x1: number; y0: number; y1: number } | null, r: number): boolean {
+  return !!card && p.x + r > card.x0 && p.x - r < card.x1 && p.y + r > card.y0 && p.y - r < card.y1;
+}
+
 export const onLayer = (x: number, y: number, above = false): { position: "absolute"; left: number; top: number; zIndex?: number } => ({
   position: "absolute",
   left: x / PX,

@@ -6,10 +6,10 @@
 import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
-import { entryOfSet, holdsOf, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
+import { entryOfSet, holdsOf, plainAmong, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import { moleculesAsTable, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind, isSetKind } from "./kinds";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takenBy, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
@@ -62,22 +62,41 @@ export function stepsBefore(doc: Flow, step: number): number[] {
   return out;
 }
 
-/** Whether a wire may go from `from` into the step `to`: the step - done by whom it is - takes what it gives, or what that is is not known yet; and no loop is made. */
+/** Whether a wire may go from `from` into the step `to` (`wireRefusal`: none). */
 export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): boolean {
+  return wireRefusal(doc, from, to, port) == null;
+}
+
+/** A kind of set, as a step's card says what it takes and what came. */
+const SET_WORDS: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "a conformer set", table: "a table", number: "a number" };
+
+/**
+ * Why a wire may not go from `from` into the step `to`, in plain words;
+ * none where it may: the step - done by whom it is - takes what it gives,
+ * or what that is is not known yet; and no loop is made.
+ */
+export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): string | null {
   const step = stepOf(doc, to);
-  if (!step) return false;
   const set = findSet(doc, from.set);
-  if (!set || set.made?.step === to) return false;
+  if (!step || !set) return "It is not there";
+  if (set.made?.step === to) return "It is what this step gives";
   // (nothing it gives may come back round to it)
   const madeBy = set.made?.step;
-  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return false;
+  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
   const holds = givesOf(doc, from);
   // (pictures - a Render step's - and charts no step takes)
-  if (holds === "pictures" || holds === "chart") return false;
+  if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
+  if (holds == null) return null;
+  // (a set mixing conformer sets with other molecules, which no step takes: which are the others)
+  const mixed = holds === "molecules" && !set.made ? plainAmong(setMolecules(doc, set)) : null;
+  if (mixed) return mixed;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
-  const takes = portOf(step.kind, port).takes;
-  if (holds == null) return true;
-  return inputsOf(step.kind).length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
+  const several = inputsOf(step.kind).length > 1;
+  const takes = portOf(step.kind, port).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
+  // (molecules or conformer sets into a port that takes a table, seen as one: kinds `takenBy`)
+  if (takenBy(takes, holds)) return null;
+  const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
+  return `It takes ${wants}, not ${SET_WORDS[holds]}`;
 }
 
 /** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
@@ -161,7 +180,7 @@ function keyTexts(m: Molecule3D): readonly string[] {
       // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
       m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
       `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
-      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}`,
+      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}`,
     ];
     keyed.set(m, texts);
   }

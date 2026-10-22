@@ -2,7 +2,8 @@
  * RDKit's conformer search as a workflow's step, on structures drawn
  * (docs/WORKFLOWS.md, *Kinds of step*): one structure it cannot make in 3D
  * leaves the others made, and is said by its place in words - never in the
- * library's own text; and the search is the one *3D structures* makes,
+ * library's own text; one whose drawing leaves stereo open is not made, a
+ * configuration never chosen for it; and the search is the one *3D structures* makes,
  * with the options chosen in Settings, Chemistry, on its 3D card.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,8 +11,14 @@ import { readMolfile } from "../../../../lib/chem/ctfile";
 
 /** What RDKit's worker was asked: each structure's molblock, and the options it was given. */
 const asked: { molblock: string; options: Record<string, unknown> }[] = [];
-/** How many times RDKit's worker was taken; and whether it makes none of methanol, saying nothing of why; whether it holds each structure until stopped, and those it was stopped for. */
-const worker = { taken: 0, noneOfMethanol: false, holds: false, stopped: [] as string[] };
+/**
+ * How many times RDKit's worker was taken; whether it makes none of methanol, saying nothing of why; whether it
+ * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
+ * stereo open, by what they hold - methanol, or every one.
+ */
+const worker = { taken: 0, noneOfMethanol: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { isomers?: number; cumulenes?: number[]; free?: boolean } };
+/** Whether a molblock is methanol's, C and O. */
+const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
 /** What a held request is let go with: the worker stopped. */
 let letGo: ((e: Error) => void) | null = null;
 
@@ -32,6 +39,11 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
     return {
       request: async (op: string, payload: { molblock: string; options: Record<string, unknown> }) => {
         if (gone) throw new Error("The worker was stopped");
+        // (what a structure's drawing leaves open: a stereocentre, here, where it is said to)
+        if (op === "open_stereo") {
+          const open = worker.open === "all" || (worker.open === "methanol" && methanol(readMolfile(payload.molblock)!));
+          return open ? { atoms: [0], bonds: [], isomers: 2, cumulenes: [], free: false, ...worker.openAs } : { atoms: [], bonds: [], isomers: 1, cumulenes: [], free: false };
+        }
         if (op !== "conformers") throw new Error(`no ${op} here`);
         asked.push(payload);
         if (worker.holds) await new Promise((_, reject) => (letGo = reject));
@@ -41,7 +53,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
           gone = true;
           throw new Error("Invariant Violation\n\texpected match not found");
         }
-        if (worker.noneOfMethanol && mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C")) return { isomers: [] };
+        if (worker.noneOfMethanol && methanol(mol)) return { isomers: [] };
         const xyz = mol.atoms.flatMap((a) => [a.x, a.y, 0.1]);
         return {
           isomers: [
@@ -70,7 +82,7 @@ import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
 import { kindInfo } from "../workflow/kinds";
-import { notMade } from "./slices/stepRuns";
+import { notMade, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -118,7 +130,7 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
 describe("RDKit's conformer search as a step, on structures drawn", () => {
   beforeEach(() => {
     asked.length = 0;
-    Object.assign(worker, { taken: 0, noneOfMethanol: false, holds: false, stopped: [] });
+    Object.assign(worker, { taken: 0, noneOfMethanol: false, holds: false, stopped: [], open: "", openAs: {} });
     letGo = null;
   });
 
@@ -154,14 +166,55 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).toMatch(/ · 1 conformer · structures 2 and 3 of 3 could not be made in 3D$/);
   });
 
+  it("never chooses a configuration the drawing leaves open: that structure is not made, and is said by its place", async () => {
+    worker.open = "methanol";
+    const { step } = await searched();
+    // (methanol never asked for conformers: only water, and ethane, which RDKit cannot make here)
+    expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
+    expect(step.ran?.ok).toBe(true);
+    expect(step.ran?.said).toMatch(/ · 1 conformer · structure 2 of 3 could not be made in 3D · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
+  });
+
+  it("makes one whose open stereo can go one way only in 3D - a bridgehead its rings fix: no choice was made", async () => {
+    worker.open = "methanol";
+    worker.openAs = { isomers: 1 };
+    const { step } = await searched();
+    expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2, 2]);
+    expect(step.ran?.said).toMatch(/ · 2 conformers of 2 compounds · structure 2 of 3 could not be made in 3D$/);
+  });
+
+  it("makes one whose open stereo no stereoisomer holds in 3D, and says it was made with its stereo free", async () => {
+    worker.open = "methanol";
+    worker.openAs = { isomers: 1, free: true };
+    const { step } = await searched();
+    expect(asked).toHaveLength(3);
+    expect(step.ran?.said).toMatch(/ · 2 conformers of 2 compounds · structure 2 of 3 could not be made in 3D · structure 3 of 3 made with its stereo free: no stereoisomer of it holds in 3D$/);
+  });
+
+  it("never makes one with an allene's axis left open: its stereoisomers are not counted, so one could be chosen unseen", async () => {
+    worker.open = "methanol";
+    worker.openAs = { isomers: 1, cumulenes: [0] };
+    const { step } = await searched();
+    expect(asked.map((a) => readMolfile(a.molblock)!.atoms.length)).toEqual([3, 2]);
+    expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
+  });
+
+  it("fails where every structure leaves stereo open, saying so - nothing made, no conformer asked for", async () => {
+    worker.open = "all";
+    const { step, sets } = await searched();
+    expect(asked).toHaveLength(0);
+    expect(step.ran).toMatchObject({ ok: false, said: "Structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all" });
+    expect(sets).toBe(1);
+  });
+
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {
     useAppSettings.setState((s) => ({ ...s, options: { ...s.options, "role:conformers": { count: 12, field: "UFF" } } }));
     await searched();
-    expect(asked[0].options).toMatchObject({ sought: "needed", count: 12, field: "UFF", iters: 2000, same: 0.5, seed: 19781 });
+    expect(asked[0].options).toMatchObject({ sought: "needed", count: 12, field: "UFF", iters: 2000, seed: 19781 });
     // (offered on the step's card as its own, those chosen in Settings its defaults - how many sought among
     //  them: as many as the molecule needs, or a number, which is shown only when a number is asked for)
     const offered = optionsFor("conformers", "rdkit");
-    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "same", "seed"]);
+    expect(offered.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
     expect(offered.find((o) => o.id === "count")?.default).toBe(12);
   });
 
@@ -179,5 +232,9 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
   it("says the structures not made, one or several", () => {
     expect(notMade([3], 4)).toBe("structure 3 of 4 could not be made in 3D");
     expect(notMade([1, 2, 4], 5)).toBe("structures 1, 2 and 4 of 5 could not be made in 3D");
+    expect(stereoOpen([2], 3)).toBe("structure 2 of 3 leaves stereo open: draw it, wedges and all");
+    expect(stereoOpen([1, 3], 3)).toBe("structures 1 and 3 of 3 leave stereo open: draw it, wedges and all");
+    expect(stereoFree([2], 3)).toBe("structure 2 of 3 made with its stereo free: no stereoisomer of it holds in 3D");
+    expect(stereoFree([1, 2], 3)).toBe("structures 1 and 2 of 3 made with their stereo free: no stereoisomer of them holds in 3D");
   });
 });

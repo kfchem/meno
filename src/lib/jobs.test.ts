@@ -22,7 +22,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
 }));
 
-import { finished, followJob, liveJobsOf, runningOf, startJob, stopJobsAndWait, type Job } from "./jobs";
+import { finished, followJob, keptText, liveJobsOf, runningOf, limitsOf, overLimits, startJob, stopJobsAndWait, type Job } from "./jobs";
 
 describe("jobs", () => {
   beforeEach(() => {
@@ -36,20 +36,38 @@ describe("jobs", () => {
     expect(["done", "failed", "stopped", "gone"].every((s) => finished(s as never))).toBe(true);
   });
 
-  it("runs one at once, sharing the computer's cores among those at once, unless Settings says otherwise", () => {
-    expect(runningOf({}, 8)).toEqual({ slots: 1, cores: 8 });
-    expect(runningOf({ atOnce: 3 }, 8)).toEqual({ slots: 3, cores: 2 });
-    expect(runningOf({ atOnce: 16 }, 8)).toEqual({ slots: 16, cores: 1 });
-    expect(runningOf({ atOnce: 2, cores: 6 }, 8)).toEqual({ slots: 2, cores: 6 });
-    // never more than the computer has
-    expect(runningOf({ cores: 32 }, 8)).toEqual({ slots: 1, cores: 8 });
+  it("gives a job all the cores jobs may use - one at a time - unless Settings says otherwise", () => {
+    expect(runningOf({}, 8)).toEqual({ cores: 8 });
+    expect(runningOf({ cores: 2 }, 8)).toEqual({ cores: 2 });
+    expect(runningOf({ coresAll: 6 }, 8)).toEqual({ cores: 6 });
+    // never more than jobs may use, nor than the computer has
+    expect(runningOf({ cores: 7, coresAll: 4 }, 8)).toEqual({ cores: 4 });
+    expect(runningOf({ cores: 32 }, 8)).toEqual({ cores: 8 });
+  });
+
+  it("lets jobs use all the computer's cores and three quarters of its memory, unless Settings says otherwise - never more than it has", () => {
+    const computer = { cores: 10, memory: 32 * 1024 };
+    expect(limitsOf({}, computer)).toEqual({ cores: 10, memory: 24 * 1024 });
+    expect(limitsOf({ coresAll: 4, memoryAll: 8 * 1024 }, computer)).toEqual({ cores: 4, memory: 8 * 1024 });
+    expect(limitsOf({ coresAll: 64, memoryAll: 64 * 1024 }, computer)).toEqual({ cores: 10, memory: 32 * 1024 });
+    // (its memory not told: as Settings says, and none said, none counted)
+    expect(limitsOf({}, { cores: 4, memory: 0 })).toEqual({ cores: 4, memory: 0 });
+  });
+
+  it("says where a step's jobs ask for more memory than jobs may use: nothing else that declares memory runs beside one", () => {
+    const limits = { memory: 24 * 1024 };
+    expect(overLimits([{ memory: 12000 }, {}], limits)).toBeNull();
+    expect(overLimits([{ memory: 30 * 1024 }, { memory: 12000 }], limits)).toBe("1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside it");
+    expect(overLimits([{ memory: 30 * 1024 }, { memory: 28 * 1024 }], limits)).toBe("2 jobs ask for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside each");
+    // (no limit on memory: nothing to say)
+    expect(overLimits([{ memory: 30 * 1024 }], { memory: 0 })).toBeNull();
   });
 
   it("asks for a job as the backend takes it", async () => {
-    await startJob({ plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], slots: 1, cores: 4 });
+    await startJob({ plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], cores: 4, memory: 2000 });
     expect(backend.asked[0]).toEqual({
       cmd: "job_start",
-      args: { payload: { plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], slots: 1, cores: 4 } },
+      args: { payload: { plugin: "xtb", program: "xtb", args: ["in.xyz"], files: [{ name: "in.xyz", text: "1\n\nH 0 0 0\n" }], cores: 4, memory: 2000 } },
     });
   });
 
@@ -95,5 +113,15 @@ describe("a plugin's jobs, as it is taken away", () => {
     await stopJobsAndWait(["x"], { stop: async () => {}, look: async (id) => job(id, "xtb", "running"), pause: async () => void waited++, most: 1000 });
     expect(waited).toBe(4);
     await stopJobsAndWait(["y"], { stop: () => Promise.reject(new Error("no")), look: () => Promise.reject(new Error("gone")), pause: async () => {} });
+  });
+});
+
+describe("the finished jobs' files, as Settings says them", () => {
+  it("says how many, and how much they hold where that is known", () => {
+    expect(keptText(0, 0)).toBe("None");
+    expect(keptText(1, 4_200_000)).toBe("1 job, 4 MB");
+    expect(keptText(2, 1000)).toBe("2 jobs, 1 MB");
+    expect(keptText(12, 1_430_000_000)).toBe("12 jobs, 1.4 GB");
+    expect(keptText(3, null)).toBe("3 jobs");
   });
 });

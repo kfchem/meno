@@ -1,4 +1,5 @@
 import { editorLayoutOptions } from "../../layoutOptions";
+import { leftTogether } from "../../utils/readNotes";
 import { styleOf } from "../../../../../lib/chem/style";
 import { wordsSet } from "../../../../../lib/chem/captions";
 import { labelSetOf } from "../../../../../lib/chem/layout2d";
@@ -23,7 +24,7 @@ import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
 import { resultKey } from "../../../../../lib/calc/results";
-import type { Workspace } from "../../utils/workspace";
+import type { SavedText, Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
@@ -227,6 +228,7 @@ export const createModelSlice = (
     // which is asked about on its own
     const among = selectionScheme(get());
     const ids = (xs: { id: number }[]) => new Set(xs.map((x) => x.id));
+    const held = [...selFlow.sets].filter((id) => get().sets.find((b) => b.id === id)?.collection?.length);
     const idle = [...selFlow.steps].filter((id) => !steps.find((s) => s.id === id)?.running);
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>
@@ -250,10 +252,13 @@ export const createModelSlice = (
         ),
         selCycles,
         ),
-        selFlow.sets,
+        // (but a set that holds its molecules itself, on no page: asked about first, after the rest)
+        [...selFlow.sets].filter((id) => !held.includes(id)),
         idle,
       ),
     );
+    // (those asked about: the selection's sets that hold their molecules themselves - so a selection of nothing else asks, not nothing)
+    if (held.length) set({ askDeleteSet: held });
     if (!deleted) return;
     forgetDeleted(set);
     // (the steps' jobs' folders taken away, as when a step is deleted on its own)
@@ -428,10 +433,15 @@ export const createModelSlice = (
 
   openWorkspace: (ws: Workspace, start = false) => {
     const { drawn } = ws;
-    // (its texts, those read - utils/workspace `readTexts` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered)
+    // (its texts, those read - utils/workspace `readKept` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered;
+    // and those whose words could not be read after them, numbered on, kept as the file named them: store/types `LostText`)
     const read = ws.texts.filter((t) => t.text != null);
-    const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) }));
-    const shown = ws.textShown != null ? read.indexOf(ws.texts[ws.textShown]) : -1;
+    const unread = ws.texts.filter((t) => t.text == null);
+    const placed = (t: SavedText) => ({ ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) });
+    const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...placed(t) }));
+    const textsLost = unread.map((t, i) => ({ id: read.length + i + 1, name: t.name, sha256: t.sha256, ...placed(t) }));
+    const shownSaved = ws.textShown != null ? ws.texts[ws.textShown] : undefined;
+    const shown = shownSaved ? (shownSaved.text != null ? texts[read.indexOf(shownSaved)] : textsLost[unread.indexOf(shownSaved)])?.id ?? null : null;
     const opened = (d: WorkspaceDocument) => {
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
       // (a workflow's parts by their own ids, each set's members as the file said them: utils/workspace)
@@ -446,7 +456,8 @@ export const createModelSlice = (
           aromaticEnabled: ws.aromaticEnabled,
           aromaticRings: ws.aromaticRings,
           texts,
-          nextTextId: texts.length + 1,
+          textsLost,
+          nextTextId: ws.texts.length + 1,
           pdfs: ws.pdfs.map((p, i) => ({ ...p, id: i + 1 })),
           nextPdfId: ws.pdfs.length + 1,
           pictures: (drawn.pictures ?? []).map((p, i) => ({ ...p, id: i + 1 })),
@@ -486,7 +497,9 @@ export const createModelSlice = (
     });
     // (and its column showing the text or the PDF it showed, or closed)
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: texts[Math.max(shown, 0)]?.id ?? null, pdfShown, textsOpen: shown >= 0 || pdfShown != null }));
+    // (what its file held that could not be read: said on every save - and, opened as the document, its file kept beside the first saved over it; opened into one, never its file to keep)
+    const leftOnOpen = start ? (ws.leftOut ? { left: ws.leftOut, kept: false } : null) : ws.leftOut ? { left: leftTogether(get().leftOnOpen?.left, ws.leftOut), kept: true } : get().leftOnOpen;
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null, leftOnOpen }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */
@@ -510,10 +523,14 @@ export const createModelSlice = (
       chosen3d: null,
       hoveredSet: null,
       chosenSet: null,
+      // (sets read as tables: of the old document's sets)
+      setsRead: [],
+      setTableShown: null,
       hoveredStep: null,
       hoveredWire: null,
       openStep: null,
       wireDrag: null,
+      wireRefused: null,
       workflowMenu: null,
       turns3d: {},
       frames3d: {},
@@ -755,6 +772,8 @@ export const createModelSlice = (
   deleteDrawn: (part: Drawn, molecules3d: number[] = []) => {
     // (a workflow's parts cut with it - but not a step running, which is asked about on its own)
     const steps = get().steps.filter((s) => part.flow?.steps.some((x) => x.id === s.id) && !s.running);
+    // (a set that holds its molecules itself, on no page, which a copy does not carry: left, said by the cut)
+    const left = (part.flow?.sets ?? []).filter((b) => get().sets.find((x) => x.id === b.id)?.collection?.length).map((b) => b.id);
     const edited = doc.edit("cut", (d) =>
       removeParts(
         ops.removeInks(
@@ -780,13 +799,14 @@ export const createModelSlice = (
         ),
         (part.inks ?? []).map((x) => x.id),
         ),
-        (part.flow?.sets ?? []).map((b) => b.id),
+        (part.flow?.sets ?? []).map((b) => b.id).filter((id) => !left.includes(id)),
         steps.map((s) => s.id),
       ),
     );
-    if (!edited) return;
+    if (!edited) return left.length;
     forgetDeleted(set);
     for (const s of steps) get().forgetStepJobs(s);
+    return left.length;
   },
 
   expandAbbreviation: (id: number) => {

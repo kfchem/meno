@@ -3,7 +3,7 @@
  * column shows as they come and go - or which PDF read there (docs/PDF.md)
  * - what a new one is called, and where Export suggests writing one.
  */
-import type { PdfItem, WorkspaceText } from "../store/types";
+import type { LostText, PdfItem, WorkspaceText } from "../store/types";
 
 /** The column's width as it first opens on a text, in CSS pixels. */
 export const COLUMN_WIDTH = 440;
@@ -13,12 +13,26 @@ export const COLUMN_WIDEST = 0.85;
 /** How much of the canvas it takes as a PDF is read in it, until it is dragged: most of it, a page being for reading. */
 export const PDF_COLUMN_SHARE = 0.75;
 
-/** How wide the column is, on a canvas `room` CSS pixels wide, showing a PDF or a text: as it was dragged, or as it first opens - kept within its least and most. */
-export function columnWidthFor(room: number, pdf: boolean, dragged: number | null): number {
-  const want = dragged ?? (pdf ? Math.round(room * PDF_COLUMN_SHARE) : COLUMN_WIDTH);
+/** How wide it first opens on a set's table (workflow/SetTableBody), in CSS pixels: its columns all seen, a name's and what worked its energy out a little cut. */
+export const TABLE_COLUMN_WIDTH = 680;
+
+/** How wide the column is, on a canvas `room` CSS pixels wide, showing a PDF, a set's table or a text: as it was dragged, or as it first opens - kept within its least and most. */
+export function columnWidthFor(room: number, pdf: boolean | "table", dragged: number | null): number {
+  const want = dragged ?? (pdf === "table" ? TABLE_COLUMN_WIDTH : pdf ? Math.round(room * PDF_COLUMN_SHARE) : COLUMN_WIDTH);
   return Math.min(Math.max(COLUMN_NARROWEST, room * COLUMN_WIDEST), Math.max(COLUMN_NARROWEST, want));
 }
 import { firstFreeBeside } from "../../../../lib/io/beside";
+
+/** What a text that could not be read is said to be, by its name: in the column, and as its workspace opens. */
+export const lostSaid = (name: string) => `${name} could not be read from the workspace.`;
+
+/** What a text in the column is, as `shownText` follows it: its id, its words - none, one that could not be read - and whether it is read there. */
+type InColumn = Pick<WorkspaceText, "id" | "reading"> & { text?: string };
+
+/** The texts in the column, in its order: those it holds, and after them those that could not be read - each its id alone (`shownText`); the texts as they are, where there are none such. */
+export function columnOf(texts: readonly WorkspaceText[], lost: readonly LostText[]): readonly InColumn[] {
+  return lost.length ? [...texts, ...lost.map((t) => ({ id: t.id }))] : texts;
+}
 
 /**
  * The text the column shows once the texts are `after`, having been
@@ -29,8 +43,8 @@ import { firstFreeBeside } from "../../../../lib/io/beside";
  * the one now where it was, or none.
  */
 export function shownText(
-  before: readonly WorkspaceText[],
-  after: readonly WorkspaceText[],
+  before: readonly InColumn[],
+  after: readonly InColumn[],
   shown: number | null,
 ): { shown: number | null; open?: true } {
   if (before === after) return { shown };

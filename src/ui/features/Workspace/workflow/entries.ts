@@ -5,10 +5,13 @@
  * set that is; and its entries, each a structure with what has been found of
  * it.
  */
+import type { Failure } from "./failures";
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
-import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
+import type { CalcInfo } from "../../../../lib/calc/output";
+import { FREQUENCY, geometryKey, type At, type By, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
+import { groupLetter } from "../../../../lib/nodes/base";
 import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
@@ -159,17 +162,20 @@ export function lyingIn(page: Page, set: Frame): { structures: number[][]; molec
 /**
  * Whether a molecule's frames are one compound's conformers wherever it
  * is: those a conformer search made - Meno's own (*3D structures*), or a
- * workflow's - which say so (`conformerSet`), where it has more than one
- * (the maintainer, 2026-10-08). A file's many geometries are not.
+ * workflow's - which say so (`conformerSet`) (the maintainer, 2026-10-08):
+ * one conformer found included, a set in which one happened to be found,
+ * not another kind of thing (the maintainer, 2026-10-21). A file's many
+ * geometries are not.
  */
-export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) => m.conformerSet === true && framesOf(m) > 1;
+export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.conformerSet === true;
 
 /**
  * What a set holds: what made it says - a Render step's, pictures; made by
  * the chemist, structures, where any is drawn - else a conformer set, where
- * a molecule in it is a conformer search's (`conformersOfOne`): each
+ * every molecule in it is a conformer search's (`conformersOfOne`): each
  * molecule in it a compound, its frames its conformers - else molecules in
- * 3D.
+ * 3D. A set mixing the two is molecules in 3D, and no step takes it
+ * (`plainAmong`).
  */
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
@@ -180,7 +186,22 @@ export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   if (set.chart) return "chart";
   const { structures } = setMembers(page, set);
   if (structures.length) return "structures";
-  return setMolecules(page, set).some(conformersOfOne) ? "conformers" : "molecules";
+  const molecules = setMolecules(page, set);
+  return molecules.length && molecules.every(conformersOfOne) ? "conformers" : "molecules";
+}
+
+/**
+ * Why a step takes no set of `molecules` mixing conformer sets with other
+ * molecules in 3D - neither the others' frames are conformers, nor a
+ * conformer set's conformers compounds of their own - naming the others,
+ * by their titles or names, else their places; none where it does not mix
+ * them.
+ */
+export function plainAmong(molecules: readonly Pick<Molecule3D, "conformerSet" | "title" | "name">[]): string | null {
+  const plain = molecules.flatMap((m, i) => (conformersOfOne(m) ? [] : [m.title || m.name || `molecule ${i + 1}`]));
+  if (!plain.length || plain.length === molecules.length) return null;
+  const named = plain.length > 3 ? `${plain.slice(0, 3).join(", ")} and ${plain.length - 3} more` : plain.join(", ");
+  return `It mixes conformer sets with other molecules in 3D: ${named} ${plain.length === 1 ? "is no conformer set" : "are no conformer sets"}`;
 }
 
 /** How many entries a set holds, of what kind of set: a structure each, a frame each of a molecule in 3D - one for a path to its last - or a picture each. */
@@ -228,6 +249,15 @@ export function setMolecules(page: Page, set: Frame & Pick<WorkflowSet, "members
   return setMembers(page, set).molecules.map((id) => byId.get(id)!);
 }
 
+/**
+ * One entry of a set of structures drawn, as Meno's own steps take it and
+ * give it (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*): its place among the
+ * set's, from 0, and the structure as it is drawn - its atoms and bonds,
+ * where they lie on the page, its wedges, labels and all - in 2D. Never
+ * made 3D here: a step after it does that, as everywhere else.
+ */
+export type DrawnEntry = { place: number; drawn: Model };
+
 /** One entry of a set of molecules in 3D, as a step takes it: its compound by its place among the set's, its number among that compound's conformers, its atoms and bonds, its geometry, its energy. */
 export type SetEntry = {
   compound: number;
@@ -249,7 +279,23 @@ export type SetEntry = {
   degeneracy?: number;
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
+  /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
+  failed?: Failure;
+  /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
+  imaginary?: number[];
   name?: string;
+  /** It is one of only a part of its compound's conformers that came from a search (`Molecule3D.partOf`): what a step makes of it is a part too. */
+  partOf?: true;
+  /**
+   * What the calculation it was read from says - the program, the method
+   * its energy is of - and what its molecule keeps besides (`keptOf`): the
+   * drawing it was made from, its stereo labels, how it was made and what
+   * its energies are from. A step that works on entries alone, changing
+   * none of them, gives them back with these as they were; a program that
+   * works them out anew gives its own.
+   */
+  calc?: CalcInfo;
+  keep?: Kept;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -268,6 +314,88 @@ export function frameXyz(m: Pick<Molecule3D, "atoms" | "frames">, f: number): nu
  * (docs/WORKFLOWS.md, *Compound sets and conformer sets*); in a conformer
  * set each molecule is a compound, its frames its conformers.
  */
+/** What a molecule in 3D keeps besides its atoms, bonds and places that an entry of it carries (`SetEntry.keep`). */
+export type Kept = Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
+
+/**
+ * What a molecule keeps besides its atoms, bonds and places: the drawing it
+ * was made from, its stereo labels, how it was made, and its bonds to ring
+ * centres (eta) - its atoms in the same order, as its entries keep them.
+ */
+export function keptOf(m: Kept): Kept {
+  return {
+    drawnFrom: m.drawnFrom,
+    drawnAs: m.drawnAs,
+    ...(m.stereo ? { stereo: m.stereo } : {}),
+    ...(m.made ? { made: m.made } : {}),
+    ...(m.centres?.length ? { centres: m.centres } : {}),
+  };
+}
+
+/** `v` as JSON with every object's keys in order: two values equal as data give the one text. */
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+/** What a calculation was, without what is each entry's own: its results, its output, its job among several, its wavefunction, the readers that could not read it. */
+function calcLevel(c: CalcInfo | undefined): string {
+  if (!c) return "";
+  const { results: _results, source: _source, job: _job, wavefunction: _wavefunction, unread: _unread, ...level } = c;
+  return stableJson(level);
+}
+
+/** A calculation, or a way of making, in a few words: its program, method and basis, or what its energies are from. */
+function madeWords(e: SetEntry): string {
+  const c = e.calc;
+  return c ? [c.program, c.method, c.basis].filter(Boolean).join(" ") || "a calculation" : e.keep?.made?.energies ?? "no calculation";
+}
+
+/** An entry's stereo labels, centre by centre and bond by bond - not which are shown - or "" where it has none. */
+function labelsOf(e: SetEntry): string {
+  const st = e.keep?.stereo;
+  if (!st || (!Object.keys(st.atoms ?? {}).length && !Object.keys(st.bonds ?? {}).length)) return "";
+  return stableJson({ atoms: st.atoms, bonds: st.bonds });
+}
+
+/**
+ * Why entries cannot stand as conformers of one compound, or null where they
+ * can: they must come from the one calculation - its program, version,
+ * method, basis, charge and multiplicity, read by the same readers - with
+ * their energies from the one source, for those to stand in one list and
+ * what made them to be said once; and be of the one configuration as their
+ * stereo labels give it, a compound being one stereoisomer.
+ */
+export function unlikeMade(g: readonly SetEntry[]): string | null {
+  const one = (f: (e: SetEntry) => string) => new Set(g.map(f)).size <= 1;
+  if (!one((e) => calcLevel(e.calc))) return `its entries come from different calculations (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (!one((e) => e.keep?.made?.energies ?? "")) return `its entries' energies come from different sources (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (!one(labelsOf)) return "its entries' stereo labels differ: they may be different stereoisomers";
+  return null;
+}
+
+/** What entries all keep alike (`SetEntry.keep`), part by part: a part one of them keeps otherwise - the drawing it was made from, how it was made - is kept by none. */
+export function keptAlike(g: readonly SetEntry[]): Kept {
+  const out: Record<string, unknown> = {};
+  for (const k of ["drawnFrom", "drawnAs", "stereo", "made", "centres"] as const) {
+    const first = g[0]?.keep?.[k];
+    if (first !== undefined && g.every((e) => stableJson(e.keep?.[k]) === stableJson(first))) out[k] = first;
+  }
+  return out as Kept;
+}
+
+/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
+const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
+  (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
+
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
@@ -279,6 +407,9 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    const keep = keptOf(m);
+    // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
+    const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       const xyz = frameXyz(m, f);
@@ -290,10 +421,17 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz,
         ...(stereo ? { stereo } : {}),
-        ...(energies ? { energy: energies[f] } : {}),
+        // (an energy that is no number - NaN, or infinite - is none)
+        ...(energies && Number.isFinite(energies[f]) ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(m.partOf ? { partOf: true as const } : {}),
+        ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
+        // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
+        ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
+        keep,
         from: m.id,
         frame: f,
         last: f === n - 1,
@@ -303,17 +441,103 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   return out;
 }
 
-/** A compound's letter, by its place among a set's: a to z, then aa, ab... */
-export function compoundLetter(i: number): string {
-  const a = "abcdefghijklmnopqrstuvwxyz";
-  return i < 26 ? a[i] : compoundLetter(Math.floor(i / 26) - 1) + a[i % 26];
+/** A compound's letter, by its place among a set's: a to z, then aa, ab... (lib/nodes `groupLetter`, one rule for both). */
+export const compoundLetter = groupLetter;
+
+/**
+ * The thermochemistry an entry's calculation read, that become its
+ * properties (docs/WORKFLOWS-FOUNDATION.md, *The entry*): the total free
+ * energy, the total enthalpy, the zero-point energy alone (not E + ZPE), and
+ * the correction to the free energy (G - E) - each in hartrees, by the
+ * reading's id, the one name every plugin that reads them gives them
+ * (agreed with Populations, which reads `thermo.free-energy`).
+ */
+export const THERMO_PROPERTIES = ["thermo.free-energy", "thermo.enthalpy", "thermo.zpve", "thermo.g-correction"] as const;
+
+/**
+ * What an entry's calculation was, for its properties (lib/entry `By`): the
+ * plugin that read it, the program, method and basis - and, for a thermal
+ * quantity, the treatment of its vibrations as the program said it.
+ */
+function byOf(calc: SetEntry["calc"], treatment?: string): By | undefined {
+  if (!calc) return undefined;
+  const plugin = calc.readers[0]?.split(" ")[0];
+  const by: By = {
+    ...(plugin ? { plugin } : {}),
+    ...(calc.program ? { program: calc.program } : {}),
+    ...(calc.method ? { method: calc.method } : {}),
+    ...(calc.basis ? { basis: calc.basis } : {}),
+    ...(treatment ? { treatment } : {}),
+  };
+  return Object.keys(by).length ? by : undefined;
+}
+
+/** A reading of the molecule's as its calculation gave it: its value, where it is a number or a text. */
+function readingOf(calc: SetEntry["calc"], id: string): number | string | undefined {
+  const r = calc?.results?.find((x) => x.on === "molecule" && x.id === id);
+  return r && r.on === "molecule" && (typeof r.value === "number" || typeof r.value === "string") ? r.value : undefined;
+}
+
+/**
+ * Its calculation's thermochemistry as properties (THERMO_PROPERTIES), each
+ * worked out where the program said: the geometry, the temperature and
+ * pressure it said it used, never a step's asking, and the solvation as
+ * it said it ("none", the gas phase stated; unsaid, not stated). Only an
+ * energy in hartrees is taken.
+ */
+function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
+  const calc = e.calc;
+  if (!calc?.results?.length) return {};
+  const kelvin = readingOf(calc, "thermo.temperature");
+  const atm = readingOf(calc, "thermo.pressure");
+  const treatment = readingOf(calc, "thermo.treatment");
+  const at: At = {
+    geometry,
+    ...(typeof kelvin === "number" ? { kelvin } : {}),
+    ...(typeof atm === "number" ? { atm } : {}),
+    ...(calc.solvation ? { solvent: calc.solvation } : {}),
+  };
+  const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
+  const out: Record<string, Property> = {};
+  for (const id of THERMO_PROPERTIES) {
+    const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
+    if (!r || r.on !== "molecule" || typeof r.value !== "number" || !Number.isFinite(r.value) || r.quantity !== "energy") continue;
+    out[id] = { value: r.value, unit: "Eh", at, ...(by ? { by } : {}), status: "computed" };
+  }
+  return out;
+}
+
+/**
+ * Its calculation's vibrations as properties (lib/entry `FREQUENCY`): the
+ * table `vibrations`, each row a vibration's frequency in cm-1 (an imaginary
+ * one negative), read from the list whose column is a wavenumber - and the
+ * property `modes`, in the same order, where every row gives its atoms'
+ * displacements. What else the list has stays among its readings: the
+ * entry's columns take only units Meno's table has.
+ */
+function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
+  const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
+  if (!list || list.on !== "list") return {};
+  const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
+  if (k < 0) return {};
+  const freqs = list.rows.map((r) => r.cells[k]);
+  if (!freqs.length || !freqs.every((f): f is number => typeof f === "number" && Number.isFinite(f))) return {};
+  const by = byOf(e.calc);
+  const n = 3 * e.atoms.length;
+  const moves = list.rows.map((r) => r.move);
+  const modes = moves.every((m): m is number[] => Array.isArray(m) && m.length === n && m.every(Number.isFinite)) ? moves : undefined;
+  return {
+    vibrations: { value: { table: { columns: [FREQUENCY], rows: freqs.map((f) => [f]) } }, unit: "none", at, ...(by ? { by } : {}), status: "computed" },
+    ...(modes ? { modes: { value: { modes }, unit: "none" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+  };
 }
 
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
  * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
  * its geometry, its species by Meno's one rule, and what has been found of
- * it as properties - its energy (in hartrees, at its geometry), its
+ * it as properties - its energy (in hartrees, at its geometry, by what
+ * worked it out), its calculation's thermochemistry and vibrations, its
  * degeneracy, its compound as its group, its number, its name - and the
  * molecule it was a frame of as its lineage.
  */
@@ -324,12 +548,18 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
   }));
-  const at = { geometry: geometryKey(e.xyz) };
+  // (the energy where its calculation was worked out - in the solvation it said - and by what)
+  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
+  const by = byOf(e.calc);
   const properties: Record<string, Property> = {
     group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
     number: { value: e.number, unit: "none", status: "computed" },
-    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, status: "computed" as const } } : {}),
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+    ...thermoOf(e, at.geometry),
+    ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
+    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
   };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
@@ -341,7 +571,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     species: speciesOf(written, e),
     properties,
     ...(e.stereo ? { stereo: e.stereo } : {}),
-    status: "done",
+    status: e.failed ? { failed: e.failed.why } : "done",
   };
 }
 
@@ -378,4 +608,12 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
     b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
   }
   return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+/** What a set holds itself, on no page (`collection`), said - "118 molecules", "400 conformers" - for what goes with it when it is deleted; none where it holds none. */
+export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
+  if (!set.collection?.length) return undefined;
+  const { holds, entries } = countOf(page, set);
+  const noun = holds === "conformers" ? "conformer" : "molecule";
+  return `${entries.toLocaleString("en-US")} ${entries === 1 ? noun : `${noun}s`}`;
 }
