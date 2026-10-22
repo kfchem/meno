@@ -164,8 +164,21 @@ export function showRun(
 /** A frame `w` wide and `h` tall, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
 
-/** The most a row of molecules in a result set spans before the next row begins. */
+/** The most a row of molecules in a result set spans before the next row begins - of a few; of many, as wide as `SET_ASPECT` makes it (`rowMost`). */
 export const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
+/**
+ * How wide a result set of many molecules is laid out against how tall:
+ * about a window's, 3 : 2, so that fitted to the view it reads as a grid -
+ * not as a column one molecule wide.
+ */
+export const SET_ASPECT = 3 / 2;
+
+/** How wide a result set's rows go: `ROW_MOST`, or - for many molecules - as wide as their room, laid out `SET_ASPECT` wide to tall, takes. */
+export function rowMost(rooms: readonly (Frame & { chip: number })[]): number {
+  let area = 0;
+  for (const r of rooms) area += (r.x1 - r.x0 + BETWEEN) * (r.y1 - r.y0 + r.chip + BETWEEN);
+  return Math.max(ROW_MOST, Math.sqrt(area * SET_ASPECT));
+}
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
 /** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
@@ -369,11 +382,11 @@ export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | 
 /**
  * How a result set's molecules lie in it, each taking the room `rooms` says:
  * under its name, in rows, left to right, a row going no wider than
- * `most` (`ROW_MOST`), and the whole in the middle of the set where the set is wider
+ * `most` (`rowMost`: of many, about a window's shape), and the whole in the middle of the set where the set is wider
  * - its inside at least `least` wide, so that its name reads whole. Each
  * molecule's place from the set's top left, and the set's width and height.
  */
-export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W, most = ROW_MOST): { at: { x: number; y: number }[]; width: number; height: number } {
+export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W, most = rowMost(rooms)): { at: { x: number; y: number }[]; width: number; height: number } {
   const places: { x: number; y: number }[] = [];
   let x = 0;
   let y = 0;
