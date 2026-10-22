@@ -16,7 +16,9 @@ describe("mapReaction", () => {
   const result = mapped(da.reactants, [da.product]);
 
   it("maps every atom, hydrogens included, one to one", () => {
-    expect(result.maps.length).toBe(64);
+    // the search's 64 differ only in which of a ring CH2's hydrogens is which; placed for the least motion
+    // about each CH2's frame (localLeastTurn), they come to 4, each once
+    expect(result.maps.length).toBe(4);
     expect(result.complete.every(Boolean)).toBe(true);
     expect(result.maps[0]).toEqual(trueMap(DA_REACTANT_NAMES, da.productOrder));
   });
@@ -110,6 +112,16 @@ describe("mapReaction", () => {
   });
 });
 
+describe("a complete map", () => {
+  it("pairs each atom with one of its own element: an H pinned to the reactants' Cl leaves the map incomplete", () => {
+    const { reactant, product, productOrder } = sn2();
+    const r = mapReaction({ reactants: [reactant], products: [product], knownPairs: [[2, productOrder.indexOf("H0")]] });
+    if ("error" in r) throw new Error(r.message);
+    expect(r.maps[0][productOrder.indexOf("H0")]).toBe(2);
+    expect(r.complete.every((c) => !c)).toBe(true);
+  });
+});
+
 describe("mapProducts (the Reaction step)", () => {
   const da = dielsAlder();
   const reactant = da.reactants[0];
@@ -162,7 +174,8 @@ describe("mapProducts (the Reaction step)", () => {
       ["broken", "C", "Br"],
     ]);
     const every = mapProducts(reactant, [da.product], { every: true });
-    expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 64 }, (_, i) => i));
+    // the Diels-Alder's maps, each once (see "maps every atom, hydrogens included, one to one")
+    expect(every.mapped.map((x) => x.map)).toEqual(Array.from({ length: 4 }, (_, i) => i));
   });
 
   it("says why a product that cannot map atom for atom is not passed on, and passes on nothing of it", () => {
@@ -173,5 +186,28 @@ describe("mapProducts (the Reaction step)", () => {
     const flat: Molecule = { atoms: da.product.atoms.map((a) => ({ ...a, z: 0 })).filter((a) => a.el !== "H"), bonds: [] };
     const flatReactant: Molecule = { atoms: reactant.atoms.map((a) => ({ ...a, z: 0 })).filter((a) => a.el !== "H"), bonds: [] };
     expect(mapProducts(flatReactant, [flat]).notMapped[0].reason).toMatch(/flat drawings/);
+  });
+
+  it("refuses a product of other elements, as many atoms or not, and says which", () => {
+    // SN2's product with its carbon made a fluorine: six atoms either side, but no carbon for the reactants' to map to
+    const { reactant: r, product: p, productOrder } = sn2();
+    const fluorine = { ...p, atoms: p.atoms.map((a, i) => (productOrder[i] === "C" ? { ...a, el: "F" } : a)) };
+    expect(mapProducts(r, [fluorine])).toEqual({
+      mapped: [],
+      notMapped: [{ product: 0, reason: "The product has 1 F more and 1 C fewer than the reactants: every atom must map to one of its own element." }],
+    });
+  });
+
+  it("pairs every atom with one of its own element: an H and a Cl trading places in the product is still CH3Cl, mapped Cl to Cl", () => {
+    const { reactant: r, product: p, productOrder } = sn2();
+    const [h, cl] = [productOrder.indexOf("H0"), productOrder.indexOf("Cl")];
+    const swapped = { ...p, atoms: p.atoms.map((a, i) => (i === h ? { ...a, el: "Cl" } : i === cl ? { ...a, el: "H" } : a)) };
+    const { mapped, notMapped } = mapProducts(r, [swapped], { every: true });
+    expect(notMapped).toEqual([]);
+    for (const x of mapped) x.molecule.atoms.forEach((a, i) => expect(a.el).toBe(r.atoms[i].el));
+    expect(mapped[0].changes.map((c) => [c.change, c.element1, c.element2])).toEqual([
+      ["formed", "C", "Cl"],
+      ["broken", "C", "Br"],
+    ]);
   });
 });

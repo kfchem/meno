@@ -1,4 +1,5 @@
 import type { ShowBox } from "../utils/viewShow";
+import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
 import type { CyclePatch, ImportedScheme, MarkOf, MarkPlaces, Relayout, WorkspaceDocument, WrittenAsLabel } from "../document";
 import type { SetHolds, SetKind, StepKind } from "../workflow/kinds";
@@ -573,6 +574,15 @@ export type WordsFlight = {
  * (`of`) - what it rises out of into the column, and goes back into.
  */
 export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
+/**
+ * A text its workspace's file was to hold whose words could not be read -
+ * damaged there, or not there (docs/FILE-IO.md, *The workspace file*): kept
+ * as the file named it, by its name and its SHA-256, with where it lay and
+ * what it was the text of, and shown in the column as what it is - never
+ * as a text, having no words: nothing to edit, copy, find or read. It stays
+ * until it is taken away, or a text of the same words comes.
+ */
+export type LostText = Omit<WorkspaceText, "text" | "path"> & { sha256: string };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
 export type TextOf = { step: number } | { molecule: number };
 /**
@@ -614,6 +624,16 @@ export type WorkflowSet = {
    * atoms.
    */
   put?: number[];
+  /**
+   * A result set of more entries than are laid out on the page
+   * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
+   * `LARGE_SET`): what the step gave, held in the set itself, in the step's
+   * order - each a molecule in 3D as it would be on the page, but on none.
+   * Its frame shows them summed up; the steps after it take them from here.
+   */
+  collection?: Omit<Molecule3D, "id" | "at">[];
+  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules did not read, and were left out - said with its count until the step runs again. */
+  unread?: number;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
@@ -634,16 +654,23 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  * then - its kind and options as they were - and what it gave, as its
  * result set held it, so that it can be shown again.
  */
-export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunResults };
+export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunKeptResults };
 /**
- * What a run gave, exit by exit, as its result sets hold it and a run kept
- * keeps it: the molecules in 3D its first exit holds and those its second
- * holds - what it set aside - and what kind of set they make. Where they
- * are structures drawn, `drawn` holds them instead, each as drawn - its
- * atoms, its bonds and where they lie - and the two lists of molecules are
- * empty.
+ * What a run gave, as its exits' sets hold it and an earlier run kept
+ * keeps it: the molecules its first exit held, those its second held, and
+ * what kind of set they make - with how many of each did not read from a
+ * file, and were left out (`unread`, `restUnread`). Where they are
+ * structures drawn, `drawn` holds them instead, each as drawn - its atoms,
+ * its bonds and where they lie - and the two lists of molecules are empty.
  */
-export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind; drawn?: { made: Model[]; rest: Model[] } };
+export type RunKeptResults = {
+  molecules: Omit<Molecule3D, "id" | "at">[];
+  rest: Omit<Molecule3D, "id" | "at">[];
+  holds: SetKind;
+  unread?: number;
+  restUnread?: number;
+  drawn?: { made: Model[]; rest: Model[] };
+};
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its
@@ -752,6 +779,8 @@ export type EditorState = {
   molecules3d: Molecule3D[];
   /** The texts the workspace holds, in their column's order. */
   texts: WorkspaceText[];
+  /** The texts its file was to hold that could not be read, after them in the column (`LostText`). */
+  textsLost: LostText[];
   /** The text its column shows, or showed as it was closed, by id; null, none. */
   textShown: number | null;
   /** Whether the column of texts is open beside the canvas. */
@@ -763,6 +792,13 @@ export type EditorState = {
    */
   cover: number;
   setCover: (px: number) => void;
+  /**
+   * The marks the canvas shows on the drawing this moment (chem/useChemMarks),
+   * for a picture made of it to show R, S, E and Z as the canvas does
+   * (chem/marks `stereoPictureItems`): neither saved nor undone.
+   */
+  shownMarks: ChemMarks | null;
+  setShownMarks: (marks: ChemMarks | null) => void;
   /** How wide the column is when it is open, in CSS pixels, as its edge was dragged: what it shows is laid out at that width as it slides. */
   columnWidth: number;
   setColumnWidth: (px: number) => void;
@@ -836,6 +872,8 @@ export type EditorState = {
   editText: (id: number, text: string) => void;
   /** A text taken out of the workspace, as one undo step. */
   removeText: (id: number) => void;
+  /** A text that could not be read taken out of the workspace, as one undo step. */
+  removeLostText: (id: number) => void;
   /** Texts deleted, their sheets with them, as one step. */
   removeTexts: (ids: Iterable<number>) => void;
   /** A text read in the column - its tab there again, where it had none - and shown. */

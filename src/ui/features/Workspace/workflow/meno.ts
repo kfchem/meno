@@ -6,8 +6,9 @@
  * it keeps, which it sets aside, and what it found; or why it could not.
  */
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
+import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
@@ -171,10 +172,29 @@ export function pushTo<K, V>(groups: Map<K, V[]>, key: K, value: V): Map<K, V[]>
   return groups;
 }
 
-/** A compound set as a conformer set: entries of the same constitution as conformers of one compound, numbered in the order they came. */
+/**
+ * A compound set as a conformer set: entries of the same constitution and
+ * the same stereoisomer (lib/entry `stereoIdentity`, from each one's own
+ * geometry, asked before it runs: kinds `perceives`) as conformers of one
+ * compound, numbered in the order they came - where each compound's
+ * entries were made alike (entries `unlikeMade`): one calculation's
+ * energies in one list, what made them said once. Else not at all, and
+ * why: an entry whose stereoisomer is not known - not asked, not
+ * perceived, or a centre left unspecified - is no conformer of a known
+ * compound; constitution alone would sum diastereomers.
+ */
 function asConformers(entries: readonly SetEntry[]): Outcome3D {
+  const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
+  if (unknown >= 0) {
+    const st = entries[unknown].stereo;
+    const why = !st ? "it has not been asked" : !st.perceived ? st.why : "a centre or double bond of it is left unspecified";
+    return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: ${why}` };
+  }
   const groups = new Map<string, SetEntry[]>();
-  for (const e of entries) pushTo(groups, constitutionOf(e), e);
+  for (const e of entries) pushTo(groups, `${constitutionOf(e)}|${stereoIdentity(e.stereo)}`, e);
+  const unlike = [...groups.values()].map(unlikeMade);
+  const first = unlike.findIndex((why) => why != null);
+  if (first >= 0) return { ok: false, said: `Compound ${compoundLetter(first)}: ${unlike[first]}` };
   const kept = [...groups.values()].flatMap((g, compound) => g.map((e, i) => ({ ...e, compound, number: i + 1 })));
   return { ok: true, holds: "conformers", kept, aside: [], said: `${plural(groups.size, "compound")} · ${kept.length}` };
 }
@@ -334,7 +354,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
     kept: [...entries],
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
-    said: `${plural(compounds, "compound")} at ${kelvin} K`,
+    // (from the electronic energy, which is all a set's entries carry today: said, so that its shares are not read as free energies' shares - the Populations node of lib/nodes weights G)
+    said: `${plural(compounds, "compound")} at ${kelvin} K, from electronic energies`,
   };
 }
 

@@ -278,7 +278,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Energy window | a funnel | a conformer set, with energies | those within the window of their compound's lowest; the rest out of its second exit, *Outside it* |
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
-| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - as conformers of one compound |
+| As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 
 The first six run a program; the last five work on a set's entries
@@ -291,7 +291,12 @@ Gaussian each stop when asked to. Their plugins work out its energy
 where it is instead, and it comes back where it was - in *Conformers*,
 its only conformer. More kinds come with Meno as they are needed - a
 free energy from an energy and its corrections, a template input written
-out - each specified before it is built.
+out - each specified before it is built. *Enumerate*, Meno's own, is
+specified and not yet built: structures made from one drawing by rule,
+such as each R group given a list of groups, in 2D, every combination
+numbered and any not made set aside with its reason
+(WORKFLOWS-FOUNDATION.md, *Enumerate*). It is not *Generate*, which a
+plugin's program or model fills.
 
 ### Who does a step
 
@@ -486,7 +491,14 @@ shuts (docs/PDF.md, step 5).
 ![A step's results and its log](workflows/6-results.svg)
 
 When a run is done, what it gave comes in as a result set to the right
-of the step, wired from it (decided):
+of the step, wired from it (decided). Its molecules lie in rows, left to
+right, each row as wide as the set's molecules need to lie about a
+window's shape, 3 : 2 wide to tall - but never narrower than twelve bonds
+- so that fitted to the view many read at a glance as a grid, not as a
+column one molecule wide (2026-10-22). Two or three lie in one row as
+before; from about five of a usual size, the set takes that shape. A set's ports
+are reachable whatever lies over them on the page - a molecule's chip
+beside its edge - being drawn over all of it.
 
 - **Optimise**: each entry as optimised, its path as frames, the energy
   of each frame - what an optimisation read from a file shows today;
@@ -506,6 +518,22 @@ A step of Meno's own can also give structures drawn, in 2D (*Structures
 drawn as results*, below): its exits' sets then hold structures on the
 page, each as the step drew it, and feed a step that takes structures
 drawn - *Conformers* - as a set the chemist drew does.
+
+**A large result set** (2026-10-21, docs/WORKFLOWS-FOUNDATION.md, *What a
+set shows*): up to 50 entries are laid out on the page, as above. An exit
+that gives more - a search's 1,000 conformers, or what Duplicates set aside -
+puts none of them on the page: its set holds them itself, in the step's order, and its frame
+says what it holds ("400 conformers of 2 compounds"). The steps after it
+take them from there, a run kept keeps them, and the workspace's file
+keeps them, with the outputs they were read from - or, with *Don't keep
+in the file*, only their count and hash. Opened from a file, a molecule
+of theirs that does not read is left out and counted, and the frame says
+how many ("51 compounds · 2 not read") until the step runs again; saved
+again, the file says so too. So does a step's earlier run kept with the
+file, on its row of the step's card - what both its exits held - and in
+each exit's set once it is shown again. They are opened as a table in the column, and put on the page from
+there, in the steps that follow (6b), and summed up in the frame with a
+sample of their structures and histograms (6c).
 
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
@@ -807,7 +835,8 @@ as Settings allows; each one's log; *Stop*, for its program and
 everything it started; how each ended, recorded - and a job whose runner
 went without saying, the computer restarted, told apart. Settings,
 *Calculations*, *Jobs*: *Jobs at once*, *Cores for each*, and the
-finished jobs' files, cleared. How it works: ARCHITECTURE.md, *Jobs*.
+finished jobs' files - how many, and how much they hold - cleared. How it
+works: ARCHITECTURE.md, *Jobs*.
 
 Decided while building it, for the maintainer to confirm:
 
@@ -920,6 +949,9 @@ Decided while building it, for the maintainer to confirm:
 - **xTB's options**: the method (GFN2-xTB, GFN1-xTB, GFN-FF), a solvent -
   ALPB, any of the 24 its documentation gives for all three methods - and,
   optimising, how far it converges (crude to extreme, normal by default).
+  What it gives back says the solvation as xtb printed it, and a
+  frequency job's thermochemistry how it was worked out (PLUGINS.md,
+  *The contract*).
 
 Changed after review (the maintainer, 2026-10-08; decided: 16): a step
 is its plugin's. Quick Add lists the plugins added, then Meno, each with
@@ -1411,6 +1443,11 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
 
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
+
+Not yet: a large set of structures drawn. *A large result set* holds more
+than 50 molecules in 3D in the set itself, off the page; structures drawn
+are all put on the page however many there are. Enumerate, which can make
+up to 10,000, holds them in its set the same way (P3b).
 
 ## Questions
 

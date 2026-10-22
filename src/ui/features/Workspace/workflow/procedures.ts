@@ -122,9 +122,10 @@ export function procedureFileName(name: string): string {
 }
 
 /** A procedure as a workspace (.meno) holds it, to be shared: its sets and steps and the wires among them, and nothing else - its middle where a workspace opened is first seen. */
-export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
+export async function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
   const parts = centredParts(p.parts);
-  return workspaceFile({
+  // (it has no file to keep: nothing not kept to say)
+  const { bytes } = await workspaceFile({
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -139,6 +140,7 @@ export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
     steps: parts.steps,
     wires: parts.wires,
   });
+  return bytes;
 }
 
 /** Parts moved so that their middle is at the page's origin. */

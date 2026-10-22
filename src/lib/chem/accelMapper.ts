@@ -759,6 +759,20 @@ export type Chain = Pair[];
  *   hydrogen included - the fewest first - and only then by ACCeL's other
  *   keys (modeler.py 1857-1865): an elementary step makes and breaks as few
  *   bonds as it can.
+ * - `transferAlignedH`: where a map moves one of an atom's like hydrogens to
+ *   another atom, the one that moves is the one the donor can bring in line
+ *   with the acceptor by turning least, and the place it takes on the
+ *   acceptor the one in line with the donor - each map's chemistry kept,
+ *   only which of the like hydrogens goes changed (`alignedTransfers`),
+ *   after ACCeL's ordering, and only where the geometry is clear by
+ *   `TRANSFER_MARGIN`: a hydrogen is passed along the line D-H...A, so the
+ *   one already nearest that line is the one that goes.
+ * - `localLeastTurn`: like hydrogens that stay on one atom, where the atom
+ *   has two or more heavy neighbours, given to one another again for the
+ *   least motion once the atom and those neighbours are laid over one
+ *   another (`localLeastTurn`), after `transferAlignedH`: such a group
+ *   cannot turn freely, so its hydrogens keep their places about their
+ *   atom's frame through a step.
  */
 export type Departures = {
   firstOfGroupByGeometry: boolean;
@@ -770,6 +784,8 @@ export type Departures = {
   spectatorsRefined: boolean;
   signedTorsion: boolean;
   fewestBondChanges: boolean;
+  transferAlignedH: boolean;
+  localLeastTurn: boolean;
 };
 export const ACCEL_EXACT: Departures = {
   firstOfGroupByGeometry: false,
@@ -781,6 +797,8 @@ export const ACCEL_EXACT: Departures = {
   spectatorsRefined: false,
   signedTorsion: false,
   fewestBondChanges: false,
+  transferAlignedH: false,
+  localLeastTurn: false,
 };
 export const MENO_DEPARTURES: Departures = {
   firstOfGroupByGeometry: true,
@@ -792,6 +810,8 @@ export const MENO_DEPARTURES: Departures = {
   spectatorsRefined: true,
   signedTorsion: true,
   fewestBondChanges: true,
+  transferAlignedH: true,
+  localLeastTurn: true,
 };
 
 /** What a trace hook is shown of each _get_maps call as it returns: its locals by their Python names. */
@@ -2772,7 +2792,193 @@ export function orderedMaps(self: Atoms, target: Atoms, o: MapOptions = {}): Cha
   let atoms_map = _get_maps(target, self, o.knownPairs ?? [], o.terminalFirst ?? null, 0, o.trace, o.departures);
   atoms_map = _correct_maps(target, self, atoms_map);
   atoms_map = _order_maps(target, self, atoms_map, o.options ?? {}, o.trace, o.departures);
+  // [Meno departures: transferAlignedH, localLeastTurn]
+  // (two maps the same once placed: the first kept, in ACCeL's order)
+  const dep = o.departures;
+  if (dep?.transferAlignedH || dep?.localLeastTurn) {
+    const seen = new Set<string>();
+    if (dep.transferAlignedH) atoms_map = atoms_map.map(alignedTransfers);
+    if (dep.localLeastTurn) atoms_map = atoms_map.map(localLeastTurn);
+    atoms_map = atoms_map.filter((m) => {
+      const k = m.map((p) => `${p[0].number}:${p[1].number}`).sort().join(",");
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
   return atoms_map;
+}
+
+/** How far `x`, a hydrogen on `centre`, is from in line with `partner`: its turn about the centre's one other neighbour's bond, or else the angle centre-H...partner short of 180 degrees (radians). */
+function offLine(centre: Atom, partner: Atom, others: readonly Atom[]): (x: Atom) => number {
+  if (others.length === 1) {
+    const axis = sub(centre.xyz, others[0].xyz);
+    const across = (p: readonly number[]) => {
+      const v = sub(p, centre.xyz);
+      const k = dot(v, axis) / dot(axis, axis);
+      return [v[0] - k * axis[0], v[1] - k * axis[1], v[2] - k * axis[2]];
+    };
+    const toPartner = across(partner.xyz);
+    return (x) => {
+      const u = across(x.xyz);
+      return Math.atan2(norm(cross(u, toPartner)), dot(u, toPartner));
+    };
+  }
+  return (x) => {
+    const u = sub(centre.xyz, x.xyz);
+    const v = sub(partner.xyz, x.xyz);
+    return Math.PI - Math.atan2(norm(cross(u, v)), dot(u, v));
+  };
+}
+
+/**
+ * How much nearer the line D-H...A, by `offLine`, another of the like
+ * hydrogens (or hydrogen places) must be before `alignedTransfers` takes it
+ * over ACCeL's: 60 degrees. A methyl's hydrogens stand 120 degrees apart
+ * about its axis, so one nearer by more than half that is not the same
+ * hydrogen reached by turning the other way: the geometry says which goes.
+ * Nearer by less, the two are too alike to tell, and ACCeL's choice stands.
+ */
+export const TRANSFER_MARGIN = Math.PI / 3;
+
+/**
+ * [Meno departure: transferAlignedH] A map with each hydrogen it moves from
+ * one atom (the donor, D) to another (the acceptor, A) placed as the
+ * transfer passes it - along the line D-H...A:
+ *
+ * - **which of D's like hydrogens goes**: the one D brings in line with A
+ *   by turning least, in the reactant;
+ * - **which of A's like hydrogen places it takes**, where A already holds
+ *   hydrogens: the one in line with D by the same measure, in the product -
+ *   A's own hydrogens keep the others.
+ *
+ * "In line by turning least": where the atom has one other neighbour X (a
+ * methyl's carbon on the rest of the molecule), its hydrogens turn about
+ * X-atom, and each one's turn is the angle about that axis between it and
+ * the partner; where it has none or several (a methylene in a chain cannot
+ * turn freely), the angle at the hydrogen, atom-H...partner, nearest 180.
+ *
+ * Only which of an atom's like hydrogens is which changes - two hydrogens on
+ * one atom swapped, a symmetry of either side - so the map's bond changes
+ * stay the same.
+ */
+export function alignedTransfers(map: Chain): Chain {
+  const out: Chain = map.map((p) => [p[0], p[1]] as Pair);
+  const toB = new Map<Atom, Atom>();
+  const toA = new Map<Atom, Atom>();
+  const at = new Map<Atom, number>();
+  const index = () => {
+    toB.clear();
+    toA.clear();
+    at.clear();
+    out.forEach((p, i) => {
+      toB.set(p[0], p[1]);
+      toA.set(p[1], p[0]);
+      at.set(p[0], i);
+    });
+  };
+  const swapB = (i: number, j: number) => {
+    const b = out[i][1];
+    out[i] = [out[i][0], out[j][1]];
+    out[j] = [out[j][0], b];
+    index();
+  };
+  index();
+  const terminalH = (x: Atom) => x.symbol === "H" && x.bonds.length === 1;
+  for (let k = 0; k < out.length; k++) {
+    const h = out[k][0];
+    const hB = out[k][1];
+    if (!terminalH(h) || !terminalH(hB)) continue;
+    const d = h.bonds[0];
+    const aB = hB.bonds[0];
+    const a = toA.get(aB);
+    const dB = toB.get(d);
+    if (!a || !dB || a === d) continue;
+    // the donor's side, in the reactant: its hydrogens that stay on it, and this one
+    const fromD = d.bonds.filter((x) => x === h || (terminalH(x) && toB.get(x)?.bonds.includes(dB)));
+    if (fromD.length >= 2) {
+      const off = offLine(d, a, d.bonds.filter((x) => x.symbol !== "H" && x !== a));
+      const best = fromD.reduce((p, q) => (off(q) < off(p) ? q : p));
+      if (best !== h && off(best) + TRANSFER_MARGIN < off(h)) swapB(k, at.get(best)!);
+    }
+    // the acceptor's side, in the product: its hydrogen places held by its own hydrogens, and the newcomer's
+    const moverH = toA.get(hB)!;
+    const kk = at.get(moverH)!;
+    const placeB = out[kk][1];
+    const toAB = aB.bonds.filter((x) => x === placeB || (terminalH(x) && toA.get(x)?.bonds.includes(a)));
+    if (toAB.length >= 2) {
+      const off = offLine(aB, dB, aB.bonds.filter((x) => x.symbol !== "H" && x !== dB));
+      const best = toAB.reduce((p, q) => (off(q) < off(p) ? q : p));
+      if (best !== placeB && off(best) + TRANSFER_MARGIN < off(placeB)) swapB(kk, at.get(toA.get(best)!)!);
+    }
+  }
+  return out;
+}
+
+/**
+ * [Meno departure: localLeastTurn] A map with each atom's like hydrogens
+ * that stay on it given to one another again for the least motion: the
+ * atom and its heavy neighbours (each paired) laid over one another, the
+ * product's onto the reactant's (`kabschFit`), and each of the product's
+ * hydrogens there given the reactant's hydrogen that leaves the sum of
+ * squared distances least - the map as it was unless another is less.
+ *
+ * Only for an atom with two or more heavy neighbours, which hold it in
+ * place: a methyl, or an atom alone, has no frame to lay over, and is left
+ * as it was. A group where a hydrogen comes or goes is left too, as
+ * `transferAlignedH` placed it. Only which of an atom's like hydrogens is
+ * which changes, so the map's bond changes stay the same.
+ */
+export function localLeastTurn(map: Chain): Chain {
+  const out: Chain = map.map((p) => [p[0], p[1]] as Pair);
+  const toA = new Map<Atom, Atom>();
+  const at = new Map<Atom, number>();
+  out.forEach((p, i) => {
+    toA.set(p[1], p[0]);
+    at.set(p[1], i);
+  });
+  const terminalH = (x: Atom) => x.symbol === "H" && x.bonds.length === 1;
+  const products = out.map((p) => p[1]).sort((x, y) => x.number - y.number);
+  for (const cB of products) {
+    const hsB = cB.bonds.filter(terminalH);
+    if (hsB.length < 2) continue;
+    const c = toA.get(cB);
+    const hs = hsB.map((x) => toA.get(x));
+    if (!c || hs.some((x) => !x || x.symbol !== "H" || !x.bonds.includes(c))) continue;
+    const frameB = [cB, ...cB.bonds.filter((x) => x.symbol !== "H" && toA.has(x))];
+    if (frameB.length < 3) continue;
+    const fit = kabschFit(
+      frameB.map((x) => toA.get(x)!.xyz),
+      frameB.map((x) => x.xyz),
+    );
+    if (!fit?.r) continue;
+    const { r, refMean, tarMean } = fit;
+    const laid = hsB.map((x) => {
+      const t = sub(x.xyz, tarMean);
+      return [0, 1, 2].map((j) => t[0] * r[0][j] + t[1] * r[1][j] + t[2] * r[2][j] + refMean[j]);
+    });
+    const cost = (perm: readonly Atom[]) => perm.reduce((acc, h, k) => acc + dot(sub(h.xyz, laid[k]), sub(h.xyz, laid[k])), 0);
+    let best = hs as Atom[];
+    let least = cost(best);
+    for (const perm of permutations(hs as Atom[])) {
+      const d = cost(perm);
+      if (d < least - 1e-12) [best, least] = [perm, d];
+    }
+    hsB.forEach((x, k) => (out[at.get(x)!] = [best[k], x]));
+  }
+  return out;
+}
+
+/** Every order of `xs`, the given order first. */
+function* permutations<T>(xs: readonly T[]): Generator<T[]> {
+  if (xs.length <= 1) {
+    yield [...xs];
+    return;
+  }
+  for (let i = 0; i < xs.length; i++) {
+    const rest = [...xs.slice(0, i), ...xs.slice(i + 1)];
+    for (const p of permutations(rest)) yield [xs[i], ...p];
+  }
 }
 
 /** Modeler.get_maps: for each map, each of self's atoms' target number (from 1), 0 for one left out. */

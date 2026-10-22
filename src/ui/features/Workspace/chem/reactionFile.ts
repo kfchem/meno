@@ -83,3 +83,23 @@ function withMapMarks(drawn: Drawn, arrow: Pick<NonNullable<Drawn["arrows"]>[num
     bonds: drawn.bonds.map((b) => (centres.has(b.id) ? { ...b, reactingCentre: centres.get(b.id) } : b)),
   };
 }
+
+/**
+ * What a reaction SMILES is made from, of the drawing (Copy as SMILES): its
+ * reaction as an RXN file holds it (`reactionFileText`) - the worker writes
+ * it "reactants>agents>products" - or why it holds none to write: more than
+ * one arrow, or nothing on one side of it. None where the drawing shows no
+ * reaction, which is written as a SMILES of its molecules. Never a mixture
+ * of a reaction's molecules, as if they were one (the command centre,
+ * 2026-10-22).
+ */
+export function reactionForSmiles(drawn: Drawn): { rxn: string } | { why: string } | null {
+  const arrows = reactionArrows(drawn);
+  if (!arrows.length) return null;
+  if (arrows.length > 1) return { why: `a reaction SMILES holds one reaction, and the selection has ${arrows.length} arrows: copy its steps one at a time` };
+  const flat = forFlatReaders(drawn);
+  const roles = reactionRoles(flat, arrows[0], drawn.pluses ?? [], NOMINAL_BOND_LENGTH);
+  if (!roles.reactants.length || !roles.products.length)
+    return { why: `the arrow has nothing ${roles.reactants.length ? "after it - no product" : "before it - no reactant"} to write as a reaction` };
+  return { rxn: reactionFileText(drawn) };
+}

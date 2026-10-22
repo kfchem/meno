@@ -63,6 +63,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
+| Molecules in 3D | which stereoisomer each molecule in 3D is (*Configurations*, below) | RDKit (`configurations`) |
 | Molecules in 3D (core) | a drawing of a structure in 3D; its bond orders and hydrogens, where its file leaves them out (WORKSPACE.md, *Hydrogens and bond orders*) | RDKit (`drawing_of`, `orders_from_smiles`, `add_hydrogens`) |
 | Molecules in 3D | pictures and films of them, rendered (RENDER.md) | Blender (a job: Blender, Meno's own copy, fetched as the plugin is set up) |
 | Drawing | 2D layout, Clean-up | Meno (its layout engine) |
@@ -73,6 +74,46 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 Meno defines the roles and their contracts. A plugin says, in its
 manifest, which roles it fills. A new kind of role comes with Meno, and a
 new plugin for an existing role needs no change to Meno.
+
+### Configurations
+
+Which stereoisomer each molecule in 3D is, read from its own geometry -
+asked before a step that needs it runs (*Populations*: a Boltzmann sum
+over two stereoisomers, which do not interconvert, is wrong), and of every
+conformer on its own, so that a set holding two configurations is seen to
+hold two. A conformer search on a structure with a centre left open can
+embed both.
+
+- **Given**: MOL blocks in 3D (`configurations`, `{ molblocks }`), in order.
+- **Gives**, for each: its elements that could be stereogenic - a centre
+  (its atom), a double bond, an axis or a cumulene (its two atoms), by
+  atom number from 0 - and whether each one's configuration is given
+  (from 3D, every one the geometry fixes); and a key that two molecules
+  share exactly when they are one stereoisomer. Or, for one it cannot
+  read, why: the others are still answered.
+- **Core** keeps the answer on the entry (`src/lib/entry.ts`,
+  `EntryStereo`) and compares entries by `stereoIdentity`: the key with
+  the plugin and version that made it, so that keys of two versions are
+  never taken for one another. An element left open, or a molecule not
+  perceived, matches nothing. CIP labels (R and S, E and Z) are the
+  checks' role, for showing, and are never part of it.
+- **Not perceived is not "no stereo".** Where nothing fills the role, or
+  the plugin fails, the entry says so and why; a step that needs it does
+  not go on as if there were none.
+
+RDKit fills it with `FindPotentialStereo`, after its own geometry has
+assigned the configuration (`AssignStereochemistryFrom3D`), and its
+canonical SMILES as the key. RDKit marks `FindPotentialStereo`
+**experimental**: its answers may change in a later RDKit. So its answers
+are held on cases worked out by hand -
+cis- and trans-1,4- and cis-1,3-dimethylcyclohexane (each ring carbon a
+centre), methylcyclohexane, 1,1-dimethylcyclohexane, propene and
+1,4-dichlorobenzene (none), meso-2,3-butanediol (two), (E)-2-butene (one
+double bond) - in `scripts/calc/test_plugin_rdkit.py`, *Configurations*,
+which CI's plugins job runs on every push, in an environment installed
+from the plugin's lock. A test in Meno's own suite fails when the plugin's
+lock moves to another RDKit (`workflow/configurations.test.ts`), until the
+version those cases passed with is written there.
 
 ## A plugin's folder
 
@@ -408,8 +449,9 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   with each request for the role (`options`). RDKit declares its conformer
   search's (0.1.8): how many sought - as many as the molecule needs, or a
   number given - the force field (MMFF94, MMFF94s, UFF), the steps an
-  optimisation may take, the RMSD within which two are the same shape, the
-  random seed - and its *Conformers* step takes the same, said once.
+  optimisation may take, the random seed - and its *Conformers* step takes
+  the same, said once. When two conformers are the same is no option
+  (below).
 - **How many conformers are sought is the molecule's to say**
   (2026-10-20): a fixed number is too few for a molecule with much to
   explore and more than a rigid one has shapes, so the RDKit plugin asks
@@ -436,33 +478,96 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,
     adamantane).
-- **The same shape with equivalent atoms swapped is the one conformer**
-  (2026-10-20): a tert-butyl's three methyls turned round, or a phenyl
-  flipped, leaves every atom of it somewhere else, so comparing atom
-  against atom counted such a shape again and again - a
-  tert-butylcyclohexane came back as 26 conformers that were 5, an
-  adamantane as 15 that were 1, an ibuprofen as 28 that were 9. Shapes are
-  now compared over the ways the molecule maps onto itself as well
-  (RDKit's `GetBestRMS`, within the same 0.5 Å over heavy atoms), as an
-  eta system's rings already were. Two things hold it back, both measured:
-  - **only where the two sit at the one energy.** A shape and the same
-    shape relabelled have the one energy exactly - over 4000 such pairs
-    here the largest gap the optimisation left was 0.000001 kcal/mol -
-    while two different shapes can fall within half an angstrom of each
-    other once relabelled: phenylcyclohexane's twist-boat lands 0.40 Å
-    from its chair that way and sits 6.1 kcal/mol above it. Without this,
-    every twist-boat of it was swallowed by a chair. Where nothing could
-    be optimised and no energies came back - no force field here having
-    parameters for it - there is nothing to show it with, so those shapes
-    are told apart atom against atom, as they were; an eta system, which
-    never has energies, keeps the comparison it was given in the first
-    place, its rings turning on their metal being the swap it is for.
-  - **only where there are few enough ways to try.** A
-    tetrakis(triphenylphosphine)palladium maps onto itself millions of
-    ways, and trying them took 2.1 s for a single pair of conformers
-    against 0.002 s for a thousand of them. Past a thousand ways its
-    shapes are told apart atom against atom, as before, and its list may
-    hold the same shape twice.
+- **The same conformer** (the maintainer, 2026-10-21): two conformers are
+  one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
+  each other, laid over at their best - turned and moved, never reflected
+  - over the ways the molecule maps onto itself. It is the maintainer's
+  standard for structures fed to quantum calculations, one definition for
+  the whole app: it keeps an OH or NH turned the other way as a conformer
+  of its own, and a conformer's mirror image too, whose atoms an average
+  over the conformers needs (a ring's two enantiotopic carbons swap
+  between them). Nothing is made one on any looser measure, nor by energy:
+  before, the RDKit plugin took shapes within 0.5 Å over their heavy atoms
+  as one, and over the molecule's symmetries only where their energies
+  agreed, and its raw embeddings, with no energies, atom against atom.
+  (`SAME_CONFORMER`, `Sameness` in its worker.)
+  - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
+    the one conformer.** Such a shape leaves every atom of it somewhere
+    else, so comparing atom against atom counted it again and again - a
+    tert-butylcyclohexane came back as 26 conformers that were 5. The ways
+    the molecule maps onto itself are tried, at most a thousand of them
+    (`ALIKE_WAYS`): a tetrakis(triphenylphosphine)palladium maps onto
+    itself millions of ways, and trying them took 2.1 s for a single pair
+    of conformers.
+  - **Hydrogens are matched, not tried.** The hydrogens on one atom are
+    each matched to the nearest of those on the atom it is taken to, once
+    the rest are laid over; past a thousand ways, so are atoms at the end
+    of a chain alike on one atom (the four chlorides of
+    OsCl4(PEt3)2, whose ways are 1728, then 72). Past a thousand still,
+    conformers are compared atom against atom. Matching to the nearest, or
+    atom against atom, can only fail to find that two conformers are the
+    same, never make two different ones one: whatever matching is tried,
+    two conformers it lays within 0.01 Å of each other are the same. So the
+    worst it does is keep a conformer twice.
+  - **Most pairs are told apart before they are laid over.** Laid over at
+    their best, two conformers share their centre, so each atom's distance
+    from it moves no more than the atom does: the RMSD of each element's
+    distances from the centre, sorted, is a bound the conformers cannot be
+    under, and each way's own atoms laid over alone is another. Only pairs
+    and ways under 0.01 Å by both are laid over in full.
+- **A metal's ligands are kept apart, where that is sound.** While a
+  metal complex is embedded and optimised, two atoms bonded to its metal,
+  of different ligands, are held at least a floor's angle apart, so that
+  its ligands do not pile up: ETKDG knows no angle at a metal, and without
+  one the seven fluorides of [ZrF7]3- came out 33 degrees apart, the
+  halides of OsCl4Br4 25. The floor goes by how many atoms are bonded to
+  the metal, and its source is geometry - each sits below the narrowest
+  angle between neighbours of the ideal polyhedra it is for:
+
+  | Atoms bonded | Floor | Narrowest ideal polyhedra |
+  |---|---|---|
+  | 2 to 6 | 75° (`NARROWEST_AT_METAL`) | trigonal prism with equal edges, 2 asin(√(3/7)) = 81.8°; octahedron, square plane, trigonal bipyramid, square pyramid, 90° |
+  | 7 to 12 | 60° (`NARROWEST_CROWDED`) | pentagonal bipyramid, 72° (360°/5); icosahedron, 63.4° (arctan 2). No common polyhedron of 10 or 11 points was worked out: there the margin rests on the icosahedron alone, 3.4° |
+  | more | none | |
+
+  Only between point donors:
+  - none at a metal with a ligand bound through atoms side by side (eta),
+    whose atoms spread round where it sits: Cp2TiCl2's Cp carbon and Cl
+    come near 76 degrees, a Zeise-type alkene's carbon and its cis Cl near
+    71. Its own holds keep the other ligands off it (*η*, WORKSPACE.md);
+  - never between two atoms of one ligand, whose own bonds set its bite
+    (en on a lanthanide bites about 65 degrees);
+  - nor for a hydride, which may sit closer to another (cis H-M-H).
+
+  The metal's row on the chip says which floor held, or that none did and
+  why. A conformer that comes out with two ligands closer than its floor
+  by more than five degrees is dropped - the holds give up to two, measured
+  on complexes pressed against the 60° floor - and
+  the chip counts it, naming the metal and the floor: it sat in a well of
+  the force field the hold could not pull it out of. [OsCl6]2-, with Fe
+  standing in, gave one 87.7 kcal/mol above the octahedron with two Cl 62
+  degrees apart.
+
+  Before (RDKit plugin 0.1.4 to 0.1.7, from 2026-10-17), one floor of 75°
+  held at every metal, between every two of its atoms not joined within
+  two bonds otherwise. It held 75° where real structures go under it -
+  seven- to twelve-coordinate metals ([ZrF7]3- came out at 73°, held,
+  where a pentagonal bipyramid's neighbours are 72° apart), and a
+  chelate's ends three bonds apart on a large metal - and it held atoms it
+  had no reason to: a Zeise-type complex's alkene carbon and cis Cl, and a
+  cis dihydride's hydrides, though there the force field's own angles
+  stayed above it (77° and 88° here, as now).
+- **Where a lighter metal stands in, or eta rings are held, that model's
+  energies order the conformers.** Where UFF has no type for a metal and a
+  lighter one of its group stands in, or a ring bound through its atoms is
+  held over its metal, UFF's energies of that model are not the
+  molecule's, so none are given and no populations come of them; but they
+  are what the shapes were optimised in, and they order them, lowest
+  first, said once in the line that says how they were made ("ordered by
+  the stand-in field, Fe for Os"; "ordered by the stand-in field, Ti for
+  Zr, the η rings held"; "ordered by UFF's energies, the η rings held").
+  Before, the embedding order stood, and [OsCl6]2-'s first conformer was
+  its distorted one.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
@@ -641,7 +746,9 @@ The same for every plugin and for Meno's own parts:
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {smiles}` and `to_smiles {molblock}` (SMILES); `analyse {molblock}`
+    {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
+    reaction as an RXN file holds it, as a reaction SMILES) (SMILES);
+    `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
     (stereoisomers); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
@@ -723,6 +830,30 @@ The same for every plugin and for Meno's own parts:
   file says them, its energy with its method and basis, the file and the
   job it came from - is what an entry of the rebuilt workflow is to
   carry.)
+- **What an energy was worked out in, as the output says it**
+  (2026-10-21), so that every number carries its method and its level:
+  - `solvation`: the model, the solvent, and anything else of it that
+    changes the energies, in the program's own words - xtb's
+    `ALPB(water), reference state gsolv [1 M gas/solution]`, its
+    reference state among them, as a free energy differs by state (xtb
+    6.7.1 run here: the bar-gas state's free energy 1.90 kcal/mol above
+    the default's, RT ln 24.5); CREST's `ALPB(water)`, which is all it
+    echoes. `none` where the output says no model was used - xtb's
+    program call, or CREST's echo of its options, holding no option that
+    asks for one, and no model printed. Left out where the output does not
+    say: never filled in from the step's options. A run whose solvation
+    is not what its step asked for is refused, saying both;
+  - the method without it: `GFN2-xTB`, never `GFN2-xTB (ALPB, water)` -
+    one place for each. Meno shows them together (`lib/calc/output.ts`,
+    `levelOf`);
+  - with a frequency job's thermochemistry, as results of their own: the
+    temperature it is at, `thermo.temperature` (K) - of several, the one
+    the program used; the pressure, `thermo.pressure` (atm), only where
+    the program prints one (xtb prints none, and its documentation states
+    none); and how it was worked out, `thermo.treatment`, a text in the
+    program's words: xtb's `rotor cutoff 50 cm-1, imag. cutoff -20 cm-1,
+    scaling factor 1` from the setup it prints (GFN-FF's factor is 1.03).
+    Two values of one treatment are written alike, so that they compare.
 - **Keeps nothing between requests**; what it needs is sent each time.
 - **Gives data, never code or markup**, in Meno's units, checked by Meno.
 - **Runs apart from the page:**

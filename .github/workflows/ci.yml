@@ -43,6 +43,20 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_charge_multiplicity.py
       - run: python3 -m unittest scripts/calc/test_reader_pyscf_species.py
 
+  frontend-windows:
+    name: Frontend tests on Windows
+    # Windows is the primary target, and some faults show only there: paths
+    # written with backslashes, processor time counted in steps of ~15.6 ms.
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+
   plugins:
     # The plugins' own tests that need their packages, each in its plugin's
     # environment installed from the plugin's lock - exactly the versions

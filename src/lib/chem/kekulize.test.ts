@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { AROMATIC_BOND, kekuleOrders, type KekuleBond } from "./kekulize";
+import { AROMATIC_BOND, kekuleOrders, kekulized, type KekuleBond } from "./kekulize";
+import { readSmiles } from "./smiles";
+import { implicitHydrogens } from "./molecule";
 
 const A = AROMATIC_BOND;
 
@@ -135,5 +137,117 @@ describe("kekuleOrders", () => {
     const { orders, n } = doublesPerAtom(mol("C C C C C", ring([0, 1, 2, 3, 4])));
     expect(orders.filter((o) => o === 2)).toHaveLength(2);
     expect(Math.max(...n)).toBe(1);
+  });
+
+  // (rings whose nitrogens must take double bonds of their own, between them: a reader that gives only its
+  // carbons theirs leaves two nitrogens without one, each then given a hydrogen it does not have - a formula
+  // two hydrogens too many. Each as RDKit writes it in a MOL file, bond type 4, no hydrogens stated)
+  it("gives 1,2,4,5-tetrazine three double bonds, one at every atom: no hydrogen on its nitrogens", () => {
+    const { orders, n } = doublesPerAtom(mol("C N N C N N", ring([0, 1, 2, 3, 4, 5])));
+    expect(orders.filter((o) => o === 2)).toHaveLength(3);
+    expect(n).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it("leaves a tetrazole one nitrogen without a double bond - its N-H - and no more: 5-phenyltetrazole, losartan's ring", () => {
+    // (c1ccc(-c2nn[nH]n2)cc1: the tetrazole's C and four N, then the phenyl's six carbons)
+    const m = mol("C N N N N C C C C C C", [...ring([0, 1, 2, 3, 4]), [0, 5, 1], ...ring([5, 6, 7, 8, 9, 10])]);
+    const { n } = doublesPerAtom(m);
+    expect(n.slice(0, 5).filter((k) => k === 0)).toHaveLength(1);
+    expect(n.slice(5)).toEqual([1, 1, 1, 1, 1, 1]);
+  });
+
+  it("gives a pteridine's every ring atom a double bond: methotrexate's 2,4-diaminopteridine has no N-H in its rings", () => {
+    // (Nc1nc(N)c2nccnc2n1: ring atoms 1-3, 5-11; the amino N 0 and 4 outside)
+    const m = mol("N C N C N C N C C N C N", [[0, 1, 1], [1, 2, A], [2, 3, A], [3, 4, 1], [3, 5, A], [5, 6, A], [6, 7, A], [7, 8, A], [8, 9, A], [9, 10, A], [10, 5, A], [10, 11, A], [11, 1, A]]);
+    const { orders, n } = doublesPerAtom(m);
+    expect(orders.filter((o) => o === 2)).toHaveLength(5);
+    expect([1, 2, 3, 5, 6, 7, 8, 9, 10, 11].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1, 1, 1, 1, 1]);
+  });
+
+  it("leaves benzotriazole one N-H, its benzene ring whole", () => {
+    // (c1ccc2[nH]nnc2c1, no hydrogen stated: carbons 0-3, 7, 8; nitrogens 4-6)
+    const m = mol("C C C C N N N C C", [[0, 1, A], [1, 2, A], [2, 3, A], [3, 4, A], [4, 5, A], [5, 6, A], [6, 7, A], [7, 3, A], [7, 8, A], [8, 0, A]]);
+    const { n } = doublesPerAtom(m);
+    expect([0, 1, 2, 3, 7, 8].map((i) => n[i])).toEqual([1, 1, 1, 1, 1, 1]);
+    expect([4, 5, 6].filter((i) => n[i] === 0)).toHaveLength(1);
+  });
+
+  // (an aromatic SMILES with no H stated on its nitrogens - as a MOL file of aromatic bonds gives them - read, and
+  // its formula counted with each atom's H by valence; each against RDKit's formula of the molecule's own SMILES)
+  const formulaOf = (smiles: string) => {
+    const s = readSmiles(smiles);
+    const orders = kekuleOrders(s.atoms, s.bonds);
+    const sum = s.atoms.map(() => 0);
+    s.bonds.forEach((b, i) => {
+      sum[b.a1] += orders[i];
+      sum[b.a2] += orders[i];
+    });
+    const n = new Map<string, number>();
+    s.atoms.forEach((a, i) => {
+      n.set(a.el, (n.get(a.el) ?? 0) + 1);
+      const h = implicitHydrogens(a.el, sum[i], a.charge ?? 0);
+      if (h) n.set("H", (n.get("H") ?? 0) + h);
+    });
+    return ["C", "H", ...[...n.keys()].filter((k) => k !== "C" && k !== "H").sort()].filter((k) => n.has(k)).map((k) => k + (n.get(k)! > 1 ? n.get(k) : "")).join("");
+  };
+
+  it.each([
+    // (a C=O or C=S on the ring takes its carbon's electron: the 4n + 2 a ring system counts asks for the N-H)
+    ["guanine", "Nc1nc2ncnc2c(=O)n1", "C5H5N5O"],
+    ["hypoxanthine", "O=c1ncnc2ncnc12", "C5H4N4O"],
+    ["xanthine", "O=c1nc(=O)c2ncnc2n1", "C5H4N4O2"],
+    ["isoguanine", "Nc1nc(=O)nc2ncnc12", "C5H5N5O"],
+    ["allopurinol", "O=c1ncnc2nncc12", "C5H4N4O"],
+    ["6-mercaptopurine", "S=c1ncnc2ncnc12", "C5H4N4S"],
+    ["thioguanine", "Nc1nc(=S)c2ncnc2n1", "C5H5N5S"],
+    ["urazole", "O=c1nnc(=O)n1", "C2H3N3O2"],
+    ["8-azaguanine", "Nc1nc2nnnc2c(=O)n1", "C4H4N6O"],
+    // (and with none: as many N-H as 4n + 2 asks - porphine's two, a tetrazine's none)
+    ["porphine", "c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3", "C20H14N4"],
+    ["1,2,4,5-tetrazine", "c1nncnn1", "C2H2N4"],
+    ["losartan's tetrazole", "c1ccc(-c2nnnn2)cc1", "C7H6N4"],
+  ])("gives %s its formula, its hydrogens not stated", (_, smiles, formula) => {
+    expect(formulaOf(smiles)).toBe(formula);
+  });
+
+  it("reads one molecule written in two orders as one: its N-H on the same atom, its double bonds the same", () => {
+    // (5-phenyltetrazole, and the same atoms written backwards: the H on the tetrazole's same nitrogen - the one
+    // next to its carbon, 1H - wherever the file put it first)
+    const nhOf = (smiles: string) => {
+      const s = readSmiles(smiles);
+      const orders = kekuleOrders(s.atoms, s.bonds);
+      const sum = s.atoms.map(() => 0);
+      s.bonds.forEach((b, i) => {
+        sum[b.a1] += orders[i];
+        sum[b.a2] += orders[i];
+      });
+      // (each N-H by its neighbours' elements: which nitrogen it is, whatever its number)
+      return s.atoms.flatMap((a, i) => (a.el === "N" && implicitHydrogens("N", sum[i]) ? [s.bonds.filter((b) => b.a1 === i || b.a2 === i).map((b) => s.atoms[b.a1 === i ? b.a2 : b.a1].el).sort().join("")] : []));
+    };
+    expect(nhOf("c1ccc(-c2nnnn2)cc1")).toEqual(nhOf("n1nnc(-c2ccccc2)n1"));
+    expect(nhOf("n1nnc(-c2ccccc2)n1")).toEqual(nhOf("n1c(-c2ccccc2)nnn1"));
+  });
+});
+
+
+describe("which atom carries an H the input did not place (kekulized hChosen)", () => {
+  // (aromatic SMILES with no H stated on their nitrogens, as a MOL file of aromatic bonds gives them)
+  const chosen = (smiles: string) => {
+    const s = readSmiles(smiles);
+    return kekulized(s.atoms, s.bonds).hChosen.map((i) => s.atoms[i].el);
+  };
+
+  it("is said where another nitrogen of the ring system could have carried it", () => {
+    expect(chosen("c1cncn1")).toEqual(["N"]); // imidazole
+    expect(chosen("c1ccc(-c2nnnn2)cc1")).toEqual(["N"]); // 5-phenyltetrazole
+    expect(chosen("c1ncc2ncnc2n1")).toEqual(["N"]); // purine
+    expect(chosen("c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3")).toEqual(["N", "N"]); // porphine
+  });
+
+  it("is not said where the H can be on that atom only, or carried by none, or the input says where", () => {
+    expect(chosen("c1ccnc1")).toEqual([]); // pyrrole: its one nitrogen
+    expect(chosen("c1ccncc1")).toEqual([]); // pyridine
+    expect(chosen("c1cnccn1")).toEqual([]); // pyrazine
+    expect(chosen("c1c[nH]cn1")).toEqual([]); // imidazole, its H stated
   });
 });
