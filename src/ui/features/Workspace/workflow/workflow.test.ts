@@ -14,7 +14,7 @@ import type { Molecule3D } from "../store/types";
 import type { EntryStereo } from "../../../../lib/entry";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
+import { keptApart, notAllMinima, pushTo, runMeno, runMenoInTurns } from "./meno";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
 
@@ -362,6 +362,73 @@ describe("Meno's own steps", () => {
     expect(runMeno("populations", set, "conformers").ok).toBe(false);
   });
 
+  it("refuse a window they cannot keep by, saying why, as Populations does a temperature", () => {
+    const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers");
+    for (const window of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    // (0: the lowest of each compound alone)
+    const none = runMeno("energy-window", set, "conformers", { window: 0 });
+    expect(none.ok && none.kept.map((e) => e.number)).toEqual([1]);
+  });
+
+  it("give no populations where one conformer is no minimum - its calculation judged it has an imaginary frequency - naming it and its frequency", () => {
+    // (the correctness lane's methanol saddle point: xtb, -382.63 cm-1, one significant)
+    const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) => (i === 1 ? { ...e, imaginary: [-382.63] } : e));
+    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first" });
+    expect(notAllMinima(set)).toBe("a #2 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first");
+    // (taken out, as the chemist would: given)
+    const minima = set.filter((e) => !e.imaginary);
+    expect(runMeno("populations", minima, "conformers", { temperature: 298.15 }).ok).toBe(true);
+    expect(notAllMinima(minima)).toBeNull();
+    // (a window on electronic energies weighs no populations: it keeps the saddle point where its energy falls)
+    expect(runMeno("energy-window", set, "conformers", { window: 3 }).ok).toBe(true);
+  });
+
+  it("give no populations, and no window, where one conformer's optimisation did not converge - naming it", () => {
+    const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) =>
+      i === 2 ? { ...e, failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : e,
+    );
+    const said = "a #3 is not converged: it is no minimum - take it out first";
+    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said });
+    // (another kind of failure is not said so)
+    const refused = set.map((e) => (e.failed ? { ...e, failed: { kind: "refused" as const, why: "x" } } : e));
+    expect(runMeno("energy-window", refused, "conformers", { window: 3 }).ok).toBe(true);
+  });
+
+  it("carry each conformer's imaginary frequencies, frame by frame - a single geometry's its calculation's, of its last", () => {
+    const m = { ...bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), imaginary: [null, [-382.63], null] };
+    expect(entries(m, "conformers").map((e) => e.imaginary)).toEqual([undefined, [-382.63], undefined]);
+    const one = { ...bent({ x: 0, y: 0 }), calc: { readers: ["xtb 6.7.1"], imaginary: [-382.63] } };
+    expect(entries(one, "molecules").map((e) => e.imaginary)).toEqual([[-382.63]]);
+    // (an earlier frame of a path: not the geometry the frequencies are of)
+    const path = { ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["xtb 6.7.1"], imaginary: [-382.63] }, path: true as const };
+    expect(entries(path, "molecules").map((e) => e.imaginary)).toEqual([[-382.63]]);
+    expect(setEntries([{ ...bent({ x: 0, y: 0 }, 2), calc: { readers: ["xtb 6.7.1"], imaginary: [-382.63] }, id: 1 }], "molecules").map((e) => e.imaginary)).toEqual([undefined, [-382.63]]);
+  });
+
+  it("take an energy that is no number - NaN, or infinite - for none: in a window, in populations, in choosing the lowest and in Duplicates' order", () => {
+    // (as a calculation's molecule keeps it, it is never an entry's energy)
+    const read = entries(bent({ x: 0, y: 0 }, 3, [0, Number.NaN, Number.NEGATIVE_INFINITY]), "conformers");
+    expect(read.map((e) => e.energy)).toEqual([0, undefined, undefined]);
+    // (and an entry given one is refused as one with none)
+    for (const bad of [Number.NaN, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]) {
+      const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers").map((e, i) => (i === 1 ? { ...e, energy: bad } : e));
+      expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "Not every entry has an energy" });
+      expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "Not every entry has an energy" });
+      expect(runMeno("choose", set, "conformers")).toEqual({ ok: false, said: "Not every entry has an energy" });
+    }
+    // Duplicates: frames 1 and 2 alike, 2 the lower - with an infinite energy, taken in order, so 1 is kept
+    const m = bent({ x: 0, y: 0 }, 3, [kcal(1), 0, kcal(2)], 0.01);
+    m.frames![1] = [0, 0, 0, 1, 0, 0, -0.3, 2, 0];
+    const set = entries(m, "conformers");
+    const ranked = runMeno("duplicates", set, "conformers", { rmsd: 0.125 });
+    expect(ranked.ok && ranked.kept.map((e) => e.number)).toEqual([2, 3]);
+    const lowest = runMeno("duplicates", set.map((e, i) => (i === 0 ? { ...e, energy: Number.NEGATIVE_INFINITY } : e)), "conformers", { rmsd: 0.125 });
+    expect(lowest.ok && lowest.kept.map((e) => e.number)).toEqual([1, 3]);
+    const nan = runMeno("duplicates", set.map((e, i) => (i === 1 ? { ...e, energy: Number.NaN } : e)), "conformers", { rmsd: 0.125 });
+    expect(nan.ok && nan.kept.map((e) => e.number)).toEqual([1, 3]);
+  });
+
   it("set aside entries alike, keeping the lower in energy", () => {
     // frames 1 and 2 0.01 Å apart; frame 3 far from both
     const m = bent({ x: 0, y: 0 }, 3, [kcal(1), 0, kcal(2)], 0.01);
@@ -439,7 +506,7 @@ describe("Meno's own steps", () => {
   });
 
   it("give no populations at 0 K or below - none to give, rather than NaN or the highest energy the most", () => {
-    for (const temperature of [0, -5]) {
+    for (const temperature of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
       const out = runMeno("populations", entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers"), "conformers", { temperature });
       expect(out.ok).toBe(false);
     }
@@ -874,7 +941,7 @@ describe("Quick Add's calculations", () => {
 });
 
 describe("a workflow's parts in the selection", () => {
-  /** A page with a molecule in a set (1), wired into an optimisation (2) whose exit is set 3 - and the store over it. */
+  /** A page with a molecule in a set (1), wired into an optimisation (2) whose exits are sets 3 and 4 (Failed) - and the store over it. */
   function selecting() {
     const doc = createWorkspaceDocument();
     doc.edit("page", () => connect(addStep(page(), "optimise", 6, 3, { method: "gfn2" }, "xtb"), { set: 1 }, 2));
@@ -886,7 +953,7 @@ describe("a workflow's parts in the selection", () => {
   it("are taken by Select all, by Ctrl or ⌘ and a click - in, and out again - and let go with the rest", () => {
     const { st } = selecting();
     st().selectAll();
-    expect(st().selFlow).toEqual({ sets: new Set([1, 3]), steps: new Set([2]) });
+    expect(st().selFlow).toEqual({ sets: new Set([1, 3, 4]), steps: new Set([2]) });
     st().clearSel();
     expect(st().selFlow).toEqual({ sets: new Set(), steps: new Set() });
     st().toggleFlowSel({ step: 2 });
@@ -916,10 +983,11 @@ describe("a workflow's parts in the selection", () => {
     const step = st().steps.find((s) => s.kind === "energy")!;
     // (the step put down given the set for its exit it came without: every step has its exits)
     const exit = resultOf(st(), step.id)!;
-    expect(st().sets).toHaveLength(4);
+    const failed = resultOf(st(), step.id, "failed")!;
+    expect(st().sets).toHaveLength(6);
     const set = st().sets.find((b) => !b.made && b.id !== 1)!;
     expect(st().wires.some((w) => w.to.step === step.id && w.from.set === set.id)).toBe(true);
-    expect(st().selFlow).toEqual({ sets: new Set([set.id, exit.id]), steps: new Set([step.id]) });
+    expect(st().selFlow).toEqual({ sets: new Set([set.id, exit.id, failed.id]), steps: new Set([step.id]) });
   });
 });
 

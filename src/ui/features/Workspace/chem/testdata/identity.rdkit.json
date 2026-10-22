@@ -112,17 +112,17 @@
   },
   {
    "name": "deuteriomethane",
-   "molfile": "00b712b10ed442aa7f5a297d0c1548a6c41c1354afb5a2c9963f9c5772005233",
+   "molfile": "2206b0794e751dcd52a85ae90b575eaa36c70a1c464d0d16285cd29fd04f0eab",
    "smiles": "[2H]C"
   },
   {
    "name": "tritiomethane",
-   "molfile": "b2f3e85d8744a3125c3de5613d4e0c38e58dec9fd788c42e5445c39f35022c65",
+   "molfile": "6537dafd660ca59cebb7f5a275599bd657849a58363a30fe87e0e92aacb8af39",
    "smiles": "[3H]C"
   },
   {
    "name": "methane-13C",
-   "molfile": "6052cc6f482f0ffecf357be57c653779e6804318a17753eea8f9d99b04e2bc99",
+   "molfile": "46867212f58f7f94fd5235f5504f86f23c4c37ea0b58d8fa2897eb151410435f",
    "smiles": "[13CH4]"
   },
   {

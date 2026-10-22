@@ -31,8 +31,11 @@ const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =
  * The parts among the sets and steps given: those sets - one made by a step
  * not among them, as a set the chemist drew - those steps, without what they
  * did (their runs are theirs, and their jobs'), and the wires among them. A
- * set goes without its members, which are this page's: put down elsewhere,
- * it holds what then lies inside it (workflow/model `membersSettled`).
+ * set goes without its members, which are this page's, and without a large
+ * set's own molecules (`collection`, and how many of them did not read),
+ * which are the set's: put down elsewhere, it holds what then lies inside it
+ * (workflow/model `membersSettled`), and a step's exit is empty until its
+ * step runs again - its molecules never copied twice.
  */
 export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet<number>): FlowParts {
   return {

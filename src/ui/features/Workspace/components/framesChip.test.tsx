@@ -70,4 +70,18 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(at(1, [0, kcal(9.994)], [0.5, 0.5])).toContain("9.99 kcal/mol");
     expect(at(0, [0, kcal(30)], [1, 0])).toContain("100%");
   });
+
+  it("says why the frame told failed, and how many warnings its calculation gave - in full, opened, in the program's words", () => {
+    const failed = [null, { kind: "not-converged" as const, why: "The optimisation did not converge" }];
+    const warnings = [{ kind: "hessian-not-stationary" as const, text: "hessian_numhess: Hessian on incompletely optimized geometry!" }];
+    const at = (frame: number) => renderToString(<FramesChip count={2} frame={frame} open={false} onFrame={none} about="xtb" failed={failed} warnings={warnings} />);
+    expect(at(1)).toContain("not converged");
+    expect(at(1)).toContain("The optimisation did not converge");
+    expect(at(1)).toContain("1 warning");
+    expect(at(1)).toContain("Frequencies at a geometry not fully optimised");
+    expect(at(1)).toContain("hessian_numhess: Hessian on incompletely optimized geometry!");
+    // (another frame, which did not fail: its warnings alone)
+    expect(at(0)).not.toContain("not converged");
+    expect(at(0)).toContain("1 warning");
+  });
 });

@@ -681,9 +681,13 @@ closes*).
   never Meno's own, which it would hold, nor its job's, which is taken away
   as soon as the job is over - and nothing of Meno's waits on it.
 - **Jobs wait their turn.** A runner takes its turn under `jobs/.queue.lock`
-  (`File::lock`): the earliest asked for among those waiting starts when
-  fewer are running than it allows (`slots`, Settings' *Jobs at once* when
-  it was asked for).
+  (`File::lock`): the earliest asked for among those waiting starts where
+  its cores and memory (`JobSpec.cores`, `.memory`) fit beside those of
+  the jobs running within what jobs may use (`jobs/.limits.json`, written
+  by Meno from Settings; this computer's cores and three quarters of its
+  memory where there is none) - or where none runs, whatever its size.
+  One behind it never starts first. How often a waiting job looks is
+  reckoned as if as many of its size ran at once as fit.
 - **Looked at often while young** (2026-10-13). The runner looks for its
   turn every 400 ms, and at its program every 200 ms - but every 50 ms
   for the first 3 s of a program, and of a job at the head of the queue,
@@ -1615,7 +1619,7 @@ that every kind of these is in this table, by its id, and no other.
 | RXN file | `rxn` | `.rxn` | `$RXN` | Meno, in its worker (`readStructures`) | Export (`reactionFileText`), Copy | a drawing with its arrow and "+" signs |
 | MOL file | `mol` | `.mol` | `V2000` / `V3000`, `M  END` | Meno, in its worker | Export, Copy (`molWriter.ts`) | a drawing; a molecule in 3D where it says it is 3D or spreads in depth |
 | SD file | `sdf` | `.sdf` | the same, and its name | Meno, in its worker | Export: the drawing as one record, each molecule in 3D as one, or each frame | a drawing, and each 3D record a molecule in 3D beside it |
-| XYZ file | `xyz` | `.xyz` | its layout: an atom count, a comment, atoms | Meno, in its worker | never | a molecule in 3D, its frames and their energies (`utils/xyzEnergies.ts`); bonds from covalent radii (`bondsByDistance`: a tenth over, or 0.15 Å, the more; none within 0.1 Å), frame by frame - forming and breaking as the frames go (`frameBondsOf`) |
+| XYZ file | `xyz` | `.xyz` | its layout: an atom count, a comment, atoms | Meno, in its worker | never | a molecule in 3D, its frames and their energies (`utils/xyzEnergies.ts`); bonds from covalent radii (`bondsByDistance`: a fifth over, or 0.15 Å, the more; none within 0.1 Å), frame by frame - forming and breaking as the frames go (`frameBondsOf`) |
 | PDB file | `pdb` | `.pdb` | its records (`RECORD_NAMES`), an atom's coordinates in their columns | Meno, in its worker (`lib/chem/pdb.ts`) | Export: molecules in 3D as HETATM and CONECT records, a MODEL for each frame where asked | a molecule in 3D: every atom, MODELs as frames, bonds from CONECT and distances (FILE-IO.md, *As step 7 was built*) |
 | Cube file | `cube` | `.cube`, `.cub` | its layout (`CUBE_MARK`) | Meno, under the readers' contract, in its worker (`lib/calc/cube.ts`) | never | a molecule in 3D, its grids promises drawn as surfaces |
 | SVG picture | `svg` | `.svg` | - | never | Export (`drawingSvg`) | - |
