@@ -830,7 +830,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       }
       // (what each job gave, as one digest - its log and every file it wrote: kept with the run, and one taken up again
       //  checked by it)
-      const gave = await Promise.all(run.jobs.map((j, k) => (!records[k] || lost[k] ? null : jobDigest(j.id).catch(() => null))));
+      const digests = await Promise.all(run.jobs.map((j, k) => (!records[k] || lost[k] ? null : jobDigest(j.id).catch(() => null))));
       // (outputs Meno cannot account for - a job whose key is not the one it was asked for with, one taken up again
       //  whose files changed since they were read, or one it took up that this run did not start nor took up again -
       //  stop the step, naming them: nothing comes in)
@@ -839,7 +839,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (!r || lost[k] || run.adopted?.[j.id] != null) return [];
         if (unrecorded[k]) return [{ id: j.id, why: "its folder has no record of how it ran" }];
         if (j.key && r.key !== j.key) return [{ id: j.id, why: "its key is not the one it was asked for with" }];
-        if (j.reused && j.gave && gave[k] !== j.gave) return [{ id: j.id, why: "its files have changed since they were read" }];
+        if (j.reused && j.gave && digests[k] !== j.gave) return [{ id: j.id, why: "its files have changed since they were read" }];
         if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [{ id: j.id, why: "made before this run began" }];
         return [];
       });
@@ -991,7 +991,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const again = run.jobs.filter((j) => j.reused).length;
       const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
       const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
-      const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave } : {};
+      const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
       const adopted = run.adopted && Object.keys(run.adopted).length ? { adopted: run.adopted } : {};
       bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...adopted, ...as });
