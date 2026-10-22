@@ -25,7 +25,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { readCalc } from "../../../../lib/calc/output";
+import { imaginaryOf, readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -34,6 +34,7 @@ import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { magnificationWithin } from "./magnified";
 import type { Style3D } from "../../../../lib/chem/style3d";
+import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
 import { anyLeftOut, leftOut, noting, readEach } from "./readNotes";
 
 type Pt = { x: number; y: number };
@@ -744,10 +745,32 @@ export function readCarried3D(given: unknown): Carried3D | null {
       const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
       return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
     })(),
+    ...(() => {
+      const failed = failedOf(m.failed, keep);
+      const imaginary = imaginaryFrames(m.imaginary, keep);
+      return { ...(failed ? { failed } : {}), ...(imaginary ? { imaginary } : {}) };
+    })(),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** Why each of a molecule's frames failed in the step that made it, where one did - one for each, null where it did not - of core's kinds (workflow/failures); of the frames kept, those left out with theirs. */
+function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
+  const out = given.filter((_, i) => keep[i]).map((f): Failure | null => {
+    const g = f as { kind?: unknown; why?: unknown } | null;
+    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
+  });
+  return out.some(Boolean) ? out : undefined;
+}
+
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them. */
+function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
+  const out = given.filter((_, i) => keep[i]).map((f) => imaginaryOf(f) ?? null);
+  return out.some(Boolean) ? out : undefined;
 }
 
 /** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */

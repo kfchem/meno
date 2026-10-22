@@ -786,6 +786,27 @@ The same for every plugin and for Meno's own parts:
     wrote, read back, to keep with the molecules read from it
     (`"wavefunction": {"kind", "file", "name"}`): given, as the output
     is, to a later step that takes its kind (a step's `files`);
+  - `prepare` may refuse an entry alone, preparing the others' jobs:
+    `{"jobs": [...], "refused": [{"entry": 1, "why": "...", "kind":
+    "refused"}]}` - an isotope's frequencies, which xtb would give as of
+    the natural element. The entry is in no job; it goes out of the
+    step's *Failed* exit with its why. A step whose every entry is
+    refused, or whose options cannot be done, is refused as a whole, as
+    before (an error);
+  - `collect` may answer, for one entry of a job, why that entry alone
+    failed - `{"why": "...", "kind": "no-geometry"}` in its place among
+    the outputs - the others taken as they are. A `kind` is one of
+    core's failure kinds (WORKFLOWS.md, *Failed*); any other, or none,
+    is taken as `failed`, its words kept. An output whose `optimised` is
+    false is not done: its last geometry goes out of the *Failed* exit as
+    *not converged*. An output's `warnings` - `[{"kind":
+    "hessian-not-stationary", "text": "..."}]`, the text the program's
+    own words - are kept with the molecule and said on its chip; a kind
+    core does not know is `other`. A warning never moves an entry. An
+    output's `imaginary` - its imaginary frequencies in cm-1, negative,
+    as the program itself judged them (xtb's "significant" ones,
+    Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
+    marks the molecule as no minimum;
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job

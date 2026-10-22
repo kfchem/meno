@@ -14,6 +14,8 @@ import { rmsd } from "./rmsd";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
+import { imaginaryWords } from "../../../../lib/calc/output";
+import { FAILURE_WORDS } from "./failures";
 
 /** Kilocalories per mole in a hartree (Meno's units table). */
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
@@ -217,9 +219,18 @@ function onesSaid(entries: readonly SetEntry[]): string {
 
 const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" };
 
+/** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
+const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
+
 /** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
 function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
-  if (entries.some((e) => e.energy == null)) return NO_ENERGY;
+  // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
+  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
+  //  frequencies are another matter: they would refuse it where the window is on free energies, which it is not)
+  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged"));
+  if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
@@ -241,7 +252,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
 function* duplicates(entries: readonly SetEntry[], holds: Holds3D, most: number, due: () => boolean): Generator<number, Outcome3D> {
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
   const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
-  const energies = entries.every((e) => e.energy != null);
+  const energies = entries.every(hasEnergy);
   const keptSet = new Set<SetEntry>();
   let before = 0;
   for (const g of groups) {
@@ -345,11 +356,29 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
   return p.length ? Math.sqrt(sum / p.length) : 0;
 }
 
+/**
+ * Why `entries` cannot be weighed against one another by their energies,
+ * where one is no minimum: the first whose optimisation did not converge,
+ * or that its calculation judged has an imaginary frequency, named with
+ * it, for the chemist to take it out (the maintainer, 2026-10-22: each
+ * program's own judgement of which are imaginary). Null where none is.
+ */
+export function notAllMinima(entries: readonly SetEntry[]): string | null {
+  const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+  const unconverged = entries.find((x) => x.failed?.kind === "not-converged");
+  if (unconverged) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum - take it out first`;
+  const e = entries.find((x) => x.imaginary?.length);
+  return e ? `${name(e)} has ${imaginaryWords(e.imaginary!)}: it is no minimum - take it out first` : null;
+}
+
 /** Each conformer's Boltzmann population within its compound at `kelvin`. */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
-  if (entries.some((e) => e.energy == null)) return NO_ENERGY;
-  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
-  if (!(kelvin > 0)) return { ok: false, said: "The temperature must be above 0 K" };
+  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  // (a saddle point's energy weighed as a minimum's would be a population of nothing: refused, naming it)
+  const saddle = notAllMinima(entries);
+  if (saddle) return { ok: false, said: saddle };
+  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most - and none at no number of kelvins, or infinitely many)
+  if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
     // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)
@@ -376,7 +405,7 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
  * by are (`by`: the program and method that worked them out).
  */
 function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome3D {
-  if (number == null && entries.some((e) => e.energy == null)) return NO_ENERGY;
+  if (number == null && !entries.every(hasEnergy)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const groups = byCompound(entries);

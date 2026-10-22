@@ -10,6 +10,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { RUNS_KEPT } from "./model";
+import { readRefused } from "./programs";
 import { leftOut, readEach } from "../utils/readNotes";
 
 export type SavedWorkflow = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wire[] };
@@ -184,7 +185,11 @@ function readRunning(v: unknown): StepRunning | undefined {
       : null;
   }, "job");
   const kind = (r as { kind?: unknown }).kind;
-  return jobs.length ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}) } : undefined;
+  // (those its plugin refused as it prepared the others' jobs: kept to be said failed when it ends)
+  const refused = readRefused({ refused: (r as { refused?: unknown }).refused }, Number.MAX_SAFE_INTEGER);
+  return jobs.length
+    ? { at: r.at, input: r.input, options: optionsIn(r.options), jobs, ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}), ...(refused.length ? { refused } : {}) }
+    : undefined;
 }
 
 function readStep(v: unknown): WorkflowStep | null {

@@ -481,7 +481,7 @@ once (*Several at once*).
 | Waiting | a clock, grey | *Waiting · 2nd* - its place in the queue |
 | Running | turning, the base colour | *Running 1:12*, or *Running · 7 of 81*; the log's last line under it; a thin bar where the program says how far it is |
 | Done | a tick, the base colour | *2:03 · E −42.108710 Eh* (its electronic energy), or *81 of 81*, or *23 kept* - how long, and the number the step is for |
-| Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why; *3 of 81 failed* where some entries did |
+| Failed | an exclamation mark, the attention colour | *Failed* - and the line of the log that says why, where nothing was done. Where some entries were, the step is done: *78 of 81 · 3 of 81 failed (2: not converged; 1: refused)* |
 | Stopped | a stop, grey | *Stopped after 0:31* |
 | Changed | turning arrows, grey | *Changed · run again* - its options, or what comes into it (its atoms with their charges, radicals and isotopes, their places, its frames), changed since its run; its results stay as they are |
 
@@ -620,8 +620,9 @@ states an undo goes back to as well.
   come in, as if Meno had been open; still running - shown running, with
   the time since they started; gone without finishing (the computer was
   restarted, say) - *Stopped*, with their logs. Where some are gone and
-  others done, those done come in and the others are counted failed:
-  *1 of 3 failed · It stopped without finishing*.
+  others done, those done come in and the others go out of the step's
+  *Failed* exit: *2 of 3 · 1 of 3 failed (1: stopped before it
+  finished)*.
 - A workspace never saved keeps its jobs with the unsaved workspace Meno
   reopens; closed without saving, its jobs are stopped - said in the
   dialog that asks about saving.
@@ -1441,6 +1442,63 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### Failed entries (2026-10-22)
+
+Foundation PR 8c (WORKFLOWS-FOUNDATION.md, *Failed entries, and running
+them again*; the maintainer's rulings of 2026-10-22):
+
+- **A calculation's second exit is *Failed*** (Optimise, Energy,
+  Frequencies, NCI; a conformer search's takes the molecules it could not
+  search). Its set is made with the step, under the first, and moves
+  down with it as the first grows.
+- **A step is done where anything was.** What it could not do goes out of
+  *Failed*, each entry as it came in - or as far as it came - saying why;
+  what follows runs on what was done. It fails only where nothing was,
+  saying why in the program's own words. The line counts the failures
+  by kind: *1 of 3 failed (1: not converged)*.
+- **The kinds of failure are core's**: not started, stopped before it
+  finished, the program stopped with an error, refused, another molecule
+  came back, no geometry came back, not converged - and *failed* for any
+  other. A plugin names one of them; its own words are always kept beside.
+- **An optimisation that did not converge is not done** (until
+  2026-10-22 it was passed on as a minimum): its path and the last
+  geometry it reached go out of *Failed*, the failure on that geometry,
+  so that *Take frames* can take it on.
+- **A plugin may refuse one entry alone** as it prepares the others'
+  jobs (an isotope's frequencies in xTB); that entry goes out of *Failed*,
+  refused, with why. Kept with the workspace while the others run.
+- **A warning never moves an entry.** A calculation's warnings - a kind
+  core knows (*frequencies at a geometry not fully optimised*: xtb's
+  "Hessian on incompletely optimized geometry!"), else *other*, with the
+  program's words - are kept with the molecule, said on its chip, and
+  counted on the step's line: *3 with warnings*.
+- **The chip says it.** A molecule that failed says why on its chip, in
+  the attention colour, and its warnings how many; opened, each in full.
+- **A structure that is no minimum is marked so** with the imaginary
+  frequencies its program judged it has - xtb's "significant" ones,
+  Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
+  on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
+  keeps each conformer's.
+- **Populations refuses a group with one that is no minimum** - its
+  optimisation not converged, or marked with an imaginary frequency -
+  naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
+  minimum - take it out first*. *Energy window* refuses one not
+  converged the same; a saddle point's mark would refuse it where the
+  window is on free energies, which it is not yet.
+- **The entry record says it too**: `imaginary`, how many imaginary
+  frequencies its calculation judged it has, where it judged any; one
+  that failed carries its reason as its status. *Populations* on free
+  energies (`lib/nodes/populations`) fails a group with one that is no
+  minimum, as Meno's does, each entry saying why.
+- **Meno's steps on energies refuse what they cannot use**: an *Energy
+  window* below 0 kcal/mol, or no number, as *Populations* refuses a
+  temperature of 0 K or below; and an energy that is no number (NaN,
+  infinite) is taken as none - by *Energy window*, *Populations*,
+  *Choose one* and *Duplicates*' order alike.
+
+A workspace saved before this opens as it was: a calculation in it has
+no *Failed* set until it next runs, when it is given one.
 
 ### Structures drawn as results (2026-10-21)
 

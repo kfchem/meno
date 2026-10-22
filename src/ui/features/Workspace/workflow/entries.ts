@@ -5,6 +5,7 @@
  * set that is; and its entries, each a structure with what has been found of
  * it.
  */
+import type { Failure } from "./failures";
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, type At, type By, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
@@ -270,6 +271,10 @@ export type SetEntry = {
   degeneracy?: number;
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
+  /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
+  failed?: Failure;
+  /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
+  imaginary?: number[];
   name?: string;
   /**
    * What the calculation it was read from says - the program, the method
@@ -377,6 +382,10 @@ export function keptAlike(g: readonly SetEntry[]): Kept {
   return out as Kept;
 }
 
+/** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
+const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
+  (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
+
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
@@ -390,7 +399,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
-    const calcBefore = m.calc ? (({ results: _r, ...rest }) => rest)(m.calc) : undefined;
+    const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       const xyz = frameXyz(m, f);
@@ -402,11 +411,15 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz,
         ...(stereo ? { stereo } : {}),
-        ...(energies ? { energy: energies[f] } : {}),
+        // (an energy that is no number - NaN, or infinite - is none)
+        ...(energies && Number.isFinite(energies[f]) ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
+        // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
+        ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
         keep,
         from: m.id,
         frame: f,
@@ -534,6 +547,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...thermoOf(e, at.geometry),
     ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
+    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
   };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
@@ -545,7 +560,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     species: speciesOf(written, e),
     properties,
     ...(e.stereo ? { stereo: e.stereo } : {}),
-    status: "done",
+    status: e.failed ? { failed: e.failed.why } : "done",
   };
 }
 

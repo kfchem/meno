@@ -1,3 +1,4 @@
+import type { Failure, FailureKind } from "../workflow/failures";
 import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
@@ -410,6 +411,18 @@ export type Molecule3D = {
   at: { x: number; y: number; z?: number };
   /** The rest of a file's frames (a trajectory, conformers): x, y, z of every atom, frame by frame. */
   frames?: number[][];
+  /**
+   * Why a program step could not do it, frame by frame (null, a frame it
+   * did): what a step's Failed exit holds (workflow/failures) - kept with
+   * it, its chip saying it in plain words.
+   */
+  failed?: (Failure | null)[];
+  /**
+   * A conformer set's: the imaginary frequencies each conformer's
+   * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame
+   * by frame - null, none. A single geometry's are its calculation's own.
+   */
+  imaginary?: (number[] | null)[];
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
@@ -685,7 +698,15 @@ export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [
  * were, and its jobs - kept in the workspace, so that one opened again picks
  * them up.
  */
-export type StepRunning = { at: number; input: string; options: OptionValues; jobs: StepJob[]; kind?: StepKind };
+export type StepRunning = {
+  at: number;
+  input: string;
+  options: OptionValues;
+  jobs: StepJob[];
+  kind?: StepKind;
+  /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
+  refused?: { entry: number; kind: FailureKind; why: string }[];
+};
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {
   id: number;
