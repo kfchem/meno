@@ -470,10 +470,35 @@ def open_stereo(mol):
 
 
 def isomers_of(mol):
-    """Each stereoisomer the open stereocentres and double bonds give, the
-    ones drawn kept as drawn; the structure itself when none is open."""
-    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS)
-    return list(EnumerateStereoisomers(mol, options=options)) or [mol]
+    """Each stereoisomer the open stereocentres and double bonds give that
+    can be made in 3D (RDKit's embedding tried, seeded by the isomer: the
+    same answer every time), the ones drawn kept as drawn - a bridgehead
+    left open gives only the one its rings allow; the structure itself when
+    none is open, or when none of them embeds with its stereo held
+    (`held_by_none`)."""
+    return embeddable(mol) or [mol]
+
+
+def embeddable(mol):
+    """The stereoisomers `isomers_of` gives, but none where no one of them embeds with its stereo held."""
+    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS, tryEmbedding=True)
+    return list(EnumerateStereoisomers(mol, options=options))
+
+
+def held_by_none(mol):
+    """Whether a structure leaves stereo open that no stereoisomer of it can
+    hold in 3D: made, then, as RDKit's embedding places it, its stereo free."""
+    atoms, bonds = open_stereo(mol)
+    return bool(atoms or bonds) and not embeddable(mol)
+
+
+def open_cumulenes(mol, bonds):
+    """Of the double bonds left open (by index), those of cumulated double
+    bonds - an allene's: an axis RDKit's enumeration does not give, so that
+    their stereoisomers are never counted."""
+    def cumulated(b):
+        return any(sum(1 for x in a.GetBonds() if x.GetBondType() == Chem.BondType.DOUBLE) > 1 for a in (b.GetBeginAtom(), b.GetEndAtom()))
+    return [i for i in bonds if cumulated(mol.GetBondWithIdx(i))]
 
 
 def kept(mol, like):
@@ -527,12 +552,17 @@ def kept(mol, like):
 
 def op_open_stereo(m):
     """What a 3D structure would have to choose: the open stereocentres and
-    double bonds, and how many stereoisomers they make - none of those that
-    `like` (see `kept`) gives a configuration."""
+    double bonds, and how many stereoisomers they make that can be made in
+    3D - none of those that `like` (see `kept`) gives a configuration. With
+    the open double bonds that are cumulated (`cumulenes`: an allene's
+    axis, whose stereoisomers are not counted), and whether none of the
+    stereoisomers embeds with its stereo held (`free`)."""
     mol = kept(read(m["molblock"]), m.get("like"))
     atoms, bonds = open_stereo(mol)
-    count = len(isomers_of(mol)) if atoms or bonds else 1
-    return {"atoms": atoms, "bonds": bonds, "isomers": count}
+    if not (atoms or bonds):
+        return {"atoms": atoms, "bonds": bonds, "isomers": 1, "cumulenes": [], "free": False}
+    made = embeddable(mol)
+    return {"atoms": atoms, "bonds": bonds, "isomers": max(len(made), 1), "cumulenes": open_cumulenes(mol, bonds), "free": not made}
 
 
 # What FindPotentialStereo calls each kind of element, as Meno's configurations name them.

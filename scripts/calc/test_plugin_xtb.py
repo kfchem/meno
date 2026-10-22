@@ -163,6 +163,22 @@ class Prepare(unittest.TestCase):
         for step in ("optimise", "energy"):
             self.assertEqual(len(ask("prepare", step=step, entries=[labelled], options=defaults(step))["jobs"]), 1)
 
+    def test_refuses_an_entry_alone_and_prepares_the_others(self):
+        # (the second labelled: its frequencies refused, saying why, as a refusal of the step is said; the first and third run)
+        labelled = {**ETHYNE, "atoms": ETHYNE["atoms"][:3] + [{**ETHYNE["atoms"][3], "isotope": 2, "mass": 2.01410177812}]}
+        half = {**ETHYNE, "charge": 0.5}
+        said = ask("prepare", step="frequencies", entries=[ETHYNE, labelled, ETHYNE, half], options=defaults("frequencies"))
+        self.assertEqual([j["entries"] for j in said["jobs"]], [[0], [2]])
+        self.assertEqual([(r["entry"], r["kind"]) for r in said["refused"]], [(1, "refused"), (3, "refused")])
+        self.assertTrue(said["refused"][0]["why"].startswith("xTB: xTB's frequencies here take no isotope's mass: 2H"))
+        self.assertEqual(said["refused"][1]["why"], "xTB: The charge is not a whole number.")
+        # (none refused: none said)
+        self.assertNotIn("refused", ask("prepare", step="frequencies", entries=[ETHYNE], options=defaults("frequencies")))
+        # (what is asked of them all, not known: the step refused as a whole, whatever the entries)
+        whole = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "optimise", "entries": [ETHYNE, labelled], "options": {"level": "perfect"}}))
+        self.assertFalse(whole["ok"])
+        self.assertIn("no level is called 'perfect'", whole["error"])
+
     def test_refuses_what_it_does_not_know(self):
         for options in ({"method": "dft"}, {"solvent": "lava"}, {"level": "perfect"}):
             said = worker.answer(json.dumps({"id": 1, "op": "prepare", "step": "optimise", "entries": [ETHYNE], "options": options}))
@@ -238,6 +254,33 @@ class Collect(unittest.TestCase):
         self.assertAlmostEqual(thermo["thermo.enthalpy"], -8.640016786693 + 0.0583013, places=6)
         # (and how they were worked out, as its setup said)
         self.assertEqual(thermo["thermo.treatment"], "rotor cutoff 50 cm-1, imag. cutoff -20 cm-1, scaling factor 1")
+
+    def test_warns_of_frequencies_at_a_geometry_not_fully_optimised_in_xtb_s_words(self):
+        # (the block xtb 6.7.1 ends a --hess run with on a geometry not optimised: a warning, never a failure)
+        warned = "\n########################################################################\n[WARNING] Runtime exception occurred\n-1- hessian_numhess: Hessian on incompletely optimized geometry!\n########################################################################\n"
+        dump = json.dumps({"total energy": -5.0, "vibrational frequencies / rcm": [0.0] * 6 + [1500.0, 3600.0], "reduced masses": [1] * 8, "IR intensities / km/mol": [0] * 8})
+        out = ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + THERMO + warned, ended="done")["outputs"][0]
+        self.assertEqual(out["warnings"], [{"kind": "hessian-not-stationary", "text": "hessian_numhess: Hessian on incompletely optimized geometry!"}])
+        self.assertEqual(out["energies"], [-5.0])
+        # (another warning: its words, of no kind core knows; none, none said)
+        other = warned.replace("hessian_numhess: Hessian on incompletely optimized geometry!", "something else")
+        self.assertEqual(ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + THERMO + other, ended="done")["outputs"][0]["warnings"], [{"kind": "other", "text": "something else"}])
+        self.assertNotIn("warnings", ask("collect", step="frequencies", entries=[ETHYNE], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + THERMO, ended="done")["outputs"][0])
+        # (an error's block is not a warning)
+        self.assertEqual(worker.warnings_of("[ERROR] Program stopped due to fatal error\n-1- no\n"), [])
+
+    def test_the_imaginary_frequencies_xtb_judged_significant(self):
+        # (a methanol saddle point from an eclipsed start: xtb lists -382.63 and says it found one significant)
+        frequencies = [-0.00004, -0.00003, -0.00002, -0.00001, 0.0, 0.00001, -382.63, 1038.5, 1084.0, 1137.3, 1235.4, 1412.3, 1464.7, 1490.0, 2952.0, 2971.1, 3001.2, 3535.0]
+        dump = json.dumps({"total energy": -8.23, "vibrational frequencies / rcm": frequencies, "reduced masses": [1] * 18, "IR intensities / km/mol": [0] * 18})
+        found = "imag cut-off (cm-1) :    5.00\n found            1  significant imaginary frequency\n writing imag mode distorted coords to xtbhess.xyz\n"
+        methanol = {"atoms": [{"el": el, "x": float(i), "y": 0.0, "z": 0.0} for i, el in enumerate("COHHHH")], "charge": 0, "multiplicity": 1}
+        collect = lambda log, step="frequencies": ask("collect", step=step, entries=[methanol], options={"method": "gfn2", "solvent": "none"}, files={"xtbout.json": dump}, log=GAS + log, ended="done")["outputs"][0]
+        self.assertEqual(collect(found)["imaginary"], [-382.63])
+        # (none said found: none, judged so - the six near zero, translations and rotations, are none of them)
+        self.assertEqual(collect("")["imaginary"], [])
+        # (not a frequency job: not judged)
+        self.assertNotIn("imaginary", collect(found, "energy"))
 
     def test_the_solvation_as_xtb_said_it(self):
         self.assertEqual(worker.solvation_of(SOLVATED), "ALPB(thf), reference state gsolv [1 M gas/solution]")

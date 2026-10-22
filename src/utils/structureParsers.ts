@@ -89,8 +89,8 @@ export function bondRadii(els: readonly string[]): Float64Array {
 }
 
 /**
- * Bonds where atoms stand closer than their covalent radii allow, a tenth
- * over: how a molecule given only its atoms and where they are - an XYZ
+ * Bonds where atoms stand closer than their covalent radii allow, a fifth
+ * over (`BOND_REACH`): how a molecule given only its atoms and where they are - an XYZ
  * file's, a calculation's - is given its bonds, all single.
  */
 export function bondsByDistance(atoms: readonly { el: string; x: number; y: number; z: number }[]): Bond[] {
@@ -193,12 +193,30 @@ const GRID_FROM = 400;
 
 /** Nearer than this, in ångströms, two atoms are in one place: no bond (the shortest, H2's, is 0.74). */
 export const ONE_PLACE = 0.1;
-/** How much further than their radii together two atoms may stand and be bonded, in ångströms, at least: H2 (0.741) is beyond its radii's tenth over (0.704). */
+/**
+ * How much further than their radii together two atoms may stand and be
+ * bonded, in ångströms, at least - for the smallest radii, whose fifth over
+ * is less. Set (2026-10-13) when the reach was a tenth over, which H2 (0.741
+ * Å) lay beyond (0.704). A fifth over reaches 0.768 Å, within which H2 now
+ * lies without it; it is kept for the smallest radii all the same.
+ */
 const REACH_FLOOR = 0.15;
 
-/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a tenth over - or, for the smallest, 0.15 Å over (the maintainer, 2026-10-13). */
+/**
+ * How many times their single-bond radii together two atoms may stand
+ * apart and be bonded (the maintainer, 2026-10-22). A tenth over left out
+ * every peroxide's O-O bond: H2O2's is 1.475 Å (NIST CCCBDB, after
+ * Redington, Olson and Cross, J. Chem. Phys. 36, 1311 (1962)), two of
+ * oxygen's radii 1.26 Å, a tenth over 1.386 Å. A fifth over is 1.512 Å.
+ * Measured over 1,437 molecules laid out by ETKDG and MMFF, their bonds
+ * the RDKit molecule's: a tenth over missed 12 bonds (9 of them O-O) and
+ * made none extra; a fifth over misses 1 and makes none extra.
+ */
+export const BOND_REACH = 1.2;
+
+/** How far apart two atoms of these single-bond radii may stand and be bonded: their radii together and a fifth over (`BOND_REACH`) - or, for the smallest, 0.15 Å over (the maintainer, 2026-10-13). */
 export function bondingDistance(r1: number, r2: number): number {
-  return Math.max((r1 + r2) * 1.1, r1 + r2 + REACH_FLOOR);
+  return Math.max((r1 + r2) * BOND_REACH, r1 + r2 + REACH_FLOOR);
 }
 
 /**

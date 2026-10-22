@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { pageHtmlLayerStyle, viewBesideColumn } from "./coverLayer";
-import { COLUMN_NARROWEST, COLUMN_WIDTH, columnWidthFor } from "../utils/texts";
+import { COLUMN_NARROWEST, COLUMN_WIDTH, columnWidthFor, TABLE_COLUMN_WIDTH } from "../utils/texts";
 
 const size = { width: 1280, height: 800 };
 
@@ -13,6 +13,9 @@ describe("the column's width", () => {
     expect(columnWidthFor(1280, true, 500)).toBe(500);
     expect(columnWidthFor(1280, true, 5000)).toBeCloseTo(1280 * 0.85);
     expect(columnWidthFor(1280, false, 10)).toBe(COLUMN_NARROWEST);
+    // (a set's table: as wide as its columns, until dragged - and never wider than the canvas lets it)
+    expect(columnWidthFor(1280, "table", null)).toBe(TABLE_COLUMN_WIDTH);
+    expect(columnWidthFor(600, "table", null)).toBeCloseTo(600 * 0.85);
   });
 });
 
