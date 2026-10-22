@@ -10,7 +10,7 @@ import { calcLine, type CalcInfo } from "../../../../lib/calc/output";
 import type { Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
-import { compoundLetter, frameXyz, framesOf } from "./entries";
+import { compoundLetter, frameMarks, frameXyz, framesOf, marksOf } from "./entries";
 
 /** One entry of a set, as its table shows it. */
 export type TableRow = {
@@ -163,6 +163,8 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.drawnAs ? { drawnAs: m.drawnAs } : {}),
     ...(m.stereo ? { stereo: m.stereo } : {}),
     ...(m.centres?.length ? { centres: m.centres } : {}),
+    // (each frame's marks: why it failed, its imaginary frequencies, and whether its marks did not read)
+    ...marksOf(frames.map((f) => frameMarks(m, f, n))),
   };
 }
 

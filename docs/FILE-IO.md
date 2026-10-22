@@ -906,7 +906,11 @@ work.meno (zip)
     Its frames are never taken for minima: *Populations* and *Energy
     window* refuse it, saying "its frames' marks could not be read, so
     whether it is a minimum is not known", its chip gives no shares, and
-    each of its entries says it as its status.
+    each of its entries says it as its status. The mark, like each frame's
+    failure and imaginary frequencies, goes with its frames wherever a
+    molecule is made of some of them - a step's results (*Duplicates*,
+    *Choose one*'s two exits, *Energy window*'s rest, *As conformers*) and
+    rows of a set's table taken out (workflow/entries `marksOf`).
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of

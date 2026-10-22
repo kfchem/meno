@@ -386,6 +386,32 @@ export function keptAlike(g: readonly SetEntry[]): Kept {
   return out as Kept;
 }
 
+/** One frame's marks: why it failed, the imaginary frequencies it was judged to have, and whether its marks did not read - as an entry, or a molecule's frame, has them. */
+export type FrameMarks = { failed?: Failure | null; imaginary?: number[] | null; marksUnread?: true };
+
+/**
+ * The marks of a molecule made of these frames, in order (one each): why
+ * each failed and its imaginary frequencies, a list each where any frame
+ * has one; and that its marks did not read, where any frame's did. What
+ * every place that makes a molecule of some frames or entries - a step's
+ * results, rows of a set's table - gives it, so that no frame that is no
+ * minimum, or not known to be one, comes out looking like one.
+ */
+export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed" | "imaginary" | "marksUnread"> {
+  return {
+    ...(frames.some((f) => f.failed) ? { failed: frames.map((f) => f.failed ?? null) } : {}),
+    ...(frames.some((f) => f.imaginary?.length) ? { imaginary: frames.map((f) => (f.imaginary?.length ? f.imaginary : null)) } : {}),
+    ...(frames.some((f) => f.marksUnread) ? { marksUnread: true as const } : {}),
+  };
+}
+
+/** A molecule's own marks of frame `f` of `n` (`FrameMarks`). */
+export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUnread">, f: number, n: number): FrameMarks => ({
+  ...(m.failed?.length === n && m.failed[f] ? { failed: m.failed[f] } : {}),
+  ...(m.imaginary?.length === n && m.imaginary[f]?.length ? { imaginary: m.imaginary[f] } : {}),
+  ...(m.marksUnread ? { marksUnread: true as const } : {}),
+});
+
 /** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
 export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
 
