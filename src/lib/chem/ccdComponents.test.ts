@@ -39,7 +39,7 @@ describe("the CCD's components given their hydrogens", () => {
   it.each(["ACT", "GLY", "ATP", "HEM", "STI"])("%s: each of its formula's hydrogens, where its ideal shape has it", (id) => {
     const c = component(id);
     const { residue } = residueOf(c);
-    const given = hydrogensFromComponent(residue, new Set(), c);
+    const given = hydrogensFromComponent(residue, new Map(), c);
     if ("why" in given) throw new Error(given.why);
     expect(given).toHaveLength(formulaHydrogens(id));
     for (const h of given) {
@@ -51,14 +51,14 @@ describe("the CCD's components given their hydrogens", () => {
   it.each(["ACT", "GLY", "ATP", "STI"])("%s: its hydrogens fill each atom's valence, as its orders and charges leave room", (id) => {
     const c = component(id);
     const { residue, atoms, bonds } = residueOf(c);
-    const given = hydrogensFromComponent(residue, new Set(), c) as { on: number }[];
+    const given = hydrogensFromComponent(residue, new Map(), c) as { on: number }[];
     for (const [i] of atoms.entries()) expect(given.filter((h) => h.on === i).length).toBe(hydrogensRoom(atoms, bonds, i));
   });
 
   it("HEM, as the CCD defines it, gives O2A and O2D a charge and a hydrogen both: they do not fit, and the chemist chooses", () => {
     const c = component("HEM");
     const { heavy, residue, atoms, bonds } = residueOf(c);
-    const given = hydrogensFromComponent(residue, new Set(), c) as { on: number }[];
+    const given = hydrogensFromComponent(residue, new Map(), c) as { on: number }[];
     // (the iron's bonds to its nitrogens not counted: theirs are the iron's)
     const off = atoms.flatMap((_, i) => (given.filter((h) => h.on === i).length !== hydrogensRoom(atoms, bonds, i) ? [heavy[i].name] : []));
     expect(off).toEqual(["O2A", "O2D"]);
@@ -79,21 +79,20 @@ describe("the CCD's components' sites, each in the form the CCD defines", () => 
     ]);
   });
 
-  it("ATP: its phosphates' hydrogens where the CCD puts them, its purine's nitrogens", () => {
+  it("ATP: its phosphates' hydrogens where the CCD puts them, its purine's nitrogens - N1 with the amino group beside it", () => {
     expect(sitesOf("ATP")).toEqual([
       ["azole", "Imidazole: no H"],
+      ["cyclic amidine", "Amino form: 2 H on N6"],
       ["phosphate", "Phosphate: H on O2G, H on O3G"],
       ["phosphate", "Phosphate: H on O2B"],
       ["phosphate", "Phosphate: H on O2A"],
-      ["ring nitrogen", "Pyridine: no H"],
-      ["ring nitrogen", "Pyridine: no H"],
+      ["ring nitrogen", "Pyrimidine: no H"],
     ]);
   });
 
-  it("imatinib: its ring nitrogens and its piperazine's - not its amide's, nor the one between its rings", () => {
+  it("imatinib: its pyrimidine with the amino group between its rings, its pyridine, its piperazine - not its amide", () => {
     expect(sitesOf("STI")).toEqual([
-      ["ring nitrogen", "Pyridine: no H"],
-      ["ring nitrogen", "Pyridine: no H"],
+      ["cyclic amidine", "Amino form: H on N13"],
       ["ring nitrogen", "Pyridine: no H"],
       ["amine", "Amine: no H"],
       ["amine", "Amine: no H"],
@@ -106,7 +105,15 @@ describe("a residue bonded to others", () => {
     const c = component("GLY");
     const { residue } = residueOf(c);
     const inChain = residue.filter((a) => a.name !== "OXT");
-    const given = hydrogensFromComponent(inChain, new Set([inChain.findIndex((a) => a.name === "N"), inChain.findIndex((a) => a.name === "C")]), c);
+    const oxt = residue.find((a) => a.name === "OXT")!;
+    const given = hydrogensFromComponent(
+      inChain,
+      new Map([
+        [inChain.findIndex((a) => a.name === "N"), [{ x: 0, y: 0, z: 0 }]],
+        [inChain.findIndex((a) => a.name === "C"), [oxt]],
+      ]),
+      c,
+    );
     if ("why" in given) throw new Error(given.why);
     expect(given.map((h) => h.name)).toEqual(["H", "HA2", "HA3"]);
   });

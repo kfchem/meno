@@ -448,6 +448,14 @@ function WorkspaceContent({
   const [givingOrders, setGivingOrders] = useState<{ id: number; atom: number | null } | null>(null);
   // its ligand's hydrogens, the ones its file leaves out, added as the chemist chooses how it is protonated - as one undo step
   const [protonating, setProtonating] = useState<Protonation | null>(null);
+  // (each time it is asked for, a card of its own: nothing chosen for one molecule carried to another)
+  const [protonatingTurn, setProtonatingTurn] = useState(0);
+  // (while a card's hydrogens are being added, no other card: those would be added after it had gone)
+  const [addingHydrogens, setAddingHydrogens] = useState(false);
+  const adding = useRef(false);
+  useEffect(() => {
+    adding.current = addingHydrogens;
+  }, [addingHydrogens]);
   const markProtonated = useCallback((atoms: number[] | null) => useProtonationMark.getState().mark(atoms && protonating ? { id: protonating.id, atoms } : null), [protonating]);
   // a PDB entry's residues given their orders from the wwPDB's dictionary - as one undo step
   const lookUpComponents = useCallback(
@@ -945,7 +953,8 @@ function WorkspaceContent({
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
-    setProtonating(null);
+    // (not while its hydrogens are being added: they would be added after it had gone)
+    if (!adding.current) setProtonating(null);
   }, [talking]);
   // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
   // being written, and the menu would stay open over it, its keys and the label's at odds)
@@ -1104,7 +1113,14 @@ function WorkspaceContent({
               },
             }
           : {}),
-        ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => setProtonating(protonationOf(menuMolecule, menu?.atom ?? null)) } : {}),
+        ...(canAddHydrogens(menuMolecule, menuPart) && !addingHydrogens
+          ? {
+              onAddHydrogens: () => {
+                setProtonatingTurn((n) => n + 1);
+                setProtonating(protonationOf(menuMolecule, menu?.atom ?? null));
+              },
+            }
+          : {}),
         // (a skeleton that has no hydrogens to add - carbon dioxide's atoms, say, where Meno could not tell: whole, as the chemist says; never a PDB entry's chains)
         ...(!menuMolecule.biopolymer && isSkeleton(menuMolecule)
           ? { onWholeWithoutH: () => store.getState().changeMolecule3d("complete without hydrogens", menuMolecule.id, (m) => ({ ...m, wholeWithoutH: true })) }
@@ -1709,14 +1725,19 @@ function WorkspaceContent({
       <AnimatePresence>
         {protonating && (
           <ProtonationCard
-            key="protonation"
+            key={`protonation-${protonatingTurn}`}
             protonation={protonating}
             onCancel={() => setProtonating(null)}
             onMark={markProtonated}
             onAdd={async (forms, charges) => {
               const chosen = { forms, charges };
-              if (keptAsDictionary(protonating, chosen)) await addHydrogensFromDictionary(store, protonating);
-              else await addHydrogensAsChosen(store, protonating, chosen);
+              setAddingHydrogens(true);
+              try {
+                if (keptAsDictionary(protonating, chosen)) await addHydrogensFromDictionary(store, protonating);
+                else await addHydrogensAsChosen(store, protonating, chosen);
+              } finally {
+                setAddingHydrogens(false);
+              }
               setProtonating(null);
             }}
           />

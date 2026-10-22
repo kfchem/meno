@@ -132,12 +132,15 @@ export type GivenHydrogen = Point & { on: number; name: string };
  * its own by name), each where the component's shape puts it: the
  * component's atom it is on and its neighbours - and theirs, where those
  * are not yet three not in a line - fitted onto the entry's. `linked` says
- * which of the residue's atoms are bonded to another residue: a leaving
- * hydrogen on one is not given. Or why none can be: an atom of the
+ * which of the residue's atoms are bonded to another residue, and where
+ * the atoms they are bonded to are: each such bond takes the place of a
+ * hydrogen of its atom - a leaving one first, then the one nearest the
+ * atom it is bonded to - unless it takes that of an atom that left (a
+ * peptide's carbon, its OXT gone). Or why none can be: an atom of the
  * component, not one that leaves, missing from the entry - the residue is
  * not whole, and is not made so - or the component giving no shape.
  */
-export function hydrogensFromComponent(atoms: readonly ResidueAtom[], linked: ReadonlySet<number>, component: Component): GivenHydrogen[] | { why: string } {
+export function hydrogensFromComponent(atoms: readonly ResidueAtom[], linked: ReadonlyMap<number, readonly Point[]>, component: Component): GivenHydrogen[] | { why: string } {
   const byName = new Map(atoms.map((a, i) => [a.name, i]));
   const heavy = component.atoms.filter((a) => a.element !== "H");
   const missing = heavy.filter((a) => !a.leaving && !byName.has(a.name)).map((a) => a.name);
@@ -148,14 +151,14 @@ export function hydrogensFromComponent(atoms: readonly ResidueAtom[], linked: Re
     near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
   }
   const of = new Map(component.atoms.map((a) => [a.name, a]));
-  const given: GivenHydrogen[] = [];
+  const given: (GivenHydrogen & { leaving: boolean })[] = [];
   for (const h of component.atoms) {
     if (h.element !== "H") continue;
     const parent = (near.get(h.name) ?? []).find((n) => of.get(n)?.element !== "H");
     if (!parent) continue;
     const on = byName.get(parent);
-    // (on an atom that left, or leaving where its atom is bonded to another residue: not there)
-    if (on == null || (h.leaving && linked.has(on))) continue;
+    // (on an atom that left: not there)
+    if (on == null) continue;
     // (the atom it is on, and its heavy neighbours there, then theirs - shell by shell, the nearest that make three not in a line)
     const points = [parent];
     for (let ring = [parent]; !spans(points.map((p) => of.get(p)!.at)) && ring.length; ) {
@@ -168,7 +171,16 @@ export function hydrogensFromComponent(atoms: readonly ResidueAtom[], linked: Re
       points.map((p) => of.get(p)!.at!),
       points.map((p) => atoms[byName.get(p)!]),
     );
-    given.push({ on, name: h.name, ...carried(fit, h.at) });
+    given.push({ on, name: h.name, leaving: !!h.leaving, ...carried(fit, h.at) });
   }
-  return given;
+  // (each bond to another residue in place of a hydrogen of its atom - but those in place of an atom that left)
+  const gone = new Set<GivenHydrogen>();
+  for (const [on, to] of linked) {
+    const left = (near.get(atoms[on].name) ?? []).filter((n) => of.get(n)?.element !== "H" && of.get(n)?.leaving && !byName.has(n)).length;
+    const its = given.filter((h) => h.on === on);
+    const far = (h: Point) => Math.min(...to.map((p) => Math.hypot(h.x - p.x, h.y - p.y, h.z - p.z)));
+    its.sort((p, q) => Number(q.leaving) - Number(p.leaving) || far(p) - far(q));
+    its.slice(0, Math.max(0, to.length - left)).forEach((h) => gone.add(h));
+  }
+  return given.filter((h) => !gone.has(h)).map(({ leaving: _, ...h }) => h);
 }

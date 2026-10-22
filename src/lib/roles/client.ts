@@ -63,7 +63,7 @@ export type ChemRequests = {
    */
   read_picture: { args: { picture: string }; result: PictureRead };
   /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
-  add_hydrogens: { args: { molblock: string }; result: { molblock: string } };
+  add_hydrogens: { args: { molblock: string; hydrogens?: number[] }; result: { molblock: string } };
 };
 
 /**

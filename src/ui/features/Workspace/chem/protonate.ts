@@ -15,7 +15,8 @@ import { create } from "zustand";
 import { chemWorker } from "../../../../lib/roles/worker";
 import { componentsNamed } from "../../../../lib/net/components";
 import { hydrogensFromComponent, type GivenHydrogen, type ResidueAtom } from "../../../../lib/chem/ccdHydrogens";
-import { chargesFor, hydrogensRoom, protonated, protonationSites, startingForms, type Chosen, type OrdersBy, type ProtonAtom, type ProtonBond, type Site } from "../../../../lib/chem/protonation";
+import { chargesFor, countsInValence, hydrogensRooms, protonated, protonationSites, startingForms, type Chosen, type OrdersBy, type ProtonAtom, type ProtonBond, type Site, valenceSums } from "../../../../lib/chem/protonation";
+import { AROMATIC_BOND, kekulized } from "../../../../lib/chem/kekulize";
 import { knownOf } from "../../../../lib/io/writers";
 import type { EditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
@@ -31,7 +32,9 @@ export type OtherAtom = { atom: number; label: string; charges: number[]; now: n
 /**
  * How a part of a molecule (`atoms`: all of it; a PDB entry's ligand) can
  * be protonated, as its card shows it: the part on its own (`part`, its
- * atoms in the order of `atoms`, its bonds among them), its sites, its
+ * atoms in the order of `atoms`, its bonds among them - aromatic ones, a
+ * file's bond type 4, drawn as single and double, `aromatic`; as the
+ * molecule has them, `given`), or why it cannot be (`why`), its sites, its
  * atoms' names, where its orders came from and the forms the card starts
  * at, the other atoms that can be charged, and whether the CCD's own
  * hydrogens can be given it (a PDB entry's ligand whose orders the CCD
@@ -41,6 +44,9 @@ export type Protonation = {
   id: number;
   atoms: number[];
   part: { atoms: ProtonAtom[]; bonds: ProtonBond[] };
+  given: ProtonBond[];
+  aromatic: boolean;
+  why?: string;
   sites: Site[];
   labels: string[];
   by: OrdersBy;
@@ -60,29 +66,47 @@ export function protonationOf(m: Molecule3D, atom: number | null): Protonation |
   const atoms = partOf(m, atom);
   if (!atoms || !canAddHydrogens(m, atoms)) return null;
   const at = new Map(atoms.map((a, k) => [a, k]));
-  const part = {
-    atoms: atoms.map((i) => ({ el: m.atoms[i].el, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}), ...(m.atoms[i].radical ? { radical: m.atoms[i].radical } : {}) })),
-    bonds: m.bonds.flatMap((b) => (at.has(b.a1) && at.has(b.a2) ? [{ a1: at.get(b.a1)!, a2: at.get(b.a2)!, order: b.order }] : [])),
-  };
+  const partAtoms = atoms.map((i) => ({ el: m.atoms[i].el, ...(m.atoms[i].charge ? { charge: m.atoms[i].charge } : {}), ...(m.atoms[i].radical ? { radical: m.atoms[i].radical } : {}) }));
+  const given = m.bonds.flatMap((b) => (at.has(b.a1) && at.has(b.a2) ? [{ a1: at.get(b.a1)!, a2: at.get(b.a2)!, order: b.order }] : []));
+  // (aromatic bonds as single and double - its nitrogens' hydrogens as few as Hückel's rule leaves, which of them the file does not say: lib/chem/kekulize)
+  const aromatic = given.some((b) => b.order === AROMATIC_BOND);
+  const orders = aromatic ? kekulized(partAtoms, given).orders : null;
+  const part = { atoms: partAtoms, bonds: orders ? given.map((b, k) => ({ ...b, order: orders[k] })) : given };
+  const unkekulized = aromatic
+    ? [...new Set(given.flatMap((b) => (b.order === AROMATIC_BOND ? [b.a1, b.a2] : [])))].filter((k) => partAtoms[k].el === "C" && !part.bonds.some((b) => (b.a1 === k || b.a2 === k) && b.order === 2))
+    : [];
   // (an entry's atoms by their names in it; any other's by element and number: N3)
   const labels = atoms.map((i) => m.biopolymer?.names[i] || `${m.atoms[i].el}${i + 1}`);
   const sites = protonationSites(part.atoms, part.bonds, (k) => labels[k]);
   const by = ordersByOf(m, atoms);
   const inSite = new Set(sites.flatMap((s) => s.atoms));
-  const sum = new Float64Array(atoms.length);
-  for (const b of part.bonds) {
-    sum[b.a1] += b.order === 4 ? 1.5 : b.order;
-    sum[b.a2] += b.order === 4 ? 1.5 : b.order;
-  }
+  const sum = valenceSums(part.atoms, part.bonds);
   const others = part.atoms.flatMap((a, k) => {
-    const charges = inSite.has(k) ? [] : chargesFor(a, Math.round(sum[k]));
-    return charges.length > 1 ? [{ atom: k, label: labels[k], charges, now: a.charge ?? 0 }] : [];
+    // (its own charge among them, whatever its bonds: what it has now is always one to keep)
+    const now = a.charge ?? 0;
+    const can = inSite.has(k) ? [] : chargesFor(a, Math.round(sum[k]));
+    const charges = can.length && !can.includes(now) ? [...can, now].sort((p, q) => p - q) : can;
+    return charges.length > 1 ? [{ atom: k, label: labels[k], charges, now }] : [];
   });
-  return { id: m.id, atoms, part, sites, labels, by, start: startingForms(by, sites), others, dictionary: !!m.biopolymer && by === "dictionary" };
+  return {
+    id: m.id,
+    atoms,
+    part,
+    given,
+    aromatic,
+    ...(unkekulized.length ? { why: `${unkekulized.map((k) => labels[k]).join(", ")} cannot be drawn with single and double bonds as ${unkekulized.length === 1 ? "its aromatic bonds are" : "their aromatic bonds are"}: nothing can be added.` } : {}),
+    sites,
+    labels,
+    by,
+    start: startingForms(by, sites, aromatic),
+    others,
+    dictionary: !!m.biopolymer && by === "dictionary",
+  };
 }
 
 /** The charge and spin multiplicity a part would have, protonated as chosen - or why it cannot be. */
 export function protonatedSpecies(p: Protonation, chosen: Chosen): { charge: number; multiplicity: number } | { why: string } {
+  if (p.why) return { why: p.why };
   const r = protonated(p.part.atoms, p.part.bonds, p.sites, chosen);
   if ("why" in r) return r;
   const atoms = p.part.atoms.map((a, k) => ({ el: a.el, x: 0, y: 0, z: 0, ...(r.charges[k] ? { charge: r.charges[k] } : {}), ...(a.radical ? { radical: a.radical } : {}) }));
@@ -94,11 +118,25 @@ export function protonatedSpecies(p: Protonation, chosen: Chosen): { charge: num
 /** Whether the chemist's choice is where the card started for a part the CCD's hydrogens can be given: each site's form as the CCD defines it, no atom charged otherwise. */
 export const keptAsDictionary = (p: Protonation, chosen: Chosen) => p.dictionary && !chosen.charges.size && p.start.every((f, k) => f != null && f === chosen.forms[k]);
 
-/** The molecule as it is now, the part's atoms the same - else it changed while the card was open: nothing is added. */
+/** Whether a molecule's part is no longer as its card was shown it: an atom's element, charge or unpaired electrons, or a bond among its atoms or its order, changed - an undo while the card was open, say. */
+function changedSince(m: Molecule3D, p: Protonation): boolean {
+  if (p.atoms.some((i) => i >= m.atoms.length)) return true;
+  const changedAtom = p.atoms.some((i, k) => {
+    const [a, was] = [m.atoms[i], p.part.atoms[k]];
+    return a.el !== was.el || (a.charge ?? 0) !== (was.charge ?? 0) || (a.radical ?? null) !== (was.radical ?? null);
+  });
+  if (changedAtom) return true;
+  const at = new Map(p.atoms.map((a, k) => [a, k]));
+  const said = (a1: number, a2: number, order: number) => `${Math.min(a1, a2)},${Math.max(a1, a2)}:${order}`;
+  const now = m.bonds.flatMap((b) => (at.has(b.a1) && at.has(b.a2) ? [said(at.get(b.a1)!, at.get(b.a2)!, b.order)] : [])).sort();
+  const was = p.given.map((b) => said(b.a1, b.a2, b.order)).sort();
+  return now.join(" ") !== was.join(" ");
+}
+
+/** The molecule as it is now, its part as the card was shown it - else it changed while the card was open: nothing is added. */
 function moleculeNow(store: EditorStore, p: Protonation): Molecule3D {
   const m = store.getState().molecules3d.find((x) => x.id === p.id);
-  if (!m || p.atoms.some((i) => i >= m.atoms.length || m.atoms[i].el !== p.part.atoms[p.atoms.indexOf(i)].el) || !canAddHydrogens(m, p.atoms))
-    throw new Error("The molecule changed meanwhile: nothing was added.");
+  if (!m || changedSince(m, p) || !canAddHydrogens(m, p.atoms)) throw new Error("The molecule changed while this was open: nothing was added. Ask for its hydrogens again.");
   return m;
 }
 
@@ -127,6 +165,7 @@ function mismatch(p: Protonation, have: readonly number[], want: readonly number
  * plugin's hydrogens are not those chosen.
  */
 export async function addHydrogensAsChosen(store: EditorStore, p: Protonation, chosen: Chosen): Promise<void> {
+  if (p.why) throw new Error(p.why);
   const r = protonated(p.part.atoms, p.part.bonds, p.sites, chosen);
   if ("why" in r) throw new Error(r.why);
   const chem = await chemWorker("drawing");
@@ -149,7 +188,8 @@ export async function addHydrogensAsChosen(store: EditorStore, p: Protonation, c
   };
   const before = drawn(moleculeNow(store, p));
   const block = blockOf(before, p.atoms);
-  const answer = await chem.request("add_hydrogens", { molblock: block.molblock }, ADD_MS);
+  // (each atom's hydrogens as chosen, in the block's order - the part's)
+  const answer = await chem.request("add_hydrogens", { molblock: block.molblock, hydrogens: block.atoms.map((i) => r.hydrogens[p.atoms.indexOf(i)]) }, ADD_MS);
   const m = moleculeNow(store, p);
   const next = withHydrogens(drawn(m), block.atoms, answer.molblock);
   if (!next) throw new Error("The hydrogens could not be put on this molecule: nothing was added.");
@@ -185,9 +225,14 @@ export async function addHydrogensFromDictionary(store: EditorStore, p: Protonat
     if (!component) throw new Error(`${name} is not in the CCD: nothing was added.`);
     const inResidue = residueAtoms[k];
     const atoms: ResidueAtom[] = inResidue.map((i) => ({ name: bp.names[i], el: m.atoms[i].el, x: m.atoms[i].x, y: m.atoms[i].y, z: m.atoms[i].z }));
-    const linked = new Set(
-      inResidue.flatMap((i, k) => (m.bonds.some((b) => (b.a1 === i && bp.residueOf[b.a2] !== r) || (b.a2 === i && bp.residueOf[b.a1] !== r)) ? [k] : [])),
-    );
+    // (its atoms bonded to another residue's, and where those are - not to a metal's: such a bond is the metal's, in place of no hydrogen)
+    const linked = new Map<number, { x: number; y: number; z: number }[]>();
+    inResidue.forEach((i, k) => {
+      const to = m.bonds
+        .flatMap((b) => (b.a1 === i && bp.residueOf[b.a2] !== r ? [b.a2] : b.a2 === i && bp.residueOf[b.a1] !== r ? [b.a1] : []))
+        .filter((j) => m.atoms[j].el !== "H" && countsInValence(m.atoms[j].el));
+      if (to.length) linked.set(k, to.map((j) => m.atoms[j]));
+    });
     const placed = hydrogensFromComponent(atoms, linked, component);
     if ("why" in placed) throw new Error(`${placed.why} Nothing was added.`);
     given.push(...placed.map((h) => ({ ...h, on: inResidue[h.on] })));
@@ -195,9 +240,10 @@ export async function addHydrogensFromDictionary(store: EditorStore, p: Protonat
   // (each atom's hydrogens those its bonds - to atoms whose valence counts - and its charge leave room for)
   const placedOn = [...new Set([...p.atoms, ...residueAtoms.flat()])];
   const labelOf = (i: number) => bp.names[i] || `${m.atoms[i].el}${i + 1}`;
-  const want = placedOn.map((i) => hydrogensRoom(m.atoms, m.bonds, i));
+  // (an atom on a metal: its bond to it in place of a hydrogen, or not - either, as the CCD has it)
+  const want = placedOn.map((i) => hydrogensRooms(m.atoms, m.bonds, i));
   const have = placedOn.map((i) => given.filter((h) => h.on === i).length);
-  const off = want.flatMap((w, k) => (have[k] !== w ? [labelOf(placedOn[k])] : []));
+  const off = want.flatMap((w, k) => (!w.includes(have[k]) ? [labelOf(placedOn[k])] : []));
   if (off.length) throw new Error(`The CCD's hydrogens do not fit ${off.join(", ")} as ${off.length === 1 ? "its bonds are" : "their bonds are"} drawn: nothing was added.`);
   const n = m.atoms.length;
   store.getState().changeMolecule3d("add hydrogens", p.id, () => ({

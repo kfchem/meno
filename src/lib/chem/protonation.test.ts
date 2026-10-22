@@ -125,6 +125,164 @@ describe("each site in each of its forms, by the formula and charge of the molec
   });
 });
 
+describe("rings and groups with more to them: every form the molecule's own hydrogens, less its charge", () => {
+  /** How many forms of each formula a site has. */
+  const counted = (forms: { formula: string }[]) => Object.fromEntries([...new Set(forms.map((f) => f.formula))].map((x) => [x, forms.filter((f) => f.formula === x).length]));
+
+  it("a tetrazole: its hydrogen on any of its four nitrogens, two of them in its cation - never two more, nor a hydrogen on its anion", () => {
+    const forms = formsOf("CC1=NN=NN1", "azole");
+    expect(counted(forms)).toEqual({ "C2H5N4+": 6, C2H4N4: 4, "C2H3N4−": 1 });
+    expect(forms.filter((f) => f.formula === "C2H4N4").map((f) => [f.name, f.where])).toEqual([
+      ["Tetrazole", "H on N3"],
+      ["Tetrazole", "H on N4"],
+      ["Tetrazole", "H on N5"],
+      ["Tetrazole", "H on N6"],
+    ]);
+  });
+
+  it("a 1,2,3-triazole likewise", () => {
+    expect(counted(formsOf("C1=CN=NN1", "azole"))).toEqual({ "C2H4N3+": 3, C2H3N3: 3, "C2H2N3−": 1 });
+  });
+
+  it("a triazolone: its lactams and lactims all of its formula - none with its ring drawn as an azo compound", () => {
+    const forms = formsOf("O=C1NN=CN1", "lactam");
+    expect(counted(forms)).toEqual({ "C2H4N3O+": 4, C2H3N3O: 5, "C2H2N3O−": 4 });
+    expect(forms.filter((f) => f.name === "Lactam").map((f) => f.where)).toEqual(["H on N3, H on N4", "H on N3, H on N6"]);
+  });
+
+  it("metformin: its two guanidines one site, sharing a nitrogen - each tautomer, and its cation and dication", () => {
+    const forms = formsOf("CN(C)C(=N)NC(=N)N", "guanidine");
+    expect(counted(forms)).toEqual({ "C4H13N52+": 1, "C4H12N5+": 4, C4H11N5: 5 });
+    expect(new Set(forms.map((f) => f.name))).toEqual(new Set(["Biguanidium", "Biguanide"]));
+  });
+
+  it("2-aminopyridine: its amino and imino forms, and its cation", () => {
+    expect(formsOf("NC1=NC=CC=C1", "cyclic amidine")).toEqual([
+      { name: "Amidinium", where: "2 H on N1, H on N3", formula: "C5H7N2+" },
+      { name: "Amino form", where: "2 H on N1", formula: "C5H6N2" },
+      { name: "Imino form", where: "H on N1, H on N3", formula: "C5H6N2" },
+    ]);
+  });
+
+  it("2-aminothiazole likewise; thiazole's nitrogen and its cation", () => {
+    expect(formsOf("NC1=NC=CS1", "cyclic amidine").map((f) => [f.name, f.formula])).toEqual([
+      ["Amidinium", "C3H5N2S+"],
+      ["Amino form", "C3H4N2S"],
+      ["Imino form", "C3H4N2S"],
+    ]);
+    expect(formsOf("C1=CSC=N1", "ring nitrogen")).toEqual([
+      { name: "Thiazolium", where: "H on N5", formula: "C3H4NS+" },
+      { name: "Thiazole", where: "no H", formula: "C3H3NS" },
+    ]);
+  });
+
+  it("cytosine: its lactam and its amino group one site - amino and imino, lactam and lactim, all of its formula", () => {
+    const forms = formsOf("NC1=NC(=O)NC=C1", "lactam");
+    expect(counted(forms)).toEqual({ "C4H6N3O+": 4, C4H5N3O: 6, "C4H4N3O−": 3 });
+    expect(forms.filter((f) => f.formula === "C4H5N3O").map((f) => f.name)).toEqual(["Lactam", "Lactim", "Lactam", "Imino lactim", "Imino lactam", "Imino lactim"]);
+  });
+
+  it("an imine and its iminium", () => {
+    expect(formsOf("CC=NC", "imine")).toEqual([
+      { name: "Iminium", where: "H on N3", formula: "C3H8N+" },
+      { name: "Imine", where: "no H", formula: "C3H7N" },
+    ]);
+  });
+
+  it("an atom that can give a metal a pair of its own: its bond in place of a hydrogen as drawn, or not - each a form", () => {
+    expect(formsOf("[Zn]NC", "metal bond")).toEqual([
+      { name: "Covalent bond to Zn", where: "H on N2", formula: "CH4NZn" },
+      { name: "Dative bond to Zn", where: "2 H on N2", formula: "CH5NZn" },
+    ]);
+    expect(formsOf("CC(=O)O[Na]", "metal bond")).toEqual([
+      { name: "Covalent bond to Na", where: "no H", formula: "C2H3NaO2" },
+      { name: "Dative bond to Na", where: "H on O4", formula: "C2H4NaO2" },
+    ]);
+    // (a pyrrolide on iron, its nitrogen with no double bond: as heme's are, drawn neutral)
+    expect(formsOf("[Fe]N1C=CC=C1", "metal bond").map((f) => f.formula)).toEqual(["C4H4FeN", "C4H5FeN"]);
+  });
+
+  it("an atom that cannot: its bond to the metal in its valence, no site - methylmercury chloride, butyllithium, tributyltin chloride", () => {
+    for (const [smiles, formula] of [
+      ["C[Hg]Cl", "CH3ClHg"],
+      ["[Li]CCCC", "C4H9Li"],
+      ["CCCC[Sn](Cl)(CCCC)CCCC", "C12H27ClSn"],
+      ["O=[As](O)(O)C1=CC=CC=C1", "C6H7AsO3"],
+    ]) {
+      const { atoms, bonds } = skeleton(smiles);
+      const sites = protonationSites(atoms, bonds, label(atoms));
+      expect(sites).toEqual([]);
+      const r = protonated(atoms, bonds, sites, { forms: [], charges: new Map() });
+      if ("why" in r) throw new Error(r.why);
+      expect(formulaOf(atoms, r.charges, r.hydrogens)).toBe(formula);
+    }
+  });
+
+  it("a pyridine bonded to a metal: its nitrogen no site - its hydrogens none either way", () => {
+    const { atoms, bonds } = skeleton("C1=CC=N([Zn])C=C1");
+    expect(protonationSites(atoms, bonds, label(atoms))).toEqual([]);
+  });
+
+  it("cytosine drawn as its imine: the same site and forms as drawn as its amine", () => {
+    const amine = formsOf("NC1=NC(=O)NC=C1", "lactam");
+    const imine = formsOf("N=C1NC(=O)NC=C1", "lactam");
+    expect(imine.map((f) => [f.name, f.where, f.formula])).toEqual(amine.map((f) => [f.name, f.where, f.formula]));
+  });
+
+  it("an N-oxide's oxygen: not a lactam's - pyrimidine N-oxide's other nitrogen a ring nitrogen", () => {
+    const { atoms, bonds } = skeleton("C1=CN=C[N+]([O-])=C1");
+    expect(protonationSites(atoms, bonds, label(atoms)).map((s) => s.kind)).toEqual(["ring nitrogen"]);
+  });
+
+  it("imidazolide on zinc: its nitrogen's bond covalent, the ring's bonds found again with it - its other nitrogen's forms", () => {
+    const { atoms, bonds } = skeleton("[Zn]N1C=NC=C1");
+    const sites = protonationSites(atoms, bonds, label(atoms));
+    expect(sites.map((s) => s.kind)).toEqual(["metal bond", "azole"]);
+    const neutral = sites[1].forms.findIndex((f) => !f.charge);
+    const r = protonated(atoms, bonds, sites, { forms: [0, neutral], charges: new Map() });
+    if ("why" in r) throw new Error(r.why);
+    expect(formulaOf(atoms, r.charges, r.hydrogens)).toBe("C3H3N2Zn");
+  });
+
+  it("a ring carbon bonded to a metal: its bond in its valence as the ring's bonds are found again - 2-(chloromercurio)imidazole", () => {
+    expect(formsOf("Cl[Hg]C1=NC=CN1", "azole").map((f) => [f.name, f.formula])).toEqual([
+      ["Imidazolium", "C3H4ClHgN2+"],
+      ["Imidazole", "C3H3ClHgN2"],
+      ["Imidazole", "C3H3ClHgN2"],
+      ["Imidazolate", "C3H2ClHgN2−"],
+    ]);
+  });
+});
+
+describe("what a site is called, by what it is made of", () => {
+  const titles = (smiles: string) => {
+    const { atoms, bonds } = skeleton(smiles);
+    return protonationSites(atoms, bonds, label(atoms)).map((s) => s.title);
+  };
+
+  it("an azole by the atoms round its ring, a ring nitrogen by its ring's", () => {
+    expect(titles("C1=NN=CO1")).toEqual(["Oxadiazole"]);
+    expect(titles("C1=NC=NO1")).toEqual(["Oxadiazole"]);
+    expect(titles("C1=NN=CS1")).toEqual(["Thiadiazole"]);
+    expect(titles("C1=CN=CN1")).toEqual(["Imidazole"]);
+    expect(titles("C1=CC=NN1")).toEqual(["Pyrazole"]);
+    expect(titles("C1=COC=N1")).toEqual(["Oxazole nitrogen"]);
+    expect(titles("C1=CON=C1")).toEqual(["Isoxazole nitrogen"]);
+    expect(titles("C1=CN=CN=C1")).toEqual(["Pyrimidine nitrogen", "Pyrimidine nitrogen"]);
+    expect(titles("C1=CN=NC=C1")).toEqual(["Pyridazine nitrogen", "Pyridazine nitrogen"]);
+    expect(titles("C1=CN=CC=N1")).toEqual(["Pyrazine nitrogen", "Pyrazine nitrogen"]);
+  });
+
+  it("a phosphorus's or sulfur's acid by what else it carries", () => {
+    expect(titles("COP(=O)(O)O")).toEqual(["Phosphate"]);
+    expect(titles("CP(=O)(O)O")).toEqual(["Phosphonate"]);
+    expect(titles("CP(C)(=O)O")).toEqual(["Phosphinate"]);
+    expect(titles("CS(=O)(=O)O")).toEqual(["Sulfonate"]);
+    expect(titles("COS(=O)(=O)O")).toEqual(["Sulfate"]);
+    expect(titles("CNS(=O)(=O)O")).toEqual(["Sulfamate"]);
+  });
+});
+
 describe("the bonds follow the form", () => {
   it("imidazolium's and each imidazole's double bonds where their hydrogens leave room for them", () => {
     const { atoms, bonds } = skeleton("C1=CN=CN1");
@@ -179,13 +337,11 @@ describe("the bonds follow the form", () => {
 });
 
 describe("what is not a site", () => {
-  it("an amide's nitrogen, a nitro group's, an aminopyridine's amino group, benzene", () => {
-    for (const smiles of ["CC(=O)N", "C[N+](=O)[O-]", "C1=CC=CC=C1"]) {
+  it("an amide's nitrogen, a nitro group's, benzene, an oxime's nitrogen, pyrrole's", () => {
+    for (const smiles of ["CC(=O)N", "C[N+](=O)[O-]", "C1=CC=CC=C1", "CC=NO", "C1=CNC=C1"]) {
       const { atoms, bonds } = skeleton(smiles);
       expect(protonationSites(atoms, bonds, label(atoms))).toEqual([]);
     }
-    const { atoms, bonds } = skeleton("NC1=NC=CC=C1");
-    expect(protonationSites(atoms, bonds, label(atoms)).map((s) => [s.kind, s.atoms])).toEqual([["ring nitrogen", [2]]]);
   });
 });
 

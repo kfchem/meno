@@ -25,6 +25,52 @@ WORKER = ROOT / "src-tauri/resources/plugins/rdkit/worker.py"
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
+class AddHydrogens(unittest.TestCase):
+    """A molecule's hydrogens added, as many on each atom as the chemist chose."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    @staticmethod
+    def block(atoms, bonds):
+        rw = Chem.RWMol()
+        conf = Chem.Conformer(len(atoms))
+        for k, (el, charge, at) in enumerate(atoms):
+            a = Chem.Atom(el)
+            a.SetFormalCharge(charge)
+            rw.AddAtom(a)
+            conf.SetAtomPosition(k, at)
+        for a1, a2, order in bonds:
+            rw.AddBond(a1, a2, {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE}[order])
+        m = rw.GetMol()
+        m.AddConformer(conf)
+        return Chem.MolToMolBlock(m, kekulize=False)
+
+    @staticmethod
+    def hydrogens(block, n):
+        m = Chem.MolFromMolBlock(block, sanitize=False, removeHs=False)
+        return [sum(1 for x in m.GetAtomWithIdx(i).GetNeighbors() if x.GetSymbol() == "H") for i in range(n)]
+
+    def test_an_amine_on_a_metal_gets_an_amines_hydrogens_where_they_are_given(self):
+        # (zinc's bond to the nitrogen is the zinc's: NH2, as chosen - by valence alone, an amido's one)
+        block = self.block([("Zn", 0, (0, 0, 0)), ("N", 0, (2.1, 0, 0)), ("C", 0, (3.5, 0.3, 0))], [(0, 1, 1), (1, 2, 1)])
+        self.assertEqual(self.hydrogens(self.worker.op_add_hydrogens({"molblock": block, "hydrogens": [0, 2, 3]})["molblock"], 3), [0, 2, 3])
+        self.assertEqual(self.hydrogens(self.worker.op_add_hydrogens({"molblock": block})["molblock"], 3), [0, 1, 3])
+
+    def test_glycines_zwitterion_and_a_count_for_each_atom(self):
+        block = self.block(
+            [("N", 1, (0, 0, 0)), ("C", 0, (1.47, 0, 0)), ("C", 0, (2, 1.4, 0)), ("O", 0, (1.3, 2.4, 0)), ("O", -1, (3.3, 1.5, 0))],
+            [(0, 1, 1), (1, 2, 1), (2, 3, 2), (2, 4, 1)],
+        )
+        self.assertEqual(self.hydrogens(self.worker.op_add_hydrogens({"molblock": block, "hydrogens": [3, 2, 0, 0, 0]})["molblock"], 5), [3, 2, 0, 0, 0])
+        with self.assertRaises(ValueError):
+            self.worker.op_add_hydrogens({"molblock": block, "hydrogens": [3, 2]})
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
 class FromSmiles(unittest.TestCase):
     @classmethod
     def setUpClass(cls):

@@ -1841,55 +1841,96 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   and the charge and spin the molecule would have. Nothing is chosen for
   the chemist: a pH model may come later.
   - **The sites** (`lib/chem/protonation.ts`), each atom in one at most,
-    the first that takes it: an azole (a flat five-membered ring with two
-    nitrogens or more: imidazole, pyrazole, a triazole, a tetrazole); a
-    lactam (a flat six-membered ring with a nitrogen and an oxygen on a
-    carbon of it: 2-pyridone, 4-pyridone, uracil); an amidine or a
-    guanidine; a carboxyl; a phosphate and a sulfonate (a phosphorus or
-    sulfur with four neighbours, two oxygens or more of them bonded to
-    nothing else); a ring nitrogen (a flat six-membered ring's, with no
-    substituent); a phenol and a thiol; an amine (a nitrogen with single
-    bonds only, outside a flat ring, and not an amide's, a sulfonamide's,
-    a nitro group's, nor an aminopyridine's amino group, whose ring
-    nitrogen is the site).
+    the first that takes it: a lactam (a flat ring with a nitrogen and an
+    oxygen on a carbon of it: 2-pyridone, 4-pyridone, uracil, a
+    triazolone); an azole (a flat five-membered ring with two nitrogens or
+    more: imidazole, pyrazole, a triazole, a tetrazole, an oxadiazole); a
+    cyclic amidine (a flat ring's carbon beside a ring nitrogen, with an
+    amino group on it: 2-aminopyridine, 2-aminothiazole, adenine); an
+    amidine or a guanidine; a carboxyl; a phosphate and a sulfonate (a
+    phosphorus or sulfur with four neighbours, two oxygens or more of them
+    bonded to nothing else, named by what else it carries: a phosphonate,
+    a phosphinate, a phosphoramidate, a sulfate, a sulfamate); a ring
+    nitrogen (a flat six-membered ring's, with no substituent, or a flat
+    five-membered ring's one nitrogen, doubly bonded: an oxazole's, a
+    thiazole's); a phenol and a thiol; an imine (a nitrogen outside a flat
+    ring doubly bonded to a carbon, on carbons alone - not an oxime's nor
+    a hydrazone's); an amine (a nitrogen with single bonds only, outside a
+    flat ring, and not an amide's, a sulfonamide's, a nitro group's, nor
+    an amino group a cyclic amidine holds). A ring drawn with an imine on
+    it - cytosine's or 2-aminothiazole's imino tautomer - is the same ring
+    as drawn with its amine. Two sites that would move the
+    hydrogens of one atom are one, their forms found together: a
+    biguanide's two guanidines, cytosine's lactam and its amino group. A
+    site is named by what it is made of - an azole or a ring nitrogen by
+    the atoms round its ring (a thiazole's, a pyrimidine's).
   - **The forms.** A form is the hydrogens each atom of a site carries,
     and its charge - every tautomer one of them, by where its hydrogens
-    are: imidazole with its hydrogen on N1 or on N3, an amidine's two, a
-    guanidine's three, 2-pyridone and 2-hydroxypyridine, a carboxylic
-    acid's hydrogen on either oxygen, a phosphate's on any of its oxygens.
-    The orders of the bonds round a form - in a ring, its whole flat ring
-    system's - are found again for it so that every atom's valence is met,
-    and they follow the form chosen: a carboxylate's one C=O, imidazolium's
-    and guanidinium's C=N+. Two ways of drawing the same hydrogens and
-    charge are one form. A site's charge is of one sign, and a ring's is
-    one at most.
+    are: imidazole with its hydrogen on N1 or on N3, a tetrazole's four,
+    an amidine's two, a guanidine's three, 2-pyridone and
+    2-hydroxypyridine, 2-aminopyridine's amino and imino forms, a
+    carboxylic acid's hydrogen on either oxygen, a phosphate's on any of
+    its oxygens. The orders of the bonds round a form - in a ring, its
+    whole flat ring system's - are found again for it so that every atom's
+    valence is met, and they follow the form chosen: a carboxylate's one
+    C=O, imidazolium's and guanidinium's C=N+. Two ways of drawing the
+    same hydrogens and charge are one form. A site's charge is of one
+    sign, and a ring's is one at most. Every form carries as many
+    hydrogens, less its charge, as the molecule is drawn with: a proton
+    more with its charge, never two hydrogens added to the bonds (a
+    dihydro tetrazole) nor two taken from them. Not among the forms: a
+    hydrogen on a carbon (a pyrazolone's CH form). Not sites yet: acidic
+    N-H groups - a sulfonamide's, an imide's, a barbiturate's - whose
+    nitrogen can be given a charge of its own on the card.
+  - **Bonds to metals.** A bond to a metal from an atom that cannot give
+    it a pair of its own - a carbon's on tin or lithium, a chlorine's on
+    mercury - counts in that atom's valence. One from an atom that can (a
+    nitrogen, phosphorus, arsenic, oxygen, sulfur, selenium or tellurium)
+    may be in place of a hydrogen or not: where the two leave it different
+    hydrogens, it is a site of its own, *Bond to Zn*, its forms *Covalent
+    bond* (as drawn: an amido, a thiolate, a sodium carboxylate, a
+    pyrrolide) and *Dative bond* (an amine, a thiol, the acid), and no
+    other site moves its hydrogens. A pyridine's nitrogen on a metal has
+    none either way.
+  - **A file whose rings are aromatic** (a molfile's bond type 4): its
+    rings are drawn with single and double bonds, its nitrogens' hydrogens
+    as few as Hückel's rule leaves (`lib/chem/kekulize.ts`); which nitrogen
+    carries one the file does not say, so every site starts unchosen. Where
+    a ring cannot be drawn so (a ring of five carbons), the card says which
+    atoms, and nothing can be added.
   - **Where the card starts** (one function, `startingForms`). Where the
     orders and charges were given by a definition - the CCD's (*As the CCD
     defines it*), a SMILES' (*As the SMILES gives it*) or its own file's, a
     molfile's, whose hydrogens are those its valences leave room for (*As
-    its file gives it*) - each site starts at the form they draw. Where they were estimated from distances, which
-    say nothing of how it is protonated, every site starts unchosen, and
-    *Add hydrogens* waits until each is chosen.
+    its file gives it*) - each site starts at the form they draw. Where
+    they were estimated from distances, which say nothing of how it is
+    protonated, or a file gives its rings as aromatic, every site starts
+    unchosen, and *Add hydrogens* waits until each is chosen.
   - **The hydrogens.** The forms chosen are drawn together - every site's
     bonds found again at once, the card saying so where they cannot all be
     drawn - and the hydrogens they leave room for are added by RDKit's
-    `AddHs`, where the atoms' geometry puts them, bonded to their atoms and
-    in their residue. A PDB entry's ligand kept as the CCD defines it is
+    `AddHs`, as many on each atom as its form gives (`add_hydrogens`'s
+    `hydrogens`), where the atoms' geometry puts them, bonded to their
+    atoms and in their residue. A PDB entry's ligand kept as the CCD defines it is
     given the CCD's own hydrogens instead, by their names, each where the
     component's ideal shape puts it beside its atom: the component's atom
     and its neighbours - and theirs, until three not in a line - fitted
     onto the entry's by Horn's closed-form quaternion fit
     (`lib/chem/ccdHydrogens.ts`), so that it stands as the component has
-    it however the residue is turned and bent; a hydrogen that leaves as
-    the residue bonds to another (an amino acid's H2, a sugar's HO1) only
-    where its atom is bonded to no other residue. Where an atom of the
+    it however the residue is turned and bent. A bond to another residue
+    takes the place of a hydrogen of its atom - one that leaves as the
+    residue bonds (an amino acid's H2), else the one nearest the atom it
+    is bonded to (a sugar's HO4, in a chain of them) - unless it takes
+    that of an atom that left (a peptide's carbon, its OXT gone). Where an atom of the
     component that does not leave is missing from the entry, it is not
     made whole: the card says which, and nothing is added.
   - **Checked before anything is written.** Each atom must then have the
     hydrogens its form gives it - its valence met by its bonds and its
-    hydrogens, a bond to a metal counted as the metal's
-    (`hydrogensRoom`). Where not, nothing is changed, and the card says at
-    which atoms. HEM, as the CCD defines it, gives its O2A and O2D a
+    hydrogens, a donor's bond to a metal in place of a hydrogen or not
+    (`hydrogensRooms`). Where not, nothing is changed, and the card says at
+    which atoms. Nor is anything written where the molecule changed
+    while the card was open (an undo, say): it is asked for again. HEM,
+    as the CCD defines it, gives its O2A and O2D a
     charge and a hydrogen both: its hydrogens are not put on as they are,
     and the chemist chooses its carboxyls' forms on the card.
   - **Said over it.** A molecule so completed says *Hydrogens added*, or

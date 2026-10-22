@@ -11,10 +11,10 @@ import { isSkeleton } from "../utils/completeness";
 import { readCarried3D } from "../utils/copyPaste";
 import { addHydrogensAsChosen, addHydrogensFromDictionary, keptAsDictionary, protonatedSpecies, protonationOf } from "./protonate";
 
-/** How many hydrogens the plugin leaves off, as these tests have it answer: 0, every one its valence leaves room for - as RDKit adds them. */
+/** How many hydrogens the plugin leaves off, as these tests have it answer: 0, every one it is asked for - or, asked for none, its valence leaves room for - as RDKit adds them. */
 let short = 0;
 const fake = {
-  request: async (op: string, args: { molblock: string }) => {
+  request: async (op: string, args: { molblock: string; hydrogens?: number[] }) => {
     if (op !== "add_hydrogens") throw new Error(op);
     const ct = readMolfile(args.molblock)!;
     const atoms = ct.atoms.map((a) => ({ el: a.symbol, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) }));
@@ -23,7 +23,7 @@ const fake = {
     let left = short;
     for (let i = 0; i < n; i++) {
       const sum = bonds.reduce((s, b) => s + (b.a1 === i || b.a2 === i ? b.order : 0), 0);
-      let h = hydrogensOf({ el: atoms[i].el, charge: atoms[i].charge }, sum);
+      let h = args.hydrogens ? args.hydrogens[i] : hydrogensOf({ el: atoms[i].el, charge: atoms[i].charge }, sum);
       if (h && left) {
         h--;
         left--;
@@ -91,9 +91,9 @@ describe("a molecule whose orders were estimated from distances, protonated as c
     const m = molecule();
     // (H3N+-CH2-COO-: five hydrogens, NH3 and CH2)
     expect(m.atoms.filter((a) => a.el === "H")).toHaveLength(5);
-    expect(m.atoms.slice(0, 5).map((a) => a.charge ?? 0)).toEqual([1, 0, 0, expect.any(Number), expect.any(Number)]);
-    expect((m.atoms[3].charge ?? 0) + (m.atoms[4].charge ?? 0)).toBe(-1);
-    expect(m.bonds[2].order + m.bonds[3].order).toBe(3);
+    // (the carboxylate drawn one way of its two: its charge on the oxygen its single bond is to)
+    expect(m.atoms.slice(0, 5).map((a) => a.charge ?? 0)).toEqual([1, 0, 0, -1, 0]);
+    expect([m.bonds[2].order, m.bonds[3].order]).toEqual([1, 2]);
     expect(m.hydrogensAdded).toEqual([{ by: "chosen", atoms: [0, 1, 2, 3, 4] }]);
     expect(isSkeleton(m)).toBe(false);
     expect(doc.history().undoLabel).toBe("add hydrogens");
@@ -123,6 +123,106 @@ describe("a molecule whose orders were estimated from distances, protonated as c
     });
     const p = protonationOf(molecule(), null)!;
     expect(p.start.map((f, k) => p.sites[k].forms[f!].name)).toEqual(["Carboxylate", "Ammonium"]);
+  });
+
+  it("is not changed where the molecule changed while the card was open - a charge, a bond's order - and says so", async () => {
+    for (const change of [
+      (m: Molecule3D) => ({ ...m, atoms: m.atoms.map((a, i) => (i === 0 ? { ...a, charge: 1 } : a)) }),
+      (m: Molecule3D) => ({ ...m, bonds: m.bonds.map((b, k) => (k === 2 ? { ...b, order: 1 } : k === 3 ? { ...b, order: 2 } : b)) }),
+    ]) {
+      const { store, molecule } = editor(glycine);
+      const p = protonationOf(molecule(), null)!;
+      store.getState().changeMolecule3d("meanwhile", molecule().id, change);
+      const before = molecule();
+      const forms = [p.sites[0].forms.findIndex((f) => f.name === "Carboxylic acid"), p.sites[1].forms.findIndex((f) => f.name === "Amine")];
+      await expect(addHydrogensAsChosen(store, p, { forms, charges: new Map() })).rejects.toThrow("The molecule changed while this was open: nothing was added. Ask for its hydrogens again.");
+      expect(molecule()).toBe(before);
+    }
+  });
+});
+
+describe("a molecule whose file gives its rings as aromatic", () => {
+  /** A ring of five atoms, its bonds aromatic (a molfile's bond type 4), as a file of imidazole - or, all carbons, of cyclopentadienyl - without its hydrogens gives it. */
+  const ring = (els: string[]): Omit<Molecule3D, "id"> => ({
+    atoms: els.map((el, k) => ({ el, x: 1.2 * Math.cos((2 * Math.PI * k) / 5), y: 1.2 * Math.sin((2 * Math.PI * k) / 5), z: 0 })),
+    bonds: els.map((_, k) => ({ a1: k, a2: (k + 1) % 5, order: 4 })),
+    at: { x: 0, y: 0 },
+  });
+
+  it("is drawn with single and double bonds, its hydrogens as many as its formula's - which nitrogen carries one waiting for the chemist", async () => {
+    const { store, molecule } = editor(ring(["N", "C", "N", "C", "C"]));
+    short = 0;
+    const p = protonationOf(molecule(), null)!;
+    expect(p.aromatic).toBe(true);
+    expect(p.sites.map((s) => [s.kind, s.forms.map((f) => `${f.name}: ${f.where}`)])).toEqual([["azole", ["Imidazolium: H on N1, H on N3", "Imidazole: H on N1", "Imidazole: H on N3", "Imidazolate: no H"]]]);
+    expect(p.start).toEqual([null]);
+    await addHydrogensAsChosen(store, p, { forms: [1], charges: new Map() });
+    const m = molecule();
+    // (C3H4N2: an N-H and three C-H)
+    expect(m.atoms.filter((a) => a.el === "H")).toHaveLength(4);
+    expect(m.bonds.slice(0, 5).map((b) => b.order).sort()).toEqual([1, 1, 1, 2, 2]);
+  });
+
+  it("is not given hydrogens where its aromatic bonds cannot be drawn with single and double ones, and says where", async () => {
+    const { store, molecule } = editor(ring(["C", "C", "C", "C", "C"]));
+    const p = protonationOf(molecule(), null)!;
+    expect(p.why).toMatch(/^C\d cannot be drawn with single and double bonds as its aromatic bonds are: nothing can be added\.$/);
+    expect(protonatedSpecies(p, { forms: p.start, charges: new Map() })).toEqual({ why: p.why });
+    const before = molecule();
+    await expect(addHydrogensAsChosen(store, p, { forms: p.start, charges: new Map() })).rejects.toThrow(p.why!);
+    expect(molecule()).toBe(before);
+  });
+});
+
+describe("a molecule bonded to a metal", () => {
+  /** Methylamine on zinc, or methoxide on iron: their bonds to the metal the metal's. */
+  const onMetal = (metal: string, el: string, charge = 0): Omit<Molecule3D, "id"> => ({
+    atoms: [
+      { el: metal, x: 0, y: 0, z: 0 },
+      { el, x: 2.1, y: 0, z: 0, ...(charge ? { charge } : {}) },
+      { el: "C", x: 3.5, y: 0.3, z: 0 },
+    ],
+    bonds: [
+      { a1: 0, a2: 1, order: 1 },
+      { a1: 1, a2: 2, order: 1 },
+    ],
+    at: { x: 0, y: 0 },
+    bondOrders: "estimated",
+  });
+
+  it("an amine on it given an amine's hydrogens where its bond is chosen dative - not an amido's", async () => {
+    const { store, molecule } = editor(onMetal("Zn", "N"));
+    short = 0;
+    const p = protonationOf(molecule(), null)!;
+    expect(p.sites.map((s) => s.forms.map((f) => `${f.name}: ${f.where}`))).toEqual([["Covalent bond to Zn: H on N2", "Dative bond to Zn: 2 H on N2"]]);
+    expect(p.start).toEqual([null]);
+    await addHydrogensAsChosen(store, p, { forms: [1], charges: new Map() });
+    const m = molecule();
+    const on = (i: number) => m.bonds.filter((b) => (b.a1 === i && m.atoms[b.a2].el === "H") || (b.a2 === i && m.atoms[b.a1].el === "H")).length;
+    expect([on(0), on(1), on(2)]).toEqual([0, 2, 3]);
+  });
+
+  it("an atom charged as its bonds leave no room for: its own charge still among those offered, as the card shows it", () => {
+    // (an ether's oxygen drawn with a charge of -1, as a file may give it)
+    const { molecule } = editor({
+      atoms: [
+        { el: "C", x: 0, y: 0, z: 0 },
+        { el: "O", x: 1.4, y: 0, z: 0, charge: -1 },
+        { el: "C", x: 2.1, y: 1.2, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 1, a2: 2, order: 1 },
+      ],
+      at: { x: 0, y: 0 },
+    });
+    expect(protonationOf(molecule(), null)!.others).toEqual([{ atom: 1, label: "O2", charges: [-1, 0, 1], now: -1 }]);
+  });
+
+  it("an oxygen on it charged as it is drawn, offered the charges its other bonds leave room for", () => {
+    const { molecule } = editor(onMetal("Fe", "O", -1));
+    const p = protonationOf(molecule(), null)!;
+    expect(p.others).toEqual([{ atom: 1, label: "O2", charges: [-1, 0, 1], now: -1 }]);
   });
 });
 
@@ -224,6 +324,39 @@ describe("a PDB entry's ligand whose orders the CCD gave", () => {
     const p = protonationOf(molecule(), 0)!;
     await expect(addHydrogensFromDictionary(store, p)).rejects.toThrow("The CCD's hydrogens do not fit N as its bonds are drawn: nothing was added.");
     expect(molecule()).toBe(before);
+  });
+});
+
+describe("a PDB entry's ligand bonded to a metal ion of its own residue", () => {
+  it("keeps the hydrogen on the atom the metal is bonded to: that bond is the metal's, in place of no hydrogen", async () => {
+    // (a zinc ion bonded to ZZG's OXT: its HXT, which leaves as the residue bonds to another, stays)
+    const ligand = entryOf(["N", "CA", "C", "O", "OXT"]);
+    const oxt = at("OXT");
+    const bp = ligand.biopolymer!;
+    const { store, molecule } = editor({
+      ...ligand,
+      atoms: [...ligand.atoms, { el: "Zn", x: oxt.x - 2, y: oxt.y, z: oxt.z }],
+      bonds: [...ligand.bonds, { a1: 4, a2: 5, order: 1 }],
+      ligandOrders: { 0: "dictionary", 1: "dictionary" },
+      biopolymer: { ...bp, names: [...bp.names, "ZN"], residueOf: [...bp.residueOf, 1], residues: [...bp.residues, { name: "ZN", chain: "A", seq: 2, iCode: "", standard: false }], structure: [null, null] },
+    });
+    const zn = readComponent(`data_ZN
+_chem_comp.id ZN
+loop_
+_chem_comp_atom.comp_id
+_chem_comp_atom.atom_id
+_chem_comp_atom.type_symbol
+_chem_comp_atom.charge
+_chem_comp_atom.pdbx_leaving_atom_flag
+_chem_comp_atom.pdbx_model_Cartn_x_ideal
+_chem_comp_atom.pdbx_model_Cartn_y_ideal
+_chem_comp_atom.pdbx_model_Cartn_z_ideal
+ZN ZN ZN 2 N 0.000 0.000 0.000
+`)!;
+    looked = { components: new Map([["ZZG", ZZG], ["ZN", zn]]), absent: [] };
+    const p = protonationOf(molecule(), 0)!;
+    await addHydrogensFromDictionary(store, p);
+    expect(molecule().biopolymer!.names.slice(6)).toEqual(["H", "H2", "HA2", "HA3", "HXT"]);
   });
 });
 

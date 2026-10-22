@@ -5,25 +5,10 @@ import { chargeText } from "../../../lib/chem/molecule";
 import type { Site } from "../../../lib/chem/protonation";
 import { keptAsDictionary, protonatedSpecies, type Protonation } from "./chem/protonate";
 
-/** What each kind of site is called on the card. */
-const SITE_NAMES: Record<Site["kind"], string> = {
-  azole: "Ring",
-  lactam: "Ring",
-  amidine: "Amidine",
-  guanidine: "Guanidine",
-  carboxyl: "Carboxyl",
-  phosphate: "Phosphate",
-  sulfonate: "Sulfonate",
-  "ring nitrogen": "Ring nitrogen",
-  phenol: "Phenol",
-  thiol: "Thiol",
-  amine: "Amine",
-};
-
 const SPINS = ["", "singlet", "doublet", "triplet", "quartet"];
 
-/** A site as its row names it: what it is, and the atoms whose hydrogens it moves - "Carboxyl O1, O2". */
-const siteName = (p: Protonation, s: Site) => `${s.kind === "azole" || s.kind === "lactam" ? s.forms.find((f) => !f.charge)?.name ?? SITE_NAMES[s.kind] : SITE_NAMES[s.kind]} ${s.changing.map((k) => p.labels[k]).join(", ")}`;
+/** A site as its row names it: what it is, and the atoms whose hydrogens it moves - "Carboxyl O4, O5", "Thiazole nitrogen N3". */
+const siteName = (p: Protonation, s: Site) => `${s.title} ${s.changing.map((k) => p.labels[k]).join(", ")}`;
 
 /** A form as its option says it: what it is, its charge, where its hydrogens are - "Imidazole - H on N3". */
 const formName = (f: Site["forms"][number]) => `${f.name}${f.charge ? ` (${chargeText(f.charge)})` : ""} - ${f.where}`;
@@ -55,21 +40,22 @@ export default function ProtonationCard({
   const [error, setError] = useState<string | null>(null);
   const chosen = useMemo(() => ({ forms, charges }), [forms, charges]);
   const species = useMemo(() => protonatedSpecies(p, chosen), [p, chosen]);
-  // (Escape lets it go while its tab is in front)
+  // (Escape lets it go while its tab is in front - not while its hydrogens are being added: they would be added after it had gone)
   const inFront = useInFront();
   useEffect(() => {
-    if (!inFront) return;
+    if (!inFront || busy) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onCancel, inFront]);
+  }, [onCancel, inFront, busy]);
   // (the molecule's atoms lit no more as the card goes)
   useEffect(() => () => onMark(null), [onMark]);
   const kept = forms.every((f, k) => f === p.start[k]) && !charges.size;
-  const said =
-    p.by === "dictionary"
+  const said = p.aromatic
+    ? "Its file gives its rings as aromatic, which does not say where their hydrogens are: choose each site."
+    : p.by === "dictionary"
       ? kept
         ? "As the CCD defines it."
         : "Changed from what the CCD defines."
@@ -190,7 +176,7 @@ export default function ProtonationCard({
       {keptAsDictionary(p, chosen) && <p className="mt-0.5 text-xs text-gh-gray">Its hydrogens are put where the CCD has them.</p>}
       {error && <p className="mt-1.5 text-xs text-accel-accent">{error}</p>}
       <div className="mt-2.5 flex justify-end gap-2">
-        <button onClick={onCancel} className="h-7 px-2.5 rounded-md text-xs text-gh-gray hover:text-gh-black">
+        <button onClick={onCancel} disabled={busy} className="h-7 px-2.5 rounded-md text-xs text-gh-gray hover:text-gh-black disabled:opacity-40">
           Cancel
         </button>
         <button onClick={() => void add()} disabled={"why" in species || busy} className="h-7 px-3 rounded-md bg-accel-base text-white text-xs hover:opacity-90 disabled:opacity-40">

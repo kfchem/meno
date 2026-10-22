@@ -60,4 +60,16 @@ describe("the card that asks how a molecule is protonated", () => {
   it("with its orders and charges from its own file - a molfile's: started from them, said so", () => {
     expect(card(glycine(undefined, { 0: 1, 4: -1 }))).toContain("As its file gives it.");
   });
+
+  it("with its file's rings aromatic: every site to choose, and said why", () => {
+    const imidazole: Molecule3D = {
+      id: 2,
+      atoms: ["N", "C", "N", "C", "C"].map((el, k) => ({ el, x: Math.cos(1.26 * k), y: Math.sin(1.26 * k), z: 0 })),
+      bonds: [0, 1, 2, 3, 4].map((k) => ({ a1: k, a2: (k + 1) % 5, order: 4 })),
+      at: { x: 0, y: 0 },
+    };
+    const html = card(imidazole);
+    expect(html).toContain("Its file gives its rings as aromatic, which does not say where their hydrogens are: choose each site.");
+    expect(html.match(/Choose…/g)).toHaveLength(1);
+  });
 });

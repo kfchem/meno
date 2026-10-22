@@ -89,7 +89,7 @@ describe("a residue given the hydrogens the dictionary defines", () => {
   it("puts each by the entry's atoms as it stands by the component's, however the residue is turned", () => {
     const move = moved({ x: 1, y: 1, z: -0.4 }, -1.3, { x: -20, y: 4, z: 7 });
     const atoms: ResidueAtom[] = ["N", "CA", "C", "O", "OXT"].map((name) => ({ name, el: name[0], ...move(ideal(name)) }));
-    const given = hydrogensFromComponent(atoms, new Set(), component);
+    const given = hydrogensFromComponent(atoms, new Map(), component);
     if ("why" in given) throw new Error(given.why);
     expect(given.map((h) => [h.name, atoms[h.on].name])).toEqual([
       ["H", "N"],
@@ -112,7 +112,7 @@ describe("a residue given the hydrogens the dictionary defines", () => {
     };
     const bent = new Set(["O", "OXT", "HXT"]);
     const atoms: ResidueAtom[] = ["N", "CA", "C", "O", "OXT"].map((name) => ({ name, el: name[0], ...(bent.has(name) ? turn(ideal(name)) : ideal(name)) }));
-    const given = hydrogensFromComponent(atoms, new Set(), component);
+    const given = hydrogensFromComponent(atoms, new Map(), component);
     if ("why" in given) throw new Error(given.why);
     const hxt = given.find((h) => h.name === "HXT")!;
     expect(near(hxt, turn(ideal("HXT")))).toBeLessThan(1e-9);
@@ -121,21 +121,39 @@ describe("a residue given the hydrogens the dictionary defines", () => {
   });
 
   it("gives no leaving hydrogen on an atom bonded to another residue, and none on an atom that left", () => {
-    // (bonded through its N to the residue before it; its OXT gone, bonded through C to the one after)
+    // (bonded through its N to the residue before it - wherever that is, its leaving H2 goes; its OXT gone, bonded through C to the one after, where OXT was)
     const atoms: ResidueAtom[] = ["N", "CA", "C", "O"].map((name) => ({ name, el: name[0], ...ideal(name) }));
-    const given = hydrogensFromComponent(atoms, new Set([0, 2]), component);
+    const given = hydrogensFromComponent(
+      atoms,
+      new Map([
+        [0, [ideal("H")]],
+        [2, [ideal("OXT")]],
+      ]),
+      component,
+    );
     if ("why" in given) throw new Error(given.why);
     expect(given.map((h) => h.name)).toEqual(["H", "HA2", "HA3"]);
   });
 
+  it("and where a bond to another residue takes the place of a hydrogen that does not leave, the one nearest the atom it is bonded to", () => {
+    // (CA bonded to an atom of another residue standing where HA3 would, a glycosidic link's way: HA3 goes, HA2 stays)
+    const atoms: ResidueAtom[] = ["N", "CA", "C", "O", "OXT"].map((name) => ({ name, el: name[0], ...ideal(name) }));
+    const at = ideal("CA");
+    const ha3 = ideal("HA3");
+    const beyond = { x: at.x + 1.4 * (ha3.x - at.x), y: at.y + 1.4 * (ha3.y - at.y), z: at.z + 1.4 * (ha3.z - at.z) };
+    const given = hydrogensFromComponent(atoms, new Map([[1, [beyond]]]), component);
+    if ("why" in given) throw new Error(given.why);
+    expect(given.map((h) => h.name)).toEqual(["H", "H2", "HA2", "HXT"]);
+  });
+
   it("gives none where an atom of the component that does not leave is missing, and says which", () => {
     const atoms: ResidueAtom[] = ["N", "C", "O", "OXT"].map((name) => ({ name, el: name[0], ...ideal(name) }));
-    expect(hydrogensFromComponent(atoms, new Set(), component)).toEqual({ why: "CA of ZZG is not in the entry, so its hydrogens cannot all be given." });
+    expect(hydrogensFromComponent(atoms, new Map(), component)).toEqual({ why: "CA of ZZG is not in the entry, so its hydrogens cannot all be given." });
   });
 
   it("gives none where the component gives no shape", () => {
     const shapeless = readComponent(ZZG.replace(/ -?\d+\.\d+ +-?\d+\.\d+ +-?\d+\.\d+$/gm, " ? ? ?"))!;
     const atoms: ResidueAtom[] = ["N", "CA", "C", "O", "OXT"].map((name) => ({ name, el: name[0], ...ideal(name) }));
-    expect(hydrogensFromComponent(atoms, new Set(), shapeless)).toEqual({ why: "The CCD gives no shape for ZZG, so its hydrogens cannot be placed." });
+    expect(hydrogensFromComponent(atoms, new Map(), shapeless)).toEqual({ why: "The CCD gives no shape for ZZG, so its hydrogens cannot be placed." });
   });
 });
