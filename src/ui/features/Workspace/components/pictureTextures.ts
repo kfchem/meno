@@ -6,7 +6,7 @@
 import * as THREE from "three";
 
 /** Each picture's texture, decoded once and shared, by its SHA-256 - a film's, its video playing - let go once none draws it. */
-export type Shared = { texture: THREE.Texture | null; users: number; waiting: Set<() => void>; video?: HTMLVideoElement; drawn?: Set<() => void> };
+export type Shared = { texture: THREE.Texture | null; users: number; waiting: Set<() => void>; video?: HTMLVideoElement; drawn?: Set<() => void>; /** Its bytes were held nowhere when it was first wanted. */ unhad?: true };
 export const textures = new Map<string, Shared>();
 
 /** Whether a film on the page is playing; none where it is not one shown. */

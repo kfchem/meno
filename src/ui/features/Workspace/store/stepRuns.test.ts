@@ -109,7 +109,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
 }));
-/** What the plugin that perceives configurations was asked, MOL blocks each time; it answers each a centre, keyed by its place. */
+/** What the plugin that perceives configurations was asked, MOL blocks each time; it answers each a centre, keyed by its molecule (by how long its block is: conformers of one molecule are one stereoisomer here). */
 const configured: string[][] = [];
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
@@ -117,7 +117,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
   pluginWorker: async () => ({
     request: async (_op: string, args: { molblocks: string[] }) => {
       configured.push(args.molblocks);
-      return { molecules: args.molblocks.map((_b, i) => ({ elements: [{ kind: "centre", atoms: [0], specified: true }], key: `k${i}` })) };
+      return { molecules: args.molblocks.map((b) => ({ elements: [{ kind: "centre", atoms: [0], specified: true }], key: `k${b.split("\n").length}` })) };
     },
   }),
 }));
@@ -392,7 +392,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc?.wavefunction).toMatchObject({ name: "water.molden", kind: "molden" });
     // (held, for a step after it to be given; and kept in the workspace's file)
     expect((await heldOutput(m.calc!.wavefunction!.sha256))?.text).toBe("[Molden Format]\n");
-    const file = readMenoFile(await workspaceFile(st()));
+    const file = readMenoFile((await workspaceFile(st())).bytes);
     expect(file.files.map((f) => f.sha256)).toContain(m.calc!.wavefunction!.sha256);
   });
 
@@ -781,15 +781,16 @@ describe("running a workflow's steps", () => {
     expect(st().steps.find((s) => s.id === b)!.ran!.said).toBe("2 of 3 kept");
   });
 
-  it("asks first which stereoisomer each entry is, for Populations - every conformer its own - and its entries carry it", async () => {
+  it("asks first which stereoisomer each entry is, for As conformers and Populations - every conformer its own - and its entries carry it", async () => {
     forgetStereo();
     configured.length = 0;
     const { st, b, c } = chain();
     await st().runFrom(c);
-    // (asked once, for the conformers the window let through - Populations' entries, each its own geometry)
+    // (asked once, by As conformers, for all three, each its own geometry; Populations' two, the window's, known by then)
     const kept = setEntries(st().molecules3d.filter((m) => setMembers(st(), st().sets.find((x) => x.made?.step === b)!).molecules.includes(m.id)), "conformers");
-    expect(configured.map((blocks) => blocks.length)).toEqual([kept.length]);
-    expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map((_e, i) => `k${i}`));
+    expect(configured.map((blocks) => blocks.length)).toEqual([3]);
+    expect(kept).toHaveLength(2);
+    expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map(() => `k${configured[0][0].split("\n").length}`));
   });
 
   it("runs all that have not run or have changed - and leaves those done as they are", async () => {

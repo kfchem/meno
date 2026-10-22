@@ -1,5 +1,5 @@
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { writeFile } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../lib/io/writeDocument";
 import { styleFileName, styleFileText, type StyleFile } from "../../../lib/chem/styleFile";
 import { styleFileBytes } from "../../../lib/doc/menoFile";
 
@@ -13,7 +13,7 @@ export async function exportStyles(styles: StyleFile, picture?: string | null): 
   const name = styleFileName(styles).replace(/[\\/:*?"<>|]+/g, " ").trim() || "Style";
   const picked = await saveDialog({ title: "Export style", defaultPath: `${name}.meno`, filters: [{ name: "Meno style", extensions: ["meno"] }] });
   if (!picked) return false;
-  await writeFile(/\.meno$/i.test(picked) ? picked : `${picked}.meno`, styleFileBytes(styleFileText(styles), pngOf(picture)));
+  await writeDocument(/\.meno$/i.test(picked) ? picked : `${picked}.meno`, styleFileBytes(styleFileText(styles), pngOf(picture)));
   return true;
 }
 
