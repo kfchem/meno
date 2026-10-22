@@ -1299,11 +1299,33 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   once, for its largest, and it is held by its top left corner, so that
   nothing in it moves as the panel grows (`quickAddPlace.ts`).
 - **No *3D structure* step**: *Conformers* takes structures drawn - RDKit's
-  search, in its worker, as *3D structures* on the canvas makes them (the
-  first stereoisomer, where the drawing leaves one open), with the step's
+  search, in its worker, as *3D structures* on the canvas makes them, with the step's
   own options - and *Choose one*, Meno's, takes one conformer of each
   compound. A plugin's step says in its manifest what it takes where it
   takes less than its kind (`takes`: CREST's search starts from 3D).
+- **A structure drawn whose stereo is left open is not made** by
+  *Conformers* (2026-10-22), where what is open could go more than one
+  way: a stereocentre or a double bond that could have a configuration and
+  is drawn without one (the roles' `open_stereo`), giving two or more
+  stereoisomers that can be made in 3D, or an allene's axis, whose
+  stereoisomers RDKit does not count. The canvas's *3D structure* asks
+  which is meant; a step cannot ask, and never chooses. The others are
+  made, and the step's line names those not made by their places
+  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*); where
+  none is made, the step fails, saying so. Until then the first
+  stereoisomer was made without a word.
+  - **A bridgehead its rings fix is no choice.** Adamantane's, cubane's or
+    norbornane's open centres give one stereoisomer that can be made in
+    3D (RDKit's enumeration with its embedding tried, seeded by the
+    isomer), so it is made, nothing said. Unwedged camphor gives two, and
+    is not.
+  - **Where no stereoisomer holds in 3D** (a strained cage's), the
+    structure is made as the embedding places it, and the line says so
+    (*structure 3 of 4 made with its stereo free: no stereoisomer of it
+    holds in 3D*).
+  - Not seen: a metal's centre (square-planar platinum) and an axis of
+    hindered rotation (a biaryl's); they are made as the embedding places
+    them.
 
 Decided while building it, for the maintainer to confirm:
 
