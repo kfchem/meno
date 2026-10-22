@@ -1,3 +1,4 @@
+import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
@@ -1411,12 +1412,12 @@ function WorkspaceContent({
     });
   };
 
-  const alert = importError?.text ?? files.error ?? chemError;
-  const dismissAlert = importError
-    ? dismissImportError
-    : files.error
-      ? files.dismissError
-      : () => setChemError(null);
+  // (each in a line of its own, dismissed by itself: utils/alerts)
+  const alerts = canvasAlerts({
+    import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
+    files: { text: files.error, dismiss: files.dismissError },
+    chem: { text: chemError, dismiss: () => setChemError(null) },
+  });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
@@ -1478,6 +1479,7 @@ function WorkspaceContent({
   // S, its texts, its style, its workflow - on the right-click menu on empty
   // space; the keys say the same. (Save is the title bar's, and Ctrl/Cmd+S.)
   const texts = useEditor((s) => s.texts);
+  const lostTexts = useEditor((s) => s.textsLost.length > 0);
   const steps = useEditor((s) => s.steps);
   const textsOpen = useEditor((s) => s.textsOpen);
   const reading = useEditor((s) => s.pdfs.some((p) => p.reading));
@@ -1497,7 +1499,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    ...(texts.length || reading
+    ...(texts.length || lostTexts || reading
       ? [
           textsOpen
             ? { name: "Hide texts", keys: "", run: () => store.getState().closeTexts() }
@@ -1508,7 +1510,7 @@ function WorkspaceContent({
                   // (the PDF it showed, rising into it again; or the text)
                   const st = store.getState();
                   if (st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown && p.reading)) st.readPdf(st.pdfShown);
-                  else if (st.texts.length) st.showText(st.textShown ?? st.texts[0].id);
+                  else if (st.texts.length || st.textsLost.length) st.showText(st.textShown ?? (st.texts[0] ?? st.textsLost[0]).id);
                   else if (st.pdfs.some((p) => p.reading)) st.readPdf(st.pdfs.find((p) => p.reading)!.id);
                 },
               },
@@ -1544,31 +1546,34 @@ function WorkspaceContent({
       onPointerUpCapture={onRightUp}
     >
       {/* Import error */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex flex-col items-center gap-2 pointer-events-none">
       <AnimatePresence>
-      {alert && (
+      {alerts.map((a) => (
         <motion.div
-          key="alert"
+          key={a.key}
+          layout
           {...RISE}
           role="alert"
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
+          className="pointer-events-auto flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
-          <span className="break-words">{alert}</span>
-          {importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          <span className="break-words">{a.text}</span>
+          {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
           <button
             aria-label="Dismiss"
             title="Dismiss"
             onClick={(e) => {
               e.stopPropagation();
-              dismissAlert();
+              a.dismiss();
             }}
             className="h-4 w-4 shrink-0 rounded-full hover:bg-gh-line"
           >
             <XMarkIcon className="h-4 w-4" />
           </button>
         </motion.div>
-      )}
+      ))}
       </AnimatePresence>
+      </div>
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
@@ -2608,7 +2613,7 @@ function TabFiles({
   children: (files: FileActions) => ReactNode;
 }) {
   // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
-  const files = useFileActions(nameTab);
+  const files = useFileActions(nameTab, tabId);
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
@@ -2619,6 +2624,8 @@ function TabFiles({
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const intent = saveIntent(e);
+      // (the keys held: saved once, as they were pressed - and still not the webview's)
+      if (!intent && e.repeat && saveIntent({ key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey })) e.preventDefault();
       if (!intent) return;
       e.preventDefault();
       void (intent === "save" ? save() : saveAs());
