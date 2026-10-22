@@ -57,6 +57,11 @@ describe("a large set's chart", () => {
     ]);
     expect(binned([5, 5, 5])).toEqual([{ from: 5, to: 5, count: 3 }]);
     expect(binned([])).toEqual([]);
+    // (no finite number, in no bin: its caller counts it)
+    expect(binned([0, NaN, 1, Infinity])).toEqual([
+      { from: 0, to: 0.5, count: 1 },
+      { from: 0.5, to: 1, count: 1 },
+    ]);
   });
 
   it("charts each conformer's energy above its compound's lowest, in kcal/mol, saying by what and of how many", () => {
@@ -75,7 +80,7 @@ describe("a large set's chart", () => {
       2,
       [
         { count: 2, why: "worked out another way" },
-        { count: 2, why: "with no energy" },
+        { count: 2, why: "with no usable energy" },
       ],
     ]);
     expect(chartOf([waters([-76])], "molecules")).toEqual({ none: "No energies charted: they are of different compounds" });
@@ -98,6 +103,33 @@ const client = (answer: (n: number) => string | Error): ChemClient => {
     },
   } as unknown as ChemClient;
 };
+
+describe("a large set's chart, where its energies are not all alike", () => {
+  it("counts an energy that is no finite number as no usable energy, and charts the rest", () => {
+    const chart = chartOf([waters([-76, NaN, -76 + KCAL, Infinity])], "conformers");
+    if ("none" in chart) throw new Error(chart.none);
+    expect([chart.counted, chart.left]).toEqual([2, [{ count: 2, why: "with no usable energy" }]]);
+    expect(chart.bins.map((b) => b.count)).toEqual([1, 1]);
+  });
+
+  it("charts none worked out by a method not stated - two such may be two methods - and counts them", () => {
+    const unstated = { made: undefined, calc: undefined };
+    const chart = chartOf([waters([-76, -76 + KCAL]), waters([-80, -80 + KCAL], unstated), waters([-90, -90 + KCAL], unstated)], "conformers");
+    if ("none" in chart) throw new Error(chart.none);
+    expect([chart.by, chart.counted, chart.left]).toEqual(["Field X", 2, [{ count: 4, why: "worked out by a method not stated" }]]);
+    expect(chartOf([waters([-80, -80 + KCAL], unstated)], "conformers")).toEqual({ none: "No energies charted: what worked them out is not stated" });
+  });
+
+  it("charts the method most were worked out by, not the first's - the first of those as many - and says how many were left", () => {
+    const odd = { made: { how: [], energies: "Field Y" } };
+    const chart = chartOf([waters([-76, -76 + KCAL], odd), waters([-80, -80 + KCAL, -80 + 2 * KCAL]), waters([-90, -90 + KCAL])], "conformers");
+    if ("none" in chart) throw new Error(chart.none);
+    expect([chart.by, chart.counted, chart.left]).toEqual(["Field X", 5, [{ count: 2, why: "worked out another way" }]]);
+    // (as many each way: the first's)
+    const tie = chartOf([waters([-76, -76 + KCAL], odd), waters([-80, -80 + KCAL])], "conformers");
+    expect("none" in tie ? null : tie.by).toBe("Field Y");
+  });
+});
 
 describe("a large set's sample drawn", () => {
   const style = styleOf(DEFAULT_STYLE_CHOICE);

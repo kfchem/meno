@@ -51,8 +51,9 @@ export function sturges(n: number): number {
 /** One bar of a histogram: the values in [from, to) - the last bar's `to` taken in too - and how many there are. */
 export type Bin = { from: number; to: number; count: number };
 
-/** `values` counted into `sturges(n)` bins of one width from the least to the greatest: all in one, where they are all one value. */
-export function binned(values: readonly number[]): Bin[] {
+/** `values` counted into `sturges(n)` bins of one width from the least to the greatest: all in one, where they are all one value. A value that is no finite number is in no bin - its caller counts it, and says so. */
+export function binned(given: readonly number[]): Bin[] {
+  const values = given.filter(Number.isFinite);
   if (!values.length) return [];
   let lo = Infinity;
   let hi = -Infinity;
@@ -76,8 +77,10 @@ export function energiesFrom(m: Pick<Molecule3D, "calc" | "energies" | "made">):
  * A large set's entries as a histogram: in a conformer set, each
  * conformer's energy above its compound's lowest, in kcal/mol - each
  * counted once, as the set holds it - of those whose energies one method
- * worked out (the first the set says, in the step's order): those by
- * another, and those with no energy, counted and said, not drawn. In a set
+ * worked out: the method most of them were worked out by, said (the first
+ * of those as many, in the step's order). Those by another, by a method
+ * not stated - two such may be two methods - and those with no usable
+ * energy (none, or no finite number), counted and said, not drawn. In a set
  * of molecules, none: the energies of different compounds are not set
  * against one another.
  */
@@ -95,32 +98,44 @@ export type Chart =
 
 export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "conformers"): Chart {
   if (holds !== "conformers") return { none: "No energies charted: they are of different compounds" };
-  let by: string | undefined;
-  const values: number[] = [];
-  let other = 0;
   let without = 0;
+  let unstated = 0;
+  // (each compound's usable energies - finite numbers - and what worked them out)
+  const compounds: { from: string; energies: number[] }[] = [];
   for (const m of molecules) {
     const n = framesOf(m);
-    const energies = m.energies?.length === n ? m.energies : undefined;
-    if (!energies) {
-      without += n;
+    const energies = m.energies?.length === n ? m.energies.filter(Number.isFinite) : [];
+    without += n - energies.length;
+    if (!energies.length) continue;
+    const from = energiesFrom(m);
+    if (from == null) {
+      unstated += energies.length;
+      continue;
+    }
+    compounds.push({ from, energies });
+  }
+  // (the method most were worked out by - the first of those as many)
+  const tally = new Map<string, number>();
+  for (const c of compounds) tally.set(c.from, (tally.get(c.from) ?? 0) + c.energies.length);
+  let by: string | undefined;
+  for (const [from, k] of tally) if (by == null || k > tally.get(by)!) by = from;
+  const values: number[] = [];
+  let other = 0;
+  for (const c of compounds) {
+    if (c.from !== by) {
+      other += c.energies.length;
       continue;
     }
     // (a compound's energies, worked out one way: its lowest among them, each above it)
-    const from = energiesFrom(m) ?? "not stated";
-    by ??= from;
-    if (from !== by) {
-      other += n;
-      continue;
-    }
     let lowest = Infinity;
-    for (const e of energies) if (e < lowest) lowest = e;
-    for (const e of energies) values.push((e - lowest) * KCAL_PER_HARTREE);
+    for (const e of c.energies) if (e < lowest) lowest = e;
+    for (const e of c.energies) values.push((e - lowest) * KCAL_PER_HARTREE);
   }
-  if (!values.length) return { none: "No energies to chart" };
+  if (!values.length) return { none: unstated ? "No energies charted: what worked them out is not stated" : "No energies to chart" };
   const left = [
     ...(other ? [{ count: other, why: "worked out another way" }] : []),
-    ...(without ? [{ count: without, why: "with no energy" }] : []),
+    ...(unstated ? [{ count: unstated, why: "worked out by a method not stated" }] : []),
+    ...(without ? [{ count: without, why: "with no usable energy" }] : []),
   ];
   return { quantity: "ΔE above each compound's lowest", unit: "kcal/mol", by: by!, bins: binned(values), counted: values.length, left };
 }

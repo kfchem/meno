@@ -538,10 +538,13 @@ chart of its energies - each saying what it is of.
   scale, so their bonds are alike.
 - **The chart**: in a conformer set, each conformer's energy above its
   compound's lowest, in kcal/mol, of the energies one method worked out
-  - the first the set says - each conformer counted once. Its line says
+  - the method most of them were (the first of those as many) - each
+  conformer counted once. Those by a method not stated are not charted,
+  since two such may be two methods; nor is an energy that is no finite
+  number. Its line says
   the quantity, the unit, the method and how many; those worked out
-  another way, and those with no energy, are counted and said, not
-  charted. Its bars are binned by Sturges's rule (⌈log₂ n⌉ + 1 bins,
+  another way, by a method not stated, or with no usable energy, are
+  counted and said, not charted. Its bars are binned by Sturges's rule (⌈log₂ n⌉ + 1 bins,
   Sturges 1926), and each says its range and count on hover. A set of
   molecules has no chart: the energies of different compounds are not
   set against one another.
