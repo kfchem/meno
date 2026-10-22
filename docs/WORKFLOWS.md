@@ -336,9 +336,9 @@ one of the kinds of calculation it does (decided: 16):
   Meno's line alone; nothing is shown of plugins not added.
 - **A wire let go on an input that does not take it** is not made, and
   the step's card says why where its state is: "It takes a conformer set,
-  not molecules in 3D" - or, for conformer sets of one conformer each,
-  "each compound here has one conformer, so they are molecules in 3D"
-  (2026-10-22). It says so until a wire is drawn again.
+  not molecules in 3D" (2026-10-22). It says so until a wire is drawn
+  again. A conformer set of one conformer is a conformer set all the
+  same, and goes where conformer sets go (the maintainer, 2026-10-21).
 - **A wire let go on empty space** opens Quick Add already at
   *Calculations*, showing only the kinds that take what the wire
   carries - and a plugin only where it does one of them.

@@ -147,12 +147,11 @@ describe("a wire a step does not take", () => {
     return { doc, set: doc.sets![0].id, step: doc.steps![0].id };
   }
 
-  it("says why: conformer sets of one conformer each are molecules, which an Energy window does not take", () => {
-    const one = setOf(1);
-    expect(canWire(one.doc, { set: one.set }, one.step)).toBe(false);
-    expect(wireRefusal(one.doc, { set: one.set }, one.step)).toBe("It takes a conformer set - each compound here has one conformer, so they are molecules in 3D");
-    const two = setOf(2);
-    expect([canWire(two.doc, { set: two.set }, two.step), wireRefusal(two.doc, { set: two.set }, two.step)]).toEqual([true, null]);
+  it("takes conformer sets of one conformer each, as of more: one conformer found is a conformer set all the same", () => {
+    for (const frames of [1, 2]) {
+      const { doc, set, step } = setOf(frames);
+      expect([canWire(doc, { set }, step), wireRefusal(doc, { set }, step)]).toEqual([true, null]);
+    }
   });
 
   it("says why of a set that is no conformer set, and of a loop", () => {
@@ -186,7 +185,6 @@ describe("a wire a step does not take", () => {
         onShowRun={() => {}}
         onClose={() => {}}
         onCardDown={() => {}}
-        onTakeDown={() => {}}
         onContextMenu={() => {}}
         onHover={() => {}}
       />,

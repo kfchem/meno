@@ -90,9 +90,7 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   const takes = portOf(step.kind, port).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
   if (takes.includes(holds)) return null;
   const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
-  // (conformer sets of one conformer each are molecules to a step: one conformer has nothing to be weighed or windowed against)
-  const ones = holds === "molecules" && takes.includes("conformers") && setMolecules(doc, set).some((m) => m.conformerSet === true && !m.frames?.length);
-  return ones ? `It takes ${wants} - each compound here has one conformer, so they are molecules in 3D` : `It takes ${wants}, not ${SET_WORDS[holds]}`;
+  return `It takes ${wants}, not ${SET_WORDS[holds]}`;
 }
 
 /** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
