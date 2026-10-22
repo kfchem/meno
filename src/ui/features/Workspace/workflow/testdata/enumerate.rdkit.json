@@ -1,0 +1,153 @@
+{
+ "reader": "RDKit 2026.03.6",
+ "command": [
+  "MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts src/ui/features/Workspace/workflow/enumerate.rdkit.test.ts",
+  "<chem python> scripts/identity/rdkit.py"
+ ],
+ "products": [
+  {
+   "name": "phenyl R1 #1",
+   "molfile": "64fe6ab786599297bf42b1ed3d2e072a6ac3a1333cc3d2b3ac43387c5268058e",
+   "smiles": "Cc1ccccc1",
+   "expected": "Cc1ccccc1"
+  },
+  {
+   "name": "phenyl R1 #2",
+   "molfile": "653868d3f08866668be0f7148720896b448ba8de00f96c65eacc6db4df00c98a",
+   "smiles": "Clc1ccccc1",
+   "expected": "Clc1ccccc1"
+  },
+  {
+   "name": "phenyl R1 #3",
+   "molfile": "38e3d57bbcd49c7d03ee3eb5fb463274f7e920cac979b097c9a10afdfd3d3f20",
+   "smiles": "COc1ccccc1",
+   "expected": "COc1ccccc1"
+  },
+  {
+   "name": "phenyl R1 #4",
+   "molfile": "38e3d57bbcd49c7d03ee3eb5fb463274f7e920cac979b097c9a10afdfd3d3f20",
+   "smiles": "COc1ccccc1",
+   "expected": "COc1ccccc1"
+  },
+  {
+   "name": "phenyl R1 #5",
+   "molfile": "e2ae99dacd4dea66a3099fe7f025696f5c0f9e8bc881a3ebf9f0c81b4d362769",
+   "smiles": "c1ccccc1",
+   "expected": "c1ccccc1"
+  },
+  {
+   "name": "para R1 and R2 #1",
+   "molfile": "57f0bd4e46c6ba504c7393aef2abd0ac9b3ff6fe5327770725baa4d3a028932e",
+   "smiles": "Cc1ccc(C)cc1",
+   "expected": "Cc1ccc(C)cc1"
+  },
+  {
+   "name": "para R1 and R2 #2",
+   "molfile": "c2f77c2e9a83463b35b88c4369142a9fbc1550e805548ac281f3b6a95d30c947",
+   "smiles": "Cc1ccc(Cl)cc1",
+   "expected": "Cc1ccc(Cl)cc1"
+  },
+  {
+   "name": "para R1 and R2 #3",
+   "molfile": "a261308396281f934d6bf903488eab4117be24531ba4d502db63b628a2059bc0",
+   "smiles": "Cc1ccc(Cl)cc1",
+   "expected": "Cc1ccc(Cl)cc1"
+  },
+  {
+   "name": "para R1 and R2 #4",
+   "molfile": "ece2ac0fddb06dab48f8ba4fba960b5edb73cc5fa5bfc76d81c539c7ff9d320e",
+   "smiles": "Clc1ccc(Cl)cc1",
+   "expected": "Clc1ccc(Cl)cc1"
+  },
+  {
+   "name": "a stereocentre's R1 #1",
+   "molfile": "4e0fc4f4d8948b9f89882b59f3d4399717b0eeb1672c7613a353498d99be41dd",
+   "smiles": "C[C@@H](F)Cl",
+   "expected": "C[C@@H](F)Cl"
+  },
+  {
+   "name": "a stereocentre's R1 #2",
+   "molfile": "5ccb1da03533d6fc9d7041be7ca3e13d4da14d78a5e067c3628d2358d6396673",
+   "smiles": "CC[C@@H](F)Cl",
+   "expected": "CC[C@@H](F)Cl"
+  },
+  {
+   "name": "a stereocentre's R1 #3",
+   "molfile": "f6d91493956e510eba400be86dfc14458905c15d2960e9b2f2f3554deaa95d9d",
+   "smiles": "F[C@@H](Cl)Br",
+   "expected": "F[C@@H](Cl)Br"
+  },
+  {
+   "name": "a stereocentre's R1 #4",
+   "molfile": "3eb6da2abe138b0b1483a6957a0336741eec0953dc86eb7c8fa95a44637e58be",
+   "smiles": "FCCl",
+   "expected": "FCCl"
+  },
+  {
+   "name": "a double bond's R1 #1",
+   "molfile": "8947b597bfc27200dec1711e3f6f367a351b52de31f8402f4190ece6c3353cee",
+   "smiles": "C/C=C/F",
+   "expected": "C/C=C/F"
+  },
+  {
+   "name": "a double bond's R1 #2",
+   "molfile": "6bd54b517b72897234daa7c460295b4a69f490ac1cdd5361b44576b2d2886160",
+   "smiles": "F/C=C/Cl",
+   "expected": "F/C=C/Cl"
+  },
+  {
+   "name": "a double bond's R1 #3",
+   "molfile": "926d64faa74da3eabcbe5e73b5d372df095598889e9e1d42c38e422a23cb2df6",
+   "smiles": "C=CF",
+   "expected": "C=CF"
+  },
+  {
+   "name": "a methyl's R1 #1",
+   "molfile": "c9f1d07dff81a31aeac6d1d4785487006ac43cf136f6fcee308d293277fd6973",
+   "smiles": "C",
+   "expected": "C"
+  },
+  {
+   "name": "a methyl's R1 #2",
+   "molfile": "00b712b10ed442aa7f5a297d0c1548a6c41c1354afb5a2c9963f9c5772005233",
+   "smiles": "[2H]C",
+   "expected": "[2H]C"
+  },
+  {
+   "name": "a methyl's R1 #3",
+   "molfile": "41a84dacee6772703f551347c8e46a5c86f5fc2a2d0ac83a2f31ac1876e513b4",
+   "smiles": "C[N+](C)(C)C",
+   "expected": "C[N+](C)(C)C"
+  },
+  {
+   "name": "phenyl R1, named groups #1",
+   "molfile": "b19a5df2db71fa292470a455b0738c215d83f97e29811424f26097e1de0852cd",
+   "smiles": "COC(=O)c1ccccc1",
+   "expected": "COC(=O)c1ccccc1"
+  },
+  {
+   "name": "phenyl R1, named groups #2",
+   "molfile": "90f4f7e5efb0f7338501a27638e3df6c578f97dfcd3d7448d3df7cfdc50cf99e",
+   "smiles": "CC(=O)c1ccccc1",
+   "expected": "CC(=O)c1ccccc1"
+  },
+  {
+   "name": "phenyl R1, named groups #3",
+   "molfile": "69afa6ed9bc86b0a4ba9201f69909a800b233aa54304bd57bbb494dcd9167fd2",
+   "smiles": "FC(F)(F)c1ccccc1",
+   "expected": "FC(F)(F)c1ccccc1"
+  },
+  {
+   "name": "phenyl R1, named groups #4",
+   "molfile": "1189545d4273dc9524ef0d1aba8fb2a94080888317d6e47e018f3e28ea93ff9b",
+   "smiles": "N#Cc1ccccc1",
+   "expected": "N#Cc1ccccc1"
+  },
+  {
+   "name": "phenyl R1, named groups #5",
+   "molfile": "b40c6e9bf3a35be1ee8b57cb2263f0107c3302517bfea0581cef3384fd4c0a23",
+   "smiles": "CN(C)c1ccccc1",
+   "expected": "CN(C)c1ccccc1"
+  }
+ ]
+}

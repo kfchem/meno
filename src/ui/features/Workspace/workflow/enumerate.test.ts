@@ -3,6 +3,7 @@ import type { DrawnRecord, Model } from "../store/types";
 import { drawingOf } from "../chem/drawing";
 import { identityOfDrawn } from "../chem/identityOf";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
+import { template } from "./testdata/enumerationCases";
 import { enumerated, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
 import { measured } from "../../../../testing/timeouts";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
@@ -12,12 +13,6 @@ import { addSet, addStep, connect } from "./model";
 import { runStep, showRun, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
 
-/** A template drawn by Meno's engine from a SMILES, each "*" an R atom, numbered in order - or as `numbers` gives them. */
-function template(smiles: string, numbers?: number[][]): Model {
-  const m = drawnFromSmiles(smiles);
-  let k = 0;
-  return { ...m, atoms: m.atoms.map((a) => (a.el === "*" ? { ...a, el: "R#", rgroups: numbers?.[k++] ?? [++k] } : a)) };
-}
 
 /** A structure's molecular formula, Hill order, its hydrogens drawn and not. */
 function formula(m: Model): string {
