@@ -3,7 +3,7 @@
   "name": "REINVENT 4",
   "version": "0.1.0",
   "uses": [{"name": "REINVENT", "version": "4.8.24+80a8d21"}],
-  "description": "Makes new molecules with REINVENT 4, a generative model of SMILES: samples them from its prior trained on PubChem, each made a molecule in 3D.",
+  "description": "Makes new molecules with REINVENT 4, a generative model of SMILES: samples them from its prior trained on PubChem, each given as the SMILES it sampled, with its likelihood.",
   "licence": "Apache-2.0",
   "homepage": "https://github.com/MolecularAI/REINVENT4",
   "environment": "uv",
@@ -14,8 +14,7 @@
       "kinds": ["generate"],
       "options": [
         {"id": "count", "label": "How many (at most 100 in one run)", "type": "number", "default": 20, "min": 1, "max": 100, "step": 1},
-        {"id": "seed", "label": "Random seed", "type": "number", "default": 1, "min": 0, "max": 2147483647, "step": 1},
-        {"id": "stereo", "label": "Unspecified stereo", "type": "choice", "choices": [{"value": "every", "label": "Every stereoisomer"}, {"value": "skip", "label": "Don't make it"}], "default": "every"}
+        {"id": "seed", "label": "Random seed", "type": "number", "default": 1, "min": 0, "max": 2147483647, "step": 1}
       ]
     }
   ],

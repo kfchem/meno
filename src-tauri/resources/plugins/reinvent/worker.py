@@ -6,7 +6,7 @@ its prior trained on PubChem.
 One JSON object per line on stdin, one per line back on stdout:
 
     {"id": 3, "op": "run", "step": "generate", "entries": [], "options": {"count": 20, "seed": 7}}
-    {"id": 3, "ok": true, "result": {"outputs": [...], "said": "..."}}
+    {"id": 3, "ok": true, "result": {"outputs": [...], "said": "...", "by": {...}}}
     {"id": 3, "ok": false, "error": "..."}
 
 It runs no code it is sent - only the operation below - and reaches no
@@ -16,25 +16,16 @@ into the folder given as this script's one argument.
     {"event": "ready", "version": "4.8.24"}
 
 REINVENT 4 samples as many SMILES as asked from the prior, on the CPU with
-the seed set, so that the same asking gives the same molecules (its `-s`,
+the seed set, so that the same asking gives the same SMILES (its `-s`,
 README *Running*; measured here, the same seed gave the same SMILES twice
-over). Each SMILES RDKit reads is made a molecule in 3D - its hydrogens
-added, one geometry embedded (ETKDG v3, the same seed) and tidied by MMFF94,
-or UFF where MMFF94 has no parameters for it - for steps that need
-coordinates; what it could not make of one is counted, with why - a
-radical among them, whose spin it does not hand on - and each isotope a
-SMILES gives is kept. A SMILES that leaves centres or double bonds
-unspecified (the prior's vocabulary has stereo tokens, and leaves them out
-as often) is made as each of their stereoisomers, each its own molecule -
-what it does specify kept as given - in one order every run gives, or not
-at all where the step asks so: never one stereoisomer picked by the seed,
-passed on as if specified. Each
-molecule goes back as an output (lib/calc/output): its atoms, the geometry,
-its bonds and its atoms' charges beside, how it was made (`method`: the
-prior, the seed, the CPU, the force field), and its results - the SMILES as
-sampled, and its NLL under the prior: the negative natural logarithm of the
-probability the prior gave each token of it, summed
-(reinvent/models/reinvent/models/model.py, `sample`, at the release pinned).
+over). What it gives is handed on as it is (docs/PLUGINS.md, *Generate*):
+each SMILES as sampled - never canonicalised, its stereo as written or
+left out, nothing made of it in 3D, nothing refused - with the model's own
+values beside it, named: its NLL under the prior (the negative natural
+logarithm of the probability the prior gave each token of it, summed:
+reinvent/models/reinvent/models/model.py, `sample`, at the release pinned)
+and its SMILES_state as REINVENT 4 writes it. Meno reads each SMILES
+itself, as it reads one pasted.
 """
 
 import csv
@@ -45,38 +36,17 @@ import subprocess
 import sys
 import tempfile
 
-from rdkit import Chem, RDLogger, rdBase
-from rdkit.Chem import Descriptors, rdDistGeom, rdForceFieldHelpers
-from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers, StereoEnumerationOptions
-
-# RDKit's own complaints go nowhere: what it could not make of a SMILES is counted, with why.
-RDLogger.DisableLog("rdApp.*")
-
 # The folder Meno keeps the plugin's files in (the manifest's `downloads`).
 FILES = sys.argv[1] if len(sys.argv) > 1 else None
 #: The prior, as the manifest downloads it, and what it is: REINVENT 4's priors (v2) on Zenodo, trained on
 #: PubChem as of 2024-06-03 (the file's own metadata, `origina_data_source`).
 PRIOR = "reinvent_pubchem.prior"
 PRIOR_SAID = "reinvent_pubchem.prior (REINVENT 4 priors v2, Zenodo 10.5281/zenodo.20701824; PubChem 2024-06-03)"
-#: The most molecules one run makes, sampled and made at once inside a request's two minutes - with room to
-#: spare on a busy computer: measured on this Mac (M4) under a load average of 14 to 24, 100 took 10 to 24 s,
-#: start-up included, and 200 took 44 to 173 s, past the two minutes. Each is a number of molecules, never a
-#: time: what one asking makes is the same anywhere, and a run too slow fails whole, never cut short.
+#: The most SMILES one run samples. Each is a number of SMILES, never a time: what one asking gives is the same
+#: anywhere, and a run too slow fails whole, never cut short.
 MOST = 100
 #: The seed where none is asked for.
 SEED = 1
-#: The most steps a force field may take tidying one embedded geometry.
-STEPS = 2000
-#: The most stereoisomers one SMILES with unspecified centres or double bonds is made as, each its own molecule:
-#: past it, not made - a SMILES of 4 open centres gives 16.
-MOST_STEREOISOMERS = 8
-#: The most centres and double bonds of unspecified stereo whose stereoisomers are tried (2^8 = 256 at most).
-MOST_OPEN = 8
-#: How many times ETKDG may try to embed one molecule's geometry (its `maxIterations`) before it is counted as not
-#: made: a number of tries, not a time, so that the same asking makes the same molecules on any computer.
-EMBED_TRIES = 50
-#: Bond orders as Meno's outputs give them, Kekulé.
-ORDERS = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3}
 
 VERSION = importlib.metadata.version("reinvent")
 
@@ -84,8 +54,9 @@ VERSION = importlib.metadata.version("reinvent")
 def sampled(count, seed, folder):
     """The SMILES REINVENT 4 samples from the prior: `count` of them with
     the random seed `seed`, on the CPU, working in `folder`; each with its
-    NLL, [(smiles, nll)], in the order it wrote them - duplicates kept, so
-    that how many came is how many were asked for."""
+    SMILES_state and NLL, [(smiles, state, nll)], in the order it wrote
+    them - duplicates kept, so that how many came is how many were asked
+    for."""
     toml = os.path.join(folder, "sampling.toml")
     out = os.path.join(folder, "sampled.csv")
     log = os.path.join(folder, "reinvent.log")
@@ -112,141 +83,7 @@ def sampled(count, seed, folder):
                 said = [line.strip() for line in f if line.strip()]
         raise ValueError("REINVENT 4 stopped: " + (said[-1] if said else f"exit {done.returncode}"))
     with open(out, encoding="utf-8") as f:
-        return [(row["SMILES"], float(row["NLL"])) for row in csv.DictReader(f)]
-
-
-def stereoisomers_of(mol, every):
-    """Each stereoisomer of a molecule read from a SMILES, as a list of molecules: those of every centre and double
-    bond it leaves unspecified, where `every`, each of them its own - what it does specify kept as given - in the
-    one order every run gives them (by their isomeric SMILES); the molecule alone where it leaves none open. Else
-    why not: a string. Never one stereoisomer chosen for it: that would pass as specified what was not."""
-    # (cumulated double bonds - an allene's axis, a butatriene's E or Z - no enumeration here sets: unspecified
-    #  where they could be stereogenic, the SMILES is not made)
-    cumulene = unspecified_cumulene(mol)
-    if cumulene:
-        return cumulene
-    cumulated = {a.GetIdx() for a in mol.GetAtoms() if sum(b.GetBondType() == Chem.BondType.DOUBLE for b in a.GetBonds()) > 1}
-    open_ = [
-        si for si in Chem.FindPotentialStereo(Chem.Mol(mol))
-        if si.specified == Chem.StereoSpecified.Unspecified
-        and not (si.type == Chem.StereoType.Bond_Double and {mol.GetBondWithIdx(si.centeredOn).GetBeginAtomIdx(), mol.GetBondWithIdx(si.centeredOn).GetEndAtomIdx()} & cumulated)
-    ]
-    if not open_:
-        return [mol]
-    if not every:
-        return "its stereo is not all specified"
-    # (2 to the power of what is open, before any are found alike: past MOST_OPEN, not tried - a long sugar
-    #  chain sampled would otherwise be thousands of stereoisomers tried before the count was seen)
-    if len(open_) > MOST_OPEN:
-        return f"more than {MOST_OPEN} centres or double bonds of unspecified stereo"
-    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, tryEmbedding=False, maxIsomers=0)
-    found = list(EnumerateStereoisomers(Chem.Mol(mol), options=options))
-    if len(found) <= 1:
-        return [mol]
-    if len(found) > MOST_STEREOISOMERS:
-        return f"more than {MOST_STEREOISOMERS} stereoisomers"
-    return sorted(found, key=lambda m: Chem.MolToSmiles(m))
-
-
-def unspecified_cumulene(mol):
-    """Why a molecule's cumulated double bonds could be stereogenic and are not given, or None: a chain of them
-    (C=C=C, C=C=C=C, ...) whose two ends each carry two different groups, as RDKit ranks its atoms - an even
-    number of double bonds an axis (an allene), an odd number E or Z (a butatriene). No enumeration here sets
-    either: made, its geometry would be one of two, unsaid. CC=C=CC has one; CC(C)=C=CC, one end carrying two
-    methyls, none."""
-    hs = Chem.AddHs(mol)
-    ranks = list(Chem.CanonicalRankAtoms(hs, breakTies=False))
-
-    def doubles(atom):
-        return [b for b in atom.GetBonds() if b.GetBondType() == Chem.BondType.DOUBLE]
-
-    def two_kinds(end, inner):
-        others = [n.GetIdx() for n in end.GetNeighbors() if n.GetIdx() != inner]
-        return len(others) == 2 and ranks[others[0]] != ranks[others[1]]
-
-    for end in hs.GetAtoms():
-        ds = doubles(end)
-        if len(ds) != 1:
-            continue
-        # (along the chain while each next atom has two double bonds: the other end where one has one)
-        prev, here, n = end, ds[0].GetOtherAtom(end), 1
-        while len(doubles(here)) == 2 and here.GetDegree() == 2:
-            nxt = next(b.GetOtherAtom(here) for b in doubles(here) if b.GetOtherAtom(here).GetIdx() != prev.GetIdx())
-            prev, here, n = here, nxt, n + 1
-        if n < 2 or end.GetIdx() > here.GetIdx() or len(doubles(here)) != 1:
-            continue
-        if two_kinds(end, ds[0].GetOtherAtom(end).GetIdx()) and two_kinds(here, prev.GetIdx()):
-            return "an allene axis of unspecified stereo" if n % 2 == 0 else "a cumulene's E or Z, unspecified"
-    return None
-
-
-def made_of(mol, seed):
-    """A molecule as one in 3D: its atoms - element, charge, isotope - its bonds, Kekulé, one geometry, and the
-    force field that tidied it. Else why not: a string - one whose geometry came out another stereoisomer too."""
-    want = Chem.MolToSmiles(mol)
-    mol = Chem.AddHs(mol)
-    params = rdDistGeom.ETKDGv3()
-    params.randomSeed = int(seed)
-    params.maxIterations = EMBED_TRIES
-    if rdDistGeom.EmbedMolecule(mol, params) != 0:
-        return f"no 3D structure embedded in {EMBED_TRIES} tries"
-    if rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
-        rdForceFieldHelpers.MMFFOptimizeMolecule(mol, maxIters=STEPS)
-        field = "MMFF94"
-    elif rdForceFieldHelpers.UFFHasAllMoleculeParams(mol):
-        rdForceFieldHelpers.UFFOptimizeMolecule(mol, maxIters=STEPS)
-        field = "UFF"
-    else:
-        field = None
-    # (the stereoisomer its geometry is, read back from it: the one asked for, or not made)
-    back = Chem.Mol(mol)
-    Chem.AssignStereochemistryFrom3D(back)
-    if Chem.MolToSmiles(Chem.RemoveHs(back)) != want:
-        # (a nitrogen's configuration its geometry did not hold: an aziridine's, say, which inverts)
-        held = {a.GetIdx(): a.GetChiralTag() for a in Chem.RemoveHs(back).GetAtoms()}
-        if any(a.GetAtomicNum() == 7 and a.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED and held.get(a.GetIdx()) != a.GetChiralTag() for a in mol.GetAtoms()):
-            return "an invertible nitrogen, whose configuration its geometry did not hold"
-        return "its geometry came out another stereoisomer"
-    Chem.Kekulize(mol, clearAromaticFlags=True)
-    if any(b.GetBondType() not in ORDERS for b in mol.GetBonds()):
-        return "a bond neither single, double nor triple"
-    return {
-        "smiles": want,
-        # (each atom's isotope too, its mass number, where the SMILES gives one: 13C, 2H)
-        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge(), "isotope": a.GetIsotope()} for a in mol.GetAtoms()],
-        "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": ORDERS[b.GetBondType()]} for b in mol.GetBonds()],
-        "xyz": [round(v, 4) for p in mol.GetConformer().GetPositions() for v in p],
-        "field": field,
-    }
-
-
-def molecules_of(smiles, seed, every=True):
-    """A SMILES as molecules in 3D: one, or each stereoisomer of what it leaves unspecified (stereoisomers_of) -
-    `made`, what made_of gives, each with its place among them (`k`, from 0) and how many there were (`of`);
-    `dropped`, those of them that could not be made, counted by why - a bridged ring's stereoisomer with its
-    bridge across the ring, which no geometry has, among them. Else why not: a string - where none was made."""
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return "not a SMILES RDKit reads"
-    # (a radical's spin is not handed on with it: made, it would reach a calculation closed-shell, its
-    #  multiplicity taken from its electrons' parity - so it is not made)
-    if Descriptors.NumRadicalElectrons(mol):
-        return "a radical, with unpaired electrons this plugin does not hand on"
-    if sum(a.GetAtomicNum() for a in mol.GetAtoms()) - Chem.GetFormalCharge(mol) <= 0:
-        return "no electrons, so nothing to calculate"
-    isomers = stereoisomers_of(mol, every)
-    if isinstance(isomers, str):
-        return isomers
-    made, dropped = [], {}
-    for k, m in enumerate(isomers):
-        one = made_of(m, seed)
-        if isinstance(one, str):
-            dropped[one] = dropped.get(one, 0) + 1
-        else:
-            made.append({**one, "k": k, "of": len(isomers)})
-    if not made:
-        return next(iter(dropped)) if len(dropped) == 1 else "none of its stereoisomers could be made"
-    return {"made": made, "dropped": dropped}
+        return [(row["SMILES"], int(row["SMILES_state"]) if row.get("SMILES_state", "").strip().lstrip("-").isdigit() else None, float(row["NLL"])) for row in csv.DictReader(f)]
 
 
 def number(options, key, default, low, high):
@@ -259,62 +96,32 @@ def number(options, key, default, low, high):
 
 
 def op_run(m):
-    """*Generate*: `count` molecules sampled with the seed `seed`, each an
-    output; and what the run made of them, in a line (`said`)."""
+    """*Generate*: `count` SMILES sampled with the seed `seed`, each an
+    output as REINVENT 4 gave it - the SMILES, and its NLL and SMILES_state
+    named - what made them (`by`), and the run in a line (`said`)."""
     if m.get("step") != "generate":
         raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
     if not FILES or not os.path.exists(os.path.join(FILES, PRIOR)):
         raise ValueError("REINVENT 4's prior is not here: add the plugin again in Settings, Plugins")
     o = m.get("options") or {}
     count, seed = number(o, "count", 20, 1, MOST), number(o, "seed", SEED, 0, 2**31 - 1)
-    every = o.get("stereo", "every") != "skip"
     with tempfile.TemporaryDirectory(prefix="meno-reinvent-") as folder:
         rows = sampled(count, seed, folder)
-    method = f"sampled from {PRIOR_SAID}, seed {seed}, on the CPU"
-    outputs, why, dropped, smiles_made, stopped = [], {}, {}, 0, None
-    for place, (smiles, nll) in enumerate(rows):
-        got = molecules_of(smiles, seed, every)
-        if isinstance(got, str):
-            why[got] = why.get(got, 0) + 1
-            continue
-        # (the run's molecules counted in the order sampled: the first SMILES whose molecules do not fit ends it,
-        #  no later one taken - never by time)
-        if len(outputs) + len(got["made"]) > MOST:
-            stopped = place
-            break
-        smiles_made += 1
-        for d, n in got["dropped"].items():
-            dropped[d] = dropped.get(d, 0) + n
-        for one in got["made"]:
-            enumerated = one["of"] > 1
-            outputs.append({
-                "schema": 1,
-                "program": "REINVENT 4",
-                "version": VERSION,
-                "method": method
-                + (f"; its stereo, unspecified in the SMILES, one of the {one['of']} stereoisomers enumerated" if enumerated else "")
-                + f"; one geometry, ETKDG v3 + {one['field'] or 'no force field'}",
-                "atoms": [a["el"] for a in one["atoms"]],
-                "charges": [a["charge"] for a in one["atoms"]],
-                **({"isotopes": [a["isotope"] for a in one["atoms"]]} if any(a["isotope"] for a in one["atoms"]) else {}),
-                "bonds": one["bonds"],
-                "frames": [one["xyz"]],
-                "results": [
-                    {"id": "smiles", "on": "molecule", "group": "Generated", "label": "SMILES as sampled", "value": smiles},
-                    *([{"id": "stereoisomer", "on": "molecule", "group": "Generated", "label": f"Stereoisomer {one['k'] + 1} of {one['of']} enumerated", "value": one["smiles"]}] if enumerated else []),
-                    {"id": "nll", "on": "molecule", "group": "Generated", "label": f"NLL under {PRIOR}", "value": nll, "digits": 2, "rank": 1},
-                ],
-            })
-    said = f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU: {smiles_made} made"
-    if len(outputs) != smiles_made:
-        said += f" \u2192 {len(outputs)} molecules with every stereoisomer of unspecified centres"
-    if dropped:
-        said += f"; {sum(dropped.values())} of their stereoisomers not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(dropped.items())) + ")"
-    if why:
-        said += f"; {sum(why.values())} not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(why.items())) + ")"
-    if stopped is not None:
-        said += f"; stopped at SMILES {stopped + 1} of {len(rows)}, its molecules past the {MOST} one run makes: the {len(rows) - stopped} from there not taken"
-    return {"outputs": outputs, "said": said}
+    outputs = [
+        {
+            "smiles": smiles,
+            "properties": {
+                "nll": {"value": nll, "unit": "none"},
+                **({"smiles_state": {"value": state, "unit": "none"}} if state is not None else {}),
+            },
+        }
+        for smiles, state, nll in rows
+    ]
+    return {
+        "outputs": outputs,
+        "said": f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU",
+        "by": {"program": "REINVENT 4", "version": VERSION, "model": PRIOR_SAID, "method": f"sampled, seed {seed}, on the CPU"},
+    }
 
 
 OPS = {"run": op_run}

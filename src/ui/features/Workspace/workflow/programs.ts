@@ -7,9 +7,9 @@
  */
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
-import { ENTRY_SCHEMA } from "../../../../lib/entry";
+import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
+import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
-import { elementOf } from "../../../../lib/chem/elements";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
@@ -308,48 +308,47 @@ export function readKept(raw: unknown, count: number): number[] | string {
   return [...new Set(kept as number[])].sort((a, b) => a - b);
 }
 
-/** The most molecules a step that makes them (Generate) brings in from one run. */
+/** The most a step that makes them (Generate) brings in from one run. */
 export const GENERATED_MOST = 1000;
 
 /**
- * What a plugin made from nothing (Generate, `run` with no entries): each
- * molecule as an output (lib/calc/output) - its atoms, one geometry, what
- * the run says of it (its method, its results: the SMILES it was sampled
- * as, its likelihood) - with what an output carries no form for, its bonds,
- * its atoms' charges and their isotopes where any is one, beside; and what the plugin says of the run, its
- * counts (`said`). Each a compound of its own, numbered as it came. Why not,
- * where any of it is not a molecule Meno can take: nothing is taken in part.
+ * One structure a generative model made, as its plugin hands it on
+ * (docs/PLUGINS.md, *Generate*): the SMILES it gave, exactly; its own
+ * values, named, each a number, a text or true/false with its unit from
+ * Meno's units table or "none"; and, where it was made from one of the
+ * structures that came in, that one's place among them (`seed`).
  */
-export function readGenerated(raw: unknown, readers: readonly string[]): { made: Worked[]; said: string } | string {
-  const r = raw as { outputs?: unknown; said?: unknown } | null;
+export type Generated = { smiles: string; properties: Record<string, { value: number | string | boolean; unit: Unit | "none" }>; seed?: number };
+
+/**
+ * What a plugin's Generate gave (`run`): each structure as `Generated`; what
+ * made them all (`by`: the program, its version, the model, how); and what
+ * the plugin says of the run (`said`). Why not, where any of it is not what
+ * Meno takes - nothing taken in part. A SMILES is not read here: Meno reads
+ * each itself, as one pasted, and counts those it cannot read.
+ */
+export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by: By; said: string } | string {
+  const r = raw as { outputs?: unknown; said?: unknown; by?: unknown } | null;
   if (!Array.isArray(r?.outputs)) return "It said nothing Meno can take";
   if (r.outputs.length > GENERATED_MOST) return `It made more than ${GENERATED_MOST}`;
-  const made: Worked[] = [];
-  for (const [i, x] of (r.outputs as (ReaderOutput & { bonds?: unknown; charges?: unknown; isotopes?: unknown })[]).entries()) {
-    if (x?.schema != null && x.schema !== OUTPUT_SCHEMA) return "It made them in a form this Meno does not read";
-    const atoms = Array.isArray(x?.atoms) && x.atoms.every((el) => typeof el === "string" && elementOf(el)) ? x.atoms : null;
-    const xyz = Array.isArray(x?.frames) && Array.isArray(x.frames[0]) ? x.frames[0] : null;
-    if (!atoms?.length || !xyz || xyz.length !== 3 * atoms.length || !xyz.every((v) => typeof v === "number" && Number.isFinite(v))) return `Molecule ${i + 1} has no geometry Meno can read`;
-    const n = atoms.length;
-    const charges = x.charges === undefined ? atoms.map(() => 0) : x.charges;
-    if (!Array.isArray(charges) || charges.length !== n || !charges.every((c) => Number.isInteger(c) && Math.abs(c) <= 8)) return `Molecule ${i + 1}'s charges are not its atoms'`;
-    // (each atom's mass number, where it is one isotope in particular; 0, natural abundance)
-    const isotopes = x.isotopes === undefined ? atoms.map(() => 0) : x.isotopes;
-    if (!Array.isArray(isotopes) || isotopes.length !== n || !isotopes.every((v) => Number.isInteger(v) && v >= 0 && v <= 300)) return `Molecule ${i + 1}'s isotopes are not its atoms'`;
-    const bonds = Array.isArray(x.bonds) ? (x.bonds as { a1?: unknown; a2?: unknown; order?: unknown }[]) : null;
-    const index = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
-    if (!bonds || !bonds.every((b) => index(b?.a1) && index(b?.a2) && b.a1 !== b.a2 && [1, 2, 3].includes(b.order as number)))
-      return `Molecule ${i + 1}'s bonds are not between its atoms`;
-    made.push({
-      compound: i,
-      number: 1,
-      atoms: atoms.map((el, k) => ({ el, ...(charges[k] ? { charge: charges[k] } : {}), ...(isotopes[k] ? { isotope: isotopes[k] } : {}), x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
-      bonds: bonds.map((b) => ({ a1: b.a1 as number, a2: b.a2 as number, order: b.order as number })),
-      xyz: [...xyz],
-      calc: calcOf(x, readers),
-    });
+  const made: Generated[] = [];
+  for (const [i, x] of (r.outputs as { smiles?: unknown; properties?: unknown; seed?: unknown }[]).entries()) {
+    if (typeof x?.smiles !== "string" || !x.smiles.trim() || x.smiles.length > 2000) return `Structure ${i + 1} has no SMILES Meno can take`;
+    const properties: Generated["properties"] = {};
+    if (x.properties != null && (typeof x.properties !== "object" || Array.isArray(x.properties))) return `Structure ${i + 1}'s values are not named`;
+    for (const [name, p] of Object.entries((x.properties ?? {}) as Record<string, { value?: unknown; unit?: unknown }>)) {
+      const v = p?.value;
+      const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+      const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+      if (value == null || unit == null || !name.trim()) return `Structure ${i + 1}'s ${name || "value"} is not one Meno can take`;
+      properties[name] = { value, unit };
+    }
+    if (x.seed != null && !(Number.isInteger(x.seed) && (x.seed as number) >= 0 && (x.seed as number) < seeds)) return `Structure ${i + 1} names a seed that did not come in`;
+    made.push({ smiles: x.smiles.trim(), properties, ...(x.seed != null ? { seed: x.seed as number } : {}) });
   }
-  return { made, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
+  const given = (r.by ?? {}) as Record<string, unknown>;
+  const by: By = Object.fromEntries(["program", "version", "model", "method"].flatMap((k) => (typeof given[k] === "string" && (given[k] as string).trim() ? [[k, (given[k] as string).trim().slice(0, 300)]] : [])));
+  return { made, by, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
 }
 
 /** What a step says of a program installed separately that is found nowhere: where to say where it is. */

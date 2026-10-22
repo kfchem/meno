@@ -70,8 +70,8 @@ export type KindInfo = {
 };
 
 export const KINDS: readonly KindInfo[] = [
-  // (new molecules from nothing that comes in: a generative model's, as its plugin asks it - no input, so no port)
-  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "molecules", runs: "program", made: "Generated" },
+  // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
+  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers" },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
