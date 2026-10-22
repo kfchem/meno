@@ -36,8 +36,10 @@ describe("a step's entry read as Meno's entry record", () => {
 });
 
 describe("the fixed numbering, on the steps there are", () => {
-  // (docs/WORKFLOWS-FOUNDATION.md, *The numbering is fixed*: no step renumbers an entry's atoms)
-  const set = [water(1, 0, -76.40), water(2, 0.3, -76.399), water(3, 0.6, -76.39)];
+  // (docs/WORKFLOWS-FOUNDATION.md, *The numbering is fixed*: no step renumbers an entry's atoms. Each perceived
+  //  first, as a run asks it - water, no stereo - for the steps that need to know which stereoisomer it is)
+  const stereo = { perceived: true as const, elements: [], key: "O", by: { plugin: "rdkit", version: "0.1.7" } };
+  const set = [water(1, 0, -76.40, { stereo }), water(2, 0.3, -76.399, { stereo }), water(3, 0.6, -76.39, { stereo })];
   const kinds: StepKind[] = ["as-conformers", "energy-window", "duplicates", "populations", "choose"];
   for (const kind of kinds) {
     it(`${kind} hands on every entry's atoms and bonds in the order they came in`, () => {

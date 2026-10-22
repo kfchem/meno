@@ -10,7 +10,7 @@ import type { DocumentStore } from "../../../../lib/doc";
 import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { DEFAULT_WORKSPACE_3D, workspace3dOf } from "../../../../lib/chem/workspaceStyle3d";
-import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText } from "./types";
+import type { Caption, Cycle, EditorState, Model, PushArrow, PdfItem, PictureItem, RingFills, Sel, SelFlow, Shape, Ink, Slide, Wire, WireEnd, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./types";
 import { createModelSlice } from "./slices/modelSlice";
 import { createSelectionSlice } from "./slices/selectionSlice";
 import { createHoverSlice } from "./slices/hoverSlice";
@@ -30,7 +30,7 @@ import { createRecordsSlice } from "./slices/recordsSlice";
 import { shownModel } from "../utils/stacks";
 import { withLooks, type Look } from "../utils/molecule3d";
 import { turnsAcross } from "./turnJournal";
-import { COLUMN_WIDTH, shownPdf, shownText } from "../utils/texts";
+import { COLUMN_WIDTH, columnOf, shownPdf, shownText } from "../utils/texts";
 
 // Re-export types for backward compatibility
 export * from "./types";
@@ -69,6 +69,7 @@ function mirrorOf(doc: WorkspaceDocument, recordsShown: Readonly<Record<number, 
     docStyle3d: doc.style3d ?? DEFAULT_WORKSPACE_3D,
     pageId: doc.pageId,
     texts: doc.texts ?? NO_TEXTS,
+    textsLost: doc.textsLost ?? NO_LOST_TEXTS,
     pdfs: doc.pdfs ?? NO_PDFS,
     pictures: doc.pictures ?? NO_PICTURES,
     slides: doc.slides ?? NO_SLIDES,
@@ -107,6 +108,7 @@ function flowHeld(sel: SelFlow, sets: readonly WorkflowSet[], steps: readonly Wo
 }
 
 const NO_TEXTS: WorkspaceText[] = [];
+const NO_LOST_TEXTS: LostText[] = [];
 const NO_PDFS: PdfItem[] = [];
 const NO_PICTURES: PictureItem[] = [];
 const NO_SLIDES: Slide[] = [];
@@ -141,9 +143,9 @@ const NO_LOOKS: Readonly<Record<number, Look>> = {};
  * moved nothing else says so: its light would stay where it was, and a key
  * - a letter, Delete - act on what is gone.
  */
-/** Whether what a wire comes out of - a set, a step - is still in the workflow. */
-function wireEndThere(end: WireEnd, sets: readonly { id: number }[], steps: readonly { id: number }[]): boolean {
-  return "set" in end ? sets.some((b) => b.id === end.set) : steps.some((x) => x.id === end.step);
+/** Whether the set a wire comes out of is still in the workflow. */
+function wireEndThere(end: WireEnd, sets: readonly { id: number }[]): boolean {
+  return sets.some((b) => b.id === end.set);
 }
 
 function hoversHeld(prev: EditorState, now: ReturnType<typeof mirrorOf>, travelled: boolean) {
@@ -225,7 +227,7 @@ export function connectStoreToDocument(
         openStep: prev.openStep != null && !mirrored.steps.some((x) => x.id === prev.openStep) ? null : prev.openStep,
         chosenSet: prev.chosenSet != null && !mirrored.sets.some((x) => x.id === prev.chosenSet) ? null : prev.chosenSet,
         // (Quick Add opened by a wire from a set or a step an undo took away: shut, its calculations being for nothing)
-        quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets, mirrored.steps) ? null : prev.quickAdd,
+        quickAdd: prev.quickAdd?.wire && !wireEndThere(prev.quickAdd.wire, mirrored.sets) ? null : prev.quickAdd,
         selPictures: picturesHeld(prev.selPictures, mirrored.pictures),
         selPdfs: picturesHeld(prev.selPdfs, mirrored.pdfs),
         selCaptions: picturesHeld(prev.selCaptions, mirrored.captions ?? []),
@@ -255,7 +257,8 @@ export function connectStoreToDocument(
         held.turns3d = turns3d;
       }
       // (the text or the PDF its column shows, as they come and go: utils/texts)
-      const texts = shownText(prev.texts, mirrored.texts, prev.textShown);
+      // (one that could not be read among them, shown as what it is: TextColumn)
+      const texts = shownText(columnOf(prev.texts, prev.textsLost), columnOf(mirrored.texts, mirrored.textsLost), prev.textShown);
       const pdf = shownPdf(prev.pdfs, mirrored.pdfs, prev.pdfShown, texts);
       const textsOpen = (texts.shown != null || pdf.shown != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
       return { ...prev, ...mirrored, ...held, textShown: texts.shown, pdfShown: pdf.shown, textsOpen };
@@ -275,6 +278,7 @@ export function createEditorStore(
     textShown: doc.getState().texts?.slice(-1)[0]?.id ?? null,
     textsOpen: !!doc.getState().texts?.length,
     cover: 0,
+    shownMarks: null,
     columnWidth: COLUMN_WIDTH,
     columnFilled: false,
     pdfColumnWidth: null,

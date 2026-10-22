@@ -14,6 +14,8 @@ import { counter, type Watch } from "../calc/client";
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
+  /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
+  rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
   from_smiles: { args: { smiles: string }; result: { molblock: string } };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
   analyse: { args: { molblock: string }; result: Analysis };
@@ -22,6 +24,13 @@ export type ChemRequests = {
    * stereoisomers they make - but for those `like` gives a configuration.
    */
   open_stereo: { args: { molblock: string; like?: Like }; result: OpenStereo };
+  /**
+   * Which stereoisomer each molecule in 3D is, read from its own geometry:
+   * its elements that could be stereogenic and a key that two molecules
+   * share exactly when they are one stereoisomer - or, for one it could not
+   * read, why (lib/entry `EntryStereo`).
+   */
+  configurations: { args: { molblocks: string[] }; result: { molecules: Configured[] } };
   /**
    * Conformers of a structure, made in 3D (ETKDG, then MMFF94): of the first
    * of its stereoisomers, or of each, where some of its stereo is left open
@@ -72,6 +81,9 @@ export type PictureRead = {
 };
 
 export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number };
+
+/** One molecule's configuration, as the plugin answers it: its elements and key, or why it has none. */
+export type Configured = { elements: { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean }[]; key: string } | { error: string };
 
 /**
  * Some of a block's atoms, by index, where a molecule in 3D made from it

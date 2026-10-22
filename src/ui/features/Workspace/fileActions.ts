@@ -2,7 +2,11 @@ import { carriedDrawing, recordDrawings, seenDrawing, seenOnly } from "./utils/s
 import { save as saveDialog } from "@tauri-apps/plugin-dialog";
 import { pushMeasures, pushOutlines, pushStroke } from "../../../lib/chem/pushArrow";
 import { pushShapes } from "./utils/pushes";
-import { exists, writeFile, writeTextFile } from "@tauri-apps/plugin-fs";
+import { exists } from "@tauri-apps/plugin-fs";
+import { writeDocument } from "../../../lib/io/writeDocument";
+import { truePath } from "../../../lib/io/truePath";
+import { turnsOf } from "../../../lib/doc/saveTurns";
+import { heldElsewhere } from "../../../lib/doc/savers";
 import { mapStanding, mappedPairSdf } from "./chem/atomMap";
 import { useCallback, useRef, useState } from "react";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
@@ -20,12 +24,12 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, EditorState } from "./store/types";
-import { carriedOf, isWorkspaceFile, workspaceFile } from "./utils/workspace";
+import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { isSkeleton } from "./utils/completeness";
 import { skeletonWhy } from "../../../lib/chem/skeleton";
 import { measurePictureMarks } from "./utils/measure3d";
-import { MARK_SCALE } from "./chem/marks";
+import { MARK_SCALE, stereoPictureItems } from "./chem/marks";
 import { style3dOf } from "./style3d";
 import { withSolidsImage } from "./render3d";
 import { pictureSurface } from "./utils/surfaceMesh";
@@ -92,6 +96,40 @@ export function exportKinds(what: Holds): WriterId[] {
 /** `path` with the extension `ext` in place of its own. */
 function withExtension(path: string, ext: string): string {
   return `${path.replace(/\.[^.\\/]*$/, "")}.${ext}`;
+}
+
+/** How a workspace's file is written, each part given apart where tests give their own (`writtenWhere`). */
+export type SaveWays = {
+  /** Writes the file, keeping the one there beside it where asked; where it was kept. */
+  write?: (path: string, bytes: Uint8Array, keepOld: boolean) => Promise<string | null>;
+  /** A file's one true path (lib/io/truePath). */
+  truePathOf?: (path: string) => Promise<string>;
+  /** The label of the tab - another than the one saving - that holds the file at a one true path (lib/doc/savers `heldElsewhere`). */
+  heldBy?: (path: string) => string | undefined;
+  /** Whether the file at a one true path, there now, is to be kept beside the new one: the file last saved to, still holding something the new one cannot keep (`SavedFile`'s `lastHolds`). */
+  keepOld?: (path: string) => boolean;
+};
+
+/**
+ * A workspace's file written to `path`, as Save or Save As has it; where it
+ * now is: its one true path (lib/io/truePath), asked once it is there - a
+ * new file's name as it is kept, a file reached through a link the file it
+ * points at - so that the workspace's tab holds the path every other way
+ * of reaching that file comes to (lib/doc/savers, `tabHolding`); and where
+ * the file it was saved over was kept, where it was (`keepOld`).
+ *
+ * Never a file another tab holds (`heldBy`): written, that tab's next save
+ * would overwrite it unseen. Refused, as a save's failure is said, naming
+ * the tab; nothing is written.
+ */
+export async function writtenWhere(path: string, bytes: Uint8Array, ways: SaveWays = {}): Promise<{ kept: string; old: string | null }> {
+  const { write = writeDocument, truePathOf = truePath, heldBy = () => undefined, keepOld = () => false } = ways;
+  const before = await truePathOf(path);
+  const holder = heldBy(before);
+  if (holder !== undefined) throw new Error(`that file is open in the tab "${holder}"; save there, or close it first.`);
+  // (written where the dialog said - where it let the page write - before its one true path is asked)
+  const old = await write(path, bytes, keepOld(before));
+  return { kept: await truePathOf(path), old };
 }
 
 /**
@@ -256,6 +294,13 @@ export function exportPxPerWorld(style: DrawingStyle): number {
 }
 
 /**
+ * What a picture of a drawing takes from its page: its aromatic circles, its
+ * styles in 3D (none, a page no workspace's: Meno's own), and the R, S, E and
+ * Z its canvas shows (none, a picture without them).
+ */
+export type PictureState = Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d" | "shownMarks">>;
+
+/**
  * The drawing exactly as the canvas lays it out, at the style's own size,
  * for a picture made of it - its reaction arrows, "+" signs and words with it.
  * Lines keep their true width however thin - the canvas's on-screen minimum
@@ -263,7 +308,7 @@ export function exportPxPerWorld(style: DrawingStyle): number {
  */
 export function drawingLayout(
   model: Drawn,
-  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>,
+  aromatic: PictureState,
   style: DrawingStyle,
 ): { layout: Layout; opts: LayoutOptions } {
   const atoms = model.atoms.map((a) => ({
@@ -304,6 +349,16 @@ export function drawingLayout(
     };
     drawn = true;
   };
+  // (R, S, E and Z, as the canvas shows them, where it shows them: chem/marks stereoPictureItems - the maintainer, 2026-10-21)
+  if (aromatic.shownMarks) {
+    const marks = stereoPictureItems({ atoms, model, marks: aromatic.shownMarks, texts: layout.texts, opts });
+    const markSet = labelSetOf(opts);
+    for (const t of marks) {
+      const box = labelBox(t, t.fontPx, markSet);
+      take([t.x - box.left, t.x + box.right], [t.y - box.bottom, t.y + box.top]);
+    }
+    layout.texts.push(...marks);
+  }
   // (the electron-pushing arrows, drawn as the canvas draws them, with their lone pairs' dots)
   const pm = pushMeasures(style, NOMINAL_BOND_LENGTH);
   const pushed = pushShapes(model.pushes ?? [], atoms, model.bonds, layout, opts, opts.fontPx, pm);
@@ -451,7 +506,7 @@ export function drawingLayout(
  */
 export function drawingSvg(
   model: Drawn,
-  aromatic: Pick<EditorState, "aromaticEnabled" | "aromaticRings"> & Partial<Pick<EditorState, "docStyle3d">>,
+  aromatic: PictureState,
   style: DrawingStyle,
   seen = false,
 ): string {
@@ -476,9 +531,12 @@ export function drawingSvg(
  * time; either way the document is then saved, and the tab's unsaved mark
  * goes. Export writes another kind of file, a copy, with its writer's
  * options (ExportCard), and leaves that alone. `error` says what went
- * wrong, if anything.
+ * wrong, if anything - and, a save done, each file the workspace has that
+ * it could not keep (utils/workspace `workspaceFile`). One save of the
+ * workspace at a time: Save or Save As asked for while one is under way
+ * waits for it, and runs once (lib/doc/saveTurns).
  */
-export function useFileActions(nameTab?: (label: string) => void) {
+export function useFileActions(nameTab?: (label: string) => void, tabId?: string) {
   const store = useEditorStore();
   const [error, setError] = useState<string | null>(null);
   // (the tab is named for the file it is saved to, as for one opened in it)
@@ -500,15 +558,25 @@ export function useFileActions(nameTab?: (label: string) => void) {
     async (path: string) => {
       // (saved as it was as its writing began: what changes while it is written - typed on, a job's results - is still unsaved)
       const written = store.getState().writing();
-      await writeFile(path, await workspaceFile(store.getState()));
-      store.getState().markSavedAs(path, written);
-      naming.current?.(fileNameOf(path));
+      // (a file it has, held nowhere, taken from where it was saved before - read before this one takes its place, Save As's too)
+      const { savedPath } = store.getState();
+      const { bytes, notKept, lastHolds } = await workspaceFile(store.getState());
+      const { kept, old } = await writtenWhere(path, bytes, {
+        // (never a file another tab saves to)
+        heldBy: (real) => heldElsewhere(real, tabId),
+        // (the file it was saved to, holding something of what this one cannot keep - its only copy, damaged: kept beside it)
+        keepOld: (real) => lastHolds && real === savedPath,
+      });
+      store.getState().markSavedAs(kept, written);
+      naming.current?.(fileNameOf(kept));
+      // (saved - new work is not lost for a file it could not keep - and each such file named, where Save's failures are, till dismissed)
+      setError(notKeptSaid(notKept, old && fileNameOf(old)));
     },
-    [store],
+    [store, tabId],
   );
 
   /** The canvas saved as a workspace, where the chemist says; whether it was. */
-  const saveAs = useCallback(
+  const saveAsNow = useCallback(
     async () =>
       (await attempt("Save", async () => {
         const picked = await saveDialog({
@@ -526,11 +594,15 @@ export function useFileActions(nameTab?: (label: string) => void) {
   );
 
   /** The canvas saved where it was saved last, or else where the chemist says; whether it was. */
-  const save = useCallback(async () => {
+  const saveNow = useCallback(async () => {
     const { savedPath: path } = store.getState();
     if (path && isWorkspaceFile(path)) return (await attempt("Save", async () => (await saveTo(path), true))) === true;
-    return saveAs();
-  }, [attempt, saveAs, saveTo, store]);
+    return saveAsNow();
+  }, [attempt, saveAsNow, saveTo, store]);
+
+  // (each in its turn: where it is last saved read as it begins, the workspace written as it is then)
+  const saveAs = useCallback(() => turnsOf(store)("saveAs", saveAsNow), [saveAsNow, store]);
+  const save = useCallback(() => turnsOf(store)("save", saveNow), [saveNow, store]);
 
   /**
    * `part` of the canvas - the selection, as a copy takes it - or else all
@@ -561,7 +633,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
           const skeletons = chosen.filter(isSkeleton).length;
           if (skeletons) throw new Error(skeletonWhy(skeletons));
           const text = await (await readerClient(plugin)).write(writer.id, fileNameOf(path), [writtenOf(chosen, style3dOf(state))], options);
-          await writeTextFile(path, text);
+          await writeDocument(path, text);
           return;
         }
         const kind = writer.id as WriterId;
@@ -570,8 +642,8 @@ export function useFileActions(nameTab?: (label: string) => void) {
         if (kind === "svg") {
           // The style the canvas is drawn in: the document's own, or the app's.
           const style = styleOf(state.docStyle);
-          await writeTextFile(path, drawingSvg(drawn, state, style, true));
-        } else await writeTextFile(path, structureFileText(drawn, path, options, style3dOf(state)));
+          await writeDocument(path, drawingSvg(drawn, state, style, true));
+        } else await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
       }),
     [attempt, store],
   );
@@ -598,7 +670,7 @@ export function useFileActions(nameTab?: (label: string) => void) {
         });
         if (!picked) return;
         const path = picked.toLowerCase().endsWith(".sdf") ? picked : `${picked}.sdf`;
-        await writeTextFile(path, mappedPairSdf(map, name));
+        await writeDocument(path, mappedPairSdf(map, name));
       }),
     [attempt, store],
   );

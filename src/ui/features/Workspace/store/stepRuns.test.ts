@@ -109,6 +109,18 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
 }));
+/** What the plugin that perceives configurations was asked, MOL blocks each time; it answers each a centre, keyed by its molecule (by how long its block is: conformers of one molecule are one stereoisomer here). */
+const configured: string[][] = [];
+vi.mock("../../../../lib/roles/worker", async (actual) => ({
+  ...(await actual<typeof import("../../../../lib/roles/worker")>()),
+  rolePlugin: (role: string) => (role === "configurations" ? { id: "rdkit", version: "0.1.7", name: "RDKit" } : undefined),
+  pluginWorker: async () => ({
+    request: async (_op: string, args: { molblocks: string[] }) => {
+      configured.push(args.molblocks);
+      return { molecules: args.molblocks.map((b) => ({ elements: [{ kind: "centre", atoms: [0], specified: true }], key: `k${b.split("\n").length}` })) };
+    },
+  }),
+}));
 /** Why the next outputs kept with the workspace fail to be, as the test has it: none, kept as Meno keeps them. */
 const keepFails: string[] = [];
 vi.mock("../../../../lib/calc/asks", async (actual) => {
@@ -134,10 +146,11 @@ import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
-import { canWire, stateOf } from "../workflow/flow";
+import { canWire, resultOf, stateOf } from "../workflow/flow";
 import { byOf, optionsFor } from "../workflow/doers";
 import { CARD_W } from "../workflow/look";
-import { setMembers } from "../workflow/entries";
+import { countOf, setEntries, setMembers } from "../workflow/entries";
+import { forgetStereo } from "../workflow/configurations";
 
 // (the plugins Meno carries, added: the kinds their outputs are read as registered)
 registerKinds(MANIFESTS);
@@ -222,7 +235,7 @@ describe("a step that runs a plugin's program", () => {
     expect(after.running).toBeUndefined();
     expect(after.ran).toMatchObject({ ok: true, jobs: [idOf(1)], said: expect.stringContaining("−5.070500 Eh") });
     const made = st().sets.find((b) => b.made?.step === step)!;
-    expect(made.made).toEqual({ step, holds: "molecules" });
+    expect(made.made).toEqual({ step, exit: "out", holds: "molecules" });
     // the molecule optimised: its path as its frames, ending at it, shown at its end; what the calculation was
     const m = st().molecules3d[1];
     expect(m).toMatchObject({ path: true, energies: [-5.0703, -5.0705], calc: { program: "xtb", method: "GFN2-xTB", optimised: true } });
@@ -249,7 +262,7 @@ describe("a step that runs a plugin's program", () => {
     await ran;
     const after = st().steps.find((s) => s.id === step)!;
     expect(after.ran).toMatchObject({ ok: true, said: expect.stringContaining("\u22125.070500 Eh") });
-    expect(st().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, holds: "molecules" });
+    expect(st().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, exit: "out", holds: "molecules" });
     expect(st().molecules3d[1]).toMatchObject({ energies: [-5.0703, -5.0705] });
     expect(stateOf(doc.getState(), after, byOf(after))).toBe("changed");
   });
@@ -291,7 +304,7 @@ describe("a step that runs a plugin's program", () => {
     Object.assign(jobs.get(idOf(1))!, { state: "running", started: Date.now(), log: "cycle 3\n" });
     await st2().lookAtJobs();
     expect(st2().jobsSeen[idOf(1)]).toMatchObject({ state: "running" });
-    expect(st2().sets.some((b) => b.made?.step === step)).toBe(false);
+    expect(st2().sets.find((b) => b.made?.step === step)?.made?.holds).toBeUndefined();
     // (done while the workspace was open again: read back and brought in, as if it had never been closed)
     Object.assign(jobs.get(idOf(1))!, { state: "done", ended: Date.now() + 5000, files: { "xtbopt.log": "-5.0705" } });
     await st2().lookAtJobs();
@@ -299,7 +312,7 @@ describe("a step that runs a plugin's program", () => {
     const after = st2().steps.find((s) => s.id === step)!;
     expect(after.running).toBeUndefined();
     expect(after.ran).toMatchObject({ ok: true, jobs: [idOf(1)] });
-    expect(st2().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, holds: "molecules" });
+    expect(st2().sets.find((b) => b.made?.step === step)?.made).toEqual({ step, exit: "out", holds: "molecules" });
   });
 
   it("saved while its job runs and opened again only once it has gone - its folder cleared - says so, and brings nothing in", async () => {
@@ -318,7 +331,7 @@ describe("a step that runs a plugin's program", () => {
     const after = store2.getState().steps.find((s) => s.id === step)!;
     expect(after.running).toBeUndefined();
     expect(after.ran).toMatchObject({ ok: false });
-    expect(store2.getState().sets.some((b) => b.made?.step === step)).toBe(false);
+    expect(store2.getState().sets.find((b) => b.made?.step === step)?.made?.holds).toBeUndefined();
   });
 
   it("given an empty set, starts nothing and says so - for each kind of step a plugin does", async () => {
@@ -379,7 +392,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc?.wavefunction).toMatchObject({ name: "water.molden", kind: "molden" });
     // (held, for a step after it to be given; and kept in the workspace's file)
     expect((await heldOutput(m.calc!.wavefunction!.sha256))?.text).toBe("[Molden Format]\n");
-    const file = readMenoFile(await workspaceFile(st()));
+    const file = readMenoFile((await workspaceFile(st())).bytes);
     expect(file.files.map((f) => f.sha256)).toContain(m.calc!.wavefunction!.sha256);
   });
 
@@ -745,9 +758,10 @@ function chain() {
   const a = st().addStep("as-conformers", "meno", 10, 0);
   st().connect({ set }, a);
   const b = st().addStep("energy-window", "meno", 30, 0);
-  st().connect({ step: a }, b);
+  // (each step's exit, the set it makes, into the next)
+  st().connect({ set: resultOf(st(), a)!.id }, b);
   const c = st().addStep("populations", "meno", 50, 0);
-  st().connect({ step: b }, c);
+  st().connect({ set: resultOf(st(), b)!.id }, c);
   return { doc, st, a, b, c };
 }
 
@@ -767,6 +781,18 @@ describe("running a workflow's steps", () => {
     expect(st().steps.find((s) => s.id === b)!.ran!.said).toBe("2 of 3 kept");
   });
 
+  it("asks first which stereoisomer each entry is, for As conformers and Populations - every conformer its own - and its entries carry it", async () => {
+    forgetStereo();
+    configured.length = 0;
+    const { st, b, c } = chain();
+    await st().runFrom(c);
+    // (asked once, by As conformers, for all three, each its own geometry; Populations' two, the window's, known by then)
+    const kept = setEntries(st().molecules3d.filter((m) => setMembers(st(), st().sets.find((x) => x.made?.step === b)!).molecules.includes(m.id)), "conformers");
+    expect(configured.map((blocks) => blocks.length)).toEqual([3]);
+    expect(kept).toHaveLength(2);
+    expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map(() => `k${configured[0][0].split("\n").length}`));
+  });
+
   it("runs all that have not run or have changed - and leaves those done as they are", async () => {
     const { st, a, b, c } = chain();
     await st().runStep(b);
@@ -780,8 +806,8 @@ describe("running a workflow's steps", () => {
   async function longer() {
     const { doc, st, a, b, c } = chain();
     const d = st().addStep("duplicates", "meno", 40, 0);
-    st().connect({ step: b }, d);
-    st().connect({ step: d }, c);
+    st().connect({ set: resultOf(st(), b)!.id }, d);
+    st().connect({ set: resultOf(st(), d)!.id }, c);
     await st().runFrom(a);
     const stepOf = (id: number) => st().steps.find((s) => s.id === id)!;
     const states = () => [a, b, d, c].map((id) => stateOf(doc.getState(), stepOf(id), byOf(stepOf(id))));
@@ -838,8 +864,8 @@ describe("running a workflow's steps", () => {
     st().showRun(b, 0);
     expect(step().ran!.said).toBe("2 of 3 kept");
     expect(step().runs![0].options).toEqual({ window: 0.5 });
-    const made = st().sets.find((x) => x.made?.step === b)!;
-    expect(made.aside?.length).toBe(1);
+    // (and what it set aside then back in its second exit's set)
+    expect(countOf(st(), resultOf(st(), b, "rest")!).entries).toBe(1);
     expect(doc.history().undoLabel).toBe("show run");
     doc.undo();
     expect(step().ran!.said).toBe("1 of 3 kept");
@@ -882,7 +908,8 @@ describe("a plugin's conformer search, and its duplicates", () => {
     await st().runStep(step);
     expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { rmsd: 0.125 }, "molecules");
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
-    expect(st().sets.find((b) => b.made?.step === step)!.aside).toHaveLength(1);
+    // (the one set aside, in the step's second exit's set)
+    expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
   });
 });
 
@@ -912,7 +939,7 @@ describe("Render as a step", () => {
     expect(optionsFor("render", "blender").map((o) => o.id).slice(0, 5)).toEqual(["width", "shape", "look", "molecules", "surfaces"]);
     expect(optionsFor("render", "blender").map((o) => o.id)).toContain("engine");
     // (it gives pictures, which no step takes: nothing is wired from it)
-    expect(canWire(st(), { step }, st().addStep("energy", "xtb", 30, 0))).toBe(false);
+    expect(canWire(st(), { set: resultOf(st(), step)!.id }, st().addStep("energy", "xtb", 30, 0))).toBe(false);
 
     rendering();
     let ran = st().runStep(step);
@@ -934,7 +961,7 @@ describe("Render as a step", () => {
     expect(first[0]).toMatchObject({ media: "image/png", px: [240, 120] });
     // (in the step's result set - a set of pictures, to its right - as a calculation's molecules are in theirs)
     const set = st().sets.find((b) => b.made?.step === step)!;
-    expect(set.made).toEqual({ step, holds: "pictures" });
+    expect(set.made).toEqual({ step, exit: "out", holds: "pictures" });
     expect(setMembers(st(), set).pictures).toEqual([first[0].id]);
     expect(set.x0).toBeGreaterThan(st().steps.find((s) => s.id === step)!.x + CARD_W);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:12 \u00b7 1 picture" });
@@ -970,7 +997,7 @@ describe("Render as a step", () => {
     await st().lookAtJobs();
     await ran;
     expect(st().pictures).toEqual([]);
-    expect(st().sets.some((b) => b.made?.step === step)).toBe(false);
+    expect(st().sets.find((b) => b.made?.step === step)?.made?.holds).toBeUndefined();
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Blender quit" });
   });
 

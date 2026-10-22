@@ -13,6 +13,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "check:tauri": "node scripts/check-tauri-versions.mjs",
+    "notices": "node scripts/licenses/notices.mjs",
     "depiction": "tsx scripts/depiction/render.ts",
     "layout-bench": "tsx scripts/layout/sheet.ts",
     "layout-fetch": "tsx scripts/layout/fetch.ts",
@@ -20,6 +21,7 @@
     "layout-compare": "tsx scripts/layout/compare.ts",
     "layout-stereo": "tsx scripts/layout/stereo.ts",
     "layout-order": "tsx scripts/layout/order.ts",
+    "layout-many": "tsx scripts/layout/many.ts",
     "roundtrip": "vitest run --config scripts/figure/roundtrip/vitest.config.ts",
     "tauri": "tauri"
   },

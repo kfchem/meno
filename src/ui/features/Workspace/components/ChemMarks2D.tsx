@@ -11,8 +11,12 @@ import {
   type LabelBox,
 } from "../../../../lib/chem/layout2d";
 import {
+  MARK_HALF_HEIGHT,
   MARK_MIN_PX,
   MARK_SCALE,
+  MARKS_APART,
+  STEREO_GAP,
+  marksSeenAt,
   stereoPlaces,
   stereoTextEms,
   valenceMessage,
@@ -34,14 +38,8 @@ const NO_MODEL: Model = { atoms: [], bonds: [] };
 /** Marks sit over the drawing, and under the canvas's buttons and cards. */
 const Z_RANGE = [20, 10];
 
-/** Half a capital letter's height, as a share of the labels' size: how far R or S stands off its atom where the style does not say. */
-const HALF_CAPITAL = 0.35;
 
-/** Half the height of a mark's letters, in ems of their size: a capital's, and a little round it. */
-const MARK_HALF_HEIGHT = 0.42;
 
-/** How far apart two of R, S, E and Z keep at the least, in ems of their size. */
-const MARKS_APART = 0.6;
 
 /**
  * The plugin's marks on the structure: a ring round each atom with more bonds
@@ -50,7 +48,8 @@ const MARKS_APART = 0.6;
  * the bonds and labels, and written as the drawing's labels are - in its
  * typeface and its colour, in italics, in parentheses if its style says
  * so. They are the editor's, laid over the drawing where it stands this
- * frame; they are not part of it, and no picture of it has them.
+ * frame; a picture of the drawing has R, S, E and Z placed as here
+ * (chem/marks `stereoPictureItems`, 2026-10-21), never the rings.
  */
 export default function ChemMarks2D({
   marks,
@@ -121,9 +120,11 @@ export default function ChemMarks2D({
   const z = Math.max(zoom, 1e-6);
   const labelFont = opts.units === "px" ? opts.fontPx / z : opts.fontPx;
   const fontPx = Math.max(MARK_MIN_PX, labelFont * MARK_SCALE * z);
+  // (and, the view far out, how far they are still seen: marksSeenAt)
+  const seenAtZoom = marksSeenAt(labelFont * MARK_SCALE * z);
   // (R, S, E and Z as the drawing's style writes them)
   const parentheses = !!opts.stereoParentheses;
-  const gap = opts.stereoGap ?? HALF_CAPITAL;
+  const gap = opts.stereoGap ?? STEREO_GAP;
   const writing = { family: fontStack(labelSetOf(opts).fontFamily ?? "Arial"), color: opts.labelColor ?? "#000000" };
 
   // R, S, E and Z, each placed clear of the bonds, the labels and the
@@ -303,7 +304,8 @@ export default function ChemMarks2D({
       {/* each R, S, E and Z taken hold of on its letters, and moved by hand */}
       {stereoShown.map(({ key, item: m, leaving }) => {
         const base = from.get(key);
-        if (leaving || !base) return null;
+        // (none to take hold of where it is mostly faded with the zoom)
+        if (leaving || !base || seenAtZoom < 0.5) return null;
         const id = Number(key.slice(key.indexOf("-") + 1));
         return (
           <MarkHold
@@ -346,7 +348,7 @@ export default function ChemMarks2D({
                 // a root of its own, after this one's effects have run)
                 placeOne(el, m);
               }}
-              style={{ position: "absolute", top: 0, left: 0, transform: "translate3d(-50%,-50%,0)" }}
+              style={{ position: "absolute", top: 0, left: 0, transform: "translate3d(-50%,-50%,0)", opacity: seenAtZoom }}
             >
               <div className={leaving ? "meno-fade-out" : "meno-fade-in"}>
                 <StereoMark text={m.text} fontPx={fontPx} parentheses={parentheses} {...writing} />

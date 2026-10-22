@@ -1,0 +1,58 @@
+/**
+ * *Re-bond* (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures):
+ * one entry's geometry with another's bonds and charges - a conformer of the
+ * reactant given the product's bonding, as the start of a restrained
+ * minimisation towards the product. The two must hold the same atoms in one
+ * numbering (a *Reaction* step writes its products in the reactants'), atom
+ * by atom; where they do not, nothing is made, and the first atom that
+ * differs is said.
+ *
+ * - **Structure and species**: the bonding entry's - its atoms' charges,
+ *   radicals and isotopes, its bonds, its charge and multiplicity.
+ * - **Geometry**: the geometry entry's, as it is: one 3D structure. Frames
+ *   are taken one at a time first (*Take frames*).
+ * - **Properties**: both entries', the geometry entry's where both have one
+ *   of a name, each still saying the geometry it was worked out at.
+ * - **Group**: *a → b*, the geometry entry's group and the bonding entry's
+ *   (each its own id where it has none).
+ * - **Lineage**: both entries.
+ */
+import type { Entry } from "../entry";
+
+export type Rebonded = { entry: Entry } | { failed: string };
+
+const groupOf = (e: Entry): string => {
+  const g = e.properties.group?.value;
+  return typeof g === "string" || typeof g === "number" ? String(g) : e.id;
+};
+
+export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded {
+  const g = geometry.geometry;
+  if (g.kind === "frames") return { failed: "The geometry holds frames: take one frame of it first (Take frames)." };
+  if (g.kind !== "3d") return { failed: `The geometry entry has no 3D places (${g.kind === "2d" ? "it is drawn" : "it has none"}).` };
+  const ga = geometry.structure.atoms;
+  const ba = bonding.structure.atoms;
+  if (ga.length !== ba.length)
+    return { failed: `The geometry has ${ga.length} atoms and the bonding ${ba.length}: both must hold the same atoms in one numbering.` };
+  const i = ga.findIndex((a, k) => a.el !== ba[k].el);
+  if (i >= 0)
+    return {
+      failed: `Atom ${i + 1} is ${ga[i].el} in the geometry and ${ba[i].el} in the bonding: both must hold the same atoms in one numbering (a Reaction step writes its products in the reactants').`,
+    };
+  return {
+    entry: {
+      id,
+      from: [geometry.id, bonding.id],
+      structure: { atoms: ba.map((a) => ({ ...a })), bonds: bonding.structure.bonds.map((b) => ({ ...b })) },
+      geometry: { kind: "3d", xyz: [...g.xyz] },
+      // (the bonding's - none where it is a skeleton, its hydrogens not there)
+      species: bonding.species ? { ...bonding.species, from: { ...bonding.species.from } } : null,
+      properties: {
+        ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
+        ...Object.fromEntries(Object.entries(geometry.properties).map(([k, p]) => [k, { ...p }])),
+        group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", status: "computed" },
+      },
+      status: "done",
+    },
+  };
+}

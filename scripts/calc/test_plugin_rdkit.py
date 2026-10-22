@@ -1,7 +1,7 @@
 """Tests for the RDKit plugin's worker (src-tauri/resources/plugins/rdkit/worker.py).
 
-The worker needs RDKit, which CI's Python has not: these run in the plugin's
-own environment, and are skipped where RDKit is missing:
+The worker needs RDKit: these run in the plugin's own environment, installed
+from its lock - in CI's job "plugins" on every push, and by hand with
 
     <the RDKit plugin's Python> -m unittest scripts/calc/test_plugin_rdkit.py
 
@@ -10,11 +10,13 @@ will do.)
 """
 
 import importlib.util
+import math
 import pathlib
 import unittest
 
 try:
     from rdkit import Chem
+    from rdkit.Chem import rdDistGeom
 except ImportError:  # (CI's Python)
     Chem = None
 
@@ -532,13 +534,14 @@ class HowManySought(unittest.TestCase):
 
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
-class SwappedAtoms(unittest.TestCase):
-    """The same shape with equivalent atoms swapped - a tert-butyl's three methyls turned round, a phenyl
-    flipped - is the one conformer. Told apart atom against atom, every atom of it was somewhere else, so it
-    was kept again and again: a tert-butylcyclohexane came back as 26 conformers which were 5."""
+class SameConformer(unittest.TestCase):
+    """Two conformers are one where all their atoms, hydrogens included, lie within 0.01 A RMSD of each other, laid
+    over at their best - turned and moved, never reflected - over the ways the molecule maps onto itself (the
+    maintainer, 2026-10-21). The same shape with a tert-butyl's methyls turned round is one conformer; an OH turned
+    the other way, or a conformer's mirror image, is another."""
 
     #: A tetrakis(triphenylphosphine)palladium: its four phosphines and twelve phenyls map onto each other more
-    #: ways than there is any trying - millions - which is the case the prune must not set about.
+    #: ways than there is any trying - millions - which is the case the comparison must not set about.
     MANY_WAYS = "[Pd](P(c1ccccc1)(c1ccccc1)c1ccccc1)(P(c1ccccc1)(c1ccccc1)c1ccccc1)(P(c1ccccc1)(c1ccccc1)c1ccccc1)P(c1ccccc1)(c1ccccc1)c1ccccc1"
 
     @classmethod
@@ -553,47 +556,274 @@ class SwappedAtoms(unittest.TestCase):
         lowest = min(entry["energies"])
         return entry, [(e - lowest) * 627.5094740631 for e in entry["energies"]]
 
-    def test_counts_a_tert_butyls_methyls_turned_round_as_the_one_shape(self):
+    @staticmethod
+    def embedded(smiles, seed=7):
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        rdDistGeom.EmbedMolecule(mol, randomSeed=seed)
+        return mol
+
+    @staticmethod
+    def turned(P, seed=3):
+        """P turned about a random axis and moved."""
+        import numpy as np
+        rng = np.random.default_rng(seed)
+        q, _ = np.linalg.qr(rng.normal(size=(3, 3)))
+        if np.linalg.det(q) < 0:
+            q[:, 0] *= -1
+        return P @ q + rng.normal(size=3)
+
+    def test_knows_a_conformer_turned_moved_and_relabelled_as_itself(self):
+        import numpy as np
+        mol = self.embedded("CC(C)(C)C1CCCCC1")
+        same = self.worker.Sameness(mol)
+        P = mol.GetConformer().GetPositions()
+        # (a methyl's three hydrogens, and the three methyls, taken round: the same atoms in other places)
+        Q = P.copy()
+        methyls = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() == 6 and a.GetTotalNumHs(includeNeighbors=True) == 3]
+        a, b, c = methyls[:3]
+        hs = lambda i: [n.GetIdx() for n in mol.GetAtomWithIdx(i).GetNeighbors() if n.GetAtomicNum() == 1]
+        for x, y in ((a, b), (b, c), (c, a)):
+            Q[x] = P[y]
+            for h, k in zip(hs(x), np.roll(hs(y), 1)):
+                Q[h] = P[k]
+        self.assertGreater(self.worker.rmsd_laid(P, self.turned(Q)), 0.5, "atom against atom, it is somewhere else")
+        self.assertLess(same.apart(P, self.turned(Q)), 1e-6)
+        self.assertTrue(same.same(P, self.turned(Q)))
+
+    def test_keeps_an_oh_turned_the_other_way_apart(self):
+        # (ethanol with its OH hydrogen turned 120 degrees about the C-O bond: another conformer)
+        import numpy as np
+        mol = self.embedded("CCO")
+        P = mol.GetConformer().GetPositions()
+        o = next(a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "O")
+        c = next(n.GetIdx() for n in mol.GetAtomWithIdx(o).GetNeighbors() if n.GetAtomicNum() == 6)
+        h = next(n.GetIdx() for n in mol.GetAtomWithIdx(o).GetNeighbors() if n.GetAtomicNum() == 1)
+        axis = (P[o] - P[c]) / np.linalg.norm(P[o] - P[c])
+        t = math.radians(120)
+        v = P[h] - P[o]
+        Q = P.copy()
+        Q[h] = P[o] + v * math.cos(t) + np.cross(axis, v) * math.sin(t) + axis * (axis @ v) * (1 - math.cos(t))
+        self.assertFalse(self.worker.Sameness(mol).same(P, Q))
+
+    def test_keeps_a_conformers_mirror_image_apart(self):
+        # (methoxycyclohexane's methyl turned one way, and the mirror image of that: two conformers, whose
+        #  ring carbons either side of the methoxy swap places - an average over them needs both)
+        import numpy as np
+        mol = self.embedded("COC1CCCCC1", seed=11)
+        P = mol.GetConformer().GetPositions()
+        mirror = P * np.array([-1.0, 1.0, 1.0])
+        same = self.worker.Sameness(mol)
+        self.assertGreater(same.apart(P, mirror), self.worker.SAME_CONFORMER)
+
+    def test_bound_is_never_above_the_rmsd(self):
+        import numpy as np
+        mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))
+        ids = list(rdDistGeom.EmbedMultipleConfs(mol, numConfs=12, randomSeed=5))
+        same = self.worker.Sameness(mol)
+        P = {c: mol.GetConformer(c).GetPositions() for c in ids}
+        for x in ids:
+            for y in ids:
+                least = same.bound(same.signature(P[x]), same.signature(P[y]))
+                self.assertLessEqual(least, self.worker.rmsd_laid(P[x], P[y]) + 1e-9)
+
+    def test_counts_a_tert_butyls_methyls_turned_round_as_one_conformer(self):
         entry, kcal = self.made("CC(C)(C)C1CCCCC1")
-        # (its two chairs and a few twist-boats - not two dozen of those with the methyls turned round)
-        self.assertLess(len(entry["frames"]), 12, kcal)
+        # (its two chairs and its twist-boats, each once - not each again with its methyls turned round)
+        self.assertLess(len(entry["frames"]), 30, kcal)
         self.assertGreater(len(entry["frames"]), 1, kcal)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertEqual(rows["The same within"], "0.01 \u00c5, all atoms (H included), over its symmetries")
 
     def test_keeps_two_shapes_that_only_fall_together_once_swapped(self):
         # (a twist-boat of it falls within 0.44 A of its chair once the methyls are swapped round, and sits 6
-        #  kcal/mol above it: two shapes, which their energies say and their atoms, swapped, do not)
+        #  kcal/mol above it: two shapes)
         _, kcal = self.made("CC(C)(C)C1CCCCC1")
         self.assertTrue(any(k > 4.0 for k in kcal), kcal)
 
-    def test_leaves_a_molecule_whose_atoms_cannot_swap_alone(self):
-        # (a sugar: every atom of it is its own, so there is nothing to swap and nothing to look for)
-        glucose = Chem.MolFromSmiles("C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O")
-        self.assertIsNone(self.worker.swappable(Chem.AddHs(glucose)))
+    def test_tries_one_way_for_a_molecule_whose_atoms_cannot_swap(self):
+        glucose = Chem.AddHs(Chem.MolFromSmiles("C([C@@H]1[C@H]([C@@H]([C@H](C(O1)O)O)O)O)O"))
+        self.assertEqual(len(self.worker.Sameness(glucose).ways), 1)
 
-    def test_will_not_swap_where_there_are_no_energies_to_show_it_is_the_one_shape(self):
-        # (an osmium of eight bonds: no force field here has parameters for it, so nothing is optimised and no
-        #  energies come back - and without them there is no showing that a swap left the shape as it was,
-        #  which is the whole of what makes two shapes one. Its halides do swap, 576 ways, and are not tried)
+    def test_compares_atom_against_atom_past_the_ways_it_can_try(self):
+        import time
+        t = time.time()
+        same = self.worker.Sameness(Chem.AddHs(Chem.MolFromSmiles(self.MANY_WAYS)))
+        self.assertTrue(same.capped)
+        self.assertEqual(len(same.ways), 1)
+        self.assertLess(time.time() - t, 5.0)
+
+    def test_matches_the_chlorides_of_an_osmium_to_the_nearest_past_the_ways(self):
+        # (OsCl4(PEt3)2 maps onto itself 4! x 2 x 3! x 3! = 1728 ways; its four chlorides matched to the nearest,
+        #  the rest map 72 ways, which are tried)
+        mol = Chem.MolFromSmiles("CCP(CC)(CC)[Os](Cl)(Cl)(Cl)(Cl)P(CC)(CC)CC", sanitize=False)
+        mol.UpdatePropertyCache(strict=False)
+        same = self.worker.Sameness(Chem.AddHs(mol))
+        self.assertFalse(same.capped)
+        self.assertEqual(len(same.ways), 72)
+
+    def test_compares_raw_embeddings_only_as_the_one_conformer(self):
+        # (an osmium of eight bonds: nothing here optimises it, so no energies; its embeddings are made one only
+        #  where they are the one conformer, and none is merged on anything looser)
         mol = Chem.MolFromSmiles("Cl[Os](Cl)(Cl)(Cl)(Br)(Br)(Br)Br")
         if mol is None:
             self.skipTest("RDKit read no eight-bonded osmium here")
-        swappable = self.worker.swappable
-        self.assertIsNotNone(swappable(Chem.AddHs(Chem.Mol(mol))), "this molecule's atoms must be ones that swap")
-        asked = []
-        self.worker.swappable = lambda m: asked.append(m) or swappable(m)
-        try:
-            entry = self.worker.conformers(mol, count=30)
-        finally:
-            self.worker.swappable = swappable
+        entry = self.worker.conformers(mol, count=10)
         self.assertNotIn("energies", entry)
-        self.assertEqual(asked, [])
+        same = self.worker.Sameness(Chem.AddHs(mol))
+        import numpy as np
+        frames = [np.array(f).reshape(-1, 3) for f in entry["frames"]]
+        for x in range(len(frames)):
+            for y in range(x + 1, len(frames)):
+                self.assertGreater(same.apart(frames[x], frames[y]), self.worker.SAME_CONFORMER)
 
-    def test_leaves_a_molecule_with_more_ways_than_can_be_tried_as_it_was(self):
-        # (trying every way of this one took 2.1 s for a single pair of conformers, and there are thousands of pairs)
-        self.assertIsNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles(self.MANY_WAYS))))
-        # (where there are few enough, they are tried: a tert-butyl's methyls, a ring read round either way)
-        self.assertIsNotNone(self.worker.swappable(Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))))
 
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class MetalFloor(unittest.TestCase):
+    """Two atoms bonded to a metal, of different ligands, held at least NARROWEST_AT_METAL apart - only where the
+    ideal polyhedra of four, five and six points are the shapes there may be - and a conformer that came out
+    under it dropped, and counted. Where a lighter metal stands in, its energies order the conformers."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def mol(self, smiles):
+        m = Chem.MolFromSmiles(smiles, sanitize=False)
+        m.UpdatePropertyCache(strict=False)
+        return m
+
+    def made(self, smiles):
+        mb = Chem.MolToMolBlock(self.mol(smiles), kekulize=False)
+        return self.worker.op_conformers({"molblock": mb})["isomers"][0]
+
+    def angles(self, entry, frame, symbol):
+        import numpy as np
+        P = np.array(entry["frames"][frame]).reshape(-1, 3)
+        m = next(i for i, a in enumerate(entry["atoms"]) if a["el"] == symbol)
+        near = sorted(b["a2"] if b["a1"] == m else b["a1"] for b in entry["bonds"] if m in (b["a1"], b["a2"]))
+        out = []
+        for x, i in enumerate(near):
+            for j in near[x + 1:]:
+                u, v = P[i] - P[m], P[j] - P[m]
+                out.append(math.degrees(math.acos(max(-1.0, min(1.0, float(u @ v / np.linalg.norm(u) / np.linalg.norm(v)))))))
+        return sorted(out), {entry["atoms"][i]["el"]: i for i in near}, P, m
+
+    def test_the_floor_sits_below_the_narrowest_ideal_polyhedron_of_six(self):
+        # (a trigonal prism with equal edges, its corners on a sphere: neighbours 2 asin(sqrt(3/7)) apart)
+        import numpy as np
+        corners = [(math.cos(2 * math.pi * k / 3), math.sin(2 * math.pi * k / 3), z) for z in (-1, 1) for k in range(3)]
+        P = np.array(corners) * np.array([1.0, 1.0, math.sqrt(3) / 2])  # (edges all sqrt(3))
+        a = math.degrees(math.acos(float(P[0] @ P[1] / np.linalg.norm(P[0]) ** 2)))
+        self.assertAlmostEqual(a, math.degrees(2 * math.asin(math.sqrt(3 / 7))), places=6)
+        self.assertAlmostEqual(a, 81.79, places=2)
+        self.assertLess(self.worker.NARROWEST_AT_METAL, a)
+
+    def test_gives_hexachloroosmate_as_its_one_octahedron(self):
+        # (the known answer: one conformer, Oh. Fe standing in for Os, one embedding stopped in a well 87.7
+        #  kcal/mol above the octahedron, two Cl 62 degrees apart - under the floor, so dropped and counted; the
+        #  other eight are the octahedron again, relabelled)
+        entry = self.made("Cl[Os-2](Cl)(Cl)(Cl)(Cl)Cl")
+        self.assertEqual(len(entry["frames"]), 1)
+        angles, _, _, _ = self.angles(entry, 0, "Os")
+        self.assertTrue(all(abs(a - 90) < 1 for a in angles[:12]), angles)
+        self.assertTrue(all(a > 179 for a in angles[12:]), angles)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertEqual(rows["Dropped"], "1: two ligands at Os closer than the 75\u00b0 floor held (narrowest 62\u00b0)")
+        self.assertEqual(rows["Kept"], "1 of 10 embedded (10 sought), 8 the same as one kept")
+        # (the order said once, in the line that says how they were made - not again in a row)
+        self.assertTrue(entry["method"].endswith("; ordered by the stand-in field, Fe for Os"), entry["method"])
+        self.assertNotIn("Order", rows)
+        self.assertNotIn("energies", entry)
+
+    def test_puts_the_trans_isomer_of_an_osmium_bisphosphine_first(self):
+        # (trans-OsCl4(PEt3)2, the one known: first by the stand-in's energies, where the embedding order put any)
+        entry = self.made("CCP(CC)(CC)[Os](Cl)(Cl)(Cl)(Cl)P(CC)(CC)CC")
+        _, at, P, m = self.angles(entry, 0, "Os")
+        ps = [i for i, a in enumerate(entry["atoms"]) if a["el"] == "P"]
+        import numpy as np
+        u, v = P[ps[0]] - P[m], P[ps[1]] - P[m]
+        self.assertGreater(math.degrees(math.acos(float(u @ v / np.linalg.norm(u) / np.linalg.norm(v)))), 170)
+
+    def test_holds_nothing_within_one_ligand_nor_for_a_hydride(self):
+        # (three en on one metal: of its fifteen pairs, the three within an en are not held, the twelve across are)
+        pairs = self.worker.floor_pairs(Chem.AddHs(self.mol("N1CCN[Co+3]123(NCCN2)NCCN3")))
+        self.assertEqual(len(pairs), 12)
+        self.assertEqual({angle for *_, angle in pairs}, {75.0})
+        # (a cis dihydride: its hydrides are not held at all, its other ligands are)
+        hydride = Chem.AddHs(self.mol("[H][Os]([H])(Cl)(Cl)(P(C)(C)C)P(C)(C)C"))
+        held = self.worker.floor_pairs(hydride)
+        self.assertEqual(len(held), 6)
+        self.assertFalse([p for p in held if 1 in (hydride.GetAtomWithIdx(p[1]).GetAtomicNum(), hydride.GetAtomWithIdx(p[2]).GetAtomicNum())])
+
+    def test_holds_seven_and_eight_bonded_atoms_at_the_crowded_floor(self):
+        # (without a floor, ETKDG knowing no angle at a metal, [ZrF7]3-'s fluorides came out 33 degrees apart and
+        #  OsCl4Br4's halides 25)
+        for smiles, symbol, n in (("F[Zr-3](F)(F)(F)(F)(F)F", "Zr", 7), ("Cl[Os](Cl)(Cl)(Cl)(Br)(Br)(Br)Br", "Os", 8)):
+            pairs = self.worker.floor_pairs(Chem.AddHs(self.mol(smiles)))
+            self.assertEqual(len(pairs), n * (n - 1) // 2)
+            self.assertEqual({angle for *_, angle in pairs}, {60.0})
+            entry = self.made(smiles)
+            for f in range(len(entry["frames"])):
+                angles, _, _, _ = self.angles(entry, f, symbol)
+                self.assertGreater(angles[0], 60 - self.worker.FLOOR_SLACK, (smiles, angles[:3]))
+            rows = {r["label"]: r["text"] for r in entry["how"]}
+            self.assertIn("ligands at least 60\u00b0 apart", rows[symbol])
+            # (pressed against the floor they come out up to two degrees under it: none is dropped for that)
+            self.assertNotIn("Dropped", rows)
+        # (and none past twelve)
+        self.assertIsNone(self.worker.floor_for(13))
+
+    def test_holds_nothing_at_a_bent_metallocene_whose_chlorides_stay_apart(self):
+        # (Cp2ZrCl2: no floor at a metal with eta rings - their own holds keep the Cl off them - and its Cl-Zr-Cl
+        #  still comes out as a bent metallocene's, about 97 degrees in crystal structures)
+        import numpy as np
+        block = EtaBound.zirconocene_dichloride()
+        drawn = self.worker.read(block)
+        self.assertEqual(self.worker.floor_pairs(drawn), [])
+        entry = self.worker.op_conformers({"molblock": block})["isomers"][0]
+        for f in range(len(entry["frames"])):
+            P = np.array(entry["frames"][f]).reshape(-1, 3)
+            u, v = P[3] - P[0], P[4] - P[0]
+            self.assertTrue(80 < math.degrees(math.acos(float(u @ v / np.linalg.norm(u) / np.linalg.norm(v)))) < 115)
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertNotIn("Dropped", rows)
+
+    def test_orders_an_eta_complex_by_the_model_it_was_optimised_in(self):
+        # (Cp2ZrCl2, Ti standing in for Zr, its rings held; ferrocene, its rings held: lowest of that model first)
+        energies, kept = [], []
+        optimised, settled = self.worker.uff_with_metals, self.worker.settle_equivalents
+
+        def optimise(mol, ids, iters, **kw):
+            out = optimised(mol, ids, iters, **kw)
+            energies.append({cid: e for cid, (_, e) in zip(ids, out)})
+            return out
+
+        def settle(mol, cids):
+            kept.append(list(cids))
+            return settled(mol, cids)
+
+        self.worker.uff_with_metals, self.worker.settle_equivalents = optimise, settle
+        try:
+            zr = self.worker.op_conformers({"molblock": EtaBound.zirconocene_dichloride()})["isomers"][0]
+            fe = self.worker.op_conformers({"molblock": EtaBound.ferrocene()})["isomers"][0]
+        finally:
+            self.worker.uff_with_metals, self.worker.settle_equivalents = optimised, settled
+        self.assertTrue(zr["method"].endswith("; ordered by the stand-in field, Ti for Zr, the \u03b7 rings held"), zr["method"])
+        self.assertTrue(fe["method"].endswith("; ordered by UFF's energies, the \u03b7 rings held"), fe["method"])
+        self.assertNotIn("energies", zr)
+        self.assertNotIn("Order", {r["label"] for r in zr["how"]})
+        for order, cids in zip(energies, kept):
+            self.assertGreater(len(cids), 1)
+            self.assertEqual(cids, sorted(cids, key=order.get))
+
+    def test_holds_nothing_at_a_metal_with_an_eta2_ligand(self):
+        # (Zeise's anion: the alkene's carbon and the cis Cl come near 71 degrees in real structures)
+        self.assertEqual(self.worker.floor_pairs(Chem.AddHs(self.mol("Cl[Pt-](Cl)(Cl)1CC1"))), [])
+        entry = self.made("Cl[Pt-](Cl)(Cl)1CC1")
+        rows = {r["label"]: r["text"] for r in entry["how"]}
+        self.assertIn("no angle held between ligands: a ligand bound through atoms side by side", rows["Pt"])
 
 @unittest.skipUnless(Chem, "RDKit is not installed here")
 class EtaBound(unittest.TestCase):
@@ -767,3 +997,70 @@ class HalideBridged(unittest.TestCase):
         for m, ring in ((0, (1, 2, 3)), (6, (7, 8, 9))):
             for c in ring:
                 self.assertAlmostEqual(float(np.linalg.norm(P[m] - P[c])), 2.1, delta=0.15)
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class Configurations(unittest.TestCase):
+    """Which stereoisomer each molecule in 3D is, read from its own geometry - held on cases whose answers are
+    known, since RDKit marks FindPotentialStereo experimental: a change in a new RDKit is caught here, not
+    inherited (docs/PLUGINS.md, *Configurations*)."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def made(self, smiles, seed=11):
+        """A MOL block of `smiles` in 3D, its configuration as the SMILES gives it."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.AddHs(Chem.MolFromSmiles(smiles))
+        params = AllChem.ETKDGv3()
+        params.randomSeed = seed
+        self.assertEqual(AllChem.EmbedMolecule(mol, params), 0)
+        return Chem.MolToMolBlock(mol)
+
+    def configured(self, smiles):
+        return self.worker.op_configurations({"molblocks": [self.made(smiles)]})["molecules"][0]
+
+    def test_finds_the_elements_that_can_be_stereogenic_and_no_others(self):
+        # (each case's answer by hand: how many centres and double bonds could be stereogenic)
+        known = {
+            "C[C@H]1CC[C@@H](C)CC1": ("trans-1,4-dimethylcyclohexane: each ring carbon carries cis/trans", 2, 0),
+            "C[C@H]1CC[C@H](C)CC1": ("cis-1,4-dimethylcyclohexane", 2, 0),
+            "C[C@H]1CCC[C@@H](C)C1": ("cis-1,3-dimethylcyclohexane", 2, 0),
+            "CC1CCCCC1": ("methylcyclohexane: C1's two ring paths alike", 0, 0),
+            "CC1(C)CCCCC1": ("1,1-dimethylcyclohexane", 0, 0),
+            "CC=C": ("propene", 0, 0),
+            "Clc1ccc(Cl)cc1": ("1,4-dichlorobenzene", 0, 0),
+            "C[C@@H](O)[C@H](C)O": ("meso-2,3-butanediol: two centres, the molecule achiral", 2, 0),
+            "C/C=C/C": ("(E)-2-butene", 0, 1),
+        }
+        for smiles, (what, centres, doubles) in known.items():
+            got = self.configured(smiles)
+            kinds = [e["kind"] for e in got["elements"]]
+            self.assertEqual((kinds.count("centre"), kinds.count("double")), (centres, doubles), what)
+            # (from 3D, every element the geometry fixes is given)
+            self.assertTrue(all(e["specified"] for e in got["elements"]), what)
+
+    def test_keys_two_molecules_alike_exactly_when_they_are_one_stereoisomer(self):
+        def key(smiles, seed=11):
+            return self.worker.op_configurations({"molblocks": [self.made(smiles, seed)]})["molecules"][0]["key"]
+
+        # (one stereoisomer, two different geometries: one key)
+        self.assertEqual(key("C[C@H]1CC[C@@H](C)CC1", 11), key("C[C@H]1CC[C@@H](C)CC1", 23))
+        # (cis and trans; R and S; E and Z; meso and R,R: each pair two keys)
+        for a, b in [
+            ("C[C@H]1CC[C@H](C)CC1", "C[C@H]1CC[C@@H](C)CC1"),
+            ("C[C@@H](O)CC", "C[C@H](O)CC"),
+            ("C/C=C/C", "C/C=C\\C"),
+            ("C[C@@H](O)[C@H](C)O", "C[C@@H](O)[C@@H](C)O"),
+        ]:
+            self.assertNotEqual(key(a), key(b), (a, b))
+
+    def test_says_why_for_a_molecule_it_cannot_read_and_answers_the_rest(self):
+        good = self.made("CC(O)CC")
+        out = self.worker.op_configurations({"molblocks": ["not a MOL block", good]})["molecules"]
+        self.assertIn("error", out[0])
+        self.assertIn("key", out[1])

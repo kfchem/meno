@@ -4,7 +4,7 @@ vi.mock("../../../../lib/calc/workers", () => ({ readerClient: () => Promise.rej
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
-import { readTexts, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
+import { readKept, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
 import { addSet } from "../workflow/model";
 import { collectionHash } from "../workflow/entries";
 import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/calc/asks";
@@ -154,7 +154,7 @@ describe("a workspace file", () => {
     const store = createEditorStore(doc);
     connectStoreToDocument(store, doc);
     store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 0, y: 0 }, calc: { readers: ["meno"], source } as never }] });
-    const bytes = await workspaceFile(store.getState());
+    const { bytes } = await workspaceFile(store.getState());
     // (the output in it, once; where it was, no longer said)
     const file = readMenoFile(bytes);
     expect(file.files).toEqual([{ sha256: source.sha256, name: "water.cube", kind: "cube", media: "text/plain", size: new TextEncoder().encode(text).length }]);
@@ -162,12 +162,14 @@ describe("a workspace file", () => {
     const json = workspaceOfFile(bytes)!;
     expect(readWorkspace(json)!.drawn.molecules3d![0].calc!.source).toEqual({ name: "water.cube", sha256: source.sha256, kind: "cube" });
     expect((await outputOf(readWorkspace(json)!.drawn.molecules3d![0].calc!.source!))?.text).toBe(text);
-    // (one not held this session is not kept, and keeps where it was)
+    // (one not to be had - held nowhere, not where it was - is not kept, keeps where it was, and is named)
     const gone = { name: "gone.out", sha256: "e".repeat(64), kind: "orca", path: "/data/gone.out" };
     store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: [{ ...water3d, at: { x: 9, y: 0 }, calc: { readers: ["cclib"], source: gone } as never }] });
-    const both = readMenoFile(await workspaceFile(store.getState()));
+    const saved = await workspaceFile(store.getState());
+    const both = readMenoFile(saved.bytes);
     expect(both.files.map((f) => f.name)).toEqual(["water.cube"]);
     expect(both.workspace).toContain("/data/gone.out");
+    expect(saved.notKept).toEqual(["gone.out"]);
   });
 
   it("holds an output it keeps only if it is what its SHA-256 says", async () => {
@@ -192,7 +194,7 @@ describe("a workspace file", () => {
       { name: "notes.txt", text: "a note" },
     ]);
     store.getState().showText(store.getState().texts[1].id);
-    const bytes = await workspaceFile(store.getState());
+    const { bytes } = await workspaceFile(store.getState());
     const file = readMenoFile(bytes);
     // (the output and the text that is its words kept once; no text said to be anywhere)
     expect(file.files.map((f) => f.name)).toEqual(["run.out", "job.inp", "notes.txt"]);
@@ -200,7 +202,7 @@ describe("a workspace file", () => {
     const saved = readWorkspace(workspaceOfFile(bytes)!)!;
     expect(saved.texts.map((t) => t.name)).toEqual(["job.inp", "run.out", "notes.txt"]);
     expect(saved.textShown).toBe(1);
-    const { ws, missing } = await readTexts(saved);
+    const { ws, missing } = await readKept(saved);
     expect(missing).toEqual([]);
     const otherDoc = createWorkspaceDocument();
     const other = createEditorStore(otherDoc);
@@ -220,16 +222,22 @@ describe("a workspace file", () => {
     expect(closed.textShown).toBeUndefined();
   });
 
-  it("opens without a text its file does not hold, and says which", async () => {
+  it("opens with a text its file does not hold as one that could not be read - shown, if it was - and says which", async () => {
     const saved = readWorkspace(
       JSON.stringify({ format: "meno-workspace", version: 1, atoms: [], bonds: [], texts: [{ name: "lost.txt", sha256: "d".repeat(64) }, { name: "bad", sha256: "x" }], textShown: 0 }),
     )!;
     // (one not known by a SHA-256 is no text)
     expect(saved.texts).toEqual([{ name: "lost.txt", sha256: "d".repeat(64) }]);
-    const { ws, missing } = await readTexts(saved);
+    const { ws, missing } = await readKept(saved);
     expect(missing).toEqual(["lost.txt"]);
-    expect(ws.texts).toEqual([]);
-    expect(ws.textShown).toBeUndefined();
+    expect(ws.texts.map((t) => [t.name, t.text])).toEqual([["lost.txt", undefined]]);
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().openWorkspace(ws, true);
+    expect(store.getState().texts).toEqual([]);
+    expect(store.getState().textsLost).toEqual([{ id: 1, name: "lost.txt", sha256: "d".repeat(64) }]);
+    expect(store.getState()).toMatchObject({ textShown: 1, textsOpen: true });
   });
 
   it("is not read where it is not one, or of a version this one does not read", () => {
@@ -286,7 +294,10 @@ describe("a workspace with what is no entry in its lists", () => {
     pluses: [{ id: 1, x: -3, y: 0 }],
     captions: [{ id: 1, x: 6, y: 1, text: "heat", marks: [{ from: 0, to: 2, bold: true }] }],
     molecules3d: [{ ...molecule, at: { x: 10, y: 0 } }],
-    sets: [{ id: 1, x0: 0, y0: -9, x1: 4, y1: -5, aside: [{ compound: 0, number: 1 }] }],
+    sets: [
+      { id: 1, x0: 0, y0: -9, x1: 4, y1: -5 },
+      { id: 4, x0: 9, y0: -9, x1: 13, y1: -5, made: { step: 2, exit: "out", holds: "molecules" } },
+    ],
     steps: [
       {
         id: 2,
@@ -294,11 +305,11 @@ describe("a workspace with what is no entry in its lists", () => {
         x: 8,
         y: -7,
         ran: { at: 1, ok: true, said: "done", input: "in", jobs: [job] },
-        runs: [{ at: 1, ok: true, said: "done", input: "in", kind: "optimise", results: { molecules: [molecule], aside: [{ compound: 0, number: 1 }], holds: "molecules" } }],
+        runs: [{ at: 1, ok: true, said: "done", input: "in", kind: "optimise", results: { molecules: [molecule], rest: [molecule], holds: "molecules" } }],
         running: { at: 2, input: "in", jobs: [{ id: job, entries: [0], reads: ["run.out"] }] },
       },
     ],
-    wires: [{ id: 3, from: { set: 1 }, to: 2 }],
+    wires: [{ id: 3, from: { set: 1 }, to: { step: 2, port: "in" } }],
     texts: [{ name: "notes.txt", sha256: "c".repeat(64), at: { x: 0, y: 9 } }],
     pdfs: [{ name: "paper.pdf", sha256: "b".repeat(64), pages: [[612, 792]], x: 20, y: 0, placed: [{ page: 0, x: 30, y: 0 }], inks: [{ ...ink, page: 0 }] }],
     pictures: [{ id: 1, name: "a.png", sha256: "a".repeat(64), media: "image/png", px: [10, 10], x: 0, y: 20, w: 1, h: 1 }],
@@ -335,23 +346,30 @@ describe("a workspace with what is no entry in its lists", () => {
     expect([d.molecules3d, d.molecules3d![0].measures, d.molecules3d![0].made?.how, d.pictures, d.slides, d.shapes, d.inks].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
     expect(d.ringFills).toEqual({ "1-2-3": "#ff0000" });
     const { sets, steps, wires } = ws.workflow!;
-    expect([sets, sets[0].aside, wires, steps[0].ran?.jobs, steps[0].runs, steps[0].runs?.[0].results?.molecules, steps[0].running?.jobs].map((l) => l?.length)).toEqual([1, 1, 1, 1, 1, 1, 1]);
+    expect(sets[1].made).toEqual({ step: 2, exit: "out", holds: "molecules" });
+    expect([sets, wires, steps[0].ran?.jobs, steps[0].runs, steps[0].runs?.[0].results?.molecules, steps[0].runs?.[0].results?.rest, steps[0].running?.jobs].map((l) => l?.length)).toEqual([2, 1, 1, 1, 1, 1, 1]);
     expect([ws.texts, ws.pdfs, ws.pdfs[0].placed, ws.pdfs[0].inks].map((l) => l?.length)).toEqual([1, 1, 1, 1]);
   });
 
-  it("reads round it in any list of entries, first or last: it is left out, and what reads is read as before", () => {
+  it("reads round it in any list of entries, first or last: it is left out, and what reads is read as before - a set's or a run's molecules counted, those it set aside too", () => {
     const whole = readWorkspace(JSON.stringify(WHOLE));
     const entries = lists.filter((p) => (valueAt(p) as unknown[]).every(isEntry));
     expect(entries.length).toBeGreaterThan(30);
     for (const path of entries) {
       const key = path[path.length - 1];
-      // (as an atom or a bond that does not read: the workspace, or the molecule it is of, does not)
+      // (a list of molecules a step gave, kept in a set or with a run: one that does not read there is counted - WorkflowSet.unread)
+      const of = path.findIndex((k, i) => k === "collection" || ((k === "molecules" || k === "rest") && path[i - 1] === "results"));
+      // (counted where the file counts them: a run's set-aside molecules as `restUnread`)
+      const counter = path[of] === "rest" ? "restUnread" : "unread";
+      // (as an atom or a bond that does not read: the workspace, or the molecule it is of, does not - one a step gave read as one that is no molecule)
       const expected =
         key !== "atoms" && key !== "bonds"
           ? whole
           : path.length === 1
             ? null
-            : readWorkspace(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
+            : of >= 0
+              ? readWorkspace(edited(path.slice(0, -1), (holder, k) => ((holder as unknown as unknown[])[k as number] = null)))
+              : readWorkspace(edited(path.slice(0, -1), (holder, k) => (holder as unknown as unknown[]).splice(k as number, 1)));
       for (const stray of STRAYS)
         for (const first of [true, false]) {
           const text = edited(path, (holder, k) => {
@@ -359,7 +377,14 @@ describe("a workspace with what is no entry in its lists", () => {
             if (first) list.unshift(stray);
             else list.push(stray);
           });
-          expect(readWorkspace(text), `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
+          const read = readWorkspace(text);
+          // (one there left out, and counted)
+          if (of >= 0 && path.length === of + 1) {
+            const holder = ["workflow", ...path.slice(0, of)].reduce((o: unknown, k) => (o as Node)[k], read) as unknown as Record<string, number | undefined>;
+            expect(holder[counter], `${path.join(".")} holding ${JSON.stringify(stray)}`).toBe(1);
+            delete holder[counter];
+          }
+          expect(read, `${path.join(".")} holding ${JSON.stringify(stray)}`).toEqual(expected);
           expect(workspaceProblem(text)).toBe(expected ? null : "it is not a workspace Meno reads");
         }
     }
@@ -416,7 +441,7 @@ describe("a workspace's sets, saved (version 2)", () => {
       let next = addSet(d, { x0: -1, y0: -1, x1: 3, y1: 2 });
       next = { ...next, sets: next.sets!.map((b) => ({ ...b, members: [...b.members!, { molecule: 2 }] })) };
       next = addSet(next, { x0: 9, y0: -1, x1: 11, y1: 1 });
-      return { ...next, sets: next.sets!.map((b) => (b.id === 2 ? { ...b, made: { step: 9, holds: "molecules" as never }, ...(keep === false ? { keep } : {}) } : b)) };
+      return { ...next, sets: next.sets!.map((b) => (b.id === 2 ? { ...b, made: { step: 9, exit: "out", holds: "molecules" as const }, ...(keep === false ? { keep } : {}) } : b)) };
     });
     return { doc, st };
   }

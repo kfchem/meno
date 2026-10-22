@@ -128,7 +128,7 @@ describe("a molecule a step gives back", () => {
     doc = connect(doc, { set: 1 }, 2);
     doc = runStep(doc, 2, W);
     const made = resultOf(doc, 2)!;
-    const back = inputOf({ ...doc, wires: [{ id: 99, from: { set: made.id }, to: 2 }] }, 2)!.molecules;
+    const back = inputOf({ ...doc, wires: [{ id: 99, from: { set: made.id }, to: { step: 2, port: "in" } }] }, 2)!.molecules;
     expect(back.map((m) => m.bondOrders)).toEqual(["unknown"]);
   });
 });

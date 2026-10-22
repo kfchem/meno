@@ -2,25 +2,53 @@
  * Just enough of ZIP for Office's clip format and Meno's workspace file:
  * writing an archive whose entries are stored as they are, and reading one
  * whose entries are stored or deflated (as Office writes them) - nothing
- * inflated but what is asked for, and nothing to more than the archive
- * says it comes to, whatever it says.
+ * inflated but what is asked for, nothing to more than the archive says it
+ * comes to, whatever it says, and nothing taken that is not what its CRC-32
+ * says it is.
  */
 import { Inflate } from "fflate";
 
+/**
+ * CRC-32's table, eight times over: the first for a byte, each after it for
+ * a byte one further back - so that eight bytes are taken at a time, some
+ * three times as fast as one at a time (1 GB a second in Node), as a
+ * workspace's every part is checked as it opens.
+ */
 const TABLE = (() => {
-  const t = new Uint32Array(256);
+  const t = new Int32Array(8 * 256);
   for (let n = 0; n < 256; n++) {
     let c = n;
     for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-    t[n] = c >>> 0;
+    t[n] = c;
+  }
+  for (let n = 0; n < 256; n++) {
+    let c = t[n];
+    for (let k = 1; k < 8; k++) {
+      c = t[c & 0xff] ^ (c >>> 8);
+      t[k * 256 + n] = c;
+    }
   }
   return t;
 })();
 
 /** CRC-32, as ZIP and PNG check their data with. */
 export function crc32(bytes: Uint8Array, start = 0xffffffff): number {
-  let c = start;
-  for (let i = 0; i < bytes.length; i++) c = TABLE[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
+  const t = TABLE;
+  let c = start | 0;
+  let i = 0;
+  for (const last = bytes.length - 8; i <= last; i += 8) {
+    c ^= bytes[i] | (bytes[i + 1] << 8) | (bytes[i + 2] << 16) | (bytes[i + 3] << 24);
+    c =
+      t[1792 + (c & 0xff)] ^
+      t[1536 + ((c >>> 8) & 0xff)] ^
+      t[1280 + ((c >>> 16) & 0xff)] ^
+      t[1024 + (c >>> 24)] ^
+      t[768 + bytes[i + 4]] ^
+      t[512 + bytes[i + 5]] ^
+      t[256 + bytes[i + 6]] ^
+      t[bytes[i + 7]];
+  }
+  for (; i < bytes.length; i++) c = t[(c ^ bytes[i]) & 0xff] ^ (c >>> 8);
   return (c ^ 0xffffffff) >>> 0;
 }
 
@@ -75,6 +103,8 @@ export type ZipEntry = {
   packed: Uint8Array;
   /** What the archive says they come to, unpacked - which `entryBytes` holds them to. */
   size: number;
+  /** Their CRC-32, unpacked, as the central directory says it - which `entryBytes` holds them to too. */
+  crc: number;
 };
 
 /**
@@ -100,6 +130,8 @@ export function zipEntries(zip: Uint8Array): ZipEntry[] | null {
   for (let n = 0; n < count; n++) {
     if (at + 46 > zip.length || view.getUint32(at, true) !== 0x02014b50) return null;
     const method = view.getUint16(at + 10, true);
+    // (the central directory's, which says it whether or not a data descriptor follows the entry)
+    const crc = view.getUint32(at + 16, true);
     const packed = view.getUint32(at + 20, true);
     const size = view.getUint32(at + 24, true);
     const nameLength = view.getUint16(at + 28, true);
@@ -112,7 +144,7 @@ export function zipEntries(zip: Uint8Array): ZipEntry[] | null {
     const start = local + 30 + view.getUint16(local + 26, true) + view.getUint16(local + 28, true);
     // (an entry running on past the archive's end: it was cut short)
     if (start + packed > zip.length) return null;
-    entries.push({ name, method, packed: zip.subarray(start, start + packed), size });
+    entries.push({ name, method, packed: zip.subarray(start, start + packed), size, crc });
   }
   return entries;
 }
@@ -127,15 +159,16 @@ const SLICE = 4 * 1024;
 
 /**
  * An entry's bytes, its own copy: stored, as they are; deflated, inflated -
- * either way only where they come to just what the archive says. What it
- * says is not trusted to set room aside by (a few bytes may say a
- * gigabyte): room grows as the bytes come, and inflating stops as soon as
- * they come to more. Null where they come to anything else, will not
- * inflate, or are packed some other way.
+ * either way only where they come to just what the archive says, and are
+ * what its CRC-32 says they are. What it says they come to is not trusted
+ * to set room aside by (a few bytes may say a gigabyte): room grows as the
+ * bytes come, and inflating stops as soon as they come to more. Null where
+ * they come to anything else, will not inflate, are not what their CRC-32
+ * says - a byte changed on the disk - or are packed some other way.
  */
 export function entryBytes(entry: ZipEntry): Uint8Array | null {
-  const { method, packed, size } = entry;
-  if (method === 0) return packed.length === size ? packed.slice() : null;
+  const { method, packed, size, crc } = entry;
+  if (method === 0) return packed.length === size && crc32(packed) === crc ? packed.slice() : null;
   if (method !== 8) return null;
   let out = new Uint8Array(Math.min(size, Math.max(4 * packed.length, 64 * 1024)));
   let n = 0;
@@ -159,7 +192,7 @@ export function entryBytes(entry: ZipEntry): Uint8Array | null {
     // (cut short, damaged, or more than it says)
     return null;
   }
-  return n === size ? out : null;
+  return n === size && crc32(out) === crc ? out : null;
 }
 
 /** The most `unzip` hands back of an archive, all the files wanted together, unless told otherwise. */
@@ -168,8 +201,9 @@ export const MOST_UNZIPPED = 64 * 1024 * 1024;
 /**
  * The files in an archive, by name: those `wanted`, where the caller says
  * which - the rest are not inflated - each as large as the archive says it
- * is. Null if it is not one this reads, or the files wanted would come to
- * more than `most` bytes together.
+ * is, and what its CRC-32 says. Null if it is not one this reads, any file
+ * wanted is not so, or the files wanted would come to more than `most`
+ * bytes together.
  */
 export function unzip(zip: Uint8Array, wanted: (name: string) => boolean = () => true, most = MOST_UNZIPPED): Map<string, Uint8Array> | null {
   const entries = zipEntries(zip);

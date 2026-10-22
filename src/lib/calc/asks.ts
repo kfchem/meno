@@ -81,17 +81,6 @@ export function holdOutputsOf(file: MenoFile): void {
   }
 }
 
-/** The outputs a workspace's molecules were read from, held this session, as its file keeps them: each once, as text. */
-export async function outputsToKeep(sources: readonly CalcSource[]): Promise<KeptData[]> {
-  const encoder = new TextEncoder();
-  const kept: KeptData[] = [];
-  for (const s of new Map(sources.map((x) => [x.sha256, x])).values()) {
-    const held = await heldOutput(s.sha256);
-    if (held) kept.push({ sha256: s.sha256, name: held.name, ...(s.kind ? { kind: s.kind } : {}), media: "text/plain", data: encoder.encode(held.text) });
-  }
-  return kept;
-}
-
 /** A file's text, read where it is: none where Meno may not read it there, or it is not there. */
 export type ReadAt = (path: string) => Promise<string | null>;
 
@@ -118,6 +107,23 @@ async function foundAt(source: CalcSource, read: ReadAt): Promise<{ name: string
  */
 export async function outputOf(source: CalcSource, read: ReadAt = readAt): Promise<{ name: string; text: string } | undefined> {
   return (await heldOutput(source.sha256)) ?? (await foundAt(source, read)) ?? undefined;
+}
+
+/**
+ * The outputs a workspace's molecules were read from, as its file keeps
+ * them: each once, as text - held this session, or read again where it was
+ * (`outputOf`) - and each that could be had neither way (`notKept`).
+ */
+export async function outputsToKeep(sources: readonly CalcSource[], read: ReadAt = readAt): Promise<{ kept: KeptData[]; notKept: CalcSource[] }> {
+  const encoder = new TextEncoder();
+  const kept: KeptData[] = [];
+  const notKept: CalcSource[] = [];
+  for (const s of new Map(sources.map((x) => [x.sha256, x])).values()) {
+    const had = await outputOf(s, read);
+    if (had) kept.push({ sha256: s.sha256, name: had.name, ...(s.kind ? { kind: s.kind } : {}), media: "text/plain", data: encoder.encode(had.text) });
+    else notKept.push(s);
+  }
+  return { kept, notKept };
 }
 
 /** The chosen file, as asked for: its path and its text; none where none was chosen. */

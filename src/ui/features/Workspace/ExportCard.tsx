@@ -31,6 +31,7 @@ export default function ExportCard({
   selected,
   known,
   skeletons,
+  said,
   onExport,
   onCancel,
 }: {
@@ -46,6 +47,8 @@ export default function ExportCard({
   known: (ids: readonly number[]) => Partial<Record<Known, string | number>>;
   /** How many of the molecules in 3D, by their ids, are skeletons - their hydrogens not there (lib/chem/skeleton). */
   skeletons: (ids: readonly number[]) => number;
+  /** What a kind of file cannot hold of what is written, said in plain words over its options; none where it holds it all. */
+  said?: (writerId: string) => string | null;
   onExport: (writer: Writer, values: OptionValues, molecules: number[]) => void;
   onCancel: () => void;
 }) {
@@ -131,6 +134,12 @@ export default function ExportCard({
             : lacking === 1
               ? `A molecule written has no hydrogens: it is written ${writer.id === "sdf" ? "as a skeleton, so that no reader adds any" : "as it is"}.`
               : `${lacking.toLocaleString("en")} molecules written have no hydrogens: they are written ${writer.id === "sdf" ? "as skeletons, so that no reader adds any" : "as they are"}.`}
+        </p>
+      )}
+      {/* (what this kind cannot hold of it, and so leaves out: said before it is written, never silently) */}
+      {!refused && said?.(writer.id) && (
+        <p role="note" className="text-xs text-gh-gray mb-3">
+          {said(writer.id)}
         </p>
       )}
       {shown.length > 0 && !refused && (

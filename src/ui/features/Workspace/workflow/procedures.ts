@@ -25,7 +25,12 @@ export function procedureOf(p: SavedProcedure): Procedure | null {
     id: p.id,
     name: p.name,
     saved: p.saved,
-    parts: { sets: read.sets.map(({ made: _m, aside: _a, ...b }) => b), steps: read.steps.map(({ ran: _r, runs: _k, running: _g, ...s }) => s), wires: read.wires },
+    // (its sets as frames: a step's exits keep which step and exit made them, so its wires lead on from them; what any held is not kept)
+    parts: {
+      sets: read.sets.map(({ members: _h, keep: _k, notKept: _n, ...b }) => b),
+      steps: read.steps.map(({ ran: _r, runs: _k, running: _g, ...s }) => s),
+      wires: read.wires,
+    },
   };
 }
 
@@ -56,12 +61,14 @@ export function removeProcedure(id: string): void {
   s.setProcedures(s.procedures.filter((p) => p.id !== id));
 }
 
-/** A procedure's steps in the order their wires lead, each from those before it - those first that nothing comes into from a step. */
+/** A procedure's steps in the order their wires lead, each from those before it - those first that nothing comes into from a step's exit. */
 function inOrder(parts: FlowParts) {
-  const before = new Map(parts.steps.map((s) => [s.id, parts.wires.find((w) => w.to === s.id)?.from]));
+  // (the step whose exit each step's first input is wired from, where one is)
+  const madeBy = new Map(parts.sets.flatMap((b) => (b.made ? [[b.id, b.made.step] as const] : [])));
+  const before = new Map(parts.steps.map((s) => [s.id, madeBy.get(parts.wires.find((w) => w.to.step === s.id)?.from.set ?? -1)]));
   const depth = (id: number, seen = new Set<number>()): number => {
     const from = before.get(id);
-    return from && "step" in from && !seen.has(id) ? 1 + depth(from.step, new Set([...seen, id])) : 0;
+    return from != null && !seen.has(id) ? 1 + depth(from, new Set([...seen, id])) : 0;
   };
   // (then from the top of the page down, and left to right)
   return [...parts.steps].sort((p, q) => depth(p.id) - depth(q.id) || q.y - p.y || p.x - q.x);
@@ -115,9 +122,10 @@ export function procedureFileName(name: string): string {
 }
 
 /** A procedure as a workspace (.meno) holds it, to be shared: its sets and steps and the wires among them, and nothing else - its middle where a workspace opened is first seen. */
-export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
+export async function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
   const parts = centredParts(p.parts);
-  return workspaceFile({
+  // (it has no file to keep: nothing not kept to say)
+  const { bytes } = await workspaceFile({
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -132,6 +140,7 @@ export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
     steps: parts.steps,
     wires: parts.wires,
   });
+  return bytes;
 }
 
 /** Parts moved so that their middle is at the page's origin. */

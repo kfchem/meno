@@ -76,6 +76,14 @@ describe("the right-click menu", () => {
     expect(menu(target({ kind: "bond", id: 2 }), { onEditLabel: none }).listed).not.toContain("Edit label");
   });
 
+  it("lists Edit label on the selection's menu where an atom selected alone is right-clicked", () => {
+    const here = { ...target({ selection: "here", drawing: true }), kind: "atom" as const, id: 1 };
+    expect(menu(here, { onEditLabel: none }).listed).toContain("Edit label");
+    // (none given - the selection more than that atom - none listed)
+    expect(menu(here).listed).not.toContain("Edit label");
+    expect(menu(target({ selection: "here", drawing: true }), { onEditLabel: none }).listed).not.toContain("Edit label");
+  });
+
   it("puts what is done most to an atom first, as icons, Delete at the end, and lists the rest", () => {
     expect(menu(target({ kind: "atom", id: 1 }))).toMatchObject({
       icons: ["Charge one up", "Charge one down", "Clean up this structure", "3D structure", "Delete atom"],

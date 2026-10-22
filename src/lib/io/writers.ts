@@ -159,10 +159,34 @@ const UNPAIRED: Record<Radical, number> = { singlet: 0, doublet: 1, triplet: 2 }
  */
 export function knownOf(m: WrittenMolecule): Record<Known, string | number> {
   const charge = m.atoms.reduce((n, a) => n + (a.charge ?? 0), 0);
+  return { charge, multiplicity: multiplicityOf(m, charge), name: m.name ?? "" };
+}
+
+/** The multiplicity a molecule's atoms say at a charge: one more than its radicals' unpaired electrons, and one more again where its electrons, at that charge, are odd without them. */
+function multiplicityOf(m: Pick<WrittenMolecule, "atoms">, charge: number): number {
   const electrons = m.atoms.reduce((n, a) => n + (NUMBERS.get(a.el) ?? 0), 0) - charge;
   let unpaired = m.atoms.reduce((n, a) => n + (a.radical ? UNPAIRED[a.radical] : 0), 0);
   if ((electrons - unpaired) % 2 !== 0) unpaired += 1;
-  return { charge, multiplicity: unpaired + 1, name: m.name ?? "" };
+  return unpaired + 1;
+}
+
+/**
+ * Why a charge and multiplicity cannot be a molecule's, or null where they
+ * can: its electrons are its atoms' atomic numbers less the charge, and a
+ * multiplicity of m has m - 1 of them unpaired - so the rest, paired, are an
+ * even number, and there are no fewer electrons than unpaired ones. (An even
+ * count of electrons takes an odd multiplicity - singlet, triplet - and an
+ * odd count an even one - doublet, quartet.)
+ */
+export function speciesProblem(m: Pick<WrittenMolecule, "atoms">, charge: number, multiplicity: number): string | null {
+  const electrons = m.atoms.reduce((n, a) => n + (NUMBERS.get(a.el) ?? 0), 0) - charge;
+  if (!Number.isInteger(charge)) return `A charge of ${charge} is not a whole number.`;
+  if (!Number.isInteger(multiplicity) || multiplicity < 1) return `A multiplicity of ${multiplicity} is not a whole number of one or more.`;
+  if (electrons < 0) return `A charge of ${charge} leaves fewer than no electrons.`;
+  if (multiplicity - 1 > electrons) return `${electrons} electrons cannot have ${multiplicity - 1} unpaired (multiplicity ${multiplicity}).`;
+  if ((electrons - (multiplicity - 1)) % 2 !== 0)
+    return `${electrons} electrons cannot have multiplicity ${multiplicity}: an ${electrons % 2 ? "odd" : "even"} count takes an ${electrons % 2 ? "even" : "odd"} multiplicity.`;
+  return null;
 }
 
 /** A molecule's charge and spin multiplicity, and where each came from: given (by the chemist, or the calculation it was read from), or its atoms. */
@@ -182,9 +206,10 @@ export function speciesOf(m: WrittenMolecule, given?: { charge?: number | null; 
   const known = knownOf(m);
   const charge = Number.isInteger(given?.charge) ? given!.charge! : null;
   const multiplicity = Number.isInteger(given?.multiplicity) && given!.multiplicity! > 0 ? given!.multiplicity! : null;
+  // (a multiplicity not given follows the charge in use: a charge given that is not the atoms' changes the electrons - Na with a charge of +1 has ten, a singlet)
   return {
     charge: charge ?? Number(known.charge),
-    multiplicity: multiplicity ?? Number(known.multiplicity),
+    multiplicity: multiplicity ?? (charge != null ? multiplicityOf(m, charge) : Number(known.multiplicity)),
     from: { charge: charge != null ? "given" : "atoms", multiplicity: multiplicity != null ? "given" : "atoms" },
   };
 }

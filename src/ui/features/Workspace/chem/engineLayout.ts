@@ -46,28 +46,63 @@ export type LayoutJob = {
  * stereocentres), their H, bonds and charges - none, as the editor has
  * none yet - and the stereochemistry the drawing shows.
  */
-export function layoutJob(part: Model): LayoutJob {
-  const drawing = drawingOf(part);
-  const { tetra, cisTrans, axes } = readStereo(drawing.atoms, drawing.bonds);
+/** Each atom's bonds, by their places in `bonds`. */
+function bondsAt(bonds: readonly { a: number; b: number }[]): Map<number, number[]> {
   const bondsOf = new Map<number, number[]>();
-  drawing.bonds.forEach((b, k) => {
+  bonds.forEach((b, k) => {
     bondsOf.set(b.a, [...(bondsOf.get(b.a) ?? []), k]);
     bondsOf.set(b.b, [...(bondsOf.get(b.b) ?? []), k]);
   });
-  // A wedge at an atom that could be a stereocentre, but says nothing the
-  // engine can take - wedge and hashes drawn opposite each other, or an
-  // atom with a lone pair for its fourth group (a sulfoxide's S): laid out,
-  // it would be lost, so it is not laid out.
+  return bondsOf;
+}
+
+/**
+ * The atoms, by their places in the drawing, with a wedge that could make
+ * them a stereocentre but says nothing that can be read: wedge and hashes
+ * drawn opposite each other, or an atom with a lone pair for its fourth
+ * group (a sulfoxide's S).
+ */
+export function unreadWedges(drawing: ReturnType<typeof drawingOf>, stereo: ReturnType<typeof readStereo>): number[] {
+  const bondsOf = bondsAt(drawing.bonds);
+  const out = new Set<number>();
   for (const b of drawing.bonds) {
     const c = b.wedge?.narrow;
     // (an axis of chirality's end: its wedge says how the axis turns)
-    if (c == null || tetra.has(c) || axes.some((ax) => ax.atoms[0] === c)) continue;
-    if ((bondsOf.get(c)?.length ?? 0) >= 3 && drawing.atoms[c].hs <= 1) {
-      throw new Error(
-        `the wedges at ${part.atoms[c].el} do not say its configuration in a way Clean-up can keep ` +
-          "(drawn crossed, or on an atom with a lone pair), so nothing was moved",
-      );
-    }
+    if (c == null || stereo.tetra.has(c) || stereo.axes.some((ax) => ax.atoms[0] === c)) continue;
+    if ((bondsOf.get(c)?.length ?? 0) >= 3 && drawing.atoms[c].hs <= 1) out.add(c);
+  }
+  return [...out];
+}
+
+/**
+ * Each star at a haptic bond's end, by its place in `part`: the pi system
+ * it stands for, its atoms by their places - which the engine draws round
+ * it (a ring face-on to its metal), as it does a written-out label's.
+ */
+export function piSystems(part: Model, drawing: ReturnType<typeof drawingOf>): Map<number, number[]> {
+  const pi = new Map<number, number[]>();
+  for (const b of part.bonds) {
+    if (!b.endpoints?.length || b.attach === "any") continue;
+    const star = [b.a, b.b].map((id) => drawing.index.get(id)!).find((i) => i != null && part.atoms[i].el === "*");
+    const atoms = b.endpoints.map((id) => drawing.index.get(id)).filter((i): i is number => i != null);
+    if (star != null && atoms.length === b.endpoints.length) pi.set(star, atoms);
+  }
+  return pi;
+}
+
+export function layoutJob(part: Model): LayoutJob {
+  const drawing = drawingOf(part);
+  const stereo = readStereo(drawing.atoms, drawing.bonds);
+  const { tetra, cisTrans, axes } = stereo;
+  const bondsOf = bondsAt(drawing.bonds);
+  // A wedge at an atom that could be a stereocentre, but says nothing the
+  // engine can take: laid out, it would be lost, so it is not laid out.
+  const unread = unreadWedges(drawing, stereo);
+  if (unread.length) {
+    throw new Error(
+      `the wedges at ${part.atoms[unread[0]].el} do not say its configuration in a way Clean-up can keep ` +
+        "(drawn crossed, or on an atom with a lone pair), so nothing was moved",
+    );
   }
   // an H on a stereocentre, bonded to nothing else: the centre's own
   const foldedInto = new Map<number, number>();
@@ -94,16 +129,9 @@ export function layoutJob(part: Model): LayoutJob {
     const neighbours = [...order.slice(0, h), ...order.slice(h + 1), -1];
     return { neighbours, volume: (moves % 2 ? -t.volume : t.volume) as 1 | -1 };
   };
-  // a star at a haptic bond's end: the pi system it stands for, which the
-  // engine draws round it (a ring face-on to its metal), as it does a
-  // written-out label's
+  // a star at a haptic bond's end: the pi system it stands for (an H of a stereocentre is none of one)
   const pi = new Map<number, number[]>();
-  for (const b of part.bonds) {
-    if (!b.endpoints?.length || b.attach === "any") continue;
-    const star = [b.a, b.b].map((id) => drawing.index.get(id)!).find((i) => i != null && part.atoms[i].el === "*");
-    const atoms = b.endpoints.map((id) => drawing.index.get(id)).filter((i): i is number => i != null && at.has(i));
-    if (star != null && atoms.length === b.endpoints.length) pi.set(star, atoms.map((i) => at.get(i)!));
-  }
+  for (const [star, atoms] of piSystems(part, drawing)) if (atoms.every((i) => at.has(i))) pi.set(star, atoms.map((i) => at.get(i)!));
   const input: LayoutInput = {
     atoms: kept.map((i) => {
       const t = configuration(i);

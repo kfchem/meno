@@ -2,7 +2,8 @@
  * A scene written as glTF 2.0 (docs/RENDER.md), from Khronos's
  * specification alone - glTF 2.0, registry.khronos.org/glTF/specs/2.0 - and
  * its extensions KHR_lights_punctual, KHR_materials_clearcoat,
- * KHR_materials_transmission, KHR_materials_ior and KHR_materials_volume
+ * KHR_materials_transmission, KHR_materials_ior, KHR_materials_volume and
+ * KHR_materials_unlit
  * (github.com/KhronosGroup/glTF, extensions/2.0/Khronos): what a renderer is given to
  * make pictures and films of molecules in 3D. Its sections are cited where
  * what is written follows one.
@@ -34,6 +35,8 @@ export type GltfMaterial = {
   ior?: number;
   /** Solid through, not a thin wall (KHR_materials_volume): how thick, in the mesh's units, and the colour white light turns to over a distance in it. */
   volume?: { thickness: number; attenuationColour?: Vec3; attenuationDistance?: number };
+  /** Not lit: its colour as it is, whatever light falls on it (KHR_materials_unlit) - a mark, not a thing. */
+  unlit?: boolean;
 };
 
 /** A mesh of one primitive of triangles (3.7.2): its vertices' places and normals, its triangles by vertex where it shares vertices, and their colours where they have their own (COLOR_0, RGBA, linear). */
@@ -99,6 +102,7 @@ const CLEARCOAT = "KHR_materials_clearcoat";
 const TRANSMISSION = "KHR_materials_transmission";
 const IOR = "KHR_materials_ior";
 const VOLUME = "KHR_materials_volume";
+const UNLIT = "KHR_materials_unlit";
 
 function fail(what: string): never {
   throw new Error(`The scene cannot be written: ${what}.`);
@@ -194,6 +198,8 @@ export function writeGltf(scene: GltfScene, generator = "Meno"): string {
         ...(m.volume.attenuationColour ? { attenuationColor: [...m.volume.attenuationColour] } : {}),
         ...(m.volume.attenuationDistance !== undefined ? { attenuationDistance: m.volume.attenuationDistance } : {}),
       };
+    // (unlit: the extension's object empty - KHR_materials_unlit)
+    if (m.unlit) extensions[UNLIT] = {};
     Object.keys(extensions).forEach((e) => used.add(e));
     return {
       name: m.name,

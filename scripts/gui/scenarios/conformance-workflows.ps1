@@ -37,7 +37,11 @@
 #   frames drawn smaller with the page.
 #
 # The page as a Mac's 2560x1720 shot shows it (read off main at de4d6790
-# on 2026-10-13; Windows wants its own). Every place below follows from
+# on 2026-10-13; Windows wants its own). NOT YET READ OFF AGAIN after #502
+# (2026-10-21): the fixture now holds its steps' exits - every exit a set to
+# the right of its card, the Energy window's two, CREST's step moved down to
+# clear them - so Fit frames a wider page, and every place below is to be
+# read off again before the next release-candidate run. Every place below follows from
 # what Fit to content frames: where Fit comes to take in the steps and
 # sets too, they are read off again. After Fit and eight notches out: the
 # set's left edge 722,870; the steps' titles at x 1960 - xTB 722, Energy window 1000,

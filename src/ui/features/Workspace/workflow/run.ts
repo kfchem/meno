@@ -6,18 +6,18 @@
  * takes the run's results away.
  */
 import { addMolecules3d, moveMolecules3d, removeMolecules3d, type WorkspaceDocument } from "../document";
-import type { AsideEntry, Molecule3D, StepRunKept, Turn3D, WorkflowStep } from "../store/types";
-import type { CalcInfo } from "../../../../lib/calc/output";
+import type { Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
+import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, inside, setEntries, frameXyz, framesOf, keptKnown, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, keptKnown, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { kindInfo, MENO_DOES, type SetKind, type StepKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
-import { addSet, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, withStepRuns } from "./model";
+import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -38,7 +38,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   // or where any step before it, however far back, is: what that gives
   // anew comes down to it
   const from = wireInto(doc, id)?.from;
-  const before = from ? ("step" in from ? from.step : findSet(doc, from.set)?.made?.step) : undefined;
+  const before = from ? findSet(doc, from.set)?.made?.step : undefined;
   const prior = before != null ? stepOf(doc, before) : undefined;
   const stale = (sid: number) => {
     const s = stepOf(doc, sid);
@@ -80,7 +80,7 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
  */
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   const from = wireInto(doc, step.id)?.from;
-  const before = from ? ("step" in from ? from.step : findSet(doc, from.set)?.made?.step) : undefined;
+  const before = from ? findSet(doc, from.set)?.made?.step : undefined;
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
   const input = inputOf(doc, step.id);
@@ -92,28 +92,33 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
 
 /**
  * What the energies of molecules in 3D are, where a calculation worked them
- * out: its program and method, as the first that says says them -
- * "RDKit · ETKDG v3, MMFF94", "xtb · GFN2-xTB". None, where none says.
+ * out: its program and level (lib/calc `levelOf`), as the first that says them -
+ * "RDKit · ETKDG v3, MMFF94", "xtb · GFN2-xTB · gas phase". None, where none says.
  */
 export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energies">[]): string | undefined {
   const c = molecules.find((m) => m.energies?.length && (m.calc?.program || m.calc?.method))?.calc;
   if (!c) return undefined;
-  return [c.program, [c.method, c.basis].filter(Boolean).join("/")].filter(Boolean).join(" \u00b7 ");
+  return [c.program, levelOf(c)].filter(Boolean).join(" \u00b7 ");
 }
 
-/** What a run gave, as its result set holds it: its molecules in 3D, those it set aside, and what kind of set they make. */
-export type RunResults = { molecules: Omit<Molecule3D, "id" | "at">[]; aside: AsideEntry[]; holds: SetKind };
+/** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
+export type RunResults = NonNullable<StepRunKept["results"]>;
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
-  if (!set?.made || set.made.holds === "pictures") return undefined;
-  const byId = new Map((doc.molecules3d ?? []).map((m) => [m.id, m]));
-  const molecules = setMembers(doc, set).molecules.map((id) => {
-    const { id: _id, at: _at, ...m } = byId.get(id)!;
-    return m;
-  });
-  return { molecules, aside: set.aside ?? [], holds: set.made.holds };
+  if (!set?.made?.holds || set.made.holds === "pictures") return undefined;
+  // (each exit's set: its collection, where it holds one, else its molecules on the page)
+  const held = (b: WorkflowSet | undefined) => (b ? (b.collection ?? setMolecules(doc, b).map(({ id: _id, at: _at, ...m }) => m)) : []);
+  const second = exitsOf(step.kind)[1];
+  const restSet = second ? resultOf(doc, step.id, second.id) : undefined;
+  return {
+    molecules: held(set),
+    rest: held(restSet),
+    holds: set.made.holds,
+    ...(set.unread ? { unread: set.unread } : {}),
+    ...(restSet?.unread ? { restUnread: restSet.unread } : {}),
+  };
 }
 
 /**
@@ -159,10 +164,26 @@ export function showRun(
 /** A frame `w` wide and `h` tall, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
 
-/** The most a row of molecules in a result set spans before the next row begins. */
+/** The most a row of molecules in a result set spans before the next row begins - of a few; of many, as wide as `SET_ASPECT` makes it (`rowMost`). */
 export const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
+/**
+ * How wide a result set of many molecules is laid out against how tall:
+ * about a window's, 3 : 2, so that fitted to the view it reads as a grid -
+ * not as a column one molecule wide.
+ */
+export const SET_ASPECT = 3 / 2;
+
+/** How wide a result set's rows go: `ROW_MOST`, or - for many molecules - as wide as their room, laid out `SET_ASPECT` wide to tall, takes. */
+export function rowMost(rooms: readonly (Frame & { chip: number })[]): number {
+  let area = 0;
+  for (const r of rooms) area += (r.x1 - r.x0 + BETWEEN) * (r.y1 - r.y0 + r.chip + BETWEEN);
+  return Math.max(ROW_MOST, Math.sqrt(area * SET_ASPECT));
+}
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
+/** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
+export const SUMMARY_W = 320 * PX;
+export const SUMMARY_H = SET_TOP + 120 * PX;
 
 /**
  * What a step gave as an entry, where a program worked it out: besides its
@@ -173,33 +194,24 @@ export const LEAST_W = 120 * PX;
 export type Worked = SetEntry & {
   path?: number[][];
   pathEnergies?: number[];
-  calc?: CalcInfo;
-  /** What the molecule made keeps besides: the drawing it was made from, its stereo labels, how it was made, its sticks to ring centres. */
-  keep?: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
   /** Its share of its compound, where the program that found it worked one out (a conformer search's populations). */
   share?: number;
 };
 
-/**
- * What a molecule made in 3D for a step keeps besides its atoms, bonds and
- * places (`Worked.keep`): the drawing it was made from, its stereo labels,
- * how it was made, and its bonds to ring centres (eta) - its atoms in the
- * same order, as the step's entries keep them.
- */
-export function keptOf(m: Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">): NonNullable<Worked["keep"]> {
-  return {
-    drawnFrom: m.drawnFrom,
-    drawnAs: m.drawnAs,
-    ...(m.stereo ? { stereo: m.stereo } : {}),
-    ...(m.made ? { made: m.made } : {}),
-    ...(m.centres?.length ? { centres: m.centres } : {}),
-  };
-}
+/** What a molecule made in 3D for a step keeps besides its atoms, bonds and places (entries `keptOf`). */
+export { keptOf };
 
-/** What a step gave, as its result set is to hold it: its molecules in 3D, those it set aside, and what kind of set they make. */
-export function resultsOf(outcome: Extract<Outcome, { ok: true }>): RunResults {
-  const aside: AsideEntry[] = outcome.aside.map((e) => ({ compound: e.compound, number: e.number, ...(e.energy != null ? { energy: e.energy } : {}) }));
-  return { molecules: moleculesOf(outcome), aside, holds: outcome.holds };
+/**
+ * What a step of `kind` gave, as its exits' sets are to hold it: its
+ * molecules in 3D, those it set aside - made into the kind of set its
+ * second exit holds (Choose one's, the conformers not chosen, a conformer
+ * set still) - and what kind of set the first make.
+ */
+export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKind): RunResults {
+  // (what it set aside is molecules as what it kept is: its second exit's set holds them, in plain view)
+  const asideHolds = restHolds(kind, outcome.holds) ?? outcome.holds;
+  const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
+  return { molecules: moleculesOf(outcome), rest, holds: outcome.holds };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -210,7 +222,7 @@ export function withResults(
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
-  return placeResults(doc, step, resultsOf(outcome), w, turns);
+  return placeResults(doc, step, resultsOf(outcome, step.kind), w, turns);
 }
 
 /** The kinds of step whose results are what came in, worked out: each laid over what it was worked out from as it is put down (`laidOver`). */
@@ -263,20 +275,55 @@ export function placeResults(
   w: Pick<RunWith, "extentOf">,
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
-  const { molecules: made, aside, holds } = results;
-  const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
-  const was = resultOf(doc, step.id);
+  const { molecules: made, rest, holds, unread, restUnread } = results;
+  const exits = exitsOf(step.kind);
+  doc = fillExit(doc, step, exits[0].id, made, holds, unread, w, turns);
+  // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
+  if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  return doc;
+}
+
+/**
+ * `doc` with an exit's set holding `made`: the set that exit made - emptied
+ * of what it held - or one made now, sized to what it holds and laid out as
+ * a run lays its results; more than are laid out on the page, held in the
+ * set itself. With how many did not read from a file (`unread`), where any.
+ */
+function fillExit(
+  doc: WorkspaceDocument,
+  step: WorkflowStep,
+  exit: string,
+  made: readonly Omit<Molecule3D, "id" | "at">[],
+  holds: SetKind,
+  unread: number | undefined,
+  w: Pick<RunWith, "extentOf">,
+  turns?: readonly (Turn3D | undefined)[],
+): WorkspaceDocument {
+  const was = resultOf(doc, step.id, exit);
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
+  const madeBy = { step: step.id, exit, holds };
+  // (an exit that gave nothing keeps its frame as it stands, saying so)
+  if (!made.length) {
+    const where = setForExit(doc, step, exit);
+    return holdMembers(markMade(where.doc, where.id, madeBy), where.id, [], unread);
+  }
+  // (more than are laid out on the page: held in the set, its frame summing them up - docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
+  if (made.reduce((n, m) => n + entriesIn(m), 0) > LARGE_SET) {
+    const frame = was ? frameAt(was.x0, was.y1, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    if (was) return holdCollection(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, [...made], unread);
+    const id = doc.nextWorkflowId ?? 1;
+    return holdCollection(markMade(addSet(doc, frame, madeBy), id, madeBy), id, [...made], unread);
+  }
+  const lay = laidOut(made.map((m, i) => roomOf(m, w.extentOf({ ...m, at: { x: 0, y: 0 } }, turns?.[i]))));
   const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
   // (all put on the page at once: one at a time copied the page's molecules again for each)
   const there = new Set((doc.molecules3d ?? []).map((m) => m.id));
   doc = addMolecules3d(doc, made.map((m, i) => ({ ...m, at: { x: frame.x0 + lay.at[i].x, y: frame.y1 + lay.at[i].y } })));
   // (the set holds what the step made, in the step's order)
   const members = (doc.molecules3d ?? []).filter((m) => !there.has(m.id)).map((m) => ({ molecule: m.id }));
-  const madeBy = { step: step.id, holds };
-  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy, aside), was.id, members);
+  if (was) return holdMembers(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, members, unread);
   const id = doc.nextWorkflowId ?? 1;
-  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy, aside), id, members);
+  return holdMembers(markMade(addSet(doc, frame, madeBy), id, madeBy), id, members, unread);
 }
 
 /**
@@ -335,11 +382,11 @@ export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | 
 /**
  * How a result set's molecules lie in it, each taking the room `rooms` says:
  * under its name, in rows, left to right, a row going no wider than
- * `most` (`ROW_MOST`), and the whole in the middle of the set where the set is wider
+ * `most` (`rowMost`: of many, about a window's shape), and the whole in the middle of the set where the set is wider
  * - its inside at least `least` wide, so that its name reads whole. Each
  * molecule's place from the set's top left, and the set's width and height.
  */
-export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W, most = ROW_MOST): { at: { x: number; y: number }[]; width: number; height: number } {
+export function laidOut(rooms: readonly (Frame & { chip: number })[], least = LEAST_W, most = rowMost(rooms)): { at: { x: number; y: number }[]; width: number; height: number } {
   const places: { x: number; y: number }[] = [];
   let x = 0;
   let y = 0;
@@ -482,12 +529,16 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
   for (const e of outcome.kept) pushTo(groups, e.compound, e);
   return [...groups.values()].map((g) => {
     const first = g[0];
-    const energies = g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
-    const shares = g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
+    const alike = unlikeMade(g) == null;
+    const energies = alike && g.every((e) => e.energy != null) ? g.map((e) => e.energy!) : undefined;
+    const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
-    // (what the calculation was, where a program worked them out: each conformer's results its own, not the compound's)
-    const calc = (first as Worked).calc;
+    // (what the calculation was, where a program worked them out - each conformer's results its own, not the
+    //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
+    //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
+    //  first, saying why)
+    const calc = alike ? (first as Worked).calc : undefined;
     return {
       atoms: atomsAt(first),
       bonds: first.bonds.map((b) => ({ ...b })),
@@ -500,7 +551,7 @@ function moleculesOf(outcome: Extract<Outcome, { ok: true }>): Omit<Molecule3D, 
       conformerSet: true,
       ...(first.name ? { name: first.name } : {}),
       ...keptKnown(first),
-      ...(first as Worked).keep,
+      ...(alike ? keptAlike(g) : {}),
     };
   });
 }
