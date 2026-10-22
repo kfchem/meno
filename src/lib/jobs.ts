@@ -49,6 +49,8 @@ export type JobAsk = {
   path?: string;
   /** Programs installed beside its own to run after it, by their names in its manifest (`installed[].beside`), with their arguments. */
   then?: { program: string; args: string[] }[];
+  /** What it is called, in words - its entry's name and its step's (`water Optimise`): its folder is named from it, path-safe (`water-optimise-3f9a2c1d`). */
+  label?: string;
 };
 
 /** Whether a job is over - and will say nothing more. */

@@ -121,6 +121,9 @@ pub struct JobSpec {
     pub memory: u64,
     /// When it was asked for, in milliseconds since 1970: the order jobs start in.
     pub created: u64,
+    /// What it is called, in words - its entry's, its step's (`water optimise`): its folder named from it, path-safe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
     /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
     /// in its work folder, given what it was given, what they say kept apart.
@@ -1533,8 +1536,19 @@ pub fn make_job(root: &Path, spec: &JobSpec, files: &[JobFile]) -> Result<(Strin
     if let Some(f) = files.iter().find(|f| !inside_name(&f.name)) {
         return Err(format!("a job's file must be inside its folder: {}", f.name));
     }
-    let id = uuid::Uuid::new_v4().to_string();
-    let dir = root.join(&id);
+    // (named from its label, with a short id of its own - one there already, named again)
+    fs::create_dir_all(root).map_err(|e| format!("a job's folder could not be made: {e}"))?;
+    let (id, dir) = (0..8)
+        .find_map(|_| {
+            let id = job_id(spec.label.as_deref().unwrap_or(""));
+            let dir = root.join(&id);
+            match fs::create_dir(&dir) {
+                Ok(()) => Some(Ok((id, dir))),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => None,
+                Err(e) => Some(Err(format!("a job's folder could not be made: {e}"))),
+            }
+        })
+        .unwrap_or_else(|| Err("a job's folder could not be named".into()))?;
     let work = dir.join(WORK);
     fs::create_dir_all(&work).map_err(|e| format!("a job's folder could not be made: {e}"))?;
     for f in files {
@@ -1843,7 +1857,42 @@ fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
 
 /// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
 pub fn job_id_ok(id: &str) -> bool {
-    uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+    // (as Meno names them now - its label, path-safe, and a short id - or as it did, a UUID alone)
+    let named = id.len() <= SLUG_MOST + 9
+        && id.rsplit_once('-').is_some_and(|(slug, tail)| tail.len() == 8 && tail.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) && slug_ok(slug));
+    named || uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+}
+
+/// The most characters of a label a job's folder is named by.
+const SLUG_MOST: usize = 40;
+
+/// A label made safe for a folder's name on every system (docs/WORKFLOWS-FOUNDATION.md, *The working directory
+/// is scratch*): small ASCII letters, digits and hyphens only, no hyphen at either end nor two together, at most
+/// `SLUG_MOST` long - a workspace, step or entry named with spaces or in Japanese gives what ASCII it has; none,
+/// "job".
+pub fn slug_of(label: &str) -> String {
+    let mut out = String::new();
+    for c in label.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+        if out.len() >= SLUG_MOST {
+            break;
+        }
+    }
+    let out = out.trim_end_matches('-').to_string();
+    if out.is_empty() { "job".into() } else { out }
+}
+
+fn slug_ok(slug: &str) -> bool {
+    !slug.is_empty() && slug.len() <= SLUG_MOST && slug.split('-').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
+}
+
+/// A new job's id - its folder's name: its label, path-safe, and eight characters of a UUID of its own.
+fn job_id(label: &str) -> String {
+    format!("{}-{}", slug_of(label), &uuid::Uuid::new_v4().simple().to_string()[..8])
 }
 
 /// A job's folder, by its id - which is only ever one Meno made.
@@ -1881,6 +1930,9 @@ pub struct JobAsk {
     /// Programs installed beside its own to run after it (`JobSpec::then`), by their names there.
     #[serde(default)]
     pub then: Vec<ThenAsk>,
+    /// What it is called, in words: its folder named from it, path-safe (`JobSpec::label`).
+    #[serde(default)]
+    pub label: Option<String>,
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -1931,6 +1983,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         cores: payload.cores.unwrap_or(1).clamp(1, 1024),
         memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
+        label: payload.label.map(|l| l.chars().take(200).collect()),
         then,
     };
     let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
@@ -2176,6 +2229,7 @@ mod tests {
             cores,
             memory,
             created: now_ms(),
+            label: None,
             then: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
@@ -2578,6 +2632,30 @@ mod tests {
     }
 
     #[test]
+    fn names_a_job_s_folder_from_its_label_path_safe_with_a_short_id_of_its_own() {
+        assert_eq!(slug_of("BINOL Optimise"), "binol-optimise");
+        assert_eq!(slug_of("  (R)-BINOL / opt #3 "), "r-binol-opt-3");
+        // (a label in Japanese, or nothing ASCII: what ASCII it has; none, "job")
+        assert_eq!(slug_of("\u{30d3}\u{30ca}\u{30d5}\u{30c1}\u{30eb} opt"), "opt");
+        assert_eq!(slug_of("\u{30d3}\u{30ca}\u{30d5}\u{30c1}\u{30eb}"), "job");
+        assert_eq!(slug_of(&"a".repeat(100)).len(), SLUG_MOST);
+        assert!(!slug_of(&format!("{} b", "a".repeat(39))).ends_with('-'));
+        let root = temp();
+        let mut spec = read_spec(&sized(&root, ECHO, 1, 0)).unwrap();
+        spec.label = Some("water Optimise".into());
+        let (id, dir) = make_job(&root, &spec, &[]).unwrap();
+        assert!(id.starts_with("water-optimise-") && id.len() == "water-optimise-".len() + 8, "{id}");
+        assert_eq!(dir.file_name().unwrap().to_str(), Some(id.as_str()));
+        assert!(job_id_ok(&id));
+        // (one made before, as a UUID alone, still one of Meno's; anything else not)
+        assert!(job_id_ok("4f1c2a9e-0b7d-4e55-9a3c-2f8e1d6b7a10"));
+        for bad in ["../x-1234abcd", "water-optimise", "water optimise-1234abcd", "Water-1234abcd", "-x-1234abcd", "x--y-1234abcd", ".taken-1234abcd", "x-1234ABCD"] {
+            assert!(!job_id_ok(bad), "{bad}");
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn takes_the_limits_settings_wrote_and_this_computer_s_where_none_are() {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
@@ -2917,6 +2995,7 @@ mod tests {
             cores: 1,
             memory: 0,
             created: now_ms(),
+            label: None,
             then: vec![],
         }
     }

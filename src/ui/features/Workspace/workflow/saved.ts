@@ -73,7 +73,8 @@ function readSet(v: unknown): WorkflowSet | null {
 }
 
 /** A job's id, as Meno makes them: a UUID. */
-const JOB = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// (a job's id, as Meno names one - its label, path-safe, and eight hex of its own (jobs.rs `job_id_ok`) - or as it did, a UUID)
+const JOB = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 /** A file's name in a job's folder: inside it. */
 const IN_FOLDER = /^(?!\/)(?![A-Za-z]:)(?!.*(?:^|[\\/])\.\.?(?:[\\/]|$)).{1,200}$/;
 

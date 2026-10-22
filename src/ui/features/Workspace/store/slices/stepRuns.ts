@@ -18,7 +18,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
@@ -517,6 +517,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(p.then ? { then: p.then } : {}),
           cores,
           ...(p.memory ? { memory: p.memory } : {}),
+          // (its folder named from its first entry's name, or its compound's letter, and its step's kind)
+          label: `${entries[p.entries[0]]?.name ?? compoundLetter(entries[p.entries[0]]?.compound ?? 0)} ${kindInfo(step.kind).name}`,
           ...(path ? { path } : {}),
         };
         jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
@@ -600,7 +602,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const p = prepared[0];
         if (p.files.some((f) => f.name === SCENE)) throw new Error("It prepared a job Meno cannot run");
         const path = paths.get(p.program);
-        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
+        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}), label: `${e.name ?? compoundLetter(e.compound)} Render` });
         const { page } = rendered;
         jobs.push({ id: job, entries: [i], reads: [], size: [page.maxX - page.minX, page.maxY - page.minY] });
       }
