@@ -5,6 +5,7 @@ import {
   readTextFile,
 } from "@tauri-apps/plugin-fs";
 import { writeAppFile } from "../io/writeDocument";
+import { MOST_WORKSPACE_FILE } from "../doc/menoFile";
 import { create } from "zustand";
 import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem/style";
 import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
@@ -72,11 +73,15 @@ export type CalculationSettings = {
   coresAll?: number;
   /** How much memory this computer's jobs may use at once, in all, in MiB; unset, three quarters of its memory. */
   memoryAll?: number;
+  /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
+  largeWorkspaceMB?: number;
 };
 
 /** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
 export const MEMORY_MOST = 64 * 1024 * 1024;
+/** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this - the most a workspace's file may come to at all. */
+export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
@@ -210,12 +215,13 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
-  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}) };
+  const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
+  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */

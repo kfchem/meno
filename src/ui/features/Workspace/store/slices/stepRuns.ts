@@ -8,7 +8,8 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
@@ -583,6 +584,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           cores,
           ...(p.memory ? { memory: p.memory } : {}),
           ...(path ? { path } : {}),
+          reads: p.reads,
         };
         jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
       }
@@ -1144,8 +1146,33 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     showStepFiles: async (id: number) => {
       const step = stepOf(doc.getState(), id);
       const job = step?.running?.jobs[0]?.id ?? step?.ran?.jobs?.[0];
-      if (!job) return;
-      await revealItemInDir(await jobFolder(job));
+      if (!step || !job) return;
+      const there = await jobFolder(job).catch(() => null);
+      if (there) return void (await revealItemInDir(there));
+      // (its folder not on this computer - a workspace saved elsewhere: what the file kept of it written back out, and shown)
+      const kept = [step.ran, ...(step.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
+      let work: string | null = null;
+      // (each file not written back, and why: never one there already written over)
+      const differs: string[] = [];
+      const notHad: string[] = [...(kept?.left ?? []).map((l) => l.name)];
+      for (const f of kept?.files ?? []) {
+        const from = await heldJobSource(f.sha256);
+        const bytes = from ? null : heldJobFile(f.sha256);
+        if (!from && !bytes) {
+          notHad.push(f.name);
+          continue;
+        }
+        const back = await writeJobBack(job, f.name, f.sha256, from ? { from } : { bytes: bytes! }).catch(() => null);
+        if (!back) {
+          notHad.push(f.name);
+          continue;
+        }
+        work = back.work;
+        if (back.differs) differs.push(f.name);
+      }
+      if (!work) throw new Error("Its files are not on this computer, and the workspace's file keeps none of them.");
+      await revealItemInDir(work);
+      return showFilesSaid(differs, notHad);
     },
     lookAtJobs,
     /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */
