@@ -496,6 +496,28 @@ function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
   };
 }
 
+/** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its name. */
+function menoProperties(e: SetEntry): Record<string, Property> {
+  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
+  const by = byOf(e.calc);
+  return {
+    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
+    number: { value: e.number, unit: "none", status: "computed" },
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+    ...thermoOf(e, at.geometry),
+    ...vibrationsOf(e, at),
+    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
+  };
+}
+
+/** The properties an entry carries of its own under names Meno gives its own (`menoProperties`), which its entry record reads as Meno's: none, mostly. */
+export function shadowedIn(e: SetEntry): string[] {
+  if (!e.properties) return [];
+  const own = menoProperties(e);
+  return Object.keys(e.properties).filter((k) => k in own);
+}
+
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
  * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
@@ -512,20 +534,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
   }));
-  // (the energy where its calculation was worked out - in the solvation it said - and by what)
-  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
-  const by = byOf(e.calc);
-  // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own)
-  const properties: Record<string, Property> = {
-    ...e.properties,
-    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
-    number: { value: e.number, unit: "none", status: "computed" },
-    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
-    ...thermoOf(e, at.geometry),
-    ...vibrationsOf(e, at),
-    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
-    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
-  };
+  // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own: `shadowedIn` names those it gave under them)
+  const properties: Record<string, Property> = { ...e.properties, ...menoProperties(e) };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
   return {
     id,

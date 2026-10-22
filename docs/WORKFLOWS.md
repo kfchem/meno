@@ -1458,24 +1458,31 @@ nodes*): the first proof of a generative workflow - structures a model
 generates, made 3D, filtered on the model's NLL and 2D properties - needs
 it.
 
-- **Its conditions are typed**, one to a line or each after a semicolon:
-  a property, a comparison (< ≤ > ≥ = ≠, or <= >= != as typed), and a
-  value - a number with its unit where the property has one ("nll < 30",
-  "energy ≤ -76.4 Eh", "gap > 40 kcal/mol"), true or false, or a text.
-  *Kept where* is all of them met, or any. Its card says them as read
-  ("nll < 30 and mw ≤ 500"), or why one does not read - a unit Meno does
-  not know, no comparison - and it does not run until they do.
+- **Its conditions are typed**, one to a line or each after a semicolon
+  (one inside double quotes is a text's): a property, a comparison (< ≤ >
+  ≥ = ≠, or <= >= != as typed), and a value - a number with its unit where
+  the property has one ("nll < 30", "energy ≤ -76.4 Eh", "gap > 40
+  kcal/mol"), true or false, or a text. *Kept where* is all of them met,
+  or any. Its card says them as read ("nll < 30 and mw ≤ 500"), or why one
+  does not read - a unit Meno does not know, no comparison, one read whole
+  that is none (=<, ≥≥), a quote not closed - and it does not run until
+  they do.
 - **A number is compared in the condition's unit**, converted within its
   dimension only: 0.5 eV against 40 kcal/mol is 11.530274 kcal/mol. A
   property of another dimension, or of none where the condition has one,
-  meets nothing, and says so.
+  or a number that is not finite (NaN, an infinity), meets nothing, and
+  says so. Kept where any is met, an entry kept with a condition that could
+  not be asked of it is counted on the line, with why ("2 of them with a
+  condition not asked (1: it has no gap; ...)").
 - **What it reads** is each entry as Meno's entry record (`entryOfSet`):
   its properties as its molecule's frame carries them
   (`Molecule3D.properties`, one map for each frame - a model's NLL, a
   descriptor - each with its unit and what worked it out), and Meno's own:
   its energy, in hartrees, its number among its compound's conformers,
-  its compound as its group, its name. Meno's own names are its own: a
-  property given under one of them is read as Meno's.
+  its compound as its group, its name, its thermochemistry. A condition on
+  a name that is Meno's own and one an entry carries of its own too is
+  refused ("which is meant cannot be told"), never read as either; the
+  entry's own goes on with it, unread.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:

@@ -102,4 +102,43 @@ describe("conditions as typed", () => {
     const out = filter(set, { conditions: typed.conditions, match: "all" });
     expect(out.ok && ids(out.exits.kept)).toEqual(["a"]);
   });
+
+  it("reads a semicolon or a line inside double quotes as the text's, and refuses a quote not closed", () => {
+    expect(conditionsIn('name = "a;b"; nll < 3')).toEqual({
+      conditions: [
+        { property: "name", compare: "=", value: "a;b" },
+        { property: "nll", compare: "<", value: 3, unit: "none" },
+      ],
+    });
+    expect(conditionsIn('name = "a; nll < 3')).toEqual({ why: "A quote is opened and not closed" });
+  });
+
+  it("reads a comparison whole: =<, =>, <==, ≥≥ or ! are none, and are refused, never read as = and a text", () => {
+    for (const op of ["=<", "=>", "<==", "≥≥", "!"]) expect(conditionsIn(`x ${op} 3`)).toEqual({ why: `"x ${op} 3": ${op} is no comparison - it takes < ≤ > ≥ = or ≠ (or <= >= !=)` });
+    expect(conditionsIn("x == 3")).toEqual({ conditions: [{ property: "x", compare: "=", value: 3, unit: "none" }] });
+  });
+});
+
+describe("Filter, on what cannot be compared", () => {
+  it("sets aside a number that is not finite - NaN, an infinity - saying so, whatever the comparison", () => {
+    const odd = [entry("n", { x: quantity(NaN, "none") }), entry("i", { x: quantity(Infinity, "none") }), entry("f", { x: quantity(2, "none") })];
+    for (const compare of ["≠", "≥", "<"] as const) {
+      const out = filter(odd, { conditions: [{ property: "x", compare, value: compare === "<" ? 5 : 1, unit: "none" }], match: "all" });
+      if (!out.ok) throw new Error(out.said);
+      expect([ids(out.exits.kept), out.exits.rest.map((e) => e.status)]).toEqual([["f"], [{ aside: "its x is not a finite number" }, { aside: "its x is not a finite number" }]]);
+    }
+  });
+
+  it("says, where any is met, of those kept how many had a condition it could not ask - no value, another unit or kind - never passing over it", () => {
+    const two = [entry("a", { nll: quantity(10, "none"), gap: quantity(2, "eV") }), entry("b", { nll: quantity(15, "none") }), entry("c", { nll: quantity(50, "none") })];
+    const out = filter(two, { conditions: [{ property: "nll", compare: "<", value: 20, unit: "none" }, { property: "gap", compare: ">", value: 1, unit: "K" }], match: "any" });
+    if (!out.ok) throw new Error(out.said);
+    expect(ids(out.exits.kept)).toEqual(["a", "b"]);
+    expect(out.said).toBe(
+      "2 of 3 entries kept · 2 of them with a condition not asked (1: its gap is in eV, which does not convert to K; 1: it has no gap) · rest 1 (1: not nll < 20 (50); it has no gap)",
+    );
+    // (all met, nothing more to say)
+    const met = filter(two.slice(0, 2), { conditions: [{ property: "nll", compare: "<", value: 20, unit: "none" }], match: "any" });
+    expect(met.ok && met.said).toBe("2 of 2 entries kept");
+  });
 });
