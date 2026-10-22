@@ -1,3 +1,4 @@
+import { readSDfile } from "./ctfile";
 import { describe, expect, it } from "vitest";
 import { writeMolfile, writeMolfile3d, writeRxnfile, writeSdf, MOL_BOND_LENGTH, type Atom3D, type Bond3D, type WriterModel } from "./molWriter";
 import { readMolfile, readRxnfile } from "./ctfile";
@@ -325,7 +326,8 @@ describe("a molecule in 3D as a molfile", () => {
         "  Meno              3D",
         "",
         "  5  4  0  0  0  0  0  0  0  0999 V2000",
-        "    0.0000    0.0000    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0",
+        // (15N+: its mass difference 1 and charge code 3 in the atom block too, beside M  CHG and M  ISO - "CTfile Formats" p. 66)
+        "    0.0000    0.0000    0.0000 N   1  3  0  0  0  0  0  0  0  0  0  0",
         "    1.0200    0.0000    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0",
         "   -0.3400    0.9600    0.0000 H   0  0  0  0  0  0  0  0  0  0  0  0",
         "   -0.3400   -0.4800    0.8300 H   0  0  0  0  0  0  0  0  0  0  0  0",
@@ -340,6 +342,30 @@ describe("a molecule in 3D as a molfile", () => {
         "",
       ].join("\n"),
     );
+  });
+
+  it("is read with its charges, radicals and isotopes from the atom block alone, as an older reader reads it", () => {
+    // ("CTfile Formats" (Chemistry 2026) p. 66: a writer writes values in the old range in both places)
+    const atoms = [
+      { el: "C", x: 0, y: 0, z: 0, isotope: 13 },
+      { el: "N", x: 1.4, y: 0, z: 0, charge: 1 },
+      { el: "O", x: 2.8, y: 0, z: 0, charge: -1 },
+      { el: "C", x: 0, y: 1.4, z: 0, radical: "doublet" as const },
+      { el: "Fe", x: 0, y: 3, z: 0, charge: 4 },
+    ];
+    const text = writeMolfile3d(atoms, [{ a1: 0, a2: 1, order: 1 }], { title: "old" });
+    const bare = text.split("\n").filter((l) => !/^M {2}(CHG|ISO|RAD)/.test(l)).join("\n");
+    const [m] = readSDfile(bare);
+    expect(m.atoms.map((a) => [a.symbol, a.mass, a.charge, a.radical])).toEqual([
+      ["C", 13, undefined, undefined],
+      ["N", undefined, 1, undefined],
+      ["O", undefined, -1, undefined],
+      ["C", undefined, undefined, "doublet"],
+      // (a charge of 4 is past the atom block's: in M  CHG alone)
+      ["Fe", undefined, undefined, undefined],
+    ]);
+    // (and with the properties' lines, as before)
+    expect(readSDfile(text)[0].atoms.map((a) => a.charge)).toEqual([undefined, 1, -1, undefined, 4]);
   });
 
   it("says it is 3D, and is read back where its atoms were, in depth", () => {

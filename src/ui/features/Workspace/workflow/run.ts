@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
@@ -90,6 +90,9 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
   const input = inputOf(doc, step.id);
   if (!input) return "Nothing comes into it";
+  // (a set that came to mix conformer sets with other molecules after it was wired)
+  const mixed = input.holds === "molecules" && from && !findSet(doc, from.set)?.made ? plainAmong(input.molecules) : null;
+  if (mixed) return mixed;
   if (!takesBy(step.kind, by, input.holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
   return null;

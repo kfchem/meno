@@ -750,7 +750,9 @@ The same for every plugin and for Meno's own parts:
     reaction as an RXN file holds it, as a reaction SMILES) (SMILES);
     `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
-    (stereoisomers); `conformers {molblock, isomers?, like?, options}`
+    (stereoisomers: what is left open, how many stereoisomers of it can
+    be made in 3D, which open double bonds are cumulated, and whether none
+    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),

@@ -175,6 +175,7 @@ export default function PartMenu({
   text,
   onSaveProcedure,
   keepInFile,
+  setHoldsOwn,
   onUseAsInput,
   onSaveAbbreviation,
   onExport,
@@ -292,6 +293,8 @@ export default function PartMenu({
   onSaveProcedure?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
   keepInFile?: { kept: boolean; set: (keep: boolean) => void };
+  /** A set right-clicked that holds its molecules itself, on no page (a large set's `collection`): what it holds, said ("118 molecules"), since they go with it when it is deleted. */
+  setHoldsOwn?: string;
   /** The selection made a set, a workflow's input; unset, where it holds no whole structure or molecule in 3D. */
   onUseAsInput?: () => void;
   /** The selection saved as an abbreviation of the user's own. */
@@ -765,9 +768,11 @@ export default function PartMenu({
         ]
       : target.kind === "set"
       ? [
-          del("Delete set"),
+          ...(setHoldsOwn ? [] : [del("Delete set")]),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure }] : []),
           ...(keepInFile ? [{ name: "Don't keep in the file", keys: "", run: () => keepInFile.set(!keepInFile.kept), checked: !keepInFile.kept, divider: true }] : []),
+          // (a set that holds its molecules itself, on no page: they go with it - said in words, listed last, not as an icon alone, before it is deleted)
+          ...(setHoldsOwn ? [{ name: `Delete set and the ${setHoldsOwn} it holds`, keys: deleteKey, run: onDelete, del: true, divider: true }] : []),
         ]
       : target.kind === "step"
       ? [

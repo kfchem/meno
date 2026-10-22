@@ -59,10 +59,28 @@ const ON_DRAWN = "Not on structures drawn: only Meno's own steps take or give th
  * own (`running`, amended in): undo does not take a run back, and the
  * workspace saved keeps it, so that one opened again picks its jobs up.
  */
+/** Structures by their places among `of`: "structure 3", "structures 1, 2 and 4". */
+const structuresAt = (places: readonly number[]) =>
+  places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
+
 /** The structures that could not be made in 3D, by their places among `of`: "structure 3 of 4 could not be made in 3D". */
 export function notMade(places: readonly number[], of: number): string {
-  const which = places.length === 1 ? `structure ${places[0]}` : `structures ${places.slice(0, -1).join(", ")} and ${places[places.length - 1]}`;
-  return `${which} of ${of} could not be made in 3D`;
+  return `${structuresAt(places)} of ${of} could not be made in 3D`;
+}
+
+/**
+ * The structures not made in 3D because their drawing leaves a stereocentre
+ * or a double bond open that could go more than one way, by their places
+ * among `of`: a conformer search never chooses a configuration the drawing
+ * does not give.
+ */
+export function stereoOpen(places: readonly number[], of: number): string {
+  return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
+}
+
+/** The structures made in 3D with their stereo free, by their places among `of`: open, and no stereoisomer of them holds in 3D. */
+export function stereoFree(places: readonly number[], of: number): string {
+  return `${structuresAt(places)} of ${of} made with ${places.length === 1 ? "its" : "their"} stereo free: no stereoisomer of ${places.length === 1 ? "it" : "them"} holds in 3D`;
 }
 
 export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetState, get: GetState, w: Pick<RunWith, "extentOf">) {
@@ -388,6 +406,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let compounds = 0;
     // (those that could not be made, by their places among the structures: the others made all the same)
     const failed: number[] = [];
+    // (those whose drawing leaves a stereocentre or a double bond open that could go more than one way, by their places: not made, a configuration never chosen for them)
+    const open: number[] = [];
+    // (those left open where no stereoisomer holds in 3D - a strained cage's: made as the embedding places them, and said so)
+    const free: number[] = [];
     try {
       let chem = await pluginWorker(plugin);
       for (const [place, atoms] of input.structures.entries()) {
@@ -397,6 +419,16 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         if (!block) continue;
         let made;
         try {
+          // (a step cannot ask, as the canvas's 3D structure does, which stereoisomer is meant: one whose drawing leaves any open that could go
+          //  more than one way in 3D is not made - an allene's axis always could, its stereoisomers not counted; a bridgehead whose rings allow
+          //  it one way only is no choice, and is made so)
+          const left = await chem.request("open_stereo", { molblock: block.molblock }, CONFORMERS_MS);
+          const unset = left.atoms.length + left.bonds.length > 0;
+          if (unset && (left.isomers > 1 || (left.cumulenes?.length ?? 0) > 0)) {
+            open.push(place + 1);
+            continue;
+          }
+          if (unset && left.free) free.push(place + 1);
           // (as long as the canvas allows the same question: the plugin, the molecule and how many are sought are the same)
           made = (await chem.request("conformers", { molblock: block.molblock, isomers: "one", options }, CONFORMERS_MS)).isomers[0];
         } catch {
@@ -442,9 +474,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
-    if (!worked.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
+    const of = input.structures.length;
+    // (each not made said: those that could not be, and those whose stereo is left open)
+    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : [])];
+    // (made, but said: their stereo not held - only those that were made)
+    const freed = free.filter((p) => !failed.includes(p));
+    if (!worked.length) {
+      const why = open.length ? unmade.join(" \u00b7 ") : "No structure drawn could be made in 3D";
+      return void fail(id, why[0].toUpperCase() + why.slice(1), at, key);
+    }
     const took = Date.now() - at;
-    const left = failed.length ? ` \u00b7 ${notMade(failed, input.structures.length)}` : "";
+    const left = [...unmade, ...(freed.length ? [stereoFree(freed, of)] : [])].map((u) => ` \u00b7 ${u}`).join("");
     bringIn(id, worked, "conformers", {
       at,
       ok: true,

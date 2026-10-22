@@ -361,8 +361,10 @@ export function createEditorStore(
     hoveredWire: null,
     openStep: null,
     wireDrag: null,
+    wireRefused: null,
     workflowMenu: null,
     askDeleteStep: null,
+    askDeleteSet: null,
     askUndo: null,
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
@@ -385,6 +387,7 @@ export function createEditorStore(
     panHold: { active: false, pointerId: null },
     suppressDblClickUntil: 0,
     savedPath: null,
+    leftOnOpen: null,
     openedName: null,
 
     ...createModelSlice(doc, set, get),

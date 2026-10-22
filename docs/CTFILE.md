@@ -25,7 +25,9 @@ title, its first line; the record's data items are not kept:
   LP) or an atom list (L, `[N,O]`, `NOT [S,Se]`); mass (V2000's mass
   difference and M  ISO, V3000's MASS); charge and radical (V2000's atom
   block and M  CHG / M  RAD, either of which clears the atom block's);
-  valence; query hydrogen count; stereo care box; atom-atom mapping;
+  valence; query hydrogen count; stereo care box (read, but not carried
+  onto the canvas nor written back: a search query's, of no structure's
+  meaning); atom-atom mapping;
   inversion/retention; exact change; query substitution, unsaturation and
   ring bond counts; alias (A) and value (V) lines; Rgroup labels
   (M  RGP, RGROUPS) and attachment points and order (M  APO, M  AAL,
@@ -33,7 +35,8 @@ title, its first line; the record's data items are not kept:
 - **Bonds**: types 1 to 10 (single, double, triple, aromatic, the four
   query types, coordination, hydrogen); stereo (a single bond's up, down,
   either; a double bond's either - cis or trans, not known); topology;
-  reacting centre; stereo care; V3000's haptic endpoints (ENDPTS with
+  reacting centre; stereo care (as an atom's: read, not carried on nor
+  written back); V3000's haptic endpoints (ENDPTS with
   ATTACH=ALL or ANY) and display (DISP: COORD, DATIVE, HBOND1, HBOND2).
 - **Sgroups** of every type - abbreviations (SUP, and the old G line),
   multiple groups, polymers (SRU, MON, MER, COP, CRO, MOD, GRA, ANY), mixtures
@@ -98,7 +101,7 @@ holds whole: the file is read (before, either failed as it was read).
 | A hydrogen bond (type 10) | Dotted: round dots a line and a half wide, three line widths apart, at least three. | GR-1.8: partial bonds dotted, at least three dots; GR-1.3: gaps of 2 to 4 line widths. |
 | A coordination bond shown as COORD | A plain line. | GR-1.7: coordination bonds plain; dashed not acceptable. |
 | A coordination bond otherwise (type 9, or DATIVE) | A dative arrow, from the first atom to the second, as before. | |
-| An aromatic bond (type 4) | Written out as a Kekulé structure: every carbon of the ring with one double bond, a pyridine-type N where the ring needs it, a pyrrole-type N-H or a furan O with none. A query atom in the ring - A, Q, *, an atom list - takes one where the ring needs it, as such an N does (until 2026-10-13 it took none, and a ring with a query atom between every two carbons came out with no double bond at all). Where the file does not say which nitrogen carries a ring's H - an imidazole's, a tetrazole's, a purine's, a porphine's - and another could have, the atom it is drawn on says so, dashed, on hover: "The file does not say which atom carries this H: it is drawn on this one." Until that atom is changed (2026-10-22, the maintainer: to be tried in use). | The editor draws single, double and triple bonds. |
+| An aromatic bond (type 4) | Written out as a Kekulé structure: every carbon of the ring with one double bond, a pyridine-type N where the ring needs it, a pyrrole-type N-H or a furan O with none. A query atom in the ring - A, Q, *, an atom list - takes one where the ring needs it, as such an N does (until 2026-10-13 it took none, and a ring with a query atom between every two carbons came out with no double bond at all). Where the file does not say which nitrogen carries a ring's H - an imidazole's, a tetrazole's, a purine's, a porphine's - and another could have, the atom it is drawn on says so, dashed, on hover: "The file does not say which atom carries this H: it is drawn on this one." Until that atom is changed (2026-10-22, the maintainer: to be tried in use). | The editor draws single, double and triple bonds. Hückel's rule as IUPAC defines it (Gold Book H02867, doi:10.1351/goldbook.H02867) is of a monocyclic system, generally n = 0 to 5; Meno applies the 4n + 2 count to each aromatic ring system as a whole, fused rings included, with no upper bound on n - beyond that definition. |
 | A query bond (types 5 to 8) | The first kind it stands for - single, or double for "double or aromatic" - labelled small beside its middle on the side with more room: S/D, S/A, D/A, Any. | GR-11.2: a bond's annotation by its middle, smaller than an atom's label. Meno's own labels. |
 
 Neither a hydrogen bond nor a coordination bond takes a hydrogen from the
@@ -473,7 +476,13 @@ the display as the file wrote it, its place not followed; a haptic bond
 with its endpoints (V3000).
 
 Mapping numbers, inversion and retention, exact change and reacting
-centres go in their fields. Enhanced stereo is written as V3000 collections
+centres go in their fields. A V2000 atom's charge, doublet radical and
+mass difference go in the atom block's ccc and dd fields too, where they
+are in those fields' range (a charge of -3 to 3, a mass difference of -3
+to 4 from the table's), beside M  CHG, M  RAD and M  ISO: *CTfile Formats*
+(Chemistry 2026, p. 66) asks every writer to put them in both, so that a
+reader of the atom block alone sees them (2026-10-22; before, the atom
+block's were 0). Enhanced stereo is written as V3000 collections
 - V2000 says only the chiral flag, set where every group is absolute.
 
 An abbreviation is written out - the atoms a file gave it, or the
