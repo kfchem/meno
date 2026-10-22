@@ -193,7 +193,13 @@ const GRID_FROM = 400;
 
 /** Nearer than this, in ångströms, two atoms are in one place: no bond (the shortest, H2's, is 0.74). */
 export const ONE_PLACE = 0.1;
-/** How much further than their radii together two atoms may stand and be bonded, in ångströms, at least: H2 (0.741) is beyond its radii's fifth over (0.768 with the floor; 0.768 alone would bond it too, the floor kept for the smallest radii). */
+/**
+ * How much further than their radii together two atoms may stand and be
+ * bonded, in ångströms, at least - for the smallest radii, whose fifth over
+ * is less. Set (2026-10-13) when the reach was a tenth over, which H2 (0.741
+ * Å) lay beyond (0.704). A fifth over reaches 0.768 Å, within which H2 now
+ * lies without it; it is kept for the smallest radii all the same.
+ */
 const REACH_FLOOR = 0.15;
 
 /**
