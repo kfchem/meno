@@ -11,11 +11,10 @@
  * out, or what is not to be had, each job's record names, with its size.
  */
 import { jobKept, type KeptJobFile } from "../../../../lib/jobs";
+import type { Appended } from "../../../../lib/io/writeDocument";
 import { JOB_FILE_MEDIA, type KeptData, type KeptFile, type MenoFile } from "../../../../lib/doc/menoFile";
+import { kindInfo } from "./kinds";
 import type { KeptJob, KeptJobEntry, LeftJobEntry, StepRan, WorkflowStep } from "../store/types";
-
-/** A job's file to be added to a workspace's file from the disk (src-tauri keptjobs.rs `Appended`). */
-export type Appended = { sha256: string; job: string; name: string };
 
 /** What a save keeps of the steps' jobs. */
 export type JobsKept = {
@@ -30,6 +29,8 @@ export type JobsKept = {
   steps: { step: number; bytes: number }[];
   /** About how much they all add. */
   bytes: number;
+  /** About how much those added from the disk add, deflated: what the file as the page writes it does not hold. */
+  adds: number;
 };
 
 /** A step's jobs, of its run and the runs it keeps, each once. */
@@ -60,7 +61,7 @@ export async function jobsToKeep(
   read: (job: string) => Promise<KeptJobFile[] | null> = jobKept,
   bytesOf: (sha256: string) => Uint8Array | null = heldJobFile,
 ): Promise<JobsKept> {
-  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0 };
+  const out: JobsKept = { records: new Map(), listed: [], appended: [], carried: [], steps: [], bytes: 0, adds: 0 };
   const seen = new Set<string>();
   for (const step of steps) {
     const raw = step.keepRaw !== false;
@@ -82,6 +83,7 @@ export async function jobsToKeep(
           out.listed.push({ sha256: f.sha256, name: f.name, media: JOB_FILE_MEDIA, size: f.size });
           out.appended.push({ sha256: f.sha256, job, name: f.name });
           bytes += f.deflated;
+          out.adds += f.deflated;
         }
       } else {
         const was = recordOf(step, job);
@@ -129,6 +131,32 @@ export const LARGE_WORKSPACE_MB = 500;
 
 /** Whether a save of `bytes` takes the workspace past `threshold`: over it, where the file it replaces - `before`, none where there is none - was not. */
 export const takesPast = (bytes: number, before: number | null, threshold: number): boolean => bytes > threshold && (before == null || before <= threshold);
+
+/** What the size warning says (LargeWorkspaceAsk): how large the file comes to, past what, and its largest steps - by name, numbered where several are of a kind - with what their jobs add. */
+export type SizeAsk = { bytes: number; threshold: number; steps: { id: number; name: string; bytes: number }[] };
+
+/** How many of the largest steps the size warning names. */
+const STEPS_NAMED = 3;
+
+/**
+ * The size warning a save of `steps` asks, where it takes the workspace past
+ * `thresholdMB` (`takesPast`): the file as the page wrote it (`written`
+ * bytes) with the job files added from the disk (`jobs`), against the file
+ * it replaces (`before`, its size; none where there is none). None where it
+ * does not, or there are no job files to leave out.
+ */
+export function sizeAsk(steps: readonly WorkflowStep[], jobs: Pick<JobsKept, "steps" | "adds">, written: number, before: number | null, thresholdMB: number): SizeAsk | null {
+  const bytes = written + jobs.adds;
+  const threshold = thresholdMB * 2 ** 20;
+  if (!jobs.steps.length || !takesPast(bytes, before, threshold)) return null;
+  const nameOf = (id: number) => {
+    const s = steps.find((x) => x.id === id)!;
+    const name = kindInfo(s.kind).name;
+    const same = steps.filter((x) => x.kind === s.kind);
+    return same.length > 1 ? `${name} ${same.indexOf(s) + 1}` : name;
+  };
+  return { bytes, threshold, steps: jobs.steps.slice(0, STEPS_NAMED).map((s) => ({ id: s.step, name: nameOf(s.step), bytes: s.bytes })) };
+}
 
 /** A size in bytes as Meno says it of a workspace: whole megabytes, or gigabytes to a tenth from one up. */
 export const megabytes = (n: number) => (n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(1)} GB` : `${Math.max(1, Math.round(n / 2 ** 20))} MB`);

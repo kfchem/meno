@@ -361,6 +361,37 @@ mod tests {
     }
 
     #[test]
+    fn a_save_adds_them_to_its_hidden_file_before_it_takes_the_old_ones_place_or_leaves_the_old_one() {
+        let root = temp("save");
+        let dir = job(&root);
+        let files = kept_files(&dir);
+        let appended: Vec<Appended> = files.iter().map(|f| Appended { sha256: f.sha256.clone(), job: ID.into(), name: f.name.clone() }).collect();
+        let path = root.join("work.meno");
+        fs::write(&path, b"the workspace saved before").unwrap();
+        let page = base_zip("{}");
+        // (as write_document writes a workspace: what the page wrote, then the job files added, in the hidden file)
+        let save = |appended: &[Appended]| {
+            crate::savefile::replace_keeping(&path, false, |f| {
+                f.write_all(&page)?;
+                append_job_files(f, &root, appended).map(|_| ()).map_err(io::Error::other)
+            })
+        };
+        save(&appended).unwrap();
+        let mut z = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
+        assert_eq!(z.len(), 3 + files.len());
+        let mut out = Vec::new();
+        z.by_name(&format!("files/{}", files[0].sha256)).unwrap().read_to_end(&mut out).unwrap();
+        assert_eq!(out, fs::read(dir.join(&files[0].name)).unwrap());
+        // (one changed since it was listed: the save fails, and the file there is as it was, nothing beside it)
+        let before = fs::read(&path).unwrap();
+        fs::write(dir.join(&files[0].name), "changed").unwrap();
+        assert!(save(&appended).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert!(!fs::read_dir(&root).unwrap().any(|e| e.unwrap().file_name().to_string_lossy().ends_with(".part")));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn appends_nothing_from_outside_a_jobs_folder_or_its_spec() {
         let root = temp("outside");
         job(&root);

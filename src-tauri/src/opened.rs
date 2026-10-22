@@ -90,12 +90,15 @@ pub fn opened_of(urls: &[tauri::Url]) -> Vec<String> {
         .collect()
 }
 
-/// Files to open: the page let read and write each - as Open's
-/// dialog lets it a file picked there - kept, and the page told.
+/// Files to open: each by its one true path (truepath.rs), so that one
+/// already open in a tab - however its path was written here - brings that
+/// tab forward; the page let read and write each - as Open's dialog lets it
+/// a file picked there - kept, and the page told.
 pub fn open(app: &AppHandle, paths: Vec<String>) {
     if paths.is_empty() {
         return;
     }
+    let paths: Vec<String> = paths.iter().map(|p| crate::truepath::true_path_or_given(p)).collect();
     for p in &paths {
         if let Some(scope) = app.try_fs_scope() {
             let _ = scope.allow_file(p);

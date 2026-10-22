@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { KeptJobFile } from "../../../../lib/jobs";
 import { JOB_FILE_MEDIA, menoFileBytes, readMenoFile } from "../../../../lib/doc/menoFile";
 import type { WorkflowStep } from "../store/types";
-import { heldJobFile, holdJobFilesOf, jobsOfStep, jobsToKeep, takesPast, withKeptJobs } from "./keptJobs";
+import { heldJobFile, holdJobFilesOf, jobsOfStep, jobsToKeep, sizeAsk, takesPast, withKeptJobs } from "./keptJobs";
 
 const J1 = "0b6f5c1e-0000-4000-8000-000000000001";
 const J2 = "0b6f5c1e-0000-4000-8000-000000000002";
@@ -46,6 +46,7 @@ describe("what a save keeps of the steps' jobs", () => {
       { step: 2, bytes: 60 + 4000 },
     ]);
     expect(kept.bytes).toBe(4268 + 4060);
+    expect(kept.adds).toBe(4268 + 4060);
   });
 
   it("with Don't keep raw outputs, keeps what a job was given, what was read back and its logs, and names each file left out with its size", async () => {
@@ -141,5 +142,24 @@ describe("the size warning", () => {
     expect(takesPast(T + 1, null, T)).toBe(true);
     expect(takesPast(T + 1, T + 5, T)).toBe(false);
     expect(takesPast(T, 0, T)).toBe(false);
+  });
+
+  it("names the largest steps, numbered where several are of a kind, with the file the page wrote and the job files added from the disk", () => {
+    const MB = 2 ** 20;
+    const steps = [step(1, [J1]), step(2, [J2]), step(3, [J3], { kind: "conformers" })];
+    const jobs = { steps: [{ step: 2, bytes: 400 * MB }, { step: 3, bytes: 90 * MB }, { step: 1, bytes: 20 * MB }], adds: 510 * MB };
+    expect(sizeAsk(steps, jobs, 10 * MB, null, 500)).toEqual({
+      bytes: 520 * MB,
+      threshold: 500 * MB,
+      steps: [
+        { id: 2, name: "Optimise 2", bytes: 400 * MB },
+        { id: 3, name: "Conformers", bytes: 90 * MB },
+        { id: 1, name: "Optimise 1", bytes: 20 * MB },
+      ],
+    });
+    // (the file there past it already; or under the threshold Settings says; or no job files to leave out: nothing asked)
+    expect(sizeAsk(steps, jobs, 10 * MB, 600 * MB, 500)).toBeNull();
+    expect(sizeAsk(steps, jobs, 10 * MB, null, 1000)).toBeNull();
+    expect(sizeAsk(steps, { steps: [], adds: 0 }, 900 * MB, null, 500)).toBeNull();
   });
 });
