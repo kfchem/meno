@@ -12,6 +12,9 @@ import { renderOptions } from "../render/renderOptions";
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind };
 
+/** The kinds of set whose entries are molecules in 3D: all but structures drawn. */
+export type Holds3D = Exclude<SetKind, "structures">;
+
 /** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
 export type SetHolds = SetKind | "pictures";
 
@@ -66,13 +69,22 @@ export type KindInfo = {
   how?: (values: Record<string, string | number | boolean>) => string;
 };
 
+/**
+ * A program step's second exit (workflow/failures): each entry it could not
+ * do, with why - as it came in, or as far as it came (an optimisation that
+ * did not converge, its last geometry) - in plain view, and wired on to try
+ * again. What it holds is what came in (`same`); a conformer search's, the
+ * molecules it could search no conformers of.
+ */
+const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
+
 export const KINDS: readonly KindInfo[] = [
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers" },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies" },
+  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", second: { ...FAILED, gives: "molecules" } },
+  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", second: FAILED },
+  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", second: FAILED },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", second: FAILED },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions" },
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", second: FAILED },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {

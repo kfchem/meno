@@ -1,3 +1,5 @@
+import type { Failure, FailureKind } from "../workflow/failures";
+import type { LeftOut } from "../utils/readNotes";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
@@ -409,6 +411,18 @@ export type Molecule3D = {
   at: { x: number; y: number; z?: number };
   /** The rest of a file's frames (a trajectory, conformers): x, y, z of every atom, frame by frame. */
   frames?: number[][];
+  /**
+   * Why a program step could not do it, frame by frame (null, a frame it
+   * did): what a step's Failed exit holds (workflow/failures) - kept with
+   * it, its chip saying it in plain words.
+   */
+  failed?: (Failure | null)[];
+  /**
+   * A conformer set's: the imaginary frequencies each conformer's
+   * calculation judged it has (lib/calc/output `CalcInfo.imaginary`), frame
+   * by frame - null, none. A single geometry's are its calculation's own.
+   */
+  imaginary?: (number[] | null)[];
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
@@ -473,6 +487,16 @@ export type Molecule3D = {
   centres?: { metal: number; atoms: number[] }[];
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
+  /**
+   * It is only some of a search's conformers, or one of them (docs/WORKFLOWS.md,
+   * *A part of a search*): those chosen from its set's table, those an
+   * Energy window or Choose one split from the others, the copies
+   * Duplicates took out - and what any step makes of them. No share is
+   * shown of them, for shares of these alone would not be the compound's
+   * populations; a *Populations* step on them works shares out, and says
+   * of what.
+   */
+  partOf?: true;
   /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
@@ -618,6 +642,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A result set of structures drawn: the atoms, by id, its step put on the
+   * page as it last ran - all it takes away when the step runs again. A
+   * structure the chemist joined to one of them by a bond keeps its own
+   * atoms.
+   */
+  put?: number[];
+  /**
    * A result set of more entries than are laid out on the page
    * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
    * `LARGE_SET`): what the step gave, held in the set itself, in the step's
@@ -655,12 +686,21 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  */
 export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunKeptResults };
 /**
- * What an earlier run gave, as its exits' sets held it: the molecules its
- * first exit held, those its second held, and what kind of set they make -
- * with how many of each did not read from a file, and were left out
- * (`unread`, `restUnread`).
+ * What a run gave, as its exits' sets hold it and an earlier run kept
+ * keeps it: the molecules its first exit held, those its second held, and
+ * what kind of set they make - with how many of each did not read from a
+ * file, and were left out (`unread`, `restUnread`). Where they are
+ * structures drawn, `drawn` holds them instead, each as drawn - its atoms,
+ * its bonds and where they lie - and the two lists of molecules are empty.
  */
-export type RunKeptResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind; unread?: number; restUnread?: number };
+export type RunKeptResults = {
+  molecules: Omit<Molecule3D, "id" | "at">[];
+  rest: Omit<Molecule3D, "id" | "at">[];
+  holds: SetKind;
+  unread?: number;
+  restUnread?: number;
+  drawn?: { made: Model[]; rest: Model[] };
+};
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its
@@ -674,7 +714,17 @@ export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [
  * were, and its jobs - kept in the workspace, so that one opened again picks
  * them up.
  */
-export type StepRunning = { at: number; input: string; options: OptionValues; jobs: StepJob[]; kind?: StepKind };
+export type StepRunning = {
+  at: number;
+  input: string;
+  options: OptionValues;
+  jobs: StepJob[];
+  kind?: StepKind;
+  /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
+  over?: string;
+  /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
+  refused?: { entry: number; kind: FailureKind; why: string }[];
+};
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {
   id: number;
@@ -695,7 +745,7 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "workflowMenu" | "askDeleteStep";
+export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -743,6 +793,8 @@ export type Drawn = Model & {
   inks?: Ink[];
   /** Catalytic cycles carried (lib/chem/cycle). */
   cycles?: Cycle[];
+  /** What the copy held that could not be read, and was left out (utils/readNotes): said as it is pasted. */
+  leftOut?: LeftOut;
 };
 
 export type EditorState = {
@@ -805,6 +857,18 @@ export type EditorState = {
   setPdfColumnWidth: (px: number) => void;
   /** The PDF the column shows, among those read there; none, it shows the text it shows (docs/PDF.md, *In the column*). */
   pdfShown: number | null;
+  /**
+   * The sets read as tables in the column, by id, in the order they were
+   * opened (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*); and the one it
+   * shows - over a text or a PDF - or none. The view's, never saved.
+   */
+  setsRead: number[];
+  setTableShown: number | null;
+  /** A set opened as a table in the column, and shown there. */
+  readSetTable: (id: number) => void;
+  showSetTable: (id: number) => void;
+  /** A set's table closed in the column. */
+  stopReadingSetTable: (id: number) => void;
   /** The PDF a page of in the column is under the pointer: it is lit on the page, as one hovered there is. */
   litPdf: number | null;
   setLitPdf: (id: number | null) => void;
@@ -1349,6 +1413,8 @@ export type EditorState = {
    * the wire it was (`was`).
    */
   wireDrag: { from?: WireEnd; to?: WireTo; at: { x: number; y: number }; was?: number } | null;
+  /** A wire let go on a step's input that does not take it: the step, and why (flow `wireRefusal`) - said on its card until a wire is drawn again. */
+  wireRefused: { step: number; said: string } | null;
   setWorkflowView: (patch: Partial<Pick<EditorState, WorkflowView>>) => void;
   /**
    * The result sets whose molecules no longer fit them, as the 3D look in
@@ -1363,7 +1429,7 @@ export type EditorState = {
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
   /** Molecules in 3D put on the page as a set of their own, named `name`, its middle at `at` or the free space nearest it: one step. */
-  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => void;
+  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => number | undefined;
   /** A chemist's set named anew; an empty name takes its name away (*Input* again). */
   renameSet: (id: number, name: string) => void;
   /** A step's result set kept in the workspace's file, or not: one step. */
@@ -1374,7 +1440,10 @@ export type EditorState = {
   /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */
   resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) => void;
   moveSet: (id: number, dx: number, dy: number, gesture?: string) => void;
-  removeSet: (id: number) => void;
+  /** A set deleted, or several in one step - one that holds its molecules itself, on no page, which go with it, only once asked about (`askDeleteSet`), `asked`. */
+  removeSet: (id: number | readonly number[], asked?: boolean) => void;
+  /** Sets that hold their molecules themselves asked to be deleted - by a key, or a selection that held them: the question asked (Workspace). */
+  askDeleteSet: number[] | null;
   /** A step of `kind`, done by `by` - Meno, or a plugin - put down, its card's top left at (x, y), with the defaults Settings has for its kind done by it; its id. */
   addStep: (kind: StepKind, by: string, x: number, y: number) => number;
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
@@ -1715,6 +1784,17 @@ export type EditorState = {
    */
   savedPath: string | null;
   /**
+   * What the workspace's file held, as it was opened, that could not be
+   * read and was left out (utils/readNotes) - said on every save, for none
+   * of it is in the file saved - and whether the file it was opened from
+   * has been kept beside the first one saved over it (`kept`).
+   */
+  leftOnOpen: { left: LeftOut; kept: boolean } | null;
+  /** What opening a workspace left out, as `leftOnOpen` keeps it; null for none. */
+  markLeftOnOpen: (left: LeftOut | null) => void;
+  /** The file it was opened from is kept beside the first one saved over it. */
+  markLeftKept: () => void;
+  /**
    * The file last opened over what the canvas held - where it is, where
    * Open said, else its name: what Save As suggests, beside it, the canvas
    * being saved nowhere since.
@@ -1777,7 +1857,8 @@ export type EditorState = {
   removePlus: (id: number) => void;
   /** What a cut takes, gone as one undo step: atoms, bonds, arrows and pluses. */
   /** What a cut took, gone: the drawn part, and the molecules in 3D by id, in one step. */
-  deleteDrawn: (part: Drawn, molecules3d?: number[]) => void;
+  /** `part` deleted, as a cut deletes what it copied; how many sets among it that hold their molecules themselves were left, which a copy does not carry. */
+  deleteDrawn: (part: Drawn, molecules3d?: number[]) => number;
   /** An abbreviation drawn out as the atoms it stands for, as one undo step. */
   expandAbbreviation: (id: number) => void;
   /** A group of atoms shown as one atom labelled `label`, holding them, as one undo step. */

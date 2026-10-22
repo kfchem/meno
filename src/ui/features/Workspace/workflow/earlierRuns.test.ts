@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D, StepRunKept } from "../store/types";
-import { droppedBy, gaveOf, runAllNote, runNote, when } from "./earlierRuns";
-import { addSet, addStep, connect, setRan, withStepRuns } from "./model";
-import { dropsOnRun, keepRun, keptRun, showRun } from "./run";
+import { droppedBy, gaveOf, namesOf, runAllNote, runNote, when } from "./earlierRuns";
+import { addStep, connect, setRan, withStepRuns } from "./model";
+import { dropsOnRun, keepRun, keptRun, runStep, showRun } from "./run";
 import { readWorkflow } from "./saved";
 
 /** A day's times, as this computer gives them: 14:02 on 22 October, and the day before. */
@@ -49,6 +49,16 @@ describe("a step's earlier runs, as it runs again", () => {
     expect(keepRun(d, d.steps![0]).steps![0].runs).toHaveLength(1);
   });
 
+  it("drop none where the click is refused: the run it would have started never starts, and what the step last did is kept with the rest", () => {
+    // (Meno's own step, nothing wired into it: refused)
+    let d = addStep(emptyWorkspaceDocument(), "energy-window", 0, 0);
+    const id = d.steps![0].id;
+    d = withStepRuns(setRan(d, id, { at: NOW, ok: true, said: "2 kept", input: "k", kind: "energy-window" }), id, [optimised(at(14, 2), 120)]);
+    const after = runStep(d, id, { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: NOW + 1000 }).steps![0];
+    expect(after.ran).toMatchObject({ ok: false, said: "Nothing comes into it" });
+    expect(after.runs!.map((r) => r.at)).toEqual([NOW, at(14, 2)]);
+  });
+
   it("are kept however many: none dropped for a count", () => {
     const runs = Array.from({ length: 14 }, (_, k) => optimised(at(9, k), 1, true));
     const d = keepRun(stepWith(runs), stepWith(runs).steps![0]);
@@ -85,6 +95,15 @@ describe("what a run drops, said before it", () => {
     expect(droppedBy(d, [d.steps![0].id], NOW)).toBe("the run from 14:02 (120 molecules) and the run from 21 Oct 09:05 (1 molecule)");
   });
 
+  it("names two runs in one minute apart, to the second - as the card's rows name them", () => {
+    const one = new Date(2026, 9, 22, 14, 2, 5).getTime();
+    const two = new Date(2026, 9, 22, 14, 2, 41).getTime();
+    expect(namesOf([one, two, at(13, 0)], NOW)).toEqual(["14:02:05", "14:02:41", "13:00"]);
+    let d = stepWith([optimised(two, 3), optimised(one, 4)]);
+    d = setRan(d, d.steps![0].id, { at: NOW, ok: true, said: "1 optimised", input: "k", kind: "optimise" });
+    expect(droppedBy(d, [d.steps![0].id], NOW)).toBe("the run from 14:02:41 (3 molecules) and the run from 14:02:05 (4 molecules)");
+  });
+
   it("counts a conformer set's conformers, and says where a run gave nothing", () => {
     const conformers: StepRunKept = { ...optimised(at(14, 2), 0), results: { molecules: [molecule(9), molecule(1)], rest: [molecule()], holds: "conformers" } };
     expect(gaveOf(conformers)).toBe("13 conformers");
@@ -111,10 +130,10 @@ describe("what a run drops, said before it", () => {
     d = stepWith([optimised(at(11, 0), 5)], d, 30);
     d = stepWith([optimised(at(12, 0), 6)], d, 60);
     const [a, b, c] = d.steps!.map((s) => s.id);
-    d = addSet(d, { x0: 10, y0: -5, x1: 20, y1: 5 }, { step: a, exit: "out", holds: "molecules" });
-    d = connect(d, { set: d.sets![0].id }, b);
-    d = addSet(d, { x0: 40, y0: -5, x1: 50, y1: 5 }, { step: b, exit: "out", holds: "molecules" });
-    d = connect(d, { set: d.sets![1].id }, c);
+    // (each wired from the exit of the one before it)
+    const out = (s: number) => d.sets!.find((x) => x.made?.step === s && x.made.exit === "out")!.id;
+    d = connect(d, { set: out(a) }, b);
+    d = connect(d, { set: out(b) }, c);
     // (the first changed: what came into it is not what it ran on)
     d = { ...d, steps: d.steps!.map((s) => (s.id === a ? { ...s, ran: { ...s.ran!, input: "was" } } : s)) };
     expect(runNote(d, b, NOW)).toBe(

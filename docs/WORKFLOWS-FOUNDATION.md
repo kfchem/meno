@@ -247,6 +247,34 @@ Property
   status      computed, failed (why), or not applicable (why)
 ```
 
+**A calculation's readings, as an entry's properties** (2026-10-22;
+`workflow/entries.ts`, `entryOfSet`). Each entry a step gives carries what
+its calculation read of that geometry (the last frame's alone: a reading
+is of one geometry). Of those, these become properties, each by the
+reading's own id, the one name every plugin that reads it gives it:
+- `energy`, in hartrees, at its geometry and in the solvation the program
+  said it used (`at.solvent`: "none", the gas phase said; left out, not
+  said), by the plugin that read it, the program, method and basis;
+- the thermochemistry, each in hartrees: `thermo.free-energy` (the total
+  G), `thermo.enthalpy` (the total H), `thermo.zpve` (the zero-point
+  energy alone, not E + ZPE) and `thermo.g-correction` (G - E). Each at
+  the temperature (`thermo.temperature`, K) and pressure
+  (`thermo.pressure`, atm) the program said it used - none where it said
+  none, never one assumed - and in its solvation; by what worked it out,
+  with the treatment of its vibrations as the program said it
+  (`thermo.treatment`). A reading that is not an energy in hartrees is
+  not taken;
+- `vibrations`, a table of each vibration's frequency (`FREQUENCY`, cm-1,
+  an imaginary one negative) in the program's order, from the list whose
+  column is a wavenumber; and `modes`, in the same order, where every
+  vibration gives its atoms' displacements (not a promise of them). What
+  else that list has - reduced masses, intensities - stays among the
+  readings: an entry's columns take only units Meno's table has.
+
+Populations reads `thermo.free-energy`, and groups only values worked out
+alike: the same temperature, solvent and pressure, by the same program,
+method, basis and treatment.
+
 **Shapes a value takes** (`src/lib/entry.ts`, `valueFault` holds each to
 its entry):
 - **a list says what it is per**, always: three numbers are three atoms'

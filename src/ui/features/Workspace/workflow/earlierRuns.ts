@@ -12,11 +12,19 @@ import { dropsOnRun } from "./run";
 
 const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
 const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
+const SECONDS = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-/** When a run was, in few words: its time - and its day, where that was not today. */
-export function when(at: number, now = Date.now()): string {
+/** When a run was, in few words: its time - to the second, where `seconds` - and its day, where that was not today. */
+export function when(at: number, now = Date.now(), seconds = false): string {
   const same = new Date(at).toDateString() === new Date(now).toDateString();
-  return same ? TIME.format(at) : `${DAY.format(at)} ${TIME.format(at)}`;
+  const time = (seconds ? SECONDS : TIME).format(at);
+  return same ? time : `${DAY.format(at)} ${time}`;
+}
+
+/** Each of a step's runs by when it was (`when`), told apart: to the second where two would read the same to the minute. */
+export function namesOf(ats: readonly number[], now = Date.now()): string[] {
+  const minutes = ats.map((at) => when(at, now));
+  return ats.map((at, i) => (minutes.some((m, j) => j !== i && m === minutes[i]) ? when(at, now, true) : minutes[i]));
 }
 
 const counted = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;
@@ -43,11 +51,16 @@ const NAMED = 3;
 export function droppedBy(doc: { steps?: WorkflowStep[] }, steps: readonly number[], now = Date.now(), named = false): string | undefined {
   const drops = steps.flatMap((id) => {
     const s = doc.steps?.find((x) => x.id === id);
-    return s && !s.running ? dropsOnRun(s).map((run) => ({ step: s, run })) : [];
+    if (!s || s.running) return [];
+    // (each named as the card's row names it: among all the step's runs)
+    const all = [...(s.ran ? [s.ran] : []), ...(s.runs ?? [])];
+    const named = namesOf(all.map((x) => x.at), now);
+    const names = new Map(all.map((r, i) => [r, named[i]]));
+    return dropsOnRun(s).map((run) => ({ step: s, run, name: names.get(run)! }));
   });
   if (!drops.length) return undefined;
   const several = named || new Set(drops.map((d) => d.step.id)).size > 1;
-  const said = drops.slice(0, NAMED).map(({ step, run }) => `${several ? `${kindInfo(step.kind).name}'s run` : "the run"} from ${when(run.at, now)} (${gaveOf(run)})`);
+  const said = drops.slice(0, NAMED).map(({ step, run, name }) => `${several ? `${kindInfo(step.kind).name}'s run` : "the run"} from ${name} (${gaveOf(run)})`);
   const more = drops.length - said.length;
   const all = more ? [...said, counted(more, "more run", "more runs")] : said;
   return all.length > 1 ? `${all.slice(0, -1).join(", ")} and ${all[all.length - 1]}` : all[0];

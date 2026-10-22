@@ -11,7 +11,9 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
-import type { LostText, PdfFind, PdfItem, WordPlace, WorkspaceText } from "./store/types";
+import type { LostText, PdfFind, PdfItem, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
+import SetTableBody from "./workflow/SetTableBody";
+import { setName } from "./workflow/doers";
 import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
 import { shortcutLabel } from "../../../lib/doc/shortcuts";
@@ -71,10 +73,16 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   const pdfShownId = useEditor((s) => s.pdfShown);
   const open = useEditor((s) => s.textsOpen);
   const read = useMemo(() => pdfs.filter((p) => p.reading), [pdfs]);
-  const pdf = read.find((p) => p.id === pdfShownId);
-  const shown = pdf ? undefined : texts.find((t) => t.id === shownId);
+  // (the sets read here as tables, and the one shown - over the text or the PDF it showed: docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)
+  const sets = useEditor((s) => s.sets);
+  const setsRead = useEditor((s) => s.setsRead);
+  const tableId = useEditor((s) => s.setTableShown);
+  const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && b.collection)), [sets, setsRead]);
+  const table = tables.find((b) => b.id === tableId);
+  const pdf = table ? undefined : read.find((p) => p.id === pdfShownId);
+  const shown = pdf || table ? undefined : texts.find((t) => t.id === shownId);
   // (one that could not be read, shown as what it is: no words, nothing to edit or copy)
-  const lostShown = pdf || shown ? undefined : lost.find((t) => t.id === shownId);
+  const lostShown = pdf || table || shown ? undefined : lost.find((t) => t.id === shownId);
   // as wide as it was dragged - a text's, as it first opened; a PDF's, most of the canvas
   const [room, setRoom] = useState(0);
   const [roomEl, setRoomEl] = useState<HTMLDivElement | null>(null);
@@ -86,19 +94,21 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
     return () => seen.disconnect();
   }, [roomEl]);
   const [textWidth, setTextWidth] = useState<number | null>(null);
+  // (a set's table: as wide as it was dragged, its own - else as wide as its columns)
+  const [tableWidth, setTableWidth] = useState<number | null>(null);
   const pdfWidth = useEditor((s) => s.pdfColumnWidth);
   const setPdfWidth = useEditor((s) => s.setPdfColumnWidth);
   const canvas = room || window.innerWidth;
   const widest = Math.max(COLUMN_NARROWEST, canvas * COLUMN_WIDEST);
   // (filling the workspace: as wide as the canvas, over all of it, the tabs and its own header kept)
   const filled = useEditor((s) => s.columnFilled);
-  const width = filled ? canvas : columnWidthFor(canvas, !!pdf, pdf ? pdfWidth : textWidth);
-  const setWidth = pdf ? setPdfWidth : setTextWidth;
+  const width = filled ? canvas : columnWidthFor(canvas, table ? "table" : !!pdf, pdf ? pdfWidth : table ? tableWidth : textWidth);
+  const setWidth = pdf ? setPdfWidth : table ? setTableWidth : setTextWidth;
   const [dragging, setDragging] = useState(false);
   // (how much of the canvas it covers, as it slides and as it is dragged: what is in view is the rest)
   const store = useEditorStore();
   // (the width the canvas lays a PDF out at in it - not changed as it shuts on what it showed)
-  const showing = open && !!(shown || pdf || lostShown);
+  const showing = open && !!(shown || pdf || table || lostShown);
   // (going over to filling the workspace, or back: what it shows laid out at its width as it eases there, frame by
   // frame - laid out at once at the width it goes to, a page jumped to its new size first, and the column then eased)
   const easing = useRef(false);
@@ -137,7 +147,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
       {/* (the canvas's width, measured: what the column's share is of) */}
       <div ref={setRoomEl} aria-hidden className="absolute inset-0 pointer-events-none" />
       <AnimatePresence initial={slideIn}>
-        {open && (shown || pdf || lostShown) && (
+        {open && (shown || pdf || table || lostShown) && (
           <motion.div
             key="texts"
             ref={setEl}
@@ -154,7 +164,7 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
             }}
             className={clsx("absolute top-0 right-0 z-20 h-full overflow-hidden", dragging && "select-none")}
           >
-            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} width={eased ?? width} />
+            <Column texts={texts} lost={lost} read={read} shown={shown} lostShown={lostShown} pdf={pdf} tables={tables} table={table} width={eased ?? width} />
             {!filled && <Edge width={width} widest={widest} setWidth={setWidth} setDragging={setDragging} />}
           </motion.div>
         )}
@@ -163,8 +173,31 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   );
 }
 
-function Column({ texts, lost, read, shown, lostShown, pdf, width }: { texts: WorkspaceText[]; lost: LostText[]; read: PdfItem[]; shown?: WorkspaceText; lostShown?: LostText; pdf?: PdfItem; width: number }) {
+function Column({
+  texts,
+  lost,
+  read,
+  shown,
+  lostShown,
+  pdf,
+  tables,
+  table,
+  width,
+}: {
+  texts: WorkspaceText[];
+  lost: LostText[];
+  read: PdfItem[];
+  shown?: WorkspaceText;
+  lostShown?: LostText;
+  pdf?: PdfItem;
+  tables: WorkflowSet[];
+  table?: WorkflowSet;
+  width: number;
+}) {
   const store = useEditorStore();
+  const steps = useEditor((s) => s.steps);
+  const showSetTable = useEditor((s) => s.showSetTable);
+  const stopReadingSetTable = useEditor((s) => s.stopReadingSetTable);
   const showText = useEditor((s) => s.showText);
   const stopReadingText = useEditor((s) => s.stopReadingText);
   const removeLostText = useEditor((s) => s.removeLostText);
@@ -207,6 +240,9 @@ function Column({ texts, lost, read, shown, lostShown, pdf, width }: { texts: Wo
           ))}
           {read.map((p) => (
             <Name key={`pdf-${p.id}`} name={p.name} title={p.name} chosen={p.id === pdf?.id} onShow={() => showPdf(p.id)} onClose={() => stopReadingPdf(p.id)} />
+          ))}
+          {tables.map((b) => (
+            <Name key={`set-${b.id}`} name={setName(b, steps)} title={setName(b, steps)} chosen={b.id === table?.id} onShow={() => showSetTable(b.id)} onClose={() => stopReadingSetTable(b.id)} />
           ))}
         </div>
         {shown && markdown && (
@@ -272,6 +308,7 @@ function Column({ texts, lost, read, shown, lostShown, pdf, width }: { texts: Wo
           )}
         </AnimatePresence>
         {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
+        {table && <SetTableBody key={`set-${table.id}`} set={table} />}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">
             <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />

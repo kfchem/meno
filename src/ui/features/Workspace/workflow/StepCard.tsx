@@ -8,7 +8,6 @@ import type { Option, OptionValues } from "../../../../lib/options";
 import type { JobSeen, WorkflowStep } from "../store/types";
 import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
-import { when } from "./earlierRuns";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
 import { CARD_H, CARD_W, portDown, PX } from "./look";
@@ -85,7 +84,8 @@ export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | un
 }
 
 /** A run as its step lists it: when, what it said, how it was set, whether it is the one shown. */
-export type RunRow = { at: number; said: string; how: string; shown: boolean; keep: boolean };
+/** A run as its card lists it: when, named apart from the step's other runs (workflow/earlierRuns `namesOf`); what it said; how it was set; whether it is shown, and kept. */
+export type RunRow = { at: number; name: string; said: string; how: string; shown: boolean; keep: boolean };
 
 /** A place in the queue, as it is said: 1st, 2nd, 3rd, 4th... */
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -144,6 +144,8 @@ export type StepCardProps = {
   run?: RunView;
   /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
   missing?: string;
+  /** A wire just let go on it that it does not take: why, in plain words (flow `wireRefusal`), said where its state is. */
+  refused?: string;
   /** The options it takes, as who does it declares them; and their values. */
   optionList: readonly Option[];
   options: OptionValues;
@@ -175,7 +177,7 @@ export type StepCardProps = {
  * does it fills - and its options.
  */
 export default function StepCard(p: StepCardProps) {
-  const line = stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
   // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
   const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
@@ -270,7 +272,7 @@ export default function StepCard(p: StepCardProps) {
                     <div key={`${r.at}-${i}`} className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] leading-4 text-gh-black truncate" title={r.said}>
-                          {`${when(r.at)} \u00b7 ${r.said}`}
+                          {`${r.name} \u00b7 ${r.said}`}
                         </div>
                         {r.how && <div className="text-[10px] leading-4 text-gh-gray truncate">{r.how}</div>}
                       </div>

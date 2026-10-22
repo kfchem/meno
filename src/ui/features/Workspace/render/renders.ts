@@ -224,7 +224,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, around, state: "preparing", started: Date.now(), ...(rendered.note ? { note: rendered.note } : {}) }] }));
 
   const settings = useAppSettings.getState();
-  const { slots, cores } = runningOf(settings.calculations);
+  const { cores } = runningOf(settings.calculations);
   let job: string;
   try {
     const paths = new Map<string, string>();
@@ -241,7 +241,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     if (p.files.some((f) => f.name === SCENE)) return fail("It prepared a job Meno cannot run");
     if (gone()) return renders.setState((s) => ({ list: s.list.filter((r) => r.key !== key) }));
     const path = paths.get(p.program);
-    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], slots, cores, ...(path ? { path } : {}) });
+    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
   } catch (e) {
     return fail(message(e));
   }
