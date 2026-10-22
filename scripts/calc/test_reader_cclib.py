@@ -221,6 +221,33 @@ class Vibrations(unittest.TestCase):
         self.assertEqual([row["cells"][0] for row in rows], list(range(1, 55)))
 
 
+class Imaginary(unittest.TestCase):
+    """The imaginary frequencies as each program itself judged them (the maintainer, 2026-10-22): a mark that a
+    structure is no minimum, never Meno's own threshold."""
+
+    def test_gaussian_s_count_in_its_archive_entry_even_where_a_line_break_splits_it(self):
+        # (the archive entry as Gaussian wraps it: 70 characters a line, each line after the first begun by a space)
+        entry = " 1\\1\\GINC-X\\Freq\\RB3LYP\\6-31G(d)\\C1H4O1\\X\\22-Oct-2026\\0\\\\#p freq\\\\methanol\\\\0,1\\C\\PG=CS [SG(C1H2O1),X(H2)]\\NIm\n ag=1\\\\0.5\\\\@\n"
+        self.assertEqual(worker.gaussian_nimag("Entering Gaussian System\n" + entry), 1)
+        self.assertIsNone(worker.gaussian_nimag("Entering Gaussian System\n 1\\1\\GINC-X\\SP\\RHF\\\\@\n"))
+        data = types.SimpleNamespace(vibfreqs=[-382.63, -12.0, 1038.5])
+        # (as many as it counts, the most negative: its own judgement, not every negative one)
+        self.assertEqual(worker.imaginary_of(data, entry, "gaussian"), [-382.63])
+        self.assertEqual(worker.imaginary_of(data, entry.replace("ag=1", "ag=0"), "gaussian"), [])
+
+    def test_orca_s_marks_in_its_last_list_of_frequencies(self):
+        listed = "VIBRATIONAL FREQUENCIES\n-----------------------\n\n   0:       0.00 cm**-1\n   6:    -382.63 cm**-1 ***imaginary mode***\n   7:    1038.54 cm**-1\n\nNORMAL MODES\n   9:   -5.00 cm**-1 ***imaginary mode***\n"
+        self.assertEqual(worker.imaginary_of(types.SimpleNamespace(), listed, "orca"), [-382.63])
+        self.assertEqual(worker.imaginary_of(types.SimpleNamespace(), listed.replace(" ***imaginary mode***", "", 1), "orca"), [])
+        self.assertIsNone(worker.imaginary_of(types.SimpleNamespace(), "no frequencies here", "orca"))
+        self.assertIsNone(worker.imaginary_of(types.SimpleNamespace(vibfreqs=[-382.63]), listed, "xtb"))
+
+    def test_a_minimum_read_says_none(self):
+        self.assertEqual(read(sample("Gaussian/dvb_ir.out"))["result"]["imaginary"], [])
+        self.assertEqual(read(sample("ORCA/dvb_ir.out"))["result"]["imaginary"], [])
+        self.assertNotIn("imaginary", read(sample("Gaussian/dvb_sp.out"))["result"])
+
+
 class Paths(unittest.TestCase):
     """Geometries that are no optimisation's path - a relaxed scan's, a reaction path's - and an excited state's."""
 

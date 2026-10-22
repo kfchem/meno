@@ -1408,6 +1408,17 @@ them again*; the maintainer's rulings of 2026-10-22):
   counted on the step's line: *3 with warnings*.
 - **The chip says it.** A molecule that failed says why on its chip, in
   the attention colour, and its warnings how many; opened, each in full.
+- **A structure that is no minimum is marked so** with the imaginary
+  frequencies its program judged it has - xtb's "significant" ones,
+  Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
+  on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
+  keeps each conformer's.
+- **Populations refuses a group with one that is no minimum** - its
+  optimisation not converged, or marked with an imaginary frequency -
+  naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
+  minimum - take it out first*. *Energy window* refuses one not
+  converged the same; a saddle point's mark would refuse it where the
+  window is on free energies, which it is not yet.
 - **Meno's steps on energies refuse what they cannot use**: an *Energy
   window* below 0 kcal/mol, or no number, as *Populations* refuses a
   temperature of 0 K or below; and an energy that is no number (NaN,

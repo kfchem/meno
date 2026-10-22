@@ -734,7 +734,11 @@ The same for every plugin and for Meno's own parts:
     *not converged*. An output's `warnings` - `[{"kind":
     "hessian-not-stationary", "text": "..."}]`, the text the program's
     own words - are kept with the molecule and said on its chip; a kind
-    core does not know is `other`. A warning never moves an entry;
+    core does not know is `other`. A warning never moves an entry. An
+    output's `imaginary` - its imaginary frequencies in cm-1, negative,
+    as the program itself judged them (xtb's "significant" ones,
+    Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
+    marks the molecule as no minimum;
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job
