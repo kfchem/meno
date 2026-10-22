@@ -72,6 +72,11 @@ class Prepare(unittest.TestCase):
         lines = energy["files"][0]["text"].splitlines()
         self.assertEqual(lines[0], "! B3LYP def2-SVP D3BJ SP CPCM(tetrahydrofuran)")
         self.assertEqual(lines[1], "%maxcore 3000")
+        # (the memory it asks of ORCA, declared for the queue to count: %maxcore for each of its processes)
+        self.assertEqual(energy["memory"], 3000)
+        four = ask("prepare", step="energy", entries=[WATER], options={**defaults("energy"), "maxcore": 3000}, cores=4)["jobs"][0]
+        self.assertEqual(four["memory"], 12000)
+        self.assertNotIn("memory", ask("prepare", step="energy", entries=[WATER], options=defaults("energy"))["jobs"][0])
         freq = ask("prepare", step="frequencies", entries=[WATER], options={**defaults("frequencies"), "dispersion": "D4", "solvation": "SMD", "solvent": "water", "keywords": "TightSCF"}, cores=1)["jobs"][0]
         lines = freq["files"][0]["text"].splitlines()
         self.assertEqual(lines[0], "! B3LYP def2-SVP D4 FREQ SMD(water) TightSCF")

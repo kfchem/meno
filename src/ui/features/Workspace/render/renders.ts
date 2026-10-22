@@ -20,7 +20,7 @@ import { pluginsFilling, type PythonPlugin } from "../../../../lib/calc/catalog"
 import { pluginClient, useReaders } from "../../../../lib/calc/workers";
 import { givenValue, askKey, useAsks } from "../../../../lib/calc/asks";
 import { isAsk, readGrid, resultKey, resultsOn } from "../../../../lib/calc/results";
-import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob } from "../../../../lib/jobs";
+import { finished, jobFolder, jobOf, readJobLog, removeJob, runningOf, startJob, stopJob, trimJob } from "../../../../lib/jobs";
 import type { OptionValues } from "../../../../lib/options";
 import { finishEntry, motionEntry } from "./renderOptions";
 import { lookFor, tooOld } from "../../../../lib/plugins/installed";
@@ -224,7 +224,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   renders.setState((s) => ({ list: [...s.list, { key, kind: ask.kind, at, around, state: "preparing", started: Date.now(), ...(rendered.note ? { note: rendered.note } : {}) }] }));
 
   const settings = useAppSettings.getState();
-  const { slots, cores } = runningOf(settings.calculations);
+  const { cores } = runningOf(settings.calculations);
   let job: string;
   try {
     const paths = new Map<string, string>();
@@ -241,7 +241,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     if (p.files.some((f) => f.name === SCENE)) return fail("It prepared a job Meno cannot run");
     if (gone()) return renders.setState((s) => ({ list: s.list.filter((r) => r.key !== key) }));
     const path = paths.get(p.program);
-    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], slots, cores, ...(path ? { path } : {}) });
+    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
   } catch (e) {
     return fail(message(e));
   }
@@ -283,11 +283,17 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     void removeJob(job).catch(() => {});
     return;
   }
+  // (its job failed: what it made - a film's frames, which it can make again - taken out of its folder, its log and what it
+  // was given kept, to be read. One that made what cannot be shown keeps it, to be looked at)
+  const failed = (why: string) => {
+    void trimJob(job).catch(() => {});
+    return fail(why);
+  };
   try {
     const client = await pluginClient(plugin);
     const entry = { scene: SCENE, film: ask.kind === "film", width: rendered.width, height: rendered.height, frames: rendered.frames, fps: rendered.fps, ...finishEntry(ask.finish), ...motionEntry(ask) };
     const said = (await client.collect("render", [entry], options, {}, log, state)) as { why?: unknown; made?: unknown };
-    if (typeof said?.why === "string") return fail(said.why.trim().slice(0, 300) || "It did not say why");
+    if (typeof said?.why === "string") return failed(said.why.trim().slice(0, 300) || "It did not say why");
     const made = Array.isArray(said?.made) ? (said.made[0] as { file?: unknown; media?: unknown } | undefined) : undefined;
     const file = typeof made?.file === "string" && /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(made.file) ? made.file : null;
     if (!file || (made?.media !== "image/png" && made?.media !== "video/mp4")) return fail("It said it made nothing Meno can show");
@@ -312,14 +318,16 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
   }
 }
 
-/** A render stopped: its job, where it has one - else it is not started - and its placeholder taken away. One that failed is put away. */
+/**
+ * A render stopped: its job, where it has one - else it is not started - and its placeholder taken away. One that failed
+ * is put away, its job's folder kept - its log, saying all Blender said - until Settings, Calculations, Jobs, clears it.
+ */
 export function stopRender(store: EditorStore, key: number): void {
   const renders = rendersOf(store);
   const r = renders.getState().list.find((x) => x.key === key);
   if (!r) return;
   if (r.state === "failed") {
     renders.setState((s) => ({ list: s.list.filter((x) => x.key !== key) }));
-    if (r.job) void removeJob(r.job).catch(() => {});
     return;
   }
   if (r.job) void stopJob(r.job).catch(() => {});
@@ -329,13 +337,13 @@ export function stopRender(store: EditorStore, key: number): void {
 /**
  * Every render of a workspace stopped: it is closing, and what they make
  * would be lost. Their jobs are stopped as a step's are, their files kept
- * (a failed one's taken away); none is looked at again, nothing goes on
+ * (a failed one's as it ended); none is looked at again, nothing goes on
  * its page, and none begins after. Resolved once each job has been asked.
  */
 export function stopRenders(store: EditorStore): Promise<void> {
   closingOf(store).abort();
   const renders = rendersOf(store);
-  const asked = renders.getState().list.flatMap((r) => (r.job ? [(r.state === "failed" ? removeJob(r.job) : stopJob(r.job)).catch(() => {})] : []));
+  const asked = renders.getState().list.flatMap((r) => (r.job && r.state !== "failed" ? [stopJob(r.job).catch(() => {})] : []));
   renders.setState({ list: [] });
   return Promise.all(asked).then(() => {});
 }

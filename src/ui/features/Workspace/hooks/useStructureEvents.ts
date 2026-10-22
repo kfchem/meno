@@ -1,4 +1,5 @@
 import { holdPdfBytes } from "../../../../lib/pdf/reader";
+import { leftOutSaid } from "../utils/readNotes";
 import { isPictureName } from "../../../../lib/picture/image";
 import { pictureToAdd } from "../utils/pictures";
 import * as THREE from "three";
@@ -13,7 +14,7 @@ import { editorModelOf, openedPlace, opensAsText, processFileContent, type Proce
 import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument } from "../document";
 import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
-import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
+import { isWorkspaceFile, readKept, readWorkspace } from "../utils/workspace";
 import { openWorkspacesFrom } from "../../../../lib/clipboard";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
 import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
@@ -155,10 +156,12 @@ export function useStructureEvents(
       if (kind?.id === MENO_KINDS.workspace.id) {
         const saved = readWorkspace(initialPayload);
         if (saved) {
-          // (its texts read from its file, held as it was opened)
-          const { ws, missing } = await readTexts(saved);
+          // (its texts read from its file, held as it was opened - and its pictures: any that cannot be read, named)
+          const { ws, missing } = await readKept(saved);
           store.getState().openWorkspace(ws, true);
-          if (missing.length) reportImportError("initial payload", new Error(`${missing.join(", ")} could not be read from the workspace.`));
+          // (and what its file held that could not be read, left out: said now, and on every save)
+          const said = [missing.length ? `${missing.join(", ")} could not be read from the workspace.` : null, leftOutSaid(ws.leftOut)].filter(Boolean);
+          if (said.length) reportImportError("initial payload", new Error(said.join(" ")));
           // (opened from its own file, it is saved back to it; else Save asks where)
           if (openedFile && initialPath && isWorkspaceFile(initialPath)) store.getState().markSavedAs(initialPath);
           else if (openedFile && initialFilename) store.getState().markOpenedOver(initialPath ?? initialFilename);

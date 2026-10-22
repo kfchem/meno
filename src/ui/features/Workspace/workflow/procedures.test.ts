@@ -11,6 +11,7 @@ const PARTS: FlowParts = {
   sets: [
     { id: 1, x0: 0, y0: -4, x1: 4, y1: 0 },
     { id: 6, x0: 10, y0: -2, x1: 14, y1: 0, made: { step: 2, exit: "out" } },
+    { id: 9, x0: 10, y0: -4, x1: 14, y1: -3, made: { step: 2, exit: "failed" } },
     { id: 7, x0: 22, y0: -2, x1: 26, y1: 0, made: { step: 5, exit: "out" } },
     { id: 8, x0: 22, y0: -4, x1: 26, y1: -3, made: { step: 5, exit: "rest" } },
   ],
@@ -82,8 +83,8 @@ describe("a procedure", () => {
     const at = Object.fromEntries(st().steps.map((s) => [s.kind, [s.x - set.x0, s.y - set.y1]]));
     expect(at).toEqual({ optimise: [6, 0], "energy-window": [18, 0] });
     expect(st().wires).toHaveLength(2);
-    // (its four sets - the input, and its steps' three exits - and its two steps)
-    expect(st().selFlow.sets.size + st().selFlow.steps.size).toBe(6);
+    // (its five sets - the input, and its steps' four exits - and its two steps)
+    expect(st().selFlow.sets.size + st().selFlow.steps.size).toBe(7);
     expect(doc.history().undoLabel).toBe("put down procedure");
     doc.undo();
     expect(st().steps).toEqual([]);

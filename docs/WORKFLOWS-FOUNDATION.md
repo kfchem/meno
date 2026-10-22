@@ -247,6 +247,34 @@ Property
   status      computed, failed (why), or not applicable (why)
 ```
 
+**A calculation's readings, as an entry's properties** (2026-10-22;
+`workflow/entries.ts`, `entryOfSet`). Each entry a step gives carries what
+its calculation read of that geometry (the last frame's alone: a reading
+is of one geometry). Of those, these become properties, each by the
+reading's own id, the one name every plugin that reads it gives it:
+- `energy`, in hartrees, at its geometry and in the solvation the program
+  said it used (`at.solvent`: "none", the gas phase said; left out, not
+  said), by the plugin that read it, the program, method and basis;
+- the thermochemistry, each in hartrees: `thermo.free-energy` (the total
+  G), `thermo.enthalpy` (the total H), `thermo.zpve` (the zero-point
+  energy alone, not E + ZPE) and `thermo.g-correction` (G - E). Each at
+  the temperature (`thermo.temperature`, K) and pressure
+  (`thermo.pressure`, atm) the program said it used - none where it said
+  none, never one assumed - and in its solvation; by what worked it out,
+  with the treatment of its vibrations as the program said it
+  (`thermo.treatment`). A reading that is not an energy in hartrees is
+  not taken;
+- `vibrations`, a table of each vibration's frequency (`FREQUENCY`, cm-1,
+  an imaginary one negative) in the program's order, from the list whose
+  column is a wavenumber; and `modes`, in the same order, where every
+  vibration gives its atoms' displacements (not a promise of them). What
+  else that list has - reduced masses, intensities - stays among the
+  readings: an entry's columns take only units Meno's table has.
+
+Populations reads `thermo.free-energy`, and groups only values worked out
+alike: the same temperature, solvent and pressure, by the same program,
+method, basis and treatment.
+
 **Shapes a value takes** (`src/lib/entry.ts`, `valueFault` holds each to
 its entry):
 - **a list says what it is per**, always: three numbers are three atoms'
@@ -297,6 +325,32 @@ It comes from the canonical numbering written for Clean-up (#319), which
 also gives each atom's symmetry class. It is order-free, and never replaces
 the numbering. It is worked out once per structure and kept with the
 collection.
+
+What it compares (`src/lib/chem/identity.ts`, 2026-10-21):
+- each atom's element, charge, mass number and unpaired electrons, and the
+  bonds between them;
+- each stereocentre's, double bond's and axis's configuration as drawn;
+- aromatic rings as one form: a structure's Kekulé structures, and
+  bond-shift isomers, are one structure. A bond made one order there keeps
+  no cis or trans of its own;
+- a plain hydrogen atom as one of its neighbour's hydrogens, with its
+  configuration carried to the atom it is on (`hydrogensFolded`). A
+  hydrogen stays an atom where it is charged, has an unpaired electron, is
+  one isotope in particular, is mapped to a reaction's atom, is bonded to
+  another hydrogen, bridges two atoms, is on a metal, or is in a pi system
+  bound to one.
+
+The texts are compared, not their keys. `identity` also says whether the
+canonical search was complete: where it ran out of steps (`settleBudget`),
+one structure may be written two ways, so a duplicate can be missed, but two
+different structures are never written the same. A drawing's structures are
+read for it by `chem/identityOf.ts`, which also names any atom whose wedges
+it could not read. The rule is checked against RDKit's canonical isomeric
+SMILES of the molfiles Meno writes (`chem/testdata/identity.rdkit.json`,
+made by `scripts/identity/rdkit.py`, with RDKit's version and the commands
+that made it). The fixture holds each molfile by its SHA-256: the test
+writes the molfiles again and checks them against it. The bond-shift
+isomers, which RDKit keeps apart, are listed by name.
 
 **Lineage.** `from` lists the entry or entries an entry was made from. An
 optimised conformer has one parent; an entry made by *Re-bond* has two: the
@@ -542,9 +596,9 @@ on question 16. Each has one role, and they are meant to be combined.
 | Node | Takes | Gives |
 |---|---|---|
 | **Filter** | molecules | *kept* and *rest*, by conditions on properties picked as rows (a property, a comparison, a value with its unit; all of them, or any). An entry with no value goes to *rest*, counted |
-| **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all |
-| **Group** | molecules | the same, each entry's *group* set: by compound (its identity with its species), by a property's value, or none |
-| **Merge** | molecules, two or more | one set, in the inputs' order; or one entry of each identity |
+| **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all; values worked out differently never ranked together, those with none to *rest*, each saying its place or why |
+| **Group** | molecules | the same, each entry's *group* set: by constitution (its identity with its species; the entry holds no configuration of its stereocentres, so stereoisomers are one group, and the option says so), by a property's value, or all together; those with nothing to group by to *rest* |
+| **Merge** | molecules, two or more | one set, in the inputs' order; or one entry for each value of a property (an ID from *Tag*), the others to *rest* naming the one kept |
 | **Tag** | molecules | the same, with a new property: an ID for each entry, under the name given |
 | **Join** | molecules, and molecules or a table | the first, with the second's properties put on by a property both carry (an ID from *Tag*), by identity, or by drawn atom; what did not match is said |
 | **Duplicates** | molecules | *kept* and *rest*: one of each identity, or by RMSD in each group, as Meno does today; with the molecule's symmetry where chosen (equivalent groups turned, equivalent atoms swapped) |
@@ -555,9 +609,9 @@ on question 16. Each has one role, and they are meant to be combined.
 |---|---|---|
 | **Number** | nothing | a number with its unit, typed by the chemist |
 | **Add** | molecules, and numbers | the same, with a new property: the sum of the properties and numbers chosen, at one geometry |
-| **Relative** | molecules, and a reference where wanted | the same, with a new property: one minus the lowest in its group, or minus the reference |
+| **Relative** | molecules, and a reference where wanted | the same, with a new property: one minus the lowest in its group, or minus the reference; values worked out differently (conditions, program, method, basis, thermal treatment) never taken from one another |
 | **Linear** | molecules | the same, with *a* × a property + *b* (for a per-atom list, *a* and *b* by element) |
-| **Populations** | molecules | the same, with shares from an energy, in each group, at a temperature, degeneracies counted |
+| **Populations** | molecules | the same, with shares from the free energy G (`thermo.free-energy`), in each group, at a temperature, degeneracies counted where every one in the group has one; an entry with no G - only an electronic energy - goes to *failed* with its group, never weighted by E; a group whose G were worked out differently (temperature, pressure, solvent, program, method, basis, thermal treatment) too |
 | **Ensemble energy** | molecules | one entry per group, with −RT ln Σ exp(−E/RT) of an energy at a temperature, degeneracies counted |
 | **Average** | molecules | one entry per group, each property chosen averaged, weighted by a property (shares) or evenly: numbers, per-atom lists and curves alike |
 | **Equivalent atoms** | molecules | the same, a per-atom property averaged over each symmetry class (from Meno's canonical numbering) |

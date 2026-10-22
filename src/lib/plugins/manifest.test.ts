@@ -125,7 +125,7 @@ describe("a plugin's manifest", () => {
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "same", "seed"]);
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
     // (how many are sought is the molecule's to say unless a number is asked for: the number is shown only then)
     expect(rdkit.roles.find((r) => r.role === "conformers")?.options.find((o) => o.id === "count")?.when).toEqual({ id: "sought", in: ["fixed"] });
   });

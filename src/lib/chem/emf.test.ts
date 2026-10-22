@@ -225,6 +225,38 @@ describe("molecules in 3D in an EMF", () => {
     }
   });
 
+  it("counts in a picture in parts the padding its parts carry, so that they add up to the total each says ([MS-EMFPLUS] 2.3.5.1)", () => {
+    const bounds = { min: { x: 4, y: -2 }, max: { x: 8, y: 2 } };
+    // PNGs of every length modulo 4, either side of where one record is too small (the image's 28-byte header with them)
+    const lengths = [0xfff0 - 28 - 3, 0xfff0 - 28, 0xfff0 - 28 + 1, 0xfff0 - 28 + 2, 0xfff0 - 28 + 3, 0xfff0 - 28 + 4, 200000, 200001, 200002, 200003];
+    for (const size of lengths) {
+      const png = new Uint8Array(size).map((_, i) => 1 + (i % 251));
+      const p = emfPlusRecords(layoutEmf(layout, opts, undefined, { png, width: 300, height: 300, bounds }).emf);
+      const parts = p.filter((r) => r.type === 0x4008 && ((r.flags >> 8) & 0x7f) === 5);
+      const whole = 28 + size;
+      const padded = whole + ((4 - (whole % 4)) % 4);
+      // every part's data whole words, as DataSize is
+      for (const r of parts) expect(r.data.byteLength % 4, `${size}`).toBe(0);
+      if (whole <= 0xfff0) {
+        // (one record, no total: as it was)
+        expect(parts, `${size}`).toHaveLength(1);
+        expect(parts[0].flags & 0x8000).toBe(0);
+        continue;
+      }
+      // each part continued but the last; each says the same total, the padded size, and the parts' data add up to it
+      expect(parts.map((r) => (r.flags & 0x8000) !== 0)).toEqual(parts.map(() => true));
+      const totals = parts.map((r) => r.data.getUint32(0, true));
+      expect(new Set(totals), `${size}`).toEqual(new Set([padded]));
+      const sum = parts.reduce((n, r) => n + r.data.byteLength - 4, 0);
+      expect(sum, `${size}`).toBe(padded);
+      // the PNG whole in them, and nothing after it but the padding's zeros
+      const bytes = parts.flatMap((r) => Array.from(new Uint8Array(r.data.buffer, r.data.byteOffset + 4, r.data.byteLength - 4)));
+      expect(bytes.slice(28, 28 + size)).toEqual(Array.from(png));
+      expect(bytes.slice(28 + size).every((b) => b === 0)).toBe(true);
+      expect(bytes.length - whole).toBeLessThan(4);
+    }
+  });
+
   it("blends the same pixels in for GDI, given them, in place of the discs: premultiplied, bottom row first", () => {
     const bounds = { min: { x: 4, y: -2 }, max: { x: 8, y: 2 } };
     // two pixels across, two down: the top row red, half there; the bottom blue

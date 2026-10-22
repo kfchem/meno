@@ -15,8 +15,8 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
-import type { WorkflowStep } from "../store/types";
-import { KINDS, kindInfo, MENO_DOES, takenBy, takes, type StepKind, type ValueKind } from "./kinds";
+import type { WorkflowSet, WorkflowStep } from "../store/types";
+import { exitOf, KINDS, kindInfo, madeName, MENO_DOES, takenBy, takes, type StepKind, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -102,6 +102,17 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
 
 /** The options a step takes, as who does it declares them. */
 export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsFor(step.kind, byOf(step));
+
+/**
+ * A set's name, as its frame says it: a step's first exit's, as the kind
+ * names what it makes, as it was set; another exit's, by its own name; a
+ * chemist's, theirs, or "Input".
+ */
+export function setName(set: Pick<WorkflowSet, "made" | "name">, steps: readonly WorkflowStep[]): string {
+  const made = set.made ? steps.find((s) => s.id === set.made!.step) : undefined;
+  const exit = made && set.made ? exitOf(made.kind, set.made.exit) : undefined;
+  return made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
+}
 
 /** The programs a plugin runs for a kind of step; none, where it does the step in its worker - or Meno does it. */
 export function programsFor(kind: StepKind, by: string): readonly string[] {
