@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, structureMember, LARGE_SET, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, structureMember, recordOn, LARGE_SET, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
@@ -361,8 +361,15 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
     // (each structure's atoms, as many as it brought)
     const added = d.model.atoms.filter((a) => !there.has(a.id)).map((a) => a.id);
     let from = 0;
-    // (each with its record, where the step gave it one)
-    return { doc: d, members: made.map((m) => structureMember(added.slice(from, (from += m.atoms.length)), m.record)), put: added };
+    // (each with its record, where the step gave it one: of that structure, as it is drawn now)
+    return {
+      doc: d,
+      members: made.map((m) => {
+        const ids = added.slice(from, (from += m.atoms.length));
+        return structureMember(ids, m.record && recordOn(m.record, d.model, ids));
+      }),
+      put: added,
+    };
   });
 }
 

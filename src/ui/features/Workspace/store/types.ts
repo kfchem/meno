@@ -620,6 +620,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A set copied, as it is put down: the records of the structures drawn it
+   * held, each by its atoms' ids as pasted - taken up by those structures as
+   * its members are found from what lies inside it (workflow/model
+   * `membersSettled`), then gone.
+   */
+  carried?: { structure: number[]; record: DrawnRecord }[];
+  /**
    * A result set of structures drawn: the atoms, by id, its step put on the
    * page as it last ran - all it takes away when the step runs again. A
    * structure the chemist joined to one of them by a bond keeps its own
@@ -647,8 +654,11 @@ export type WorkflowSet = {
  * geometry, in 2D: the entries it was made from (`from`, by id, where they
  * have one), its properties by name, and whether it is done or was set
  * aside, and why. All of it optional: a structure the chemist drew has none.
+ * `of` is the structure it was given for, as a key (workflow/entries
+ * `drawnHash`): edited since, the structure is another, and its properties
+ * and status are taken away, `stale` saying why.
  */
-export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus };
+export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
 export type DrawnModel = Model & { record?: DrawnRecord };
 /** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */

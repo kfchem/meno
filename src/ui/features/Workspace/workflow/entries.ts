@@ -7,9 +7,9 @@
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
-import { FREQUENCY, geometryKey, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
-import { isUnit } from "../../../../lib/units";
-import { leftOut } from "../utils/readNotes";
+import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
+import { leftOut, readEach } from "../utils/readNotes";
+import { signatureOf } from "../utils/drawnLink";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { groupLetter } from "../../../../lib/nodes/base";
@@ -124,13 +124,22 @@ export function setMembers(
   const molecules = new Set((page.molecules3d ?? []).map((m) => m.id));
   const pictures = new Set((page.pictures ?? []).map((p) => p.id));
   const out = { structures: [] as number[][], records: [] as (DrawnRecord | undefined)[], molecules: [] as number[], pictures: [] as number[] };
-  const taken = new Set<number>();
+  // (each structure taken, by its place among them)
+  const taken = new Map<number, number>();
   for (const m of set.members) {
     if ("structure" in m) {
+      const mine = new Set<number>();
       for (const id of m.structure) {
         const k = byAtom.get(id);
-        if (k == null || taken.has(k)) continue;
-        taken.add(k);
+        if (k == null || mine.has(k)) continue;
+        mine.add(k);
+        const i = taken.get(k);
+        if (i != null) {
+          // (two members joined into one structure: what each came from kept, the properties of neither)
+          if (m.record) out.records[i] = joined(out.records[i], m.record);
+          continue;
+        }
+        taken.set(k, out.structures.length);
         out.structures.push(drawn[k].ids);
         out.records.push(m.record);
       }
@@ -138,6 +147,8 @@ export function setMembers(
       if (molecules.has(m.molecule) && !out.molecules.includes(m.molecule)) out.molecules.push(m.molecule);
     } else if (pictures.has(m.picture) && !out.pictures.includes(m.picture)) out.pictures.push(m.picture);
   }
+  // (each record as its structure stands now: edited since it was given, its properties are of the one before)
+  out.records = out.records.map((r, i) => recordNow(r, page.model, out.structures[i]));
   return out;
 }
 
@@ -155,13 +166,107 @@ export function membersOf(found: {
   ];
 }
 
+/** What a record is of: the structure it was given for, as a short key (`drawnKey`) - so that, edited since, it is known to be another. */
+export const drawnHash = (model: Model, ids: readonly number[]): string => hash(drawnKey(model, ids)).toString(36);
+
+/** What a record says once the structure it was given for has been edited: its properties and status taken away. */
+export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";
+
+/** A record put on a structure as it is drawn now: of that structure (`of`). */
+export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => ({ ...record, of: drawnHash(model, ids) });
+
+/**
+ * The record of a structure edited since it was given, or of two joined
+ * into one, where `a` is the other's: what each came from kept, and the
+ * properties and status of neither - said so (`stale`). None where nothing
+ * is left.
+ */
+function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undefined {
+  const from = [...new Set([...(a?.from ?? []), ...(b.from ?? [])])];
+  const stale = a?.properties || a?.status || b.properties || b.status ? BEFORE_THE_EDIT : (a?.stale ?? b.stale);
+  const out: DrawnRecord = { ...(from.length ? { from } : {}), ...(stale ? { stale } : {}) };
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`). */
+function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
+  if (!record?.of || record.of === drawnHash(model, ids)) return record;
+  return joined(undefined, record);
+}
+
+/** What a record adds to a step's key (flow `inputKey`): all it says, but not what it is of - the structure's own key says that. */
+export const recordKey = ({ of: _of, ...r }: DrawnRecord): string => stableJson(r);
+
 /** A structure as a set's member: its atoms' ids, and its record where it has one. */
 export function structureMember(ids: readonly number[], record?: DrawnRecord): Member {
   return { structure: [...ids], ...(record ? { record } : {}) };
 }
 
+/** FNV-1a over a string: a short key - for what came into a step, and for the structure a record is of. */
+export function hash(text: string, h = 0x811c9dc5): number {
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * What a drawn structure adds to a step's key, as text: what it is - its
+ * atoms' elements, charges, masses and radicals, its bonds' orders, wedges
+ * and dative bonds (`signatureOf`) - and what its drawing says by where
+ * things lie: on which side of each double bond each neighbour is, the
+ * other end's taken together (cis or trans), and the order the neighbours
+ * go round each atom a wedge starts from. Not where it is drawn: moved
+ * whole, turned, or an atom nudged without crossing a line that matters, it
+ * is the same; mirrored, its wedged centres are not.
+ */
+const drawnKeyed = new WeakMap<Model, Map<string, string>>();
+export function drawnKey(model: Model, ids: readonly number[]): string {
+  const known = drawnKeyed.get(model) ?? new Map<string, string>();
+  drawnKeyed.set(model, known);
+  const name = ids.join(",");
+  const had = known.get(name);
+  if (had != null) return had;
+  const of = new Set(ids);
+  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
+  const near = new Map<number, number[]>();
+  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
+  for (const b of bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  const said: string[] = [];
+  for (const a of at.values()) if (a.radical) said.push(`r${a.id}:${a.radical}`);
+  for (const b of bonds) {
+    if (b.dative) said.push(`d${b.a}-${b.b}`);
+    if (b.order === 2) {
+      // (each neighbour's side of the line through the bond, measured the same way at both ends)
+      const p = at.get(b.a)!;
+      const q = at.get(b.b)!;
+      const side = (id: number) => {
+        const n = at.get(id)!;
+        return Math.sign((q.x - p.x) * (n.y - p.y) - (q.y - p.y) * (n.x - p.x));
+      };
+      for (const n of near.get(b.a) ?? []) if (n !== b.b) for (const m of near.get(b.b) ?? []) if (m !== b.a) said.push(`${n}~${m}:${side(n) * side(m)}`);
+    }
+    if (b.stereo && b.stereo !== "none") {
+      // (round the atom it starts from, anticlockwise, from its lowest-numbered neighbour)
+      const c = at.get(b.a)!;
+      const round = (near.get(b.a) ?? [])
+        .map((id) => ({ id, angle: Math.atan2(at.get(id)!.y - c.y, at.get(id)!.x - c.x) }))
+        .sort((u, v) => u.angle - v.angle)
+        .map((u) => u.id);
+      const first = round.indexOf(Math.min(...round));
+      said.push(`w${b.a}:${[...round.slice(first), ...round.slice(0, first)].join(">")}`);
+    }
+  }
+  const key = `${signatureOf(model, ids)}|${said.sort().join(",")}`;
+  known.set(name, key);
+  return key;
+}
+
 const isText = (v: unknown): v is string => typeof v === "string";
-const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /** An entry's status as a file keeps it (lib/entry `EntryStatus`), or none where it is not one. */
 function statusIn(v: unknown): EntryStatus | undefined {
@@ -174,40 +279,34 @@ function statusIn(v: unknown): EntryStatus | undefined {
 
 /**
  * A structure drawn's record as a file keeps it (`DrawnRecord`), each part
- * read as data: the entries it came from, by id; its properties - a number,
- * a text or true/false, with its unit from Meno's units table or "none",
- * whether it was worked out, and by what - each that does not read left
- * out, and counted (utils/readNotes); and its status. None where nothing of it reads.
+ * read as data: the entries it came from, by id, each that is no text left
+ * out; its properties, each as lib/entry reads one (`propertyIn`), each
+ * that does not read left out - all counted (utils/readNotes); its status;
+ * what it is of, and why its properties were taken away. None where
+ * nothing of it reads.
  */
 export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
-  const r = v as { from?: unknown; properties?: unknown; status?: unknown } | null;
+  const r = v as { from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
   if (!r || typeof r !== "object") return undefined;
-  const from = Array.isArray(r.from) && r.from.every(isText) ? (r.from as string[]) : undefined;
+  const from = readEach(r.from, (id) => (isText(id) ? id : null), "madeFrom");
   const properties: Record<string, Property> = {};
   if (r.properties && typeof r.properties === "object" && !Array.isArray(r.properties)) {
     for (const [name, p] of Object.entries(r.properties as Record<string, unknown>)) {
-      const q = p as { value?: unknown; unit?: unknown; status?: unknown; by?: unknown } | null;
-      const value = q?.value;
-      if (!(isNumber(value) || isText(value) || typeof value === "boolean") || !(q!.unit === "none" || (isText(q!.unit) && isUnit(q!.unit)))) {
-        leftOut("property");
-        continue;
-      }
-      const status = q!.status === "computed" ? "computed" : isText((q!.status as { failed?: unknown })?.failed) ? { failed: (q!.status as { failed: string }).failed } : isText((q!.status as { notApplicable?: unknown })?.notApplicable) ? { notApplicable: (q!.status as { notApplicable: string }).notApplicable } : null;
-      if (!status) {
-        leftOut("property");
-        continue;
-      }
-      const by = q!.by && typeof q!.by === "object" ? Object.fromEntries(Object.entries(q!.by as Record<string, unknown>).filter(([k, x]) => BY_KEYS.has(k) && isText(x))) : undefined;
-      properties[name] = { value, unit: q!.unit as Property["unit"], status, ...(by && Object.keys(by).length ? { by } : {}) };
+      const read = name ? propertyIn(p) : undefined;
+      if (read) properties[name] = read;
+      else leftOut("property");
     }
   }
   const status = statusIn(r.status);
-  const record: DrawnRecord = { ...(from?.length ? { from } : {}), ...(Object.keys(properties).length ? { properties } : {}), ...(status ? { status } : {}) };
+  const record: DrawnRecord = {
+    ...(from.length ? { from } : {}),
+    ...(Object.keys(properties).length ? { properties } : {}),
+    ...(status ? { status } : {}),
+    ...(isText(r.of) ? { of: r.of } : {}),
+    ...(isText(r.stale) ? { stale: r.stale } : {}),
+  };
   return Object.keys(record).length ? record : undefined;
 }
-
-/** What may say what worked a property out (lib/entry `By`). */
-const BY_KEYS = new Set(["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment"]);
 
 /** Where each of a page's structures, molecules and pictures is: what a set's gestures read (workflow/model `membersSettled`). */
 export function placesOf(page: Page): { structures: { ids: number[]; at: Pt }[]; molecules: Map<number, Pt>; pictures: Map<number, Pt> } {

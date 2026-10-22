@@ -64,6 +64,15 @@ function readSet(v: unknown): WorkflowSet | null {
       const members = membersIn(b.members);
       return members ? { members } : {};
     })(),
+    // (a set copied: the records its structures drawn carry, to be taken up as it is put down)
+    ...(() => {
+      const carried = readEach(b.carried, (x) => {
+        const c = x as { structure?: unknown; record?: unknown } | null;
+        const record = readDrawnRecord(c?.record);
+        return Array.isArray(c?.structure) && c.structure.length && c.structure.every((id) => isId(id)) && record ? { structure: c.structure as number[], record } : null;
+      }, "member");
+      return carried.length ? { carried } : {};
+    })(),
     // (the atoms its step put on the page, by id, as members' are: a result set's alone)
     ...(made && Array.isArray(b.put) && b.put.length && b.put.every((id) => isId(id)) ? { put: b.put as number[] } : {}),
     // (a large result set's collection, each molecule read as the page's are - those that do not read counted, with those its file already said had not)

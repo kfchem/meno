@@ -1467,16 +1467,35 @@ All of it is optional. A structure the chemist drew has none.
   (`DrawnEntry.record`, from `inputOf`'s `records`), and its outcome
   carries it out. A run kept keeps it with each structure
   (`RunResults.drawn`, as `DrawnModel`).
-- **It stays with the structure** as the set's members settle again.
-  Moved, or joined by the chemist to a structure of their own, the
-  structure is still the member, and its record stays with it.
+- **It stays with the structure** as the set's members settle again,
+  moved whole or turned.
+- **It is of the structure it was given for.** The record keeps which
+  (`of`: the structure's key, as a step's input key reads a structure:
+  its atoms, bonds, wedges and double bonds' sides, not where it is
+  drawn). Edited since - an atom changed, a wedge turned over, a bond
+  drawn or broken, joined to a structure of the chemist's - the
+  structure is another, and its properties and status were not worked out
+  for it. They are taken away, and the record says so (`stale`: "its
+  properties were for the structure before the edit"); what it came from
+  is kept. Undone, the structure is the one they were for again, and the
+  record is as it was. Two such structures joined into one keep what each
+  came from, and the properties of neither.
+- **It is in what a step after it is keyed by** (`inputKey`): all of the
+  record but `of`, which the structure's own key says. The same structure
+  with another value from the step before has not been run on, and the
+  step's card says it has changed.
+- **A copy of its set carries it.** A set copied goes without its members,
+  and put down holds what then lies inside it. Each structure that had a
+  record, pasted whole, takes it up again (`WorkflowSet.carried`, by its
+  atoms' ids as pasted), of the structure as pasted.
 - **In the file** it is written with the member, and read back as data
-  (`readDrawnRecord`): a property whose value is not a number, a text or
-  true/false, whose unit is not in the units table, or whose status is
-  not one of lib/entry's is left out, counted and said as the file opens
-  (FILE-IO.md, *What does not read*), and so is anything that says what
-  worked it out but is not one of `By`'s parts. A record left with
-  nothing is none.
+  (`readDrawnRecord`). Each property is read as lib/entry reads one
+  (`propertyIn`): one whose value is not a number, a text or true/false,
+  whose unit is not in the units table, whose status is not one of
+  lib/entry's, or whose `by` or `at` does not read, is left out. So is an
+  entry it came from that is no text. Each one left out is counted and
+  said as the file opens (FILE-IO.md, *What does not read*). A record left
+  with nothing is none.
 
 
 Not yet: a large set of structures drawn. *A large result set* holds more
