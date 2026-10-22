@@ -11,6 +11,8 @@ import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
 import { leftOut, readEach } from "../utils/readNotes";
 import { signatureOf } from "../utils/drawnLink";
+import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { groupLetter } from "../../../../lib/nodes/base";
@@ -167,8 +169,31 @@ export function membersOf(found: {
   ];
 }
 
-/** What a record is of: the structure it was given for, as a short key (`drawnKey`) - so that, edited since, it is known to be another. */
-export const drawnHash = (model: Model, ids: readonly number[]): string => hash(drawnKey(model, ids)).toString(36);
+/**
+ * What a record is of: the structure it was given for, as a short key - so
+ * that, edited since, it is known to be another. Its identity (chem
+ * `identityOfDrawn`), each label that stands for atoms drawn out
+ * (`labelsDrawnOut`): its atoms' elements, charges, masses and unpaired
+ * electrons, its bonds, and each configuration as the drawing shows it -
+ * not how: not where it lies, which wedges say it, whether an H is drawn,
+ * nor whether a group is written by its label. So Clean-up, which draws
+ * the same structure afresh, keeps a record's properties; a changed atom,
+ * charge, bond, or configuration - its mirror image - does not.
+ */
+export function drawnHash(model: Model, ids: readonly number[]): string {
+  // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
+  const labels = model.atoms.filter((a) => a.abbrev && ids.includes(a.id)).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
+  const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
+  let key = identities.get(drawn);
+  if (key == null) {
+    key = hash(identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids)))).text).toString(36);
+    if (identities.size >= IDENTITIES_KEPT) identities.clear();
+    identities.set(drawn, key);
+  }
+  return key;
+}
+const identities = new Map<string, string>();
+const IDENTITIES_KEPT = 4096;
 
 /** What a record says once the structure it was given for has been edited: its properties and status taken away. */
 export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";

@@ -1580,16 +1580,27 @@ All of it is optional. A structure the chemist drew has none.
 - **It stays with the structure** as the set's members settle again,
   moved whole or turned.
 - **It is of the structure it was given for.** The record keeps which
-  (`of`: the structure's key, as a step's input key reads a structure:
-  its atoms, bonds, wedges and double bonds' sides, not where it is
-  drawn). Edited since - an atom changed, a wedge turned over, a bond
-  drawn or broken, joined to a structure of the chemist's - the
-  structure is another, and its properties and status were not worked out
-  for it. They are taken away, and the record says so (`stale`: "its
-  properties were for the structure before the edit"); what it came from
-  is kept. Undone, the structure is the one they were for again, and the
-  record is as it was. Two such structures joined into one keep what each
-  came from, and the properties of neither.
+  (`of`: the structure's identity, as Duplicates and identity read one -
+  chem/identity - hashed). Each label that stands for atoms is read as
+  those atoms (`labelsDrawnOut`): those it holds, as Clean-up writes a
+  group by its label, else the dictionary's. So the key is the structure's
+  elements, charges, masses, unpaired electrons, bonds and each
+  configuration the drawing shows - not how it is drawn: not where it
+  lies, which bonds are wedged or which way, whether an H is drawn, nor
+  whether a group is written by its label. Clean-up, which draws the same
+  structure afresh, keeps a record as it is.
+  Edited since - an atom, a charge, a mass or a bond changed, an atom
+  taken away or added, the configuration turned to its mirror image, a
+  group's label or what it holds changed, joined to a structure of the
+  chemist's - the structure is another, and its properties and status were
+  not worked out for it. They are taken away, and the record says so
+  (`stale`: "its properties were for the structure before the edit");
+  what it came from is kept. Undone, the structure is the one they were
+  for again, and the record is as it was. Two such structures joined into
+  one keep what each came from, and the properties of neither.
+  The identity is worked out once for each structure as drawn, and again
+  only when its drawing's key (`drawnKey`, with what its labels hold)
+  changes.
 - **It is in what a step after it is keyed by** (`inputKey`): all of the
   record but `of`, which the structure's own key says. The same structure
   with another value from the step before has not been run on, and the

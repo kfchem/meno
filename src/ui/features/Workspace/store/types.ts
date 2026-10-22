@@ -667,9 +667,10 @@ export type WorkflowSet = {
  * geometry, in 2D: the entries it was made from (`from`, by id, where they
  * have one), its properties by name, and whether it is done or was set
  * aside, and why. All of it optional: a structure the chemist drew has none.
- * `of` is the structure it was given for, as a key (workflow/entries
- * `drawnHash`): edited since, the structure is another, and its properties
- * and status are taken away, `stale` saying why.
+ * `of` is the structure it was given for, as a key of its identity, not
+ * of how it is drawn (workflow/entries `drawnHash`): edited since, the
+ * structure is another, and its properties and status are taken away,
+ * `stale` saying why.
  */
 export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
