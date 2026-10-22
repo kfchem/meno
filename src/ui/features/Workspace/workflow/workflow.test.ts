@@ -16,7 +16,7 @@ import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, remo
 import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
 import { inputsOf } from "./kinds";
-import { doerOf } from "./doers";
+import { doerOf, inputsFor, takesBy } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
 import { selectionFrame } from "./selectionSet";
@@ -765,6 +765,26 @@ describe("Quick Add's calculations", () => {
     expect(canWire(gen, { set: 1 }, id)).toBe(false);
     expect(connect(gen, { set: 1 }, id)).toBe(gen);
     expect(inputsOf("generate")).toEqual([]);
+  });
+
+  it("offer a step that makes molecules from seeds (CReM's Generate) on a compound set's wire too - its one input, seeds - and never REINVENT 4's", () => {
+    const doc = addStep(page(), "as-conformers", 5, 0);
+    useReaders.setState({ state: { reinvent: "added", crem: "added" }, problem: {} });
+    expect(offered(doc).filter(([who]) => who === "CReM" || who === "REINVENT 4")).toEqual([
+      ["CReM", ["generate"]],
+      ["REINVENT 4", ["generate"]],
+    ]);
+    expect(offered(doc, { set: 1 }).filter(([who]) => who === "CReM" || who === "REINVENT 4")).toEqual([["CReM", ["generate"]]]);
+    const gen = addStep(doc, "generate", 9, 0, undefined, "crem");
+    const id = gen.steps![gen.steps!.length - 1].id;
+    expect(inputsFor("generate", "crem")).toEqual([{ id: "in", name: "Seeds", takes: ["molecules"] }]);
+    expect(inputsFor("generate", "reinvent")).toEqual([]);
+    expect(canWire(gen, { set: 1 }, id)).toBe(true);
+    const wired = connect(gen, { set: 1 }, id);
+    expect(wired.wires!.filter((w) => w.to.step === id)).toEqual([expect.objectContaining({ from: { set: 1 }, to: { step: id, port: "in" } })]);
+    // (a conformer set is no seeds: compounds, each one molecule)
+    expect(takesBy("generate", "crem", "conformers")).toBe(false);
+    expect(takesBy("generate", "reinvent", "molecules")).toBe(false);
   });
 });
 

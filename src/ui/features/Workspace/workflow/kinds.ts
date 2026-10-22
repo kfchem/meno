@@ -68,7 +68,8 @@ export type KindInfo = {
 
 export const KINDS: readonly KindInfo[] = [
   // (new molecules from nothing that comes in: a generative model's, as its plugin asks it - no input, so no port)
-  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "molecules", runs: "program", made: "Generated" },
+  // (or from seeds, where who does it takes them - CReM's: then its one input, `SEEDS`)
+  { kind: "generate", name: "Generate", icon: "sparks", takes: ["molecules"], inputs: [], gives: "molecules", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers" },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
@@ -207,10 +208,13 @@ export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
   return second.gives === "same" || second.gives === "pictures" ? first : second.gives;
 }
 
-/** The input of `kind` named `port`, or its first where `port` is not one of its own. */
-/** Whether a kind takes nothing in: no input, nothing wired to it (Generate's). */
+/** Whether a kind takes nothing in of its own: no input (Generate's) - but seeds, where who does it takes them (workflow/doers `inputsFor`). */
 export const takesNothing = (kind: StepKind): boolean => inputsOf(kind).length === 0;
 
+/** The one input of a kind that takes nothing in of its own, where who does it makes molecules from seeds (its manifest's `seeds`): molecules, each a seed. */
+export const SEEDS: StepPort = { id: ONE_INPUT, name: "Seeds", takes: ["molecules"] };
+
+/** The input of `kind` named `port`, or its first where `port` is not one of its own. */
 export function portOf(kind: StepKind, port: string): StepPort {
   const inputs = inputsOf(kind);
   return inputs.find((p) => p.id === port) ?? inputs[0];

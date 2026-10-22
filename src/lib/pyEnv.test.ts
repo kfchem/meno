@@ -161,3 +161,13 @@ describe("setting a plugin up, with what it downloads besides", () => {
     expect(fetched()).toBe(false);
   });
 });
+
+describe("a file a plugin downloads, as asking to set it up says it", () => {
+  it("says its licence and size - unpacked too, where Meno unpacks it - and how its makers ask to be cited", async () => {
+    const { fileSaid } = await import("./pyEnv");
+    const weights = { file: "model.pth", name: "Its trained model", licence: "MIT", url: "https://h/model.pth", sha256: "ab".repeat(32), bytes: 23_528_840 };
+    expect(fileSaid(weights)).toBe("Its trained model (MIT licence, 24 MB)");
+    const db = { ...weights, file: "f.db.gz", name: "A fragment database", licence: "CC BY 4.0", bytes: 281_251_246, unpack: "gz" as const, unpackedBytes: 2_027_749_376, cite: "Polishchuk, J. Cheminform. 2020, 12, 28" };
+    expect(fileSaid(db)).toBe("A fragment database (CC BY 4.0 licence, 281 MB, 2.0 GB unpacked; cite Polishchuk, J. Cheminform. 2020, 12, 28)");
+  });
+});

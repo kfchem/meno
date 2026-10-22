@@ -17,7 +17,7 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
-import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
+import { byOf, installedFor, optionsFor, programsFor, seededBy } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type SetKind, type StepKind } from "../../workflow/kinds";
@@ -449,16 +449,23 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    */
   const GENERATE_MS = 10 * 60_000;
 
-  /** A step that takes nothing in, a plugin's at once (`run`, with no entries: Generate's): what it made, each a compound of its own, and what it says of the run. */
+  /**
+   * A step that takes nothing in of its own, a plugin's at once (`run`: Generate's) - with no entries, or the
+   * seeds wired in, where its plugin makes molecules from them (CReM's): what it made, each a compound of its own,
+   * and what it says of the run.
+   */
   async function runGenerate(id: number, plugin: PythonPlugin, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    const input = seededBy(step.kind, plugin.id) ? inputOf(d, id) : null;
+    if (seededBy(step.kind, plugin.id) && !input?.molecules.length) return void fail(id, "Nothing came in", at, key);
+    const seeds = input ? setEntries(input.molecules, "molecules").map(pluginEntry) : [];
     let read;
     try {
       const client = await pluginClient(plugin);
-      read = readGenerated(await client.run(step.kind, [], options, "molecules", GENERATE_MS), [`${plugin.id} ${client.version || plugin.version}`]);
+      read = readGenerated(await client.run(step.kind, seeds, options, "molecules", GENERATE_MS), [`${plugin.id} ${client.version || plugin.version}`]);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }

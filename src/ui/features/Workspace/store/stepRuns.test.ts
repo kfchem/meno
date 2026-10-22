@@ -970,6 +970,31 @@ describe("Generate: a step that takes nothing in", () => {
     expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("changed");
   });
 
+  it("from seeds, where its plugin takes them (CReM's): waits for a set of molecules wired in, and gives its plugin each as an entry", async () => {
+    useReaders.setState({ state: { crem: "added", xtb: "added" }, problem: {} });
+    const { st } = editor();
+    const step = st().addStep("generate", "crem", 0, 30);
+    const here = () => st().steps.find((s) => s.id === step)!;
+    expect(stateOf(st(), here(), "crem")).toBe("no-input");
+    st().connect({ set: st().sets[0].id }, step);
+    expect(st().wires.filter((w) => w.to.step === step)).toHaveLength(1);
+    expect(stateOf(st(), here(), "crem")).toBe("ready");
+    worker.run.mockImplementationOnce(async () => ({ ...generated, said: "2 made from 1 seed (fragments replaced, radius 3, seed 1)" }) as never);
+    await st().runStep(step);
+    expect(worker.run).toHaveBeenCalledWith(
+      "generate",
+      [expect.objectContaining({ atoms: [expect.objectContaining({ el: "O" }), expect.objectContaining({ el: "H" }), expect.objectContaining({ el: "H" })], charge: 0, multiplicity: 1 })],
+      expect.objectContaining({ operation: "mutate", count: 20, radius: 3 }),
+      "molecules",
+      600_000,
+    );
+    expect(here().ran).toMatchObject({ ok: true, said: "2 made from 1 seed (fragments replaced, radius 3, seed 1)" });
+    expect(setMembers(st(), resultOf(st(), step)!).molecules).toHaveLength(2);
+    // (changed once what came in has)
+    st().removeWire(st().wires.find((w) => w.to.step === step)!.id);
+    expect(stateOf(st(), here(), "crem")).toBe("changed");
+  });
+
   it("takes no wire, and fails, saying why, on anything it made that is no molecule", async () => {
     const { st } = page();
     const set = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });

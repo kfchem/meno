@@ -41,6 +41,7 @@ jobs:
       - run: python3 -m unittest scripts/calc/test_plugin_pictures.py
       - run: python3 -m unittest scripts/calc/test_plugin_wfx.py
       - run: python3 -m unittest scripts/calc/test_plugin_reinvent.py
+      - run: python3 -m unittest scripts/calc/test_plugin_crem.py
       - run: python3 -m unittest scripts/calc/test_charge_multiplicity.py
       - run: python3 -m unittest scripts/calc/test_reader_pyscf_species.py
 
@@ -60,6 +61,10 @@ jobs:
           - plugin: rdkit
             needs: rdkit
             tests: scripts/calc/test_plugin_rdkit.py scripts/chem/test_chem_worker.py
+          # (its fragment database aside: 2 GB unpacked, its tests that need it skipped here)
+          - plugin: crem
+            needs: crem
+            tests: scripts/calc/test_plugin_crem.py
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Its environment, from its lock

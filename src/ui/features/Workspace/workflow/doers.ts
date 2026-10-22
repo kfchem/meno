@@ -16,7 +16,7 @@ import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowStep } from "../store/types";
-import { KINDS, kindInfo, MENO_DOES, takes, type SetKind, type StepKind } from "./kinds";
+import { inputsOf, KINDS, kindInfo, MENO_DOES, SEEDS, takes, takesNothing, type SetKind, type StepKind, type StepPort } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -45,10 +45,21 @@ export function kindsOf(by: string): StepKind[] {
  */
 export function takesBy(kind: StepKind, by: string, holds: SetKind): boolean {
   if (!takes(kind, holds)) return false;
+  // (a kind that takes nothing in of its own: only seeds, where who does it takes them)
+  if (takesNothing(kind)) return seededBy(kind, by);
   if (!by || by === MENO.id) return true;
   const decl = pluginById(by)?.steps.find((d) => d.kind === kind);
   return !decl?.takes || decl.takes.includes(holds);
 }
+
+/** Whether a step of a kind that takes nothing in of its own (Generate), done by `by`, makes its molecules from seeds wired in (its manifest's `seeds`: CReM's). */
+export const seededBy = (kind: StepKind, by: string): boolean => takesNothing(kind) && !!pluginById(by)?.steps.find((d) => d.kind === kind)?.seeds;
+
+/** The inputs a step of `kind` done by `by` has: the kind's own; or, one that takes nothing in of its own, seeds where who does it takes them - else none. */
+export const inputsFor = (kind: StepKind, by: string): readonly StepPort[] => (seededBy(kind, by) ? [SEEDS] : inputsOf(kind));
+
+/** Whether a step of `kind` done by `by` takes nothing in: nothing can be wired to it. */
+export const takesNothingBy = (kind: StepKind, by: string): boolean => inputsFor(kind, by).length === 0;
 
 /**
  * What a plugin is called where its steps are - a card, Quick Add,

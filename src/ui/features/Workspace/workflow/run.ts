@@ -13,8 +13,8 @@ import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, LARGE_SET, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type SetKind, type StepKind } from "./kinds";
-import { takesBy } from "./doers";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } from "./kinds";
+import { takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
 import { addSet, holdCollection, holdMembers, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
@@ -84,7 +84,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
   // (a step that takes nothing in needs only someone to do it)
-  if (takesNothing(step.kind)) return by ? null : "Nothing added does this step";
+  if (takesNothingBy(step.kind, by)) return by ? null : "Nothing added does this step";
   const input = inputOf(doc, step.id);
   if (!input) return "Nothing comes into it";
   if (!takesBy(step.kind, by, input.holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;

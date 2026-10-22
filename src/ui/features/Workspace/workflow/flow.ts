@@ -7,8 +7,8 @@ import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers, setMolecules } from "./entries";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takesNothing, type SetHolds, type SetKind } from "./kinds";
-import { byOf, optionsFor, takesBy } from "./doers";
+import { exitOf, ONE_INPUT, optionsOf, type SetHolds, type SetKind } from "./kinds";
+import { byOf, inputsFor, optionsFor, takesBy, takesNothingBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -64,7 +64,7 @@ export function stepsBefore(doc: Flow, step: number): number[] {
 export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): boolean {
   const step = stepOf(doc, to);
   // (a step that takes nothing in has nothing to wire to)
-  if (!step || takesNothing(step.kind)) return false;
+  if (!step || takesNothingBy(step.kind, byOf(step))) return false;
   const set = findSet(doc, from.set);
   if (!set || set.made?.step === to) return false;
   // (nothing it gives may come back round to it)
@@ -74,9 +74,10 @@ export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE
   // (pictures - a Render step's - no step takes)
   if (holds === "pictures") return false;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
-  const takes = portOf(step.kind, port).takes;
+  const inputs = inputsFor(step.kind, byOf(step));
+  const takes = (inputs.find((p) => p.id === port) ?? inputs[0]).takes;
   if (holds == null) return true;
-  return inputsOf(step.kind).length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
+  return inputs.length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
 }
 
 /** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
@@ -178,7 +179,7 @@ function drawnKey(model: Model, ids: readonly number[]): string {
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   // (a step that takes nothing in runs on its options alone, and who does it)
-  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
+  if (takesNothingBy(step.kind, by)) return hash(`${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
   const input = inputOf(doc, step.id);
   if (!input) return "";
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
@@ -201,7 +202,7 @@ export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   // (its jobs under way: the card says which, as they were last looked at)
   if (step.running) return "running";
   // (a step that takes nothing in is ready as it is)
-  const into = takesNothing(step.kind) || !!wireInto(doc, step.id);
+  const into = takesNothingBy(step.kind, by) || !!wireInto(doc, step.id);
   if (!step.ran) return into ? "ready" : "no-input";
   // (what comes from a step not run yet, or run since, has changed)
   if (!into) return "changed";
