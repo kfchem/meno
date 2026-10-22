@@ -1,4 +1,4 @@
-import type { Failure } from "../workflow/failures";
+import type { Failure, FailureKind } from "../workflow/failures";
 import type { ShowBox } from "../utils/viewShow";
 import type { ChemMarks } from "../chem/marks";
 import type { AtomNumberKind, AtomNumbersShown } from "../utils/atomNumbers";
@@ -666,7 +666,15 @@ export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [
  * were, and its jobs - kept in the workspace, so that one opened again picks
  * them up.
  */
-export type StepRunning = { at: number; input: string; options: OptionValues; jobs: StepJob[]; kind?: StepKind };
+export type StepRunning = {
+  at: number;
+  input: string;
+  options: OptionValues;
+  jobs: StepJob[];
+  kind?: StepKind;
+  /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
+  refused?: { entry: number; kind: FailureKind; why: string }[];
+};
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {
   id: number;

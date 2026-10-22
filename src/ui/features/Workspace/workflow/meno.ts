@@ -190,9 +190,14 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
 
 const NO_ENERGY: Outcome = { ok: false, said: "Not every entry has an energy" };
 
+/** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
+const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
+
 /** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
 function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
-  if (entries.some((e) => e.energy == null)) return NO_ENERGY;
+  // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
+  if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
+  if (!entries.every(hasEnergy)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
@@ -214,7 +219,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome {
 function* duplicates(entries: readonly SetEntry[], holds: SetKind, most: number, due: () => boolean): Generator<number, Outcome> {
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
   const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
-  const energies = entries.every((e) => e.energy != null);
+  const energies = entries.every(hasEnergy);
   const keptSet = new Set<SetEntry>();
   let before = 0;
   for (const g of groups) {
@@ -320,9 +325,9 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
 
 /** Each conformer's Boltzmann population within its compound at `kelvin`. */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
-  if (entries.some((e) => e.energy == null)) return NO_ENERGY;
-  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most)
-  if (!(kelvin > 0)) return { ok: false, said: "The temperature must be above 0 K" };
+  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most - and none at no number of kelvins, or infinitely many)
+  if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
     // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)
@@ -348,7 +353,7 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome {
  * by are (`by`: the program and method that worked them out).
  */
 function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome {
-  if (number == null && entries.some((e) => e.energy == null)) return NO_ENERGY;
+  if (number == null && !entries.every(hasEnergy)) return NO_ENERGY;
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const groups = byCompound(entries);

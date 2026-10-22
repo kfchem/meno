@@ -93,16 +93,39 @@ const inside = (name: string) => !!name && name.length <= 200 && !name.startsWit
 const KIND_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const texts = (v: unknown, most: number) => (Array.isArray(v) && v.length <= most && v.every((t) => typeof t === "string") ? (v as string[]) : null);
 
+/** An entry a plugin would not prepare a job for, by its place among those sent - and why, its kind one of core's (`refused` where it names none). */
+export type Refusal = { entry: number; kind: FailureKind; why: string };
+
+/**
+ * The entries a plugin refused as it prepared the others' jobs (`refused`
+ * beside `jobs`: `{"entry": 2, "why": "..."}`), each among the `count`
+ * sent and named once; none where it named none, or named one wrongly.
+ */
+export function readRefused(raw: unknown, count: number): Refusal[] {
+  const list = (raw as { refused?: unknown } | null)?.refused;
+  if (!Array.isArray(list) || list.length > count) return [];
+  const out: Refusal[] = [];
+  for (const r of list) {
+    const g = r as { entry?: unknown; why?: unknown; kind?: unknown } | null;
+    const entry = g?.entry;
+    if (!Number.isInteger(entry) || (entry as number) < 0 || (entry as number) >= count || out.some((o) => o.entry === entry) || typeof g?.why !== "string") return [];
+    out.push({ entry: entry as number, kind: g.kind === undefined ? "refused" : failureKindOf(g.kind), why: g.why.trim().slice(0, WORDS_MOST) || "It did not say why" });
+  }
+  return out;
+}
+
 /**
  * The jobs a plugin prepared for `count` entries, checked: each its entries
- * among those, every entry in one; its program a name; its files inside its
- * folder. Why not, where they are not.
+ * among those, every entry in one - or refused (`readRefused`), and then in
+ * none; its program a name; its files inside its folder. Why not, where
+ * they are not.
  */
 export function readPrepared(raw: unknown, count: number): Prepared[] | string {
   const jobs = (raw as { jobs?: unknown } | null)?.jobs;
   if (!Array.isArray(jobs) || !jobs.length) return "It prepared no job";
   const out: Prepared[] = [];
-  const covered = new Set<number>();
+  const refused = new Set(readRefused(raw, count).map((r) => r.entry));
+  const covered = new Set<number>(refused);
   for (const j of jobs) {
     const r = j as Record<string, unknown> | null;
     const entries = Array.isArray(r?.entries) && r.entries.every((i) => Number.isInteger(i) && i >= 0 && i < count) ? (r.entries as number[]) : null;
@@ -129,6 +152,7 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
     const given = stdin === undefined || (typeof stdin === "string" && files.some((f) => f.name === stdin));
     if (!entries?.length || !program || !args || !reads || reads.some((n) => !inside(n)) || files.length !== (r?.files as unknown[]).length || !given || then.some((t) => !t))
       return "It prepared a job Meno cannot run";
+    if (entries.some((i) => refused.has(i))) return "It prepared a job for what it refused";
     entries.forEach((i) => covered.add(i));
     out.push({
       entries: [...entries],

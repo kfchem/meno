@@ -54,7 +54,11 @@ documentation has them (xtb-docs.readthedocs.io: "Commandline Usage",
   Solvation": gsolv, 1 L of gas and 1 L of solution, unless another is
   asked). None where its program call asked for none and it printed no
   model: so said, not taken from the options. Where that is not what was
-  asked, the job is refused.
+  asked, the job is refused;
+- what xtb warned of as it ran on - the numbered messages of a block it
+  heads "[WARNING]" - each in its own words: a Hessian worked out at a
+  geometry not fully optimised ("Hessian on incompletely optimized
+  geometry!") named as such. A warning never fails its entry.
 
 It keeps nothing between requests, and reaches no network.
 """
@@ -197,25 +201,30 @@ def refuse_isotopes(entry):
             raise Refused(f"xTB's frequencies here take no isotope's mass: {iso}{el} would be given as {el} of natural mass")
 
 
-def args_for(step, options, entry, cores):
+def asked_of_all(step, options):
+    """What a step's options ask of every entry, checked: a method, a solvent and a level it knows."""
     method = METHODS.get(options.get("method", "gfn2"))
     if method is None:
         raise Refused(f"no method is called {options.get('method')!r}")
     solvent = options.get("solvent", "none")
     if solvent != "none" and solvent not in SOLVENTS:
         raise Refused(f"no solvent is called {solvent!r}")
+    if step == "optimise" and options.get("level", "normal") not in LEVELS:
+        raise Refused(f"no level is called {options.get('level')!r}")
+    return method, solvent
+
+
+def args_for(step, options, entry, cores):
+    method, solvent = asked_of_all(step, options)
     charge = whole(entry.get("charge", 0), "The charge")
     multiplicity = whole(entry.get("multiplicity", 1), "The multiplicity")
     if multiplicity < 1:
         raise Refused("the multiplicity is less than one")
     args = [INPUT]
     if step == "optimise":
-        level = options.get("level", "normal")
-        if level not in LEVELS:
-            raise Refused(f"no level is called {level!r}")
         # (a lone atom: its energy where it is)
         if not lone(entry):
-            args += ["--opt", level]
+            args += ["--opt", options.get("level", "normal")]
     elif step == "frequencies":
         refuse_isotopes(entry)
         args += ["--hess"]
@@ -229,23 +238,41 @@ def args_for(step, options, entry, cores):
 
 
 def op_prepare(m):
+    """A job for each entry. One this plugin will not run - an isotope's
+    frequencies, a charge that is no whole number - is refused alone, saying
+    why (`refused`), and the others are run; where every one is, or what is
+    asked of them all cannot be done - a method, a solvent or a level it does
+    not know - the step is refused as a whole."""
     step = m.get("step")
     if step not in STEPS:
         raise Refused(f"this plugin does no {step!r}")
     options = m.get("options") or {}
+    entries = m.get("entries") or []
+    if not entries:
+        raise Refused("nothing came in")
+    asked_of_all(step, options)
     jobs = []
-    for i, entry in enumerate(m.get("entries") or []):
+    refused = []
+    first = None
+    for i, entry in enumerate(entries):
+        try:
+            args = args_for(step, options, entry, m.get("cores"))
+        except Refused as e:
+            # (said as a refusal of the whole step is: "xTB: ...")
+            refused.append({"entry": i, "why": f"xTB: {e}.", "kind": "refused"})
+            first = first or e
+            continue
         reads = [DUMP] + ([PATH, LAST, CONVERGED, NOT_CONVERGED] if step == "optimise" and not lone(entry) else [])
         jobs.append({
             "entries": [i],
             "program": PROGRAM,
-            "args": args_for(step, options, entry, m.get("cores")),
+            "args": args,
             "files": [{"name": INPUT, "text": xyz_of(entry)}, {"name": CONTROL, "text": CONTROL_TEXT}],
             "reads": reads,
         })
     if not jobs:
-        raise Refused("nothing came in")
-    return {"jobs": jobs}
+        raise first
+    return {"jobs": jobs, **({"refused": refused} if refused else {})}
 
 
 # --- what a job wrote ---------------------------------------------------------
@@ -509,6 +536,21 @@ def why_of(log):
     return said[0] if len(said) == 1 else f"{said[0]}: {said[-1]}"
 
 
+# (xtb's own words, as it warns of frequencies at a geometry whose gradient is not near zero)
+HESSIAN_NOT_STATIONARY = "Hessian on incompletely optimized geometry"
+
+
+def warnings_of(log):
+    """What xtb warned of as it ran on: the numbered messages of each block it heads "[WARNING]", each once."""
+    out = []
+    for block in re.finditer(r"^\[WARNING\][^\n]*\n((?:[ \t]*-\d+-[^\n]*\n?)+)", log, re.M):
+        for m in re.finditer(r"^\s*-\d+-\s+(.*\S)\s*$", block.group(1), re.M):
+            text = m.group(1)
+            if all(w["text"] != text for w in out):
+                out.append({"kind": "hessian-not-stationary" if HESSIAN_NOT_STATIONARY in text else "other", "text": text})
+    return out
+
+
 def output_of(step, entry, options, files, log):
     elements = elements_of(entry)
     n = len(elements)
@@ -550,6 +592,7 @@ def output_of(step, entry, options, files, log):
     as_asked = solvation == "none" if solvent == "none" else solvation is not None and f"({solvent})" in solvation
     if solvation is not None and not as_asked:
         raise Refused(f"xtb ran with solvation {solvation}, not as asked ({solvent})")
+    warnings = warnings_of(log)
     return {
         "schema": SCHEMA,
         "program": "xtb",
@@ -563,6 +606,7 @@ def output_of(step, entry, options, files, log):
         "energies": energies,
         "optimised": optimised,
         "results": results,
+        **({"warnings": warnings} if warnings else {}),
     }
 
 

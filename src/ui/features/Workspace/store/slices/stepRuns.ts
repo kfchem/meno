@@ -23,7 +23,7 @@ import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } fr
 import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -499,10 +499,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     };
     const given = await Promise.all(entries.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
     let prepared;
+    let refused: Refusal[] = [];
     try {
       const client = await pluginClient(plugin);
       const sent = entries.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
-      prepared = readPrepared(await client.prepare(step.kind, sent, options, cores), entries.length);
+      const raw = await client.prepare(step.kind, sent, options, cores);
+      prepared = readPrepared(raw, entries.length);
+      refused = readRefused(raw, entries.length);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -530,7 +533,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, `It could not be started: ${message(e)}`, at, key);
     }
     if (gone(id)) return forgetStarted(jobs);
-    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind }), { unsaved: true });
+    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(refused.length ? { refused } : {}) }), { unsaved: true });
     set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
@@ -776,7 +779,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const same = !snap && inputKey(d, { ...step, kind, options: run.options }, by) === run.input;
       const entries: SetEntry[] = snap ? snap.entries : same && input && input.holds !== "structures" ? jobEntries(kind, setEntries(input.molecules, input.holds), input.holds) : [];
       const holds = snap?.holds ?? input?.holds;
-      const total = run.jobs.reduce((n, j) => n + j.entries.length, 0);
+      const total = run.jobs.reduce((n, j) => n + j.entries.length, 0) + (run.refused?.length ?? 0);
       const worked: Worked[] = [];
       // (each entry it could not do, with why - a job that failed fails each entry it was for - counted, and kept
       //  for its Failed exit as it came in; one that came in changed while it ran, counted alone)
@@ -794,6 +797,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         for (const w of Array.isArray(made) ? made : [made]) (w.failed ? failedOnes : worked).push(w);
         if (!Array.isArray(made) && made.failed) failures.push(made.failed);
       };
+      // (those its plugin would not prepare a job for: refused, each with why - the others run)
+      for (const r of run.refused ?? []) fails([entries[r.entry]], r.kind, r.why);
       const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
       for (const [k, j] of run.jobs.entries()) {
         const mine = j.entries.map((i) => entries[i]);

@@ -3,7 +3,7 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, workedOf } from "./programs";
 import type { SetEntry } from "./entries";
 import { resultsOf } from "./run";
 
@@ -96,6 +96,21 @@ describe("the jobs a plugin prepares", () => {
       { ...job, then: "orca_2mkl" },
     ])
       expect(readPrepared({ jobs: [bad] }, 1)).toBe("It prepared a job Meno cannot run");
+  });
+
+  it("leave out an entry the plugin refused, saying why - the others run; never a job for one refused", () => {
+    const refused = [{ entry: 1, why: " xTB: no isotope's mass. " }];
+    const raw = { jobs: [job, { ...job, entries: [2] }], refused };
+    expect(readPrepared(raw, 3)).toEqual([job, { ...job, entries: [2] }]);
+    // (its kind core's - `refused` where it names none, `failed` where it names one core does not know)
+    expect(readRefused(raw, 3)).toEqual([{ entry: 1, kind: "refused", why: "xTB: no isotope's mass." }]);
+    expect(readRefused({ ...raw, refused: [{ ...refused[0], kind: "out-of-memory" }] }, 3)).toEqual([{ entry: 1, kind: "failed", why: "xTB: no isotope's mass." }]);
+    expect(readPrepared({ ...raw, jobs: [job, { ...job, entries: [1, 2] }] }, 3)).toBe("It prepared a job for what it refused");
+    // (named wrongly - beyond those sent, twice, without why: none taken, and the entry is then in no job)
+    for (const bad of [[{ entry: 3, why: "x" }], [refused[0], refused[0]], [{ entry: 1 }]]) {
+      expect(readRefused({ ...raw, refused: bad }, 3)).toEqual([]);
+      expect(readPrepared({ ...raw, refused: bad }, 3)).toBe("It prepared no job for some of what came in");
+    }
   });
 });
 

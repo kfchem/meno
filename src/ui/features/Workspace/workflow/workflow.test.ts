@@ -361,6 +361,37 @@ describe("Meno's own steps", () => {
     expect(runMeno("populations", set, "conformers").ok).toBe(false);
   });
 
+  it("refuse a window they cannot keep by, saying why, as Populations does a temperature", () => {
+    const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers");
+    for (const window of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(runMeno("energy-window", set, "conformers", { window })).toEqual({ ok: false, said: "The window must be 0 kcal/mol or more" });
+    // (0: the lowest of each compound alone)
+    const none = runMeno("energy-window", set, "conformers", { window: 0 });
+    expect(none.ok && none.kept.map((e) => e.number)).toEqual([1]);
+  });
+
+  it("take an energy that is no number - NaN, or infinite - for none: in a window, in populations, in choosing the lowest and in Duplicates' order", () => {
+    // (as a calculation's molecule keeps it, it is never an entry's energy)
+    const read = entries(bent({ x: 0, y: 0 }, 3, [0, Number.NaN, Number.NEGATIVE_INFINITY]), "conformers");
+    expect(read.map((e) => e.energy)).toEqual([0, undefined, undefined]);
+    // (and an entry given one is refused as one with none)
+    for (const bad of [Number.NaN, Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]) {
+      const set = entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers").map((e, i) => (i === 1 ? { ...e, energy: bad } : e));
+      expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said: "Not every entry has an energy" });
+      expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said: "Not every entry has an energy" });
+      expect(runMeno("choose", set, "conformers")).toEqual({ ok: false, said: "Not every entry has an energy" });
+    }
+    // Duplicates: frames 1 and 2 alike, 2 the lower - with an infinite energy, taken in order, so 1 is kept
+    const m = bent({ x: 0, y: 0 }, 3, [kcal(1), 0, kcal(2)], 0.01);
+    m.frames![1] = [0, 0, 0, 1, 0, 0, -0.3, 2, 0];
+    const set = entries(m, "conformers");
+    const ranked = runMeno("duplicates", set, "conformers", { rmsd: 0.125 });
+    expect(ranked.ok && ranked.kept.map((e) => e.number)).toEqual([2, 3]);
+    const lowest = runMeno("duplicates", set.map((e, i) => (i === 0 ? { ...e, energy: Number.NEGATIVE_INFINITY } : e)), "conformers", { rmsd: 0.125 });
+    expect(lowest.ok && lowest.kept.map((e) => e.number)).toEqual([1, 3]);
+    const nan = runMeno("duplicates", set.map((e, i) => (i === 1 ? { ...e, energy: Number.NaN } : e)), "conformers", { rmsd: 0.125 });
+    expect(nan.ok && nan.kept.map((e) => e.number)).toEqual([1, 3]);
+  });
+
   it("set aside entries alike, keeping the lower in energy", () => {
     // frames 1 and 2 0.01 Å apart; frame 3 far from both
     const m = bent({ x: 0, y: 0 }, 3, [kcal(1), 0, kcal(2)], 0.01);
@@ -438,7 +469,7 @@ describe("Meno's own steps", () => {
   });
 
   it("give no populations at 0 K or below - none to give, rather than NaN or the highest energy the most", () => {
-    for (const temperature of [0, -5]) {
+    for (const temperature of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
       const out = runMeno("populations", entries(bent({ x: 0, y: 0 }, 2, [0, kcal(1)]), "conformers"), "conformers", { temperature });
       expect(out.ok).toBe(false);
     }

@@ -717,6 +717,28 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
   });
 
+  it("runs the jobs its plugin prepared, and sends an entry it refused out of its Failed exit, with why - kept with the workspace while it runs", async () => {
+    const { st, step } = waters(3);
+    const one = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    const why = "xTB: xTB's frequencies here take no isotope's mass: 2H would be given as H of natural mass.";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }, { entries: [2], ...one }], refused: [{ entry: 1, why }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(2);
+    // (saved while it runs: what was refused is kept, to be said when it ends)
+    const saved = readWorkspace(workspaceText(st()))!;
+    expect(saved.workflow?.steps.find((s) => s.id === step)?.running?.refused).toEqual([{ entry: 1, kind: "refused", why }]);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
+    const failedSet = resultOf(st(), step, "failed")!;
+    const failedOnes = setMembers(st(), failedSet).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why }]]);
+  });
+
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);

@@ -377,7 +377,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         bonds: m.bonds,
         xyz,
         ...(stereo ? { stereo } : {}),
-        ...(energies ? { energy: energies[f] } : {}),
+        // (an energy that is no number - NaN, or infinite - is none)
+        ...(energies && Number.isFinite(energies[f]) ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
