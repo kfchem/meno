@@ -489,6 +489,16 @@ export type Molecule3D = {
   /** Its frames are conformers - not a path through time - so each is as likely as its energy says (`populations`). */
   conformerSet?: boolean;
   /**
+   * It is only some of a search's conformers, or one of them (docs/WORKFLOWS.md,
+   * *A part of a search*): those chosen from its set's table, those an
+   * Energy window or Choose one split from the others, the copies
+   * Duplicates took out - and what any step makes of them. No share is
+   * shown of them, for shares of these alone would not be the compound's
+   * populations; a *Populations* step on them works shares out, and says
+   * of what.
+   */
+  partOf?: true;
+  /**
    * How it was made, where something made it - its conformers' method and
    * force field - as rows to show, in the words of what made it; and what
    * its energies are (`energies`), where it gave them: the force field's
@@ -726,6 +736,8 @@ export type StepRunning = {
   options: OptionValues;
   jobs: StepJob[];
   kind?: StepKind;
+  /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
+  over?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
   refused?: { entry: number; kind: FailureKind; why: string }[];
 };
@@ -861,6 +873,18 @@ export type EditorState = {
   setPdfColumnWidth: (px: number) => void;
   /** The PDF the column shows, among those read there; none, it shows the text it shows (docs/PDF.md, *In the column*). */
   pdfShown: number | null;
+  /**
+   * The sets read as tables in the column, by id, in the order they were
+   * opened (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*); and the one it
+   * shows - over a text or a PDF - or none. The view's, never saved.
+   */
+  setsRead: number[];
+  setTableShown: number | null;
+  /** A set opened as a table in the column, and shown there. */
+  readSetTable: (id: number) => void;
+  showSetTable: (id: number) => void;
+  /** A set's table closed in the column. */
+  stopReadingSetTable: (id: number) => void;
   /** The PDF a page of in the column is under the pointer: it is lit on the page, as one hovered there is. */
   litPdf: number | null;
   setLitPdf: (id: number | null) => void;
@@ -1421,7 +1445,7 @@ export type EditorState = {
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
   /** Molecules in 3D put on the page as a set of their own, named `name`, its middle at `at` or the free space nearest it: one step. */
-  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => void;
+  placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => number | undefined;
   /** A chemist's set named anew; an empty name takes its name away (*Input* again). */
   renameSet: (id: number, name: string) => void;
   /** A step's result set kept in the workspace's file, or not: one step. */

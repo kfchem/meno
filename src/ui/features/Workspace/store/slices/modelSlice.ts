@@ -523,6 +523,9 @@ export const createModelSlice = (
       chosen3d: null,
       hoveredSet: null,
       chosenSet: null,
+      // (sets read as tables: of the old document's sets)
+      setsRead: [],
+      setTableShown: null,
       hoveredStep: null,
       hoveredWire: null,
       openStep: null,

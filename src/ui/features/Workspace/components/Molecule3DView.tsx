@@ -11,7 +11,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -483,15 +483,13 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const [measureTexts, setMeasureTexts] = useState<Record<number, string>>({});
   const [shownMeasures, setShownMeasures] = useState<Measure3D[]>(m.measures ?? []);
   const dirty = useRef(true);
-  // a conformer set's shares: as a Populations step found them, or by Boltzmann; and its atoms' elements
+  // a conformer set's shares, as its chip shows them; and its atoms' elements
   const shares = useMemo(
-    () =>
-      m.shares?.length === solid.frames.length
-        ? m.shares
-        : m.conformerSet && m.energies?.length === solid.frames.length
-          ? populations(m.energies, m.degeneracies)
-          : undefined,
-    [m.shares, m.conformerSet, m.energies, m.degeneracies, solid.frames.length],
+    () => {
+      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, energies: m.energies, degeneracies: m.degeneracies });
+      return shares?.length === solid.frames.length ? shares : undefined;
+    },
+    [m.frames, m.shares, m.conformerSet, m.partOf, m.energies, m.degeneracies, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about

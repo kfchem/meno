@@ -35,6 +35,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
+  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid)
+  computerResources: async () => ({ cores: 8, memory: 32 * 1024 }),
 }));
 
 /** The files a job made that Meno reads itself, as the test has them: a render's pictures, by where they are. */
@@ -213,9 +215,9 @@ describe("a step that runs a plugin's program", () => {
     const ran = st().runStep(step);
     await settle();
     await settle();
-    // prepared by the plugin with what came in, its job started - with how many may run at once, and the cores each may use
+    // prepared by the plugin with what came in, its job started - with the cores it takes
     expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], slots: 1 })]);
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"] }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)
@@ -770,6 +772,23 @@ describe("a step that runs a plugin's program", () => {
     connectStoreToDocument(store2, doc2);
     store2.getState().openWorkspace(saved, true);
     expect(store2.getState().molecules3d.map((m) => m.failed ?? null)).toEqual(st().molecules3d.map((m) => m.failed ?? null));
+  });
+
+  it("says where a job asks for more memory than jobs may use - nothing else that declares memory runs beside it - kept with the workspace while it runs", async () => {
+    const { st, step } = waters(2);
+    const job = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...job, memory: 30 * 1024 }, { entries: [1], ...job, memory: 1000 }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started.map((a) => a.memory)).toEqual([30 * 1024, 1000]);
+    const over = "1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside it";
+    expect(st().steps.find((s) => s.id === step)!.running?.over).toBe(over);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toBe(`0:01 \u00b7 2 of 2 \u00b7 ${over}`);
   });
 
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {

@@ -12,6 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
+import { sharesOf } from "../utils/molecule3d";
 import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
@@ -519,7 +520,7 @@ export function placeAsSet(
  * wider than the molecule (centred under it: "4 / 4 · 0.00 kcal/mol" is
  * wider than a water).
  */
-function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack">>, e: Frame): Frame & { chip: number } {
+function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>, e: Frame): Frame & { chip: number } {
   const least = NOMINAL_BOND_LENGTH / 4;
   const half = chipWide(m) / 2;
   return { x0: Math.min(e.x0, -least, -half), x1: Math.max(e.x1, least, half), y0: Math.min(e.y0, -least), y1: Math.max(e.y1, least), chip: hasChip(m) ? CHIP : 0 };
@@ -532,13 +533,13 @@ function roomOf(m: Pick<Molecule3D, "frames" | "calc" | "energies" | "shares" | 
  * geometry's shows only while it is pointed at, over what is beside it:
  * none.
  */
-export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack">>): number {
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>): number {
   const n = framesOf(m);
   // (a single geometry called by its name: its name, and its energy where it has one)
   if (n < 2) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
   const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
   const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
-  const shares = m.shares?.length === n || (m.conformerSet && m.energies?.length === n) ? " · 100%" : "";
+  const shares = sharesOf(m) ? " · 100%" : "";
   return `${numbered}${n} / ${n}${energies}${shares}`.length * CHIP_CHAR + CHIP_SIDES;
 }
 
@@ -690,6 +691,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        ...(e.partOf ? { partOf: true as const } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - of its last frame, a path's own
         //  frames before it none)
         ...(e.failed ? { failed: [...(path ?? []).map(() => null), e.failed] } : {}),
@@ -722,6 +724,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
+      // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
+      ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
       ...(g.some((e) => e.failed) ? { failed: g.map((e) => e.failed ?? null) } : {}),
       // (each conformer's imaginary frequencies, as its calculation judged them)

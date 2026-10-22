@@ -548,14 +548,66 @@ again, the file says so too. So does a step's earlier run kept with the
 file, on its row of the step's card - what both its exits held - and in
 each exit's set once it is shown again. Its molecules are on no page,
 so deleting the set deletes them: its frame says so ("On no page:
-deleting the set deletes them"), and so does its menu, in words, last ("Delete
-set and the 118 molecules it holds"), before it happens (2026-10-22).
-Deleted by the Delete key it is asked about first, as a step running is
-- and so it is in a selection deleted: the rest goes, and it is asked
-about. A cut leaves it in place, since a copy does not carry its
-molecules, and says so. They are opened as a table in the column, and put on the page from
-there, in the steps that follow (6b), and summed up in the frame with a
-sample of their structures and histograms (6c).
+deleting the set deletes them"), and so does its menu, in words, last
+("Delete set and the 118 molecules it holds"), before it happens
+(2026-10-22). Deleted by the Delete key it is asked about first, as a
+step running is - and so it is in a selection deleted: the rest goes, and
+it is asked about. A cut leaves it in place, since a copy does not carry
+its molecules, and says so. They are summed up in the frame with a sample
+of their structures and histograms in the steps that follow (6c).
+
+*Open as a table*, on the set's menu or under its summary, reads them in
+the column beside the texts and PDFs, a tab of their own named as the
+set is (2026-10-21):
+- A row for each entry, in the step's order: its place; in a conformer
+  set its compound's letter and its number among that compound's
+  conformers; its name; its energy in hartrees; in a conformer set its
+  energy above its compound's lowest, in kcal/mol; how many forms of it
+  the search found alike, where it said; and *From*, what worked its
+  energy out ("not stated" where nothing says). No share is shown: a
+  share needs a temperature, and the set does not hold one.
+- Pressing a column's name sorts by it, again the other way; rows with no
+  value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
+- Rows are chosen as in a list (a click; ⌘ or Ctrl to add or take one;
+  Shift for those between, as sorted). *Put on the page* puts those chosen
+  beside the set as a set of their own, "From" the set's name, in the
+  set's order: each one geometry with its energy and what worked it out,
+  and of its calculation only what is of that frame. A compound's
+  conformers chosen stay one conformer set, so that the new set counts
+  them as the step's did ("2 compounds · 5"). Where some of the
+  compound's conformers are left out, the set is a part of a search
+  (below), and the table shows no energy above the compound's lowest,
+  which may not be among them. All of a compound's conformers chosen are
+  the whole set, its shares with it.
+- The tab closes as a text's does, and goes when its set is deleted. It
+  is the view's, not saved with the workspace.
+
+**A part of a search** (decided 2026-10-21): a conformer set's chip shows
+each conformer's share of its compound - as a *Populations* step worked
+it out, or else by Boltzmann at room temperature over its frames. Over
+only some of a search's conformers, such shares would be worked out again
+over those alone, and are not the compound's populations. So a molecule
+that is only a part of a search's conformers, or one of them, is marked
+so (`partOf`), and its chip shows no shares:
+- those chosen from a set's table, some of a compound's left out;
+- what an *Energy window* splits from a compound, in either exit (a
+  compound all within it is whole);
+- what *Choose one* chooses from several conformers, and the rest;
+- the copies *Duplicates* takes out of a conformer set (*Alike*). What it
+  keeps is the compound as it came, its copies merged into those kept -
+  whole, unless what came in was a part. Out of a compound set, the
+  copies are of a structure there twice, of no search, and not marked;
+- whatever any step makes of a part: an optimisation of it, a step of
+  Meno's on it, *As conformers* grouping it with others.
+
+A conformer search run from one of them finds the compound's conformers
+anew, whole. Shares a *Populations* step worked out are always shown: it
+says at what temperature, and they are of what it was given - given a
+part, it says that too, for they are not the compound's populations ("1
+compound at 298.15 K, from electronic energies · shares over the 5
+conformers given, part of a search"). (Until
+2026-10-21 Meno showed shares worked out again over what these steps
+kept.)
 
 Meno's own steps take no time to speak of and are done at once, all but
 Duplicates (2026-10-14). Thousands of conformers alike take it seconds,
@@ -590,9 +642,25 @@ states an undo goes back to as well.
 
 ### Several at once
 
-- By default **one job runs at a time** on this computer; others wait,
-  in the order they were started. Settings, *Calculations*: how many at
-  once, and how many cores each may use.
+- **Jobs run as many at once as their cores and memory fit** what this
+  computer's jobs may use - all its cores and three quarters of its
+  memory, unless Settings, *Calculations*, says less - and the others
+  wait, in the order they were started: a job never starts ahead of one
+  asked for before it, however small (2026-10-22; until then, a number of
+  jobs at once). A job takes the cores Settings gives each - unset, all
+  that jobs may use, so one runs at a time - and the memory its plugin
+  declares (ORCA's %maxcore for each process, Gaussian's %Mem); one that
+  declares none is counted by its cores alone. So a small job waits behind
+  a large one that does not fit yet, though it would fit itself: the
+  order is kept, and nothing is starved. A job asking for more memory than
+  the limits, though no more than the computer has, starts once no job
+  that declares memory runs, and none that declares memory starts beside
+  it - one that declares none still may, where cores allow - and its step
+  says so (*1 job asks for more memory (30.0 GB) than jobs may use (24.0
+  GB): nothing else that declares memory runs beside it*); one larger than
+  the computer - more cores or memory than it
+  has - is refused, saying so, never started to swap or fail inside its
+  program.
 - **A step on many entries makes one job for each** (decided), queued as
   above - each with its own log, a failure its own, several at once
   where Settings allows.
@@ -878,8 +946,10 @@ Decided while building it, for the maintainer to confirm:
   once** - all of them while one runs at a time; set, never more than the
   computer has. A program is told them as `OMP_NUM_THREADS` (and MKL's
   and OpenBLAS's); a plugin's command may say them as well (xTB's `-P`).
-- **Jobs at once counts for jobs asked for after it is changed**: one
-  already waiting keeps the number it was asked with.
+- **Jobs at once counted for jobs asked for after it was changed** (until
+  2026-10-22): one already waiting kept the number it was asked with. What
+  jobs may use now counts at once, for every job waiting - Settings tells
+  the runner as it changes.
 - **A job whose runner went without saying how it ended is *gone***, in
   its record; its card will show it *Stopped*, with its log, as above.
 - **Stop is at once on Windows** (its job object is ended); on macOS and
@@ -1442,6 +1512,30 @@ them again). Not yet: a kind with two or three inputs, and matching them
 on a property - none of Meno's kinds takes two yet; the first come with
 the structure steps and *Path search*. *Tag*, which writes the property
 they match on, comes with Meno's own nodes.
+
+### The runner seam (2026-10-22)
+
+Foundation PR 14, its first part (WORKFLOWS-FOUNDATION.md, *Where jobs
+run*):
+
+- **A runner says where a job runs** (`lib/runners`): it starts a job,
+  says how it stands, gives its log and files, stops it and takes it
+  away. This computer's is the one built in step 2, now behind that seam;
+  a runner for another machine hangs on it later as a plugin of its own,
+  its jobs named by it (`<runner>:<job>`). There is one runner yet, so no
+  step offers *Runs on*.
+- **This computer's runner knows its resources**: Settings, *Calculations*,
+  *Jobs*: *Cores for each job*, *Cores jobs may use* and *Memory jobs may
+  use*, the computer's own cores and memory beside them (*of 10*, *GB of
+  32*). Meno tells the runner what jobs may use as it starts and as
+  Settings changes (`.limits.json` in the jobs folder); the runner reads it
+  as it looks for a waiting job's turn.
+- **A plugin declares a job's memory** (`prepare`: `memory`, in MiB).
+
+Not yet, in the seam's second part: the working folder chosen in
+Settings, path-safe folder names from the workspace's, step's and
+entry's, *Open the folder*, and job folders cleaned once their files are
+in the `.meno` unless *Keep job folders* is chosen.
 
 ### Failed entries (2026-10-22)
 

@@ -8,7 +8,7 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
-import { finished, jobFiles, jobFolder, jobOf, listJobs, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
@@ -538,7 +538,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
-    const { slots, cores } = runningOf(useAppSettings.getState().calculations);
+    const { cores } = runningOf(useAppSettings.getState().calculations);
     // (a program installed separately: where it is, looked for again - and found, or said not to be)
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
@@ -565,6 +565,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, message(e), at, key);
     }
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
+    // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
+    //  refused - run with nothing else that declares memory beside them: said, on the step's line)
+    const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
     const jobs: StepJob[] = [];
     try {
       for (const p of prepared) {
@@ -577,8 +580,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           files: p.files,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),
-          slots,
           cores,
+          ...(p.memory ? { memory: p.memory } : {}),
           ...(path ? { path } : {}),
         };
         jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
@@ -588,7 +591,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, `It could not be started: ${message(e)}`, at, key);
     }
     if (gone(id)) return forgetStarted(jobs);
-    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(refused.length ? { refused } : {}) }), { unsaved: true });
+    doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(over ? { over } : {}), ...(refused.length ? { refused } : {}) }), { unsaved: true });
     set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
@@ -640,7 +643,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { ask, theirs } = renderChoices(step.kind, options);
-    const { slots, cores } = runningOf(useAppSettings.getState().calculations);
+    const { cores } = runningOf(useAppSettings.getState().calculations);
     const paths = new Map<string, string>();
     for (const decl of installedFor(step.kind, plugin.id)) {
       const where = await lookFor(plugin.id, decl.name);
@@ -662,7 +665,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const p = prepared[0];
         if (p.files.some((f) => f.name === SCENE)) throw new Error("It prepared a job Meno cannot run");
         const path = paths.get(p.program);
-        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], slots, cores, ...(path ? { path } : {}) });
+        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
         const { page } = rendered;
         jobs.push({ id: job, entries: [i], reads: [], size: [page.maxX - page.minX, page.maxY - page.minY] });
       }
@@ -965,11 +968,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
       const warned = worked.filter((w) => w.calc?.warnings?.length).length;
-      // (one that came in and failed: its why alone)
-      const said =
+      // (one that came in and failed: its why alone; what Settings kept off said after, as it was)
+      const said = `${
         !ok && failures.length && total === 1
           ? failures[0].why
-          : [...(ok ? [found] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : [])].join(" \u00b7 ");
+          : [...(ok ? [found] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : [])].join(" \u00b7 ")
+      }${run.over ? ` \u00b7 ${run.over}` : ""}`;
       const gives = givesFor(kind, holds ?? "molecules");
       // (refused, and its run closed as any other)
       if (gives) bringIn(id, worked, gives, { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as }, failedOnes);
@@ -1135,7 +1139,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
       }
       // (rising out of its step into the column, where the column is not showing it already)
-      if (last != null) set({ textShown: last, textsOpen: true, pdfShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
+      if (last != null) set({ textShown: last, textsOpen: true, pdfShown: null, setTableShown: null, ...(showing === last ? {} : { textFlight: { id: last, to: "column" as const, start: performance.now() } }) });
     },
     showStepFiles: async (id: number) => {
       const step = stepOf(doc.getState(), id);

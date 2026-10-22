@@ -49,14 +49,18 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       };
       doc.amend((d) => fitResultSets(d, extentOf, (id) => turns3d[id]));
     },
-    placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) =>
+    // (the set made's id, where one was)
+    placeAsSet: (ms: Omit<Molecule3D, "id" | "at">[], at: { x: number; y: number }, name?: string) => {
+      const id = doc.getState().nextWorkflowId ?? 1;
       // (in free space nearest where it was asked for, as a file opened goes: utils/freePlace)
-      doc.edit("place structures", (d) =>
+      const made = doc.edit("place structures", (d) =>
         placeAsSet(d, ms, at, { extentOf: (m, turn) => reachOverFrames({ ...m, id: 0 }, style3dOf(get()), turn) }, (width, height) =>
           freePlace(pageBoxes(get(), styleOf(get().docStyle)), { x0: -width / 2, x1: width / 2, y0: -height / 2, y1: height / 2 }, at, NOMINAL_BOND_LENGTH),
           name,
         ),
-      ),
+      );
+      return made ? id : undefined;
+    },
     renameSet: (id: number, name: string) => doc.edit("rename set", (d) => wf.renameSet(d, id, name)),
     keepSet: (id: number, keep: boolean) => doc.edit(keep ? "keep set in file" : "keep set out of file", (d) => wf.keepSet(d, id, keep)),
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
@@ -67,6 +71,17 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) =>
       doc.edit("size set", (d) => wf.resizeSet(d, id, frame), coalesce("set-size", id, gesture)),
     moveSet: (id: number, dx: number, dy: number, gesture?: string) => doc.edit("move set", (d) => wf.moveSet(d, id, dx, dy), coalesce("set-move", id, gesture)),
+    readSetTable: (id: number) => set((prev: EditorState) => ({ ...prev, setsRead: prev.setsRead.includes(id) ? prev.setsRead : [...prev.setsRead, id], setTableShown: id, textsOpen: true })),
+    showSetTable: (id: number) => set({ setTableShown: id, textsOpen: true }),
+    stopReadingSetTable: (id: number) =>
+      set((prev: EditorState) => {
+        const setsRead = prev.setsRead.filter((s) => s !== id);
+        // (the one shown closed: the last of the others, or what the column showed before it)
+        if (prev.setTableShown !== id) return { ...prev, setsRead };
+        const next = setsRead[setsRead.length - 1] ?? null;
+        const nothing = next == null && prev.pdfShown == null && !prev.texts.some((t) => t.id === prev.textShown && t.reading !== false) && !prev.textsLost.some((t) => t.id === prev.textShown);
+        return { ...prev, setsRead, setTableShown: next, ...(nothing ? { textsOpen: false } : {}) };
+      }),
     removeSet: (id: number | readonly number[], asked = false) => {
       const ids = typeof id === "number" ? [id] : [...id];
       // (one that holds its molecules itself, on no page, is asked about first: they go with it)
@@ -75,6 +90,8 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
         set((prev: EditorState) => ({
           ...prev,
           askDeleteSet: null,
+          setsRead: prev.setsRead.filter((s) => !ids.includes(s)),
+          setTableShown: prev.setTableShown != null && ids.includes(prev.setTableShown) ? null : prev.setTableShown,
           hoveredSet: prev.hoveredSet != null && ids.includes(prev.hoveredSet) ? null : prev.hoveredSet,
           chosenSet: prev.chosenSet != null && ids.includes(prev.chosenSet) ? null : prev.chosenSet,
         }));

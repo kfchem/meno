@@ -2004,6 +2004,11 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          onOpenAsTable={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.collection ? () => store.getState().readSetTable(set.id) : undefined;
+          })()}
           setHoldsOwn={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const st = store.getState();

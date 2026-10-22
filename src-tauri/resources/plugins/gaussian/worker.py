@@ -73,6 +73,7 @@ its energy.
 """
 
 import json
+import math
 import re
 import sys
 
@@ -279,8 +280,24 @@ def keeps_wavefunction(options):
     return keep
 
 
+# MiB in each of %Mem's units: bytes by 1024s, words of 8 bytes; a bare number is words
+MEMORY_MIB = {"": 8 / 1024 ** 2, "KB": 1 / 1024, "MB": 1, "GB": 1024, "TB": 1024 ** 2, "KW": 8 / 1024, "MW": 8, "GW": 8 * 1024, "TW": 8 * 1024 ** 2}
+
+
+def memory_of(options):
+    """The memory a job asks of Gaussian (%Mem), in MiB as the queue counts it, rounded up: none where it is not set
+    (Gaussian's own default then)."""
+    memory = one_line(options.get("memory", ""), "Memory").replace(" ", "")
+    if not memory or not MEMORY.match(memory):
+        return None
+    number = re.match(r"\d+", memory).group(0)
+    unit = memory[len(number):].upper()
+    return max(1, math.ceil(int(number) * MEMORY_MIB[unit]))
+
+
 def op_prepare(m):
     options = m.get("options") or {}
+    memory = memory_of(options)
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
@@ -290,6 +307,7 @@ def op_prepare(m):
             "files": [{"name": INPUT, "text": step_input(m.get("step"), entry, options, m.get("cores"))}],
             "stdin": INPUT,
             "reads": [WAVEFUNCTION] if keeps_wavefunction(options) else [],
+            **({"memory": memory} if memory else {}),
         })
     if not jobs:
         raise Refused("nothing came in")
