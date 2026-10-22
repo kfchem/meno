@@ -26,9 +26,14 @@ export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet[
   return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
 }
 
-/** A set's members, as given: a step's result set holding what the step made, in its order. */
-export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[]): WorkspaceDocument {
-  return withSet(doc, id, (b) => ({ ...b, members }));
+/** A set's members, as given: a step's result set holding what the step made, in its order - on the page, so no collection of its own; and how many of them did not read, where some did not (`WorkflowSet.unread`). */
+export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[], unread?: number): WorkspaceDocument {
+  return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
+}
+
+/** A step's result set holding what the step made itself, in its order (`WorkflowSet.collection`): none of the page's molecules among its members. */
+export function holdCollection(doc: WorkspaceDocument, id: number, collection: NonNullable<WorkflowSet["collection"]>, unread?: number): WorkspaceDocument {
+  return withSet(doc, id, ({ unread: _u, ...b }) => ({ ...b, members: [], collection, ...(unread ? { unread } : {}) }));
 }
 
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */

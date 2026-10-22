@@ -35,6 +35,19 @@ export type GeometryOrders = { orders: number[]; charges: number[]; decided: boo
 /** Elements whose bonds are counted: a metal's are dative, kept single and out of the reckoning. */
 const COUNTED = new Set(["H", "B", "C", "N", "O", "F", "Si", "P", "S", "Cl", "Ge", "As", "Se", "Br", "Te", "I"]);
 
+/*
+ * The angles, flatness and costs below are a heuristic's weights: no
+ * literature gives them. Their basis is what they were measured to do
+ * (2026-10-21): the 197 molecules of RDKit's NCI sample
+ * (Data/NCI/first_200.props.sdf that fit here), laid out by ETKDG and
+ * MMFF, all given their orders and charges right - 394 of 394, with their
+ * hydrogens and without; and a set of harder groups (nitro, azide, diazo,
+ * N-oxide, guanidinium, pyridone, sulfonamide, zwitterions and others),
+ * right with their hydrogens but where an anionic nitrogen or carbon
+ * leaves them undecided, and without them right but for protonation,
+ * which heavy atoms do not say. A change to any of them is measured
+ * against both again.
+ */
 /** An atom's three neighbours in a plane: the sum of its bond angles at least this, in degrees (360 flat, about 328 at a tetrahedron's corner); at most `PYRAMID_SUM`, pyramidal. */
 const PLANE_SUM = 350;
 const PYRAMID_SUM = 340;
@@ -289,7 +302,9 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
     if (hydrogens && a.el === "O" && valence[i] === 1) return -1;
     return 0;
   });
-  // (an oxygen held singly by a charged nitrogen carries the charge back: a nitro group, an N-oxide)
+  // (an oxygen held singly by a charged nitrogen carries the charge back: a nitro group, an N-oxide; and a
+  // nitrogen held doubly by one, at the end of its chain: an azide's R-N=N+=N-, a diazo group's C=N+=N-.
+  // Left without it, each would read as a cation - R-N=N+=NH - the hydrogens not there to say otherwise)
   // (each atom's first bond, found once: not every bond looked through for each oxygen)
   const firstBond = new Int32Array(atoms.length).fill(-1);
   bonds.forEach((b, k) => {
@@ -297,10 +312,11 @@ export function ordersFromGeometry(atoms: readonly GeoAtom[], bonds: readonly Ge
     if (firstBond[b.a2] < 0) firstBond[b.a2] = k;
   });
   atoms.forEach((a, i) => {
-    if (a.el !== "O" || near[i].length !== 1 || hydrogens) return;
+    if (near[i].length !== 1 || hydrogens) return;
     const k = firstBond[i];
     const other = near[i][0];
-    if (orders[k] === 1 && charges[other] === 1 && atoms[other].el === "N") charges[i] = -1;
+    if (charges[other] !== 1 || atoms[other].el !== "N") return;
+    if ((a.el === "O" && orders[k] === 1) || (a.el === "N" && orders[k] === 2)) charges[i] = -1;
   });
   return { orders, charges, decided };
 }

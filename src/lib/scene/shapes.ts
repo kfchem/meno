@@ -68,6 +68,33 @@ export function unitCylinder(around = 32): Shape {
 }
 
 /**
+ * A ring of radius 1 about +Y - in the XZ plane - its tube `tube` thick (radius): `along` vertices round the ring and
+ * `around` round its tube, its normals outward from the tube's axis. A line drawn round a ball of radius 1, lying on it.
+ */
+export function unitRing(tube: number, along = 96, around = 12): Shape {
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const indices: number[] = [];
+  for (let i = 0; i <= along; i++) {
+    const phi = (2 * Math.PI * i) / along;
+    const [cx, cz] = [Math.cos(phi), -Math.sin(phi)];
+    for (let j = 0; j <= around; j++) {
+      const th = (2 * Math.PI * j) / around;
+      const [nr, ny] = [Math.cos(th), Math.sin(th)];
+      positions.push(cx * (1 + tube * nr), tube * ny, cz * (1 + tube * nr));
+      normals.push(cx * nr, ny, cz * nr);
+    }
+  }
+  const row = around + 1;
+  for (let i = 0; i < along; i++)
+    for (let j = 0; j < around; j++) {
+      const a = i * row + j;
+      indices.push(a, a + row, a + 1, a + 1, a + row, a + row + 1);
+    }
+  return { positions: Float32Array.from(positions), normals: Float32Array.from(normals), indices: Uint32Array.from(indices) };
+}
+
+/**
  * A tube of `radius` along a polyline, as one smooth mesh: its cross-section a circle of `around` vertices, turned along the
  * line by parallel transport (no twist, no rib where the line bends), its ends closed flat. The points are where the tube's
  * axis passes, in the mesh's own units. Fewer than two points, or points that coincide, give an empty shape.
