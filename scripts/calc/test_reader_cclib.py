@@ -158,7 +158,9 @@ class Gaussian(unittest.TestCase):
     def test_vibrations_with_their_symmetries(self):
         r = read(sample("Gaussian/dvb_ir.out"))["result"]
         v = result(r, "vibrations")
-        self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "IR intensity"])
+        self.assertEqual([c["label"] for c in v["columns"]], ["Mode", "Symmetry", "Frequency", "Reduced mass", "IR intensity"])
+        # (its first mode as Gaussian printed it: AU, 53.1981 cm-1, 3.2266 amu, 0.0342 km/mol)
+        self.assertEqual(v["rows"][0]["cells"], [1, "AU", 53.1981, 3.2266, 0.0342])
 
     def test_a_correlated_energy_over_the_scf(self):
         r = read(sample("Gaussian/water_mp2.log"))["result"]
