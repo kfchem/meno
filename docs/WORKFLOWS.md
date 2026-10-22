@@ -574,7 +574,8 @@ its energies, each saying what it is of.
   scale, so their bonds are alike.
 - **The chart**: in a conformer set, each conformer's energy above its
   compound's lowest, in kcal/mol, of the energies one method worked out
-  - the method most of them were (the first of those as many) - each
+  - a program, its version and a level; not a job, nor a charge - the
+  method most of them were (the first of those as many) - each
   conformer counted once. Those by a method not stated are not charted,
   since two such may be two methods; nor is an energy that is no finite
   number. Its line says
