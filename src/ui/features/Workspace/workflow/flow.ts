@@ -4,7 +4,7 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { DrawnKept, Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, DrawnRecord, Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers, setMolecules } from "./entries";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
@@ -80,21 +80,25 @@ export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE
 
 /**
  * What comes into a step: the kind of set, and its molecules in 3D and
- * structures drawn, in order - those on the page by their atoms' ids, or,
- * from a large result set, as it holds them off the page (`held`). Null
- * where nothing does - or what would has not been made yet, or is
- * pictures, which no step takes.
+ * structures drawn - each with its record, where it has one - in order:
+ * those on the page by their atoms' ids, or, from a large result set, as
+ * it holds them off the page (`held`). Null where nothing does - or what
+ * would has not been made yet, or is pictures, which no step takes.
  */
-export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; held?: readonly DrawnKept[] } | null {
+export function inputOf(
+  doc: Flow,
+  step: number,
+  port?: string,
+): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[]; held?: readonly DrawnModel[] } | null {
   const from = wireInto(doc, step, port)?.from;
   if (!from) return null;
   const set = findSet(doc, from.set);
   if (!set) return null;
   const holds = holdsOf(doc, set);
   if (holds === "pictures") return null;
-  if (set.drawnCollection) return { holds, molecules: [], structures: [], held: set.drawnCollection };
-  const { structures } = setMembers(doc, set);
-  return { holds, molecules: setMolecules(doc, set), structures };
+  if (set.drawnCollection) return { holds, molecules: [], structures: [], records: [], held: set.drawnCollection };
+  const { structures, records } = setMembers(doc, set);
+  return { holds, molecules: setMolecules(doc, set), structures, records };
 }
 
 /** FNV-1a over a string: a short key for what came into a step. */

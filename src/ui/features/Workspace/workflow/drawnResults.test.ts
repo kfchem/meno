@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
-import type { Model } from "../store/types";
-import { countOf, holdsOf, setMembers } from "./entries";
+import type { DrawnModel, DrawnRecord, Model } from "../store/types";
+import { countOf, holdsOf, numberedRecord, readDrawnRecord, recordNumber, setMembers } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf } from "./flow";
 import { runMenoDrawn } from "./meno";
 import { addSet, addStep, connect, membersSettled } from "./model";
@@ -42,7 +42,7 @@ const chloroethane = (): Model => ({
   ] as never,
 });
 
-const drawn = (made: Model[], rest: Model[] = []): RunResults => ({ molecules: [], rest: [], holds: "structures", drawn: { made, rest } });
+const drawn = (made: DrawnModel[], rest: DrawnModel[] = []): RunResults => ({ molecules: [], rest: [], holds: "structures", drawn: { made, rest } });
 
 /** A page with a step that sets entries aside (Duplicates), at (5, 0), its exits not run yet - and a structure of the chemist's, drawn above it, that is none of its. */
 function page(): WorkspaceDocument {
@@ -230,13 +230,13 @@ describe("structures drawn, given by a step", () => {
 
 describe("a large set of structures drawn, given by a step", () => {
   /** `n` structures as a step might number them: each a chloroethane, said to be the `k`th made. */
-  const many = (n: number, from = 1) => Array.from({ length: n }, (_, k) => ({ ...chloroethane(), entry: { number: from + k, how: `R1 = ${from + k}` } }));
+  const many = (n: number, from = 1) => Array.from({ length: n }, (_, k) => ({ ...chloroethane(), record: numberedRecord(from + k, `R1 = ${from + k}`) }));
 
   it("of more than are laid out are held in the set itself, none on the page, in the step's order - as many as it holds said in its frame", () => {
     const doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1), many(2)), W);
     const out = resultOf(doc, doc.steps![0].id, "out")!;
     expect(out.drawnCollection).toHaveLength(LARGE_SET + 1);
-    expect(out.drawnCollection!.map((m) => m.entry!.number)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1));
+    expect(out.drawnCollection!.map((m) => recordNumber(m.record))).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1));
     expect(out.drawnCollection!.map(shapeOf)).toEqual(Array.from({ length: LARGE_SET + 1 }, () => shapeOf(chloroethane())));
     expect(out.members).toEqual([]);
     expect(out.put).toBeUndefined();
@@ -287,7 +287,7 @@ describe("a large set of structures drawn, given by a step", () => {
     let doc = placeResults(page(), page().steps![0], drawn(many(LARGE_SET + 1)), W);
     doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 1, ok: true, said: "first", input: "k", kind: s.kind } })) };
     const step = () => doc.steps![0];
-    expect(resultsNow(doc, step())!.drawn!.made.map((m) => m.entry!.number)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1));
+    expect(resultsNow(doc, step())!.drawn!.made.map((m) => recordNumber(m.record))).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1));
     doc = keepRun(doc, step());
     doc = placeResults(doc, step(), drawn([chiral()]), W);
     doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 2, ok: true, said: "second", input: "k", kind: s.kind } })) };
@@ -304,7 +304,7 @@ describe("a large set of structures drawn, given by a step", () => {
     out.unread = 2;
     const read = readWorkflow(text)!.sets.find((b) => b.made?.exit === "out")!;
     expect(read.drawnCollection).toHaveLength(LARGE_SET);
-    expect(read.drawnCollection!.map((m) => m.entry!.number)).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1).filter((n) => n !== 4));
+    expect(read.drawnCollection!.map((m) => recordNumber(m.record))).toEqual(Array.from({ length: LARGE_SET + 1 }, (_, k) => k + 1).filter((n) => n !== 4));
     expect(read.unread).toBe(3);
     // (a chemist's set holds none: none is read for one)
     expect(readWorkflow({ sets: [{ id: 1, x0: 0, y0: 0, x1: 2, y1: 2, drawnCollection: [chloroethane()] }] })!.sets[0].drawnCollection).toBeUndefined();
@@ -316,6 +316,92 @@ describe("a large set of structures drawn, given by a step", () => {
     const parts = partsOf(doc, new Set([out.id]), new Set([doc.steps![0].id]));
     expect(parts.sets[0].drawnCollection).toBeUndefined();
     expect(parts.sets[0].unread).toBeUndefined();
+  });
+});
+
+/** Records as steps give them: an Enumerate product's number and how it was made; a generated structure's NLL and lineage; one set aside, and why. */
+const numbered: DrawnRecord = {
+  properties: {
+    number: { value: 2, unit: "none", status: "computed", by: { step: "4" } },
+    "made.how": { value: "R1 = Me", unit: "none", status: "computed", by: { step: "4" } },
+  },
+};
+const sampled: DrawnRecord = { from: ["seed-1"], properties: { nll: { value: 23.5, unit: "none", status: "computed", by: { plugin: "reinvent", version: "4.6.0" } } } };
+const aside: DrawnRecord = { status: { aside: "a radical" } };
+
+describe("structures drawn, each with its record", () => {
+  it("keep a step's record on their members, give it on along a wire, and keep it with a run kept and shown again", () => {
+    let doc = placeResults(page(), page().steps![0], drawn([{ ...chiral(), record: numbered }, chloroethane()], [{ ...chloroethane(), record: aside }]), W);
+    const step = () => doc.steps![0];
+    const out = resultOf(doc, step().id, "out")!;
+    expect(setMembers(doc, out).records).toEqual([numbered, undefined]);
+    expect(setMembers(doc, resultOf(doc, step().id, "rest")!).records).toEqual([aside]);
+    // (what a step after it is given: each structure with its record)
+    doc = addStep(doc, "conformers", 40, 0);
+    doc = connect(doc, { set: out.id }, doc.steps![1].id);
+    const input = inputOf(doc, doc.steps![1].id)!;
+    expect(drawnEntries(doc.model, input.structures, input.records).map((e) => e.record)).toEqual([numbered, undefined]);
+    // (a run kept keeps them, and gives them back when shown again)
+    doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 1, ok: true, said: "first", input: "k", kind: s.kind } })) };
+    expect(resultsNow(doc, step())!.drawn!.made.map((m) => m.record)).toEqual([numbered, undefined]);
+    doc = keepRun(doc, step());
+    doc = placeResults(doc, step(), drawn([{ ...chloroethane(), record: sampled }]), W);
+    expect(setMembers(doc, resultOf(doc, step().id, "out")!).records).toEqual([sampled]);
+    doc = showRun(doc, step().id, 0, W);
+    expect(setMembers(doc, resultOf(doc, step().id, "out")!).records).toEqual([numbered, undefined]);
+    expect(step().runs![0].results!.drawn!.made.map((m) => m.record)).toEqual([sampled]);
+  });
+
+  it("keep their records as a set's members settle again: moved, or joined by the chemist to a structure of their own", () => {
+    const first = placeResults(page(), page().steps![0], drawn([{ ...chiral(), record: numbered }]), W);
+    const out = resultOf(first, first.steps![0].id, "out")!;
+    const br = first.model.atoms.find((a) => a.el === "Br" && out.put!.includes(a.id))!;
+    const joined = membersSettled(
+      { ...first, model: { atoms: [...first.model.atoms, { id: 900, el: "C", x: br.x - 1.5, y: br.y, r: 0.9 } as never], bonds: [...first.model.bonds, { id: 901, a: br.id, b: 900, order: 1 } as never] }, nextId: 902 },
+      first,
+    );
+    const held = setMembers(joined, resultOf(joined, joined.steps![0].id, "out")!);
+    expect(held.structures[0]).toContain(900);
+    expect(held.records).toEqual([numbered]);
+  });
+
+  it("are written with their records and read back - the members' and a run kept's alike", () => {
+    let doc = placeResults(page(), page().steps![0], drawn([{ ...chiral(), record: sampled }], [{ ...chloroethane(), record: aside }]), W);
+    doc = { ...doc, steps: doc.steps!.map((s) => ({ ...s, ran: { at: 1, ok: true, said: "first", input: "k", kind: s.kind } })) };
+    doc = keepRun(doc, doc.steps![0]);
+    const saved = readWorkflow(JSON.parse(JSON.stringify({ sets: doc.sets, steps: doc.steps, wires: doc.wires })))!;
+    const back = { ...doc, sets: saved.sets, steps: saved.steps };
+    expect(setMembers(back, resultOf(back, back.steps![0].id, "out")!).records).toEqual([sampled]);
+    expect(setMembers(back, resultOf(back, back.steps![0].id, "rest")!).records).toEqual([aside]);
+    expect(saved.steps[0].runs![0].results!.drawn!.made[0].record).toEqual(sampled);
+    expect(saved.steps[0].runs![0].results!.drawn!.rest[0].record).toEqual(aside);
+  });
+
+  it("are read as data: what of a record does not read is left out, and a record of nothing is none", () => {
+    expect(
+      readDrawnRecord({
+        from: ["a", "b"],
+        properties: {
+          kept: { value: 1.5, unit: "kcal/mol", status: "computed", by: { step: "3", junk: "x", plugin: 7 } },
+          aText: { value: "R1 = Me", unit: "none", status: { notApplicable: "no ring" } },
+          noUnit: { value: 2, unit: "furlongs", status: "computed" },
+          noValue: { value: { nested: true }, unit: "none", status: "computed" },
+          noStatus: { value: 3, unit: "none", status: "guessed" },
+          infinite: { value: Infinity, unit: "none", status: "computed" },
+        },
+        status: { aside: "a radical" },
+      }),
+    ).toEqual({
+      from: ["a", "b"],
+      properties: {
+        kept: { value: 1.5, unit: "kcal/mol", status: "computed", by: { step: "3" } },
+        aText: { value: "R1 = Me", unit: "none", status: { notApplicable: "no ring" } },
+      },
+      status: { aside: "a radical" },
+    });
+    expect(readDrawnRecord({ from: [1], properties: { x: { value: 1 } }, status: "maybe" })).toBeUndefined();
+    expect(readDrawnRecord("no")).toBeUndefined();
+    expect(readDrawnRecord({ status: "done" })).toEqual({ status: "done" });
   });
 });
 

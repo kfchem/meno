@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import type { Model } from "../store/types";
+import type { DrawnRecord, Model } from "../store/types";
 import { drawingOf } from "../chem/drawing";
 import { identityOfDrawn } from "../chem/identityOf";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { enumerated, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
 import { measured } from "../../../../testing/timeouts";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
-import { countOf, numberedOn, setMembers } from "./entries";
+import { countOf, numberedOn, numberedRecord, recordHow, recordNumber, recordWhy, setMembers } from "./entries";
 import { canWire, resultOf } from "./flow";
 import { addSet, addStep, connect } from "./model";
 import { runStep, showRun, type RunWith } from "./run";
@@ -192,7 +192,9 @@ describe("Enumerate as a step", () => {
     const step = doc.steps![0].id;
     return { doc: connect(doc, { set: 1 }, step), step };
   }
-  const entries = (doc: WorkspaceDocument, step: number, exit: string) => (resultOf(doc, step, exit)!.members ?? []).map((m) => ("structure" in m ? m.entry : undefined));
+  /** What each member's record says (`numberedRecord`): its number, how it was made and, where it was set aside, why. */
+  const said = (r: DrawnRecord | undefined) => (r ? { number: recordNumber(r), how: recordHow(r), ...(recordWhy(r) ? { why: recordWhy(r) } : {}) } : undefined);
+  const entries = (doc: WorkspaceDocument, step: number, exit: string) => (resultOf(doc, step, exit)!.members ?? []).map((m) => ("structure" in m ? said(m.record) : undefined));
 
   it("is wired from a set of structures drawn, and makes its products into its sets - each with its number and how it was made, those aside with why", () => {
     const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
@@ -205,6 +207,13 @@ describe("Enumerate as a step", () => {
       { number: 4, how: "R1 = Cl, R2 = Cl" },
     ]);
     expect(entries(ran, step, "rest")).toEqual([{ number: 3, how: "R1 = Cl, R2 = Me", why: "Same as 2" }]);
+    // (each as an entry keeps it: its number and how it was made its properties, its status done or set aside)
+    const first = resultOf(ran, step, "out")!.members![0];
+    expect("structure" in first && first.record).toEqual(numberedRecord(1, "R1 = Me, R2 = Me"));
+    expect(numberedRecord(3, "R1 = Cl, R2 = Me", "Same as 2")).toEqual({
+      properties: { number: { value: 3, unit: "none", status: "computed" }, "made.how": { value: "R1 = Cl, R2 = Me", unit: "none", status: "computed" } },
+      status: { aside: "Same as 2" },
+    });
     expect(countOf(ran, resultOf(ran, step, "out")!)).toMatchObject({ holds: "structures", entries: 3 });
     // (the template untouched, where it was)
     expect(ran.model.atoms.filter((a) => t0(doc).has(a.id)).map((a) => [a.id, a.el, a.x, a.y])).toEqual(doc.model.atoms.map((a) => [a.id, a.el, a.x, a.y]));
@@ -214,7 +223,7 @@ describe("Enumerate as a step", () => {
     const { doc, step } = page("R1: Me\nCl\nR2: Me\nCl");
     const ran = runStep(doc, step, W);
     const shown = numberedOn(ran, ran.sets!);
-    expect(shown.map((n) => n.entry.number)).toEqual([1, 2, 4, 3]);
+    expect(shown.map((n) => recordNumber(n.record))).toEqual([1, 2, 4, 3]);
     const out = resultOf(ran, step, "out")!;
     for (const n of shown.slice(0, 3)) expect(n.x > out.x0 && n.x < out.x1 && n.y > out.y0 && n.y < out.y1).toBe(true);
   });
@@ -251,7 +260,7 @@ describe("Enumerate as a step", () => {
     const second = runStep(changed, step, W);
     expect(entries(second, step, "out")).toEqual([{ number: 1, how: "R1 = F, R2 = F" }]);
     expect(entries(second, step, "rest")).toEqual([]);
-    expect(second.steps![0].runs![0].results!.drawn!.made.map((m) => m.entry?.number)).toEqual([1, 2, 4]);
+    expect(second.steps![0].runs![0].results!.drawn!.made.map((m) => recordNumber(m.record))).toEqual([1, 2, 4]);
     const shown = showRun(second, step, 0, W);
     expect(entries(shown, step, "out").map((e) => e?.number)).toEqual([1, 2, 4]);
     expect(entries(shown, step, "rest")).toEqual([{ number: 3, how: "R1 = Cl, R2 = Me", why: "Same as 2" }]);
@@ -262,7 +271,7 @@ describe("Enumerate as a step", () => {
     const ran = runStep(doc, step, W);
     const read = readWorkflow(JSON.parse(JSON.stringify({ sets: ran.sets, steps: ran.steps, wires: ran.wires })))!;
     const out = read.sets.find((b) => b.id === resultOf(ran, step, "out")!.id)!;
-    expect(out.members!.map((m) => ("structure" in m ? m.entry?.number : null))).toEqual([1, 2, 4]);
+    expect(out.members!.map((m) => ("structure" in m ? recordNumber(m.record) : null))).toEqual([1, 2, 4]);
   });
 });
 

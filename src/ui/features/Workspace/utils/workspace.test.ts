@@ -7,7 +7,7 @@ import { DEFAULT_STYLE_CHOICE } from "../../../../lib/chem/style";
 import { readKept, readWorkspace, workspaceFile, workspaceProblem, workspaceText } from "./workspace";
 import { addSet, addStep } from "../workflow/model";
 import { placeResults } from "../workflow/run";
-import { collectionHash } from "../workflow/entries";
+import { collectionHash, numberedRecord } from "../workflow/entries";
 import { askFor, heldOutput, outputOf, rememberOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { workspaceOfFile } from "../../../views/openFile";
@@ -512,7 +512,7 @@ describe("a workspace's sets, saved (version 2)", () => {
   it("of a large result set of structures drawn: each written as the set holds it, with what its step said of it - or, kept out of the file, only how many and their hash", () => {
     const { doc, st } = canvas();
     // (51 nitrogen molecules a step gave, numbered: more than are laid out, so held in the set)
-    const n2 = (k: number) => ({ atoms: [{ id: 1, el: "N", x: 0, y: 0, r: 0.9 }, { id: 2, el: "N", x: 1.1, y: 0, r: 0.9 }] as never[], bonds: [{ id: 1, a: 1, b: 2, order: 3 }] as never[], entry: { number: k, how: `R1 = ${k}` } });
+    const n2 = (k: number) => ({ atoms: [{ id: 1, el: "N", x: 0, y: 0, r: 0.9 }, { id: 2, el: "N", x: 1.1, y: 0, r: 0.9 }] as never[], bonds: [{ id: 1, a: 1, b: 2, order: 3 }] as never[], record: numberedRecord(k, `R1 = ${k}`) });
     const made = Array.from({ length: 51 }, (_, k) => n2(k + 1));
     doc.edit("sets", (d) => {
       const s = addStep(d, "duplicates", 40, 0);

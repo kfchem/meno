@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, numberedRecord, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { enumerated } from "./enumerate";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { SeriesCore } from "../store/types";
@@ -67,7 +67,7 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
       const options = optionsOf(kindInfo(kind).options ?? [], own);
       const r = enumerated(entries[0].drawn, String(options.lists ?? ""), style);
       if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
-      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, entry: { number: m.number, how: m.how, ...(why ? { why } : {}) } });
+      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: numberedRecord(m.number, m.how, why) });
       // (its valence as it was checked before it ran, where it was: never claimed where it was not)
       const valence = said.length ? said : ["Valence not checked"];
       return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 "), core: r.core };

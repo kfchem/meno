@@ -11,7 +11,7 @@ import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen } from "../workflow/cardOpen";
-import { countOf, numberedOn, type Frame } from "../workflow/entries";
+import { countOf, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
@@ -815,9 +815,9 @@ export default function Workflow2D() {
               <span
                 className="block whitespace-nowrap rounded px-1 text-[10px] leading-4 tabular-nums text-gh-gray"
                 style={{ pointerEvents: "auto" }}
-                title={n.entry.why ? `${n.entry.how} \u00b7 ${n.entry.why}` : n.entry.how}
+                title={[recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ")}
               >
-                #{n.entry.number}
+                #{recordNumber(n.record)}
               </span>
             </div>
           ))}

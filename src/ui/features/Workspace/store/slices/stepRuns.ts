@@ -18,7 +18,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, recordNumber, setEntries, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
@@ -209,7 +209,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * a real structure, its configuration open. Its card says how many it has
    * been through as it asks.
    */
-  async function leftOpen(id: number, at: number, kept: readonly { drawn: Model; entry?: { number: number } }[]): Promise<string> {
+  async function leftOpen(id: number, at: number, kept: readonly DrawnEntry[]): Promise<string> {
     const by = rolePlugin("stereoisomers");
     if (!by || !(await chemAtHand("stereoisomers"))) return "Configurations left open not looked for: no plugin finds stereoisomers";
     const working = (patch: { done: number } | null) =>
@@ -227,7 +227,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const block = blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id))[0];
         if (block) {
           const found = await chem.request("open_stereo", { molblock: block.molblock });
-          if (found.atoms.length || found.bonds.length) open.push(e.entry?.number ?? k + 1);
+          if (found.atoms.length || found.bonds.length) open.push(recordNumber(e.record) ?? k + 1);
         }
         if (k % 25 === 24) working({ done: k + 1 });
       }

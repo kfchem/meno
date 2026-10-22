@@ -1447,7 +1447,7 @@ them to one is refused, as before. P3 adds *Enumerate*, the first.
 **A large set of structures drawn** is held as a large set of molecules
 is (*A large result set*): an exit that gives more than 50 puts none of
 them on the page. Its set holds each structure as the step drew it, in
-the step's order, with what the step said of it, and its frame says how
+the step's order, with its record, and its frame says how
 many ("120 structures"). The steps after it take them from there, and a
 run kept keeps them. The workspace's file keeps them too, or, with *Don't
 keep in the file*, only their count and hash. Opened from a file, a
@@ -1458,6 +1458,41 @@ the page as before. Copied with its step, the set holds nothing until the
 step runs again, as a large set of molecules does. Held off the page,
 they are kept as the step drew them: a change of the workspace's style
 reaches them only once they are on the page.
+
+### A structure drawn's record (2026-10-22)
+
+A structure a step gives keeps a record of its own, as an entry does
+(WORKFLOWS-FOUNDATION.md, *The entry*). The drawing itself is its
+structure and its geometry, in 2D, so the record holds the rest
+(`DrawnRecord`, `store/types`):
+
+- `from`: the entries it was made from, by id, where they have one. A
+  generated structure names its seed's; a template drawn on the page has
+  no id, so an Enumerate product names none.
+- `properties`: by name, each a `Property` as lib/entry has it, with its
+  value, its unit from Meno's units table or "none", its status, and what
+  worked it out. Enumerate's `number` and `made.how` are kept here, and so
+  is a generative model's value for each structure.
+- `status`: done, failed, or set aside, with why (`{ aside: "a radical" }`).
+
+All of it is optional. A structure the chemist drew has none.
+
+- **Where it is kept.** A set's member keeps it beside the structure's
+  atoms (`Member.structure` and `.record`). A step's entries carry it in
+  (`DrawnEntry.record`, from `inputOf`'s `records`), and its outcome
+  carries it out. A run kept keeps it with each structure
+  (`RunResults.drawn`, as `DrawnModel`), and so does a large result set
+  held off the page (`WorkflowSet.drawnCollection`).
+- **It stays with the structure** as the set's members settle again.
+  Moved, or joined by the chemist to a structure of their own, the
+  structure is still the member, and its record stays with it.
+- **In the file** it is written with the member, and read back as data
+  (`readDrawnRecord`): a property whose value is not a number, a text or
+  true/false, whose unit is not in the units table, or whose status is
+  not one of lib/entry's is left out, and so is anything that says what
+  worked it out but is not one of `By`'s parts. A record left with
+  nothing is none.
+
 
 ## Questions
 
