@@ -339,10 +339,12 @@ mod win {
                     CoTaskMemFree(Some(p.0 as *const _));
                     s
                 });
+                // (Windows' own "choose an app" is no app: what opens the format, none yet)
+                let path = assoc(&dotted, ASSOCSTR_EXECUTABLE).filter(|p| !super::is_app_chooser(Some(p)));
                 FormatDefault {
                     ext: ext.to_string(),
-                    app: assoc(&dotted, ASSOCSTR_FRIENDLYAPPNAME),
-                    path: assoc(&dotted, ASSOCSTR_EXECUTABLE),
+                    app: path.as_ref().and_then(|_| assoc(&dotted, ASSOCSTR_FRIENDLYAPPNAME)),
+                    path,
                     meno: prog.as_deref() == Some(PROG_ID),
                     offered: offered.iter().any(|o| o == ext),
                 }
@@ -498,6 +500,13 @@ pub fn defaults_state() -> DefaultsState {
 /// it was - moved to the Trash since, say (lib/defaultApps `APP_GONE`).
 pub const APP_GONE: &str = "app-gone";
 
+/// Whether the program a format would start is Windows' own "choose an app" (`OpenWith.exe`),
+/// which Windows names as if it were an app ("Select an app", in the user's language): no
+/// app opens such a format yet, and the page says so (Windows 11 build 26300, 2026-10-22).
+pub fn is_app_chooser(path: Option<&str>) -> bool {
+    path.and_then(|p| p.rsplit(['\\', '/']).next()).is_some_and(|f| f.eq_ignore_ascii_case("OpenWith.exe"))
+}
+
 /// Whether the app at `app` is gone from where it was; none asked for (Meno itself) is not.
 pub fn app_gone(app: Option<&str>) -> bool {
     app.is_some_and(|p| !std::path::Path::new(p).exists())
@@ -572,6 +581,15 @@ mod tests {
         let mut e = registration(r"C:\Users\someone\AppData\Local\Meno\Meno.exe");
         e.extend(extensions().map(claim));
         e
+    }
+
+    #[test]
+    fn takes_windows_own_choose_an_app_for_no_app() {
+        assert!(is_app_chooser(Some(r"C:\WINDOWS\system32\OpenWith.exe")));
+        assert!(is_app_chooser(Some(r"C:\Windows\System32\openwith.EXE")));
+        assert!(!is_app_chooser(Some(r"C:\Program Files\Some Viewer\viewer.exe")));
+        assert!(!is_app_chooser(Some(r"C:\Tools\NotOpenWith.exe")));
+        assert!(!is_app_chooser(None));
     }
 
     #[test]

@@ -1054,6 +1054,16 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     `shell\open\command`; and one value, `Meno`, in the shared
     `Software\RegisteredApplications`. Then `SHChangeNotify`. Never
     `OpenWithProgids`, never `Applications\Meno.exe`.
+  - What opens a format now is asked of Windows, never read from the
+    registry: the default ProgID (`IApplicationAssociationRegistration::
+    QueryCurrentDefault`) and the program and its name
+    (`AssocQueryString`). The user's choice is not always under the
+    `UserChoice` key: Windows 11 build 26300 (tried 2026-10-22) keeps it
+    under `UserChoiceLatest`, and the page read it right because it asks
+    Windows. Nothing in Meno reads `UserChoice` itself. Where the program
+    is Windows' own *choose an app* (`OpenWith.exe`), which Windows names
+    as if it were an app (*Select an app*, in the user's language), no app
+    opens the format yet, and the row says *No app opens it yet*.
   - Tried on Windows 11 (2026-10-21) with exactly these keys: a
     double-click did not go to Meno, and Meno's own page in Default apps
     listed its formats with their defaults. But for each format claimed,
