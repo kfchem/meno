@@ -26,7 +26,7 @@ import { exitOf, howOf, inputsOf, kindInfo, madeName, optionsOf } from "../workf
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, portDown, PX, shuttingCard } from "../workflow/look";
+import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PORTS_Z, portDown, PX, shuttingCard } from "../workflow/look";
 import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -305,12 +305,14 @@ export default function Workflow2D() {
   const [compact, setCompact] = useState(false);
   const [zoom, setZoom] = useState((camera as THREE.OrthographicCamera).zoom || 1);
   const layer = useRef<HTMLDivElement>(null);
+  const portsLayer = useRef<HTMLDivElement>(null);
   useFrame(() => {
     const z = (camera as THREE.OrthographicCamera).zoom || 1;
     const small = wordsTooSmall(z);
     if (small !== compact) setCompact(small);
     if (Math.abs(Math.log(z / zoom)) > 0.03) setZoom(z);
     layer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
+    portsLayer.current?.style.setProperty("--hair", `${1 / (z * PX)}px`);
   });
 
   const worldOf = (cx: number, cy: number): Pt => {
@@ -679,10 +681,8 @@ export default function Workflow2D() {
             hovered={hoveredSet === b.id}
             chosen={chosenSet === b.id || selFlow.sets.has(b.id)}
             compact={compact}
-            give={portLook("give", { set: b.id })}
             onTabDown={(e) => dragSet(e, b)}
             onEdgeDown={(edge, e) => sizeSet(edge, e, b)}
-            onGiveDown={(e) => drawFrom(e, { set: b.id })}
             onContextMenu={menuOf("set", b.id)}
             onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
@@ -720,7 +720,6 @@ export default function Workflow2D() {
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onClose={() => store.getState().setWorkflowView({ openStep: null })}
             onCardDown={(e) => dragStep(e, s)}
-            onTakeDown={(e, port) => drawInto(e, s.id, port)}
             onContextMenu={menuOf("step", s.id)}
             onHover={(on) => (on ? hover({ hoveredStep: s.id }) : unhover("hoveredStep", s.id))}
           />
@@ -791,7 +790,41 @@ export default function Workflow2D() {
               <Fragment key={key}>{item}</Fragment>
             ),
           )}
-    
+        </div>
+      </PageHtml>
+      {/* The ports, on a layer of their own over the molecules' chips and
+          cards: a port is pressed, lit and let go on whatever lies over it
+          on the page - a chip below a molecule among many reaching over a
+          set's edge, say. Small as they are, they hide nothing. */}
+      <PageHtml transform distanceFactor={HTML_DISTANCE} position={[0, 0, 0]} zIndexRange={[PORTS_Z, PORTS_Z]} pointerEvents="none">
+        <div ref={portsLayer} style={{ position: "relative", width: 0, height: 0 }}>
+          {sets.map((b) => {
+            const f = shownOf(b);
+            const info = setInfo.get(b.id)!;
+            return (
+              <div key={`b${b.id}`} className="meno-fade-in" style={{ ...onLayer(f.x1, (f.y0 + f.y1) / 2), width: 0, height: 0 }}>
+                <Port look={portLook("give", { set: b.id })} label={`Out of ${info.name}`} data={{ "data-give-set": String(b.id) }} onPointerDown={(e) => drawFrom(e, { set: b.id })} style={{ left: 0, top: 0 }} />
+              </div>
+            );
+          })}
+          {steps.map((s) => {
+            const ports = inputsOf(s.kind);
+            const name = kindInfo(s.kind).name;
+            return (
+              <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>
+                {ports.map((p, k) => (
+                  <Port
+                    key={p.id}
+                    look={portLook("take", { step: s.id, port: p.id })}
+                    label={ports.length > 1 ? `${p.name} into ${name}` : `Into ${name}`}
+                    data={{ "data-take": `${s.id}:${p.id}` }}
+                    onPointerDown={(e) => drawInto(e, s.id, p.id)}
+                    style={{ left: 0, top: portDown(k) / PX }}
+                  />
+                ))}
+              </div>
+            );
+          })}
           {/* the selection's port: pulled, the selection becomes an input set */}
           {asSet && !wireDrag && (
             <div className="meno-fade-in" style={{ ...onLayer(asSet.x1, (asSet.y0 + asSet.y1) / 2), width: 0, height: 0 }}>
