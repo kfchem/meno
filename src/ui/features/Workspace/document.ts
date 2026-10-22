@@ -621,10 +621,6 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
 }
 
 /**
- * An atom's chemistry set anew - its element or label, charge, radical and
- * isotope, each left off where it has none - leaving where it is alone.
- */
-/**
  * An abbreviation drawn out as the atoms it stands for - as the file gave
  * them, turned to where its bond goes now, or the dictionary's, laid out
  * on from that bond - the labelled atom become the one it is attached by,
@@ -826,6 +822,10 @@ export function groupHeldAt(doc: WorkspaceDocument, id: number, label: string): 
   return s ? { ...s, ...(toward ? { toward } : {}) } : undefined;
 }
 
+/**
+ * An atom's chemistry set anew - its element or label, charge, radical and
+ * isotope, each left off where it has none - leaving where it is alone.
+ */
 export function setAtomChemistry(
   doc: WorkspaceDocument,
   id: number,

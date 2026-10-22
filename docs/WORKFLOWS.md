@@ -1494,6 +1494,56 @@ All of it is optional. A structure the chemist drew has none.
   nothing is none.
 
 
+### Enumerate: R groups (as built, 2026-10-22)
+
+As WORKFLOWS-FOUNDATION.md specifies (*Enumerate*, *R groups*), with what
+the build settled:
+
+- **The step.** *Enumerate* is Meno's own, and plugins can't take its kind
+  (`MENO_ONLY`, lib/plugins/steps). It takes one set of structures drawn,
+  *Template*, and gives *Made* and *Aside*. Its one option, *R groups, one
+  to a line*, is a box of lines (`LinesOption`, lib/options). Beside each
+  line, as it is typed, the box shows what the line was read as: the
+  group's label and formula, the element, or why it does not read.
+  Settings shows no box of lines, since a list belongs to one step.
+- **The join is `expandAbbreviation`** (Workspace/document). The canvas's
+  *Expand abbreviation* calls it, and Enumerate calls it with the group in
+  hand. There is one function for both.
+- **What stops it before it runs.** Each reason in the specification is
+  said in full, naming the line or the atom. A template whose wedges do
+  not say a configuration stops it too, since identity could not judge
+  its products.
+- **Valence.** Where a plugin does the checks and is at hand, the
+  template and each option are checked first, and anything flagged stops
+  the step in the checks' words. Otherwise the set says *Valence not
+  checked*.
+- **Configurations left open.** Where a plugin finds stereoisomers and is
+  at hand, the products made are each asked, and the set counts and names
+  by number those with a configuration left open. Otherwise it says they
+  were not looked for.
+- **The products.** Each is drawn as the join draws it and is not laid
+  out again. Each keeps its record (*A structure drawn's record*): its
+  number, how it was made, and, if it was set aside, why (*Same as 2*).
+  On the page, each one's number is shown under it (*#2*), with how it was
+  made on hover. Its result sets carry the series' core
+  (`WorkflowSet.core`). More than 50 are held in the set itself, off the
+  page (*A large set of structures drawn*).
+- **Duplicates** are judged by `identity()` (lib/chem/identity), which
+  also says when the canonical search ran out of steps. The set then says
+  how many products a duplicate may have been missed among.
+- **Known answers against RDKit.** The fixture
+  (`workflow/testdata/enumerate.rdkit.json`, made by
+  `scripts/identity/rdkit.py`) holds each product of the cases in
+  `workflow/testdata/enumerationCases.ts` by the SHA-256 of the molfile
+  Meno writes of it. It also holds RDKit's canonical SMILES of that
+  molfile, and of the compound written by hand for that combination. The
+  test checks that each product is that compound, configurations
+  included, and that the products set aside as *Same as n* are exactly
+  those whose SMILES are product n's. No case differs by design so far.
+- **Not yet.** A set held off the page can't yet be opened as a table or
+  shown as a grid of its structures (6b, 6c). Its frame says how many it
+  holds. *Substituent swap* and *Scaffold swap* come after.
+
 ## Questions
 
 None left open in what is built (2026-10-08): the seven steps are built

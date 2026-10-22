@@ -738,8 +738,7 @@ Only the step's lists say what an R group may be.
   The number is a property of the entry (`number`, unit none).
 - **The join is the canvas's.** Each R atom is replaced as an abbreviation
   drawn out on the canvas is (*Expand abbreviation*): one function, used
-  by both. P3 moves the part that places the group out of the workspace's
-  store, so the canvas and Enumerate share it:
+  by both, `expandAbbreviation` (Workspace/document), given the group:
   - the group's attach atom takes the R atom's place and its bond;
   - the group's other atoms are laid out from it, clear of the drawing.
 - **The template's atoms keep their numbers.** Each R atom's number goes to
@@ -761,7 +760,9 @@ Only the step's lists say what an R group may be.
   its neighbour's hydrogens (below).
 
 **Each entry says how it was made.**
-- `from` is the template's entry.
+- `from` is the template's entry, where it has one. A template drawn on
+  the page has no entry id, so its products name none (WORKFLOWS.md,
+  *A structure drawn's record*).
 - `made.how` gives the choices in words: *R1 = Me, R2 = OMe*.
 - Each option is given as it was typed and as it was read.
 
@@ -829,13 +830,18 @@ options of one list that read as the same group do it too.
 
 **The rule is tested against another canonicaliser**, as the layout's
 known answers are (#507):
-- a committed fixture holds each test product as a molfile written by
-  Meno (its 2D coordinates and wedges), with RDKit's canonical isomeric
-  SMILES of it, recorded by a script under `scripts/` with RDKit's
-  version. RDKit reads the configurations from the drawing itself, so
-  Meno's reading of the wedges is checked as well;
-- the test checks that Meno's identity splits the products into the same
-  groups as RDKit's canonical SMILES do;
+- a committed fixture holds each test product by the SHA-256 of the
+  molfile Meno writes of it (its 2D coordinates and wedges). The test
+  writes the molfile again and checks it against that, so the fixture pins
+  every molfile without holding columns of coordinates. Beside it are
+  RDKit's canonical isomeric SMILES of that molfile, and of the compound
+  written by hand for that combination, recorded by a script under
+  `scripts/` with RDKit's version and the commands that make it. RDKit
+  reads the configurations from the drawing itself, so Meno's reading of
+  the wedges is checked as well;
+- the test checks that each product is the compound written for it, and
+  that Meno's identity splits the products into the same groups as RDKit's
+  canonical SMILES do;
 - where the two rules differ by design (bond-shift isomers, which RDKit's
   aromaticity does not join), the fixture lists the case, and the test
   holds Meno to its own rule there.
