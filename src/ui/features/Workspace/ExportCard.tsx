@@ -26,6 +26,7 @@ export default function ExportCard({
   what,
   selected,
   known,
+  said,
   onExport,
   onCancel,
 }: {
@@ -39,6 +40,8 @@ export default function ExportCard({
   selected: readonly number[];
   /** What Meno knows of the molecules in 3D written, by their ids. */
   known: (ids: readonly number[]) => Partial<Record<Known, string | number>>;
+  /** What a kind of file cannot hold of what is written, said in plain words over its options; none where it holds it all. */
+  said?: (writerId: string) => string | null;
   onExport: (writer: Writer, values: OptionValues, molecules: number[]) => void;
   onCancel: () => void;
 }) {
@@ -113,6 +116,12 @@ export default function ExportCard({
           </button>
         ))}
       </div>
+      {/* (what this kind cannot hold of it, and so leaves out: said before it is written, never silently) */}
+      {said?.(writer.id) && (
+        <p role="note" className="text-xs text-gh-gray mb-3">
+          {said(writer.id)}
+        </p>
+      )}
       {shown.length > 0 && (
         <motion.div key={`${writer.id}:${given.join(",")}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
           <OptionsForm options={shown} values={values} onChange={(v) => setChosen((c) => ({ ...c, [writer.id]: v }))} />

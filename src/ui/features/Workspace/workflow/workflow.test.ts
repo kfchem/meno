@@ -1,9 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+// (the plugin that perceives configurations, as the test has it: every molecule here - water, sulfane, their
+//  like - has no stereo, which a run asks before As conformers and Populations; workflow/configurations)
+vi.mock("./configurations", async (actual) => ({
+  ...(await actual<typeof import("./configurations")>()),
+  stereoKnown: () => ({ perceived: true, elements: [], key: "none", by: { plugin: "rdkit", version: "0.1.7" } }),
+}));
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
+import type { EntryStereo } from "../../../../lib/entry";
 import { setMembers, countOf, setEntries, holdsOf } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
 import { keptApart, pushTo, runMeno, runMenoInTurns } from "./meno";
@@ -13,7 +21,7 @@ import { factor } from "../../../../lib/units";
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
-import { energiesBy, laidOver, placeResults, runStep, type RunWith } from "./run";
+import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
 import { inputsOf } from "./kinds";
 import { doerOf } from "./doers";
@@ -74,10 +82,11 @@ describe("what a set holds", () => {
     let file = addMolecule3d(emptyWorkspaceDocument(), bent({ x: 0, y: 0 }, 6));
     file = addSet(file, { x0: -2, y0: -2, x1: 2, y1: 2 });
     expect(countOf(file, file.sets![0])).toEqual({ holds: "molecules", entries: 6, compounds: 6 });
-    // (one conformer alone says nothing of a set)
+    // (one conformer found is a conformer set all the same: the maintainer, 2026-10-21)
     let one = addMolecule3d(emptyWorkspaceDocument(), { ...bent({ x: 0, y: 0 }, 1), conformerSet: true });
     one = addSet(one, { x0: -2, y0: -2, x1: 2, y1: 2 });
-    expect(holdsOf(one, one.sets![0])).toBe("molecules");
+    expect(holdsOf(one, one.sets![0])).toBe("conformers");
+    expect(countOf(one, one.sets![0])).toEqual({ holds: "conformers", entries: 1, compounds: 1 });
   });
 
   it("is a set of structures where any is drawn in it", () => {
@@ -592,6 +601,113 @@ describe("a step's exits", () => {
     const gone = removeStep(doc, step);
     expect(gone.sets!.map((b) => b.id)).toEqual([1, resultOf(doc, lastStep(doc))!.id]);
     expect(gone.wires).toEqual([]);
+  });
+});
+
+describe("what a step on entries alone gives back", () => {
+  /** One compound's five conformers, made by a conformer search: what it was made by, what its energies are from, its stereo labels - the first conformer 4 kcal/mol up. */
+  function made(): WorkspaceDocument {
+    const m = {
+      ...bent({ x: 0, y: 0 }, 5, [4, 0, 0.5, 2, 0.5].map((k) => -76 + kcal(k))),
+      conformerSet: true as const,
+      numbers: [1, 2, 3, 4, 5],
+      calc: { readers: [], program: "RDKit", method: "MMFF94", results: [{ id: "x", on: "molecule" as const, group: "G", label: "Last", value: 1 }] },
+      made: { method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" },
+      stereo: { atoms: { 0: "R" }, bonds: {} },
+    };
+    return addSet(addMolecule3d(emptyWorkspaceDocument(), m), { x0: -3, y0: -3, x1: 3, y1: 3 });
+  }
+
+  it("keeps what its energies are from and how they were made - the first conformer gone or not", () => {
+    let doc = addStep(made(), "energy-window", 5, 0, { window: 1 });
+    doc = connect(doc, { set: 1 }, 2);
+    doc = runStep(doc, 2, W);
+    const out = resultOf(doc, 2)!;
+    const m = doc.molecules3d!.find((x) => setMembers(doc, out).molecules.includes(x.id))!;
+    // (conformers 2, 3 and 5 within the window - 1, which carried them before, not among them)
+    expect(m.numbers).toEqual([2, 3, 5]);
+    expect(m.made).toEqual({ method: "ETKDG v3 + MMFF94", how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
+    expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
+    expect(m.stereo).toEqual({ atoms: { 0: "R" }, bonds: {} });
+  });
+
+  /** A water as a compound set holds it, worked out by `program`'s `method`, at `energy`, its drawing `drawn` and stereo labels `labels`. */
+  const water = (id: number, program: string, method: string, energy: number, drawn: number[], labels: Record<number, string> = {}) =>
+    setEntries(
+      [
+        {
+          ...bent({ x: 0, y: 0 }, 1, [energy]),
+          id,
+          calc: { readers: [], program, method },
+          made: { how: [{ label: "Made", text: "ETKDG v3" }], energies: method },
+          drawnFrom: drawn,
+          stereo: { atoms: labels, bonds: {} },
+        },
+      ],
+      "molecules"
+    ).map((e) => ({ ...e, compound: id }));
+
+  it("will not make one compound of entries worked out by different calculations", () => {
+    // (the desk's case: water by MMFF94 at -76 Eh and by GFN2-xTB at -75.9 - one list of their energies means nothing)
+    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "xtb", "GFN2-xTB", -75.9, [1, 2, 3])], "molecules");
+    expect(out).toEqual({ ok: false, said: "Compound a: its entries come from different calculations (RDKit MMFF94; xtb GFN2-xTB)" });
+  });
+
+  it("will not make one compound of entries labelled as different stereoisomers", () => {
+    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3], { 0: "R" }), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3], { 0: "S" })], "molecules");
+    expect(out).toEqual({ ok: false, said: "Compound a: its entries' stereo labels differ: they may be different stereoisomers" });
+  });
+
+  /** Which stereoisomer an entry is, as the plugin that perceives configurations answers: `key`, or not perceived, and why. */
+  const isomer = (key: string | { why: string }): EntryStereo =>
+    typeof key === "string"
+      ? { perceived: true, elements: [{ kind: "centre", atoms: [0], specified: true }], key, by: { plugin: "rdkit", version: "0.1.7" } }
+      : { perceived: false, why: key.why };
+
+  it("makes a compound of each stereoisomer, read from each entry's own geometry", () => {
+    // (four conformers, two of them R and two S, read so from their geometry: two compounds of two - not one of four)
+    const all = [1, 2, 3, 4].flatMap((id) => water(id, "RDKit", "MMFF94", -76 - id / 1000, [1, 2, 3]));
+    const out = runMeno("as-conformers", all.map((e, i) => ({ ...e, stereo: isomer(i % 2 ? "S" : "R") })), "molecules");
+    expect(out.ok && out.kept.map((e) => [e.compound, e.number, e.energy])).toEqual([[0, 1, -76.001], [0, 2, -76.003], [1, 1, -76.002], [1, 2, -76.004]]);
+    expect(out.said).toBe("2 compounds · 4");
+  });
+
+  it("will not make a compound of entries none of which was asked which stereoisomer it is", () => {
+    // (constitution alone would sum diastereomers: not asked is not known, and it fails closed)
+    const all = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3])].map((e) => ({ ...e, stereo: undefined }));
+    expect(runMeno("as-conformers", all, "molecules")).toEqual({ ok: false, said: "Which stereoisomer entry 1 is is not known: it has not been asked" });
+  });
+
+  it("will not make a compound of an entry whose stereoisomer is not known", () => {
+    const all = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [1, 2, 3])];
+    const out = runMeno("as-conformers", [{ ...all[0], stereo: isomer("R") }, { ...all[1], stereo: isomer({ why: "Nothing added tells stereoisomers apart" }) }], "molecules");
+    expect(out).toEqual({ ok: false, said: "Which stereoisomer entry 2 is is not known: Nothing added tells stereoisomers apart" });
+  });
+
+  it("makes one compound of entries made alike, keeping only what all of them keep", () => {
+    // (one calculation and one source of energies, drawn twice: the drawing each was made from is no one's to keep)
+    const out = runMeno("as-conformers", [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "RDKit", "MMFF94", -76.001, [4, 5, 6])], "molecules");
+    expect(out.ok).toBe(true);
+    const [m] = resultsOf(out as Extract<typeof out, { ok: true }>, "as-conformers").molecules;
+    expect(m.energies).toEqual([-76, -76.001]);
+    expect(m.calc).toMatchObject({ program: "RDKit", method: "MMFF94" });
+    expect(m.made).toEqual({ how: [{ label: "Made", text: "ETKDG v3" }], energies: "MMFF94" });
+    expect(m.drawnFrom).toBeUndefined();
+  });
+
+  it("gives a compound of entries made unlike no calculation, and no energies in one list", () => {
+    // (should a conformer set come with such a compound in it, past As conformers: the first's are not the compound's)
+    const kept = [...water(1, "RDKit", "MMFF94", -76, [1, 2, 3]), ...water(2, "xtb", "GFN2-xTB", -75.9, [1, 2, 3])].map((e, i) => ({ ...e, compound: 0, number: i + 1 }));
+    const [m] = resultsOf({ ok: true, holds: "conformers", kept, aside: [], said: "" }, "energy-window").molecules;
+    expect(m.calc).toBeUndefined();
+    expect(m.energies).toBeUndefined();
+    expect(m.made).toBeUndefined();
+  });
+
+  it("gives what a calculation read of one geometry only to that geometry: the last frame's", () => {
+    const entries = setEntries(made().molecules3d!, "conformers");
+    expect(entries.map((e) => e.calc?.results?.length ?? 0)).toEqual([0, 0, 0, 0, 1]);
+    expect(entries.every((e) => e.calc?.method === "MMFF94")).toBe(true);
   });
 });
 

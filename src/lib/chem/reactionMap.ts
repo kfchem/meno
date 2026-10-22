@@ -184,7 +184,8 @@ export function mapReaction(input: ReactionMapInput): ReactionMap | ReactionMapR
   const nR = r.atoms.length;
   const nP = p.atoms.length;
   const maps = atomsMapNumbers(p.atoms, ordered).map((nums) => nums.map((n) => n - 1));
-  const complete = maps.map((m) => nR === nP && m.every((i) => i >= 0) && new Set(m).size === nP);
+  // (one to one, and each atom with one of its own element: a map that pairs a carbon with a fluorine is no map of the reaction)
+  const complete = maps.map((m) => nR === nP && m.every((i, j) => i >= 0 && r.molecule.atoms[i].el === p.molecule.atoms[j].el) && new Set(m).size === nP);
   const mapped = atomsMapped(p.atoms, r.atoms, ordered);
   const productsInReactantNumbering: Molecule[] = mapped.length === ordered.length ? maps.map((m) => renumbered(p.molecule, m, nR)) : [];
   return {
@@ -282,6 +283,11 @@ export function mapProducts(
       });
       return;
     }
+    const unlike = elementsDiffer(reactant, p);
+    if (unlike) {
+      notMapped.push({ product, reason: unlike });
+      return;
+    }
     const result = mapReaction({ reactants: [reactant], products: [p], accelExact: o.accelExact });
     if ("error" in result) {
       notMapped.push({ product, reason: result.message });
@@ -293,15 +299,37 @@ export function mapProducts(
     }
     const which = o.every ? result.maps.map((_, i) => i) : [0];
     for (const k of which) {
+      const m = result.maps[k];
+      const j = m.findIndex((i, j) => i >= 0 && result.reactant.atoms[i].el !== result.product.atoms[j].el);
+      if (j >= 0) {
+        const [a, b] = [result.product.atoms[j].el, result.reactant.atoms[m[j]].el];
+        notMapped.push({ product, map: k, reason: `The map pairs the product's atom ${j + 1} (${a}) with the reactants' atom ${m[j] + 1} (${b}): an atom maps only to one of its own element.` });
+        continue;
+      }
       if (!result.complete[k]) {
         notMapped.push({ product, map: k, reason: "The map leaves atoms of one side unpaired." });
         continue;
       }
-      const m = result.maps[k];
       mapped.push({ product, map: k, molecule: renumbered(result.product, m, reactant.atoms.length), changes: bondChangeRows(result.reactant, result.product, m) });
     }
   });
   return { mapped, notMapped };
+}
+
+/** Why a product cannot map atom for atom onto the reactants for its elements - which it has more or fewer of - or none where each side has as many of each. */
+function elementsDiffer(reactant: Molecule, product: Molecule): string | null {
+  const count = (m: Molecule) => {
+    const n = new Map<string, number>();
+    for (const a of m.atoms) n.set(a.el, (n.get(a.el) ?? 0) + 1);
+    return n;
+  };
+  const [r, p] = [count(reactant), count(product)];
+  const els = [...new Set([...r.keys(), ...p.keys()])].sort();
+  const more = els.filter((e) => (p.get(e) ?? 0) > (r.get(e) ?? 0)).map((e) => `${(p.get(e) ?? 0) - (r.get(e) ?? 0)} ${e}`);
+  const fewer = els.filter((e) => (p.get(e) ?? 0) < (r.get(e) ?? 0)).map((e) => `${(r.get(e) ?? 0) - (p.get(e) ?? 0)} ${e}`);
+  if (!more.length && !fewer.length) return null;
+  const said = [more.length ? `${more.join(", ")} more` : "", fewer.length ? `${fewer.join(", ")} fewer` : ""].filter(Boolean).join(" and ");
+  return `The product has ${said} than the reactants: every atom must map to one of its own element.`;
 }
 
 /** A full map's pairs between heavy atoms only - for showing on a drawing: (reactant atom, product atom). */

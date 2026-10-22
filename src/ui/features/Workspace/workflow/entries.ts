@@ -6,10 +6,13 @@
  * it.
  */
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
-import { geometryKey, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
+import type { CalcInfo } from "../../../../lib/calc/output";
+import { geometryKey, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
+import { isUnit } from "../../../../lib/units";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
-import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import { groupLetter } from "../../../../lib/nodes/base";
+import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
 type Pt = { x: number; y: number };
@@ -99,14 +102,27 @@ function componentsByAtom(model: Model): Map<number, number> {
   return found;
 }
 
-/** What a set holds: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) - its members, in their order, where it has them; else what lies inside its frame (`lyingIn`). A member gone from the page is left out; a structure member is the structures drawn now that hold any of its atoms. */
-export function setMembers(page: Page, set: Frame & { members?: readonly Member[] }): { structures: number[][]; molecules: number[]; pictures: number[] } {
-  if (!set.members) return lyingIn(page, set);
+/**
+ * What a set holds: the structures drawn (each its atoms' ids), the
+ * molecules in 3D and the pictures (by id) - its members, in their order,
+ * where it has them; else what lies inside its frame (`lyingIn`). A member
+ * gone from the page is left out; a structure member is the structures
+ * drawn now that hold any of its atoms, each with the member's record
+ * (`records`, beside the structures: none where it has none).
+ */
+export function setMembers(
+  page: Page,
+  set: Frame & { members?: readonly Member[] },
+): { structures: number[][]; records: (DrawnRecord | undefined)[]; molecules: number[]; pictures: number[] } {
+  if (!set.members) {
+    const lying = lyingIn(page, set);
+    return { ...lying, records: lying.structures.map(() => undefined) };
+  }
   const drawn = drawnIn(page.model);
   const byAtom = componentsByAtom(page.model);
   const molecules = new Set((page.molecules3d ?? []).map((m) => m.id));
   const pictures = new Set((page.pictures ?? []).map((p) => p.id));
-  const out = { structures: [] as number[][], molecules: [] as number[], pictures: [] as number[] };
+  const out = { structures: [] as number[][], records: [] as (DrawnRecord | undefined)[], molecules: [] as number[], pictures: [] as number[] };
   const taken = new Set<number>();
   for (const m of set.members) {
     if ("structure" in m) {
@@ -115,6 +131,7 @@ export function setMembers(page: Page, set: Frame & { members?: readonly Member[
         if (k == null || taken.has(k)) continue;
         taken.add(k);
         out.structures.push(drawn[k].ids);
+        out.records.push(m.record);
       }
     } else if ("molecule" in m) {
       if (molecules.has(m.molecule) && !out.molecules.includes(m.molecule)) out.molecules.push(m.molecule);
@@ -123,10 +140,68 @@ export function setMembers(page: Page, set: Frame & { members?: readonly Member[
   return out;
 }
 
-/** What `setMembers` found, as members: in its order, structures first, then molecules, then pictures. */
-export function membersOf(found: { structures: readonly (readonly number[])[]; molecules: readonly number[]; pictures: readonly number[] }): Member[] {
-  return [...found.structures.map((ids) => ({ structure: [...ids] })), ...found.molecules.map((molecule) => ({ molecule })), ...found.pictures.map((picture) => ({ picture }))];
+/** What `setMembers` found, as members: in its order, structures first - each with its record, where it has one - then molecules, then pictures. */
+export function membersOf(found: {
+  structures: readonly (readonly number[])[];
+  records?: readonly (DrawnRecord | undefined)[];
+  molecules: readonly number[];
+  pictures: readonly number[];
+}): Member[] {
+  return [
+    ...found.structures.map((ids, i) => structureMember(ids, found.records?.[i])),
+    ...found.molecules.map((molecule) => ({ molecule })),
+    ...found.pictures.map((picture) => ({ picture })),
+  ];
 }
+
+/** A structure as a set's member: its atoms' ids, and its record where it has one. */
+export function structureMember(ids: readonly number[], record?: DrawnRecord): Member {
+  return { structure: [...ids], ...(record ? { record } : {}) };
+}
+
+const isText = (v: unknown): v is string => typeof v === "string";
+const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** An entry's status as a file keeps it (lib/entry `EntryStatus`), or none where it is not one. */
+function statusIn(v: unknown): EntryStatus | undefined {
+  if (v === "done") return v;
+  const o = v as { failed?: unknown; aside?: unknown } | null;
+  if (isText(o?.failed)) return { failed: o.failed };
+  if (isText(o?.aside)) return { aside: o.aside };
+  return undefined;
+}
+
+/**
+ * A structure drawn's record as a file keeps it (`DrawnRecord`), each part
+ * read as data: the entries it came from, by id; its properties - a number,
+ * a text or true/false, with its unit from Meno's units table or "none",
+ * whether it was worked out, and by what - each that does not read left
+ * out; and its status. None where nothing of it reads.
+ */
+export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
+  const r = v as { from?: unknown; properties?: unknown; status?: unknown } | null;
+  if (!r || typeof r !== "object") return undefined;
+  const from = Array.isArray(r.from) && r.from.every(isText) ? (r.from as string[]) : undefined;
+  const properties: Record<string, Property> = {};
+  if (r.properties && typeof r.properties === "object" && !Array.isArray(r.properties)) {
+    for (const [name, p] of Object.entries(r.properties as Record<string, unknown>)) {
+      const q = p as { value?: unknown; unit?: unknown; status?: unknown; by?: unknown } | null;
+      const value = q?.value;
+      if (!(isNumber(value) || isText(value) || typeof value === "boolean")) continue;
+      if (!(q!.unit === "none" || (isText(q!.unit) && isUnit(q!.unit)))) continue;
+      const status = q!.status === "computed" ? "computed" : isText((q!.status as { failed?: unknown })?.failed) ? { failed: (q!.status as { failed: string }).failed } : isText((q!.status as { notApplicable?: unknown })?.notApplicable) ? { notApplicable: (q!.status as { notApplicable: string }).notApplicable } : null;
+      if (!status) continue;
+      const by = q!.by && typeof q!.by === "object" ? Object.fromEntries(Object.entries(q!.by as Record<string, unknown>).filter(([k, x]) => BY_KEYS.has(k) && isText(x))) : undefined;
+      properties[name] = { value, unit: q!.unit as Property["unit"], status, ...(by && Object.keys(by).length ? { by } : {}) };
+    }
+  }
+  const status = statusIn(r.status);
+  const record: DrawnRecord = { ...(from?.length ? { from } : {}), ...(Object.keys(properties).length ? { properties } : {}), ...(status ? { status } : {}) };
+  return Object.keys(record).length ? record : undefined;
+}
+
+/** What may say what worked a property out (lib/entry `By`). */
+const BY_KEYS = new Set(["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment"]);
 
 /** Where each of a page's structures, molecules and pictures is: what a set's gestures read (workflow/model `membersSettled`). */
 export function placesOf(page: Page): { structures: { ids: number[]; at: Pt }[]; molecules: Map<number, Pt>; pictures: Map<number, Pt> } {
@@ -159,10 +234,12 @@ export function lyingIn(page: Page, set: Frame): { structures: number[][]; molec
 /**
  * Whether a molecule's frames are one compound's conformers wherever it
  * is: those a conformer search made - Meno's own (*3D structures*), or a
- * workflow's - which say so (`conformerSet`), where it has more than one
- * (the maintainer, 2026-10-08). A file's many geometries are not.
+ * workflow's - which say so (`conformerSet`) (the maintainer, 2026-10-08):
+ * one conformer found included, a set in which one happened to be found,
+ * not another kind of thing (the maintainer, 2026-10-21). A file's many
+ * geometries are not.
  */
-export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet" | "frames">) => m.conformerSet === true && framesOf(m) > 1;
+export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.conformerSet === true;
 
 /**
  * What a set holds: what made it says - a Render step's, pictures; made by
@@ -220,6 +297,16 @@ export function setMolecules(page: Page, set: Frame & Pick<WorkflowSet, "members
   return setMembers(page, set).molecules.map((id) => byId.get(id)!);
 }
 
+/**
+ * One entry of a set of structures drawn, as Meno's own steps take it and
+ * give it (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*): its place among the
+ * set's, from 0, and the structure as it is drawn - its atoms and bonds,
+ * where they lie on the page, its wedges, labels and all - in 2D - and
+ * its record, where it has one (`DrawnRecord`: what a step gave it). Never
+ * made 3D here: a step after it does that, as everywhere else.
+ */
+export type DrawnEntry = { place: number; drawn: Model; record?: DrawnRecord };
+
 /** One entry of a set of molecules in 3D, as a step takes it: its compound by its place among the set's, its number among that compound's conformers, its atoms and bonds, its geometry, its energy. */
 export type SetEntry = {
   compound: number;
@@ -242,6 +329,16 @@ export type SetEntry = {
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
   name?: string;
+  /**
+   * What the calculation it was read from says - the program, the method
+   * its energy is of - and what its molecule keeps besides (`keptOf`): the
+   * drawing it was made from, its stereo labels, how it was made and what
+   * its energies are from. A step that works on entries alone, changing
+   * none of them, gives them back with these as they were; a program that
+   * works them out anew gives its own.
+   */
+  calc?: CalcInfo;
+  keep?: Kept;
   /** The molecule in 3D it is a frame of, by id; which frame, and whether it is that molecule's last. */
   from?: number;
   frame?: number;
@@ -260,6 +357,84 @@ export function frameXyz(m: Pick<Molecule3D, "atoms" | "frames">, f: number): nu
  * (docs/WORKFLOWS.md, *Compound sets and conformer sets*); in a conformer
  * set each molecule is a compound, its frames its conformers.
  */
+/** What a molecule in 3D keeps besides its atoms, bonds and places that an entry of it carries (`SetEntry.keep`). */
+export type Kept = Pick<Molecule3D, "drawnFrom" | "drawnAs" | "stereo" | "made" | "centres">;
+
+/**
+ * What a molecule keeps besides its atoms, bonds and places: the drawing it
+ * was made from, its stereo labels, how it was made, and its bonds to ring
+ * centres (eta) - its atoms in the same order, as its entries keep them.
+ */
+export function keptOf(m: Kept): Kept {
+  return {
+    drawnFrom: m.drawnFrom,
+    drawnAs: m.drawnAs,
+    ...(m.stereo ? { stereo: m.stereo } : {}),
+    ...(m.made ? { made: m.made } : {}),
+    ...(m.centres?.length ? { centres: m.centres } : {}),
+  };
+}
+
+/** `v` as JSON with every object's keys in order: two values equal as data give the one text. */
+function stableJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(stableJson).join(",")}]`;
+  if (v && typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    return `{${Object.keys(o)
+      .filter((k) => o[k] !== undefined)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${stableJson(o[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v) ?? "null";
+}
+
+/** What a calculation was, without what is each entry's own: its results, its output, its job among several, its wavefunction, the readers that could not read it. */
+function calcLevel(c: CalcInfo | undefined): string {
+  if (!c) return "";
+  const { results: _results, source: _source, job: _job, wavefunction: _wavefunction, unread: _unread, ...level } = c;
+  return stableJson(level);
+}
+
+/** A calculation, or a way of making, in a few words: its program, method and basis, or what its energies are from. */
+function madeWords(e: SetEntry): string {
+  const c = e.calc;
+  return c ? [c.program, c.method, c.basis].filter(Boolean).join(" ") || "a calculation" : e.keep?.made?.energies ?? "no calculation";
+}
+
+/** An entry's stereo labels, centre by centre and bond by bond - not which are shown - or "" where it has none. */
+function labelsOf(e: SetEntry): string {
+  const st = e.keep?.stereo;
+  if (!st || (!Object.keys(st.atoms ?? {}).length && !Object.keys(st.bonds ?? {}).length)) return "";
+  return stableJson({ atoms: st.atoms, bonds: st.bonds });
+}
+
+/**
+ * Why entries cannot stand as conformers of one compound, or null where they
+ * can: they must come from the one calculation - its program, version,
+ * method, basis, charge and multiplicity, read by the same readers - with
+ * their energies from the one source, for those to stand in one list and
+ * what made them to be said once; and be of the one configuration as their
+ * stereo labels give it, a compound being one stereoisomer.
+ */
+export function unlikeMade(g: readonly SetEntry[]): string | null {
+  const one = (f: (e: SetEntry) => string) => new Set(g.map(f)).size <= 1;
+  if (!one((e) => calcLevel(e.calc))) return `its entries come from different calculations (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (!one((e) => e.keep?.made?.energies ?? "")) return `its entries' energies come from different sources (${[...new Set(g.map(madeWords))].join("; ")})`;
+  if (!one(labelsOf)) return "its entries' stereo labels differ: they may be different stereoisomers";
+  return null;
+}
+
+/** What entries all keep alike (`SetEntry.keep`), part by part: a part one of them keeps otherwise - the drawing it was made from, how it was made - is kept by none. */
+export function keptAlike(g: readonly SetEntry[]): Kept {
+  const out: Record<string, unknown> = {};
+  for (const k of ["drawnFrom", "drawnAs", "stereo", "made", "centres"] as const) {
+    const first = g[0]?.keep?.[k];
+    if (first !== undefined && g.every((e) => stableJson(e.keep?.[k]) === stableJson(first))) out[k] = first;
+  }
+  return out as Kept;
+}
+
 export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): SetEntry[] {
   const out: SetEntry[] = [];
   molecules.forEach((m, i) => {
@@ -271,6 +446,9 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    const keep = keptOf(m);
+    // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
+    const calcBefore = m.calc ? (({ results: _r, ...rest }) => rest)(m.calc) : undefined;
     // (a path: its last frame alone)
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
       const xyz = frameXyz(m, f);
@@ -286,6 +464,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
+        keep,
         from: m.id,
         frame: f,
         last: f === n - 1,
@@ -295,11 +475,8 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
   return out;
 }
 
-/** A compound's letter, by its place among a set's: a to z, then aa, ab... */
-export function compoundLetter(i: number): string {
-  const a = "abcdefghijklmnopqrstuvwxyz";
-  return i < 26 ? a[i] : compoundLetter(Math.floor(i / 26) - 1) + a[i % 26];
-}
+/** A compound's letter, by its place among a set's: a to z, then aa, ab... (lib/nodes `groupLetter`, one rule for both). */
+export const compoundLetter = groupLetter;
 
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of

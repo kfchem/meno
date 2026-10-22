@@ -19,6 +19,7 @@ import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
+import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
@@ -574,6 +575,15 @@ export type WordsFlight = {
  * (`of`) - what it rises out of into the column, and goes back into.
  */
 export type WorkspaceText = { id: number; name: string; text: string; path?: string; at?: { x: number; y: number }; point?: number; reading?: false; icon?: true; of?: TextOf };
+/**
+ * A text its workspace's file was to hold whose words could not be read -
+ * damaged there, or not there (docs/FILE-IO.md, *The workspace file*): kept
+ * as the file named it, by its name and its SHA-256, with where it lay and
+ * what it was the text of, and shown in the column as what it is - never
+ * as a text, having no words: nothing to edit, copy, find or read. It stays
+ * until it is taken away, or a text of the same words comes.
+ */
+export type LostText = Omit<WorkspaceText, "text" | "path"> & { sha256: string };
 /** What a text without a sheet is the text of, its body on the page: a step, whose log it is; or a molecule, shown from whose menu it is that molecule's output. */
 export type TextOf = { step: number } | { molecule: number };
 /**
@@ -609,6 +619,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A result set of structures drawn: the atoms, by id, its step put on the
+   * page as it last ran - all it takes away when the step runs again. A
+   * structure the chemist joined to one of them by a bond keeps its own
+   * atoms.
+   */
+  put?: number[];
+  /**
    * A result set of more entries than are laid out on the page
    * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
    * `LARGE_SET`): what the step gave, held in the set itself, in the step's
@@ -623,8 +640,18 @@ export type WorkflowSet = {
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
   notKept?: { count: number; hash: string };
 };
-/** One of a set's members: a structure drawn, by its atoms' ids; a molecule in 3D, or a picture, by id. */
-export type Member = { structure: number[] } | { molecule: number } | { picture: number };
+/**
+ * What a structure drawn that a step gave keeps of its own, as an entry
+ * (lib/entry `Entry`) keeps it - the drawing itself its structure and its
+ * geometry, in 2D: the entries it was made from (`from`, by id, where they
+ * have one), its properties by name, and whether it is done or was set
+ * aside, and why. All of it optional: a structure the chemist drew has none.
+ */
+export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus };
+/** A structure drawn as a step gave it: the drawing, and its record where it has one. */
+export type DrawnModel = Model & { record?: DrawnRecord };
+/** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
+export type Member = { structure: number[]; record?: DrawnRecord } | { molecule: number } | { picture: number };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -640,12 +667,21 @@ export type StepRan = { at: number; ok: boolean; said: string; input: string; st
  */
 export type StepRunKept = StepRan & { kind: StepKind; options?: OptionValues; results?: RunKeptResults };
 /**
- * What an earlier run gave, as its exits' sets held it: the molecules its
- * first exit held, those its second held, and what kind of set they make -
- * with how many of each did not read from a file, and were left out
- * (`unread`, `restUnread`).
+ * What a run gave, as its exits' sets hold it and an earlier run kept
+ * keeps it: the molecules its first exit held, those its second held, and
+ * what kind of set they make - with how many of each did not read from a
+ * file, and were left out (`unread`, `restUnread`). Where they are
+ * structures drawn, `drawn` holds them instead, each as drawn - its atoms,
+ * its bonds and where they lie - and the two lists of molecules are empty.
  */
-export type RunKeptResults = { molecules: Omit<Molecule3D, "id" | "at">[]; rest: Omit<Molecule3D, "id" | "at">[]; holds: SetKind; unread?: number; restUnread?: number };
+export type RunKeptResults = {
+  molecules: Omit<Molecule3D, "id" | "at">[];
+  rest: Omit<Molecule3D, "id" | "at">[];
+  holds: SetKind;
+  unread?: number;
+  restUnread?: number;
+  drawn?: { made: DrawnModel[]; rest: DrawnModel[] };
+};
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
  * their place among those that came in; and the files of its folder its
@@ -754,6 +790,8 @@ export type EditorState = {
   molecules3d: Molecule3D[];
   /** The texts the workspace holds, in their column's order. */
   texts: WorkspaceText[];
+  /** The texts its file was to hold that could not be read, after them in the column (`LostText`). */
+  textsLost: LostText[];
   /** The text its column shows, or showed as it was closed, by id; null, none. */
   textShown: number | null;
   /** Whether the column of texts is open beside the canvas. */
@@ -845,6 +883,8 @@ export type EditorState = {
   editText: (id: number, text: string) => void;
   /** A text taken out of the workspace, as one undo step. */
   removeText: (id: number) => void;
+  /** A text that could not be read taken out of the workspace, as one undo step. */
+  removeLostText: (id: number) => void;
   /** Texts deleted, their sheets with them, as one step. */
   removeTexts: (ids: Iterable<number>) => void;
   /** A text read in the column - its tab there again, where it had none - and shown. */

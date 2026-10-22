@@ -1,10 +1,10 @@
 import {
   exists,
   readTextFile,
-  writeTextFile,
   BaseDirectory,
   mkdir,
 } from "@tauri-apps/plugin-fs";
+import { writeAppFile } from "./io/writeDocument";
 import { filesSetUp, pixiSetUp, uvSetUp, type SetUpReach } from "./plugins/setUpSources";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -107,14 +107,9 @@ async function ensureDir(rel: string, baseDir: BaseDirectory) {
   }
 }
 
-async function writeJsonSafe(
-  rel: string,
-  data: unknown,
-  baseDir: BaseDirectory
-) {
-  const parent = rel.split("/").slice(0, -1).join("/");
-  if (parent) await ensureDir(parent, baseDir);
-  await writeTextFile(rel, JSON.stringify(data, null, 2), { baseDir });
+/** `data` as JSON at `rel` in Meno's local data folder, whole or not at all: a note cut short would have an environment set up again. */
+async function writeJsonSafe(rel: string, data: unknown) {
+  await writeAppFile(rel, JSON.stringify(data, null, 2), "local");
 }
 
 type PyEnvInfo = {
@@ -251,7 +246,7 @@ export async function ensurePyEnv(
     opts
   );
   // (set up, with the files besides the user was told of)
-  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) }, BaseDirectory.AppLocalData);
+  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) });
   const extra = besides(pluginOf(profile));
   // (who downloads what: the packages' maker, and Meno the plugin's files besides)
   const downloads = (maker: string) => `${maker}, fetched the first time it is needed, downloads ${extra.need ? "the packages, and Meno the rest" : "them"} - once`;

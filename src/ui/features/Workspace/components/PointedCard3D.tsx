@@ -24,7 +24,7 @@ export function ResultGroups({ groups }: { groups: CardGroups }) {
             {g.rows.map((r, k) => (
               <div key={k} className="contents">
                 <span className="text-gh-gray whitespace-nowrap">{r.label}</span>
-                <span className={`text-right ${r.marked ? "text-accel-accent" : "text-gh-black"}`}>{r.text}</span>
+                <span className={`text-right [overflow-wrap:anywhere] ${r.marked ? "text-accel-accent" : "text-gh-black"}`}>{r.text}</span>
               </div>
             ))}
           </div>
