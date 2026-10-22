@@ -206,6 +206,15 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   return [...out.values()];
 }
 
+/** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
+function onesSaid(entries: readonly SetEntry[]): string {
+  const groups = byCompound(entries);
+  const ones = groups.filter((g) => g.length === 1).length;
+  if (!ones) return "";
+  if (ones === groups.length) return groups.length === 1 ? " · the compound has one conformer" : " · each compound has one conformer";
+  return ` · ${ones === 1 ? "1 compound has" : `${ones} compounds have`} one conformer`;
+}
+
 const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" };
 
 /** Each compound's conformers within `kcal` of its lowest; the rest set aside. */
@@ -217,7 +226,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
     const lowest = least(g.map((e) => e.energy!));
     for (const e of g) ((e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9 ? kept : aside).push(e);
   }
-  return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept` };
+  return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
 }
 
 /**
@@ -250,7 +259,7 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, most: number,
   // (in the order they came)
   const kept = entries.filter((e) => keptSet.has(e));
   const aside = entries.filter((e) => !keptSet.has(e));
-  return { ok: true, holds, kept, aside, said: `${kept.length} of ${entries.length} kept` };
+  return { ok: true, holds, kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
@@ -355,7 +364,7 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
     // (from the electronic energy, which is all a set's entries carry today: said, so that its shares are not read as free energies' shares - the Populations node of lib/nodes weights G)
-    said: `${plural(compounds, "compound")} at ${kelvin} K, from electronic energies`,
+    said: `${plural(compounds, "compound")} at ${kelvin} K, from electronic energies${onesSaid(entries)}`,
   };
 }
 

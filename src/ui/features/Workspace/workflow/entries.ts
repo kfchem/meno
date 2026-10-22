@@ -171,16 +171,32 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.confor
 /**
  * What a set holds: what made it says - a Render step's, pictures; made by
  * the chemist, structures, where any is drawn - else a conformer set, where
- * a molecule in it is a conformer search's (`conformersOfOne`): each
+ * every molecule in it is a conformer search's (`conformersOfOne`): each
  * molecule in it a compound, its frames its conformers - else molecules in
- * 3D.
+ * 3D. A set mixing the two is molecules in 3D, and no step takes it
+ * (`plainAmong`).
  */
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
   if (set.made?.holds) return set.made.holds;
   const { structures } = setMembers(page, set);
   if (structures.length) return "structures";
-  return setMolecules(page, set).some(conformersOfOne) ? "conformers" : "molecules";
+  const molecules = setMolecules(page, set);
+  return molecules.length && molecules.every(conformersOfOne) ? "conformers" : "molecules";
+}
+
+/**
+ * Why a step takes no set of `molecules` mixing conformer sets with other
+ * molecules in 3D - neither the others' frames are conformers, nor a
+ * conformer set's conformers compounds of their own - naming the others,
+ * by their titles or names, else their places; none where it does not mix
+ * them.
+ */
+export function plainAmong(molecules: readonly Pick<Molecule3D, "conformerSet" | "title" | "name">[]): string | null {
+  const plain = molecules.flatMap((m, i) => (conformersOfOne(m) ? [] : [m.title || m.name || `molecule ${i + 1}`]));
+  if (!plain.length || plain.length === molecules.length) return null;
+  const named = plain.length > 3 ? `${plain.slice(0, 3).join(", ")} and ${plain.length - 3} more` : plain.join(", ");
+  return `It mixes conformer sets with other molecules in 3D: ${named} ${plain.length === 1 ? "is no conformer set" : "are no conformer sets"}`;
 }
 
 /** How many entries a set holds, of what kind of set: a structure each, a frame each of a molecule in 3D - one for a path to its last - or a picture each. */
@@ -566,4 +582,12 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
     b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
   }
   return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+/** What a set holds itself, on no page (`collection`), said - "118 molecules", "400 conformers" - for what goes with it when it is deleted; none where it holds none. */
+export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
+  if (!set.collection?.length) return undefined;
+  const { holds, entries } = countOf(page, set);
+  const noun = holds === "conformers" ? "conformer" : "molecule";
+  return `${entries.toLocaleString("en-US")} ${entries === 1 ? noun : `${noun}s`}`;
 }
