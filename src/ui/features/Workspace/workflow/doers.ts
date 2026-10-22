@@ -16,7 +16,7 @@ import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowStep } from "../store/types";
-import { KINDS, kindInfo, MENO_DOES, takes, type SetKind, type StepKind } from "./kinds";
+import { KINDS, kindInfo, MENO_DOES, takenBy, takes, type StepKind, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -43,11 +43,11 @@ export function kindsOf(by: string): StepKind[] {
  * it out (`takes`: CREST's conformer search starts from molecules in 3D,
  * not from structures drawn).
  */
-export function takesBy(kind: StepKind, by: string, holds: SetKind): boolean {
+export function takesBy(kind: StepKind, by: string, holds: ValueKind): boolean {
   if (!takes(kind, holds)) return false;
   if (!by || by === MENO.id) return true;
   const decl = pluginById(by)?.steps.find((d) => d.kind === kind);
-  return !decl?.takes || decl.takes.includes(holds);
+  return !decl?.takes || takenBy(decl.takes, holds);
 }
 
 /**

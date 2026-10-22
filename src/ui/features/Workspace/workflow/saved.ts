@@ -6,6 +6,7 @@
  */
 import type { Member, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
+import { numberIn, tableIn } from "../../../../lib/table";
 import type { OptionValues } from "../../../../lib/options";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
@@ -62,6 +63,12 @@ function readSet(v: unknown): WorkflowSet | null {
       const collection = b.collection.flatMap((m) => carriedMolecule(m));
       const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
+    })(),
+    // (a table or a number it holds, read as the file kept it - none where it does not read)
+    ...(() => {
+      const table = b.table != null ? tableIn(b.table) : undefined;
+      const number = b.number != null ? numberIn(b.number) : undefined;
+      return { ...(table ? { table } : {}), ...(number ? { number } : {}) };
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),

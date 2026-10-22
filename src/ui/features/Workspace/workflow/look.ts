@@ -58,6 +58,8 @@ export const PORT = 11 * PX;
 /** How far inside a set what it holds stays from its frame; how far below its top - under its name - it begins; and how far below its top its name stands. */
 export const SET_PAD = 14 * PX;
 export const SET_TOP = 36 * PX;
+/** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
+export const TABLE_PX = { w: 400, h: 196 };
 export const NAME_DOWN = 18 * PX;
 /** A result set's distance from its step, and between molecules in it. */
 export const GAP = 64 * PX;

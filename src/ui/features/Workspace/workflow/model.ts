@@ -3,12 +3,13 @@
  * steps and wires, numbered from one counter - each change an edit to the
  * document, so that undo takes it back and Save keeps it.
  */
+import type { Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
-import { SET_PAD, SET_TOP } from "./look";
+import { PX, SET_PAD, SET_TOP, TABLE_PX } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
 import { exitsOf, inputsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
@@ -23,6 +24,21 @@ export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet[
   const id = idOf(doc);
   const f = framed(frame);
   const set: WorkflowSet = { id, ...f, ...(made ? { made } : {}), ...(name ? { name } : {}), members: membersOf(lyingIn(doc, f)) };
+  return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
+}
+
+/**
+ * `doc` with a set holding `table` - read from a file, a text on the page -
+ * put down with its middle at `at`, as large as its first rows take, named
+ * `name`: a chemist's set, holding nothing else.
+ */
+/** How large a set holding a table is put down, on the page: its first rows, and what it is. */
+export const TABLE_SET = { w: TABLE_PX.w * PX + 2 * SET_PAD, h: SET_TOP + TABLE_PX.h * PX + SET_PAD };
+
+export function addTableSet(doc: WorkspaceDocument, at: { x: number; y: number }, table: Table, name?: string): WorkspaceDocument {
+  const { w, h } = TABLE_SET;
+  const id = idOf(doc);
+  const set: WorkflowSet = { id, x0: at.x - w / 2, x1: at.x + w / 2, y0: at.y - h / 2, y1: at.y + h / 2, ...(name ? { name } : {}), members: [], table };
   return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
 }
 
@@ -282,7 +298,8 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     // what the edit took out
     let kept = prior ? list.filter((p) => !(p.wasIn && !inside(set, p.at))) : list;
     // what the edit brought into a chemist's set, each at its place in reading order
-    if (!set.made && prior) {
+    // (a set holding a table or a number takes in nothing: what it holds is its own)
+    if (!set.made && !set.table && !set.number && prior) {
       const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));
       const heldAtoms = new Set(held.structures.flat());
       const add = (member: Member, at: { x: number; y: number }, w: { x: number; y: number } | null | undefined) => {

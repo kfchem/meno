@@ -1,7 +1,8 @@
 import clsx from "clsx";
 import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { WorkflowSet } from "../store/types";
-import { NAME_DOWN, SET_PAD, PX } from "./look";
+import { NAME_DOWN, SET_PAD, PX, TABLE_PX } from "./look";
+import { NumberBody, TableBody } from "./ValueBody";
 import { HAIR, Port, type PortLook } from "./StepCard";
 
 /** How wide the band along a frame's edge is that a press takes to size it, in px. */
@@ -109,6 +110,21 @@ export default function SetFrame(p: SetFrameProps) {
         >
           <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
           <span className="text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+        </div>
+      )}
+      {/* (a table or a number it holds: what it is, inside it - made smaller to fit a frame sized smaller) */}
+      {(p.set.table || p.set.number) && (
+        <div
+          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
+          style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
+        >
+          {p.set.table ? (
+            <div className="origin-top-left" style={{ width: TABLE_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / TABLE_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / TABLE_PX.h)})` }}>
+              <TableBody table={p.set.table} />
+            </div>
+          ) : (
+            p.set.number && <NumberBody number={p.set.number} />
+          )}
         </div>
       )}
       <Port look={p.give} label={`Out of ${p.name}`} data={{ "data-give-set": String(p.set.id) }} onPointerDown={p.onGiveDown} style={{ left: w, top: h / 2 }} />

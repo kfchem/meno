@@ -13,7 +13,7 @@ import { turnAfter, turnOver } from "../utils/align3d";
 import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, LARGE_SET, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
 import { pushTo, runMeno, type Outcome } from "./meno";
@@ -28,7 +28,7 @@ import { rmsd } from "./rmsd";
 export type RunWith = { extentOf: (m: Omit<Molecule3D, "id">, turn?: Turn3D) => Frame; byOf: (step: WorkflowStep) => string; now: number };
 
 /** What each kind of set is called, where a step says what it takes. */
-const SET_NAMES: Record<SetKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "conformer sets" };
+const SET_NAMES: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "conformer sets", table: "a table", number: "a number" };
 
 /** `doc` with the step `id` run - and first the steps before it that need it. */
 export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 0): WorkspaceDocument {
@@ -107,7 +107,7 @@ export type RunResults = NonNullable<StepRunKept["results"]>;
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
-  if (!set?.made?.holds || set.made.holds === "pictures") return undefined;
+  if (!set?.made?.holds || !isSetKind(set.made.holds)) return undefined;
   // (each exit's set: its collection, where it holds one, else its molecules on the page)
   const held = (b: WorkflowSet | undefined) => (b ? (b.collection ?? setMolecules(doc, b).map(({ id: _id, at: _at, ...m }) => m)) : []);
   const second = exitsOf(step.kind)[1];

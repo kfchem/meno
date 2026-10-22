@@ -20,7 +20,7 @@ import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, setEntries, type SetEntry } from "../../workflow/entries";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
-import { kindInfo, optionsOf, type SetKind, type StepKind } from "../../workflow/kinds";
+import { kindInfo, optionsOf, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, workedOf, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
@@ -201,7 +201,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   /** The kind of set a step's results make, for what came in (Render's pictures are laid by `finishRender`). */
   const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): SetKind => {
     const g = kindInfo(kind).gives;
-    return g === "same" || g === "pictures" ? holds : g;
+    return isSetKind(g) ? g : holds;
   };
 
   /** The results of a step put in, as one edit - what it set aside in its second exit's set - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */

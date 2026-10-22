@@ -13,5 +13,14 @@ export type StepKind = (typeof STEP_KINDS)[number];
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;
 export type SetKind = (typeof SET_KINDS)[number];
 
+/**
+ * What flows along a wire, besides (docs/WORKFLOWS-FOUNDATION.md, *Values
+ * and their types*): a set's kinds, a table (lib/table) or a number with
+ * its unit. Plugins take and give these, and bring none of their own; a
+ * chart is Meno's alone, and goes into no step.
+ */
+export const VALUE_KINDS = [...SET_KINDS, "table", "number"] as const;
+export type ValueKind = (typeof VALUE_KINDS)[number];
+
 /** Whether an id is a kind of step Meno defines. */
 export const isStepKind = (id: string): id is StepKind => (STEP_KINDS as readonly string[]).includes(id);

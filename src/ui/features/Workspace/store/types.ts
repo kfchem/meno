@@ -19,6 +19,7 @@ import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
+import type { NumberValue, Table } from "../../../../lib/table";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
@@ -618,6 +619,10 @@ export type WorkflowSet = {
   collection?: Omit<Molecule3D, "id" | "at">[];
   /** A result set opened from a file, or an earlier run's shown again: how many of its molecules did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
+  /** A table it holds (lib/table, docs/WORKFLOWS.md *Tables*): read from a file and put on the page, or a step's; no members then. */
+  table?: Table;
+  /** A number it holds, with its unit and what worked it out: a step's. */
+  number?: NumberValue;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
@@ -1350,6 +1355,8 @@ export type EditorState = {
   /** A step's result set kept in the workspace's file, or not: one step. */
   keepSet: (id: number, keep: boolean) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
+  /** A table put on the page as a set of its own, its middle at `at`, named `name` - a text read as one (lib/table `tableOfText`); its id. */
+  placeTable: (table: Table, at: { x: number; y: number }, name?: string) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
   /** A set's frame sized anew, or the set moved with all it holds: a run of either in one gesture one step. */

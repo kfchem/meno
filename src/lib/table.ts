@@ -307,3 +307,77 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
     left: [...[...left].map(([column, why]) => ({ column, why })), ...[...missing].map(([column, k]) => ({ column, why: `${k} with no value, missing in ${k === 1 ? "its row" : "their rows"}` }))],
   };
 }
+
+// ---- kept in a file ----
+
+/** A number, as a value: with its unit (or none), and what worked it out and where, where known. */
+export type NumberValue = { value: number; unit: Unit | "none"; by?: By; at?: At };
+
+const isCell = (c: unknown): c is Cell => c === null || typeof c === "string" || typeof c === "boolean" || (typeof c === "number" && Number.isFinite(c));
+const isText = (v: unknown): v is string => typeof v === "string";
+
+/** What a file kept of what worked a number out, or where: its text fields as they are; none where nothing reads. */
+function fieldsIn<T extends object>(v: unknown, numbers: readonly string[] = []): T | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const out: Record<string, string | number> = {};
+  for (const [k, x] of Object.entries(v)) if (isText(x) || (numbers.includes(k) && typeof x === "number" && Number.isFinite(x))) out[k] = x;
+  return Object.keys(out).length ? (out as T) : undefined;
+}
+
+/**
+ * A table as a workspace's file keeps it, read back: its columns - a
+ * number's unit read against Meno's units table - and its rows, each as
+ * many cells as there are columns, each of its column's kind or none; what
+ * was not read when it was made, and what was left, as they were. A column,
+ * row or cell that does not read is left out of none: the table does not
+ * read, and is none.
+ */
+export function tableIn(v: unknown): Table | undefined {
+  const t = v as { columns?: unknown; rows?: unknown; unread?: unknown; left?: unknown } | null;
+  if (!t || !Array.isArray(t.columns) || !Array.isArray(t.rows)) return undefined;
+  const columns: TableColumn[] = [];
+  for (const c of t.columns as { name?: unknown; kind?: unknown; unit?: unknown; by?: unknown; at?: unknown }[]) {
+    if (!isText(c?.name)) return undefined;
+    if (c.kind === "number") {
+      if (!(c.unit === "none" || (isText(c.unit) && isUnit(c.unit)))) return undefined;
+      const by = fieldsIn<By>(c.by);
+      const at = fieldsIn<At>(c.at, ["kelvin", "atm"]);
+      columns.push({ name: c.name, kind: "number", unit: c.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) });
+    } else if (c.kind === "text" || c.kind === "bool" || c.kind === "entry") columns.push({ name: c.name, kind: c.kind });
+    else return undefined;
+  }
+  const rows: Cell[][] = [];
+  for (const r of t.rows) {
+    if (!Array.isArray(r) || r.length !== columns.length || !r.every(isCell)) return undefined;
+    // (each cell of its column's kind, or none)
+    if (r.some((c, j) => c !== null && (columns[j].kind === "number" ? typeof c !== "number" : columns[j].kind === "bool" ? typeof c !== "boolean" : typeof c !== "string"))) return undefined;
+    rows.push(r as Cell[]);
+  }
+  const unread = Array.isArray(t.unread)
+    ? (t.unread as Partial<Unread>[]).flatMap((u) => (Number.isInteger(u?.row) && isText(u?.column) && isText(u?.text) && isText(u?.why) ? [{ row: u.row!, column: u.column!, text: u.text!, why: u.why! }] : []))
+    : [];
+  const left = Array.isArray(t.left) ? (t.left as { column?: unknown; why?: unknown }[]).flatMap((l) => (isText(l?.column) && isText(l?.why) ? [{ column: l.column, why: l.why }] : [])) : [];
+  return { columns, rows, unread, left };
+}
+
+/** A number as a workspace's file keeps it, read back: a finite value, its unit from Meno's units table or none; none where it does not read. */
+export function numberIn(v: unknown): NumberValue | undefined {
+  const n = v as { value?: unknown; unit?: unknown; by?: unknown; at?: unknown } | null;
+  if (!n || typeof n.value !== "number" || !Number.isFinite(n.value) || !(n.unit === "none" || (isText(n.unit) && isUnit(n.unit)))) return undefined;
+  const by = fieldsIn<By>(n.by);
+  const at = fieldsIn<At>(n.at, ["kelvin", "atm"]);
+  return { value: n.value, unit: n.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) };
+}
+
+/**
+ * A text read as a table, where it is one: a file named .csv or .tsv that
+ * reads to a column at least; or another text that reads to two columns or
+ * more, every row of them - none where it does not, so that prose is not
+ * offered as a table.
+ */
+export function tableOfText(name: string, text: string): Table | null {
+  const t = readTable(text);
+  if (!t.columns.length || !t.rows.length) return null;
+  if (/\.(csv|tsv)$/i.test(name)) return t;
+  return t.columns.length >= 2 && !t.unread.some((u) => u.why.endsWith("columns")) ? t : null;
+}

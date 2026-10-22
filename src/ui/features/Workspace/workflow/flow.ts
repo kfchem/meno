@@ -7,7 +7,7 @@ import type { WorkspaceDocument } from "../document";
 import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { signatureOf } from "../utils/drawnLink";
 import { holdsOf, setMembers, setMolecules } from "./entries";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind, isSetKind } from "./kinds";
 import { byOf, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
@@ -70,8 +70,8 @@ export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE
   const madeBy = set.made?.step;
   if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return false;
   const holds = givesOf(doc, from);
-  // (pictures - a Render step's - no step takes)
-  if (holds === "pictures") return false;
+  // (pictures - a Render step's - and charts no step takes)
+  if (holds === "pictures" || holds === "chart") return false;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
   const takes = portOf(step.kind, port).takes;
   if (holds == null) return true;
@@ -85,7 +85,8 @@ export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKin
   const set = findSet(doc, from.set);
   if (!set) return null;
   const holds = holdsOf(doc, set);
-  if (holds === "pictures") return null;
+  // (a table, a number, a chart - no entries to give a step that works on them)
+  if (!isSetKind(holds)) return null;
   const { structures } = setMembers(doc, set);
   return { holds, molecules: setMolecules(doc, set), structures };
 }

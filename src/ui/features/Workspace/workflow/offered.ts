@@ -22,7 +22,7 @@ type Flow = Parameters<typeof givesOf>[0];
 export function offeredSteps(flow: Flow, wire?: WireEnd): QuickGroup[] {
   const set = wire ? givesOf(flow, wire) : null;
   const offered = (kind: StepKind, by: string) =>
-    kind === "as-conformers" ? !!wire && set === "molecules" : !wire || set == null || (set !== "pictures" && takesBy(kind, by, set));
+    kind === "as-conformers" ? !!wire && set === "molecules" : !wire || set == null || (set !== "pictures" && set !== "chart" && takesBy(kind, by, set));
   return doersAdded()
     .map((d) => ({
       by: d.id,
