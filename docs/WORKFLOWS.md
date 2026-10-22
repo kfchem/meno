@@ -562,8 +562,14 @@ states an undo goes back to as well.
   jobs at once). A job takes the cores Settings gives each - unset, all
   that jobs may use, so one runs at a time - and the memory its plugin
   declares (ORCA's %maxcore for each process, Gaussian's %Mem); one that
-  declares none is counted by its cores alone. A job larger than the
-  limits runs alone.
+  declares none is counted by its cores alone. So a small job waits behind
+  a large one that does not fit yet, though it would fit itself: the
+  order is kept, and nothing is starved. A job larger than the limits,
+  though no larger than the computer, runs alone, and its step says so (*1
+  job asks for more memory (30.0 GB) than jobs may use (24.0 GB): it runs
+  alone*); one larger than the computer - more cores or memory than it
+  has - is refused, saying so, never started to swap or fail inside its
+  program.
 - **A step on many entries makes one job for each** (decided), queued as
   above - each with its own log, a failure its own, several at once
   where Settings allows.

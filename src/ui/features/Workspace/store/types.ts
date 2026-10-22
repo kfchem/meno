@@ -659,7 +659,15 @@ export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [
  * were, and its jobs - kept in the workspace, so that one opened again picks
  * them up.
  */
-export type StepRunning = { at: number; input: string; options: OptionValues; jobs: StepJob[]; kind?: StepKind };
+export type StepRunning = {
+  at: number;
+  input: string;
+  options: OptionValues;
+  jobs: StepJob[];
+  kind?: StepKind;
+  /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words - each runs alone. */
+  over?: string;
+};
 /** A step on the page: its kind, where its card's top left stands, who does it - Meno, or a plugin, by id - its options, what it last did - and its run, while its jobs wait or run. */
 export type WorkflowStep = {
   id: number;

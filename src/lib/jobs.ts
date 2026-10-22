@@ -127,6 +127,20 @@ export function limitsOf(c: Pick<CalculationSettings, "coresAll" | "memoryAll">,
   return { cores, memory: Number.isFinite(memory) ? memory : 0 };
 }
 
+/**
+ * What a step says of its jobs that ask for more memory than jobs may use
+ * (`limits`, MiB) - none more than the computer has: those are refused -
+ * in plain words: each runs alone, nothing beside it. Nothing where none
+ * does, or where jobs may use memory without limit (nought).
+ */
+export function overLimits(jobs: readonly { memory?: number }[], limits: { memory: number }): string | null {
+  const over = jobs.filter((j) => limits.memory > 0 && (j.memory ?? 0) > limits.memory);
+  if (!over.length) return null;
+  const gb = (mib: number) => `${(mib / 1024).toFixed(1)} GB`;
+  const most = Math.max(...over.map((j) => j.memory!));
+  return `${over.length === 1 ? "1 job asks" : `${over.length} jobs ask`} for more memory (${gb(most)}) than jobs may use (${gb(limits.memory)}): ${over.length === 1 ? "it runs" : "each runs"} alone`;
+}
+
 /** What jobs may use, told to this computer's runner: every job waiting takes it up at once. */
 export const writeJobLimits = (limits: { cores: number; memory: number }) => invoke<void>("jobs_limits", limits);
 

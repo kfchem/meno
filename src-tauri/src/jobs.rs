@@ -237,9 +237,23 @@ fn limits_in(root: &Path) -> Limits {
 }
 
 /// Whether a job of `cores` and `memory` may start beside those running, using `used`: none running, always - a
-/// job larger than the limits runs alone, never never; else where it fits within what is left.
+/// job larger than the limits runs alone, never never; else where it fits within what is left. Memory of nought,
+/// either way, counts for nothing: a job that declares none, or limits with none (the computer's not told).
 fn fits(limits: Limits, used: (u32, u64), running: u32, cores: u32, memory: u64) -> bool {
-    running == 0 || (used.0 + cores.max(1) <= limits.cores && (memory == 0 || used.1 + memory <= limits.memory))
+    running == 0 || (used.0 + cores.max(1) <= limits.cores && (memory == 0 || limits.memory == 0 || used.1 + memory <= limits.memory))
+}
+
+/// Why a job of `cores` and `memory` (MiB) cannot run on `here` at all - it asks for more than the computer has,
+/// and would only swap or fail inside its program - in plain words; none where it can.
+pub fn beyond(here: Resources, cores: u32, memory: u64) -> Option<String> {
+    let gb = |mib: u64| format!("{:.1} GB", mib as f64 / 1024.0);
+    if cores > here.cores {
+        return Some(format!("it asks for {cores} cores, and this computer has {}", here.cores));
+    }
+    if here.memory > 0 && memory > here.memory {
+        return Some(format!("it asks for {} of memory, and this computer has {}", gb(memory), gb(here.memory)));
+    }
+    None
 }
 
 /// How many jobs of `spec`'s size run at once within `limits`: what a waiting one's pace is reckoned by.
@@ -1972,6 +1986,10 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         None => plugin_program(&data, &plugin_dir, &payload.plugin, &payload.program, &payload.args)?,
     };
     let then = then_of(&found, &payload.program, &payload.then)?;
+    // (one asking for more than the computer has never starts: refused, saying so)
+    if let Some(why) = beyond(computer(), payload.cores.unwrap_or(1), payload.memory.unwrap_or(0)) {
+        return Err(format!("It cannot run on this computer: {why}"));
+    }
 
     let spec = JobSpec {
         plugin: payload.plugin.clone(),
@@ -2599,8 +2617,16 @@ mod tests {
         assert!(fits(l, (4, 8_000), 1, 4, 8_000));
         assert!(!fits(l, (4, 8_000), 1, 5, 1_000));
         assert!(!fits(l, (4, 8_000), 1, 2, 8_001));
-        // (a job that declares no memory is counted by its cores alone)
+        // (a job that declares no memory is counted by its cores alone; and limits with none - the computer's memory
+        //  not told - count none)
         assert!(fits(l, (4, 16_000), 1, 4, 0));
+        assert!(fits(Limits { cores: 8, memory: 0 }, (4, 16_000), 1, 4, 8_000));
+        // (more than the computer has: refused, in plain words; within it, though over the limits, not)
+        let here = Resources { cores: 10, memory: 32 * 1024 };
+        assert_eq!(beyond(here, 12, 0).as_deref(), Some("it asks for 12 cores, and this computer has 10"));
+        assert_eq!(beyond(here, 4, 40 * 1024).as_deref(), Some("it asks for 40.0 GB of memory, and this computer has 32.0 GB"));
+        assert_eq!(beyond(here, 10, 32 * 1024), None);
+        assert_eq!(beyond(Resources { cores: 10, memory: 0 }, 4, 40 * 1024), None);
         assert_eq!(slots_for(l, &JobSpec { cores: 3, ..read_spec(&sized(&temp(), "x", 3, 0)).unwrap() }), 2);
 
         // in the queue: two of 4 cores in 6 - the second waits, though a core-sized job behind it would fit
