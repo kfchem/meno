@@ -14,7 +14,7 @@ import { SET_PAD, SET_TOP, CHIP } from "./look";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 /** Whether a molecule in 3D shows a frames chip below it (Molecule3DView): it has frames, or a calculation it was read from. */
-export const hasChip = (m: Pick<Molecule3D, "frames" | "calc"> & Partial<Pick<Molecule3D, "title" | "stack">>) => framesOf(m) > 1 || !!m.calc || named3d(m);
+export const hasChip = (m: Pick<Molecule3D, "frames" | "calc"> & Partial<Pick<Molecule3D, "title" | "stack" | "failed">>) => framesOf(m) > 1 || !!m.calc || named3d(m) || !!m.failed?.some(Boolean);
 /** A molecule in 3D called by a name of its own - a structure read from coordinates in a text - not one of a stack, whose chip says its record's: its chip says it. */
 export const named3d = (m: Partial<Pick<Molecule3D, "title" | "stack">>) => !!m.title && !m.stack;
 

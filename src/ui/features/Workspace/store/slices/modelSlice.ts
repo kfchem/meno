@@ -228,6 +228,7 @@ export const createModelSlice = (
     // which is asked about on its own
     const among = selectionScheme(get());
     const ids = (xs: { id: number }[]) => new Set(xs.map((x) => x.id));
+    const held = [...selFlow.sets].filter((id) => get().sets.find((b) => b.id === id)?.collection?.length);
     const idle = [...selFlow.steps].filter((id) => !steps.find((s) => s.id === id)?.running);
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>
@@ -251,10 +252,13 @@ export const createModelSlice = (
         ),
         selCycles,
         ),
-        selFlow.sets,
+        // (but a set that holds its molecules itself, on no page: asked about first, after the rest)
+        [...selFlow.sets].filter((id) => !held.includes(id)),
         idle,
       ),
     );
+    // (those asked about: the selection's sets that hold their molecules themselves - so a selection of nothing else asks, not nothing)
+    if (held.length) set({ askDeleteSet: held });
     if (!deleted) return;
     forgetDeleted(set);
     // (the steps' jobs' folders taken away, as when a step is deleted on its own)
@@ -523,6 +527,7 @@ export const createModelSlice = (
       hoveredWire: null,
       openStep: null,
       wireDrag: null,
+      wireRefused: null,
       workflowMenu: null,
       turns3d: {},
       frames3d: {},
@@ -765,6 +770,8 @@ export const createModelSlice = (
   deleteDrawn: (part: Drawn, molecules3d: number[] = []) => {
     // (a workflow's parts cut with it - but not a step running, which is asked about on its own)
     const steps = get().steps.filter((s) => part.flow?.steps.some((x) => x.id === s.id) && !s.running);
+    // (a set that holds its molecules itself, on no page, which a copy does not carry: left, said by the cut)
+    const left = (part.flow?.sets ?? []).filter((b) => get().sets.find((x) => x.id === b.id)?.collection?.length).map((b) => b.id);
     const edited = doc.edit("cut", (d) =>
       removeParts(
         ops.removeInks(
@@ -790,13 +797,14 @@ export const createModelSlice = (
         ),
         (part.inks ?? []).map((x) => x.id),
         ),
-        (part.flow?.sets ?? []).map((b) => b.id),
+        (part.flow?.sets ?? []).map((b) => b.id).filter((id) => !left.includes(id)),
         steps.map((s) => s.id),
       ),
     );
-    if (!edited) return;
+    if (!edited) return left.length;
     forgetDeleted(set);
     for (const s of steps) get().forgetStepJobs(s);
+    return left.length;
   },
 
   expandAbbreviation: (id: number) => {

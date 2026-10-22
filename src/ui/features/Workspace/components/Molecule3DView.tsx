@@ -256,6 +256,10 @@ export type Molecule3DViewProps = {
  * changes goes over to what it is to be rather than jumping: another frame,
  * another look, its place on an undo, its coming and going.
  */
+/** The imaginary frequencies each of a molecule's `n` frames was judged to have: a conformer set's, frame by frame; a single geometry's, its calculation's, of its last. */
+const imaginaryShown = (m: Pick<Molecule3D, "imaginary" | "calc">, n: number): (number[] | null)[] | undefined =>
+  m.imaginary?.length === n ? m.imaginary : m.calc?.imaginary ? [...new Array<null>(n - 1).fill(null), m.calc.imaginary] : undefined;
+
 export default function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
   const solid = solidOf(m, style);
@@ -1958,7 +1962,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {(solid.frames.length > 1 || m.conformerSet || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
-          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m)) && !props.stacked ? (
+          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
@@ -1983,6 +1987,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               said={m.said}
               area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}
+              {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
+              {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
+              {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>

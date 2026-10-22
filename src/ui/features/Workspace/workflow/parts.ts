@@ -31,16 +31,19 @@ const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =
  * The parts among the sets and steps given: those sets - one made by a step
  * not among them, as a set the chemist drew - those steps, without what they
  * did (their runs are theirs, and their jobs'), and the wires among them. A
- * set goes without its members, which are this page's: put down elsewhere,
- * it holds what then lies inside it (workflow/model `membersSettled`) - its
- * structures drawn with the records they had (`WorkflowSet.carried`).
+ * set goes without its members, which are this page's, and without a large
+ * set's own molecules (`collection`, and how many of them did not read),
+ * which are the set's: put down elsewhere, it holds what then lies inside it
+ * (workflow/model `membersSettled`) - its structures drawn with the records
+ * they had (`WorkflowSet.carried`) - and a step's exit is empty until its
+ * step runs again - its molecules never copied twice.
  */
 export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet<number>): FlowParts {
   return {
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members, keep: _k, notKept: _n, put: _p, carried: _c, ...b }) => {
+      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, unread: _u, carried: _r, ...b }) => {
         // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
         const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
         const set = b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b;

@@ -75,6 +75,8 @@ describe("a conformer that does not read", () => {
     numbers: [1, 2, 3, 4],
     shares: [0.4, 0.3, 0.2, 0.1],
     degeneracies: [1, 2, 1, 2],
+    failed: [null, null, { kind: "program", why: "it stopped" }, { kind: "program", why: "it did not converge" }],
+    imaginary: [null, [-42], [-310], null],
     calc: {
       readers: ["test-reader 1.0"],
       results: [
@@ -93,6 +95,11 @@ describe("a conformer that does not read", () => {
     expect(m.numbers).toEqual([1, 2, 4]);
     expect(m.shares).toEqual([0.4, 0.3, 0.1]);
     expect(m.degeneracies).toEqual([1, 2, 2]);
+  });
+
+  it("takes why it failed and its imaginary frequencies with it", () => {
+    expect(m.failed?.map((f) => f?.why ?? null)).toEqual([null, null, "it did not converge"]);
+    expect(m.imaginary).toEqual([null, [-42], null]);
   });
 
   it("is counted with the frames its file left out, and said", () => {
