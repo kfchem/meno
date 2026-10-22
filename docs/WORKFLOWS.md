@@ -1385,7 +1385,8 @@ says what worked them out and where, where that is known.
 
 **Read from a file** (`readTable`): CSV, or TSV where the first line has a
 tab, or values separated by semicolons where it has those and no commas
-(as spreadsheets write CSV where a comma is the decimal mark) - read as
+and the second line has them too (as spreadsheets write CSV where a comma
+is the decimal mark; one column's name may hold a semicolon) - read as
 RFC 4180 has it (quoted fields may hold the delimiter, line breaks and
 doubled quotes); a byte-order mark before it is left out.
 - The first line names the columns, each with its unit in brackets:
@@ -1413,7 +1414,8 @@ unspecified) - and each property a column.
   each, named for what tells it apart from the others ("energy · B",
   "G · 310 K", "energy · step 4", "energy · plugin not stated geometry
   1a2b"), numbered only where that still leaves two alike - never one
-  column of values that are not alike.
+  column of values that are not alike. The name is made from what differs
+  among the entries there are: a new way arriving can change it.
 - A property with no value is missing in its row, and counted.
 - A property an entry has not computed (failed, not applicable) is no
   value in its row.

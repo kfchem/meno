@@ -109,10 +109,15 @@ export function numberOf(text: string): number | null {
 const TRUE = new Set(["true", "yes"]);
 const FALSE = new Set(["false", "no"]);
 
-/** The delimiter a file's first line shows: a tab; else a semicolon where it has semicolons and no commas (as spreadsheets write CSV where a comma is the decimal mark); else a comma. */
-export function delimiterOf(first: string): "\t" | ";" | "," {
+/**
+ * The delimiter a file's first lines show: a tab; else a semicolon where
+ * the first line has semicolons and no commas and the second has
+ * semicolons too (as spreadsheets write CSV where a comma is the decimal
+ * mark) - a single column's name may hold a semicolon; else a comma.
+ */
+export function delimiterOf(first: string, second?: string): "\t" | ";" | "," {
   if (first.includes("\t")) return "\t";
-  return first.includes(";") && !first.includes(",") ? ";" : ",";
+  return first.includes(";") && !first.includes(",") && (second == null || second.includes(";")) ? ";" : ",";
 }
 
 /**
@@ -127,8 +132,8 @@ export function delimiterOf(first: string): "\t" | ";" | "," {
  */
 export function readTable(given: string): Table {
   const text = given.replace(/^\uFEFF/, "");
-  const first = text.split(/\r?\n/, 1)[0] ?? "";
-  const all = records(text, delimiterOf(first));
+  const [first = "", second] = text.split(/\r?\n/, 2);
+  const all = records(text, delimiterOf(first, second));
   const unread: Unread[] = [];
   if (!all.length) return { columns: [], rows: [], unread, left: [] };
   // (a name given twice: the second "name (2)", and said)

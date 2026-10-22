@@ -124,7 +124,10 @@ describe("a table read from a file, as programs write them", () => {
   });
 
   it("reads values separated by semicolons where the first line has those and no commas", () => {
-    expect(["a\tb", "a;b", "a,b", "a;b,c"].map(delimiterOf)).toEqual(["\t", ";", ",", ","]);
+    expect(["a\tb", "a;b", "a,b", "a;b,c"].map((l) => delimiterOf(l))).toEqual(["\t", ";", ",", ","]);
+    // (a single column whose name holds a semicolon: its rows have none - one column, read whole)
+    const one = readTable("note; remark\nhello\nthere\n");
+    expect([one.columns.map((c) => c.name), one.rows, one.unread]).toEqual([["note; remark"], [["hello"], ["there"]], []]);
     const t = readTable("name;shift (none)\nC1;7,26\nC2;128.4\n");
     expect(t.columns.map((c) => c.name)).toEqual(["name", "shift"]);
     // (a decimal comma is no number Meno reads: said where it is)
