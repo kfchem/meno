@@ -660,7 +660,7 @@ export type WorkflowSet = {
 export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus };
 /** A structure drawn as a step gave it: the drawing, and its record where it has one. */
 export type DrawnModel = Model & { record?: DrawnRecord };
-/** One of a set's members: a structure drawn, by its atoms' ids - with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
+/** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
 export type Member = { structure: number[]; record?: DrawnRecord } | { molecule: number } | { picture: number };
 /**
  * The core a series of structures drawn shares (Enumerate's: docs/WORKFLOWS-FOUNDATION.md,
