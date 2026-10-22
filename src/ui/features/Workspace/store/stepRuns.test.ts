@@ -10,6 +10,15 @@ const TOO_LARGE = "(too large)";
 /** Where set, what each job's start waits on once its folder is made - a step's jobs started one by one, as the runner does. */
 let holdStart: Promise<void> | null = null;
 const idOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+/** What a job gave, as one digest - of its log and files, as the test has them: 64 hex digits, as the runner's. */
+function digestOf(id: string): string {
+  const j = jobs.get(id)!;
+  let h = 7;
+  for (const c of JSON.stringify([j.log, Object.entries(j.files).sort()])) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return (h >>> 0).toString(16).padStart(64, "0");
+}
+/** Each program installed separately as it is now (its stamp), by where it is; one not there cannot be told. */
+const stamps: Record<string, string> = {};
 
 vi.mock("../../../../lib/jobs", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/jobs")>()),
@@ -27,6 +36,11 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
     return { text: log.slice(from), next: log.length };
   },
   jobFiles: async (id: string) => Object.keys(jobs.get(id)?.files ?? {}),
+  jobDigest: async (id: string) => digestOf(id),
+  programStamp: async (path: string) => {
+    if (!stamps[path]) throw `${path}: not there`;
+    return stamps[path];
+  },
   readJobFile: async (id: string, name: string) => {
     const text = jobs.get(id)!.files[name];
     if (text === TOO_LARGE) throw `${name} is too large to read: 300 MB, past 256 MB`;
@@ -195,7 +209,7 @@ function waters(n: number) {
 }
 
 /** A job of the test's ended: done with what it wrote, or as `state` says. */
-const end = (n: number, state: Job["state"] = "done", more: Partial<Job> = {}) =>
+const end = (n: number, state: Job["state"] = "done", more: Partial<Job & { files: Record<string, string>; log: string }> = {}) =>
   Object.assign(jobs.get(idOf(n))!, { state, started: 1000, ended: 2000, ...(state === "done" ? { files: { "xtbopt.log": "-5.0705" } } : {}), ...more });
 
 describe("a step that runs a plugin's program", () => {
@@ -611,7 +625,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((x) => x.id === step)!.kind).toBe("frequencies");
   });
 
-  it("asks before a running step is deleted - and, deleted, stops its jobs and takes their files away", async () => {
+  it("asks before a running step is deleted - and, deleted, stops its jobs, their files left until finished jobs are cleared", async () => {
     const { st, step } = editor();
     void st().runStep(step);
     await settle();
@@ -624,6 +638,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().askDeleteStep).toBeNull();
     await settle();
     expect(asked.stopped).toEqual([idOf(1)]);
+    expect(asked.removed).toEqual([]);
   });
 
   it("deleted while it runs - the only step running, its jobs looked at no more - ends its run: nothing waits on it for good", async () => {
@@ -764,6 +779,73 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await third;
     expect(st().steps.find((s) => s.id === step)!.ran!.keys).not.toEqual(ran.keys);
+  });
+
+  it("takes a job up again only while it gives what it gave: its files changed since, the step stops on it", async () => {
+    const { st, step } = editor();
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await first;
+    expect(st().steps.find((s) => s.id === step)!.ran!.gave).toEqual([digestOf(idOf(1))]);
+    // (kept with the workspace, beside its key)
+    expect(readWorkspace(workspaceText(st()))!.workflow!.steps.find((s) => s.id === step)!.ran!.gave).toEqual([digestOf(idOf(1))]);
+    // (its output written over since - by hand, say, or by another program: taken up again, it is not what was read)
+    jobs.get(idOf(1))!.files["xtbopt.log"] = "-9.9999";
+    await st().runStep(step);
+    await settle();
+    await settle();
+    await st().lookAtJobs();
+    await settle();
+    expect(asked.started).toHaveLength(1);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({
+      ok: false,
+      said: `Output Meno cannot account for: ${idOf(1)} (its files have changed since they were read)`,
+      unaccounted: [idOf(1)],
+    });
+  });
+
+  it("keys a program installed separately by itself as it is now: replaced, its job runs again; not to be told, none is taken up again", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n1";
+    const orca = () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never;
+    const [prepare, collect] = [worker.prepare.getMockImplementation()!, worker.collect.getMockImplementation()!];
+    worker.prepare.mockImplementation(async () => orca());
+    worker.collect.mockImplementation(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    try {
+      const { st } = editor();
+      const step = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, step);
+      const runOnce = async (n: number) => {
+        const ran = st().runStep(step);
+        await settle();
+        await settle();
+        if (jobs.has(idOf(n)) && jobs.get(idOf(n))!.state === "waiting") end(n, "done", { log: "ORCA's output" });
+        await st().lookAtJobs();
+        await ran;
+        return st().steps.find((s) => s.id === step)!.ran!;
+      };
+      const once = await runOnce(1);
+      expect(once.ok).toBe(true);
+      // (the same program as it was: taken up again)
+      expect((await runOnce(2)).said).toMatch(/ \u00b7 Reused$/);
+      expect(asked.started).toHaveLength(1);
+      // (replaced - though it says the same version: another key, run)
+      stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n2";
+      const replaced = await runOnce(2);
+      expect(asked.started).toHaveLength(2);
+      expect(replaced.keys).not.toEqual(once.keys);
+      // (not to be told: run, nothing taken up again)
+      delete stamps["/Applications/orca_6/orca"];
+      await runOnce(3);
+      expect(asked.started).toHaveLength(3);
+    } finally {
+      worker.prepare.mockImplementation(prepare);
+      worker.collect.mockImplementation(collect);
+    }
   });
 
   it("stops on output it cannot account for - a job whose key is not its own, or one made before its run began - naming it, bringing nothing in", async () => {

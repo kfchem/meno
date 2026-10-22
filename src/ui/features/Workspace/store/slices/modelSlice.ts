@@ -256,7 +256,7 @@ export const createModelSlice = (
     );
     if (!deleted) return;
     forgetDeleted(set);
-    // (the steps' jobs' folders taken away, as when a step is deleted on its own)
+    // (the steps' jobs stopped, as when a step is deleted on its own)
     for (const s of gone) get().forgetStepJobs(s);
   },
 

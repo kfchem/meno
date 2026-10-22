@@ -629,7 +629,7 @@ export type Member = { structure: number[] } | { molecule: number } | { picture:
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
  * and, where it ran jobs, whether it was stopped, how long it took (ms), and
- * its jobs, by id, whose logs and files are kept until the step is deleted;
+ * its jobs, by id, whose logs and files are kept until finished jobs are cleared;
  * and the kind and options it ran with.
  */
 export type StepRan = {
@@ -642,6 +642,8 @@ export type StepRan = {
   jobs?: string[];
   /** Its jobs' keys, one for each of `jobs` (lib/jobKeys): what a later run finds a job to take up again by. */
   keys?: string[];
+  /** What each of `jobs` gave as it was read, as one digest (lib/jobs `jobDigest`) - none where it was not read: a job taken up again must give the same. */
+  gave?: (string | null)[];
   /** Stopped on output Meno cannot account for: the jobs it could not, by id, and the run as it stood - for *Adopt* to take up again. */
   unaccounted?: string[];
   held?: StepRunning;
@@ -678,6 +680,8 @@ export type StepJob = {
   key?: string;
   /** A job whose key this workspace had run to the end before: not run again, what it gave taken up again. */
   reused?: true;
+  /** A job taken up again: what it gave when it was first read, as one digest - what it gives now must be the same. */
+  gave?: string;
 };
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
@@ -1374,9 +1378,9 @@ export type EditorState = {
    * document as saved as it was - the look is Settings', not the document's.
    */
   fitResultSets: () => void;
-  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
+  /** A step's jobs forgotten, as it is deleted: those running stopped, its run ended - no folder taken away (another step, or a copy of the workspace, may use it). */
   forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran" | "runs">) => void;
-  /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
+  /** Whether a step's last run's jobs are kept still - not those of jobs taken away as the step went before they ran. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
   /** Molecules in 3D put on the page as a set of their own, named `name`, its middle at `at` or the free space nearest it: one step. */

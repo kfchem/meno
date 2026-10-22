@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, jobsFolder, limitsOf, listJobs, runningOf } from "../../../lib/jobs";
+import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, jobsFolder, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
@@ -50,8 +50,9 @@ export default function JobSettings() {
     });
   };
 
-  // where jobs are made: a working folder chosen, or Meno's own (changed only while none waits or runs)
-  const [folder, setFolder] = useState<{ path: string; own: boolean } | null>(null);
+  // where jobs are made: a working folder chosen, or Meno's own (changed only while none waits or runs) - one chosen
+  // and not there said so, never another taken in its place
+  const [folder, setFolder] = useState<JobsFolder | null>(null);
   const [folderWhy, setFolderWhy] = useState<string | null>(null);
   useEffect(() => {
     if (!isTauri()) return;
@@ -95,7 +96,9 @@ export default function JobSettings() {
             <span className="block text-xs text-gh-gray truncate" title={folder.path}>
               {folder.own ? "Meno's own folder" : folder.path}
             </span>
+            {folder.missing && <span className="block text-xs text-accel-accent">Not there now: no job runs until it is, or another is chosen</span>}
             {folderWhy && <span className="block text-xs text-accel-accent">{folderWhy}</span>}
+            <span className="block text-xs text-gh-gray">Best on this computer's own disk: a network or synced folder may lose a job's files as it runs</span>
           </span>
           <button onClick={() => void choose(false)} className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base">
             Choose…

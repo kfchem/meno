@@ -94,6 +94,9 @@ function readRan(v: unknown): StepRan | undefined {
   // (a key for each job, or none: one missing would take a job up again by another's)
   const given = (r as { keys?: unknown }).keys;
   const keys = Array.isArray(given) && given.length === jobs.length && jobs.length === (r.jobs as unknown[]).length && given.every(isJobKey) ? (given as string[]) : undefined;
+  // (what each gave, as one digest, beside its key: or none - one out of place would check a job by another's)
+  const digests = (r as { gave?: unknown }).gave;
+  const gave = keys && Array.isArray(digests) && digests.length === jobs.length && digests.every((g) => g === null || isJobKey(g)) ? (digests as (string | null)[]) : undefined;
   const options = optionsIn(r.options);
   return {
     at: r.at,
@@ -104,6 +107,7 @@ function readRan(v: unknown): StepRan | undefined {
     ...(isNum(r.took) && r.took >= 0 ? { took: r.took } : {}),
     ...(jobs.length ? { jobs } : {}),
     ...(keys ? { keys } : {}),
+    ...(gave ? { gave } : {}),
     ...readAccounting(r),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),
@@ -175,6 +179,7 @@ function readRunning(v: unknown): StepRunning | undefined {
             ...(Array.isArray(j.size) && j.size.length === 2 && j.size.every((n) => isNum(n) && n > 0) ? { size: [j.size[0], j.size[1]] as [number, number] } : {}),
             ...(isJobKey((j as { key?: unknown }).key) ? { key: (j as { key: string }).key } : {}),
             ...((j as { reused?: unknown }).reused === true ? { reused: true as const } : {}),
+            ...(isJobKey((j as { gave?: unknown }).gave) ? { gave: (j as { gave: string }).gave } : {}),
           },
         ]
       : [],

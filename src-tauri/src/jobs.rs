@@ -32,6 +32,7 @@
 
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -1884,11 +1885,29 @@ struct WorkingFolder {
     path: String,
 }
 
-/// The working folder chosen for jobs in Settings, where one is and is still there; none, Meno's own.
+/// The working folder chosen for jobs in Settings, where one is - there or not: a drive not connected, say, is
+/// still the one chosen, and no job is made anywhere else until the chemist chooses again. None, Meno's own.
 fn chosen_folder(data: &Path) -> Option<PathBuf> {
     let chosen: WorkingFolder = serde_json::from_str(&fs::read_to_string(data.join(WORKING_FOLDER)).ok()?).ok()?;
     let path = PathBuf::from(chosen.path);
-    (path.is_absolute() && path.is_dir()).then_some(path)
+    path.is_absolute().then_some(path)
+}
+
+/// Why no job can be made in the working folder chosen: it is not there.
+fn missing_folder(chosen: &Path) -> String {
+    format!(
+        "The folder chosen for jobs is not there: {}. Connect it, or choose another in Settings, Calculations, Jobs",
+        chosen.display()
+    )
+}
+
+/// The folder new jobs are made in (`jobs_roots`' first) - never another where the working folder chosen is not
+/// there: said instead.
+fn new_jobs_root(data: &Path) -> Result<PathBuf, String> {
+    if let Some(chosen) = chosen_folder(data).filter(|c| !c.is_dir()) {
+        return Err(missing_folder(&chosen));
+    }
+    Ok(jobs_roots(data).remove(0))
 }
 
 /// The jobs' folders: the one new jobs are made in - the working folder chosen, its `meno-jobs`, else Meno's own -
@@ -1902,7 +1921,7 @@ fn jobs_roots(data: &Path) -> Vec<PathBuf> {
 }
 
 fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = jobs_roots(&crate::local_data_dir(app)?).remove(0);
+    let root = new_jobs_root(&crate::local_data_dir(app)?)?;
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
 }
@@ -1912,11 +1931,13 @@ fn all_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     Ok(jobs_roots(&crate::local_data_dir(app)?))
 }
 
-/// The working folder jobs are made in, and whether it is Meno's own (Settings, *Calculations*, *Jobs*).
+/// The working folder jobs are made in, whether it is Meno's own, and whether it is not there (Settings,
+/// *Calculations*, *Jobs*).
 #[derive(Serialize)]
 pub struct JobsFolder {
     pub path: String,
     pub own: bool,
+    pub missing: bool,
 }
 
 #[tauri::command]
@@ -1924,7 +1945,7 @@ pub fn jobs_folder(app: AppHandle) -> Result<JobsFolder, String> {
     let data = crate::local_data_dir(&app)?;
     let chosen = chosen_folder(&data);
     let path = chosen.clone().unwrap_or_else(|| jobs_in(&data));
-    Ok(JobsFolder { path: path.to_string_lossy().into_owned(), own: chosen.is_none() })
+    Ok(JobsFolder { path: path.to_string_lossy().into_owned(), own: chosen.is_none(), missing: chosen.is_some_and(|c| !c.is_dir()) })
 }
 
 /// The working folder jobs are made in, chosen (`path`), or Meno's own again (none): a folder that is there, that
@@ -2220,6 +2241,57 @@ pub async fn job_folder(app: AppHandle, id: String) -> Result<String, String> {
     Ok(job_dir(&app, &id)?.join(WORK).to_string_lossy().into_owned())
 }
 
+/// What a job gave, as one digest: the SHA-256 of its log and of every file in its work folder, each by its name -
+/// a file changed since, added or taken away gives another. Kept with the run that read it, and compared when the
+/// job is taken up again (docs/WORKFLOWS.md, *Job keys*).
+fn digest_of(dir: &Path) -> std::io::Result<String> {
+    let mut sum = Sha256::new();
+    let mut one = |label: &str, path: &Path| -> std::io::Result<()> {
+        sum.update(label.as_bytes());
+        sum.update([0]);
+        match File::open(path) {
+            Ok(mut f) => {
+                sum.update(f.metadata()?.len().to_le_bytes());
+                std::io::copy(&mut f, &mut sum)?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => sum.update(b"none"),
+            Err(e) => return Err(e),
+        }
+        Ok(())
+    };
+    one("log", &dir.join(LOG))?;
+    let mut names = work_files(dir);
+    names.sort();
+    for name in names {
+        one(&format!("work/{name}"), &dir.join(WORK).join(&name))?;
+    }
+    Ok(sum.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// What a job gave, as one digest (`digest_of`): read off Meno's way, its files however large.
+#[tauri::command]
+pub async fn job_digest(app: AppHandle, id: String) -> Result<String, String> {
+    let dir = job_dir(&app, &id)?;
+    tauri::async_runtime::spawn_blocking(move || digest_of(&dir))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("job {id}'s files could not be read: {e}"))
+}
+
+/// A program installed separately as it is now, for a job's key: where it is, its size, and when it was last
+/// written - a program replaced, though it says the same version, or none, gives another key.
+fn stamp_of(path: &Path) -> Result<String, String> {
+    let real = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
+    let meta = fs::metadata(&real).map_err(|e| format!("{}: {e}", real.display()))?;
+    let written = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).ok_or_else(|| format!("{}: no time written", real.display()))?;
+    Ok(format!("{}\n{}\n{}", real.display(), meta.len(), written.as_nanos()))
+}
+
+#[tauri::command]
+pub async fn program_stamp(path: String) -> Result<String, String> {
+    stamp_of(Path::new(&path))
+}
+
 #[tauri::command]
 pub async fn job_stop(app: AppHandle, id: String) -> Result<(), String> {
     ask_stop(&job_dir(&app, &id)?).map_err(|e| e.to_string())
@@ -2256,9 +2328,11 @@ fn clear_finished(root: &Path) -> Result<u32, String> {
     let mut cleared = 0;
     for e in fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
         let dir = e.path();
-        if e.file_name().to_string_lossy().starts_with(TAKEN) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        // (nothing but what Meno named: a folder chosen for jobs may hold others' - left as they are)
+        if name.starts_with(TAKEN) {
             let _ = fs::remove_dir_all(&dir);
-        } else if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
+        } else if job_id_ok(&name) && dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
             cleared += 1;
         }
     }
@@ -2817,6 +2891,16 @@ mod tests {
         assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
         assert!(choose_folder(&data, Some("relative/path")).is_err());
         assert!(choose_folder(&data, Some(data.join("not there").to_str().unwrap())).is_err());
+        // (one chosen and gone since - a drive not connected: still the one chosen, and no job made in Meno's own
+        //  instead - said, until another is chosen)
+        let gone = temp();
+        choose_folder(&data, Some(gone.to_str().unwrap())).unwrap();
+        fs::remove_dir_all(&gone).unwrap();
+        assert_eq!(jobs_roots(&data), vec![gone.join(IN_CHOSEN), jobs_in(&data)]);
+        assert_eq!(new_jobs_root(&data), Err(missing_folder(&gone)));
+        assert!(!gone.exists());
+        choose_folder(&data, None).unwrap();
+        assert_eq!(new_jobs_root(&data), Ok(jobs_in(&data)));
         for d in [data, scratch, elsewhere] {
             let _ = fs::remove_dir_all(d);
         }
@@ -3043,6 +3127,44 @@ mod tests {
     }
 
     #[test]
+    fn a_job_s_digest_is_of_its_log_and_every_file_it_wrote() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let first = digest_of(&dir).unwrap();
+        assert_eq!(digest_of(&dir).unwrap(), first);
+        assert_eq!(first.len(), 64);
+        fs::write(dir.join(LOG), "ran\n").unwrap();
+        let logged = digest_of(&dir).unwrap();
+        assert_ne!(logged, first);
+        fs::write(dir.join(WORK).join("out.txt"), "1.0").unwrap();
+        let wrote = digest_of(&dir).unwrap();
+        assert_ne!(wrote, logged);
+        // (a byte changed; the same bytes under another name)
+        fs::write(dir.join(WORK).join("out.txt"), "1.1").unwrap();
+        assert_ne!(digest_of(&dir).unwrap(), wrote);
+        fs::write(dir.join(WORK).join("out.txt"), "1.0").unwrap();
+        assert_eq!(digest_of(&dir).unwrap(), wrote);
+        fs::rename(dir.join(WORK).join("out.txt"), dir.join(WORK).join("out2.txt")).unwrap();
+        assert_ne!(digest_of(&dir).unwrap(), wrote);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_program_s_stamp_changes_as_it_is_replaced() {
+        let root = temp();
+        let program = root.join("prog");
+        fs::write(&program, "one").unwrap();
+        let first = stamp_of(&program).unwrap();
+        assert_eq!(stamp_of(&program).unwrap(), first);
+        // (replaced by one as long, later)
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(&program, "two").unwrap();
+        assert_ne!(stamp_of(&program).unwrap(), first);
+        assert!(stamp_of(&root.join("none")).is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn takes_finished_jobs_away_out_of_the_way_first_and_what_was_left_of_others() {
         let root = temp();
         let done = shell(&root, ECHO, 1);
@@ -3055,9 +3177,14 @@ mod tests {
         let left = root.join(format!("{TAKEN}0123"));
         fs::create_dir_all(left.join("work")).unwrap();
         fs::write(left.join(SPEC), fs::read(waiting.join(SPEC)).unwrap()).unwrap();
+        // (a folder not named as Meno names jobs - another's, in a working folder chosen - left, finished or not)
+        let theirs = root.join("their-results");
+        fs::create_dir_all(theirs.join("work")).unwrap();
+        fs::copy(done.join(SPEC), theirs.join(SPEC)).unwrap();
+        fs::copy(done.join(RECORD), theirs.join(RECORD)).unwrap();
         assert_eq!(clear_finished(&root).unwrap(), 2);
         assert!(!done.exists() && !failed.exists() && !left.exists());
-        assert!(waiting.exists());
+        assert!(waiting.exists() && theirs.exists());
         // (and one alone, by the same way: nothing of it left under its id)
         let one = shell(&root, ECHO, 1);
         write_record(&one, &JobRecord { ended: Some(3), ..JobRecord::new(JobState::Stopped, 1) }).unwrap();

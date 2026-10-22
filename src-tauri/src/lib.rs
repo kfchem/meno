@@ -1065,7 +1065,9 @@ pub fn run() {
             jobs::computer_resources,
             jobs::jobs_limits,
             jobs::jobs_folder,
-            jobs::jobs_folder_choose
+            jobs::jobs_folder_choose,
+            jobs::job_digest,
+            jobs::program_stamp
         ])
         .build(context)
         .expect("error while building tauri application")

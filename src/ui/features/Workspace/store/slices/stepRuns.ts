@@ -8,7 +8,26 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
+import {
+  computerCores,
+  computerResources,
+  finished,
+  jobDigest,
+  jobFiles,
+  jobFolder,
+  jobOf,
+  limitsOf,
+  listJobs,
+  overLimits,
+  programStamp,
+  readJobFile,
+  readJobLog,
+  removeJob,
+  runningOf,
+  startJob,
+  stopJob,
+  type Job,
+} from "../../../../../lib/jobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
 import { jobKey, reusable } from "../../../../../lib/jobKeys";
@@ -48,7 +67,7 @@ const NO_RECORD = "it has no record of how it ran";
 /** How long before its run a job may have been asked for and be the run's own: the moments a run takes to ready its jobs. */
 const STARTED_BEFORE_MS = 60_000;
 
-/** How long Meno waits for a stopped job to end before its files are taken away with its step. */
+/** How long Meno waits for a stopped job to end before its files are taken away - one started for a step gone since. */
 const STOP_WAIT_MS = 15_000;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -513,6 +532,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, message(e), at, key);
     }
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
+    // (each program installed separately as it is now, for its jobs' keys - one replaced gives other keys, though it
+    //  says the same version or none: one that cannot be told, and no job is taken up again)
+    let stamps: string[] | null = [];
+    for (const where of paths.values()) {
+      const stamp = await programStamp(where).catch(() => null);
+      if (stamp == null) {
+        stamps = null;
+        break;
+      }
+      stamps.push(stamp);
+    }
     // (the jobs this workspace ran before, and how each stands now: one whose key ran to the end is not run again)
     const states = new Map((await listJobs().catch((): Job[] => [])).map((j) => [j.id, j.state]));
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
@@ -536,18 +566,25 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           label: `${entries[p.entries[0]]?.name ?? compoundLetter(entries[p.entries[0]]?.compound ?? 0)} ${kindInfo(step.kind).name}`,
           ...(path ? { path } : {}),
         };
-        const jobKeyed = jobKey({
+        const jobKeyed = await jobKey({
           plugin: plugin.id,
           pluginVersion: plugin.version,
           program: p.program,
           programVersion: useInstalled.getState().chosen[programKey(plugin.id, p.program)]?.version ?? said,
+          stamps: stamps ?? [],
           args: p.args,
           ...(p.stdin ? { stdin: p.stdin } : {}),
           ...(p.then ? { then: p.then } : {}),
           files: p.files,
         });
-        const again = reusable([...(doc.getState().steps ?? [])], jobKeyed, (j) => states.get(j));
-        jobs.push({ id: again ?? (await startJob({ ...ask, key: jobKeyed })), entries: p.entries, reads: p.reads, key: jobKeyed, ...(again ? { reused: true as const } : {}) });
+        const again = stamps ? reusable([...(doc.getState().steps ?? [])], jobKeyed, (j) => states.get(j)) : null;
+        jobs.push({
+          id: again?.id ?? (await startJob({ ...ask, key: jobKeyed })),
+          entries: p.entries,
+          reads: p.reads,
+          key: jobKeyed,
+          ...(again ? { reused: true as const, gave: again.gave } : {}),
+        });
       }
     } catch (e) {
       for (const j of jobs) void stopJob(j.id).catch(() => {});
@@ -791,13 +828,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         bringIn(id, [], "molecules", { at: run.at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: run.input, took, jobs: ids, ...as });
         return close();
       }
-      // (outputs Meno cannot account for - a job whose key is not the one it was asked for with, or one it took up
-      //  that this run did not start nor took up again - stop the step, naming them: nothing comes in)
+      // (what each job gave, as one digest - its log and every file it wrote: kept with the run, and one taken up again
+      //  checked by it)
+      const gave = await Promise.all(run.jobs.map((j, k) => (!records[k] || lost[k] ? null : jobDigest(j.id).catch(() => null))));
+      // (outputs Meno cannot account for - a job whose key is not the one it was asked for with, one taken up again
+      //  whose files changed since they were read, or one it took up that this run did not start nor took up again -
+      //  stop the step, naming them: nothing comes in)
       const unaccounted = run.jobs.flatMap((j, k) => {
         const r = records[k];
         if (!r || lost[k] || run.adopted?.[j.id] != null) return [];
         if (unrecorded[k]) return [{ id: j.id, why: "its folder has no record of how it ran" }];
         if (j.key && r.key !== j.key) return [{ id: j.id, why: "its key is not the one it was asked for with" }];
+        if (j.reused && j.gave && gave[k] !== j.gave) return [{ id: j.id, why: "its files have changed since they were read" }];
         if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [{ id: j.id, why: "made before this run began" }];
         return [];
       });
@@ -949,7 +991,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const again = run.jobs.filter((j) => j.reused).length;
       const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
       const said = `${ok ? found : failed >= total ? whys[0] : `${failed} of ${total} failed \u00b7 ${whys[0]}`}${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
-      const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!) } : {};
+      const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave } : {};
       // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
       const adopted = run.adopted && Object.keys(run.adopted).length ? { adopted: run.adopted } : {};
       bringIn(id, worked, givesFor(kind, holds ?? "molecules"), { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...adopted, ...as });
@@ -1135,34 +1177,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       doc.amend((x) => setRunning(x, id, { ...held, adopted: { ...(held.adopted ?? {}), [job]: Date.now() } }), { unsaved: true });
       await finishStep(id);
     },
-    /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */
+    /** Whether a step's last run's jobs are kept still: not those taken away as the step went while they were being started. */
     jobsKept: (step: { ran?: StepRan }) => (step.ran?.jobs ?? []).some((j) => !forgotten.has(j)),
-    /** A step deleted: its jobs stopped, and their files taken away once they have ended - those of every run it keeps, not its last alone - and those waiting for its run let go, as when it is stopped. */
+    /**
+     * A step deleted: the jobs of its run stopped, and those waiting for its
+     * run let go, as when it is stopped. No job's folder is taken away with
+     * it: another step may have taken a job up again, and a copy of the
+     * workspace saved elsewhere names the same jobs - their folders go when
+     * finished jobs are cleared (Settings, *Calculations*, *Jobs*).
+     */
     forgetJobs: (step: { id: number; running?: { jobs: StepJob[] }; ran?: StepRan; runs?: readonly StepRan[] }) => {
       // (not left to the next look at the jobs: where it was the only step running, there is none)
       const waiting = waiters.get(step.id) ?? [];
       waiters.delete(step.id);
       waiting.forEach((f) => f());
-      // (a job another step's run took up again - or whose run this one took up - stays while that step keeps it)
-      const kept = new Set(
-        (doc.getState().steps ?? [])
-          .filter((s) => s.id !== step.id)
-          .flatMap((s) => [...(s.running?.jobs.map((j) => j.id) ?? []), ...(s.ran?.jobs ?? []), ...(s.runs ?? []).flatMap((r) => r.jobs ?? [])]),
-      );
-      const jobs = [...new Set([...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? []), ...(step.runs ?? []).flatMap((r) => r.jobs ?? [])])].filter((j) => !kept.has(j));
-      for (const job of jobs) {
-        forgotten.add(job);
-        void (async () => {
-          await stopJob(job).catch(() => {});
-          const until = Date.now() + STOP_WAIT_MS;
-          while (Date.now() < until) {
-            const r = await jobOf(job).catch(() => null);
-            if (!r || finished(r.state)) break;
-            await new Promise((go) => setTimeout(go, 500));
-          }
-          await removeJob(job).catch(() => {});
-        })();
-      }
+      for (const j of step.running?.jobs ?? []) if (!j.reused) void stopJob(j.id).catch(() => {});
     },
   };
 }

@@ -70,6 +70,10 @@ export const readJobLog = (id: string, from: number) => runnerOf(id).log(id, fro
 /** The files in a job's folder, by their paths there. */
 export const jobFiles = (id: string) => runnerOf(id).files(id);
 export const readJobFile = (id: string, name: string) => runnerOf(id).read(id, name);
+/** What a job gave, as one digest - compared when it is taken up again. */
+export const jobDigest = (id: string) => runnerOf(id).digest(id);
+/** A program installed separately as it is now, for a job's key: where it is, its size, and when it was written. */
+export const programStamp = (path: string) => invoke<string>("program_stamp", { path });
 /** Where a job's files are, for *Show files*. */
 export const jobFolder = (id: string) => runnerOf(id).folder(id);
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
@@ -79,10 +83,18 @@ export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
 export const clearFinishedJobs = () => runnerOf().clearFinished();
 
-/** The working folder this computer's jobs are made in (its `meno-jobs`), and whether it is Meno's own. */
-export const jobsFolder = () => invoke<{ path: string; own: boolean }>("jobs_folder");
+/** Where this computer's jobs are made (Settings, *Calculations*, *Jobs*). */
+export type JobsFolder = {
+  /** The working folder chosen (Meno makes its `meno-jobs` in it), or Meno's own. */
+  path: string;
+  own: boolean;
+  /** The folder chosen is not there - a drive not connected, say: no job is made until it is, or another is chosen. */
+  missing: boolean;
+};
+/** The working folder this computer's jobs are made in, whether it is Meno's own, and whether it is there. */
+export const jobsFolder = () => invoke<JobsFolder>("jobs_folder");
 /** Jobs made in a working folder chosen - or in Meno's own again (null): refused, saying why, while any job waits or runs. */
-export const chooseJobsFolder = (path: string | null) => invoke<{ path: string; own: boolean }>("jobs_folder_choose", { path });
+export const chooseJobsFolder = (path: string | null) => invoke<JobsFolder>("jobs_folder_choose", { path });
 
 /** This computer's cores, and its memory in MiB (nought where it could not be told), as its system says. */
 export const computerResources = () => invoke<{ cores: number; memory: number }>("computer_resources");
