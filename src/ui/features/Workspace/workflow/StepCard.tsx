@@ -146,7 +146,7 @@ export type StepCardProps = {
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
-  /** Its inputs, in the kind's order, each lit or not as a wire is drawn: one port each down its left side, named where there is more than one. What it gives is its exits' sets, beside it - it has no port of its own for that. */
+  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
@@ -167,7 +167,6 @@ export type StepCardProps = {
   /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
   onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
-  onTakeDown: (e: ReactPointerEvent, port: string) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
 };
@@ -306,16 +305,6 @@ export default function StepCard(p: StepCardProps) {
         )}
         </AnimatePresence>
       </div>
-      {p.inputs.map((input, k) => (
-        <Port
-          key={input.id}
-          look={input.look}
-          label={p.inputs.length > 1 ? `${input.name} into ${p.info.name}` : `Into ${p.info.name}`}
-          data={{ "data-take": `${p.step.id}:${input.id}` }}
-          onPointerDown={(e) => p.onTakeDown(e, input.id)}
-          style={{ left: 0, top: portDown(k) / PX }}
-        />
-      ))}
       {/* (an input's name, where there is more than one: outside the card, level with its port) */}
       {p.inputs.length > 1 &&
         p.inputs.map((input, k) => (

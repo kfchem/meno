@@ -184,8 +184,20 @@ export function canonicalRanks(input: LayoutInput): number[] {
  * another for any other, its mirror image included where it is chiral.
  */
 export function canonicalText(input: LayoutInput): string {
+  return canonicalWritten(input).text;
+}
+
+/**
+ * `canonicalText`, and whether the search for the order that writes it
+ * least was complete: where it ran out of steps (`settleBudget` - very
+ * large and very symmetric molecules), the text is the least of the orders
+ * tried, so one molecule may be written two ways. It is still the whole
+ * molecule written out, so two molecules are never written the same.
+ */
+export function canonicalWritten(input: LayoutInput): { text: string; complete: boolean } {
   const { rank, first, withStereo } = classed(input);
-  return written(input, first, settled(rank, input.atoms.length, withStereo, (r) => written(input, first, r)));
+  const found = search(rank, input.atoms.length, withStereo, (r) => written(input, first, r));
+  return { text: written(input, first, found.r), complete: !found.cut };
 }
 
 /** The molecule's own order `way` (old index to new) from its ranks (`canonicalRanks`). */

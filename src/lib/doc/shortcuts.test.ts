@@ -73,6 +73,13 @@ describe("saveIntent", () => {
     expect(saveIntent({ key: "s" })).toBeNull();
     expect(saveIntent({ key: "a", ctrlKey: true })).toBeNull();
   });
+
+  it("saves once as the keys are pressed, not again as they are held", () => {
+    expect(saveIntent({ key: "s", metaKey: true, repeat: false })).toBe("save");
+    expect(saveIntent({ key: "s", metaKey: true, repeat: true })).toBeNull();
+    expect(saveIntent({ key: "s", ctrlKey: true, repeat: true })).toBeNull();
+    expect(saveIntent({ key: "S", ctrlKey: true, shiftKey: true, repeat: true })).toBeNull();
+  });
 });
 
 describe("isCleanUpKey", () => {

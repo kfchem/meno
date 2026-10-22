@@ -18,8 +18,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// How large the log grows before it is begun again, in bytes.
-const MOST: u64 = 5 * 1024 * 1024;
+/// How large the log grows before it is begun again, in bytes - the network's
+/// record (net.rs) too.
+pub(crate) const MOST: u64 = 5 * 1024 * 1024;
 /// How many lines are kept from before the log's folder is known, to be written once it is.
 const EARLY: usize = 200;
 /// The longest text taken from the page for one line, in bytes.
@@ -135,34 +136,35 @@ impl Log {
         if self.stopped {
             return;
         }
-        let n = line.len() as u64;
-        let size = fs::metadata(&self.path).map_or(0, |m| m.len());
-        if size > 0 && size + n > self.most {
-            self.begin_again();
-            if self.stopped {
-                return;
-            }
+        // (where it can be neither begun again nor emptied, written no more)
+        if !room_for(&self.path, line.len() as u64, self.most) {
+            self.stopped = true;
+            return;
         }
         // (opened for this line alone, and closed again)
         if let Ok(mut file) = open(&self.path) {
             let _ = file.write_all(line.as_bytes());
         }
     }
+}
 
-    /// The log begun again, the one before kept as meno.log.1 in place of
-    /// the one before that; where it cannot be moved there, emptied; where
-    /// it cannot be emptied either, written no more.
-    fn begin_again(&mut self) {
-        let before = self.path.with_extension("log.1");
-        let _ = fs::remove_file(&before);
-        if fs::rename(&self.path, &before).is_ok() {
-            return;
-        }
-        let emptied = OpenOptions::new().write(true).open(&self.path).and_then(|f| f.set_len(0));
-        if emptied.is_err() {
-            self.stopped = true;
-        }
+/// Room made in the file at `path` for `n` bytes more: where they would take
+/// it past `most`, it is begun again, the one before kept beside it with
+/// ".1" after its name (meno.log.1) in place of the one before that; where
+/// it cannot be moved there, emptied. False where it could be neither.
+pub(crate) fn room_for(path: &Path, n: u64, most: u64) -> bool {
+    let size = fs::metadata(path).map_or(0, |m| m.len());
+    if size == 0 || size + n <= most {
+        return true;
     }
+    let mut before = path.as_os_str().to_owned();
+    before.push(".1");
+    let before = PathBuf::from(before);
+    let _ = fs::remove_file(&before);
+    if fs::rename(path, &before).is_ok() {
+        return true;
+    }
+    OpenOptions::new().write(true).open(path).and_then(|f| f.set_len(0)).is_ok()
 }
 
 /// A line as the log holds it: the time (UTC), its source, its text - each

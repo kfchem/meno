@@ -1,0 +1,144 @@
+{
+ "reader": "RDKit 2026.03.6",
+ "command": [
+  "MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts",
+  "<chem python> scripts/identity/rdkit.py"
+ ],
+ "cases": [
+  {
+   "name": "methanol",
+   "molfile": "de96a45f524c8991c53246a48ee99bc0673625dcda8996e9f79e4f85971d64db",
+   "smiles": "CO"
+  },
+  {
+   "name": "methanol, its H drawn",
+   "molfile": "291652a904cd88dd37d7de33575d98de5b011b10c141ada2f7f2f699a949be49",
+   "smiles": "CO"
+  },
+  {
+   "name": "chlorobenzene",
+   "molfile": "653868d3f08866668be0f7148720896b448ba8de00f96c65eacc6db4df00c98a",
+   "smiles": "Clc1ccccc1"
+  },
+  {
+   "name": "chlorobenzene, an H drawn beside the Cl",
+   "molfile": "c950db7b931b38e834cc76373bba0b5145be46e7232b5ca7d36b019ec791f469",
+   "smiles": "Clc1ccccc1"
+  },
+  {
+   "name": "toluene",
+   "molfile": "1d7df30a1627fafbe7d18f1ffc3a5f5dac65cd8d49405e5244999979c2cfd4e2",
+   "smiles": "Cc1ccccc1"
+  },
+  {
+   "name": "toluene, the other Kekule structure",
+   "molfile": "8d8cb4c1117a24e18bc7e3d9d45fded9228cd931dddc8be3f89d9ea27c5b54e7",
+   "smiles": "Cc1ccccc1"
+  },
+  {
+   "name": "(R)-bromochlorofluoromethane",
+   "molfile": "f6db16a0be8aa90dbc5e741d68fc2346a53d893f8f824894a9d5ad29ddada489",
+   "smiles": "F[C@@H](Cl)Br"
+  },
+  {
+   "name": "(S)-bromochlorofluoromethane",
+   "molfile": "9e540c239ba71a75de2fc509ba7a885116ed05ef3f98f7a9622821a6298016af",
+   "smiles": "F[C@H](Cl)Br"
+  },
+  {
+   "name": "(R)-bromochlorofluoromethane, its H drawn",
+   "molfile": "1a25e784d193c275d980abf7800ca2ceafbfdf3733656b31c6e8260ac423bc40",
+   "smiles": "F[C@@H](Cl)Br"
+  },
+  {
+   "name": "(S)-alanine",
+   "molfile": "5c7c3ada4b119cd9dfa2f475945456077d1406d50c25f139c355eaaadda051ca",
+   "smiles": "C[C@H](N)C(=O)O"
+  },
+  {
+   "name": "(R)-alanine",
+   "molfile": "1197b855f88156fdf7e4cb72296766d314bbb0230dd9217bcec62c6ef0f1c11d",
+   "smiles": "C[C@@H](N)C(=O)O"
+  },
+  {
+   "name": "(E)-1,2-difluoroethene",
+   "molfile": "4a8c050c33cbebd26e5d578639ae6e370ab7d333acfd236fb1b0ebcb99d22bff",
+   "smiles": "F/C=C/F"
+  },
+  {
+   "name": "(Z)-1,2-difluoroethene",
+   "molfile": "3c389907f4caea73638a6010fd16e768c3e1309559de1a698b9e5e6ad3c70dbc",
+   "smiles": "F/C=C\\F"
+  },
+  {
+   "name": "(Z)-1,2-difluoroethene, its H drawn",
+   "molfile": "b8ae115a749f9b34a04ffc6432c17c633bb8a742b9a4697e7912dc1671090b49",
+   "smiles": "F/C=C\\F"
+  },
+  {
+   "name": "(E)-but-2-ene",
+   "molfile": "0e63de53bb5d6582a17c6e3dd09f934ee8e256b7a6908d7e966b39f6d953cb42",
+   "smiles": "C/C=C/C"
+  },
+  {
+   "name": "(Z)-but-2-ene",
+   "molfile": "adeb0b5f49a7921fae5fd7fbea030587cebdfb6b381dc38136c6483108f0711e",
+   "smiles": "C/C=C\\C"
+  },
+  {
+   "name": "fluoroethene",
+   "molfile": "20aabbe2064a12b67fefcc631d0b4ff22d012d8aad7b15cbcc5c7409bf09a042",
+   "smiles": "C=CF"
+  },
+  {
+   "name": "fluoroethene, both H of its CH2 drawn",
+   "molfile": "415491b0c3ea9912eefa8b9eef9e8ff45728def78b0aa487b6635989c39b03a7",
+   "smiles": "C=CF"
+  },
+  {
+   "name": "4-hydroxypyridine",
+   "molfile": "d72d27d4647108a591065e8b657bdd1d2fbfa19e561969b877c8e02d2a541b0f",
+   "smiles": "Oc1ccncc1"
+  },
+  {
+   "name": "4-pyridone",
+   "molfile": "eccf89599a189f66a7e0c8eb45d864fef4ecbddb304c9c166696084e51e6d384",
+   "smiles": "O=c1cc[nH]cc1"
+  },
+  {
+   "name": "methane",
+   "molfile": "df4122de85401f3da22374c3f275159580ce5cca0d9920fb657c5a4143deb578",
+   "smiles": "C"
+  },
+  {
+   "name": "deuteriomethane",
+   "molfile": "00b712b10ed442aa7f5a297d0c1548a6c41c1354afb5a2c9963f9c5772005233",
+   "smiles": "[2H]C"
+  },
+  {
+   "name": "tritiomethane",
+   "molfile": "b2f3e85d8744a3125c3de5613d4e0c38e58dec9fd788c42e5445c39f35022c65",
+   "smiles": "[3H]C"
+  },
+  {
+   "name": "methane-13C",
+   "molfile": "6052cc6f482f0ffecf357be57c653779e6804318a17753eea8f9d99b04e2bc99",
+   "smiles": "[13CH4]"
+  },
+  {
+   "name": "hydrogen",
+   "molfile": "dd68ebb1b20318f50d8b824fabb612824792c4c009a789c30e4b7579a844f80d",
+   "smiles": "[H][H]"
+  },
+  {
+   "name": "1,2-dimethylcyclooctatetraene, across a double bond",
+   "molfile": "eea021c5337163bf4c38d62fba6dbac96bc85aa4d5faa678fc89155eaa85ed53",
+   "smiles": "CC1=C(C)/C=C\\C=C/C=C\\1"
+  },
+  {
+   "name": "1,2-dimethylcyclooctatetraene, across a single bond",
+   "molfile": "ea572863ff4de561bd4b657c593a5981c3b1e838c6886a86317e01137005f0fa",
+   "smiles": "CC1=C/C=C\\C=C/C=C\\1C"
+  }
+ ]
+}

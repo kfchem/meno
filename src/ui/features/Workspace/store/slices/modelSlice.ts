@@ -23,7 +23,7 @@ import { selectionScheme } from "../../utils/selectionScheme";
 import { relinked } from "../../utils/drawnLink";
 import { pictureBytes } from "../../../../../lib/picture/held";
 import { resultKey } from "../../../../../lib/calc/results";
-import type { Workspace } from "../../utils/workspace";
+import type { SavedText, Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
@@ -432,10 +432,15 @@ export const createModelSlice = (
 
   openWorkspace: (ws: Workspace, start = false) => {
     const { drawn } = ws;
-    // (its texts, those read - utils/workspace `readTexts` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered)
+    // (its texts, those read - utils/workspace `readKept` - numbered from the first; a molecule one is of, by its place, as the molecules are numbered;
+    // and those whose words could not be read after them, numbered on, kept as the file named them: store/types `LostText`)
     const read = ws.texts.filter((t) => t.text != null);
-    const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) }));
-    const shown = ws.textShown != null ? read.indexOf(ws.texts[ws.textShown]) : -1;
+    const unread = ws.texts.filter((t) => t.text == null);
+    const placed = (t: SavedText) => ({ ...(t.at ? { at: t.at } : {}), ...(t.point != null ? { point: t.point } : {}), ...(t.reading === false ? { reading: false as const } : {}), ...(t.icon ? { icon: true as const } : {}), ...(t.of ? { of: "step" in t.of ? t.of : { molecule: t.of.molecule + 1 } } : {}) });
+    const texts = read.map((t, i) => ({ id: i + 1, name: t.name, text: t.text!, ...placed(t) }));
+    const textsLost = unread.map((t, i) => ({ id: read.length + i + 1, name: t.name, sha256: t.sha256, ...placed(t) }));
+    const shownSaved = ws.textShown != null ? ws.texts[ws.textShown] : undefined;
+    const shown = shownSaved ? (shownSaved.text != null ? texts[read.indexOf(shownSaved)] : textsLost[unread.indexOf(shownSaved)])?.id ?? null : null;
     const opened = (d: WorkspaceDocument) => {
       const next = ops.withImportedScheme(ops.replaceModel(d, drawn), ops.schemeOf(drawn));
       // (a workflow's parts by their own ids, each set's members as the file said them: utils/workspace)
@@ -450,7 +455,8 @@ export const createModelSlice = (
           aromaticEnabled: ws.aromaticEnabled,
           aromaticRings: ws.aromaticRings,
           texts,
-          nextTextId: texts.length + 1,
+          textsLost,
+          nextTextId: ws.texts.length + 1,
           pdfs: ws.pdfs.map((p, i) => ({ ...p, id: i + 1 })),
           nextPdfId: ws.pdfs.length + 1,
           pictures: (drawn.pictures ?? []).map((p, i) => ({ ...p, id: i + 1 })),
@@ -490,7 +496,7 @@ export const createModelSlice = (
     });
     // (and its column showing the text or the PDF it showed, or closed)
     const pdfShown = ws.pdfShown != null ? ws.pdfShown + 1 : null;
-    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: texts[Math.max(shown, 0)]?.id ?? null, pdfShown, textsOpen: shown >= 0 || pdfShown != null }));
+    set((prev: EditorState) => ({ ...prev, turns3d, frames3d, lists3d, stacksShown, recordsShown, model: shownModel(prev.fullModel, recordsShown), textShown: shown ?? texts[0]?.id ?? textsLost[0]?.id ?? null, pdfShown, textsOpen: shown != null || pdfShown != null }));
   },
 
   /** A file opened over what the canvas holds: one step, arrow and all. */
