@@ -109,6 +109,35 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertTrue(r["ok"])
         self.assertEqual(r["result"]["smiles"], "N[C@@H](Cc1ccc(Cl)cc1)C(=O)O")
 
+    def test_writes_a_reaction_smiles_reactants_agents_products(self):
+        # (an RXN file as Meno writes one - "rrrpppaaa", each molecule a $MOL - acetic acid and ethanol to ethyl
+        # acetate and water over sulfuric acid; the (R)-CHFClBr wedge as a reactant keeps its centre)
+        def rxn(reactants, products, agents):
+            head = ["$RXN", "", "", "", f"{len(reactants):3d}{len(products):3d}{len(agents):3d}"]
+            return "\n".join(head) + "\n" + "".join("$MOL\n" + b for b in reactants + products + agents)
+        acid = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("O", 2.6, 0), ("O", 1.3, 2.25)], [(0, 1, 1, None), (1, 2, 1, None), (1, 3, 2, None)])
+        ethanol = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("O", 2.6, 0)], [(0, 1, 1, None), (1, 2, 1, None)])
+        ester = v2000([("C", 0, 0), ("C", 1.3, 0.75), ("O", 1.3, 2.25), ("O", 2.6, 0), ("C", 3.9, 0.75), ("C", 5.2, 0)], [(0, 1, 1, None), (1, 2, 2, None), (1, 3, 1, None), (3, 4, 1, None), (4, 5, 1, None)])
+        water = v2000([("O", 0, 0)], [])
+        acid_s = v2000([("S", 0, 0), ("O", 1.4, 0), ("O", -1.4, 0), ("O", 0, 1.4), ("O", 0, -1.4)], [(0, 1, 1, None), (0, 2, 1, None), (0, 3, 2, None), (0, 4, 2, None)])
+        r = ask("rxn_to_smiles", rxnblock=rxn([acid, ethanol], [ester, water], [acid_s]))
+        self.assertTrue(r["ok"])
+        self.assertEqual(r["result"]["smiles"], "CC(=O)O.CCO>O=S(=O)(O)O>CCOC(C)=O.O")
+        chfclbr = v2000(
+            [("C", 0, 0), ("F", 0, 1.5), ("Cl", 1.3, -0.75), ("Br", -1.3, -0.75), ("H", 0.4, -1.4)],
+            [(0, 1, 1, None), (0, 2, 1, None), (0, 3, 1, None), (0, 4, 1, "up")],
+        )
+        smiles = ask("rxn_to_smiles", rxnblock=rxn([chfclbr], [water], []))["result"]["smiles"]
+        self.assertEqual(smiles.split(">>")[0], ask("to_smiles", molblock=chfclbr)["result"]["smiles"])
+        self.assertIn("@", smiles)
+        # (H2 as a reactant - its two hydrogens drawn, a molecule of its own, not taken away as hydrogens are -
+        # and a lone metal as the agent: ethene hydrogenated over palladium)
+        ethene = v2000([("C", 0, 0), ("C", 1.3, 0)], [(0, 1, 2, None)])
+        h2 = v2000([("H", 0, 0), ("H", 0.74, 0)], [(0, 1, 1, None)])
+        ethane = v2000([("C", 0, 0), ("C", 1.5, 0)], [(0, 1, 1, None)])
+        palladium = v2000([("Pd", 0, 0)], [])
+        self.assertEqual(ask("rxn_to_smiles", rxnblock=rxn([ethene, h2], [ethane], [palladium]))["result"]["smiles"], "C=C.[H][H]>[Pd]>CC")
+
     def test_writes_a_smiles_without_an_h_drawn_to_carry_a_wedge(self):
         # (R)-CHFClBr's H drawn, on a wedge
         block = v2000(
@@ -220,14 +249,14 @@ class ChemWorkerTest(unittest.TestCase):
         self.assertEqual(ask("open_stereo", molblock=flat)["result"], {"atoms": [1], "bonds": [], "isomers": 2})
 
     def test_makes_conformers_as_its_options_say_and_says_how(self):
-        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "same": 0.3, "seed": 7})["result"]["isomers"][0]
+        made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
         self.assertEqual(made["field"], "MMFF94s")
         how = {r["label"]: r["text"] for r in made["how"]}
         self.assertEqual(how["Embedded"], "ETKDG v3")
         self.assertEqual(how["Random seed"], "7")
         self.assertEqual(how["Optimised"], "MMFF94s, at most 300 steps")
-        self.assertRegex(how["Kept"], r"^\d+ of 5 sought$")
-        self.assertEqual(how["Alike within"], "0.3 \u00c5 (heavy atoms' RMSD)")
+        self.assertRegex(how["Kept"], r"^\d+ of 5 embedded \(5 sought\)")
+        self.assertEqual(how["The same within"], "0.01 \u00c5, all atoms (H included), over its symmetries")
         self.assertTrue(how["Made by"].startswith("RDKit "))
         self.assertLessEqual(len(made["frames"]), 5)
         # (what it may not be, kept to what it may: a force field it does not know, the default)

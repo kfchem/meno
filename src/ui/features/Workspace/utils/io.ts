@@ -4,6 +4,7 @@ import { bondChem, chemistry } from "../../../../lib/chem/molecule";
 import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
+import { atomAs } from "./figures";
 import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import { atomsTogether, bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
@@ -136,18 +137,7 @@ export function stackedRead({ records, ...read }: StructureRead): ProcessedFileR
  * fields the drawing needs, defaults filled in.
  */
 export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
-  return {
-    atoms: mdl.atoms.map((a) => ({
-      id: a.id,
-      x: a.x,
-      y: a.y,
-      r: a.r ?? 0.9,
-      el: a.el ?? "C",
-      ...chemistry(a),
-      // (of a stack of drawings, its stack and record: utils/stacks)
-      ...(a.stack ? { stack: a.stack } : {}),
-    })),
-    bonds: mdl.bonds.map((b) => ({
+  const bonds: Model["bonds"] = mdl.bonds.map((b) => ({
       id: b.id,
       a: b.a,
       b: b.b,
@@ -158,9 +148,26 @@ export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
       ...(b.display ? { display: b.display } : {}),
       ...(b.dative ? { dative: true } : {}),
       ...bondChem(b),
-    })),
-  };
+  }));
+  const atoms: Model["atoms"] = mdl.atoms.map((a) => ({
+    id: a.id,
+    x: a.x,
+    y: a.y,
+    r: a.r ?? 0.9,
+    el: a.el ?? "C",
+    ...chemistry(a),
+    // (of a stack of drawings, its stack and record: utils/stacks)
+    ...(a.stack ? { stack: a.stack } : {}),
+  }));
+  // (an H the file did not place, put where another atom could have carried it: said over the atom while it is as read - the maintainer, 2026-10-22)
+  mdl.atoms.forEach((a, i) => {
+    if (a.hChosen) atoms[i].unsure = { said: [H_CHOSEN_SAID], as: atomAs(atoms[i], bonds) };
+  });
+  return { atoms, bonds };
 }
+
+/** What an atom says whose H the file did not place, put on it where another atom could have carried it: an imidazole's, a tetrazole's, a purine's. */
+export const H_CHOSEN_SAID = "The file does not say which atom carries this H: it is drawn on this one.";
 
 /** What a file read holds as the editor draws it: the structures, and a reaction's arrow and "+" signs. */
 export function drawnOf(result: ProcessedFileResult, style3d: Style3D = STYLE_3D): Drawn {

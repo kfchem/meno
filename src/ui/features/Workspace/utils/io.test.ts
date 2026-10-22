@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
-import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
+import { calcResult, editorModelOf, H_CHOSEN_SAID, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
 import { useNotices } from "../../../notices";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
@@ -13,6 +13,8 @@ import { entriesIn, setEntries } from "../workflow/entries";
 import { notesOf, solidOf } from "./molecule3d";
 import { readCarried3D } from "./copyPaste";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
+import { readMarks } from "./figures";
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
 beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
@@ -210,6 +212,26 @@ describe("files of 3D structures", () => {
     const r = await processFileContent("water.mol", water("2D", [0, 0, 0]));
     expect(r.molecules3d).toBeUndefined();
     expect(r.model.atoms).toHaveLength(3);
+  });
+});
+
+describe("an aromatic ring whose file does not say which nitrogen carries its H", () => {
+  // (imidazole, its five bonds aromatic - MOL bond type 4 - and no H stated)
+  const imidazole = "imidazole\n  test\n\n  5  5  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.8500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8084    0.2627    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4996   -0.6877    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4996   -0.6877    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8084    0.2627    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  4  0\n  2  3  4  0\n  3  4  4  0\n  4  5  4  0\n  5  1  4  0\nM  END";
+
+  it("says so over the nitrogen it is drawn on, while that atom is as read", async () => {
+    // (as the canvas takes a file it opens: useStructureEvents)
+    const r = { model: editorModelOf((await processFileContent("imidazole.mol", imidazole)).model) };
+    const { atoms } = readMarks(r.model);
+    const said = [...atoms].map(([id, words]) => [r.model.atoms.find((a) => a.id === id)!.el, words]);
+    expect(said).toEqual([["N", H_CHOSEN_SAID]]);
+    // (its H drawn on it: its two ring bonds single)
+    const id = atoms.keys().next().value!;
+    const sum = r.model.bonds.filter((b) => b.a === id || b.b === id).reduce((n, b) => n + b.order, 0);
+    expect(implicitHydrogens("N", sum)).toBe(1);
+    // (made another atom, or its bonds changed: no longer said)
+    const edited = { ...r.model, atoms: r.model.atoms.map((a) => (a.id === id ? { ...a, el: "C" } : a)) };
+    expect(readMarks(edited).atoms.size).toBe(0);
   });
 });
 

@@ -13,7 +13,7 @@ import { editorModelOf, openedPlace, opensAsText, processFileContent, type Proce
 import { isBlankDocument, schemeOf, type ImportedScheme, type WorkspaceDocument } from "../document";
 import { structureInDrop } from "../chem/fromClipboard";
 import { centredAt } from "../utils/copyPaste";
-import { isWorkspaceFile, readTexts, readWorkspace } from "../utils/workspace";
+import { isWorkspaceFile, readKept, readWorkspace } from "../utils/workspace";
 import { openWorkspacesFrom } from "../../../../lib/clipboard";
 import { isMenoFile } from "../../../../lib/doc/menoFile";
 import { askToOpenFiles, opensAsWorkspace } from "../../../layouts/commands";
@@ -155,8 +155,8 @@ export function useStructureEvents(
       if (kind?.id === MENO_KINDS.workspace.id) {
         const saved = readWorkspace(initialPayload);
         if (saved) {
-          // (its texts read from its file, held as it was opened)
-          const { ws, missing } = await readTexts(saved);
+          // (its texts read from its file, held as it was opened - and its pictures: any that cannot be read, named)
+          const { ws, missing } = await readKept(saved);
           store.getState().openWorkspace(ws, true);
           if (missing.length) reportImportError("initial payload", new Error(`${missing.join(", ")} could not be read from the workspace.`));
           // (opened from its own file, it is saved back to it; else Save asks where)

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { strToU8, unzipSync, zipSync } from "fflate";
 import { createHash } from "node:crypto";
-import { isMenoFile, MENO_MEDIA_TYPE, menoFileBytes, MOST_FILE, MOST_FILES, MOST_WORKSPACE, NotMenoFile, readMenoFile } from "./menoFile";
+import { DamagedMenoFile, isMenoFile, MENO_MEDIA_TYPE, menoFileBytes, menoKindOf, MOST_FILE, MOST_FILES, MOST_WORKSPACE, NotMenoFile, readMenoFile, readStyleFile, styleFileBytes } from "./menoFile";
 import { writeMenoFile } from "./menoFileWriter";
 import { holdPicturesOf, pictureBytes } from "../picture/held";
 import { measured } from "../../testing/timeouts";
@@ -104,9 +104,11 @@ describe("a workspace file", () => {
     expect(isMenoFile(other)).toBe(false);
     expect(() => readMenoFile(other)).toThrow(NotMenoFile);
     expect(isMenoFile(strToU8(WORKSPACE))).toBe(false);
-    // (a list of files that does not read keeps nothing)
+    // (a list of files that does not read names nothing - and is said not to)
     const odd = zipSync({ mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0 }], "workspace.json": strToU8(WORKSPACE), "files.json": strToU8("[oops") });
     expect(readMenoFile(odd).files).toEqual([]);
+    expect(readMenoFile(odd).listDamaged).toBe(true);
+    expect(readMenoFile(bytes).listDamaged).toBe(false);
   });
 });
 
@@ -137,7 +139,7 @@ describe("a workspace file that says other than it holds", () => {
       }),
     ).toBeLessThan(16 * 1024 * 1024);
     expect(thrown).toBeInstanceOf(NotMenoFile);
-    expect(String(thrown)).toMatch(/cut short or damaged/);
+    expect(String(thrown)).toMatch(/Its workspace is damaged/);
     expect(() => readMenoFile(saying(deflated, "workspace.json", MOST_WORKSPACE + 1))).toThrow(/larger than Meno takes in/);
     // (as it was, it reads)
     expect(readMenoFile(deflated).workspace).toBe(WORKSPACE.repeat(50));
@@ -146,7 +148,7 @@ describe("a workspace file that says other than it holds", () => {
   it("saying it comes to less than it holds, is refused - not cut short to what it says", () => {
     expect(readMenoFile(saying(bytes, `files/${sha(output)}`, output.length - 100)).data(sha(output))).toBeNull();
     expect(readMenoFile(saying(bytes, `files/${sha(picture)}`, picture.length - 1)).data(sha(picture))).toBeNull();
-    expect(() => readMenoFile(saying(deflated, "workspace.json", 20))).toThrow(/cut short or damaged/);
+    expect(() => readMenoFile(saying(deflated, "workspace.json", 20))).toThrow(/Its workspace is damaged/);
     // (and the others in it still read)
     const file = readMenoFile(saying(bytes, `files/${sha(output)}`, output.length - 100));
     expect(file.data(sha(picture))).toEqual(picture);
@@ -182,6 +184,141 @@ describe("a workspace file that says other than it holds", () => {
     const real = strToU8("a picture this is not");
     holdPicturesOf(readMenoFile(menoFileBytes(WORKSPACE, [{ sha256: said, name: "real.png", media: "image/png", data: real }])));
     expect(pictureBytes(said)).toEqual(real);
+  });
+});
+
+/** `zip` with the byte at the first place `text` is found in it - at `at` in it - made `to`: a byte changed on the disk after it was written, the size the same. */
+function changed(zip: Uint8Array, text: string, at: number, to: string): Uint8Array {
+  const where = Buffer.from(zip).indexOf(text);
+  if (where < 0) throw new Error(`no ${text} in the archive`);
+  const out = zip.slice();
+  out[where + at] = to.charCodeAt(0);
+  return out;
+}
+
+/** `zip` with what its central directory says of `name`'s CRC-32 changed: the bytes as they were. */
+function crcSaid(zip: Uint8Array, name: string): Uint8Array {
+  const out = zip.slice();
+  const view = new DataView(out.buffer);
+  const wanted = strToU8(name);
+  for (let at = 0; at + 46 <= out.length; at++) {
+    if (view.getUint32(at, true) !== 0x02014b50) continue;
+    const length = view.getUint16(at + 28, true);
+    if (length === wanted.length && out.subarray(at + 46, at + 46 + length).every((b, i) => b === wanted[i])) {
+      view.setUint32(at + 16, view.getUint32(at + 16, true) ^ 1, true);
+      return out;
+    }
+  }
+  throw new Error(`no ${name} in the archive`);
+}
+
+/** The error `run` throws. */
+function thrownBy(run: () => unknown): unknown {
+  try {
+    run();
+  } catch (e) {
+    return e;
+  }
+  return undefined;
+}
+
+describe("a workspace file changed on the disk after it was written", () => {
+  // (a workspace that says "x":1 - read as "x":9, it would open as data, and nobody would know)
+  const ws = '{"format":"meno-workspace","version":2,"atoms":[{"id":1,"el":"C","x":1,"y":0}],"bonds":[]}\n';
+  const kept = [
+    { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", data: output },
+    { sha256: sha(picture), name: "figure.png", media: "image/png", data: picture },
+  ];
+  const bytes = menoFileBytes(ws, kept);
+
+  it("a byte changed in its workspace, is refused - the part named, told from other failures", () => {
+    expect(readMenoFile(bytes).workspace).toContain('"x":1');
+    const nine = changed(bytes, '"x":1', 4, "9");
+    const thrown = thrownBy(() => readMenoFile(nine));
+    expect(thrown).toBeInstanceOf(NotMenoFile);
+    expect(thrown).toBeInstanceOf(DamagedMenoFile);
+    expect((thrown as DamagedMenoFile).part).toBe("workspace.json");
+    expect(String(thrown)).toContain("Its workspace is damaged, and cannot be read.");
+    // (the bytes as they were, the archive saying another CRC-32 of them: refused the same)
+    expect(() => readMenoFile(crcSaid(bytes, "workspace.json"))).toThrow(DamagedMenoFile);
+    // (and what says what it is: so too)
+    expect(() => readMenoFile(crcSaid(bytes, "mimetype"))).toThrow(/cut short or damaged/);
+    expect(() => menoKindOf(crcSaid(bytes, "mimetype"))).toThrow(DamagedMenoFile);
+  });
+
+  it("a byte changed in what it says it holds, is refused as damaged - not taken for a newer Meno's", () => {
+    const style = styleFileBytes('{"drawing":[],"molecules3d":[]}');
+    expect(menoKindOf(style)).toBe("style");
+    const odd = changed(style, '"kind":"style"', 12, "f");
+    const thrown = thrownBy(() => menoKindOf(odd));
+    expect(thrown).toBeInstanceOf(DamagedMenoFile);
+    expect((thrown as DamagedMenoFile).part).toBe("meno.json");
+    expect(String(thrown)).toContain("It is a Meno file damaged where it says what it holds, and cannot be read.");
+    expect(() => readStyleFile(odd)).toThrow(DamagedMenoFile);
+    // (a workspace that says it is one, likewise)
+    const said = zipSync({ mimetype: [strToU8(MENO_MEDIA_TYPE), { level: 0 }], "meno.json": [strToU8('{"kind":"workspace"}'), { level: 0 }], "workspace.json": [strToU8(ws), { level: 0 }] });
+    expect(menoKindOf(said)).toBe("workspace");
+    expect(() => menoKindOf(changed(said, '"kind":"workspace"', 16, "f"))).toThrow(/damaged where it says what it holds/);
+  });
+
+  it("a byte changed in a style file's styles, is refused - not read as other styles", () => {
+    const style = styleFileBytes('{"drawing":[{"name":"Mine","style":{"bondLengthPt":14}}],"molecules3d":[]}');
+    expect(readStyleFile(style).styles).toContain('"bondLengthPt":14');
+    const odd = changed(style, '"bondLengthPt":14', 16, "9");
+    const thrown = thrownBy(() => readStyleFile(odd));
+    expect(thrown).toBeInstanceOf(DamagedMenoFile);
+    expect((thrown as DamagedMenoFile).part).toBe("style.json");
+    expect(String(thrown)).toContain("It is a style file whose styles are damaged, and cannot be read.");
+  });
+
+  it("a byte changed in its list of the files it keeps, the list is not believed: the files are had as the workspace names them", () => {
+    const odd = changed(bytes, '"figure.png"', 6, "f");
+    // (as the workspace names what it keeps: the open path reads that from the workspace - Workspace/utils/workspace)
+    const named = () => [
+      { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain" },
+      { sha256: sha(picture), name: "figure.png", media: "image/png" },
+    ];
+    const file = readMenoFile(odd, named);
+    expect(file.listDamaged).toBe(true);
+    expect(file.files).toEqual([
+      { sha256: sha(output), name: "job.log", kind: "gaussian", media: "text/plain", size: output.length },
+      { sha256: sha(picture), name: "figure.png", media: "image/png", size: picture.length },
+    ]);
+    expect(file.data(sha(output))).toEqual(output);
+    expect(file.data(sha(picture))).toEqual(picture);
+    // (the workspace itself read, and the file opened)
+    expect(file.workspace).toBe(ws);
+  });
+
+  it("its list of files garbage, or gone, every file it keeps is still had by its SHA-256 - and said to have no list", () => {
+    const parts = unzipSync(bytes);
+    const rebuilt = (list: Uint8Array | null) =>
+      zipSync({
+        mimetype: [parts.mimetype, { level: 0 }],
+        "workspace.json": [parts["workspace.json"], { level: 0 }],
+        ...(list ? { "files.json": [list, { level: 0 }] } : {}),
+        [`files/${sha(output)}`]: [output, { level: 6 }],
+        [`files/${sha(picture)}`]: [picture, { level: 0 }],
+      });
+    for (const odd of [rebuilt(strToU8("\u0000garbage{")), rebuilt(strToU8('["not", "a", "list"]')), rebuilt(null)]) {
+      const file = readMenoFile(odd);
+      expect(file.listDamaged).toBe(true);
+      expect(file.data(sha(output))).toEqual(output);
+      expect(file.data(sha(picture))).toEqual(picture);
+      expect(file.data("0".repeat(64))).toBeNull();
+      // (named as the workspace names them, where it is asked; one it does not name, by its SHA-256 alone)
+      expect(readMenoFile(odd, () => [{ sha256: sha(picture), name: "figure.png", media: "image/png" }]).files).toEqual([{ sha256: sha(picture), name: "figure.png", media: "image/png", size: picture.length }]);
+    }
+  });
+
+  it("a byte changed in a file it keeps, that file alone is not had - the rest are", () => {
+    const at = Buffer.from(bytes).indexOf(Buffer.from(picture.subarray(100, 140)));
+    const odd = bytes.slice();
+    odd[at + 5] ^= 0xff;
+    const file = readMenoFile(odd);
+    expect(file.workspace).toBe(ws);
+    expect(file.data(sha(picture))).toBeNull();
+    expect(file.data(sha(output))).toEqual(output);
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AROMATIC_BOND, kekuleOrders, type KekuleBond } from "./kekulize";
+import { AROMATIC_BOND, kekuleOrders, kekulized, type KekuleBond } from "./kekulize";
 import { readSmiles } from "./smiles";
 import { implicitHydrogens } from "./molecule";
 
@@ -229,3 +229,25 @@ describe("kekuleOrders", () => {
   });
 });
 
+
+describe("which atom carries an H the input did not place (kekulized hChosen)", () => {
+  // (aromatic SMILES with no H stated on their nitrogens, as a MOL file of aromatic bonds gives them)
+  const chosen = (smiles: string) => {
+    const s = readSmiles(smiles);
+    return kekulized(s.atoms, s.bonds).hChosen.map((i) => s.atoms[i].el);
+  };
+
+  it("is said where another nitrogen of the ring system could have carried it", () => {
+    expect(chosen("c1cncn1")).toEqual(["N"]); // imidazole
+    expect(chosen("c1ccc(-c2nnnn2)cc1")).toEqual(["N"]); // 5-phenyltetrazole
+    expect(chosen("c1ncc2ncnc2n1")).toEqual(["N"]); // purine
+    expect(chosen("c1cc2cc3ccc(cc4ccc(cc5ccc(cc1n2)n5)n4)n3")).toEqual(["N", "N"]); // porphine
+  });
+
+  it("is not said where the H can be on that atom only, or carried by none, or the input says where", () => {
+    expect(chosen("c1ccnc1")).toEqual([]); // pyrrole: its one nitrogen
+    expect(chosen("c1ccncc1")).toEqual([]); // pyridine
+    expect(chosen("c1cnccn1")).toEqual([]); // pyrazine
+    expect(chosen("c1c[nH]cn1")).toEqual([]); // imidazole, its H stated
+  });
+});

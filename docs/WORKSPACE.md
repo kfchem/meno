@@ -487,13 +487,15 @@ Taken on 2026-10-13:
   the two have the same conformers and shares.
 - **A metal's bonds hold** (2026-10-17). A bond drawn to a d- or f-block
   metal is embedded at its covalent length (Pyykkö's radii, as Meno's own)
-  with the metal's ligands kept apart, and the metal is given UFF's own
+  with the metal's ligands kept apart where that is sound (PLUGINS.md, *A
+  metal's ligands are kept apart*), and the metal is given UFF's own
   geometry for it: square planar for Ni, Pd, Pt and Au (their angles held
   at 90 and 180 degrees), tetrahedral or octahedral for the rest. Where UFF
   has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
   metal of its group stands in for its shape while its bonds are held at
   their own lengths, and no energies are given: the chip says so, and the
-  conformers are not ranked or weighted. Before, UFF without terms for a
+  conformers are not weighted. They are ordered by the stand-in's energies,
+  as the line that says how they were made says. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
   asked about as the CTfile's multi-centre bond - a bond from the metal to a
