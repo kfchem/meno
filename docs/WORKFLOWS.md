@@ -419,7 +419,11 @@ Conformers go through a workflow as any set does (decided):
     looked at, never entries: before, a scan of 3 points opened as 21
     compounds, each with an energy, and a conformer set weighted geometries
     that were no minimum of anything. An optimisation that never converged
-    gives its last geometry as its entry, and says *Not converged* over it.
+    gives its last geometry as its entry, and says *Not converged* over it -
+    one stopped at its first geometry too. A run stopped before its last
+    point converged - an interrupted scan - gives that point as well, and
+    says *Last point not converged*. Over each it says how many of its
+    frames are entries: "4 of 21 frames are entries (converged points)".
     (A step's own optimisation was already one entry, its path: *Results*.)
 - **Steps work entry by entry**, or compound by compound where the kind
   says so: *Optimise* each entry; *Energy window* and *Populations*

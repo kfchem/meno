@@ -24,6 +24,18 @@ export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? 
 export const TOGETHER_MARK = "Atoms in one place";
 /** What an opened optimisation says that never converged: its last geometry is no optimum (the words a step's failure uses for it). */
 export const NOT_CONVERGED_MARK = "Not converged";
+/** What an opened optimisation or scan says whose last point never converged: "Not converged" where it is its only entry, "Last point not converged" where others did. */
+export const notConvergedMark = (entries: number) => (entries > 1 ? "Last point not converged" : NOT_CONVERGED_MARK);
+/**
+ * What an opened optimisation or scan says of its frames that are steps on
+ * the way, not entries: "4 of 21 frames are entries (converged points)" -
+ * and, where its last point never converged, "(converged points, and the
+ * last)"; of one, "1 of 5 frames is an entry (the converged one)".
+ */
+export function entriesMark(entries: number, frames: number, lastUnfinished = false): string {
+  const which = entries === 1 ? (lastUnfinished ? "the last" : "the converged one") : lastUnfinished ? "converged points, and the last" : "converged points";
+  return `${entries} of ${frames} frames ${entries === 1 ? "is an entry" : "are entries"} (${which})`;
+}
 /** What a molecule says of the atoms its file has and it leaves out, their element not read: "1 atom left out", "3 atoms left out". */
 export const atomsLeftOutMark = (n: number) => `${n.toLocaleString("en")} ${n === 1 ? "atom" : "atoms"} left out`;
 

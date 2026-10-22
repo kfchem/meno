@@ -646,10 +646,11 @@ def path_kind(data, text):
 
 def converged_of(data, text, frames):
     """Of an optimisation's or a relaxed scan's geometries, each one's being one the run found converged - as
-    cclib marks it (`optstatus`, OPT_DONE): an optimisation's last, a relaxed scan's each point; None where the
-    run optimised nothing (one geometry, a rigid scan, a reaction path) or cclib marks none."""
+    cclib marks it (`optstatus`, OPT_DONE): an optimisation's last, a relaxed scan's each point - one stopped at its
+    first geometry too, marked not; None where the run optimised nothing (a single point, a rigid scan, a reaction
+    path) or cclib marks none."""
     status = getattr(data, "optstatus", None) if has(data, "optstatus") else None
-    if status is None or not len(status) or frames < 2 or path_kind(data, text) == "irc":
+    if status is None or not len(status) or frames < 1 or path_kind(data, text) == "irc":
         return None
     if path_kind(data, text) == "scan" and frames <= len(data.scanenergies):
         return None

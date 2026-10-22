@@ -200,10 +200,14 @@ class Converged(unittest.TestCase):
 
     def test_an_optimisation_that_did_not_converge_marks_none(self):
         self.assertEqual(worker.converged_of(self.data([1, 0]), "", 2), [False, False])
+        # (stopped at its first geometry - MaxCycles 1: Gaussian marks it 3, ORCA 1 - marked as not, as one of two is)
+        self.assertEqual(worker.converged_of(self.data([3]), "", 1), [False])
+        self.assertEqual(worker.converged_of(self.data([1]), "", 1), [False])
 
     def test_none_where_nothing_was_optimised(self):
+        # (a single point: cclib marks nothing)
         self.assertIsNone(worker.converged_of(self.data(None), "", 1))
-        self.assertIsNone(worker.converged_of(self.data([1]), "", 1))
+        self.assertIsNone(worker.converged_of(self.data([]), "", 1))
         # (a rigid scan: one geometry a point)
         self.assertIsNone(worker.converged_of(self.data([1, 1, 1], scan=[-1.0, -1.1, -1.2]), "", 3))
         # (a reaction path: its points are the path)

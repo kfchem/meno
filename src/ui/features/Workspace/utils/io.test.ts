@@ -302,6 +302,32 @@ describe("a calculation's output, as a reader read it", () => {
       expect(notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary")).toContain("Not converged");
     });
 
+    it("says how many of its frames are entries, and that the rest are steps on the way", () => {
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const molecule = { ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D;
+      // (and, as any opened output's, that its bond orders are not known)
+      expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "4 of 21 frames are entries (converged points)"]);
+    });
+
+    it("a scan stopped before its last point converged: the points it converged on, and that last point, said not to have", () => {
+      // (the same Gaussian scan's output cut short in its third point - 13 geometries, points 1 and 2 converged)
+      const converged = SCAN.slice(0, 13).map((_, k) => [4, 10].includes(k));
+      const [m] = calcResult(output(13, converged), ["cclib"], "scan-cut.log").molecules3d!;
+      expect(m.entryFrames).toEqual([4, 10, 12]);
+      expect(m.notConverged).toBe(true);
+      const molecule = { ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D;
+      expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "3 of 13 frames are entries (converged points, and the last)", "Last point not converged"]);
+    });
+
+    it("an optimisation stopped at its first geometry says it did not converge, as one stopped at its second does", () => {
+      const [one] = calcResult(output(1, [false]), ["cclib"], "opt1.log").molecules3d!;
+      const [two] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      const notes = (m: typeof one) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
+      expect(notes(one)).toEqual(["Bond orders unknown", "Not converged"]);
+      expect(notes(two)).toEqual(["Bond orders unknown", "1 of 2 frames is an entry (the last)", "Not converged"]);
+    });
+
     it("every geometry, where the reader marks none - and where its marks are not one a geometry", () => {
       const [plain] = calcResult({ ...output(3, []), converged: undefined }, ["cclib"], "x.out").molecules3d!;
       expect(entriesIn(plain)).toBe(3);

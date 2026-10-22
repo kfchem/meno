@@ -530,7 +530,7 @@ export type Molecule3D = {
    * geometry is one (docs/WORKFLOWS.md, *Compound sets and conformer sets*).
    */
   entryFrames?: number[];
-  /** An opened optimisation that never converged: its last geometry its entry, and said so over it (completeness `NOT_CONVERGED_MARK`). */
+  /** An opened optimisation or scan whose last point never converged - stopped, or cut short: its last geometry an entry all the same, and said so over it (completeness `notConvergedMark`). */
   notConverged?: true;
 };
 /**

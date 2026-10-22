@@ -230,7 +230,9 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
   // (of an optimisation or a relaxed scan, the geometries it converged on are its entries - the rest steps on the
   // way; none converged, its last, said not to have - where the reader marks every geometry it gave)
   const marks = Array.isArray(out.converged) && out.converged.length === given.length && given.length === 1 + frames.length && out.converged.every((c) => typeof c === "boolean") ? out.converged : undefined;
-  const entryFrames = marks ? (marks.some(Boolean) ? marks.flatMap((ok, i) => (ok ? [i] : [])) : [frames.length]) : undefined;
+  // (a run stopped before its last point converged - an interrupted scan, an optimisation cut short - gives that point too, its last geometry, said not to have)
+  const unfinished = !!marks && !marks[marks.length - 1];
+  const entryFrames = marks ? [...marks.flatMap((ok, i) => (ok ? [i] : [])), ...(unfinished ? [frames.length] : [])] : undefined;
   return {
     atoms: first.atoms,
     bonds: first.bonds,
@@ -241,7 +243,7 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
     ...(name ? { name } : {}),
     ...(together ? { together } : {}),
     ...(entryFrames && entryFrames.length < 1 + frames.length ? { entryFrames } : {}),
-    ...(marks && !marks.some(Boolean) ? { notConverged: true as const } : {}),
+    ...(unfinished ? { notConverged: true as const } : {}),
     calc,
   };
 }
