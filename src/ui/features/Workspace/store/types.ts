@@ -423,6 +423,13 @@ export type Molecule3D = {
    * by frame - null, none. A single geometry's are its calculation's own.
    */
   imaginary?: (number[] | null)[];
+  /**
+   * Its file's marks of which frames failed, or are no minimum (`failed`,
+   * `imaginary`), did not read: kept as such - its frames' state not known,
+   * so that no step weighs one as a minimum (utils/copyPaste
+   * `readCarried3D`, workflow/meno `notAllMinima`).
+   */
+  marksUnread?: true;
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */

@@ -251,10 +251,13 @@ export function populations(energies: readonly number[], degeneracies?: readonly
  * step found them, or else by Boltzmann at room temperature (`populations`)
  * - none of only a part of a search's conformers (`partOf`), whose shares
  * of these alone would not be the compound's, nor where its energies are
- * not each frame's.
+ * not each frame's, nor where its marks of failed frames did not read
+ * (`marksUnread`).
  */
-export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies">): number[] | undefined {
+export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "marksUnread">): number[] | undefined {
   const n = 1 + (m.frames?.length ?? 0);
+  // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
+  if (m.marksUnread) return undefined;
   if (m.shares?.length === n) return m.shares;
   return m.conformerSet && !m.partOf && m.energies?.length === n ? populations(m.energies, m.degeneracies) : undefined;
 }

@@ -704,14 +704,14 @@ export function readCarried3D(given: unknown): Carried3D | null {
   // (a ligand's atoms whose orders are unknown: each that is one of its own kept, any other said - never all dropped for one)
   const unknownOrders = Array.isArray(m.unknownOrders) ? m.unknownOrders.filter(index) : [];
   if (m.unknownOrders !== undefined && (!Array.isArray(m.unknownOrders) || unknownOrders.length < m.unknownOrders.length)) leftOut("bondOrders");
-  // (which frames failed, and which are no minimum: marks that do not read leave out the molecule - said - never its frames
-  // shown as fine, which a step after it would weigh as minima)
-  const failed = failedOf(m.failed, keep);
-  const imaginary = imaginaryFrames(m.imaginary, keep);
-  if (failed === null || imaginary === null) {
-    leftOut("frameMarks");
-    return null;
-  }
+  // (which frames failed, and which are no minimum: marks that do not read are left out - said - and the molecule kept,
+  // marked so, never its frames shown as fine, which a step after it would weigh as minima)
+  const failedRead = failedOf(m.failed, keep);
+  const imaginaryRead = imaginaryFrames(m.imaginary, keep);
+  const marksUnread = failedRead === null || imaginaryRead === null || m.marksUnread === true;
+  if (failedRead === null || imaginaryRead === null) leftOut("frameMarks");
+  const failed = marksUnread ? undefined : failedRead;
+  const imaginary = marksUnread ? undefined : imaginaryRead;
   return {
     atoms: atoms as Carried3D["atoms"],
     bonds: bonds as Carried3D["bonds"],
@@ -756,6 +756,7 @@ export function readCarried3D(given: unknown): Carried3D | null {
     })(),
     ...(failed ? { failed } : {}),
     ...(imaginary ? { imaginary } : {}),
+    ...(marksUnread ? { marksUnread: true as const } : {}),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),

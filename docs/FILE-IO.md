@@ -900,9 +900,13 @@ work.meno (zip)
   - **Marks of which frames failed, or are no minimum, fail closed.** A
     molecule's marks of failure or of imaginary frequencies that do not
     read - not one for each frame, or one that is neither a mark nor
-    none - leave the molecule out, said ("whose marks of failed frames
-    did not read"). Dropping the marks alone would show its frames as
-    fine, and a step after it would weigh them as minima.
+    none - are left out, and said ("marks of a molecule's failed
+    frames"). The molecule is kept whole - its geometry, frames, energies
+    and the rest - and marked so (`marksUnread`), which is saved with it.
+    Its frames are never taken for minima: *Populations* and *Energy
+    window* refuse it, saying "its frames' marks could not be read, so
+    whether it is a minimum is not known", its chip gives no shares, and
+    each of its entries says it as its status.
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of
