@@ -1419,6 +1419,11 @@ them again*; the maintainer's rulings of 2026-10-22):
   minimum - take it out first*. *Energy window* refuses one not
   converged the same; a saddle point's mark would refuse it where the
   window is on free energies, which it is not yet.
+- **The entry record says it too**: `imaginary`, how many imaginary
+  frequencies its calculation judged it has, where it judged any; one
+  that failed carries its reason as its status. *Populations* on free
+  energies (`lib/nodes/populations`) fails a group with one that is no
+  minimum, as Meno's does, each entry saying why.
 - **Meno's steps on energies refuse what they cannot use**: an *Energy
   window* below 0 kcal/mol, or no number, as *Populations* refuses a
   temperature of 0 K or below; and an energy that is no number (NaN,

@@ -429,6 +429,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     number: { value: e.number, unit: "none", status: "computed" },
     ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, status: "computed" as const } } : {}),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
+    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
   };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
