@@ -529,6 +529,8 @@ export default function App() {
   const tabsRef = useRef(state.tabsById);
   tabsRef.current = state.tabsById;
   useEffect(() => {
+    // (outside Tauri - the browser dev server - there is no window to watch)
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     let gone = false;
     getCurrentWindow()
@@ -539,7 +541,6 @@ export default function App() {
         }
       })
       .then((u) => (gone ? u() : (unlisten = u)))
-      // Outside Tauri - the browser dev server - there is no window to watch.
       .catch(() => {});
     return () => {
       gone = true;
