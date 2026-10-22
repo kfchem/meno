@@ -260,8 +260,13 @@ export function connectStoreToDocument(
       // (one that could not be read among them, shown as what it is: TextColumn)
       const texts = shownText(columnOf(prev.texts, prev.textsLost), columnOf(mirrored.texts, mirrored.textsLost), prev.textShown);
       const pdf = shownPdf(prev.pdfs, mirrored.pdfs, prev.pdfShown, texts);
-      const textsOpen = (texts.shown != null || pdf.shown != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
-      return { ...prev, ...mirrored, ...held, textShown: texts.shown, pdfShown: pdf.shown, textsOpen };
+      // (and the sets read as tables, of those still there holding their own - one shown giving way to a text or a PDF come)
+      const stillRead = prev.setsRead.filter((id) => (mirrored.sets ?? []).some((b) => b.id === id && b.collection));
+      const setsRead = stillRead.length === prev.setsRead.length ? prev.setsRead : stillRead;
+      const setTableShown =
+        texts.open || pdf.open || prev.setTableShown == null ? null : setsRead.includes(prev.setTableShown) ? prev.setTableShown : (setsRead[setsRead.length - 1] ?? null);
+      const textsOpen = (texts.shown != null || pdf.shown != null || setTableShown != null) && (texts.open ?? pdf.open ?? prev.textsOpen);
+      return { ...prev, ...mirrored, ...held, textShown: texts.shown, pdfShown: pdf.shown, setsRead, setTableShown, textsOpen };
     });
   sync();
   return doc.subscribe(sync);
@@ -283,6 +288,8 @@ export function createEditorStore(
     columnFilled: false,
     pdfColumnWidth: null,
     pdfShown: null,
+    setsRead: [],
+    setTableShown: null,
     litPdf: null,
     pdfFlight: null,
     pdfSel: null,
@@ -361,8 +368,10 @@ export function createEditorStore(
     hoveredWire: null,
     openStep: null,
     wireDrag: null,
+    wireRefused: null,
     workflowMenu: null,
     askDeleteStep: null,
+    askDeleteSet: null,
     askUndo: null,
     hoverPulse: { id: null, nonce: 0, until: 0 },
     pressHold: null,
@@ -385,6 +394,7 @@ export function createEditorStore(
     panHold: { active: false, pointerId: null },
     suppressDblClickUntil: 0,
     savedPath: null,
+    leftOnOpen: null,
     openedName: null,
 
     ...createModelSlice(doc, set, get),

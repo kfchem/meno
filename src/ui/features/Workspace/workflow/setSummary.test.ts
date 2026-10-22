@@ -129,6 +129,21 @@ describe("a large set's chart, where its energies are not all alike", () => {
     const tie = chartOf([waters([-76, -76 + KCAL], odd), waters([-80, -80 + KCAL])], "conformers");
     expect("none" in tie ? null : tie.by).toBe("Field Y");
   });
+
+  it("charts no compound only a part of whose conformers is here - its lowest may not be among them - and counts them", () => {
+    const chart = chartOf([waters([-76, -76 + KCAL]), waters([-80, -80 + KCAL, -80 + 2 * KCAL], { partOf: true })], "conformers");
+    if ("none" in chart) throw new Error(chart.none);
+    expect([chart.counted, chart.left]).toEqual([2, [{ count: 3, why: "of a compound only a part of whose conformers is here" }]]);
+    expect(chartOf([waters([-80, -80 + KCAL], { partOf: true })], "conformers")).toEqual({ none: "No energies charted: each compound is only a part of a search's conformers" });
+  });
+
+  it("sets energies against one another by the program and level that worked them out - not by each one's job or state", () => {
+    // (two compounds from jobs 1 and 2 of one run: one method, one chart)
+    const job = (number: number, charge: number): Partial<Molecule3D> => ({ made: undefined, calc: { readers: ["prog"], program: "prog", version: "6.7", method: "GFN2-xTB", job: { number, of: 2 }, charge } });
+    const chart = chartOf([waters([-76, -76 + KCAL], job(1, 0)), waters([-80, -80 + KCAL], job(2, -1))], "conformers");
+    if ("none" in chart) throw new Error(chart.none);
+    expect([chart.by, chart.counted, chart.left]).toEqual(["prog \u00b7 GFN2-xTB", 4, []]);
+  });
 });
 
 describe("a large set's sample drawn", () => {

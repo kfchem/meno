@@ -8,7 +8,7 @@
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
 import { framesOf } from "./entries";
-import { energiesBy } from "./run";
+import { energiesFrom } from "./setTable";
 
 /** How many of a set's structures its frame draws: a grid of four by three. */
 export const SAMPLE = 12;
@@ -17,7 +17,7 @@ export const SAMPLE = 12;
 export type Sampled = { molecule: number; frame: number };
 
 /** What of a molecule in 3D the summary reads. */
-type Of3D = Pick<Molecule3D, "frames" | "path" | "energies" | "calc" | "made">;
+type Of3D = Pick<Molecule3D, "frames" | "path" | "energies" | "calc" | "made" | "partOf">;
 
 /**
  * The structures a large set's frame draws, and what they are of: in a
@@ -68,19 +68,16 @@ export function binned(given: readonly number[]): Bin[] {
   return bins;
 }
 
-/** What worked a molecule's energies out, in the words of what did: its calculation's program and level, or the plugin's that made it; none where nothing says. */
-export function energiesFrom(m: Pick<Molecule3D, "calc" | "energies" | "made">): string | undefined {
-  return energiesBy([m]) ?? m.made?.energies;
-}
-
 /**
  * A large set's entries as a histogram: in a conformer set, each
  * conformer's energy above its compound's lowest, in kcal/mol - each
  * counted once, as the set holds it - of those whose energies one method
  * worked out: the method most of them were worked out by, said (the first
  * of those as many, in the step's order). Those by another, by a method
- * not stated - two such may be two methods - and those with no usable
- * energy (none, or no finite number), counted and said, not drawn. In a set
+ * not stated - two such may be two methods - those with no usable
+ * energy (none, or no finite number), and those of a compound only a part
+ * of whose conformers is here (`partOf`: its lowest may not be among
+ * them), counted and said, not drawn. In a set
  * of molecules, none: the energies of different compounds are not set
  * against one another.
  */
@@ -100,6 +97,7 @@ export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "confor
   if (holds !== "conformers") return { none: "No energies charted: they are of different compounds" };
   let without = 0;
   let unstated = 0;
+  let parts = 0;
   // (each compound's usable energies - finite numbers - and what worked them out)
   const compounds: { from: string; energies: number[] }[] = [];
   for (const m of molecules) {
@@ -107,8 +105,13 @@ export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "confor
     const energies = m.energies?.length === n ? m.energies.filter(Number.isFinite) : [];
     without += n - energies.length;
     if (!energies.length) continue;
+    // (only a part of a search's conformers: its lowest may not be among them, so nothing is above it - counted, not charted)
+    if (m.partOf) {
+      parts += energies.length;
+      continue;
+    }
     const from = energiesFrom(m);
-    if (from == null) {
+    if (!from) {
       unstated += energies.length;
       continue;
     }
@@ -131,11 +134,12 @@ export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "confor
     for (const e of c.energies) if (e < lowest) lowest = e;
     for (const e of c.energies) values.push((e - lowest) * KCAL_PER_HARTREE);
   }
-  if (!values.length) return { none: unstated ? "No energies charted: what worked them out is not stated" : "No energies to chart" };
+  if (!values.length) return { none: unstated ? "No energies charted: what worked them out is not stated" : parts ? "No energies charted: each compound is only a part of a search's conformers" : "No energies to chart" };
   const left = [
     ...(other ? [{ count: other, why: "worked out another way" }] : []),
     ...(unstated ? [{ count: unstated, why: "worked out by a method not stated" }] : []),
     ...(without ? [{ count: without, why: "with no usable energy" }] : []),
+    ...(parts ? [{ count: parts, why: "of a compound only a part of whose conformers is here" }] : []),
   ];
   return { quantity: "ΔE above each compound's lowest", unit: "kcal/mol", by: by!, bins: binned(values), counted: values.length, left };
 }

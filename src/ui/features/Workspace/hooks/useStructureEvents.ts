@@ -1,4 +1,5 @@
 import { holdPdfBytes } from "../../../../lib/pdf/reader";
+import { leftOutSaid } from "../utils/readNotes";
 import { isPictureName } from "../../../../lib/picture/image";
 import { pictureToAdd } from "../utils/pictures";
 import * as THREE from "three";
@@ -158,7 +159,9 @@ export function useStructureEvents(
           // (its texts read from its file, held as it was opened - and its pictures: any that cannot be read, named)
           const { ws, missing } = await readKept(saved);
           store.getState().openWorkspace(ws, true);
-          if (missing.length) reportImportError("initial payload", new Error(`${missing.join(", ")} could not be read from the workspace.`));
+          // (and what its file held that could not be read, left out: said now, and on every save)
+          const said = [missing.length ? `${missing.join(", ")} could not be read from the workspace.` : null, leftOutSaid(ws.leftOut)].filter(Boolean);
+          if (said.length) reportImportError("initial payload", new Error(said.join(" ")));
           // (opened from its own file, it is saved back to it; else Save asks where)
           if (openedFile && initialPath && isWorkspaceFile(initialPath)) store.getState().markSavedAs(initialPath);
           else if (openedFile && initialFilename) store.getState().markOpenedOver(initialPath ?? initialFilename);

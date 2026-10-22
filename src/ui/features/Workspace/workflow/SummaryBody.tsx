@@ -89,7 +89,7 @@ function ChartOf({ chart }: { chart: Chart }) {
  * drawn saying why - with what the sample is of; and a histogram of its
  * entries' energies, saying what of, in what units, by what, and of how many.
  */
-export default function SummaryBody(p: { count: string; nouns: string; collection: Collection; holds: "molecules" | "conformers"; style: StyleChoice }) {
+export default function SummaryBody(p: { count: string; nouns: string; collection: Collection; holds: "molecules" | "conformers"; style: StyleChoice; onOpenTable?: () => void; compact?: boolean }) {
   // (the workspace's drawing style, given: the frame is drawn on the workflow's layer, outside the editor's store)
   const choice = p.style;
   const sample = useMemo(() => sampleOf(p.collection, p.holds), [p.collection, p.holds]);
@@ -113,10 +113,22 @@ export default function SummaryBody(p: { count: string; nouns: string; collectio
   }, [cells]);
   return (
     <div className="flex flex-col gap-2 w-full" data-set-summary="">
-      <div className="flex items-baseline gap-1.5">
+      <div className="flex items-center gap-1.5">
         <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.count}</span>
-        <span className="text-xs leading-4 text-gh-gray">{p.nouns}</span>
+        <span className="flex-1 text-xs leading-4 text-gh-gray">{p.nouns}</span>
+        {p.onOpenTable && (
+          <button
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={p.onOpenTable}
+            className="h-6 rounded-md px-2 text-xs leading-4 text-gh-black bg-white ring-1 ring-gh-line transition-colors duration-150 ease-meno hover:bg-gh-base"
+            style={{ pointerEvents: p.compact ? "none" : "auto" }}
+          >
+            Open as a table
+          </button>
+        )}
       </div>
+      {/* (held in the set alone: deleting it deletes them - said before it happens) */}
+      <span className="-mt-2 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
       <div className="grid grid-cols-4" style={{ width: 4 * CELL.w }}>
         {sample.picks.map((s, i) => {
           const c = cells?.[i];

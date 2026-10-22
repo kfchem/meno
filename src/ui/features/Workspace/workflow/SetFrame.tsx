@@ -28,6 +28,8 @@ export type SetFrameProps = {
   onRename?: (name: string) => void;
   /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame where its molecules would lie, with a sample of them drawn and a chart of their energies (SummaryBody). */
   summary?: { count: string; nouns: string; holds: "molecules" | "conformers"; style: StyleChoice };
+  /** Its summary's *Open as a table*: what it holds read in the column. */
+  onOpenTable?: () => void;
 };
 
 const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -112,7 +114,7 @@ export default function SetFrame(p: SetFrameProps) {
               className="origin-top-left"
               style={{ width: SUMMARY_PX.w, height: SUMMARY_PX.h, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / SUMMARY_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / SUMMARY_PX.h)})` }}
             >
-              <SummaryBody count={p.summary.count} nouns={p.summary.nouns} collection={p.set.collection} holds={p.summary.holds} style={p.summary.style} />
+              <SummaryBody count={p.summary.count} nouns={p.summary.nouns} collection={p.set.collection} holds={p.summary.holds} style={p.summary.style} onOpenTable={p.onOpenTable} compact={p.compact} />
             </div>
           )}
         </div>
