@@ -16,7 +16,7 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   startJob: async (ask: JobAsk) => {
     asked.started.push(ask);
     const id = idOf(next++);
-    jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "waiting", created: Date.now(), log: "", files: {} });
+    jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "waiting", created: Date.now(), log: "", files: {}, ...(ask.key ? { key: ask.key } : {}) });
     if (holdStart) await holdStart;
     return id;
   },
@@ -763,6 +763,23 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await third;
     expect(st().steps.find((s) => s.id === step)!.ran!.keys).not.toEqual(ran.keys);
+  });
+
+  it("stops on output it cannot account for - a job whose key is not its own, or one made before its run began - naming it, bringing nothing in", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    // (one job's folder holding another job's - its key not the one asked for - and the other made long before)
+    Object.assign(jobs.get(idOf(1))!, { key: "0".repeat(64) });
+    end(1);
+    end(2, "done", { created: Date.now() - 3_600_000 });
+    await st().lookAtJobs();
+    await ran;
+    const done = st().steps.find((s) => s.id === step)!.ran!;
+    expect(done.ok).toBe(false);
+    expect(done.said).toBe(`Output Meno cannot account for: ${idOf(1)} (its key is not the one it was asked for with); ${idOf(2)} (made before this run began)`);
+    expect(st().molecules3d).toHaveLength(2);
   });
 
   it("deleted, keeps the folder of a job another step's run took up again", async () => {

@@ -1455,8 +1455,15 @@ question N):
   again**, while that step keeps it.
 - Kept with the workspace: each run's jobs' keys, one for each job.
 
-Not yet, in its second part: outputs Meno cannot account for stopping
-the step, and *Adopt*.
+- **Output Meno cannot account for stops the step**, naming each job and
+  why, and nothing comes in: a job whose key is not the one it was asked
+  for with (its folder holds another job's), or one the run neither
+  started nor took up again - made more than a minute before the run
+  began. Each job keeps its key with it (`job.json`).
+
+Not yet: *Adopt*, which takes such a job's output as the step's result,
+recorded with when, marked wherever it is shown; and a job folder found
+without its record, which is still taken as *gone*.
 
 ## Questions
 

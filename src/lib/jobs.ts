@@ -28,6 +28,8 @@ export type Job = {
   code?: number;
   /** Why it failed, where it failed before its program could say. */
   why?: string;
+  /** Its key, as Meno asked for it with one (lib/jobKeys). */
+  key?: string;
 };
 
 /** A file written into a job's folder before it starts, by its path there. */
@@ -49,6 +51,8 @@ export type JobAsk = {
   path?: string;
   /** Programs installed beside its own to run after it, by their names in its manifest (`installed[].beside`), with their arguments. */
   then?: { program: string; args: string[] }[];
+  /** Its key (lib/jobKeys), kept with it: what Meno checks it by when it takes it up. */
+  key?: string;
   /** What it is called, in words - its entry's name and its step's (`water Optimise`): its folder is named from it, path-safe (`water-optimise-3f9a2c1d`). */
   label?: string;
 };

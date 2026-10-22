@@ -124,6 +124,9 @@ pub struct JobSpec {
     /// What it is called, in words - its entry's, its step's (`water optimise`): its folder named from it, path-safe.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub label: Option<String>,
+    /// Its key, as Meno worked it out when it asked for it (lib/jobKeys): what Meno checks a job it takes up by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
     /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
     /// in its work folder, given what it was given, what they say kept apart.
@@ -2033,6 +2036,9 @@ pub struct JobAsk {
     /// What it is called, in words: its folder named from it, path-safe (`JobSpec::label`).
     #[serde(default)]
     pub label: Option<String>,
+    /// Its key (`JobSpec::key`): 64 hex digits, or none.
+    #[serde(default)]
+    pub key: Option<String>,
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -2088,6 +2094,7 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
         label: payload.label.map(|l| l.chars().take(200).collect()),
+        key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
     };
     let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
@@ -2127,13 +2134,16 @@ pub struct JobListed {
     pub id: String,
     pub plugin: String,
     pub program: String,
+    /// Its key, as it was asked for with one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     #[serde(flatten)]
     pub record: JobRecord,
 }
 
 fn listed(id: &str, dir: &Path) -> Option<JobListed> {
     let spec = read_spec(dir)?;
-    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, record: current_record(dir)? })
+    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record: current_record(dir)? })
 }
 
 #[tauri::command]
@@ -2334,6 +2344,7 @@ mod tests {
             memory,
             created: now_ms(),
             label: None,
+            key: None,
             then: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
@@ -3146,6 +3157,7 @@ mod tests {
             memory: 0,
             created: now_ms(),
             label: None,
+            key: None,
             then: vec![],
         }
     }

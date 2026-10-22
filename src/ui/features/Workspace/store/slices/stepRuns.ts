@@ -42,6 +42,9 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
+/** How long before its run a job may have been asked for and be the run's own: the moments a run takes to ready its jobs. */
+const STARTED_BEFORE_MS = 60_000;
+
 /** How long Meno waits for a stopped job to end before its files are taken away with its step. */
 const STOP_WAIT_MS = 15_000;
 
@@ -541,7 +544,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           files: p.files,
         });
         const again = reusable([...(doc.getState().steps ?? [])], jobKeyed, (j) => states.get(j));
-        jobs.push({ id: again ?? (await startJob(ask)), entries: p.entries, reads: p.reads, key: jobKeyed, ...(again ? { reused: true as const } : {}) });
+        jobs.push({ id: again ?? (await startJob({ ...ask, key: jobKeyed })), entries: p.entries, reads: p.reads, key: jobKeyed, ...(again ? { reused: true as const } : {}) });
       }
     } catch (e) {
       for (const j of jobs) void stopJob(j.id).catch(() => {});
@@ -780,6 +783,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const lost = records.map((r) => !r || r.state === "gone");
       if (records.some((r) => r?.state === "stopped") || lost.every(Boolean)) {
         bringIn(id, [], "molecules", { at: run.at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: run.input, took, jobs: ids, ...as });
+        return close();
+      }
+      // (outputs Meno cannot account for - a job whose key is not the one it was asked for with, or one it took up
+      //  that this run did not start nor took up again - stop the step, naming them: nothing comes in)
+      const unaccounted = run.jobs.flatMap((j, k) => {
+        const r = records[k];
+        if (!r || lost[k]) return [];
+        if (j.key && r.key !== j.key) return [`${j.id} (its key is not the one it was asked for with)`];
+        if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [`${j.id} (made before this run began)`];
+        return [];
+      });
+      if (unaccounted.length) {
+        bringIn(id, [], "molecules", { at: run.at, ok: false, said: `Output Meno cannot account for: ${unaccounted.join("; ")}`, input: run.input, took, jobs: ids, ...as });
         return close();
       }
       // (Render's: pictures, beside the step - no set)
