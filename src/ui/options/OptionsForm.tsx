@@ -51,12 +51,18 @@ export default function OptionsForm({
   values,
   onChange,
   context,
+  choosing,
+  onChoose,
 }: {
   options: readonly Option[];
   values: OptionValues;
   onChange: (values: OptionValues) => void;
   /** Values of other options shown beside these, which an option's `when` may name. */
   context?: OptionValues;
+  /** The atoms option being chosen on the drawing, by its id - none, where none is. */
+  choosing?: string | null;
+  /** Choosing an atoms option's atoms on the drawing begun (its id), or ended (null). Without it, an atoms option is only counted. */
+  onChoose?: (id: string | null) => void;
 }) {
   const set = (id: string, v: string | number | boolean) => {
     // (a choice that fills in others - a preset's parts - sets them with it)
@@ -97,8 +103,20 @@ export default function OptionsForm({
               </div>
             </fieldset>
           ) : o.type === "atoms" ? (
-            <div className="text-xs text-gh-gray">
-              {o.label} <span className="text-gh-black">{String(values[o.id] ?? "").split(/[\s,]+/).filter(Boolean).length || "none"}</span>
+            <div className="flex items-center gap-2 text-xs text-gh-gray">
+              <span>
+                {o.label} <span className="text-gh-black tabular-nums">{String(values[o.id] ?? "").split(/[\s,]+/).filter(Boolean).length || "none"}</span>
+              </span>
+              {onChoose && (
+                <button
+                  type="button"
+                  aria-pressed={choosing === o.id}
+                  onClick={() => onChoose(choosing === o.id ? null : o.id)}
+                  className={`h-6 rounded-md border px-2 text-xs ${choosing === o.id ? "border-accel-base bg-accel-base/5 text-accel-base" : "border-gh-line bg-white text-gh-black hover:bg-gh-base"}`}
+                >
+                  {choosing === o.id ? "Done" : "Choose on the drawing"}
+                </button>
+              )}
             </div>
           ) : o.type === "lines" ? (
             <LinesField option={o} value={String(values[o.id] ?? "")} onChange={(v) => set(o.id, v)} />

@@ -5,7 +5,8 @@ import { identityOfDrawn } from "../chem/identityOf";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { template } from "./testdata/enumerationCases";
 import type { Enumerated } from "./enumerate";
-import { groupsReadAs, positionIds, positionsOf, readGroups, substituted } from "./substituents";
+import { groupsReadAs, positionIds, positionMarks, positionsOf, readGroups, substituted } from "./substituents";
+import type { WorkflowStep } from "../store/types";
 import { kindInfo } from "./kinds";
 import { shownOptions } from "../../../../lib/options";
 import { runMenoDrawn } from "./meno";
@@ -186,5 +187,24 @@ describe("Enumerate's way: substituents", () => {
     expect(out.kept.map((e) => [recordNumber(e.record), recordHow(e.record)])).toEqual([[1, "Position 1 (C3) = Cl"]]);
     expect(out.aside).toHaveLength(1);
     expect(out.core?.attach).toEqual({ P1: [2], P2: [7] });
+  });
+});
+
+describe("the positions chosen, marked on the drawing", () => {
+  const drawn = drawnFromSmiles(XYLENE);
+  const step = (id: number, options: WorkflowStep["options"]) => ({ id, kind: "enumerate", x: 0, y: 0, options }) as WorkflowStep;
+  const steps = [step(1, { way: "substituents", positions: "8 3" }), step(2, { way: "rgroups", positions: "1" }), step(3, { way: "substituents", positions: "5 99" })];
+
+  it("each numbered as the step numbers it, by the drawing's atom order, at its atom", () => {
+    expect(positionMarks(drawn, steps, new Set([1])).map((m) => [m.n, m.x, m.y])).toEqual([
+      [1, drawn.atoms[2].x, drawn.atoms[2].y],
+      [2, drawn.atoms[7].x, drawn.atoms[7].y],
+    ]);
+  });
+
+  it("only for a step by substituents that is shown - selected, open or chosen for - and only atoms still drawn", () => {
+    expect(positionMarks(drawn, steps, new Set())).toEqual([]);
+    expect(positionMarks(drawn, steps, new Set([2]))).toEqual([]);
+    expect(positionMarks(drawn, steps, new Set([3])).map((m) => m.n)).toEqual([1]);
   });
 });

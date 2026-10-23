@@ -21,7 +21,7 @@ import type { LineRead } from "../../../../lib/options";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { identityInputOf } from "../chem/identityOf";
 import { undrawnHydrogens } from "../chem/drawing";
-import type { Model, SeriesCore } from "../store/types";
+import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
 import { joined, MOST_COMBINATIONS, readOption, type Enumerated, type Made, type OptionProblem, type OptionRead } from "./enumerate";
 
@@ -247,4 +247,21 @@ export function substituted(template: Model, ids: readonly number[], text: strin
       ...(missed ? [`Duplicates may be missed among ${missed}: the canonical search ran out of steps`] : []),
     ],
   };
+}
+
+/**
+ * The marks of the positions chosen on the drawing, each numbered as the
+ * step numbers it (by the drawing's own atom order): those of each Enumerate
+ * step by substituents among `shown` - selected, open, or being chosen for -
+ * and only those, so the drawing stays the parent otherwise. Each at its
+ * atom, by its key.
+ */
+export function positionMarks(model: Model, steps: readonly WorkflowStep[], shown: ReadonlySet<number>): { key: string; x: number; y: number; n: number }[] {
+  const place = new Map(model.atoms.map((a, i) => [a.id, i]));
+  return steps.flatMap((s) => {
+    if (s.kind !== "enumerate" || s.options?.way !== "substituents" || !shown.has(s.id)) return [];
+    const ids = positionIds(String(s.options.positions ?? "")).filter((id) => place.has(id));
+    ids.sort((p, q) => place.get(p)! - place.get(q)!);
+    return ids.map((id, k) => ({ key: `${s.id}:${id}`, x: model.atoms[place.get(id)!].x, y: model.atoms[place.get(id)!].y, n: k + 1 }));
+  });
 }

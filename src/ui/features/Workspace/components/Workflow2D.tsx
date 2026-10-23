@@ -12,6 +12,7 @@ import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen } from "../workflow/cardOpen";
+import { positionMarks } from "../workflow/substituents";
 import { countOf, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
@@ -245,6 +246,7 @@ export default function Workflow2D() {
   const chosenSet = useEditor((s) => s.chosenSet);
   const hoveredWire = useEditor((s) => s.hoveredWire);
   const openStep = useEditor((s) => s.openStep);
+  const choosingAtoms = useEditor((s) => s.choosingAtoms);
   // (the step a click last opened, and when: a double-click's second click leaves it open)
   const opened = useRef<{ step: number; at: number } | null>(null);
 
@@ -280,6 +282,11 @@ export default function Workflow2D() {
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
   // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
   const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
+  // (the positions an Enumerate step by substituents has chosen, numbered, while it is selected, open, or being chosen for)
+  const positions = useMemo(
+    () => positionMarks(model, steps, new Set([...selFlow.steps, ...(openStep != null ? [openStep] : []), ...(choosingAtoms ? [choosingAtoms.step] : [])])),
+    [model, steps, selFlow, openStep, choosingAtoms],
+  );
   // (who does a kind of step changes as plugins are added and taken away)
   useReaders((r) => r.state);
   // (where the programs installed separately that steps run are: looked for as such steps are put down, opened, changed)
@@ -777,10 +784,12 @@ export default function Workflow2D() {
             runs={runRows(s)}
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: values })}
+            choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
+            onChoose={(option) => store.getState().setWorkflowView({ choosingAtoms: option ? { step: s.id, option } : null })}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
             onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}
-            onClose={() => store.getState().setWorkflowView({ openStep: null })}
+            onClose={() => store.getState().setWorkflowView({ openStep: null, choosingAtoms: null })}
             onCardDown={(e) => dragStep(e, s)}
             onContextMenu={menuOf("step", s.id)}
             onHover={(on) => (on ? hover({ hoveredStep: s.id }) : unhover("hoveredStep", s.id))}
@@ -844,6 +853,11 @@ export default function Workflow2D() {
                 className={k.joined ? "rounded-lg border border-accel-base bg-accel-base/5" : "rounded-lg border border-dashed border-gh-gray"}
                 style={{ width: (k.frame.x1 - k.frame.x0) / PX, height: (k.frame.y1 - k.frame.y0) / PX, pointerEvents: "none" }}
               />
+            </div>
+          ))}
+          {positions.map((m) => (
+            <div key={`p${m.key}`} style={{ ...onLayer(m.x + NOMINAL_BOND_LENGTH / 4, m.y + NOMINAL_BOND_LENGTH / 4), transform: "translate(-50%, -50%)" }}>
+              <span className="block min-w-4 rounded-full border border-accel-base bg-white px-1 text-center text-[10px] leading-4 tabular-nums text-accel-base">{m.n}</span>
             </div>
           ))}
           {numbered.map((n) => (
