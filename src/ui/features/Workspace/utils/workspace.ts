@@ -31,6 +31,7 @@ import { markNotHad } from "../../../../lib/doc/notHad";
 import { sha256Hex } from "../../../../lib/binary/sha256";
 import type { CalcSource } from "../../../../lib/calc/output";
 import { readWorkflow, type SavedWorkflow } from "../workflow/saved";
+import { withKeptJobs, type JobsKept } from "../workflow/keptJobs";
 
 export const WORKSPACE = "meno-workspace";
 /** The version a workspace's JSON is written at: 2 since sets keep their members (docs/FILE-IO.md, *The workspace file*). */
@@ -101,9 +102,10 @@ export function carriedOf(state: Pick<Saved, "molecules3d" | "turns3d" | "frames
  * The canvas as a workspace's JSON. An output its file keeps (`kept`, by
  * SHA-256) is not said to be anywhere else: where it was is left out - nor
  * is a text's, which it always keeps (`texts`, each text's SHA-256, in
- * order).
+ * order). Each step's run says what the file keeps of its jobs (`jobs`,
+ * workflow/keptJobs) - nothing, where the file keeps none of them.
  */
-export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(), texts: readonly string[] = []): string {
+export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(), texts: readonly string[] = [], jobs: JobsKept["records"] = new Map()): string {
   // (a result set kept out of the file: its molecules and its structures drawn not written, only how many it held and their hash - *Don't keep in the file*)
   const page = { model: given.model, molecules3d: given.molecules3d, pictures: given.pictures };
   const unkept = (given.sets ?? []).filter((b) => b.keep === false && b.made).map((b) => setMembers(page, b));
@@ -162,7 +164,7 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
       pluses: state.pluses,
       ...(state.captions.length ? { captions: state.captions } : {}),
       molecules3d,
-      ...(state.sets?.length || state.steps?.length ? { sets: savedSets, steps: state.steps ?? [], wires: state.wires ?? [] } : {}),
+      ...(state.sets?.length || state.steps?.length ? { sets: savedSets, steps: withKeptJobs(state.steps ?? [], jobs), wires: state.wires ?? [] } : {}),
       ...(state.docStyle ? { style: state.docStyle } : {}),
       // (its styles in 3D, each whole: it opens the same on any computer)
       ...(state.docStyle3d ? { style3d: state.docStyle3d } : {}),
@@ -217,8 +219,11 @@ export type SavedFile = { bytes: Uint8Array; notKept: string[]; lastHolds: boole
  * so that nothing new is lost for it, and its JSON still has it where it
  * lay - by what it is known by, which its file does not hold - so that,
  * opened again, it is named again, never taken for one that is there.
+ * Given what a save keeps of its steps' jobs (`jobs`, workflow/keptJobs):
+ * those of them not on this computer, and a list of those that are, whose
+ * bytes are added from the disk as it is written (src-tauri keptjobs.rs).
  */
-export async function workspaceFile(state: Saved & { savedPath?: string | null }): Promise<SavedFile> {
+export async function workspaceFile(state: Saved & { savedPath?: string | null }, jobs?: JobsKept): Promise<SavedFile> {
   // (the outputs they were read from, and the wavefunctions kept with them)
   // (a large result set's molecules too: they are on no page - WorkflowSet.collection)
   const molecules = [...state.molecules3d, ...(state.sets ?? []).flatMap((b) => (b.keep === false ? [] : (b.collection ?? [])))];
@@ -239,8 +244,9 @@ export async function workspaceFile(state: Saved & { savedPath?: string | null }
   // (an output kept, carried or held, is said to be nowhere else)
   const keptOutputs = new Set([...outputs.kept.map((k) => k.sha256), ...outputs.notKept.map((s) => s.sha256).filter((h) => had.has(h))]);
   const bytes = await writeMenoFile(
-    workspaceText(state, keptOutputs, texts.map((t) => t.sha256)),
-    [...outputs.kept, ...texts, ...lost.kept, ...pdfs.kept, ...pictures.kept, ...carried],
+    workspaceText(state, keptOutputs, texts.map((t) => t.sha256), jobs?.records),
+    [...outputs.kept, ...texts, ...lost.kept, ...pdfs.kept, ...pictures.kept, ...carried, ...(jobs?.carried ?? [])],
+    jobs?.listed ?? [],
   );
   const notKept = wanting.filter((w) => !had.has(w.sha256));
   return { bytes, notKept: notKept.map((w) => w.name), lastHolds: notKept.length > 0 && holds };
