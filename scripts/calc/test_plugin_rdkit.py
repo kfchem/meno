@@ -1434,3 +1434,22 @@ class StructureSteps(unittest.TestCase):
         self.assertEqual(got[0]["as"], "drawn")
         # (a lone proton, read as drawn: its weight and the rest, none chosen for it)
         self.assertEqual(got[1]["properties"]["mw"]["value"], 1.008)
+
+    def test_descriptors_of_a_lone_ion_leave_out_its_logp_saying_why(self):
+        # (a lone atom or ion as Meno gives one - its valence written as none: Na+, Cl-, a sodium atom - has no logP of
+        #  its own, Crippen's typing giving every one the same; its weight as any. Methane, a lone C with its H, has one)
+        def lone(el, charge):
+            chg = f" CHG={charge}" if charge else ""
+            return {"molblocks": [
+                "\n  Meno\n\n  0  0  0     0  0            999 V3000\nM  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n"
+                f"M  V30 1 {el} 0.0000 0.0000 0 0{chg} VAL=-1\nM  V30 END ATOM\nM  V30 END CTAB\nM  END\n"
+            ]}
+        got = self.run_step("descriptors", [lone("Na", 1), lone("Cl", -1), lone("Na", 0), self.entry("C")])
+        for g, mw in zip(got[:3], [22.99, 35.453, 22.99]):
+            props = g["properties"]
+            self.assertNotIn("logp", props)
+            self.assertEqual(props["not_given"]["value"], "logp: not defined for a lone ion")
+            self.assertEqual(props["mw"]["value"], mw)
+            self.assertEqual((props["tpsa"]["value"], props["hbd"]["value"]), (0.0, 0))
+        self.assertIn("logp", got[3]["properties"])
+        self.assertNotIn("not_given", got[3]["properties"])

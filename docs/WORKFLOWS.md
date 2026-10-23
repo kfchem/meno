@@ -284,7 +284,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
 | Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing; one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
-| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
+| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 
 The first six run a program; the next six work on a set's entries
 alone (*Who does a step*); the last three are a plugin's (RDKit's), done
@@ -1569,6 +1569,13 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   - Not seen: a metal's centre (square-planar platinum) and an axis of
     hindered rotation (a biaryl's); they are made as the embedding places
     them.
+- **A lone atom or ion is not made, and said so** (2026-10-23): one atom
+  alone has no 3D structure, as on the canvas (*structure 2 of 3 left
+  out: one atom alone has no 3D structure*); where every one is, the
+  step fails, saying so. A structure made of its parts makes its first
+  molecule, and names what it left out (*structure 3: its Cl− left
+  out*, a salt's counter-ion; *its 1 other part left out*). Until then
+  each was passed by without a word.
 
 Decided while building it, for the maintainer to confirm:
 

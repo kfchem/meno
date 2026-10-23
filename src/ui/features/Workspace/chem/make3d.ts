@@ -107,9 +107,13 @@ function nameOf(a: Model["atoms"][number]): string {
  */
 export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
   if (!madeAny) return "One atom alone has no 3D structure.";
+  return `${bareNames(bare)} ${bare.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
+}
+
+/** Bare atoms named, in a list: "Na+", "Na+ and Cl−", "Na+, Cl− and Ca2+". */
+export function bareNames(bare: Model["atoms"]): string {
   const names = bare.map(nameOf);
-  const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
-  return `${list} ${names.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
+  return names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : names[0];
 }
 
 /**

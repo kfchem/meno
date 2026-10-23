@@ -2430,8 +2430,20 @@ def step_descriptors(entries, options):
         if problem != Chem.SanitizeFlags.SANITIZE_NONE:
             out.append({"aside": f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "kind": "valence"})
             continue
-        out.append({"as": "drawn", "properties": {name: {"value": round(float(f(mol)), 4) if unit != "none" or name == "logp" else int(f(mol)), "unit": unit, "method": how} for name, unit, how, f in DESCRIPTORS}})
+        # (a lone atom or ion - Na+, Cl-, a lone metal: one atom, no bond, no hydrogen - has no logP of its own: Crippen's
+        #  is a sum over atoms typed by what they are bonded to, and gives every lone ion one type's value. Left out, and
+        #  said so; its weight and the rest, as for any)
+        lone = mol.GetNumAtoms() == 1 and mol.GetAtomWithIdx(0).GetTotalNumHs() == 0
+        given = [d for d in DESCRIPTORS if not (lone and d[0] in UNDEFINED_ALONE)]
+        properties = {name: {"value": round(float(f(mol)), 4) if unit != "none" or name == "logp" else int(f(mol)), "unit": unit, "method": how} for name, unit, how, f in given}
+        if lone:
+            properties["not_given"] = {"value": f"{', '.join(UNDEFINED_ALONE)}: not defined for a lone ion", "unit": "none", "method": "what Descriptors leaves out of a lone atom or ion"}
+        out.append({"as": "drawn", "properties": properties})
     return {"structures": out}
+
+
+#: The descriptors not defined for a lone atom or ion: Wildman-Crippen logP, a sum over atoms typed by their bonds.
+UNDEFINED_ALONE = ("logp",)
 
 
 #: The steps on structures drawn, by kind.
