@@ -29,7 +29,7 @@
     {
       "kinds": ["duplicates"],
       "options": [
-        {"id": "rmsd", "label": "Alike within (heavy atoms' RMSD, over symmetries)", "type": "number", "default": 0.125, "min": 0, "step": 0.025, "unit": "Å"}
+        {"id": "mirrors", "label": "Mirror images", "type": "choice", "choices": [{"value": "apart", "label": "Kept apart"}, {"value": "counted", "label": "Counted in (degeneracy 2)"}], "default": "apart"}
       ]
     }
   ]
