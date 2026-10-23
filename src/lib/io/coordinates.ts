@@ -52,6 +52,8 @@ export type CoordinateStructure = {
   broken?: string[];
   /** The other lines among its atoms, left out: a page's number, a running head, a table's heads set again, a caption. */
   skipped?: string[];
+  /** The page's numbers it runs on over: one structure across a page's end. */
+  continues?: string[];
 };
 
 const SYMBOL = new Map(ELEMENTS.map((e) => [e.symbol.toLowerCase(), e.symbol]));
@@ -144,7 +146,9 @@ const speciesUnread = (l: string) => (/\bcharge\s*[=:]/i.test(l) && !CHARGE_SAID
 function looksLikeAtom(l: string): boolean {
   const ws = l.split(/[\s,;]+/).filter(Boolean);
   const first = /^\d+$/.test(ws[0] ?? "") && ws.length > 1 ? 1 : 0;
-  return elementOfLabel(ws[first] ?? "") != null && ws.slice(first + 1).some((w) => /\d\.\d/.test(w));
+  if (elementOfLabel(ws[first] ?? "") != null && ws.slice(first + 1).some((w) => /\d\.\d/.test(w))) return true;
+  // (or a symbol no element has - a ghost atom's, a dummy's: Bq, X, Xx - and three numbers, as an atom's line has them)
+  return /^[A-Za-z]{1,3}\d{0,3}$/.test(ws[first] ?? "") && ws.slice(first + 1, first + 4).filter((w) => DECIMAL.test(w)).length === 3;
 }
 
 /** A value of a crystal structure's table: a number and its uncertainty in brackets, or a displacement starred. */
@@ -200,7 +204,7 @@ function gapLines(ts: readonly Token[], from: number, to: number, lines: readonl
 }
 
 /** A run of atoms with what was written before it. */
-type Run = { recs: Rec[]; before: string[]; after: string[]; /** What was written before its first atom ends on that atom's line: the text's lines' ends made spaces. */ joined?: true };
+type Run = { recs: Rec[]; before: string[]; after: string[] };
 
 /** A line of numbers alone: a charge and a multiplicity, or a count. */
 const NUMBERS_ONLY = /^[+-]?\d+(?:[\s,]+[+-]?\d+)?$/;
@@ -261,7 +265,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     // (numbered atoms: the count begun again - a new structure)
     const renumbered = r.index === 1 && prev != null && prev.recs[prev.recs.length - 1].index != null;
     if (prev && !renumbered && (gap.length === 0 || (count != null && !counts))) prev.recs.push(r);
-    else runs.push({ recs: [r], before: gapLines(ts, last, r.from, lines), after: [], ...(r.from > 0 && ts[r.from - 1].line === r.line ? { joined: true as const } : {}) });
+    else runs.push({ recs: [r], before: gapLines(ts, last, r.from, lines), after: [] });
     last = r.to;
   }
   if (runs.length) runs[runs.length - 1].after = gapLines(ts, last, ts.length, lines);
@@ -269,7 +273,10 @@ export function readCoordinates(text: string): CoordinateStructure[] {
   // bond and no atom of one stands in another's place - two structures each about the origin stand in each other's)
   for (let k = 1; k < runs.length; k++) {
     const [a, b] = [runs[k - 1], runs[k]];
-    if (b.before.some((l) => NUMBERS_ONLY.test(l) || STATED.test(l) || NOTE.test(l))) continue;
+    // (a note between them alone - an energy set among its atoms - parts them no more than a page's foot does: one, where they
+    // bond as one; a note with a name, a count or a charge between them begins the next)
+    const notesOnly = b.before.length > 0 && b.before.every((l) => NOTE.test(l) || FRAGMENT.test(l));
+    if (!notesOnly && b.before.some((l) => NUMBERS_ONLY.test(l) || STATED.test(l) || NOTE.test(l))) continue;
     const pa = atomsOfRecs(a.recs, 1);
     const pb = atomsOfRecs(b.recs, 1);
     if (pieces([...pa, ...pb]) < pieces(pa) + pieces(pb) && !crowds(pa, pb)) {
@@ -304,8 +311,17 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     const among = raw.slice(first0, last0 + 1).flatMap((l, k) => (l && !atomLines.has(first0 + k) ? [l] : []));
     const broken = [...among.filter((l) => looksLikeAtom(l) || speciesUnread(l)), ...own.filter(speciesUnread)];
     const skipped = among.filter((l) => !broken.includes(l));
-    out.push(...structureOf(run, own, bohrAll, n + 1).map((s) => ({ ...s, ...(broken.length ? { broken } : {}), ...(skipped.length ? { skipped } : {}) })));
+    // (where it runs on over a page's end: said, by the page's number there, so the chemist sees where it was joined)
+    const breaks = skipped.filter((l) => PAGE_MARK.test(l));
+    out.push(...structureOf(run, own, bohrAll, n + 1).map((s) => ({ ...s, ...(broken.length ? { broken } : {}), ...(skipped.length ? { skipped } : {}), ...(breaks.length ? { continues: breaks } : {}) })));
   });
+  // (a lone atom left out by a structure - set apart from it by something - named on the card, never dropped unsaid)
+  const near = (r: Run) => kept.some((k) => k.recs.some((q) => Math.abs(q.line - r.recs[0].line) <= 3));
+  for (const r of runs) {
+    if (kept.includes(r) || r.recs.length !== 1 || counting(r) || !near(r)) continue;
+    const line = raw[r.recs[0].line] ?? "";
+    out.push({ name: "An atom on its own", notes: [], bohr: false, atoms: atomsOfRecs(r.recs, 1), warnings: [], broken: [line] });
+  }
   if (out.length) out[out.length - 1].notes.push(...kept[kept.length - 1].after.filter((l) => NOTE.test(l)));
   return out.map(checked);
 }
@@ -335,10 +351,9 @@ function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: num
   const saidCharge = [...said].reverse().map((l) => CHARGE_SAID.exec(l)).find((m) => m)?.[1];
   const saidMultiplicity = [...said].reverse().map((l) => MULTIPLICITY_SAID.exec(l)).find((m) => m)?.[1];
   const inWords = saidCharge != null && saidMultiplicity != null ? `${saidCharge} ${saidMultiplicity}` : undefined;
-  // (only on a line of its own - never two numbers at a title's end, "TS 2 1", "Conformer 12 3", which may be its name's -
-  // or, the text's lines' ends made spaces, the last two numbers before its first atom, on that atom's line)
-  const pair =
-    inWords ?? [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l)) ?? (run.joined ? /(?:^|\s)([+-]?\d+)[\s,]+(\d+)$/.exec(said[said.length - 1] ?? "")?.slice(1).join(" ") : undefined);
+  // (only on a line of its own, or said in words - never two numbers at a title's end, "TS 2 1", "Conformer 12 3", which may be
+  // its name's, nor the last two before its first atom where the text's lines' ends were made spaces: those may be a name's too)
+  const pair = inWords ?? [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l));
   const [charge, multiplicity] = pair ? pair.split(/[\s,]+/).map(Number) : [];
   const stated = said.map((l) => STATED.exec(l)).find((m) => m) ?? null;
   const alone = said.find(counts);

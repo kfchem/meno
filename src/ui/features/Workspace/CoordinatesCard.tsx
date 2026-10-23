@@ -81,6 +81,7 @@ export default function CoordinatesCard({
                 <span className="shrink-0 w-28 text-right text-gh-gray truncate">{formulaOf(s.atoms)}</span>
               </div>
               {s.notes.length > 0 && <div className="text-xs text-gh-gray truncate">{s.notes.join(" · ")}</div>}
+              {s.continues && s.continues.length > 0 && <div className="text-xs text-gh-gray">{`Continues across a page break (${s.continues.join(", ")})`}</div>}
               {s.skipped && s.skipped.length > 0 && (
                 <div className="text-xs text-gh-gray truncate" title={s.skipped.join("\n")}>
                   {`${s.skipped.length === 1 ? "1 line" : `${s.skipped.length} lines`} not read: ${s.skipped.join(" · ")}`}

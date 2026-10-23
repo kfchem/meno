@@ -154,11 +154,11 @@ describe("coordinates in a text", () => {
     expect(s.warnings[0]).toMatch(/columns came mixed/);
   });
 
-  it("reads a text whose lines' ends were made spaces, as some copies make them: each structure, its charge and multiplicity", () => {
+  it("reads a text whose lines' ends were made spaces, as some copies make them: each structure - but no charge nor multiplicity, two numbers before its atoms on a line that may be a name's", () => {
     const ss = read(lines("Water", "E = -76.4 Hartree", "0 1", WATER, "Methane", "1 2", METHANE).replace(/\n/g, " "));
-    expect(ss.map((s) => [s.name, formulaOf(s.atoms), s.charge, s.multiplicity, s.notes])).toEqual([
-      ["Water", "H2O", 0, 1, ["E = -76.4 Hartree"]],
-      ["Methane", "CH4", 1, 2, []],
+    expect(ss.map((s) => [formulaOf(s.atoms), s.charge, s.multiplicity])).toEqual([
+      ["H2O", undefined, undefined],
+      ["CH4", undefined, undefined],
     ]);
   });
 
@@ -313,5 +313,41 @@ describe("coordinates selected across pages", () => {
     const [s] = readCoordinates(["Conformer 12 3", ...rows(0, 4)].join("\n"));
     expect(s.charge).toBeUndefined();
     expect(s.multiplicity).toBeUndefined();
+  });
+});
+
+describe("coordinates: what a run of atoms holds, said", () => {
+  const H = (k: number) => `H ${(0.63 * (k % 2 ? 1 : -1)).toFixed(4)} ${(0.63 * (k < 2 ? 1 : -1)).toFixed(4)} ${(0.63 * (k === 1 || k === 2 ? 1 : -1)).toFixed(4)}`;
+
+  it("never takes two numbers at a title's end as a charge and multiplicity, the title and an atom on one line", () => {
+    const [s] = readCoordinates("TS 2 1 O 0.0 0.0 0.0\nH 0.0 0.76 0.59\nH 0.0 -0.76 0.59");
+    expect([s.charge, s.multiplicity]).toEqual([undefined, undefined]);
+  });
+
+  it("goes on past a note set among its atoms - an energy - listing it as not read, never losing the atom beside it", () => {
+    for (const note of ["Energy = -76.4 Eh", "E(RB3LYP) = -40.5"]) {
+      const [s, ...rest] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", note, H(0), H(1), H(2), H(3)].join("\n"));
+      expect([note, formulaOf(s.atoms), rest.length]).toEqual([note, "CH4", 0]);
+      expect(s.skipped).toEqual([note]);
+    }
+  });
+
+  it("says where a structure runs on over a page's end, by the page's number", () => {
+    const [s] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", H(0), "S14", H(1), H(2), H(3)].join("\n"));
+    expect(formulaOf(s.atoms)).toBe("CH4");
+    expect(s.continues).toEqual(["S14"]);
+  });
+
+  it("names a lone atom set apart from a structure beside it on the card - never dropped unsaid - and keeps it from being placed", () => {
+    const ss = readCoordinates(["Water", "O 0.0000 0.0000 0.1173", "H 0.0000 0.7572 -0.4692", "H 0.0000 -0.7572 -0.4692", "set apart here", "C 10.0000 10.0000 10.0000"].join("\n"));
+    expect(ss.map((s) => [s.name, formulaOf(s.atoms), s.broken])).toEqual([
+      ["Water", "H2O", undefined],
+      ["An atom on its own", "C", ["C 10.0000 10.0000 10.0000"]],
+    ]);
+  });
+
+  it("refuses a structure with a line of an unknown symbol and three numbers among its atoms - a ghost or a dummy atom - naming it", () => {
+    const [s] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", H(0), "Xx 0.100 0.200 0.300", H(1), H(2), H(3)].join("\n"));
+    expect(s.broken).toEqual(["Xx 0.100 0.200 0.300"]);
   });
 });
