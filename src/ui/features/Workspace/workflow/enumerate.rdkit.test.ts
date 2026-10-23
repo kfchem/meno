@@ -14,7 +14,8 @@ import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { enumerated } from "./enumerate";
 import { substituted } from "./substituents";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
-import { ENUMERATION_CASES, SUBSTITUENT_CASES, template } from "./testdata/enumerationCases";
+import { ENUMERATION_CASES, SUBSTITUENT_CASES, SUBSTITUENT_DIFFERENTIAL, template } from "./testdata/enumerationCases";
+import { undrawnHydrogens } from "../chem/drawing";
 
 const ROOT = resolve(__dirname, "../../../../..");
 const FIXTURE = resolve(__dirname, "testdata/enumerate.rdkit.json");
@@ -23,19 +24,31 @@ const FIXTURE = resolve(__dirname, "testdata/enumerate.rdkit.json");
 const products = [
   ...ENUMERATION_CASES.map((c) => ({ c, made: () => enumerated(template(c.template), c.lists) })),
   ...SUBSTITUENT_CASES.map((c) => ({ c, made: () => substituted(drawnFromSmiles(c.template), c.positions, c.groups, c.combine) })),
+  ...SUBSTITUENT_DIFFERENTIAL.templates.map((t) => {
+    const drawn = drawnFromSmiles(t);
+    const hs = undrawnHydrogens(drawn);
+    const positions = drawn.atoms.filter((a) => a.el !== "H" && (hs.get(a.id) ?? 0) > 0).map((a) => a.id);
+    const groups = SUBSTITUENT_DIFFERENTIAL.groups;
+    // (one at a time: each position's groups in turn - its number says which, and RDKit makes its compound)
+    const transforms = positions.flatMap((id) => groups.map((g) => ({ t, k: id - 1, group: g.smiles })));
+    return { c: { name: `differential: ${t}`, products: transforms.map(() => ""), transforms }, made: () => substituted(drawn, positions, groups.map((g) => g.typed).join("\n"), "one") };
+  }),
 ].flatMap(({ c, made }) => {
   const r = made();
   if (!r.ok) throw new Error(`${c.name}: ${r.problems.join("; ")}`);
   return [...r.made.map((m) => ({ ...m, why: undefined as string | undefined })), ...r.aside]
     .sort((p, q) => p.number - q.number)
-    .map((m) => ({ case: c.name, name: `${c.name} #${m.number}`, number: m.number, why: m.why, expected: c.products[m.number - 1], molfile: writeMolfile(m.drawn) }));
+    .map((m) => {
+      const transform = "transforms" in c ? c.transforms[m.number - 1] : undefined;
+      return { case: c.name, name: `${c.name} #${m.number}`, number: m.number, why: m.why, ...(transform ? { transform } : { expected: c.products[m.number - 1] }), molfile: writeMolfile(m.drawn) };
+    });
 });
 
 describe("Enumerate's products, against RDKit (the fixture)", () => {
   if (process.env.MENO_IDENTITY_MOLFILES) {
     it("writes the molfiles for RDKit to read (the fixture's first step)", () => {
       mkdirSync(resolve(ROOT, ".identity"), { recursive: true });
-      writeFileSync(resolve(ROOT, ".identity/products.json"), JSON.stringify(products.map((p) => ({ name: p.name, molfile: p.molfile, expected: p.expected })), null, 1));
+      writeFileSync(resolve(ROOT, ".identity/products.json"), JSON.stringify(products.map((p) => ({ name: p.name, molfile: p.molfile, ..."transform" in p ? { transform: p.transform } : { expected: p.expected } })), null, 1));
     });
   }
 

@@ -11,6 +11,7 @@ import { kindInfo } from "./kinds";
 import { shownOptions } from "../../../../lib/options";
 import { runMenoDrawn } from "./meno";
 import { recordHow, recordNumber } from "./entries";
+import { changedAt, saidOf } from "./stereoKept";
 
 /** A structure's molecular formula, Hill order, its hydrogens drawn and not. */
 function formula(m: Model): string {
@@ -210,5 +211,55 @@ describe("the positions chosen, marked on the drawing", () => {
     expect(positionMarks(drawn, steps, new Set())).toEqual([]);
     expect(positionMarks(drawn, steps, new Set([2]))).toEqual([]);
     expect(positionMarks(drawn, steps, new Set([3])).map((m) => m.n)).toEqual([1]);
+  });
+});
+
+describe("configurations kept through a substituent swap (the review desk's differential against RDKit)", () => {
+  it("a stereocentre's own undrawn H taken: the group where the H was, the centre as drawn - valine's alpha carbon", () => {
+    const r = ok(substituted(drawnFromSmiles("CC(C)[C@H](N)C(=O)O"), [4], "Me\nOMe\nCl", "one"));
+    expect(same(r.made[0].drawn, "CC(C)[C@](C)(N)C(=O)O")).toBe(true);
+    expect(same(r.made[1].drawn, "CC(C)[C@](OC)(N)C(=O)O")).toBe(true);
+    expect(same(r.made[2].drawn, "CC(C)[C@](Cl)(N)C(=O)O")).toBe(true);
+  });
+
+  it("the same beside another centre - threonine's alpha carbon, and a centre next to one", () => {
+    const r = ok(substituted(drawnFromSmiles("N[C@H](C(=O)O)[C@@H](C)O"), [2], "Me\nF", "one"));
+    expect(same(r.made[0].drawn, "N[C@](C)(C(=O)O)[C@@H](C)O")).toBe(true);
+    expect(same(r.made[1].drawn, "N[C@](F)(C(=O)O)[C@@H](C)O")).toBe(true);
+    const q = ok(substituted(drawnFromSmiles("CC[C@H](C)[C@@H](C)O"), [3], "OMe\nCl", "one"));
+    expect(same(q.made[0].drawn, "CC[C@](OC)(C)[C@@H](C)O")).toBe(true);
+    expect(same(q.made[1].drawn, "CC[C@](Cl)(C)[C@@H](C)O")).toBe(true);
+  });
+
+  it("a ring centre: cis and trans kept - the dimethylcyclohexane's second centre", () => {
+    const r = ok(substituted(drawnFromSmiles("C[C@H]1CC[C@@H](C)CC1"), [5], "OMe\nF", "one"));
+    expect(same(r.made[0].drawn, "C[C@H]1CC[C@@](OC)(C)CC1")).toBe(true);
+    expect(same(r.made[0].drawn, "C[C@H]1CC[C@](OC)(C)CC1")).toBe(false);
+    expect(same(r.made[1].drawn, "C[C@H]1CC[C@@](F)(C)CC1")).toBe(true);
+  });
+
+  it("a CH2 beside a ring centre: that centre kept, and the one the group makes left open - no configuration made up", () => {
+    const r = ok(substituted(drawnFromSmiles("OC[C@H]1OC(O)C[C@@H]1O"), [2], "Me\nCl", "one"));
+    expect(same(r.made[0].drawn, "OC(C)[C@H]1OC(O)C[C@@H]1O")).toBe(true);
+    expect(same(r.made[1].drawn, "OC(Cl)[C@H]1OC(O)C[C@@H]1O")).toBe(true);
+    for (const m of r.made) expect(saidOf(m.drawn).centres.has(2)).toBe(false);
+  });
+
+  it("together, every position's centre kept", () => {
+    const r = ok(substituted(drawnFromSmiles("C[C@H](O)[C@@H](O)C"), [2, 4], "F", "together"));
+    expect(same(r.made[0].drawn, "C[C@](F)(O)[C@@](F)(O)C")).toBe(true);
+  });
+});
+
+describe("the guard: a product's configurations read back against its template's", () => {
+  it("names a centre whose configuration a product changes, and one it makes up at a template atom", () => {
+    const template = drawnFromSmiles("F[C@H](Cl)Br");
+    expect(changedAt(template, template, new Map())).toEqual([]);
+    const flipped = { ...template, bonds: template.bonds.map((b) => (b.stereo === "up" ? { ...b, stereo: "down" as const } : b.stereo === "down" ? { ...b, stereo: "up" as const } : b)) };
+    expect(changedAt(template, flipped, new Map())).toEqual([2]);
+    const lost = { ...template, bonds: template.bonds.map(({ stereo: _s, ...b }) => b) };
+    expect(changedAt(template, lost, new Map())).toEqual([2]);
+    const plain = drawnFromSmiles("FC(Cl)Br");
+    expect(changedAt(plain, template, new Map())).toEqual([2]);
   });
 });

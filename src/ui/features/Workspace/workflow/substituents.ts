@@ -23,6 +23,7 @@ import { identityInputOf } from "../chem/identityOf";
 import { undrawnHydrogens } from "../chem/drawing";
 import type { Model, SeriesCore, WorkflowStep } from "../store/types";
 import { calculateNewBondPosition } from "../utils/geometry";
+import { changedAt, rewedged, wedgesHeld } from "./stereoKept";
 import { joined, MOST_COMBINATIONS, readOption, type Enumerated, type Made, type OptionProblem, type OptionRead } from "./enumerate";
 
 /** How the positions are combined: one position given a group in each product, or every position in each. */
@@ -183,11 +184,24 @@ export function substituted(template: Model, ids: readonly number[], text: strin
   if (count > MOST_COMBINATIONS) return { ok: false, problems: [`${size} make ${thousands(count)} combinations; Enumerate makes at most ${thousands(MOST_COMBINATIONS)}`] };
 
   const name = (k: number) => `Position ${k + 1} (${positions[k].name})`;
-  const product = (choice: readonly (OptionRead | null)[]): Model => {
+  const atomName = (id: number) => {
+    const i = template.atoms.findIndex((a) => a.id === id);
+    return `${template.atoms[i].el}${i + 1}`;
+  };
+  // (each product's configurations read back and held to the template's - docs/WORKFLOWS-FOUNDATION.md, *Configurations kept*)
+  const product = (choice: readonly (OptionRead | null)[]): { drawn: Model; changed: number[] } => {
     // (H, and a position not given one, left as drawn)
     const given = choice.flatMap((o, k) => (o && !isPlainH(o) ? [k] : []));
     const { model, rs: at } = withRs(template, positions, given);
-    return joined(model, given.map((k) => [k + 1, [at.get(k)!], choice[k]!] as const), style);
+    let drawn = wedgesHeld(template, joined(model, given.map((k) => [k + 1, [at.get(k)!], choice[k]!] as const), style));
+    // (a heavy atom's undrawn H taken: the group in its place among the centre's neighbours)
+    const took = new Map(given.filter((k) => !positions[k].drawnH).map((k) => [positions[k].id, at.get(k)!]));
+    for (const c of changedAt(template, drawn, took)) {
+      if (!took.has(c)) continue;
+      const again = rewedged(template, drawn, c, took);
+      if (again) drawn = again;
+    }
+    return { drawn, changed: changedAt(template, drawn, took) };
   };
   const combinations: { choice: (OptionRead | null)[]; how: string }[] = [];
   if (combine === "one") {
@@ -211,9 +225,12 @@ export function substituted(template: Model, ids: readonly number[], text: strin
   const aside: (Made & { why: string })[] = [];
   const seen = new Map<string, number>();
   let missed = 0;
+  const refused: string[] = [];
   combinations.forEach(({ choice, how }, i) => {
     const number = i + 1;
-    const drawnNow = product(choice);
+    const { drawn: drawnNow, changed } = product(choice);
+    // (a product that would say another configuration than its template's: never made - the step stops, naming it)
+    if (changed.length) return void refused.push(`${how}: would change the configuration at ${changed.map(atomName).join(", ")}`);
     const found = identity(identityInputOf(drawnNow).input);
     if (!found.complete) missed++;
     const first = seen.get(found.text);
@@ -223,6 +240,10 @@ export function substituted(template: Model, ids: readonly number[], text: strin
       made.push({ number, drawn: drawnNow, how });
     }
   });
+  if (refused.length) {
+    const shown = refused.slice(0, 5);
+    return { ok: false, problems: [...shown, ...(refused.length > shown.length ? [`and ${refused.length - shown.length} more like them`] : [])] };
+  }
   // (the core every product shares: the template's atoms, but a drawn H chosen - its place a group's attach atom where it is given one - each position by the atom its group is bonded to)
   const place = new Map(template.atoms.map((a, i) => [a.id, i]));
   const isH = new Set(positions.filter((p) => p.drawnH).map((p) => p.id));

@@ -44,6 +44,31 @@ export const SUBSTITUENT_CASES: readonly SubstituentCase[] = [
   { name: "substituents: a CH2 beside a stereocentre", template: "C[C@H](F)CC", positions: [4], groups: "Cl", combine: "one", products: ["C[C@H](F)C(C)Cl"] },
 ];
 
+/**
+ * The substituents' differential against RDKit: stereo-rich templates, each
+ * atom with an undrawn hydrogen a position in turn, one at a time, with
+ * each of the groups - the compound for each made by RDKit itself, the
+ * group put in place of one of that atom's hydrogens (scripts/identity/rdkit.py
+ * `substituted`), its configurations kept. Written by no hand, so every
+ * position is held to it, the awkward ones too.
+ */
+export const SUBSTITUENT_DIFFERENTIAL: { templates: readonly string[]; groups: readonly { typed: string; smiles: string }[] } = {
+  templates: [
+    "CC(C)[C@H](N)C(=O)O",
+    "N[C@H](C(=O)O)[C@@H](C)O",
+    "CC[C@H](C)[C@@H](C)O",
+    "C[C@H]1CC[C@@H](C)CC1",
+    "OC[C@H]1OC(O)C[C@@H]1O",
+    "C[C@@H](O)c1ccccc1",
+    "F/C=C/C",
+  ],
+  groups: [
+    { typed: "Me", smiles: "C" },
+    { typed: "OMe", smiles: "OC" },
+    { typed: "Cl", smiles: "Cl" },
+  ],
+};
+
 /** A template drawn by Meno's engine from a SMILES, each "*" an R atom, numbered in order - or as `numbers` gives them. */
 export function template(smiles: string, numbers?: number[][]): Model {
   const m = drawnFromSmiles(smiles);

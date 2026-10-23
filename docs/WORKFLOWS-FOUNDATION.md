@@ -965,6 +965,28 @@ every product. A group at a heavy atom's hydrogen has its attach atom after
 the template's atoms. A wedged centre whose undrawn hydrogen is replaced
 keeps its arrangement, with the group where the hydrogen was.
 
+**Configurations kept.** Replacing a hydrogen keeps the arrangement in
+space: the group goes where the hydrogen was.
+- **A centre whose own undrawn hydrogen is replaced** is wedged anew to say
+  the configuration it had. A wedge with three bonds in the page reads
+  otherwise than a wedge with the hydrogen left out, so the old wedge alone
+  would invert it.
+- **Every wedge keeps its narrow end.** A bond added to an atom changes how
+  the drawing counts its bonds, and with them which end of a wedge reads as
+  narrow, so a wedge would move to the next atom.
+- **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
+  open, with no configuration made up. *Stereoisomers* can enumerate it.
+- **The guard behind them.** Every product is read back as the canvas reads
+  a drawing, and each configuration of the template, at its atoms, mapped,
+  is held to it. A product that would change one, lose one, or say one the
+  template does not, is never made: the step stops, naming it (*Position 1
+  (C4) = Me: would change the configuration at C4*). This holds one at a
+  time and together, and for groups with configurations of their own.
+- **Tested against RDKit** by a differential in the fixture: stereo-rich
+  templates, every atom with an undrawn hydrogen in turn, each with several
+  groups, the compound for each made by RDKit by putting the group in that
+  hydrogen's place.
+
 **What stops the step before it runs**, naming the position or the line:
 no positions chosen; a chosen atom no longer in the drawing; a chosen atom
 with no hydrogen, or whose hydrogens are all drawn (*choose the H*); a drawn
