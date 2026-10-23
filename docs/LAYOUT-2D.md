@@ -949,3 +949,54 @@ one would be, and set out together (`src/lib/layout/many.ts`).
   that lays out a drawing (`chem/layOut.ts` `layOutMany`).
   `npm run layout-many` times a thousand analogues
   (`testdata/analogues.ts`) and reads every one back.
+
+## A part between fixed neighbours
+
+A part of a structure can be drawn afresh while the rest stays where the
+chemist drew it (`src/lib/layout/around.ts` `layoutAround(input, part,
+fixed)`): the new scaffold of a scaffold swap, its substituents as they
+were. Clean-up draws whole structures; this is for a caller that replaces
+one part of a drawing (the maintainer's rulings, 2026-10-23).
+
+- **Where the part ends.** Only at single bonds in no ring. A part whose
+  edge would cut a ring system takes the whole system in, and the result
+  says which atoms were taken (`taken`). A part joined to the rest by a
+  double or triple bond is refused.
+- **The part as the engine draws it.** The part is laid out on its own by
+  `layout2D`, each bond to the rest a stub (the rest's atom, alone), and
+  set down onto the rest without being bent: its rings stay regular, its
+  bonds of one length (the rest's own, the middle of its bonds).
+  - **On one bond**, exactly. The stub lies on the rest's atom and the
+    bond along the room the rest leaves there: the middle of the widest
+    gap between its bonds, or, on an atom with one other bond, either way
+    at 120 degrees from it. The rest does not move.
+  - **On two bonds or more**, by the turn and shift that put the stubs
+    nearest the rest's atoms, the part's drawing or its mirror image.
+    Each branch of the rest (what hangs from one bond to the part) is
+    then moved as a whole onto its new bond: it keeps its own drawing and
+    is turned, about its atom, only as far as the new bond needs to lie in
+    the room the branch left for the old (`moved`). The rest is never
+    otherwise moved.
+- **Refused, and why said**, so that the caller draws the whole structure
+  afresh instead: a part's stubs ending more than one bond from the
+  rest's atoms (`MISMATCH_LIMIT`: a 1,2-substituted ring swapped for a
+  part with its substituents far apart); a metal complex or an axis of
+  chirality in the part; a part that holds a cage, drawn in perspective;
+  a part that is the whole structure, in pieces, or not bonded to the
+  rest.
+- **Stereochemistry.** The rest's wedges and drawn H's are kept, except
+  at a centre in the part or bonded to it. Those centres are given theirs
+  afresh, as `layout2D` places them. The whole drawing is then read back
+  (`readBack.ts` `notAsGiven`), and one that does not read as the
+  structure given is not handed over.
+- **Crowding** is said, not mended by moving the rest: atoms of the part
+  or of a moved branch within half a bond of another, and bonds crossing
+  (`crowded`, in words). Of the ways the part can be set down, the one
+  nearest the rest's atoms is taken, then the one that reads best by the
+  engine's own measure.
+- **In any order.** The molecule is worked in its own order (`canonical.ts`),
+  as `layout2D` is, and every choice goes by the drawing or by that order:
+  the same structure and the same rest, given with their atoms in any
+  order, come out the same.
+- **Flat.** The drawing it hands back is flat. A rest drawn in
+  perspective keeps its depth only as the caller keeps it.

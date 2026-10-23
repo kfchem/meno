@@ -15,7 +15,7 @@
  * where the rest's atoms are - nothing is drawn, and why is said: the
  * caller draws the whole structure afresh instead.
  */
-import { canonicalRanks, reordered, restored, symmetryOrbits, walkOrder } from "./canonical";
+import { canonicalRanks, reordered, restored, walkOrder } from "./canonical";
 import { notAsGiven } from "./readBack";
 import { layout2D, measureLaidOut, type Layout2D } from "./engine";
 import { angleOf, cross, dist, dot, rotate, sub, wrap, type Point } from "./geometry";
@@ -41,9 +41,6 @@ export type Around = { layout: Layout2D; part: number[]; taken: number[]; moved:
 /** How far, in bonds, the part's stubs may be from the rest's atoms they stand for: past it the substituents would end up elsewhere than drawn. */
 export const MISMATCH_LIMIT = 1;
 
-/** How many of the part's symmetries are tried, each a drawing of it with its atoms otherwise placed. */
-const SYMMETRIES_TRIED = 96;
-
 export function layoutAround(input: LayoutInput, part: readonly number[], fixed: FixedDrawing): Around {
   const n = input.atoms.length;
   if (!part.length || part.some((a) => !Number.isInteger(a) || a < 0 || a >= n)) return { refused: "No part of the structure was given to draw." };
@@ -60,16 +57,16 @@ export function layoutAround(input: LayoutInput, part: readonly number[], fixed:
     wedges: fixed.stereo.wedges.map((w) => ({ ...w, from: to[w.from], to: w.to < 0 ? w.to : to[w.to] })),
     hydrogens: fixed.stereo.hydrogens.map((h) => ({ on: to[h.on], at: h.at })),
   };
-  const r = inOwnOrder(own, new Set(part.map((a) => to[a])), at, stereo);
+  // (each atom named in words by its place as given)
+  const said = (a: number) => `${own.atoms[a].el}${back[a] + 1}`;
+  const r = inOwnOrder(own, new Set(part.map((a) => to[a])), at, stereo, said);
   if ("refused" in r) return r;
   const named = (atoms: readonly number[]) => atoms.map((a) => back[a]).sort((p, q) => p - q);
   return { ...r, layout: restored(r.layout, to), part: named(r.part), taken: named(r.taken), moved: r.moved.map(named) };
 }
 
-/** An atom as words say it: its element and its place, counted from 1. */
-const said = (input: LayoutInput, a: number) => `${input.atoms[a].el}${a + 1}`;
-
-function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[], stereo: Stereo | undefined): Around {
+/** The part drawn, with the atoms in the molecule's own order; `said`, an atom in words: its element and its place as given, counted from 1. */
+function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[], stereo: Stereo | undefined, said: (a: number) => string): Around {
   const n = input.atoms.length;
   const mol = perceive(input);
   const part = new Set(given);
@@ -86,15 +83,15 @@ function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[]
   const taken = inPart.filter((a) => !given.has(a));
   if (part.size === n) return { refused: "The part is the whole structure, so it is drawn whole." };
   const metal = inPart.find((a) => isMetal(input.atoms[a].el) || input.atoms[a].el === "*" || input.atoms[a].pi);
-  if (metal != null) return { refused: `${said(input, metal)} makes the part a metal complex, which is drawn whole.` };
+  if (metal != null) return { refused: `${said(metal)} makes the part a metal complex, which is drawn whole.` };
   if (input.axes?.some((x) => x.atoms.some((a) => part.has(a)))) return { refused: "An axis of chirality runs through the part, so the structure is drawn whole." };
   const joins = input.bonds.filter((b) => part.has(b.a) !== part.has(b.b));
   const multiple = joins.find((b) => b.order !== 1);
-  if (multiple) return { refused: `The part is joined to the rest by a ${multiple.order === 2 ? "double" : multiple.order === 3 ? "triple" : "non-single"} bond (${said(input, multiple.a)}-${said(input, multiple.b)}), so the structure is drawn whole.` };
+  if (multiple) return { refused: `The part is joined to the rest by a ${multiple.order === 2 ? "double" : multiple.order === 3 ? "triple" : "non-single"} bond (${said(multiple.a)}-${said(multiple.b)}), so the structure is drawn whole.` };
   if (!joins.length) return { refused: "The part is not bonded to the rest." };
   if (!connected(mol, inPart)) return { refused: "The part is in pieces, so the structure is drawn whole." };
   const unplaced = input.atoms.findIndex((_, a) => !part.has(a) && !at[a]);
-  if (unplaced >= 0) return { refused: `${said(input, unplaced)} of the rest is not placed.` };
+  if (unplaced >= 0) return { refused: `${said(unplaced)} of the rest is not placed.` };
 
   // (worked at the engine's unit, a bond of length 1: the rest's bonds' middle length)
   const lengths = input.bonds.filter((b) => !part.has(b.a) && !part.has(b.b)).map((b) => dist(at[b.a]!, at[b.b]!)).filter((l) => l > 1e-9).sort((p, q) => p - q);
@@ -123,14 +120,11 @@ function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[]
   const laid = layout2D(subInput);
   if (laid.depth.some((d) => d != null) || laid.solid.some(Boolean)) return { refused: "The part holds a cage, drawn in perspective, so the structure is drawn whole." };
 
-  // every drawing of the part its symmetries give - its stubs onto the rest's atoms one way or another - and each mirrored
-  const drawings: Point[][] = [];
-  for (const g of symmetriesOf(subInput)) {
-    const p = subAtoms.map((_, k) => ({ x: laid.x[g[k]], y: laid.y[g[k]] }));
-    drawings.push(p, p.map((q) => ({ x: -q.x, y: q.y })));
-  }
+  // the part's drawing, and its mirror image: the rest's atoms may lie as either has its stubs
+  const own = subAtoms.map((_, k) => ({ x: laid.x[k], y: laid.y[k] }));
+  const drawings = [own, own.map((q) => ({ x: -q.x, y: q.y }))];
   const kept = keptStereo(input, stereo, part, attachments);
-  const candidates: { layout: Layout2D; moved: number[][]; mismatch: number; score: number; text: string }[] = [];
+  const candidates: { layout: Layout2D; moved: number[][]; mismatch: number; score: number }[] = [];
   for (const p of drawings) {
     for (const placed of setDown(mol, p, attachments, attachments.map(({ a }) => sub2.get(a)!), inPart.length, rest, part)) {
       if (placed.mismatch > MISMATCH_LIMIT + 1e-9) continue;
@@ -156,15 +150,14 @@ function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[]
       }
       const layout = drawingOf(input, mol, pos, kept, motions);
       const score = measureLaidOut(input, layout).score;
-      const text = layout.x.map((x, i) => `${x.toFixed(4)},${layout.y[i].toFixed(4)}`).join(" ");
-      candidates.push({ layout, moved, mismatch: placed.mismatch, score, text });
+      candidates.push({ layout, moved, mismatch: placed.mismatch, score });
     }
   }
   if (!candidates.length) {
     return { refused: `The new part's bonds to the rest end more than ${MISMATCH_LIMIT} bond${MISMATCH_LIMIT === 1 ? "" : "s"} from where the rest's atoms are, so the structure is drawn whole.` };
   }
-  // (nearest the rest's atoms first, then the drawing that reads best, then by where its atoms are: never by the order the atoms came in)
-  candidates.sort((p, q) => (Math.abs(p.mismatch - q.mismatch) > 1e-6 ? p.mismatch - q.mismatch : Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : p.text < q.text ? -1 : p.text > q.text ? 1 : 0));
+  // (nearest the rest's atoms first, then the drawing that reads best; of two alike, the first made - the part as drawn before its mirror image, the rest's openings by their angles: never by the order the atoms came in)
+  candidates.sort((p, q) => (Math.abs(p.mismatch - q.mismatch) > 1e-6 ? p.mismatch - q.mismatch : Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : 0));
   let why = "";
   for (const c of candidates) {
     const wrong = notAsGiven(input, c.layout);
@@ -173,7 +166,7 @@ function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[]
       continue;
     }
     const layout = inUnit(c.layout, unit, at, part, c.moved);
-    return { layout, part: inPart, taken, moved: c.moved, mismatch: c.mismatch, crowded: crowding(input, c.layout, part, c.moved) };
+    return { layout, part: inPart, taken, moved: c.moved, mismatch: c.mismatch, crowded: crowding(input, c.layout, part, c.moved, said) };
   }
   return { refused: `Drawn so, it would not read back as the structure given (${why}), so the structure is drawn whole.` };
 }
@@ -207,31 +200,6 @@ function branchOf(mol: Molecule, f: number, a: number, part: ReadonlySet<number>
     }
   }
   return [...seen].sort((p, q) => p - q);
-}
-
-/**
- * The part's symmetries, each a permutation of its atoms (stubs among
- * them): the group the symmetries found generate, the identity first, as
- * many as are tried.
- */
-function symmetriesOf(input: LayoutInput): number[][] {
-  const identity = input.atoms.map((_, k) => k);
-  const generators = symmetryOrbits(input).automorphisms;
-  const found = new Map([[identity.join(","), identity]]);
-  const todo = [identity];
-  while (todo.length && found.size < SYMMETRIES_TRIED) {
-    const g = todo.shift()!;
-    for (const h of generators) {
-      const gh = g.map((k) => h[k]);
-      const text = gh.join(",");
-      if (!found.has(text)) {
-        found.set(text, gh);
-        todo.push(gh);
-        if (found.size >= SYMMETRIES_TRIED) break;
-      }
-    }
-  }
-  return [...found.values()];
 }
 
 /**
@@ -372,29 +340,30 @@ function inUnit(out: Layout2D, unit: number, at: readonly (Point | null)[], part
   };
 }
 
-/** Where the part, or a branch moved, crowds the drawing: atoms nearer than half a bond, bonds crossing - in words. */
-function crowding(input: LayoutInput, out: Layout2D, part: ReadonlySet<number>, moved: readonly number[][]): string[] {
+/** Where the part, or a branch moved, crowds the drawing: atoms nearer than half a bond, bonds crossing - in words, each atom by its place as given (`said`), in that order. */
+function crowding(input: LayoutInput, out: Layout2D, part: ReadonlySet<number>, moved: readonly number[][], said: (a: number) => string): string[] {
   const n = input.atoms.length;
   const touched = new Set([...part, ...moved.flat()]);
   const p = (a: number) => ({ x: out.x[a], y: out.y[a] });
   const bonded = new Set(input.bonds.map((b) => key(b.a, b.b)));
-  const said2 = (a: number) => said(input, a);
-  const out2: string[] = [];
+  // (by their places as given: the same words whatever order the atoms came in)
+  const place = (a: number) => Number(said(a).replace(/^\D+/, ""));
+  const pair = (u: number, v: number) => (place(u) < place(v) ? [u, v] : [v, u]);
+  const words: [number, number, string][] = [];
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++) {
-      if (!touched.has(i) && !touched.has(j)) continue;
-      if (bonded.has(key(i, j))) continue;
-      if (dist(p(i), p(j)) < 0.5) out2.push(`${said2(i)} and ${said2(j)} are on top of each other`);
+      if ((!touched.has(i) && !touched.has(j)) || bonded.has(key(i, j))) continue;
+      const [u, v] = pair(i, j);
+      if (dist(p(i), p(j)) < 0.5) words.push([place(u), place(v), `${said(u)} and ${said(v)} are on top of each other`]);
     }
-  const bonds = input.bonds;
+  const bonds = input.bonds.map((b) => pair(b.a, b.b));
   for (let i = 0; i < bonds.length; i++)
     for (let j = i + 1; j < bonds.length; j++) {
-      const [b, c] = [bonds[i], bonds[j]];
-      if (![b.a, b.b, c.a, c.b].some((a) => touched.has(a))) continue;
-      if (b.a === c.a || b.a === c.b || b.b === c.a || b.b === c.b) continue;
-      if (crosses(p(b.a), p(b.b), p(c.a), p(c.b))) out2.push(`${said2(b.a)}-${said2(b.b)} crosses ${said2(c.a)}-${said2(c.b)}`);
+      const [[a, b], [c, d]] = place(bonds[i][0]) < place(bonds[j][0]) ? [bonds[i], bonds[j]] : [bonds[j], bonds[i]];
+      if (![a, b, c, d].some((x) => touched.has(x)) || a === c || a === d || b === c || b === d) continue;
+      if (crosses(p(a), p(b), p(c), p(d))) words.push([place(a), place(c), `${said(a)}-${said(b)} crosses ${said(c)}-${said(d)}`]);
     }
-  return out2;
+  return words.sort((x, y) => x[0] - y[0] || x[1] - y[1] || (x[2] < y[2] ? -1 : 1)).map((w) => w[2]);
 }
 
 /** Whether two segments cross, each strictly between its ends. */

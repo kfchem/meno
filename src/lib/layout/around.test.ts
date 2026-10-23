@@ -48,6 +48,18 @@ describe("a part drawn afresh between fixed neighbours", () => {
     expect(r.crowded).toEqual([]);
   });
 
+  it("says where it is crowded, rather than moving the rest: an ion of the rest where either way the ring could go has its atom", () => {
+    // (ethylbenzene beside two chloride ions, each 0.3 of a bond past where one of the two openings at its CH2 puts the ring's first atom: on it, it would not read back)
+    const g = fromSmiles("CCc1ccccc1.[Cl-].[Cl-]");
+    const along = (deg: number, r = 1.5) => ({ x: r * Math.cos((deg * Math.PI) / 180), y: r * Math.sin((deg * Math.PI) / 180) });
+    const fixed: FixedDrawing = { at: [along(30), { x: 0, y: 0 }, null, null, null, null, null, null, along(150, 1.95), along(-90, 1.95)] };
+    const r = layoutAround(g, [2, 3, 4, 5, 6, 7], fixed);
+    if ("refused" in r) throw new Error(r.refused);
+    expect(at(r.layout, 8)).toEqual(fixed.at[8]);
+    expect(at(r.layout, 9)).toEqual(fixed.at[9]);
+    expect(r.crowded).toContain("C3 and Cl9 are on top of each other");
+  });
+
   it("on two bonds: a benzene swapped for a pyridine, its substituents where they were within a hair, each moved as a whole", () => {
     // (1,3-diethylbenzene drawn; then 2,6-diethylpyridine, its ethyls where the benzene's were)
     const old = fromSmiles("CCc1cccc(CC)c1");
@@ -64,6 +76,18 @@ describe("a part drawn afresh between fixed neighbours", () => {
     expect(r.mismatch).toBeLessThan(0.05);
     for (const a of [0, 1, 7, 8]) expect(dist(at(r.layout, a), fixed.at[a]!) / 2).toBeLessThan(0.1);
     for (const l of bondsOf(g, r.layout, g.atoms.map((_, a) => a), 2)) expect(l).toBeCloseTo(1, 6);
+    expect(notAsGiven(g, r.layout)).toEqual([]);
+  });
+
+  it("on three bonds: the rest drawn as the mirror image of how the part is drawn on its own - the part mirrored to meet it", () => {
+    // (1,2,4-triethylbenzene: no turn takes its three ethyls onto their mirror image)
+    const g = fromSmiles("CCc1ccc(CC)c(CC)c1");
+    const drawn = layout2D(g);
+    const ring = [2, 3, 4, 5, 8, 11];
+    const fixed = restOf({ x: drawn.x.map((x) => -x), y: drawn.y }, ring);
+    const r = layoutAround(g, ring, fixed);
+    if ("refused" in r) throw new Error(r.refused);
+    expect(r.mismatch).toBeLessThan(0.05);
     expect(notAsGiven(g, r.layout)).toEqual([]);
   });
 
@@ -124,6 +148,31 @@ describe("a part drawn afresh between fixed neighbours", () => {
     expect(wedges.length).toBeGreaterThan(0);
     const r = layoutAround(g, [6], { ...restOf(drawn, [6]), stereo: { wedges, hydrogens: drawn.hydrogens } });
     expect("refused" in r && r.refused.startsWith("Drawn so, it would not read back as the structure given")).toBe(true);
+  });
+
+  it("comes out the same whatever order the atoms are given in, its wedges too", () => {
+    // ((R)-1-phenylethanol's CH(OH) the part)
+    const g = fromSmiles("C[C@@H](O)c1ccccc1");
+    const drawn = layout2D(g);
+    const fixed = restOf(drawn, [1, 2]);
+    const n = g.atoms.length;
+    const seen = (input: LayoutInput, r: ReturnType<typeof layoutAround>) => {
+      if ("refused" in r) throw new Error(r.refused);
+      const p = (a: number) => `${r.layout.x[a].toFixed(6)},${r.layout.y[a].toFixed(6)}`;
+      const atoms = input.atoms.map((a, i) => `${a.el}@${p(i)}`).sort().join(" ");
+      const wedges = r.layout.wedges.map((w) => `${p(w.from)}>${w.to < 0 ? "H" : p(w.to)}:${w.stereo}`).sort().join(" ");
+      const hydrogens = r.layout.hydrogens.map((h) => `${p(h.on)}>${h.at.x.toFixed(6)},${h.at.y.toFixed(6)}`).sort().join(" ");
+      return `${atoms} | ${wedges} | ${hydrogens}`;
+    };
+    const first = seen(g, layoutAround(g, [1, 2], fixed));
+    const orders = [g.atoms.map((_, i) => n - 1 - i), g.atoms.map((_, i) => (i + 4) % n), g.atoms.map((_, i) => (i * 7) % n)];
+    for (const [k, to] of orders.entries()) {
+      expect(new Set(to).size).toBe(n);
+      const other = reordered(g, to);
+      const atOther = new Array<Point | null>(n).fill(null);
+      fixed.at.forEach((p, i) => (atOther[to[i]] = p ?? null));
+      expect(seen(other, layoutAround(other, [to[1], to[2]], { at: atOther })), `order ${k + 1}`).toBe(first);
+    }
   });
 
   it("comes out the same whatever order the atoms are given in", () => {
