@@ -752,7 +752,9 @@ The same for every plugin and for Meno's own parts:
     reaction as an RXN file holds it, as a reaction SMILES) (SMILES);
     `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
-    (stereoisomers); `conformers {molblock, isomers?, like?, options}`
+    (stereoisomers: what is left open, how many stereoisomers of it can
+    be made in 3D, which open double bonds are cumulated, and whether none
+    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
@@ -786,6 +788,31 @@ The same for every plugin and for Meno's own parts:
     wrote, read back, to keep with the molecules read from it
     (`"wavefunction": {"kind", "file", "name"}`): given, as the output
     is, to a later step that takes its kind (a step's `files`);
+  - `prepare` may refuse an entry alone, preparing the others' jobs:
+    `{"jobs": [...], "refused": [{"entry": 1, "why": "...", "kind":
+    "refused"}]}` - an isotope's frequencies, which xtb would give as of
+    the natural element. The entry is in no job; it goes out of the
+    step's *Failed* exit with its why. A step whose every entry is
+    refused, or whose options cannot be done, is refused as a whole, as
+    before (an error);
+  - `collect` may answer, for one entry of a job, why that entry alone
+    failed - `{"why": "...", "kind": "no-geometry"}` in its place among
+    the outputs - the others taken as they are. A `kind` is one of
+    core's failure kinds (WORKFLOWS.md, *Failed*); any other, or none,
+    is taken as `failed`, its words kept. An output whose `optimised` is
+    false is not done: its last geometry goes out of the *Failed* exit as
+    *not converged*. An output's `warnings` - `[{"kind":
+    "hessian-not-stationary", "text": "..."}]`, the text the program's
+    own words - are kept with the molecule and said on its chip; a kind
+    core does not know is `other`. A warning never moves an entry. An
+    output's `imaginary` - its imaginary frequencies in cm-1, negative,
+    as the program itself judged them (xtb's "significant" ones,
+    Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
+    marks the molecule as no minimum;
+  - a job `prepare` gives may declare the memory it takes, in MiB
+    (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
+    times its processes, Gaussian's %Mem - counted against what this
+    computer's jobs may use; none declared, it is counted by its cores;
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job
@@ -800,7 +827,13 @@ The same for every plugin and for Meno's own parts:
   - `run {step, entries, options, holds}` - a kind of step it does at
     once, in its worker, with no job: the entries it kept, by their
     place (RDKit's *Duplicates*). `holds` says whether they came as a
-    conformer set or a compound set.
+    conformer set or a compound set. Where it counted a mirror image in
+    one kept, it says so beside them - `"counted": [{"entry": 0,
+    "degeneracy": 2, "mirror": [...]}]`, the atoms the mirror image swaps
+    as a permutation - and an entry given carries its `degeneracy`, where
+    it has one. `"capped": 2` says how many compounds it took atom against
+    atom, their ways onto themselves too many to try: a duplicate of one
+    could be missed, and the step says so.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,

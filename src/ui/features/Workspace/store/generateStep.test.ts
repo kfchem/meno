@@ -103,6 +103,7 @@ describe("Generate: a step that takes nothing in", () => {
     // (each with its record: the SMILES as given, the model's values - named, as computed, by what made them - and what it leaves open)
     const by = { plugin: "reinvent", version: expect.any(String), program: "REINVENT 4 4.8.24", model: "reinvent_pubchem.prior", method: "sampled, seed 7, on the CPU" };
     expect(held.records[0]).toEqual({
+      of: expect.any(String),
       properties: {
         smiles: { value: "CCO", unit: "none", status: "computed", by },
         nll: { value: 21.5, unit: "none", status: "computed", by },

@@ -13,11 +13,13 @@ use uuid::Uuid;
 
 mod ccd;
 mod clipboard;
+mod defaults;
 mod folders;
 mod fonts;
 #[cfg(windows)]
 mod drop;
 mod jobs;
+mod keptjobs;
 mod logfile;
 mod pdf;
 mod pdfmake;
@@ -864,7 +866,9 @@ fn ole_close(id: u32) -> Result<(), String> {
 
 /// `--register-ole` and `--unregister-ole`, which the installer runs: the
 /// class Office finds Meno's structures by, written or taken out, and then
-/// nothing else. Whether it worked is the exit code.
+/// nothing else; and `--unregister-defaults`, which the uninstaller runs:
+/// what is left of Meno's listing in Default apps (defaults.rs), taken out.
+/// Whether it worked is the exit code.
 #[cfg(windows)]
 fn registration_asked() -> Option<i32> {
     let args: Vec<String> = std::env::args().collect();
@@ -881,6 +885,9 @@ fn registration_asked() -> Option<i32> {
     }
     if args.iter().any(|a| a == "--unregister-ole") {
         return Some(done(ole::unregister()));
+    }
+    if args.iter().any(|a| a == "--unregister-defaults") {
+        return Some(done(defaults::unregister()));
     }
     None
 }
@@ -1051,6 +1058,12 @@ pub fn run() {
             present::present_window,
             // workspace files opened from outside Meno
             opened::opened_files,
+            // Meno as the default app for them, chosen in Settings
+            defaults::defaults_state,
+            defaults::defaults_use,
+            defaults::defaults_offer,
+            defaults::defaults_open_settings,
+            defaults::defaults_withdraw,
             // keeping Meno up to date
             update::update_state,
             update::update_check,
@@ -1071,8 +1084,13 @@ pub fn run() {
             jobs::job_stop,
             jobs::job_remove,
             jobs::jobs_clear_finished,
+            jobs::computer_resources,
+            jobs::jobs_limits,
             jobs::job_trim,
-            jobs::jobs_finished_bytes
+            jobs::jobs_finished_bytes,
+            keptjobs::job_kept,
+            keptjobs::file_now,
+            keptjobs::job_write_back
         ])
         .build(context)
         .expect("error while building tauri application")

@@ -5,7 +5,7 @@
  * own.
  */
 import { numberText } from "../../../../lib/calc/results";
-import type { Option } from "../../../../lib/options";
+import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 
@@ -57,6 +57,8 @@ export type KindInfo = {
   options?: readonly Option[];
   /** What must be known of its entries before it runs, where something must: which stereoisomer each is (`configurations`, workflow/configurations) - asked of the plugin that perceives it, every entry its own. */
   perceives?: "configurations";
+  /** Where it needs them known only with some options: whether these do (Duplicates' mirror images counted in). Unsaid, always. */
+  perceivesWith?: (v: OptionValues) => boolean;
   /** Meno's own choices for a kind a plugin does, whoever does it, before the plugin's (Render's: a picture's size and shape, and what its molecules and surfaces are made of). */
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
@@ -69,15 +71,24 @@ export type KindInfo = {
   how?: (values: Record<string, string | number | boolean>) => string;
 };
 
+/**
+ * A program step's second exit (workflow/failures): each entry it could not
+ * do, with why - as it came in, or as far as it came (an optimisation that
+ * did not converge, its last geometry) - in plain view, and wired on to try
+ * again. What it holds is what came in (`same`); a conformer search's, the
+ * molecules it could search no conformers of.
+ */
+const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
+
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers" },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised" },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies" },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies" },
+  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", second: { ...FAILED, gives: "molecules" } },
+  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", second: FAILED },
+  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", second: FAILED },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", second: FAILED },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions" },
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", second: FAILED },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
@@ -100,7 +111,23 @@ export const KINDS: readonly KindInfo[] = [
     runs: "entries",
     made: "Unlike",
     second: { id: "rest", name: "Alike", gives: "same", of: "rest" },
-    options: [{ id: "rmsd", label: "Alike within (RMSD)", type: "number", default: 0.125, min: 0, step: 0.025, unit: "Å" }],
+    // (alike: the one definition of the same conformer, workflow/sameConformer - no threshold of its own; the
+    //  maintainer, 2026-10-21. A conformer's mirror image, in an achiral molecule: kept apart by default - an atom's
+    //  average over both needs both - or counted in, its degeneracy 2 and the atoms it swaps kept: 2026-10-22)
+    options: [
+      {
+        id: "mirrors",
+        label: "Mirror images",
+        type: "choice",
+        choices: [
+          { value: "apart", label: "Kept apart" },
+          { value: "counted", label: "Counted in (degeneracy 2)" },
+        ],
+        default: "apart",
+      },
+    ],
+    perceives: "configurations",
+    perceivesWith: (v) => v.mirrors === "counted",
   },
   {
     kind: "populations",

@@ -1,8 +1,10 @@
 import clsx from "clsx";
 import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { WorkflowSet } from "../store/types";
-import { NAME_DOWN, SET_PAD, PX } from "./look";
+import type { StyleChoice } from "../../../../lib/chem/style";
+import { NAME_DOWN, SET_PAD, PX, SUMMARY_PX } from "./look";
 import { HAIR, Port } from "./StepCard";
+import SummaryBody from "./SummaryBody";
 
 /** How wide the band along a frame's edge is that a press takes to size it, in px. */
 const EDGE = 8;
@@ -24,8 +26,10 @@ export type SetFrameProps = {
   onHover: (on: boolean) => void;
   /** A chemist's set: its name changed - two clicks on it, Enter to keep it, Escape to leave it as it was. */
   onRename?: (name: string) => void;
-  /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame, where its molecules would lie. */
-  summary?: { count: string; nouns: string };
+  /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame where its molecules would lie, with a sample of them drawn and a chart of their energies (SummaryBody). */
+  summary?: { count: string; nouns: string; holds: "molecules" | "conformers"; style: StyleChoice };
+  /** Its summary's *Open as a table*: what it holds read in the column. */
+  onOpenTable?: () => void;
 };
 
 const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -101,11 +105,18 @@ export default function SetFrame(p: SetFrameProps) {
       </div>
       {p.summary && (
         <div
-          className={clsx("absolute flex flex-col items-center justify-center text-center transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
+          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
           style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
         >
-          <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
-          <span className="text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+          {/* (made at its own size, and made smaller to fit a frame sized smaller - by hand, or before it was this large) */}
+          {p.set.collection && (
+            <div
+              className="origin-top-left"
+              style={{ width: SUMMARY_PX.w, height: SUMMARY_PX.h, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / SUMMARY_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / SUMMARY_PX.h)})` }}
+            >
+              <SummaryBody count={p.summary.count} nouns={p.summary.nouns} collection={p.set.collection} holds={p.summary.holds} style={p.summary.style} onOpenTable={p.onOpenTable} compact={p.compact} />
+            </div>
+          )}
         </div>
       )}
       {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} />}

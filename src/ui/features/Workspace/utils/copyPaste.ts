@@ -25,7 +25,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { readCalc } from "../../../../lib/calc/output";
+import { imaginaryOf, readCalc } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -34,6 +34,8 @@ import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { magnificationWithin } from "./magnified";
 import type { Style3D } from "../../../../lib/chem/style3d";
+import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
+import { anyLeftOut, leftOut, noting, readEach } from "./readNotes";
 
 type Pt = { x: number; y: number };
 
@@ -243,6 +245,11 @@ function withArrowForm(a: Arrow): Arrow {
 
 /** The structure in Meno's own record, or null if `text` is not one this version reads. */
 export function readRecord(text: string): Drawn | null {
+  const { value, left } = noting(() => readRecordNoting(text));
+  return value && anyLeftOut(left) ? { ...value, leftOut: left } : value;
+}
+
+function readRecordNoting(text: string): Drawn | null {
   let data: unknown;
   try {
     data = JSON.parse(text);
@@ -257,11 +264,12 @@ export function readRecord(text: string): Drawn | null {
   if (!drawn) return null;
   // (a copy's PDFs and texts' sheets: a workspace's file keeps its own, apart)
   const pdfs = readPdfs(r.pdfs).map((p, i) => ({ ...p, id: i + 1 }));
-  const sheets = (Array.isArray(r.sheets) ? (r.sheets as { name?: unknown; text?: unknown; at?: { x?: unknown; y?: unknown }; icon?: unknown }[]) : []).flatMap((t, i) =>
-    typeof t?.name === "string" && typeof t.text === "string" && isNum(t.at?.x) && isNum(t.at?.y)
-      ? [{ id: i + 1, name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }]
-      : [],
-  );
+  const sheets = readEach(r.sheets, (v) => {
+    const t = v as { name?: unknown; text?: unknown; at?: { x?: unknown; y?: unknown }; icon?: unknown } | null;
+    return typeof t?.name === "string" && typeof t.text === "string" && isNum(t.at?.x) && isNum(t.at?.y)
+      ? { name: t.name.slice(0, 260), text: t.text, at: { x: t.at.x, y: t.at.y }, ...(t.icon === true ? { icon: true as const } : {}) }
+      : null;
+  }, "text").map((t, i) => ({ id: i + 1, ...t }));
   const labelPt = isNum(r.labelPt) && r.labelPt > 0 ? r.labelPt : undefined;
   return { ...drawn, ...(bondPt ? { bondPt } : {}), ...(labelPt ? { labelPt } : {}), ...(pdfs.length ? { pdfs } : {}), ...(sheets.length ? { sheets } : {}) };
 }
@@ -274,7 +282,8 @@ export function readRecord(text: string): Drawn | null {
 export function placesRead(data: unknown): { molecules3d: number[]; pictures: number[] } {
   const r = data as { molecules3d?: unknown; pictures?: unknown } | null;
   const places = (list: unknown, reads: (v: unknown) => unknown) => (Array.isArray(list) ? list.flatMap((v, i) => (reads(v) ? [i] : [])) : []);
-  return { molecules3d: places(r?.molecules3d, readCarried3D), pictures: places(r?.pictures, readPicture) };
+  // (read again only to be placed: what they leave out is said where they are read for the page)
+  return noting(() => ({ molecules3d: places(r?.molecules3d, readCarried3D), pictures: places(r?.pictures, readPicture) })).value;
 }
 
 /**
@@ -313,23 +322,25 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     return null;
   }
   // (arrows and pluses that do not read are left out, not the structure)
-  const arrows = (Array.isArray(r.arrows) ? (r.arrows as Partial<Arrow>[]) : [])
-    .filter((a) => isEntry(a) && isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length))
-    .map((a) => withArrowForm(a as Arrow));
-  const pluses = (Array.isArray(r.pluses) ? (r.pluses as Partial<Plus>[]) : []).filter(
-    (p) => isEntry(p) && isNum(p.id) && isNum(p.x) && isNum(p.y),
-  ) as Plus[];
+  const arrows = readEach(r.arrows, (v) => {
+    const a = v as Partial<Arrow>;
+    return isEntry(a) && isNum(a.id) && isNum(a.x) && isNum(a.y) && isNum(a.angle) && isNum(a.length) ? withArrowForm(a as Arrow) : null;
+  }, "arrow");
+  const pluses = readEach(r.pluses, (v) => {
+    const p = v as Partial<Plus>;
+    return isEntry(p) && isNum(p.id) && isNum(p.x) && isNum(p.y) ? (p as Plus) : null;
+  }, "plus");
   // (words over an arrow that is not there are over none)
   const arrowIds = new Set(arrows.map((a) => a.id));
-  const shapes = (Array.isArray(r.shapes) ? r.shapes : []).flatMap((x): Shape[] => {
-    const read = readShape(x, pointPx);
-    return read ? [read] : [];
-  });
+  const shapes = readEach(r.shapes, (x) => readShape(x, pointPx), "shape");
   // (words written in a shape before 2026-10-19 - a shape is a shape now - words on the page as they were: where, as wide and as large, beside it)
-  const captions = (Array.isArray(r.captions) ? (r.captions as Partial<Caption>[]) : []).flatMap((c): Caption[] => {
-    if (!isEntry(c) || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return [];
+  const captions = readEach(r.captions, (v): Caption | null => {
+    const c = v as Partial<Caption>;
+    if (!isEntry(c) || !isNum(c.id) || !isNum(c.x) || !isNum(c.y) || typeof c.text !== "string" || !c.text.trim()) return null;
     const from = wordsFromOf(c.from);
-    return [
+    // (words over an arrow not there are over none - and so said)
+    if (c.arrow != null && !(isNum(c.arrow) && arrowIds.has(c.arrow))) leftOut("captionArrow");
+    return (
       {
         id: c.id,
         x: c.x,
@@ -345,26 +356,21 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
           const marks = marksRead(c.marks, c.text.length);
           return marks.length ? { marks } : {};
         })(),
-      },
-    ];
-  });
-  const molecules3d = (Array.isArray(r.molecules3d) ? r.molecules3d : []).flatMap((m) => {
-    const read = readCarried3D(m);
-    return read ? [read] : [];
-  });
+      }
+    );
+  }, "caption");
+  const molecules3d = readEach(r.molecules3d, readCarried3D, "molecule3d");
   // (a workflow's parts, read as a workspace's are - what they did is a step's own, not a copy's)
   const read = r.flow ? readWorkflow(r.flow) : undefined;
   const flow = read ? { ...read, steps: read.steps.map(({ ran: _r, runs: _k, running: _g, ...s }) => s) } : undefined;
-  const pictures = (Array.isArray(r.pictures) ? r.pictures : []).flatMap((p) => {
-    const read = readPicture(p);
-    return read ? [read] : [];
-  });
+  const pictures = readEach(r.pictures, readPicture, "picture");
   // (slides where their place and size read, in their order)
-  const slides = (Array.isArray(r.slides) ? (r.slides as Partial<Slide>[]) : []).flatMap((s): Slide[] =>
-    isNum(s?.id) && isNum(s.x) && isNum(s.y) && isNum(s.w) && isNum(s.h) && s.w > 0 && s.h > 0
-      ? [{ id: s.id, x: s.x, y: s.y, w: s.w, h: s.h, ...(s.around === true ? { around: true as const } : {}) }]
-      : [],
-  );
+  const slides = readEach(r.slides, (v): Slide | null => {
+    const s = v as Partial<Slide> | null;
+    return isNum(s?.id) && isNum(s.x) && isNum(s.y) && isNum(s.w) && isNum(s.h) && s.w > 0 && s.h > 0
+      ? { id: s.id, x: s.x, y: s.y, w: s.w, h: s.h, ...(s.around === true ? { around: true as const } : {}) }
+      : null;
+  }, "slide");
   // (a mark put by hand where it reads as a place, else where the drawing puts it)
   const markAt = (p: unknown) => {
     const q = p as { x?: unknown; y?: unknown } | undefined;
@@ -391,14 +397,15 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     if (Array.isArray(x.gap) && x.gap.length === 2 && x.gap.every((g) => isNum(g) && ids.has(g)) && x.gap[0] !== x.gap[1]) return { gap: [x.gap[0], x.gap[1]] };
     return null;
   };
-  const pushes = (Array.isArray(r.pushes) ? (r.pushes as Partial<PushArrow>[]) : []).flatMap((p): PushArrow[] => {
-    if (!isEntry(p)) return [];
+  const pushes = readEach(r.pushes, (v): PushArrow | null => {
+    const p = v as Partial<PushArrow>;
+    if (!isEntry(p)) return null;
     const from = endOf(p.from);
     const to = endOf(p.to);
-    if (!isNum(p.id) || !from || !to) return [];
+    if (!isNum(p.id) || !from || !to) return null;
     const bend = p.bend && isNum(p.bend.along) && isNum(p.bend.out) && Math.abs(p.bend.along) < 10 && Math.abs(p.bend.out) < 10 ? { along: p.bend.along, out: p.bend.out } : undefined;
-    return [{ id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}), ...(p.fromPair ? { fromPair: true as const } : {}), ...(isColour(p.color) ? { color: p.color } : {}) }];
-  });
+    return { id: p.id, from, to, ...(p.half ? { half: true as const } : {}), ...(bend ? { bend } : {}), ...(p.noPair ? { noPair: true as const } : {}), ...(p.fromPair ? { fromPair: true as const } : {}), ...(isColour(p.color) ? { color: p.color } : {}) };
+  }, "push");
   // (colours only as colours: what is not one is left out - it would go into a picture's markup)
   const withColours = <T extends { color?: unknown; highlight?: unknown }>(x: T): T => {
     const out = { ...x };
@@ -456,17 +463,11 @@ export function readDrawn(data: unknown, pointPx = POINT): Drawn | null {
     ...(slides.length ? { slides } : {}),
     ...(shapes.length ? { shapes } : {}),
     ...(() => {
-      const cycles = (Array.isArray(r.cycles) ? r.cycles : []).flatMap((c): Cycle[] => {
-        const read = readCycle(c);
-        return read ? [read] : [];
-      });
+      const cycles = readEach(r.cycles, readCycle, "cycle");
       return cycles.length ? { cycles } : {};
     })(),
     ...(() => {
-      const inks = (Array.isArray(r.inks) ? r.inks : []).flatMap((k): Ink[] => {
-        const read = readInk(k);
-        return read ? [read] : [];
-      });
+      const inks = readEach(r.inks, readInk, "ink");
       return inks.length ? { inks } : {};
     })(),
   };
@@ -615,6 +616,35 @@ function stackOf(given: unknown): Carried3D["stack"] | undefined {
   return { id: s.id as number, ...(s.spread === true ? { spread: true as const } : {}) };
 }
 
+/**
+ * A molecule's calculation as a file carries it, its results of frames
+ * made those of the frames kept (`keep`, by geometry - the first, then each
+ * frame): a value of each frame left out taken out with it, and a row of a
+ * list on one no longer on any - never on the frame after it.
+ */
+function framesKeptIn(calc: unknown, keep: readonly boolean[]): unknown {
+  const c = calc as { results?: unknown } | null | undefined;
+  if (keep.every(Boolean) || !c || typeof c !== "object" || !Array.isArray(c.results)) return calc;
+  const at = new Map<number, number>();
+  keep.forEach((k, i) => k && at.set(i, at.size));
+  const results = c.results.map((v) => {
+    const r = v as { on?: unknown; values?: unknown; rows?: unknown } | null;
+    if (r?.on === "frames" && Array.isArray(r.values) && r.values.length === keep.length) return { ...r, values: r.values.filter((_, i) => keep[i]) };
+    if (r?.on === "list" && Array.isArray(r.rows))
+      return {
+        ...r,
+        rows: r.rows.map((row) => {
+          const w = row as { frame?: unknown } | null;
+          if (!w || typeof w !== "object" || !Number.isInteger(w.frame)) return row;
+          const { frame, ...rest } = w;
+          return at.has(frame as number) ? { ...rest, frame: at.get(frame as number) } : rest;
+        }),
+      };
+    return v;
+  });
+  return { ...c, results };
+}
+
 /** A molecule in 3D in Meno's own record, or null where it does not read as one. */
 export function readCarried3D(given: unknown): Carried3D | null {
   const m = given as Partial<Record<keyof Carried3D, unknown>>;
@@ -634,10 +664,23 @@ export function readCarried3D(given: unknown): Carried3D | null {
   const frames = listed.filter(whole);
   const shownFrame = Number.isInteger(m.frame) ? Math.min(Math.max(0, m.frame as number), listed.length) : null;
   const frame = shownFrame == null ? null : listed.slice(0, shownFrame).filter(whole).length;
-  const energies = Array.isArray(m.energies) && m.energies.every(isNum) && m.energies.length === frames.length + 1 ? (m.energies as number[]) : undefined;
-  const measures = (Array.isArray(m.measures) ? (m.measures as Partial<Measure3D>[]) : []).filter(
-    (x): x is Measure3D => isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index),
-  );
+  // (a frame that does not read is left out alone: its energy, number, share and degeneracy with it, every other frame's kept - and counted with those its file left out)
+  const keep = [true, ...listed.map(whole)];
+  const framesDropped = listed.length - frames.length;
+  leftOut("frame", framesDropped);
+  const perFrame = <T,>(v: unknown, fine: (x: unknown) => boolean): T[] | undefined => {
+    if (v === undefined) return undefined;
+    if (!Array.isArray(v) || v.length !== keep.length || !v.every(fine)) {
+      leftOut("frameValues");
+      return undefined;
+    }
+    return v.filter((_, i) => keep[i]) as T[];
+  };
+  const energies = perFrame<number>(m.energies, isNum);
+  const measures = readEach(m.measures, (v) => {
+    const x = v as Partial<Measure3D>;
+    return isEntry(x) && isNum(x.id) && Array.isArray(x.atoms) && x.atoms.length >= 2 && x.atoms.length <= 4 && x.atoms.every(index) ? (x as Measure3D) : null;
+  }, "measure");
   const turn = Array.isArray(m.turn) && m.turn.length === 4 && m.turn.every(isNum) ? (m.turn as Turn3D) : undefined;
   // what ties it to the drawing it was made from: the drawing's atom each
   // of its atoms is (a paste ties it to the pasted drawing: pasteModel)
@@ -648,7 +691,19 @@ export function readCarried3D(given: unknown): Carried3D | null {
   const stereo = readStereo(m.stereo, n, bonds.length);
   const numbers = readAtomNumbers(m.atomNumbers, n);
   const biopolymer = readBiopolymer(m.biopolymer, n);
-  const calc = readCalc(m.calc, n, 1 + frames.length);
+  if (m.biopolymer !== undefined && !biopolymer) leftOut("biopolymer");
+  const calc = readCalc(framesKeptIn(m.calc, keep), n, 1 + frames.length);
+  if (m.calc !== undefined && m.calc !== null && !calc) leftOut("calc");
+  // (its results that do not read, or are of atoms or frames it does not have)
+  const givenResults = Array.isArray((m.calc as { results?: unknown } | undefined)?.results) ? ((m.calc as { results: unknown[] }).results.length) : 0;
+  if (m.calc !== undefined) leftOut("calcResult", calc ? givenResults - (calc.results?.length ?? 0) : givenResults);
+  const givenUnread = Array.isArray((m.calc as { unread?: unknown } | undefined)?.unread) ? (m.calc as { unread: unknown[] }).unread.length : 0;
+  if (calc) leftOut("calcUnread", givenUnread - (calc.unread?.length ?? 0));
+  const bondOrders = m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" || m.bondOrders === "estimated" ? m.bondOrders : undefined;
+  if (m.bondOrders !== undefined && !bondOrders) leftOut("bondOrders");
+  // (a ligand's atoms whose orders are unknown: each that is one of its own kept, any other said - never all dropped for one)
+  const unknownOrders = Array.isArray(m.unknownOrders) ? m.unknownOrders.filter(index) : [];
+  if (m.unknownOrders !== undefined && (!Array.isArray(m.unknownOrders) || unknownOrders.length < m.unknownOrders.length)) leftOut("bondOrders");
   return {
     atoms: atoms as Carried3D["atoms"],
     bonds: bonds as Carried3D["bonds"],
@@ -669,25 +724,64 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(drawnFrom ? { drawnFrom } : {}),
     ...(drawnFrom && typeof m.drawnAs === "string" ? { drawnAs: m.drawnAs } : {}),
     ...(m.conformerSet === true ? { conformerSet: true } : {}),
+    ...(m.partOf === true ? { partOf: true as const } : {}),
     ...(centresOf(m.centres, n) ? { centres: centresOf(m.centres, n) } : {}),
     ...(biopolymer ? { biopolymer } : {}),
-    ...(m.bondOrders === "unknown" || m.bondOrders === "perceived" || m.bondOrders === "assigned" || m.bondOrders === "dictionary" || m.bondOrders === "estimated" ? { bondOrders: m.bondOrders } : {}),
+    ...(bondOrders ? { bondOrders } : {}),
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
-    ...(Array.isArray(m.unknownOrders) && m.unknownOrders.length && m.unknownOrders.every(index) ? { unknownOrders: m.unknownOrders as number[] } : {}),
+    ...(unknownOrders.length ? { unknownOrders } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
-    ...(Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? { framesLeftOut: m.framesLeftOut as number } : {}),
+    ...(() => {
+      const left = (Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? (m.framesLeftOut as number) : 0) + framesDropped;
+      return left ? { framesLeftOut: left } : {};
+    })(),
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
     ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
     ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
-    ...(Array.isArray(m.numbers) && m.numbers.length === 1 + frames.length && m.numbers.every((k) => Number.isInteger(k)) ? { numbers: m.numbers as number[] } : {}),
-    ...(Array.isArray(m.shares) && m.shares.length === 1 + frames.length && m.shares.every(isNum) ? { shares: m.shares as number[] } : {}),
-    ...(Array.isArray(m.degeneracies) && m.degeneracies.length === 1 + frames.length && m.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? { degeneracies: m.degeneracies as number[] } : {}),
+    ...(() => {
+      const numbers = perFrame<number>(m.numbers, (k) => Number.isInteger(k));
+      const shares = perFrame<number>(m.shares, isNum);
+      const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
+      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
+    })(),
+    ...(() => {
+      const failed = failedOf(m.failed, keep);
+      const imaginary = imaginaryFrames(m.imaginary, keep);
+      const mirrors = mirrorsOf(m.mirrors, keep, n);
+      return { ...(failed ? { failed } : {}), ...(imaginary ? { imaginary } : {}), ...(mirrors ? { mirrors } : {}) };
+    })(),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** A conformer set's mirror images counted in, frame by frame: each a permutation of its `atoms` atoms, or null; of the frames kept, those left out with theirs. */
+function mirrorsOf(given: unknown, keep: boolean[], atoms: number): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
+  const isPermutation = (p: unknown): p is number[] =>
+    Array.isArray(p) && p.length === atoms && p.every((i) => Number.isInteger(i) && i >= 0 && i < atoms) && new Set(p).size === atoms;
+  const out = given.filter((_, i) => keep[i]).map((p) => (isPermutation(p) ? [...p] : null));
+  return out.some(Boolean) ? out : undefined;
+}
+
+/** Why each of a molecule's frames failed in the step that made it, where one did - one for each, null where it did not - of core's kinds (workflow/failures); of the frames kept, those left out with theirs. */
+function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
+  const out = given.filter((_, i) => keep[i]).map((f): Failure | null => {
+    const g = f as { kind?: unknown; why?: unknown } | null;
+    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
+  });
+  return out.some(Boolean) ? out : undefined;
+}
+
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them. */
+function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
+  const out = given.filter((_, i) => keep[i]).map((f) => imaginaryOf(f) ?? null);
+  return out.some(Boolean) ? out : undefined;
 }
 
 /** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */
@@ -720,24 +814,28 @@ function centresOf(given: unknown, atoms: number): Carried3D["centres"] | undefi
 function readStereo(given: unknown, atoms: number, bonds: number): Carried3D["stereo"] | undefined {
   const s = given as { atoms?: unknown; bonds?: unknown; chosen?: unknown } | null | undefined;
   if (!s || typeof s !== "object") return undefined;
+  // (a label not of an atom or a bond of its own is left out alone, and said - every other kept)
   const labels = (r: unknown, n: number): Record<number, string> | null => {
     if (!r || typeof r !== "object" || Array.isArray(r)) return null;
     const out: Record<number, string> = {};
     for (const [k, v] of Object.entries(r)) {
       const i = Number(k);
-      if (!Number.isInteger(i) || i < 0 || i >= n || typeof v !== "string") return null;
-      out[i] = v;
+      if (!Number.isInteger(i) || i < 0 || i >= n || typeof v !== "string") leftOut("stereo");
+      else out[i] = v;
     }
     return out;
   };
   const a = labels(s.atoms, atoms);
   const b = labels(s.bonds, bonds);
-  if (!a || !b) return undefined;
-  const within = (v: unknown, n: number): v is number[] =>
-    Array.isArray(v) && v.every((i) => Number.isInteger(i) && i >= 0 && i < n);
+  if (!a || !b) {
+    // (no list of labels to read: those of the other list lost with it, and at least one)
+    leftOut("stereo", Math.max(1, Object.keys(a ?? b ?? {}).length));
+    return undefined;
+  }
+  const within = (v: unknown, n: number): number[] => (Array.isArray(v) ? v.filter((i) => Number.isInteger(i) && i >= 0 && i < n) : []);
   const pair = (v: unknown) => {
     const c = v as { atoms?: unknown; bonds?: unknown } | undefined;
-    return c && within(c.atoms, atoms) && within(c.bonds, bonds) ? { atoms: c.atoms, bonds: c.bonds } : undefined;
+    return c && Array.isArray(c.atoms) && Array.isArray(c.bonds) ? { atoms: within(c.atoms, atoms), bonds: within(c.bonds, bonds) } : undefined;
   };
   const chosen = pair(s.chosen);
   // (those shown, as asked for on it)

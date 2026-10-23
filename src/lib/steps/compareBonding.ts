@@ -80,7 +80,7 @@ export function comparedBonding(e: Entry, reference: Entry, o: CompareOptions = 
   const said = (p: number, q: number) => `${els[p]}${p + 1}-${els[q]}${q + 1}`;
   for (const b of reference.structure.bonds) {
     if (passed(b.a1, b.a2) || here.has(key(b.a1, b.a2))) continue;
-    differences.push(`${said(b.a1, b.a2)} is bonded in the reference, not here: ${d(b.a1, b.a2).toFixed(2)} Å apart, past ${bondingDistance(radii[b.a1], radii[b.a2]).toFixed(2)} Å (their covalent radii and a tenth over).`);
+    differences.push(`${said(b.a1, b.a2)} is bonded in the reference, not here: ${d(b.a1, b.a2).toFixed(2)} Å apart, past ${bondingDistance(radii[b.a1], radii[b.a2]).toFixed(2)} Å (their covalent radii and a fifth over).`);
   }
   for (let k = 0; k < pairs.length; k += 2) {
     const [p, q] = [pairs[k], pairs[k + 1]];

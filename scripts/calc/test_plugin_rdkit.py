@@ -615,6 +615,76 @@ class SameConformer(unittest.TestCase):
         same = self.worker.Sameness(mol)
         self.assertGreater(same.apart(P, mirror), self.worker.SAME_CONFORMER)
 
+    @staticmethod
+    def entry(mol, P, energy=0.0):
+        """A conformer as Meno gives one to `run`: its atoms in place, its bonds, its compound and energy."""
+        orders = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3, Chem.BondType.AROMATIC: 4}
+        return {
+            "atoms": [{"el": a.GetSymbol(), "x": float(P[i][0]), "y": float(P[i][1]), "z": float(P[i][2])} for i, a in enumerate(mol.GetAtoms())],
+            "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": orders[b.GetBondType()]} for b in mol.GetBonds()],
+            "compound": 0,
+            "energy": energy,
+        }
+
+    def test_duplicates_keeps_a_mirror_image_apart_or_counts_it_in_with_the_atoms_it_swaps(self):
+        import numpy as np
+        mol = self.embedded("COC1CCCCC1", seed=11)
+        P = mol.GetConformer().GetPositions()
+        ring = [a.GetIdx() for a in mol.GetAtoms() if a.GetSymbol() == "C" and a.IsInRing()]
+        c1 = next(i for i in ring if any(n.GetSymbol() == "O" for n in mol.GetAtomWithIdx(i).GetNeighbors()))
+        c2, c6 = [n.GetIdx() for n in mol.GetAtomWithIdx(c1).GetNeighbors() if n.GetIdx() in ring]
+        # (its mirror image as a conformer of the same molecule takes it: reflected, the ring's two sides swapped -
+        #  reflected alone, C1's four neighbours would turn the other way round, which no turn of a bond does)
+        swap = next(w for w in mol.GetSubstructMatches(mol, uniquify=False, maxMatches=1000) if w[c2] == c6 and w[c1] == c1)
+        reflected = P * np.array([-1.0, 1.0, 1.0])
+        M = np.empty_like(P)
+        for i, j in enumerate(swap):
+            M[j] = reflected[i]
+        mirror = self.turned(M)
+        relabelled = self.turned(P, seed=8)
+        given = [self.entry(mol, P), self.entry(mol, relabelled, 1e-6), self.entry(mol, mirror)]
+        run = lambda options: self.worker.op_run({"step": "duplicates", "entries": given, "options": options, "holds": "conformers"})
+        # (by default: the same conformer turned set aside, its mirror image kept - two)
+        self.assertEqual(run({}), {"kept": [0, 2]})
+        counted = run({"mirrors": "counted"})
+        self.assertEqual(counted["kept"], [0])
+        [twin] = counted["counted"]
+        self.assertEqual((twin["entry"], twin["degeneracy"]), (0, 2))
+        # (the ring carbons either side of the methoxy swap: C2 for C6, and each of their hydrogens)
+        self.assertEqual((twin["mirror"][c2], twin["mirror"][c6], twin["mirror"][c1]), (c6, c2, c1))
+        self.assertEqual(sorted(twin["mirror"]), list(range(mol.GetNumAtoms())))
+
+    def test_duplicates_never_counts_in_an_enantiomer(self):
+        import numpy as np
+        mol = self.embedded("CC(O)CC", seed=4)
+        P = mol.GetConformer().GetPositions()
+        given = [self.entry(mol, P), self.entry(mol, P * np.array([-1.0, 1.0, 1.0]))]
+        out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {"mirrors": "counted"}, "holds": "molecules"})
+        self.assertEqual(out, {"kept": [0, 1], "counted": []})
+
+    def test_duplicates_says_where_it_could_miss_one_past_the_ways_it_tries(self):
+        import math
+        # (a centre with 7 two-carbon arms: 7! = 5,040 ways onto itself, past the 1,000 tried - its atoms taken against
+        #  their own alone; the same conformer, two arms' labels swapped, is missed, and that is said)
+        arms = 7
+        atoms, bonds, xyz = [("W", (0.0, 0.0, 0.0))], [], []
+        for k in range(arms):
+            t = 2 * math.pi * k / arms + 0.1 * k * k
+            z = math.cos(1 + k)
+            r = math.sqrt(1 - z * z)
+            d = (r * math.cos(t), r * math.sin(t), z)
+            atoms += [("C", tuple(2.1 * v for v in d)), ("C", tuple(3.6 * v + 0.3 * (k % 2) for v in d))]
+            bonds += [(0, 1 + 2 * k), (1 + 2 * k, 2 + 2 * k)]
+        order = [0, 3, 4, 1, 2] + list(range(5, 1 + 2 * arms))
+        def entry(places):
+            return {"atoms": [{"el": el, "x": p[0], "y": p[1], "z": p[2]} for el, p in zip([a for a, _ in atoms], places)],
+                    "bonds": [{"a1": i, "a2": j, "order": 1} for i, j in bonds], "compound": 0, "energy": 0.0}
+        given = [entry([p for _, p in atoms]), entry([atoms[i][1] for i in order])]
+        out = self.worker.op_run({"step": "duplicates", "entries": given, "options": {}, "holds": "conformers"})
+        self.assertEqual(out, {"kept": [0, 1], "capped": 1})
+        # (one of it alone: nothing to miss, nothing said)
+        self.assertEqual(self.worker.op_run({"step": "duplicates", "entries": given[:1], "options": {}, "holds": "conformers"}), {"kept": [0]})
+
     def test_bound_is_never_above_the_rmsd(self):
         import numpy as np
         mol = Chem.AddHs(Chem.MolFromSmiles("CC(C)(C)C1CCCCC1"))
@@ -1064,3 +1134,98 @@ class Configurations(unittest.TestCase):
         out = self.worker.op_configurations({"molblocks": ["not a MOL block", good]})["molecules"]
         self.assertIn("error", out[0])
         self.assertIn("key", out[1])
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class OpenStereo(unittest.TestCase):
+    """What a structure drawn leaves open, and how many ways it can go in 3D (`op_open_stereo`): a step that cannot
+    ask which is meant refuses only where there is a choice - a bridgehead its rings fix is none - and never
+    misses an allene's axis, whose stereoisomers RDKit does not count."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def drawn(self, smiles, hydrogens=False):
+        """`smiles` as a drawing: laid out in 2D, wedged where the SMILES gives a configuration."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles(smiles)
+        if hydrogens:
+            mol = Chem.AddHs(mol)
+        AllChem.Compute2DCoords(mol)
+        return self.worker.op_open_stereo({"molblock": Chem.MolToMolBlock(mol)})
+
+    def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
+        """`open_stereo` and then `conformers` of one structure, as a Conformers step asks them: the stereoisomers
+        tried in 3D once, not twice - the same answer both times, and copies, so that one caller's changes are
+        not another's."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles("CC1=CCC2CC1C2(C)C")
+        AllChem.Compute2DCoords(mol)
+        block = Chem.MolToMolBlock(mol)
+        calls = []
+        real = self.worker.EnumerateStereoisomers
+
+        def counted(*args, **kwargs):
+            calls.append(1)
+            return real(*args, **kwargs)
+
+        self.worker.EMBEDDABLE.clear()
+        self.worker.EnumerateStereoisomers = counted
+        try:
+            first = self.worker.op_open_stereo({"molblock": block})
+            again = self.worker.op_open_stereo({"molblock": block})
+            made = self.worker.op_conformers({"molblock": block, "isomers": "all", "options": {"count": 1}})
+        finally:
+            self.worker.EnumerateStereoisomers = real
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(first, again)
+        self.assertEqual(len(made["isomers"]), first["isomers"])
+        self.worker.embeddable(self.worker.read(block))[0].SetProp("asked", "by one")
+        self.assertFalse(self.worker.embeddable(self.worker.read(block))[0].HasProp("asked"))
+
+    def test_a_cage_or_bridged_ring_its_rings_fix_is_one_way_only(self):
+        for name, smiles, centres in [
+            ("adamantane", "C1C2CC3CC1CC(C2)C3", 4),
+            ("cubane", "C12C3C4C1C5C2C3C45", 8),
+            ("norbornane", "C1CC2CCC1C2", 2),
+            ("bicyclo[1.1.0]butane", "C1C2C1C2", 2),
+        ]:
+            got = self.drawn(smiles)
+            # (its bridgeheads are open, as drawn - and give one stereoisomer that can be made, so there is nothing to choose)
+            self.assertEqual(len(got["atoms"]), centres, name)
+            self.assertEqual((got["isomers"], got["cumulenes"], got["free"]), (1, [], False), name)
+
+    def test_what_could_go_more_than_one_way_is_counted_so(self):
+        # (camphor unwedged: its two enantiomers; 5-methylnorbornene, the methyl alone wedged: exo or endo, through the bridgeheads)
+        for name, smiles in [("camphor", "CC1(C)C2CCC1(C)C(=O)C2"), ("5-methylnorbornene", "C[C@H]1CC2C=CC1C2"), ("2-butanol", "CC(O)CC")]:
+            self.assertEqual(self.drawn(smiles)["isomers"], 2, name)
+        # (the same, every centre wedged: nothing open)
+        self.assertEqual(self.drawn("C[C@@H]1C[C@@H]2C=C[C@H]1C2"), {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "free": False})
+
+    def test_an_allenes_axis_left_open_is_said_as_cumulated(self):
+        got = self.drawn("CC=C=CC")
+        self.assertEqual(got["bonds"], [1, 2])
+        self.assertEqual(got["cumulenes"], [1, 2])
+        # (not counted: RDKit's enumeration does not give an allene's two forms - why the cumulated bonds are said)
+        self.assertEqual(got["isomers"], 1)
+
+    def test_a_cage_no_stereoisomer_of_which_embeds_is_made_with_its_stereo_free(self):
+        # (2-methylbicyclo[1.1.1]pentane: its bridgeheads and the methyl's carbon open, and no stereoisomer RDKit gives of
+        #  them embeds with its stereo held - made all the same, as the embedding places it)
+        from rdkit.Chem import AllChem
+
+        for hydrogens in (False, True):
+            got = self.drawn("C1C2CC1C2C", hydrogens)
+            self.assertEqual((got["isomers"], got["free"]), (1, True), hydrogens)
+        mol = Chem.MolFromSmiles("C1C2CC1C2C")
+        AllChem.Compute2DCoords(mol)
+        made = self.worker.op_conformers({"molblock": Chem.MolToMolBlock(mol), "isomers": "one", "count": 1})["isomers"]
+        self.assertEqual(len(made), 1)
+        self.assertTrue(made[0]["frames"])
+        # (prismane: free too - and no 3D structure of it at all, which the step says as it says any it cannot make)
+        self.assertTrue(self.drawn("C12C3C4C1C3C24")["free"])

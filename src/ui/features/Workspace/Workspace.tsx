@@ -79,6 +79,7 @@ import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
+import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -203,7 +204,8 @@ import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
-import { missingFor } from "./workflow/doers";
+import { byOf, MENO, missingFor } from "./workflow/doers";
+import { heldOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -964,6 +966,8 @@ function WorkspaceContent({
   const inkMode = useEditor((s) => s.inkMode);
   const endInk = useCallback(() => store.getState().setInkMode(null), [store]);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
+  const askDeleteSet = useEditor((s) => s.askDeleteSet);
+  const setsNow = useEditor((s) => s.sets);
   // An undo or a redo that would take away a running step is held, and asks
   // first what deleting it asks (heard before the app's own undo, App.tsx)
   const askUndo = useEditor((s) => s.askUndo);
@@ -1688,6 +1692,21 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* (a save past the size Settings says, asked before it is written: fileActions) */}
+      <AnimatePresence>
+        {files.sizeAsked && (
+          <LargeWorkspaceAsk
+            key="large"
+            bytes={files.sizeAsked.bytes}
+            threshold={files.sizeAsked.threshold}
+            steps={files.sizeAsked.steps}
+            most={files.sizeAsked.most}
+            onKeepNoRaw={() => files.sizeAsked?.answer("no raw")}
+            onSaveAll={() => files.sizeAsked?.answer("all")}
+            onCancel={() => files.sizeAsked?.answer("cancel")}
+          />
+        )}
+      </AnimatePresence>
       {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
       {ownTab && <SettingsStyleAsk active={active} />}
       <AnimatePresence>
@@ -1836,6 +1855,21 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {askDeleteSet != null && askDeleteSet.every((id) => setsNow.some((b) => b.id === id)) && (
+          <ConfirmDiscard
+            title={
+              askDeleteSet.length === 1
+                ? `Delete the set and the ${heldOwn(store.getState(), setsNow.find((b) => b.id === askDeleteSet[0])!) ?? "molecules"} it holds?`
+                : `Delete ${askDeleteSet.length} sets and the molecules they hold?`
+            }
+            message={`They are on no page: they go with ${askDeleteSet.length === 1 ? "the set" : "the sets"}. Undo brings them back until the workspace is closed.`}
+            discardLabel={askDeleteSet.length === 1 ? "Delete set" : "Delete sets"}
+            onCancel={() => store.getState().setWorkflowView({ askDeleteSet: null })}
+            onDiscard={() => store.getState().removeSet(askDeleteSet, true)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {askUndo != null && (
           <ConfirmDiscard
             title={askUndo.steps > 1 ? "Delete steps that are running?" : "Delete a step that is running?"}
@@ -1934,7 +1968,8 @@ function WorkspaceContent({
             else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
             else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
-            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
+            // (the menu says what goes with a set that holds its molecules itself: asked there, in its words)
+            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id, true);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
             else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
             else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
@@ -1973,7 +2008,13 @@ function WorkspaceContent({
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
               ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
-              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
+              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () =>
+                    void st
+                      .showStepFiles(s.id)
+                      .then((said) => said && useNotices.getState().show({ id: `show-files:${s.id}`, title: "Some files were not written out", text: said }))
+                      .catch(() => {}) } : {}),
+              // (a step a plugin does runs jobs, whose files the workspace's file keeps: workflow/keptJobs)
+              ...(byOf(s) !== MENO.id ? { keepRaw: { kept: s.keepRaw !== false, set: (keep: boolean) => st.keepRawOutputs(s.id, keep) } } : {}),
             };
           })()}
           onStepOptions={() => {
@@ -1985,6 +2026,17 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          onOpenAsTable={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.collection ? () => store.getState().readSetTable(set.id) : undefined;
+          })()}
+          setHoldsOwn={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const st = store.getState();
+            const set = st.sets.find((b) => b.id === menu.id);
+            return set?.collection?.length ? heldOwn(st, set) : undefined;
+          })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const set = store.getState().sets.find((b) => b.id === menu.id);
