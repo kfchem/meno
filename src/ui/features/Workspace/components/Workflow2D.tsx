@@ -856,7 +856,7 @@ export default function Workflow2D() {
             </div>
           ))}
           {positions.map((m) => (
-            <div key={`p${m.key}`} style={{ ...onLayer(m.x + NOMINAL_BOND_LENGTH / 4, m.y + NOMINAL_BOND_LENGTH / 4), transform: "translate(-50%, -50%)" }}>
+            <div key={`p${m.key}`} style={{ ...onLayer(m.x, m.y), transform: "translate(-50%, -50%)" }}>
               <span className="block min-w-4 rounded-full border border-accel-base bg-white px-1 text-center text-[10px] leading-4 tabular-nums text-accel-base">{m.n}</span>
             </div>
           ))}

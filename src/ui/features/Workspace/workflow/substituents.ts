@@ -262,6 +262,16 @@ export function positionMarks(model: Model, steps: readonly WorkflowStep[], show
     if (s.kind !== "enumerate" || s.options?.way !== "substituents" || !shown.has(s.id)) return [];
     const ids = positionIds(String(s.options.positions ?? "")).filter((id) => place.has(id));
     ids.sort((p, q) => place.get(p)! - place.get(q)!);
-    return ids.map((id, k) => ({ key: `${s.id}:${id}`, x: model.atoms[place.get(id)!].x, y: model.atoms[place.get(id)!].y, n: k + 1 }));
+    return ids.map((id, k) => ({ key: `${s.id}:${id}`, ...markPlace(model, id), n: k + 1 }));
   });
+}
+
+/** Where a position's mark goes: half a bond out from its atom, toward where its group goes - a heavy atom's new bond, a drawn H's own - so it is clear of the drawing's bonds. */
+function markPlace(model: Model, id: number): { x: number; y: number } {
+  const a = model.atoms.find((x) => x.id === id)!;
+  const near = model.bonds.flatMap((b) => (b.a === id ? [b.b] : b.b === id ? [b.a] : [])).map((n) => model.atoms.find((x) => x.id === n)!);
+  const L = bondLength(model);
+  // (a drawn H: on along its bond, beyond it)
+  const spot = a.el === "H" && near.length === 1 ? { x: 2 * a.x - near[0].x, y: 2 * a.y - near[0].y } : calculateNewBondPosition(a, near, model.atoms, a, L);
+  return { x: a.x + (spot.x - a.x) * 0.5, y: a.y + (spot.y - a.y) * 0.5 };
 }

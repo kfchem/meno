@@ -195,11 +195,15 @@ describe("the positions chosen, marked on the drawing", () => {
   const step = (id: number, options: WorkflowStep["options"]) => ({ id, kind: "enumerate", x: 0, y: 0, options }) as WorkflowStep;
   const steps = [step(1, { way: "substituents", positions: "8 3" }), step(2, { way: "rgroups", positions: "1" }), step(3, { way: "substituents", positions: "5 99" })];
 
-  it("each numbered as the step numbers it, by the drawing's atom order, at its atom", () => {
-    expect(positionMarks(drawn, steps, new Set([1])).map((m) => [m.n, m.x, m.y])).toEqual([
-      [1, drawn.atoms[2].x, drawn.atoms[2].y],
-      [2, drawn.atoms[7].x, drawn.atoms[7].y],
-    ]);
+  it("each numbered as the step numbers it, by the drawing's atom order, half a bond out from its atom where its group goes", () => {
+    const marks = positionMarks(drawn, steps, new Set([1]));
+    expect(marks.map((m) => m.n)).toEqual([1, 2]);
+    // (outside the ring: farther from the drawing's middle - p-xylene's is its ring's - than the atom)
+    const mid = { x: (Math.min(...drawn.atoms.map((a) => a.x)) + Math.max(...drawn.atoms.map((a) => a.x))) / 2, y: (Math.min(...drawn.atoms.map((a) => a.y)) + Math.max(...drawn.atoms.map((a) => a.y))) / 2 };
+    for (const [m, atom] of [[marks[0], drawn.atoms[2]], [marks[1], drawn.atoms[7]]] as const) {
+      expect(Math.hypot(m.x - mid.x, m.y - mid.y)).toBeGreaterThan(Math.hypot(atom.x - mid.x, atom.y - mid.y));
+      expect(Math.hypot(m.x - atom.x, m.y - atom.y)).toBeGreaterThan(0.3);
+    }
   });
 
   it("only for a step by substituents that is shown - selected, open or chosen for - and only atoms still drawn", () => {

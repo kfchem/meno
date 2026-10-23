@@ -103,8 +103,8 @@ export default function OptionsForm({
               </div>
             </fieldset>
           ) : o.type === "atoms" ? (
-            <div className="flex items-center gap-2 text-xs text-gh-gray">
-              <span>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-gh-gray">
+              <span className="whitespace-nowrap">
                 {o.label} <span className="text-gh-black tabular-nums">{String(values[o.id] ?? "").split(/[\s,]+/).filter(Boolean).length || "none"}</span>
               </span>
               {onChoose && (
@@ -112,7 +112,7 @@ export default function OptionsForm({
                   type="button"
                   aria-pressed={choosing === o.id}
                   onClick={() => onChoose(choosing === o.id ? null : o.id)}
-                  className={`h-6 rounded-md border px-2 text-xs ${choosing === o.id ? "border-accel-base bg-accel-base/5 text-accel-base" : "border-gh-line bg-white text-gh-black hover:bg-gh-base"}`}
+                  className={`h-6 shrink-0 whitespace-nowrap rounded-md border px-2 text-xs ${choosing === o.id ? "border-accel-base bg-accel-base/5 text-accel-base" : "border-gh-line bg-white text-gh-black hover:bg-gh-base"}`}
                 >
                   {choosing === o.id ? "Done" : "Choose on the drawing"}
                 </button>

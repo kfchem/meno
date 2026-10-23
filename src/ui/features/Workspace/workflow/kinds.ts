@@ -290,7 +290,7 @@ export const KINDS: readonly KindInfo[] = [
       },
       {
         id: "combine",
-        label: "Positions",
+        label: "Combine",
         type: "choice",
         default: "one",
         when: { id: "way", in: ["substituents"] },
