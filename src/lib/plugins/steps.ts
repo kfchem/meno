@@ -24,6 +24,7 @@ export const STEP_KINDS = [
   "stereoisomers",
   "descriptors",
   "enumerate",
+  "chart",
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 

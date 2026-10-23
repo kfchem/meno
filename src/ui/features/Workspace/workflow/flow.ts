@@ -5,8 +5,10 @@
  */
 import type { WorkspaceDocument } from "../document";
 import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
-import { drawnKey, hash, holdsOf, plainAmong, recordKey, setMembers, setMolecules } from "./entries";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
+import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
+import { levelOf } from "../../../../lib/calc/output";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
@@ -86,8 +88,8 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   // (pictures - a Render step's - and charts no step takes)
   if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
   if (holds == null) return null;
-  // (a set mixing conformer sets with other molecules, which no step takes: which are the others)
-  const mixed = holds === "molecules" && !set.made ? plainAmong(setMolecules(doc, set)) : null;
+  // (a set mixing conformer sets with other molecules, which no step takes as its entries: which are the others - one read as a table takes it, each molecule as it is)
+  const mixed = holds === "molecules" && !set.made && !readsAsTable(step.kind, port) ? plainAmong(setMolecules(doc, set)) : null;
   if (mixed) return mixed;
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
   const several = inputsOf(step.kind).length > 1;
@@ -122,6 +124,65 @@ export function inputOf(
   return { holds, molecules: setMolecules(doc, set), structures, records };
 }
 
+/** The table a set holds that comes into a step - read from a file, or a step's: none where what comes in holds none. */
+export function tableWired(doc: Flow, step: number, port?: string): Table | null {
+  const from = wireInto(doc, step, port)?.from;
+  return (from && findSet(doc, from.set)?.table) || null;
+}
+
+/**
+ * What comes into a step as a table (lib/table, docs/WORKFLOWS.md
+ * *Tables*): the table a set holds; or molecules in 3D seen as one, an
+ * entry a row (`moleculesAsTable`) - named for the molecule and frame it is
+ * ("molecule:3#2"), and its energy with the program and level that worked
+ * it out, where the molecule's calculation says them. None where nothing
+ * comes in, or what does is structures drawn, pictures or a chart.
+ */
+export function tableInto(doc: Flow, step: number, port?: string): Table | null {
+  const table = tableWired(doc, step, port);
+  if (table) return table;
+  const input = inputOf(doc, step, port);
+  if (!input || input.holds === "structures") return null;
+  const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
+  // (each molecule as it is - a conformer set's frames its conformers, another's each an entry of its own - in a set that mixes them too)
+  // (and each row says which: a conformer of its set, a frame of a molecule of several - a scan's, a path's - or a molecule)
+  let compounds = 0;
+  const what: string[] = [];
+  const entries = input.molecules.flatMap((m) => {
+    const conformers = conformersOfOne(m);
+    const es = setEntries([m], conformers ? "conformers" : "molecules").map((e) => ({ ...e, compound: compounds + e.compound }));
+    compounds += new Set(es.map((e) => e.compound)).size;
+    es.forEach((e, k) => what.push(conformers ? `conformer ${e.number} of ${es.length}` : es.length > 1 ? `frame ${(e.frame ?? k) + 1} of ${es.length}` : "molecule"));
+    return es;
+  });
+  const seen = moleculesAsTable(
+    entries.map((e: SetEntry) => {
+      const entry = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
+      const energy = entry.properties.energy;
+      const how = e.from != null ? by.get(e.from) : undefined;
+      return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
+    }),
+  );
+  // (said after the row's id)
+  return { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) };
+}
+
+/** The molecule in 3D on the page, and its frame, a row of molecules seen as a table is of (`tableInto`): none where it names none, or that molecule is not on the page. */
+export function entryOnPage(doc: Pick<Flow, "molecules3d">, entry: string | undefined): { molecule: number; frame: number } | null {
+  const m = entry != null ? /^molecule:(\d+)#(\d+)$/.exec(entry) : null;
+  if (!m) return null;
+  const molecule = Number(m[1]);
+  return (doc.molecules3d ?? []).some((x) => x.id === molecule) ? { molecule, frame: Number(m[2]) } : null;
+}
+
+/** A table's columns and rows as text, for a step's key: worked out once for each table - a table changed is a new one. */
+const tableTexts = new WeakMap<Table, string>();
+function tableText(t: Table): string {
+  let text = tableTexts.get(t);
+  if (text == null) tableTexts.set(t, (text = JSON.stringify([t.columns, t.rows])));
+  return text;
+}
+
 /**
  * What a molecule in 3D adds to a step's key, as text: worked out once for
  * each molecule - a molecule changed is a new one - since every step's key
@@ -145,12 +206,16 @@ function keyTexts(m: Molecule3D): readonly string[] {
 
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
+  const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
   // (a step that takes nothing in runs on its options alone, and who does it)
   // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
-  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
+  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
+  // (a table: its columns and rows, as they are)
+  const table = tableWired(doc, step.id);
+  if (table) return hash(tableText(table), hash(`table|${step.kind}|${by}|${options}`)).toString(36);
   const input = inputOf(doc, step.id);
   if (!input) return "";
-  let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
+  let h = hash(`${input.holds}|${step.kind}|${by}|${options}`);
   for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
   input.structures.forEach((s, i) => {
     h = hash(drawnKey(doc.model, s), h);
