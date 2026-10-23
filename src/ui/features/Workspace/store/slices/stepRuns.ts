@@ -22,7 +22,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, recordNumber, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
@@ -664,12 +664,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const e = entries[i];
       // (kept as drawn - with what the step worked out of it, where it did, on its record beside what it had. Kept,
       //  it is not what an earlier step set aside, whatever it came in saying; and given values worked out of it as it
-      //  now is, its record no longer says its values were of the structure before an edit)
+      //  now is - at least one - its record says those it had before an edit were taken away, not that these are of it)
       if ("as" in a) {
         const { stale, ...rest } = carried(e) ?? {};
-        const record: DrawnRecord = a.properties
-          ? { ...rest, properties: { ...rest.properties, ...Object.fromEntries(Object.entries(a.properties).map(([name, p]) => [name, valueOf(p)])) } }
-          : { ...rest, ...(stale ? { stale } : {}) };
+        const record: DrawnRecord =
+          a.properties && Object.keys(a.properties).length
+            ? {
+                ...rest,
+                properties: { ...rest.properties, ...Object.fromEntries(Object.entries(a.properties).map(([name, p]) => [name, valueOf(p)])) },
+                ...(stale ? { stale: TAKEN_AT_THE_EDIT } : {}),
+              }
+            : { ...rest, ...(stale ? { stale } : {}) };
         kept.push({ ...e, record: Object.keys(record).length ? record : undefined });
       }
       else if ("made" in a) made[i].forEach((m, k) => kept.push({ place: kept.length, drawn: m.drawn, record: madeRecord(e, k, a) }));

@@ -40,7 +40,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
-import { setMembers, drawnHash } from "../workflow/entries";
+import { setMembers, drawnHash, TAKEN_AT_THE_EDIT } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { drawnSaid, readDrawnAnswers } from "../workflow/programs";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
@@ -215,9 +215,13 @@ describe("a plugin's step on structures drawn", () => {
     const described = await ran("descriptors", [aside, stale]);
     expect(described.out!.records.map((r) => [r?.status, r?.stale, Object.keys(r?.properties ?? {})])).toEqual([
       [undefined, undefined, ["number", "mw"]],
-      [undefined, undefined, ["mw"]],
+      // (the values it had before the edit still gone, and said so: not read as all it had)
+      [undefined, TAKEN_AT_THE_EDIT, ["mw"]],
       [undefined, undefined, []],
     ]);
+    // (no value worked out - an empty answer - is nothing new: still said stale as it was)
+    answer = () => ({ structures: [{ as: "drawn", properties: {} }, { as: "drawn", properties: {} }, { as: "drawn" }] });
+    expect((await ran("descriptors", [aside, stale])).out!.records[1]?.stale).toBe(stale.stale);
     // (kept with nothing worked out - Check structures: not set aside any more, and still said stale)
     answer = () => ({ structures: [{ as: "drawn" }, { as: "drawn" }, { as: "drawn" }] });
     const checked = await ran("check-structures", [aside, stale]);
