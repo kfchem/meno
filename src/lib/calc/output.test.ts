@@ -80,6 +80,36 @@ describe("what a reader hands back", () => {
     expect(readCalc({ readers: [], charge: "1" }, 3, 1)).toBeUndefined();
   });
 
+  it("refuses the whole record where any field there is not as Meno writes it - never read back without it, as if it had not been said", () => {
+    const made = { readers: [], program: "RDKit", method: "MMFF94" };
+    const kept = calcOf(water, ["cclib 1.9rc1"]);
+    // (each field malformed in turn, in a record by no reader and in one by a reader)
+    const malformed: Record<string, unknown[]> = {
+      charge: ["1", 1.5, null, Number.NaN],
+      multiplicity: ["2", 0, -1, 2.5, null],
+      program: [7, "", "  ", null],
+      version: [6, ""],
+      method: [false, ""],
+      basis: [{}, ""],
+      solvation: [[], ""],
+      optimised: ["yes", 1, null],
+      adopted: ["today", null],
+    };
+    for (const [k, values] of Object.entries(malformed))
+      for (const v of values) {
+        expect(readCalc({ ...made, [k]: v }, 3, 1), `${k} ${String(v)}`).toBeUndefined();
+        expect(readCalc({ ...kept, [k]: v }, 3, 2), `${k} ${String(v)}`).toBeUndefined();
+      }
+    // (the desk's case: the program kept, the charge gone, said nowhere - refused instead)
+    expect(readCalc({ readers: [], program: "RDKit", charge: "1" }, 3, 1)).toBeUndefined();
+    // (a reader that is no name; readers that are not a list)
+    expect(readCalc({ ...kept, readers: ["cclib 1.9rc1", 3] }, 3, 2)).toBeUndefined();
+    expect(readCalc({ ...kept, readers: [" "] }, 3, 2)).toBeUndefined();
+    expect(readCalc({ ...kept, readers: "cclib 1.9rc1" }, 3, 2)).toBeUndefined();
+    // (each well formed, as written: read back as it was)
+    expect(readCalc({ ...made, charge: -1, multiplicity: 1, optimised: true }, 3, 1)).toEqual({ ...made, charge: -1, multiplicity: 1, optimised: true });
+  });
+
   it("reads back from a file as it was kept, and not where it does not read", () => {
     const kept = calcOf(water, ["cclib 1.9rc1"]);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)).toEqual(kept);

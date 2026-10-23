@@ -123,6 +123,15 @@ export type Property = {
   /** For each number in it, a unit from Meno's units table, or "none" where it has none (a count, a share) - "none" for a table, whose columns carry their own, and for modes and restraints, whose units are theirs. */
   unit: Unit | "none";
   at?: At;
+  /**
+   * The structure it was worked out from, where it is a value of the
+   * structure and not of a geometry - a descriptor's molar mass, its logP -
+   * as its key (lib/steps/restructure `structureKey`). A step that changes
+   * an entry's bonding (Re-bond) marks one whose structure is no longer the
+   * entry's as not applicable, never shown as current. None on a value of a
+   * geometry (`at`) or on a label (a Tag's ID, restraints).
+   */
+  of?: string;
   by?: By;
   status: PropertyStatus;
 };
@@ -269,7 +278,7 @@ const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "bas
  * not keep as a property.
  */
 export function propertyIn(v: unknown): Property | undefined {
-  const p = v as { value?: unknown; unit?: unknown; at?: unknown; by?: unknown; status?: unknown } | null;
+  const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
   const value = p.value;
   if (!((typeof value === "number" && Number.isFinite(value)) || typeof value === "string" || typeof value === "boolean")) return undefined;
@@ -291,7 +300,8 @@ export function propertyIn(v: unknown): Property | undefined {
     if ((a.kelvin != null && !Number.isFinite(a.kelvin)) || (a.atm != null && !Number.isFinite(a.atm)) || (a.solvent != null && typeof a.solvent !== "string")) return undefined;
     at = { geometry: a.geometry, ...(a.kelvin != null ? { kelvin: a.kelvin as number } : {}), ...(a.atm != null ? { atm: a.atm as number } : {}), ...(a.solvent != null ? { solvent: a.solvent as string } : {}) };
   }
-  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(by ? { by } : {}), status };
+  if (p.of != null && typeof p.of !== "string") return undefined;
+  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(typeof p.of === "string" ? { of: p.of } : {}), ...(by ? { by } : {}), status };
 }
 
 /** Properties by name as a file or a plugin gives them, read back (`propertyIn`): those that read; none where none do. */

@@ -2,10 +2,10 @@ import PageHtml from "./PageHtml";
 import { asideOf, EDGE } from "./chipAside";
 import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
 import { aboveText, chipLine, isMarked, resultsOn, valueText, type Result } from "../../../../lib/calc/results";
-import { factor } from "../../../../lib/units";
 import { cardGroupsOf, readerNameOf } from "../../../../lib/calc/sources";
 import { ResultGroups, type CardGroups } from "./PointedCard3D";
-import { greatest, least } from "../../../../lib/chem/lists";
+import { barsAbove } from "../utils/barsAbove";
+import { greatest } from "../../../../lib/chem/lists";
 import { FAILURE_WORDS, WARNING_WORDS, type Failure, type Warning } from "../workflow/failures";
 import { imaginaryWords } from "../../../../lib/calc/output";
 
@@ -64,29 +64,6 @@ export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
       <FramesChip {...props} />
     </PageHtml>
   );
-}
-
-/** What a molecule's frames chip says where its failures are not one to each frame. */
-export const FAILURES_ASTRAY = "its frames' failures do not line up";
-
-/**
- * Each frame's energy above the lowest of those that finished, in kcal/mol:
- * none of one that did not - it failed, or its marks did not read
- * (`marksUnread`) - which is no frame's zero either. All of them none,
- * where none finished (`noBaseline`).
- */
-export function barsAbove(
-  energies: readonly number[],
-  failed?: readonly (Failure | null)[],
-  marksUnread?: boolean,
-): { above: (number | null)[]; noBaseline: boolean; why?: string } {
-  // (failures not one to each frame say nothing of which finished: none is taken to have - never every one)
-  if (failed && failed.length !== energies.length) return { above: energies.map(() => null), noBaseline: true, why: FAILURES_ASTRAY };
-  const finished = (i: number) => !marksUnread && !failed?.[i] && Number.isFinite(energies[i]);
-  const done = energies.filter((_, i) => finished(i));
-  if (!done.length) return { above: energies.map(() => null), noBaseline: true };
-  const lowest = least(done);
-  return { above: energies.map((e, i) => (finished(i) ? (e - lowest) * factor("Eh", "kcal/mol") : null)), noBaseline: false };
 }
 
 /** Words begun with a capital, as a label is. */

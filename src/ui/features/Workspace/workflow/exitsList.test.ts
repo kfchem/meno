@@ -27,6 +27,10 @@ describe("a kind's exits, as a list", () => {
       enumerate: [first("Made", "structures"), rest("Aside", "same")],
       chart: [first("Chart", "chart")],
       "energy-diagram": [first("Energy diagram", "chart")],
+      tag: [first("Tagged", "same")],
+      species: [first("With species", "same"), failed()],
+      combine: [first("Combined", "molecules")],
+      measure: [first("Measured", "same")],
     };
     // (every kind guarded: one added declares its exits here too)
     expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());
