@@ -913,6 +913,31 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
   };
 }
 
+/** How a value of the structure one was made from is named on it (stepRuns `madeRecord`): `made_from.nll`, that one's NLL - never its own. */
+export const MADE_FROM = "made_from.";
+
+/**
+ * A structure drawn as an entry record (lib/entry) reads it - by Filter,
+ * and as a table of structures (flow `structuresAsTable`) - by `id`: its
+ * record's properties, what it was made from and its status, its drawing
+ * no part of it (no structure, no geometry); and Meno's `state` of it:
+ * "failed: <why>" where its record says it failed, else finished (one an
+ * earlier step set aside - the same as another - is no failure).
+ */
+export function drawnAsEntry(e: DrawnEntry, id: string): Entry {
+  const status = e.record?.status;
+  const state = typeof status === "object" && "failed" in status ? `failed: ${status.failed}` : FINISHED;
+  return {
+    id,
+    from: e.record?.from ?? [],
+    structure: { atoms: [], bonds: [] },
+    geometry: { kind: "none" },
+    species: null,
+    properties: { ...e.record?.properties, state: { value: state, unit: "none", status: "computed" } },
+    status: status ?? "done",
+  };
+}
+
 /** What a step's entry is, as Filter's `state` reads it (docs/WORKFLOWS.md, *Filter*): "finished"; else why not - its failure in a step's line's words ("not converged", "refused"), or "marks not read". */
 export const FINISHED = "finished";
 /**
