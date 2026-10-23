@@ -78,7 +78,9 @@ Numbers that change in place are tabular (`tabular-nums`).
 - **Lines**: 1 px, `border-gh-line`; a separator `my-1 border-t
   border-gh-line`.
 - **Shadows**: `shadow-lg` for what floats over the page (menus, cards,
-  dialogs); `shadow-sm` for toasts and chips; nothing else.
+  dialogs); `shadow-sm` for toasts and chips; what the pointer carries (a
+  structure lifted from a PDF, a picture or words in flight)
+  `filter: drop-shadow(var(--meno-lift))`; nothing else.
 - **Over the page**: a card's ground is `bg-white/95`, so the drawing
   shows faintly beneath.
 

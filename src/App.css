@@ -126,6 +126,15 @@ body {
   --ease-meno-leave: cubic-bezier(0.4, 0, 0.6, 1);
 }
 
+/* What is carried by the pointer - a structure lifted from a PDF, a picture
+   or words in flight - stands off the page by this shadow, as
+   `filter: drop-shadow(var(--meno-lift))` (docs/LOOK.md, *Sizes, room and
+   corners*). Set here rather than in @theme so that it is always there for
+   an inline style to name. */
+:root {
+  --meno-lift: 0 6px 10px rgb(0 0 0 / 0.18);
+}
+
 /* Coming into view: a tab's body as the tab is chosen, a settings section,
    a view taking a tab's place (src/ui/theme/motion.ts, DURATION.quick). */
 @keyframes meno-fade-in {
