@@ -446,6 +446,7 @@ export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a table or a number it holds: that, whatever lies in its frame)
   if (set.table) return "table";
   if (set.number) return "number";
+  if (set.chart) return "chart";
   const { structures } = setMembers(page, set);
   if (structures.length) return "structures";
   const molecules = setMolecules(page, set);
@@ -471,10 +472,10 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   const holds = holdsOf(page, set);
   const { structures, pictures } = setMembers(page, set);
   if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
-  // (a table's rows; a number, one)
+  // (a table's rows; a number, one; a chart's points)
   if (holds === "table") return { holds, entries: set.table?.rows.length ?? 0, compounds: set.table?.rows.length ?? 0 };
   if (holds === "number") return { holds, entries: set.number ? 1 : 0, compounds: set.number ? 1 : 0 };
-  if (holds === "chart") return { holds, entries: 0, compounds: 0 };
+  if (holds === "chart") return { holds, entries: set.chart?.points.length ?? 0, compounds: set.chart?.points.length ?? 0 };
   const molecules = setMolecules(page, set);
   const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
   // (a large result set's structures drawn, held off the page, as many as it holds)
@@ -581,6 +582,15 @@ export type SetEntry = {
   frame?: number;
   last?: boolean;
 };
+
+/**
+ * The entries a step that needs whole molecules refuses, by their places:
+ * the skeletons among them, each to its Failed exit, kind "refused", with
+ * why - the rest run (lib/chem/skeleton `skeletonWhy`).
+ */
+export function skeletonEntries(kind: StepKind, entries: readonly SetEntry[]): number[] {
+  return kindInfo(kind).whole ? entries.flatMap((e, i) => (e.skeleton ? [i] : [])) : [];
+}
 
 /**
  * Why a step of `kind` is not run on `entries`, where its plugin needs whole

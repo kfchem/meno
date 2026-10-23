@@ -440,13 +440,14 @@ Conformers go through a workflow as any set does (decided):
     looked at, never entries: before, a scan of 3 points opened as 21
     compounds, each with an energy, and a conformer set weighted geometries
     that were no minimum of anything. A point the run never converged on
-    is no entry either: an optimisation that never converged - one stopped
-    at its first geometry too - gives none, and says *Not converged* over
-    it; a run stopped before its last point converged - an interrupted scan
-    - gives the points it did, and says *Last point not converged*. The
-    point stays a frame, to be looked at; nothing that is no minimum is
-    weighed (the command centre, 2026-10-22, until an entry can carry its
-    own failure). Over each it says how many of its frames are entries: "4
+    is an entry marked failed, not converged (*Failed*): an optimisation
+    that never converged - one stopped at its first geometry too - gives
+    its last geometry so, and says *Not converged* over it; a run stopped
+    before its last point converged - an interrupted scan - gives the
+    points it did, and that last one so, and says *Last point not
+    converged*. It is seen and carried on, and never weighed: *Energy
+    window* and *Populations* refuse it, saying why (2026-10-23; from
+    2026-10-22 until then, it was no entry). Over each it says how many of its frames are entries: "4
     of 21 frames are entries (converged points)".
     (A step's own optimisation was already one entry, its path: *Results*.)
   - **What is not known to be found is no entry either: never every
@@ -1740,7 +1741,10 @@ them again*; the maintainer's rulings of 2026-10-22):
   naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
   minimum - take it out first*. *Energy window* refuses one not
   converged the same; a saddle point's mark would refuse it where the
-  window is on free energies, which it is not yet.
+  window is on free energies, which it is not yet. *Choose one*, choosing
+  the lowest, and *Duplicates*, ranking by energy which copy it keeps,
+  refuse one that is no minimum the same - not converged, a saddle point,
+  or its marks not read (2026-10-23); *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
   the same two marks, rather than Boltzmann shares of an energy that is
   none (utils/molecule3d `sharesWithheld`); opened, it says why, naming
@@ -2091,6 +2095,49 @@ g/mol", "tpsa < 90 Å²" (or Å2).
 Not yet: structures drawn - *Generate*'s output and *Descriptors'* -
 read from their record (`DrawnEntry.record.properties`), which comes in
 a PR of its own; conditions picked from what comes in rather than typed.
+
+### Charts (2026-10-22)
+
+**Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
+takes a table - or molecules or conformer sets, seen as one - and gives a
+chart, one column of numbers against another, in a set of its own to the
+right of it. Its options name the columns, *Across* and *Up*; none named,
+it takes the first two columns of numbers (molecules seen as a table:
+each entry's number, then its energy).
+- A point for each row with a number in both; **a row without is counted
+  and said**, by what it lacks ("4 points · 1 row left (1 with no
+  measured)"), and each such row named, pointed at - its entry and what it
+  is, or its row ("molecule:2#2 (frame 3 of 3)", "row 3"). A column named that is not there, or is no column of
+  numbers, or a table with fewer than two such: the step says why, and
+  makes nothing.
+- Each axis is labelled with its column's name, unit, and what worked its
+  numbers out where that is known, and the conditions they were worked out
+  at - temperature, pressure, solvent - where stated ("energy (Eh) · xtb ·
+  GFN2-xTB · 298.15 K · 1 atm · water"; lib/chart `howOf`, which a number's
+  set says too). The ticks are 1, 2 or 5 times a power of ten, about five of
+  them, from below the least value to above the greatest.
+- A point pointed at says its row, what it is, and its two values; pressed, where it is
+  of a molecule on the page, that molecule is chosen at its frame.
+- Its set's count line says its points. It is kept in the workspace's
+  file. A chart goes into no step.
+- A point dragged reports where to in the axes' own units (`ChartBody`
+  `onPointDrag`) - the place a step that works with it starts from. Nothing
+  on the page takes it yet.
+- Run again, it charts what comes in now, in the set it made before; it
+  says it has changed when the table - its columns and rows - its options
+  or what comes into it has. An earlier run's chart is not kept among its
+  runs: shown again, the set holds the chart it holds now.
+- Seen as a table, molecules are each read as they are - a conformer
+  set's frames as its conformers, another molecule's frames each an entry
+  of its own - so a set mixing the two goes into Chart, which a step that
+  works on entries refuses (*A wire let go on an input that does not take
+  it*; kinds `readsAsTable`).
+- Each row says what it is, in a column of its own after its id (*what*,
+  lib/table `WHAT_COLUMN`): "conformer 2 of 7", a conformer set's; "frame
+  3 of 12", a frame of a molecule of several that is no conformer set - a
+  scan's, a path's - each frame an entry, a compound, of its own, number 1;
+  "molecule", one of a single geometry. A chart of number against energy
+  draws a scan's frames beside the conformers, each saying which it is.
 
 ## Questions
 

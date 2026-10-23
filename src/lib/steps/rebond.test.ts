@@ -65,5 +65,6 @@ describe("Re-bond", () => {
     const r = rebonded(entryOf(reactant, "rc1"), { ...entryOf(product, "p1"), species: null }, "e1");
     if ("failed" in r) throw new Error(r.failed);
     expect(r.entry.species).toBeNull();
+    expect(r.said).toEqual(["The bonding has no hydrogens, so the entry's charge and spin are not known either."]);
   });
 });

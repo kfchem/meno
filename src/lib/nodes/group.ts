@@ -48,6 +48,7 @@ export function group(entries: readonly Entry[], options: GroupOptions): NodeOut
   const done: Entry[] = [];
   const rest: Entry[] = [];
   let regrouped = 0;
+  let skeletons = 0;
   for (const e of entries) {
     const k = keyOf(e, options.by);
     if ("why" in k) {
@@ -56,12 +57,15 @@ export function group(entries: readonly Entry[], options: GroupOptions): NodeOut
     }
     if (!letters.has(k.key)) letters.set(k.key, groupLetter(letters.size));
     if (e.properties[PROPERTY.group]) regrouped++;
+    if (options.by === "constitution" && !e.species) skeletons++;
     done.push({ ...e, properties: { ...e.properties, [PROPERTY.group]: { value: letters.get(k.key)!, unit: "none", status: "computed" } } });
   }
   const how = options.by === "constitution" ? "by constitution" : options.by === "all together" ? "all together" : `by ${options.by.property}`;
   const said =
     `${countGroups(letters.size)} ${how} · ${done.length} of ${count(entries.length)}` +
     (regrouped ? ` · ${regrouped} had a group before` : "") +
+    // (a skeleton's hydrogens are not there: two of the same heavy atoms are one group, however each is protonated)
+    (skeletons ? ` · ${skeletons} without hydrogens, grouped by heavy atoms alone` : "") +
     (rest.length ? ` · rest ${rest.length} (${tally(rest)})` : "");
   return { ok: true, exits: { done, rest }, said };
 }

@@ -7,6 +7,7 @@
 import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, SeriesCore, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import { numberIn, tableIn } from "../../../../lib/table";
+import { chartIn } from "../../../../lib/chart";
 import type { OptionValues } from "../../../../lib/options";
 import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -57,7 +58,7 @@ function readSet(v: unknown): WorkflowSet | null {
   if (!b || !isId(b.id) || !isNum(b.x0) || !isNum(b.y0) || !isNum(b.x1) || !isNum(b.y1)) return null;
   const made = b.made as { step?: unknown; exit?: unknown; holds?: unknown } | undefined;
   const madeRead =
-    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures")
+    made && isId(made.step) && isName(made.exit) && (made.holds == null || SETS.includes(made.holds as SetKind) || made.holds === "pictures" || made.holds === "chart")
       ? { step: made.step, exit: made.exit, ...(made.holds != null ? { holds: made.holds as SetHolds } : {}) }
       : undefined;
   // (one that says it was made by a step, but not by which as it reads: a set like any other - and said)
@@ -107,11 +108,14 @@ function readSet(v: unknown): WorkflowSet | null {
       const unread = b.drawnCollection.length - drawnCollection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return drawnCollection.length || unread ? { drawnCollection, ...(unread ? { unread } : {}) } : {};
     })(),
-    // (a table or a number it holds, read as the file kept it - what does not read left out, and counted)
+    // (a table, a number or a chart it holds, read as the file kept it - what does not read left out, and counted)
     ...(() => {
       const table = b.table != null ? tableIn(b.table, leftOut) : undefined;
       const number = b.number != null ? numberIn(b.number, leftOut) : undefined;
-      return { ...(table ? { table } : {}), ...(number ? { number } : {}) };
+      const chart = b.chart != null ? chartIn(b.chart) : undefined;
+      // (a chart is read whole or not at all - a point unread would leave it drawn short of one: counted)
+      if (b.chart != null && !chart) leftOut("chart");
+      return { ...(table ? { table } : {}), ...(number ? { number } : {}), ...(chart ? { chart } : {}) };
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
     ...(b.keep === false && made ? { keep: false as const } : {}),

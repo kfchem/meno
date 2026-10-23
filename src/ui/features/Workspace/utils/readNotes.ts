@@ -23,6 +23,7 @@ const NOUNS = {
   tableRow: ["row of a table", "rows of tables"],
   tableCell: ["cell of a table", "cells of tables"],
   number: ["number held in a set", "numbers held in sets"],
+  chart: ["chart", "charts"],
   valueField: ["note of how a value was worked out", "notes of how values were worked out"],
   frameMarks: ["mark of a molecule's failed frames", "marks of molecules' failed frames"],
   frameValues: ["list of energies, numbers, shares or degeneracies", "lists of energies, numbers, shares or degeneracies"],

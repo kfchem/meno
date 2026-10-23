@@ -344,6 +344,9 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   };
 }
 
+/** The name of a column of text saying what each row is, where a table has one (molecules seen as a table: "conformer 2 of 7", "frame 3 of 12", "molecule"): a chart's point and a row it leaves say it. */
+export const WHAT_COLUMN = "what";
+
 // ---- kept in a file ----
 
 /** A number, as a value: with its unit (or none), and what worked it out and where, where known. */
@@ -358,7 +361,7 @@ export type Lost = (what: Unreadable, n?: number) => void;
 const NO_COUNT: Lost = () => {};
 
 /** What a file kept of what worked a number out, or where: its text fields as they are - and the numbers `numbers` names - none where nothing reads; each field that does not read told `lost`. */
-function fieldsIn<T extends object>(v: unknown, numbers: readonly string[] = [], lost: Lost = NO_COUNT): T | undefined {
+export function fieldsIn<T extends object>(v: unknown, numbers: readonly string[] = [], lost: Lost = NO_COUNT): T | undefined {
   if (v == null) return undefined;
   if (typeof v !== "object") {
     lost("valueField");
