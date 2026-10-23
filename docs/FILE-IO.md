@@ -912,7 +912,9 @@ work.meno (zip)
     a step's earlier runs and jobs under way. Ties whose other end is not
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
-    results and its notes of what could not be read.
+    results and its notes of what could not be read. Within a structure a
+    step gave a set: each property of its record, and each entry it was
+    made from.
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of
