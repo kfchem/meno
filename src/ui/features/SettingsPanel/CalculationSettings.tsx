@@ -28,7 +28,8 @@ export default function CalculationSettings() {
           <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line">
             {kindsOf(d.id).map((kind) => {
               const k = kindInfo(kind);
-              const options = optionsFor(kind, d.id);
+              // (lines a step reads - Enumerate's R groups - are its own, each for its template: no default of them)
+              const options = optionsFor(kind, d.id).filter((o) => o.type !== "lines");
               const role = stepRole(kind, d.id);
               return (
                 <div key={kind} className="divide-y divide-gh-line/60">
