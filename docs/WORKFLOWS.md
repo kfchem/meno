@@ -2205,6 +2205,19 @@ it.
   a name that is Meno's own and one an entry carries of its own too is
   refused ("which is meant cannot be told"), never read as either; the
   entry's own goes on with it, unread.
+- **An entry's state** is Meno's own too (`state`, entries `entryState`):
+  "finished" where it is a result to stand on - converged, not failed,
+  its file's marks read - else why not, in the words a step's line
+  counts failures in ("not converged", "refused", "the program stopped
+  with an error"), or "marks not read". "state = finished" keeps the
+  finished and sets the rest aside, each saying what it is ("not state =
+  finished (not converged)"): the Filter a step's refusal names, where a
+  value is read from results (an Energy diagram's levels: meno
+  `STATE_FINISHED`). A text or true-or-false condition not met says the
+  value, as a number's does. On a condition on any value but its state,
+  an entry that is no result is never kept, though its value would pass:
+  it goes to *The rest* named, its state said ("a #2 not converged") -
+  its value is not to be trusted.
 - **Structures drawn** - *Generate*'s, after *Check structures*,
   *Stereoisomers* or *Descriptors* - are read by their record alone (meno
   `filteredDrawn`): the properties a step gave each (`DrawnRecord.properties`:
@@ -2222,7 +2235,11 @@ it.
   why where one gave it ("Same as 2; not mw < 500 g/mol (612.4 g/mol)").
   More than are laid out on the page
   come in held in their set, and go out so (`LARGE_SET`), as any step's
-  structures drawn do.
+  structures drawn do. A structure's `state` is Meno's here too: "failed:
+  <why>" where its record says it failed, else "finished" (one set aside
+  before, the same as another, is no failure). On a condition on any value
+  but its state one that failed is never kept, but set aside named
+  ("structure 2 failed: ..."); on its state alone it is judged by that.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:

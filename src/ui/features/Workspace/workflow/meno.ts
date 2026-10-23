@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity, type Entry } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, entryOfSet, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, entryState, FINISHED, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
 import { positionIds, substituted } from "./substituents";
@@ -252,9 +252,17 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
     const both = entries.filter((e) => shadowedIn(e).includes(c.property)).length;
     if (both) return { ok: false, said: `"${c.property}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
   }
+  // (a value of one that is no result - failed, not converged, its marks unread - is not to be trusted: on a condition on any
+  //  value but its state, never kept, but set aside named, its state said; on its state alone it is judged by that)
+  const onValues = read.conditions.some((c) => c.property !== "state");
+  const notResult = (x: { id: string }) => {
+    const e = entries[Number(x.id)];
+    const state = entryState(e);
+    return state === FINISHED ? null : `${compoundLetter(e.compound)} #${e.number} ${state}`;
+  };
   const out = filter(
     entries.map((e, i) => entryOfSet(e, String(i))),
-    { conditions: read.conditions, match },
+    { conditions: read.conditions, match, ...(onValues ? { unread: notResult } : {}) },
   );
   if (!out.ok) return out;
   const back = (es: readonly { id: string }[]) => es.map((e) => entries[Number(e.id)]);
@@ -275,7 +283,21 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
 function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all" | "any"): DrawnOutcome {
   const read = conditionsIn(text);
   if ("why" in read) return { ok: false, said: read.why };
-  const out = filter(entries.map(recordAsEntry), { conditions: read.conditions, match, unread: (e) => entries[Number(e.id)].record?.stale ?? null });
+  // (its state is Meno's on a structure drawn too: one its record carries of its own by that name cannot be told from it)
+  if (read.conditions.some((c) => c.property === "state")) {
+    const both = entries.filter((e) => e.record?.properties && "state" in e.record.properties).length;
+    if (both) return { ok: false, said: `"state" is Meno's own, and ${both === 1 ? "1 structure carries one" : `${both} structures carry one`} of its own by that name too: which is meant cannot be told` };
+  }
+  // (edited since its properties were given: none to read. And one that failed is no result: on a condition on any value but
+  //  its state never kept, but set aside named, its why said; on its state alone it is judged by that)
+  const onValues = read.conditions.some((c) => c.property !== "state");
+  const unread = (x: { id: string }) => {
+    const e = entries[Number(x.id)];
+    if (e.record?.stale) return e.record.stale;
+    const status = e.record?.status;
+    return onValues && typeof status === "object" && "failed" in status ? `structure ${e.place + 1} failed: ${status.failed}` : null;
+  };
+  const out = filter(entries.map(recordAsEntry), { conditions: read.conditions, match, unread });
   if (!out.ok) return out;
   // (kept: its record without the status it came in with - an earlier step's "aside" is not what this one says of it)
   const kept = out.exits.kept.map((e) => {
@@ -289,21 +311,32 @@ function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all
     const was = entries[Number(e.id)];
     const now = typeof e.status === "object" && "aside" in e.status ? e.status.aside : "";
     const before = typeof was.record?.status === "object" ? ("aside" in was.record.status ? was.record.status.aside : was.record.status.failed) : "";
-    return { ...was, record: { ...was.record, status: { aside: before ? `${before}; ${now}` : now } } };
+    // (an earlier why first - but once, where this one says it already)
+    return { ...was, record: { ...was.record, status: { aside: before && !now.includes(before) ? `${before}; ${now}` : now } } };
   });
   return { ok: true, holds: "structures", kept, aside, said: out.said };
 }
 
-/** A structure drawn as Filter reads it, by its place: its record's properties, what it was made from and its status - its drawing no part of it (no structure, no geometry). */
-const recordAsEntry = (e: DrawnEntry, i: number): Entry => ({
-  id: String(i),
-  from: e.record?.from ?? [],
-  structure: { atoms: [], bonds: [] },
-  geometry: { kind: "none" },
-  species: null,
-  properties: e.record?.properties ?? {},
-  status: e.record?.status ?? "done",
-});
+/**
+ * A structure drawn as Filter reads it, by its place: its record's
+ * properties, what it was made from and its status - its drawing no part
+ * of it (no structure, no geometry) - and Meno's `state` of it: "failed:
+ * <why>" where its record says it failed, else finished (one an earlier
+ * step set aside - the same as another - is no failure).
+ */
+const recordAsEntry = (e: DrawnEntry, i: number): Entry => {
+  const status = e.record?.status;
+  const state = typeof status === "object" && "failed" in status ? `failed: ${status.failed}` : FINISHED;
+  return {
+    id: String(i),
+    from: e.record?.from ?? [],
+    structure: { atoms: [], bonds: [] },
+    geometry: { kind: "none" },
+    species: null,
+    properties: { ...e.record?.properties, state: { value: state, unit: "none", status: "computed" } },
+    status: status ?? "done",
+  };
+};
 
 /** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
 function onesSaid(entries: readonly SetEntry[]): string {
@@ -542,14 +575,18 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
  * out first. As `notAllMinima` refuses for Energy window and Populations,
  * but every one named, and every kind of failure: a level's lowest may be
  * the one that failed, and the lowest of the rest is then not its energy.
+ * A Filter on the entries' state takes them out (`STATE_FINISHED`).
  * Imaginary frequencies are not among them: which level should be a saddle
  * point is the chemist's to say. Null where none is.
  */
+/** The condition that keeps only the entries that are results to stand on, as a Filter is given it (entries `entryState`). */
+export const STATE_FINISHED = `state = ${FINISHED}`;
+
 export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
   const bad = entries.flatMap((e, k) =>
     e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind] ?? e.failed.kind}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
   );
-  return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first` : null;
+  return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first (a Filter on "${STATE_FINISHED}")` : null;
 }
 
 /**
