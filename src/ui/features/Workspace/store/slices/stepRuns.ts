@@ -21,7 +21,7 @@ import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
+import { blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
 import { compoundLetter, frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -644,8 +644,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       const client = await pluginClient(plugin);
       const given = input.held
-        ? entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
-        : input.structures.map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
+        ? entries.map((e) => ({ molblocks: drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
+        : input.structures.map((ids) => ({ molblocks: drawnBlocksOf(d.model, ids).map((b) => b.molblock) }));
       answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
@@ -752,8 +752,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       const client = await pluginClient(plugin);
       const given = input?.held
-        ? seeds.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
-        : (input?.structures ?? []).map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
+        ? seeds.map((e) => ({ molblocks: drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
+        : (input?.structures ?? []).map((ids) => ({ molblocks: drawnBlocksOf(d.model, ids).map((b) => b.molblock) }));
       read = readGenerated(await client.run(step.kind, given, options, "structures", GENERATE_MS), given.length);
     } catch (e) {
       return void fail(id, message(e), at, key);

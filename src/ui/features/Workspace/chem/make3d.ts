@@ -112,14 +112,31 @@ export function bareWords(bare: Model["atoms"], madeAny: boolean): string {
   return `${list} ${names.length > 1 ? "were" : "was"} left out: one atom alone has no 3D structure.`;
 }
 
+/**
+ * Whether a part is one a step on structures drawn is asked about, as it is
+ * drawn: any that stands for a molecule (`standsForMolecule`), and a lone
+ * atom of an element besides - Na+, Cl-, a lone metal, which has no 3D
+ * structure but is part of what was drawn: a salt's counter-ion one of its
+ * parts, counted in its weight. A label of nothing known alone has no
+ * element to give.
+ */
+export function asDrawn(part: Model): boolean {
+  if (standsForMolecule(part)) return true;
+  const [a] = part.atoms;
+  return part.atoms.length === 1 && !a.abbrev && isElementSymbol(a.el);
+}
+
 /** The structures that hold these atoms, each as the plugin is asked about it; a bare atom's none (`standsForMolecule`). */
-export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
+export function blocksOf(model: Model, atoms: Iterable<number>, keep: (part: Model) => boolean = standsForMolecule): Block[] {
   return fragmentsHolding(model, atoms)
     .map((ids) => partOf(model, ids))
-    .filter(standsForMolecule)
+    .filter(keep)
     .map((part) => {
-      // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound)
-      const asked = etaBound(part);
+      // (a ring or chain bound to a metal through all its atoms, as one multi-centre bond: etaBound. A bare atom - Na+, a
+      //  lone metal - as Meno counts it, with no hydrogens, which a reader would add to a lone Na: its valence written,
+      //  none, where the drawing sets none of its own)
+      const bare = !standsForMolecule(part);
+      const asked = etaBound(bare ? { ...part, atoms: part.atoms.map((a) => ({ ...a, valence: a.valence ?? 0 })) } : part);
       const index = molIndex(asked);
       const molblock = chemMolblock(asked);
       const centres = centresIn(molblock);
@@ -132,6 +149,11 @@ export function blocksOf(model: Model, atoms: Iterable<number>): Block[] {
         part,
       };
     });
+}
+
+/** The parts of a structure drawn, as a step on structures drawn is asked about them (`asDrawn`): a bare atom's too. */
+export function drawnBlocksOf(model: Model, atoms: Iterable<number>): Block[] {
+  return blocksOf(model, atoms, asDrawn);
 }
 
 /** What a structure leaves open: its stereocentres and double bonds drawn without a configuration, by id, and how many stereoisomers they make. */

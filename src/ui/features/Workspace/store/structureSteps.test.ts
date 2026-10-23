@@ -247,6 +247,39 @@ describe("a plugin's step on structures drawn", () => {
     ]);
   });
 
+  it("gives a lone ion as drawn - a block of its own, never none, with no hydrogens a reader would add", async () => {
+    // (methylammonium and two chlorides drawn beside it: each a structure of the set, each given as its block -
+    //  a chloride before none, read as a structure with no atoms)
+    const doc = createWorkspaceDocument();
+    doc.edit("draw", (d) => ({
+      ...d,
+      model: {
+        atoms: [
+          { id: 1, el: "C", x: -400, y: 0, r: 0.9 },
+          { id: 2, el: "N", x: -398.5, y: 0, r: 0.9, charge: 1 },
+          { id: 3, el: "Cl", x: -396, y: 0, r: 0.9, charge: -1 },
+          { id: 4, el: "Na", x: -380, y: 0, r: 0.9, charge: 1 },
+        ],
+        bonds: [{ id: 5, a: 1, b: 2, order: 1 }],
+      },
+      nextId: 100,
+    }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
+    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
+    const step = st().addStep("check-structures", "rdkit", 0, 0);
+    st().connect({ set }, step);
+    await st().runStep(step);
+    expect(asked).toHaveLength(1);
+    const blocks = asked[0].entries.map((e) => e.molblocks);
+    expect(blocks.map((b) => b.length)).toEqual([1, 1, 1]);
+    expect(blocks.flat().filter((b) => /V30 1 Cl \S+ \S+ 0 0 CHG=-1 VAL=-1\n/.test(b))).toHaveLength(1);
+    expect(blocks.flat().filter((b) => /V30 1 Na \S+ \S+ 0 0 CHG=1 VAL=-1\n/.test(b))).toHaveLength(1);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "3 of 3 kept" });
+  });
+
   it("takes in nothing where the plugin says nothing Meno can take, saying so", async () => {
     answer = () => ({ structures: [{ as: "drawn" }] });
     const { step, out } = await ran("stereoisomers");

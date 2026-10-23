@@ -840,7 +840,11 @@ The same for every plugin and for Meno's own parts:
     could be missed, and the step says so;
   - **steps on structures drawn** (`run` with `holds` "structures":
     RDKit's *Check structures* and *Stereoisomers*): each entry is a
-    structure as `{molblocks}`, a MOL block for each of its parts, and
+    structure as `{molblocks}`, a MOL block for each of its parts - a
+    lone ion or atom of an element among them (Na+, Cl-, a lone metal),
+    which has no 3D structure but is part of what was drawn, its valence
+    written as none (`VAL=-1`) so that a reader adds no hydrogens to it:
+    `chem/make3d` `drawnBlocksOf` - and
     the answer is `{"structures": [...]}`, one for each, in their order:
     `{"as": "drawn"}`, kept as it is - with `"properties"`, where the step
     works numbers out of it (*Descriptors*): each `{value, unit, method}`,
