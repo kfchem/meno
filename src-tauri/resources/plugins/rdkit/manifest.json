@@ -31,6 +31,24 @@
       "options": [
         {"id": "mirrors", "label": "Mirror images", "type": "choice", "choices": [{"value": "apart", "label": "Kept apart"}, {"value": "counted", "label": "Counted in (degeneracy 2)"}], "default": "apart"}
       ]
+    },
+    {
+      "kinds": ["check-structures"],
+      "options": [
+        {"id": "parts", "label": "More than one part (a salt, a mixture)", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep"}], "default": "aside"},
+        {"id": "valence", "label": "An atom with more bonds than it can have", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep as drawn"}], "default": "aside"},
+        {"id": "electrons", "label": "A part with no electrons (H+)", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep"}], "default": "aside"},
+        {"id": "radicals", "label": "Radicals", "type": "choice", "choices": [{"value": "aside", "label": "Set aside"}, {"value": "keep", "label": "Keep"}], "default": "aside"}
+      ]
+    },
+    {
+      "kinds": ["stereoisomers"],
+      "options": [
+        {"id": "open", "label": "Stereo left open", "type": "choice", "choices": [{"value": "every", "label": "Every stereoisomer"}, {"value": "aside", "label": "Set aside"}], "default": "every"}
+      ]
+    },
+    {
+      "kinds": ["descriptors"]
     }
   ]
 }

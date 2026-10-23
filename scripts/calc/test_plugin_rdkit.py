@@ -1229,3 +1229,107 @@ class OpenStereo(unittest.TestCase):
         self.assertTrue(made[0]["frames"])
         # (prismane: free too - and no 3D structure of it at all, which the step says as it says any it cannot make)
         self.assertTrue(self.drawn("C12C3C4C1C3C24")["free"])
+
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class StructureSteps(unittest.TestCase):
+    """*Check structures* and *Stereoisomers* on structures drawn (`op_run`): each structure kept as drawn, made anew
+    as its stereoisomers, or set aside saying why - never one changed, and nothing chosen for one."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def entry(self, smiles, radical_on=None):
+        """A structure as Meno gives one: a MOL block for each of its parts, laid out in 2D, wedged as the SMILES says
+        - an atom given an unpaired electron where `radical_on` says."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles(smiles)
+        if radical_on is not None:
+            mol = Chem.RWMol(mol)
+            atom = mol.GetAtomWithIdx(radical_on)
+            atom.SetNumRadicalElectrons(1)
+            atom.SetNumExplicitHs(max(atom.GetTotalNumHs() - 1, 0))
+            atom.SetNoImplicit(True)
+            mol = mol.GetMol()
+            Chem.SanitizeMol(mol)
+        blocks = []
+        for part in Chem.GetMolFrags(mol, asMols=True):
+            AllChem.Compute2DCoords(part)
+            # (RDKit lays a lone atom out nowhere - NaN - where Meno draws it somewhere: at the origin, here)
+            conf = part.GetConformer()
+            for i in range(part.GetNumAtoms()):
+                if math.isnan(conf.GetAtomPosition(i).x):
+                    conf.SetAtomPosition(i, (0.0, 0.0, 0.0))
+            blocks.append(Chem.MolToMolBlock(part))
+        return {"molblocks": blocks}
+
+    def run_step(self, step, entries, options=None):
+        return self.worker.op_run({"step": step, "entries": entries, "options": options or {}, "holds": "structures"})["structures"]
+
+    def test_check_keeps_each_as_drawn_or_sets_it_aside_saying_why(self):
+        got = self.run_step(
+            "check-structures",
+            [self.entry("CCO"), self.entry("C[NH3+].[Cl-]"), self.entry("[H+]"), self.entry("CC", radical_on=1), self.entry("CC(O)CC")],
+        )
+        self.assertEqual(
+            got,
+            [
+                {"as": "drawn"},
+                {"aside": "2 parts (a salt, or a mixture)", "kind": "parts"},
+                {"aside": "a part with no electrons ([H+])", "kind": "no electrons"},
+                {"aside": "a radical: unpaired electrons on C", "kind": "radical"},
+                {"as": "drawn"},
+            ],
+        )
+        # (what the options keep is not looked for)
+        kept = self.run_step("check-structures", [self.entry("C[NH3+].[Cl-]"), self.entry("CC", radical_on=1)], {"parts": "keep", "radicals": "keep"})
+        self.assertEqual(kept, [{"as": "drawn"}, {"as": "drawn"}])
+
+    def test_check_finds_an_atom_with_more_bonds_than_it_can_have(self):
+        five = Chem.RWMol()
+        n = five.AddAtom(Chem.Atom(7))
+        for _ in range(5):
+            c = five.AddAtom(Chem.Atom(6))
+            five.AddBond(n, c, Chem.BondType.SINGLE)
+        from rdkit.Chem import AllChem
+
+        mol = five.GetMol()
+        mol.UpdatePropertyCache(strict=False)
+        AllChem.Compute2DCoords(mol)
+        got = self.run_step("check-structures", [{"molblocks": [Chem.MolToMolBlock(mol)]}])
+        self.assertEqual(got, [{"aside": "an atom with more bonds than it can have (N)", "kind": "valence"}])
+
+    def test_stereoisomers_of_what_is_left_open_each_a_drawing_in_a_fixed_order(self):
+        got = self.run_step("stereoisomers", [self.entry("CCO"), self.entry("CC(O)CC"), self.entry("C[C@H](O)CC"), self.entry("C1CC2CCC1C2")])
+        self.assertEqual(got[0], {"as": "drawn"})
+        made = [Chem.MolToSmiles(Chem.MolFromMolBlock(b)) for b in got[1]["made"]]
+        self.assertEqual(made, sorted(made))
+        self.assertEqual(sorted(made), ["CC[C@@H](C)O", "CC[C@H](C)O"])
+        # (given, or a bridgehead its rings fix: nothing to make)
+        self.assertEqual(got[2:], [{"as": "drawn"}, {"as": "drawn"}])
+        # (the same every time)
+        self.assertEqual(self.run_step("stereoisomers", [self.entry("CC(O)CC")]), [got[1]])
+
+    def test_stereoisomers_set_aside_what_cannot_be_given_whole(self):
+        got = self.run_step("stereoisomers", [self.entry("CC=C=CC"), self.entry("CC(O)C(O)C(O)C(O)C(O)C(O)C")])
+        self.assertEqual(got[0], {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"})
+        self.assertEqual(got[1]["kind"], "too many")
+        self.assertRegex(got[1]["aside"], r"^\d+ stereoisomers, more than the 32 made of one$")
+        # (set aside, as the option says, where it would make them)
+        self.assertEqual(self.run_step("stereoisomers", [self.entry("CC(O)CC")], {"open": "aside"}), [{"aside": "stereo left open: 2 stereoisomers", "kind": "stereo open"}])
+
+    def test_descriptors_of_each_as_drawn_with_unit_and_how(self):
+        got = self.run_step("descriptors", [self.entry("CC(=O)Nc1ccc(O)cc1"), self.entry("[H+]")])
+        props = got[0]["properties"]
+        # (paracetamol's, as RDKit 2026.03.6 works them out - its weight and polar surface area the published ones)
+        self.assertEqual({k: (v["value"], v["unit"]) for k, v in props.items()}, {
+            "mw": (151.165, "g/mol"), "logp": (1.3506, "none"), "tpsa": (49.33, "Å2"), "hbd": (2, "none"), "hba": (2, "none"), "rotatable": (1, "none"),
+        })
+        self.assertTrue(all(v["method"] for v in props.values()))
+        self.assertEqual(got[0]["as"], "drawn")
+        # (a lone proton, read as drawn: its weight and the rest, none chosen for it)
+        self.assertEqual(got[1]["properties"]["mw"]["value"], 1.008)

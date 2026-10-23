@@ -104,6 +104,9 @@ describe("the readers Meno knows of", () => {
     expect(rdkit.steps.map((d) => [d.kind, d.programs])).toEqual([
       ["conformers", ["python"]],
       ["duplicates", []],
+      ["check-structures", []],
+      ["stereoisomers", []],
+      ["descriptors", []],
     ]);
     // (and those that fill a role by running a program Meno fetches as the plugin is set up: Blender, rendering - never one installed separately)
     const blender = PLUGINS.find((p) => p.id === "blender")!;

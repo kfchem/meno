@@ -831,7 +831,24 @@ The same for every plugin and for Meno's own parts:
     as a permutation - and an entry given carries its `degeneracy`, where
     it has one. `"capped": 2` says how many compounds it took atom against
     atom, their ways onto themselves too many to try: a duplicate of one
-    could be missed, and the step says so.
+    could be missed, and the step says so;
+  - **steps on structures drawn** (`run` with `holds` "structures":
+    RDKit's *Check structures* and *Stereoisomers*): each entry is a
+    structure as `{molblocks}`, a MOL block for each of its parts, and
+    the answer is `{"structures": [...]}`, one for each, in their order:
+    `{"as": "drawn"}`, kept as it is - with `"properties"`, where the step
+    works numbers out of it (*Descriptors*): each `{value, unit, method}`,
+    its unit from Meno's units table (g/mol and Å² among them) or "none",
+    kept on its record as `computed` by the plugin, its version, the
+    program and the method; `{"made": [block, ...]}`, made anew
+    as drawings (V3000, laid out in 2D, wedged), which Meno reads and
+    lays out as it does a SMILES's (`chem/fromSmiles` `drawingOf`), at most
+    64 of one; or `{"aside": why, "kind": kind}`, set aside, why in a few
+    plain words and a short kind to count it by on the step's line
+    (*3 set aside (2: radical; 1: parts)*). A made one keeps the record
+    of the one it was made of (WORKFLOWS.md, *A structure drawn's
+    record*); one set aside, its status saying why. An answer that is
+    not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,

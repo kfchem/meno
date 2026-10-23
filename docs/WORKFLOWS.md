@@ -280,9 +280,15 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
+| Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
+| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing; one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them), or - as the option says - all that leave stereo open |
+| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 
-The first six run a program; the last five work on a set's entries
-alone (*Who does a step*). A step that keeps a set keeps its kind: a
+The first six run a program; the next five work on a set's entries
+alone (*Who does a step*); the last three are a plugin's (RDKit's), done
+at once in its worker on structures drawn (PLUGINS.md, *steps on
+structures drawn*), each with its own options: they change no atom or
+bond of a structure they keep, and choose nothing for one. A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
 molecules in 3D only. A lone atom - the ion of a salt drawn as ions -

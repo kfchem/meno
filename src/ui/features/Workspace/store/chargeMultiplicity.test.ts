@@ -420,7 +420,7 @@ const chem = {
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).takes.some((h) => h !== "structures"));
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -499,9 +499,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - Render alone left out here: it gives pictures)
+    // (each kind Meno defines filled by something - left out here Render, which gives pictures, and those that take structures drawn alone, whose atoms are as drawn)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["render"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["render", "check-structures", "stereoisomers", "descriptors"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 
