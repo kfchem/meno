@@ -3,7 +3,7 @@
   "name": "CReM",
   "version": "0.1.0",
   "uses": [{"name": "CReM", "version": "0.3.2"}, {"name": "RDKit", "version": "2026.03.6"}],
-  "description": "Makes new molecules from seeds with CReM: fragments of each seed, or its hydrogens, replaced by fragments found in the same surroundings in a database of them built from ChEMBL 33, each made a molecule in 3D.",
+  "description": "Makes new structures from seeds with CReM: fragments of each seed, or its hydrogens, replaced by fragments found in the same surroundings in a database of them built from ChEMBL 33, each given as the SMILES it made, with the change and how often the fragment put in occurs.",
   "licence": "BSD-3-Clause",
   "homepage": "https://github.com/DrrDom/crem",
   "environment": "uv",
@@ -17,8 +17,7 @@
         {"id": "count", "label": "How many from each seed (at most 100)", "type": "number", "default": 20, "min": 1, "max": 100, "step": 1},
         {"id": "radius", "label": "Surroundings matched (bonds out)", "type": "number", "default": 3, "min": 1, "max": 5, "step": 1},
         {"id": "adds", "label": "Heavy atoms added, at most", "type": "number", "default": 2, "min": 1, "max": 10, "step": 1},
-        {"id": "seed", "label": "Random seed", "type": "number", "default": 1, "min": 0, "max": 2147483647, "step": 1},
-        {"id": "stereo", "label": "Unspecified stereo", "type": "choice", "choices": [{"value": "every", "label": "Every stereoisomer"}, {"value": "skip", "label": "Don't make it"}], "default": "every"}
+        {"id": "seed", "label": "Random seed", "type": "number", "default": 1, "min": 0, "max": 2147483647, "step": 1}
       ]
     }
   ],

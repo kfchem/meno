@@ -1,4 +1,4 @@
-"""The CReM plugin's worker: new molecules made from seeds, for Meno's step
+"""The CReM plugin's worker: new structures made from seeds, for Meno's step
 *Generate* (its manifest; docs/WORKFLOWS.md, *Kinds of step*), with CReM
 (BSD-3-Clause; Polishchuk, J. Cheminform. 2020, 12, 28): each seed's
 fragments replaced, or its hydrogens, by fragments found in the same
@@ -6,8 +6,8 @@ surroundings in a database of them, built from ChEMBL 33.
 
 One JSON object per line on stdin, one per line back on stdout:
 
-    {"id": 3, "op": "run", "step": "generate", "entries": [...], "options": {"operation": "mutate", "count": 20}}
-    {"id": 3, "ok": true, "result": {"outputs": [...], "said": "..."}}
+    {"id": 3, "op": "run", "step": "generate", "entries": [{"molblocks": [...]}], "options": {"operation": "mutate", "count": 20}}
+    {"id": 3, "ok": true, "result": {"outputs": [...], "said": "...", "by": {...}}}
     {"id": 3, "ok": false, "error": "..."}
 
 It runs no code it is sent - only the operation below - and reaches no
@@ -17,24 +17,22 @@ there (manifest.json, `downloads`).
 
     {"event": "ready", "version": "0.3.2"}
 
-Each seed is read from its atoms and bonds, its stereo from its geometry.
-CReM replaces a fragment of it (*Replace fragments*) - or a hydrogen
-(*Add to it*) - by a fragment the database holds in the same surroundings,
-`radius` bonds out: the larger the radius, the closer the surroundings
-must match, and the fewer and more conservative the molecules. Where more
-are found than asked for, CReM picks those it makes with the random seed
-given, so that the same asking gives the same molecules; a seed's own
-structure, found again, is not one of them. Each new molecule is made in
-3D as Meno's other generators make theirs: its hydrogens added, one
-geometry embedded (ETKDG v3, the same random seed) and tidied by MMFF94,
-or UFF where MMFF94 has no parameters for it; one that leaves centres or
-double bonds unspecified is made as each of its stereoisomers, or not at
-all where the step asks so - never one picked for it. What could not be
-made is counted, with why. Each molecule goes back as an output
-(lib/calc/output) with its atoms, bonds and charges beside, how it was
-made (`method`), and its results: its SMILES, the seed it came from, the
-change made (as CReM writes it, a reaction SMARTS), and how many times
-the fragment put in occurs in the database.
+Each seed is a structure drawn, given as its MOL blocks, read as RDKit
+reads them. CReM replaces a fragment of it (*Replace fragments*) - or a
+hydrogen (*Add to it*) - by a fragment the database holds in the same
+surroundings, `radius` bonds out: the larger the radius, the closer the
+surroundings must match, and the fewer and more conservative the
+structures. Where more are found than asked for, CReM picks those it makes
+with the random seed given, so that the same asking gives the same ones.
+
+Each goes back as CReM gives it, and nothing more is made of it here
+(docs/PLUGINS.md, *Generate*): its SMILES; its values, named - the change
+made (`change`, a reaction SMARTS as CReM writes it), how many times the
+fragment put in occurs in the database (`frequency`), and the seed as CReM
+read it (`seed`, its SMILES); and which seed it was made from, by its
+place among those given (`seed` beside them). Nothing is made 3D, no
+stereo is enumerated, nothing is refused: the general steps after it do
+that. A seed RDKit cannot read is counted, with why.
 """
 
 import importlib.metadata
@@ -44,10 +42,8 @@ import sys
 
 from crem.crem import grow_mol, mutate_mol
 from rdkit import Chem, RDLogger
-from rdkit.Chem import Descriptors, rdDistGeom, rdForceFieldHelpers
-from rdkit.Chem.EnumerateStereoisomers import EnumerateStereoisomers, StereoEnumerationOptions
 
-# RDKit's own complaints go nowhere: what could not be made is counted, with why.
+# RDKit's own complaints go nowhere: a seed that could not be read is counted, with why.
 RDLogger.DisableLog("rdApp.*")
 
 # The folder Meno keeps the plugin's files in (the manifest's `downloads`).
@@ -56,7 +52,8 @@ FILES = sys.argv[1] if len(sys.argv) > 1 else None
 #: it is, as its record says.
 DB = "chembl33_sa2_f5.db"
 DB_SAID = "chembl33_sa2_f5 (CReM fragment databases, Zenodo 10.5281/zenodo.16909329; from ChEMBL 33, fragments of at most 15 heavy atoms)"
-#: The most molecules one seed gives in one run, and one run in all - a number of molecules, never a time.
+#: The most structures one seed gives in one run, and one run in all - a number of structures, never a time: the
+#: most Meno takes of a Generate (workflow/programs `GENERATED_MOST`).
 MOST_EACH = 100
 MOST = 1000
 #: The random seed where none is asked for.
@@ -65,17 +62,6 @@ SEED = 1
 RADIUS = 3
 #: The most heavy atoms a change adds, where none is asked for: CReM's own default for both operations.
 ADDS = 2
-#: The most steps a force field may take tidying one embedded geometry.
-STEPS = 2000
-#: The most stereoisomers one molecule with unspecified centres or double bonds is made as, each its own.
-MOST_STEREOISOMERS = 8
-#: The most centres and double bonds of unspecified stereo whose stereoisomers are tried (2^8 = 256 at most).
-MOST_OPEN = 8
-#: How many times ETKDG may try to embed one molecule's geometry before it is counted as not made.
-EMBED_TRIES = 50
-#: Bond orders as Meno's entries and outputs give them.
-ORDERS = {Chem.BondType.SINGLE: 1, Chem.BondType.DOUBLE: 2, Chem.BondType.TRIPLE: 3}
-BOND_OF = {1: Chem.BondType.SINGLE, 2: Chem.BondType.DOUBLE, 3: Chem.BondType.TRIPLE}
 #: What each operation is called, as the step's options and its outputs say it.
 OPERATIONS = {"mutate": "fragments replaced", "grow": "hydrogens replaced"}
 
@@ -83,129 +69,18 @@ VERSION = importlib.metadata.version("crem")
 
 
 def seed_of(entry):
-    """A seed as RDKit has it, from an entry Meno gives (lib/entry): its atoms, with charges and isotopes, its bonds,
-    its stereo read from its geometry - its hydrogens folded in. Else why not: a string."""
-    atoms, bonds = entry.get("atoms") or [], entry.get("bonds") or []
-    if not atoms:
+    """A seed as RDKit reads it, from a structure drawn as Meno gives one: its MOL blocks, its parts joined - as
+    drawn, its stereo as its blocks say it. Else why not: a string."""
+    blocks = entry.get("molblocks") or []
+    if not blocks:
         return "it has no atoms"
-    rw = Chem.RWMol()
-    try:
-        for a in atoms:
-            atom = Chem.Atom(str(a.get("el")))
-            atom.SetFormalCharge(int(a.get("charge") or 0))
-            if a.get("isotope"):
-                atom.SetIsotope(int(a["isotope"]))
-            if a.get("radical"):
-                atom.SetNumRadicalElectrons(int(a["radical"]))
-            # (its hydrogens are those drawn: none made up for it)
-            atom.SetNoImplicit(True)
-            rw.AddAtom(atom)
-        for b in bonds:
-            order = BOND_OF.get(b.get("order"))
-            if order is None:
-                return "a bond neither single, double nor triple"
-            rw.AddBond(int(b["a1"]), int(b["a2"]), order)
-    except (RuntimeError, ValueError, KeyError, TypeError):
-        return "an atom or bond RDKit cannot take"
-    mol = rw.GetMol()
-    conf = Chem.Conformer(len(atoms))
-    for i, a in enumerate(atoms):
-        conf.SetAtomPosition(i, (float(a.get("x", 0)), float(a.get("y", 0)), float(a.get("z", 0))))
-    mol.AddConformer(conf, assignId=True)
-    try:
-        Chem.SanitizeMol(mol)
-    except Exception:  # RDKit's own refusals, of every kind
-        return "not a molecule RDKit takes (its valences)"
-    if Descriptors.NumRadicalElectrons(mol):
-        return "a radical, with unpaired electrons this plugin does not hand on"
-    if len(Chem.GetMolFrags(mol)) > 1:
-        return "more than one molecule"
-    Chem.AssignStereochemistryFrom3D(mol)
-    return Chem.RemoveHs(mol)
-
-
-def stereoisomers_of(mol, every):
-    """Each stereoisomer of a molecule, as a list of molecules: those of every centre and double bond it leaves
-    unspecified, where `every`, each its own - what it does specify kept - in the one order every run gives them
-    (by their isomeric SMILES); the molecule alone where it leaves none open. Else why not: a string. Never one
-    stereoisomer chosen for it: that would pass as specified what was not."""
-    cumulated = {a.GetIdx() for a in mol.GetAtoms() if sum(b.GetBondType() == Chem.BondType.DOUBLE for b in a.GetBonds()) > 1}
-    if cumulated:
-        # (cumulated double bonds - an allene's axis - no enumeration here sets: not made)
-        return "cumulated double bonds"
-    open_ = [si for si in Chem.FindPotentialStereo(Chem.Mol(mol)) if si.specified == Chem.StereoSpecified.Unspecified]
-    if not open_:
-        return [mol]
-    if not every:
-        return "its stereo is not all specified"
-    if len(open_) > MOST_OPEN:
-        return f"more than {MOST_OPEN} centres or double bonds of unspecified stereo"
-    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, tryEmbedding=False, maxIsomers=0)
-    found = list(EnumerateStereoisomers(Chem.Mol(mol), options=options))
-    if len(found) <= 1:
-        return [mol]
-    if len(found) > MOST_STEREOISOMERS:
-        return f"more than {MOST_STEREOISOMERS} stereoisomers"
-    return sorted(found, key=lambda m: Chem.MolToSmiles(m))
-
-
-def made_of(mol, seed):
-    """A molecule as one in 3D: its atoms - element, charge, isotope - its bonds, Kekulé, one geometry, and the
-    force field that tidied it. Else why not: a string - one whose geometry came out another stereoisomer too."""
-    want = Chem.MolToSmiles(mol)
-    mol = Chem.AddHs(mol)
-    params = rdDistGeom.ETKDGv3()
-    params.randomSeed = int(seed)
-    params.maxIterations = EMBED_TRIES
-    if rdDistGeom.EmbedMolecule(mol, params) != 0:
-        return f"no 3D structure embedded in {EMBED_TRIES} tries"
-    if rdForceFieldHelpers.MMFFHasAllMoleculeParams(mol):
-        rdForceFieldHelpers.MMFFOptimizeMolecule(mol, maxIters=STEPS)
-        field = "MMFF94"
-    elif rdForceFieldHelpers.UFFHasAllMoleculeParams(mol):
-        rdForceFieldHelpers.UFFOptimizeMolecule(mol, maxIters=STEPS)
-        field = "UFF"
-    else:
-        field = None
-    # (the stereoisomer its geometry is, read back from it: the one asked for, or not made)
-    back = Chem.Mol(mol)
-    Chem.AssignStereochemistryFrom3D(back)
-    if Chem.MolToSmiles(Chem.RemoveHs(back)) != want:
-        return "its geometry came out another stereoisomer"
-    Chem.Kekulize(mol, clearAromaticFlags=True)
-    if any(b.GetBondType() not in ORDERS for b in mol.GetBonds()):
-        return "a bond neither single, double nor triple"
-    return {
-        "smiles": want,
-        "atoms": [{"el": a.GetSymbol(), "charge": a.GetFormalCharge(), "isotope": a.GetIsotope()} for a in mol.GetAtoms()],
-        "bonds": [{"a1": b.GetBeginAtomIdx(), "a2": b.GetEndAtomIdx(), "order": ORDERS[b.GetBondType()]} for b in mol.GetBonds()],
-        "xyz": [round(v, 4) for p in mol.GetConformer().GetPositions() for v in p],
-        "field": field,
-    }
-
-
-def molecules_of(smiles, seed, every):
-    """A SMILES as molecules in 3D: one, or each stereoisomer of what it leaves unspecified - `made`, each with its
-    place among them (`k`) and how many there were (`of`); `dropped`, those that could not be made, counted by
-    why. Else why not: a string - where none was made."""
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        return "not a SMILES RDKit reads"
-    if Descriptors.NumRadicalElectrons(mol):
-        return "a radical, with unpaired electrons this plugin does not hand on"
-    isomers = stereoisomers_of(mol, every)
-    if isinstance(isomers, str):
-        return isomers
-    made, dropped = [], {}
-    for k, m in enumerate(isomers):
-        one = made_of(m, seed)
-        if isinstance(one, str):
-            dropped[one] = dropped.get(one, 0) + 1
-        else:
-            made.append({**one, "k": k, "of": len(isomers)})
-    if not made:
-        return next(iter(dropped)) if len(dropped) == 1 else "none of its stereoisomers could be made"
-    return {"made": made, "dropped": dropped}
+    mol = None
+    for block in blocks:
+        part = Chem.MolFromMolBlock(block)
+        if part is None:
+            return "a part RDKit cannot read"
+        mol = part if mol is None else Chem.CombineMols(mol, part)
+    return mol
 
 
 def number(options, key, default, low, high):
@@ -228,7 +103,8 @@ def changed(mol, db, operation, radius, adds, count, seed):
 
 
 def op_run(m):
-    """*Generate* from seeds: each seed's new molecules, each an output; and what the run made, in a line (`said`)."""
+    """*Generate* from seeds: each structure CReM made, as it gave it, with which seed it was made from; what made
+    them (`by`); and the run in a line (`said`)."""
     if m.get("step") != "generate":
         raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
     db = os.path.join(FILES or "", DB, DB)
@@ -243,61 +119,38 @@ def op_run(m):
     radius = number(o, "radius", RADIUS, 1, 5)
     adds = number(o, "adds", ADDS, 1, 10)
     seed = number(o, "seed", SEED, 0, 2**31 - 1)
-    every = o.get("stereo", "every") != "skip"
     if count * len(entries) > MOST:
         raise ValueError(f"At most {MOST} in one run: {len(entries)} seeds of {count} each are more - fewer seeds, or fewer from each")
-    method = f"CReM {VERSION}, {OPERATIONS[operation]} from {DB_SAID}, radius {radius}, at most {adds} heavy atoms added, seed {seed}"
-    outputs, why, dropped, seeds_why, found = [], {}, {}, {}, 0
+    how = f"{OPERATIONS[operation]}, radius {radius}, at most {adds} heavy atoms added, seed {seed}"
+    outputs, unread = [], {}
     for place, entry in enumerate(entries):
-        name = str(entry.get("name") or f"Seed {place + 1}")
         mol = seed_of(entry)
         if isinstance(mol, str):
-            seeds_why[mol] = seeds_why.get(mol, 0) + 1
+            unread[mol] = unread.get(mol, 0) + 1
             continue
-        from_seed = Chem.MolToSmiles(mol)
+        try:
+            Chem.SanitizeMol(mol)
+        except Exception:  # RDKit's own refusals, of every kind: a seed it cannot take is one it cannot read
+            unread["not a structure RDKit can take"] = unread.get("not a structure RDKit can take", 0) + 1
+            continue
+        read_as = Chem.MolToSmiles(mol)
         for smiles, change, frequency in changed(mol, db, operation, radius, adds, count, seed):
-            found += 1
-            got = molecules_of(smiles, seed, every)
-            if isinstance(got, str):
-                why[got] = why.get(got, 0) + 1
-                continue
-            for d, n in got["dropped"].items():
-                dropped[d] = dropped.get(d, 0) + n
-            for one in got["made"]:
-                enumerated = one["of"] > 1
-                outputs.append({
-                    "schema": 1,
-                    "program": "CReM",
-                    "version": VERSION,
-                    "method": method
-                    + (f"; its stereo, left unspecified, one of the {one['of']} stereoisomers enumerated" if enumerated else "")
-                    + f"; one geometry, ETKDG v3 + {one['field'] or 'no force field'}",
-                    "atoms": [a["el"] for a in one["atoms"]],
-                    "charges": [a["charge"] for a in one["atoms"]],
-                    **({"isotopes": [a["isotope"] for a in one["atoms"]]} if any(a["isotope"] for a in one["atoms"]) else {}),
-                    "bonds": one["bonds"],
-                    "frames": [one["xyz"]],
-                    "results": [
-                        {"id": "smiles", "on": "molecule", "group": "Generated", "label": "SMILES", "value": Chem.MolToSmiles(Chem.MolFromSmiles(smiles))},
-                        *([{"id": "stereoisomer", "on": "molecule", "group": "Generated", "label": f"Stereoisomer {one['k'] + 1} of {one['of']} enumerated", "value": one["smiles"]}] if enumerated else []),
-                        {"id": "seed", "on": "molecule", "group": "Generated", "label": "From seed", "value": f"{name}: {from_seed}"},
-                        {"id": "change", "on": "molecule", "group": "Generated", "label": "Change made", "value": change},
-                        {"id": "frequency", "on": "molecule", "group": "Generated", "label": "Times the fragment put in occurs in the database", "value": frequency, "rank": 1},
-                    ],
-                })
-    taken = len(entries) - sum(seeds_why.values())
-    said = f"{found} made from {taken} seed{'' if taken == 1 else 's'} ({OPERATIONS[operation]}, radius {radius}, seed {seed})"
-    if len(outputs) != found - sum(why.values()):
-        said += f" → {len(outputs)} molecules with every stereoisomer of unspecified centres"
-    if dropped:
-        said += f"; {sum(dropped.values())} of their stereoisomers not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(dropped.items())) + ")"
-    if why:
-        said += f"; {sum(why.values())} not made (" + "; ".join(f"{n}: {w}" for w, n in sorted(why.items())) + ")"
-    if seeds_why:
-        said += f"; {sum(seeds_why.values())} seed{'' if sum(seeds_why.values()) == 1 else 's'} not taken (" + "; ".join(f"{n}: {w}" for w, n in sorted(seeds_why.items())) + ")"
+            outputs.append({
+                "smiles": smiles,
+                "properties": {
+                    "change": {"value": change, "unit": "none"},
+                    "frequency": {"value": frequency, "unit": "none"},
+                    "seed": {"value": read_as, "unit": "none"},
+                },
+                "seed": place,
+            })
+    taken = len(entries) - sum(unread.values())
     if not taken:
-        raise ValueError("No seed could be taken: " + "; ".join(sorted(seeds_why)))
-    return {"outputs": outputs[:MOST], "said": said}
+        raise ValueError("No seed could be read: " + "; ".join(sorted(unread)))
+    said = f"{len(outputs)} made from {taken} seed{'' if taken == 1 else 's'} ({OPERATIONS[operation]}, radius {radius}, seed {seed})"
+    if unread:
+        said += f"; {sum(unread.values())} seed{'' if sum(unread.values()) == 1 else 's'} not read (" + "; ".join(f"{n}: {w}" for w, n in sorted(unread.items())) + ")"
+    return {"outputs": outputs[:MOST], "said": said, "by": {"program": "CReM", "version": VERSION, "model": DB_SAID, "method": how}}
 
 
 OPS = {"run": op_run}
