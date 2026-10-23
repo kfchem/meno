@@ -1,4 +1,6 @@
 import { boltzmann } from "../../../../lib/boltzmann";
+import { imaginaryWords } from "../../../../lib/calc/output";
+import { FAILURE_WORDS } from "../workflow/failures";
 import { easeInOut, easeOut } from "../../../theme/motion";
 import { ROOM_TEMPERATURE } from "../../../../lib/units";
 import * as THREE from "three";
@@ -251,15 +253,33 @@ export function populations(energies: readonly number[], degeneracies?: readonly
  * step found them, or else by Boltzmann at room temperature (`populations`)
  * - none of only a part of a search's conformers (`partOf`), whose shares
  * of these alone would not be the compound's, nor where its energies are
- * not each frame's, nor where its marks of failed frames did not read
- * (`marksUnread`).
+ * not each frame's, nor where a frame is no minimum (`sharesWithheld`).
  */
-export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "marksUnread">): number[] | undefined {
+export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "failed" | "imaginary" | "numbers" | "marksUnread">): number[] | undefined {
   const n = 1 + (m.frames?.length ?? 0);
-  // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
-  if (m.marksUnread) return undefined;
+  if (sharesWithheld(m)) return undefined;
   if (m.shares?.length === n) return m.shares;
   return m.conformerSet && !m.partOf && m.energies?.length === n ? populations(m.energies, m.degeneracies) : undefined;
+}
+
+/**
+ * Why a conformer set shows no shares: a frame that is no minimum - its
+ * optimisation did not converge, or its calculation judged it has an
+ * imaginary frequency - whose energy weighed as a minimum's would share
+ * out nothing real, named by its number, as *Populations* names one it
+ * refuses (workflow/meno `notAllMinima`); or that its file's marks of that
+ * did not read (`marksUnread`). None where each frame is one.
+ */
+export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers" | "marksUnread">): string | null {
+  // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
+  if (m.marksUnread) return "its frames' marks could not be read, so whether each is a minimum is not known: no shares are given";
+  const n = 1 + (m.frames?.length ?? 0);
+  const name = (i: number) => `#${m.numbers?.length === n ? m.numbers[i] : i + 1}`;
+  const unconverged = m.failed?.length === n ? m.failed.findIndex((f) => f?.kind === "not-converged") : -1;
+  if (unconverged >= 0) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum, so no shares are given`;
+  const saddle = m.imaginary?.length === n ? m.imaginary.findIndex((f) => !!f?.length) : -1;
+  if (saddle >= 0) return `${name(saddle)} has ${imaginaryWords(m.imaginary![saddle]!)}: it is no minimum, so no shares are given`;
+  return null;
 }
 
 /** How a molecule in 3D is drawn: in the 3D style's primary look, or its secondary. */
