@@ -13,7 +13,7 @@ import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
@@ -222,6 +222,9 @@ export function rowMost(rooms: readonly (Frame & { chip: number })[]): number {
 }
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
+/** The room a numbered structure's number takes under it (Workflow2D `numbered`): half a bond, and a line of 16 px. */
+const NUMBER_ROOM = NOMINAL_BOND_LENGTH / 2 + 16 * PX;
+
 /** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
 export const SUMMARY_W = SUMMARY_PX.w * PX + 2 * SET_PAD;
 export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
@@ -395,7 +398,8 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
   // (each about the middle of its box)
   const boxes = made.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
-  const rooms = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: 0 }));
+  // (a structure its step numbered given room for its number under it, as Workflow2D shows it: half a bond down, a line of 16 px)
+  const rooms = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: recordNumber(made[i].record) != null ? NUMBER_ROOM : 0 }));
   return filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => {
     // (all put on the page at once, as one model - one at a time copied the page's drawing again for each - their ids made apart first: two given in one numbering, as a template's products are, would be one structure)
     const apart = numberedApart(made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y)));

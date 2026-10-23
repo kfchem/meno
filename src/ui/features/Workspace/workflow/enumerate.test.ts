@@ -11,6 +11,8 @@ import { countOf, numberedOn, numberedRecord, recordHow, recordNumber, recordWhy
 import { canWire, resultOf } from "./flow";
 import { addSet, addStep, connect } from "./model";
 import { runStep, showRun, type RunWith } from "./run";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { PX } from "./look";
 import { readWorkflow } from "./saved";
 
 
@@ -215,6 +217,14 @@ describe("Enumerate as a step", () => {
     expect(countOf(ran, resultOf(ran, step, "out")!)).toMatchObject({ holds: "structures", entries: 3 });
     // (the template untouched, where it was)
     expect(ran.model.atoms.filter((a) => t0(doc).has(a.id)).map((a) => [a.id, a.el, a.x, a.y])).toEqual(doc.model.atoms.map((a) => [a.id, a.el, a.x, a.y]));
+  });
+
+  it("gives each product's number room under it, inside its set's frame", () => {
+    const { doc, step } = page("R1: Me\nCl\nOMe\n*C(=O)N(C)C\nR2: Me\nCl");
+    const ran = runStep(doc, step, W);
+    const out = resultOf(ran, step, "out")!;
+    // (its number's line, as the page draws it: half a bond under the lowest atom, 16 px tall)
+    for (const n of numberedOn(ran, [out])) expect(n.y - NOMINAL_BOND_LENGTH / 2 - 16 * PX).toBeGreaterThan(out.y0);
   });
 
   it("shows each product's number under it, each where its structure lies in its set", () => {
