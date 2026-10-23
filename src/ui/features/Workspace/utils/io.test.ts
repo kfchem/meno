@@ -347,7 +347,7 @@ describe("a calculation's output, as a reader read it", () => {
       expect(m.frames).toHaveLength(1);
       expect(notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary")).toContain("Not converged");
       // (Energy window and Populations refuse it, saying why)
-      expect(notAllMinima(entries(m))).toMatch(/not converged - take it out first$/);
+      expect(notAllMinima(entries(m))).toMatch(/not converged - take it out first \(a Filter on "state = finished"\)$/);
     });
 
     it("says how many of its frames are entries, and that the rest are steps on the way", () => {

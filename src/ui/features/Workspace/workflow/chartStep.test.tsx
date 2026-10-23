@@ -5,6 +5,7 @@ import { readTable } from "../../../../lib/table";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, holdsOf, MARKS_UNREAD } from "./entries";
+import { STATE_FINISHED } from "./meno";
 import { canWire, entryOnPage, inputKey, resultOf, stateOf, tableInto } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
 import { runStep, whyNot, type RunWith } from "./run";
@@ -143,7 +144,7 @@ describe("a Chart step", () => {
       [{ marksUnread: true as const }, `a #1: ${MARKS_UNREAD}; a #2: ${MARKS_UNREAD}; a #3: ${MARKS_UNREAD}`],
     ] as const) {
       const [ran, chart] = run(extra as Partial<Molecule3D>);
-      expect(ran).toMatchObject({ ok: false, said: `Not every entry is a result to stand on: ${said} - take ${said.includes(";") ? "them" : "it"} out first` });
+      expect(ran).toMatchObject({ ok: false, said: `Not every entry is a result to stand on: ${said} - take ${said.includes(";") ? "them" : "it"} out first (a Filter on "${STATE_FINISHED}")` });
       expect(chart).toBeUndefined();
     }
     // (all results: charted)

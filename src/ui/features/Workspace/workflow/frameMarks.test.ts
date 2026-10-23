@@ -65,7 +65,7 @@ describe("a frame's marks", () => {
   it("come through Duplicates, Choose one - both its exits - Energy window's rest and As conformers", () => {
     expect(marks(ran("duplicates", [unranked(marked())]).molecules[0])).toEqual({ failed: [null, stopped, null], imaginary: [null, null, [-120.5]], marksUnread: undefined });
     // (ranked by energy, a set with one that is no minimum is refused, naming it)
-    expect(runMeno("duplicates", setEntries([marked()], "conformers"), "conformers")).toMatchObject({ ok: false, said: expect.stringMatching(/take it out first$/) });
+    expect(runMeno("duplicates", setEntries([marked()], "conformers"), "conformers")).toMatchObject({ ok: false, said: expect.stringMatching(/take (it|them) out first \(a Filter on "state = finished"\)$/) });
     const chosen = ran("choose", [marked()], { which: "number", number: 3 });
     expect(marks(chosen.molecules[0])).toEqual({ failed: undefined, imaginary: [[-120.5]], marksUnread: undefined });
     expect(marks(chosen.rest[0])).toEqual({ failed: [null, stopped], imaginary: undefined, marksUnread: undefined });
