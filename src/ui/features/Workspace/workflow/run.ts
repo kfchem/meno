@@ -677,6 +677,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        // (how many it stands for, and its mirror image's atoms where one was counted in - of its last geometry; a path's
+        //  frames before it, one each, none)
+        ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy] } : {}),
+        ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror]] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
         // (why a program step could not do it, where one could not: its Failed exit's - of its last frame, a path's own
         //  frames before it none)
@@ -707,6 +711,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
       ...(degeneracies ? { degeneracies } : {}),
+      ...(g.some((e) => e.mirror) ? { mirrors: g.map((e) => (e.mirror ? [...e.mirror] : null)) } : {}),
       // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
