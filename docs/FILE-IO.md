@@ -926,9 +926,10 @@ work.meno (zip)
     a step's earlier runs and jobs under way. Ties whose other end is not
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
-    results and its notes of what could not be read. Within a structure a
-    step gave a set: each property of its record, and each entry it was
-    made from. Within a set holding a table:
+    results and its notes of what could not be read, and each property of
+    a frame (`Molecule3D.properties`) that does not read. Within a
+    structure a step gave a set: each property of its record, and each
+    entry it was made from. Within a set holding a table:
     a column that does not read (with its cells), a row not of the table's
     width, and a cell not of its column's kind - none in its row, and named
     among what the table says was not read; a table with no column that

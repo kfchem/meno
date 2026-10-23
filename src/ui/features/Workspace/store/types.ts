@@ -561,6 +561,13 @@ export type Molecule3D = {
   /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
   /**
+   * Each frame's properties by name, as lib/entry has them - each with its
+   * unit and what worked it out (a model's NLL, a descriptor) - where a
+   * step or a plugin gave them (docs/WORKFLOWS.md, *Filter*): what a step
+   * that works on entries reads and keeps as they were.
+   */
+  properties?: Record<string, Property>[];
+  /**
    * Each frame's mirror image counted in, where Duplicates counted one in
    * (workflow/meno): the atoms the mirror image swaps - atom i of this
    * conformer plays the part of atom `mirrors[f][i]` in its mirror image -

@@ -491,6 +491,8 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
   const steps: number[] = [];
   chain.forEach(([kind, by], i) => {
     const id = st().addStep(kind, by, 1000 * i, 0);
+    // (a Filter keeping every entry - each has its number - so that what it passes on is all it was given)
+    if (kind === "filter") st().updateStep(id, { options: { conditions: "number \u2265 1", match: "all" } });
     st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });

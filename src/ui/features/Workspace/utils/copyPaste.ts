@@ -5,6 +5,7 @@
  */
 import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
+import { propertiesIn } from "../../../../lib/entry";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
@@ -782,7 +783,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
       const numbers = perFrame<number>(m.numbers, (k) => Number.isInteger(k));
       const shares = perFrame<number>(m.shares, isNum);
       const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
-      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
+      // (each frame's properties, one map each - a frame with none, an empty one; a property that does not read left out, and counted)
+      const maps = perFrame<Record<string, unknown>>(m.properties, (p) => !!p && typeof p === "object" && !Array.isArray(p));
+      const read = maps?.map((p) => propertiesIn(p) ?? {});
+      if (maps && read) leftOut("property", maps.reduce((k, p, i) => k + Object.keys(p).length - Object.keys(read[i]).length, 0));
+      const properties = read?.some((p) => Object.keys(p).length) ? read : undefined;
+      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}), ...(properties ? { properties } : {}) };
     })(),
     ...(failed ? { failed } : {}),
     ...(imaginary ? { imaginary } : {}),

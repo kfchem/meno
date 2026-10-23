@@ -19,6 +19,7 @@ export const STEP_KINDS = [
   "populations",
   "as-conformers",
   "choose",
+  "filter",
   "check-structures",
   "stereoisomers",
   "descriptors",

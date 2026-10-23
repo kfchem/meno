@@ -8,7 +8,8 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, MARKS_UNREAD, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, MARKS_UNREAD, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
@@ -47,6 +48,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return populations(entries, Number(options.temperature));
     case "choose":
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
+    case "filter":
+      return filtered(entries, holds, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }
@@ -208,6 +211,31 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   const out = new Map<number, SetEntry[]>();
   for (const e of entries) pushTo(out, e.compound, e);
   return [...out.values()];
+}
+
+/**
+ * Entries kept by conditions on their properties (lib/nodes `filter`), read
+ * as each is an entry (`entryOfSet`): those that meet them, the rest set
+ * aside - said, both counted, with why each of the rest was, an entry with
+ * no value for a property named among them. A condition on a name that is
+ * both Meno's own and one an entry carries of its own is refused, never
+ * read as either.
+ */
+function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, match: "all" | "any"): Outcome3D {
+  const read = conditionsIn(text);
+  if ("why" in read) return { ok: false, said: read.why };
+  // (a condition on a name that is Meno's and an entry's own too - "energy" given by a plugin as well: which is meant cannot be told, so it is not guessed)
+  for (const c of read.conditions) {
+    const both = entries.filter((e) => shadowedIn(e).includes(c.property)).length;
+    if (both) return { ok: false, said: `"${c.property}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
+  }
+  const out = filter(
+    entries.map((e, i) => entryOfSet(e, String(i))),
+    { conditions: read.conditions, match },
+  );
+  if (!out.ok) return out;
+  const back = (es: readonly { id: string }[]) => es.map((e) => entries[Number(e.id)]);
+  return { ok: true, holds, kept: back(out.exits.kept), aside: back(out.exits.rest), said: out.said };
 }
 
 /** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
