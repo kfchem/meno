@@ -600,7 +600,12 @@ How these behave:
     again: five tries over a second (`ERROR_SHARING_VIOLATION`,
     `ERROR_LOCK_VIOLATION`, and `ERROR_ACCESS_DENIED`, as Windows says of a
     file open elsewhere without leave to delete it; whether the file may be
-    written at all was looked at before). ReplaceFileW is always given a
+    written at all was looked at before). That look - the file opened to
+    write it, and closed again - is tried again the same way while the file
+    is held by one that lets no one else open it, as a spreadsheet program
+    holds a file it saves (`ERROR_SHARING_VIOLATION`,
+    `ERROR_LOCK_VIOLATION`); a file that may not be written
+    (`ERROR_ACCESS_DENIED`, kept read-only) fails at once. ReplaceFileW is always given a
     hidden name to keep the old file under until the new one is in place,
     so the file is never gone: where the system leaves it under that name
     (`ERROR_UNABLE_TO_MOVE_REPLACEMENT_2`), it is named as it was again,
