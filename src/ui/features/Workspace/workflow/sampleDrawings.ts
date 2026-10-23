@@ -13,8 +13,9 @@ import type { DrawingStyle } from "../../../../lib/chem/style";
 import { arranged } from "../../../../lib/layout/many";
 import { emptyWorkspaceDocument, relayout } from "../document";
 import { drawingSvg } from "../fileActions";
-import type { Model, Molecule3D } from "../store/types";
-import { drawnOf } from "../chem/make3d";
+import type { Model } from "../store/types";
+import { drawnOf, type Drawable } from "../chem/make3d";
+import { isSkeleton } from "../utils/completeness";
 import { layoutJob, nextFree, relayoutFrom } from "../chem/engineLayout";
 import { layOutMany } from "../chem/layOut";
 
@@ -35,9 +36,12 @@ function pictured(model: Model, style: DrawingStyle): { svg: string; w: number; 
   return { svg, w: size ? Number(size[1]) : 0, h: size ? Number(size[2]) : 0 };
 }
 
+/** What a cell of a skeleton says in place of its drawing. */
+export const SKELETON_CELL = "Its hydrogens are not there, so it is not drawn.";
+
 /** The molecules given - each at the frame given - drawn, in their order. */
 export async function sampleDrawings(
-  molecules: readonly { m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">; frame: number }[],
+  molecules: readonly { m: Drawable; frame: number }[],
   style: DrawingStyle,
   chem: Promise<ChemClient> = chemWorker("drawing"),
 ): Promise<Cell[]> {
@@ -52,6 +56,11 @@ export async function sampleDrawings(
   // (each one's drawing, wedged as it is in 3D: one the plugin could not draw says why)
   const drawn: (Model | string)[] = [];
   for (const { m, frame } of molecules) {
+    // (a skeleton, its hydrogens not there, is not drawn: drawnOf refuses it - said in a few words, in its place)
+    if (isSkeleton(m)) {
+      drawn.push(SKELETON_CELL);
+      continue;
+    }
     try {
       drawn.push((await drawnOf(client, m, frame)).drawn);
     } catch (e) {

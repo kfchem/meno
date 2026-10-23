@@ -71,7 +71,7 @@ import { knownOf } from "../../../../lib/io/writers";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { setEntries, setMembers, type SetEntry } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
-import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind } from "../workflow/kinds";
+import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind, isSetKind } from "../workflow/kinds";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
 import { measured } from "../../../../testing/timeouts";
@@ -424,12 +424,12 @@ const chem = {
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && !takesNothing(kind));
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures"));
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
   const g = kindInfo(kind).gives;
-  return g === "same" || g === "pictures" ? holds : g;
+  return isSetKind(g) ? g : holds;
 };
 
 /**
@@ -503,9 +503,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - left out here Render, which gives pictures, and Generate, given nothing)
+    // (each kind Meno defines filled by something - left out here Render, which gives pictures, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

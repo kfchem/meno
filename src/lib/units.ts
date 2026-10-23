@@ -32,14 +32,14 @@ export const GAS_CONSTANT_HARTREE = BOLTZMANN_J / HARTREE_J;
 export const ROOM_TEMPERATURE = 298.15;
 
 /** What a unit measures. A number converts only to a unit of its own dimension. */
-export type Dimension = "energy" | "temperature" | "length" | "angle";
+export type Dimension = "energy" | "temperature" | "length" | "angle" | "molar mass" | "area";
 
 /**
  * The units Meno knows. Energies per molecule (Eh, eV, cm⁻¹) and per mole
  * (kcal/mol, kJ/mol) are one dimension, as chemists use them: a mole's
  * worth of a molecule's energy.
  */
-export type Unit = "Eh" | "kcal/mol" | "kJ/mol" | "eV" | "cm-1" | "K" | "°C" | "Å" | "bohr" | "nm" | "pm" | "°";
+export type Unit = "Eh" | "kcal/mol" | "kJ/mol" | "eV" | "cm-1" | "K" | "°C" | "Å" | "bohr" | "nm" | "pm" | "°" | "g/mol" | "Å2";
 
 type UnitInfo = {
   dimension: Dimension;
@@ -64,6 +64,9 @@ export const UNITS: Readonly<Record<Unit, UnitInfo>> = {
   nm: { dimension: "length", scale: 10, label: "nm" },
   pm: { dimension: "length", scale: 0.01, label: "pm" },
   "°": { dimension: "angle", scale: 1, label: "°" },
+  // (a molecule's mass per mole, and a surface's area: a descriptor's - molecular weight, polar surface area)
+  "g/mol": { dimension: "molar mass", scale: 1, label: "g/mol" },
+  "Å2": { dimension: "area", scale: 1, label: "Å²" },
 };
 
 /** Whether a text names one of Meno's units. */

@@ -50,7 +50,7 @@ import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
-import { partOf } from "./utils/completeness";
+import { isSkeleton, partOf } from "./utils/completeness";
 import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
@@ -177,7 +177,7 @@ import GuideStructure from "./components/GuideStructure";
 import { guideNotice } from "../../../lib/plugins/guides";
 import { selectionFrame } from "./workflow/selectionSet";
 import { offeredSteps } from "./workflow/offered";
-import { PORT_DOWN } from "./workflow/look";
+import { GAP, PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
@@ -206,6 +206,8 @@ import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
+import { tableOfText } from "../../../lib/table";
+import { TABLE_SET } from "./workflow/model";
 import { heldOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
@@ -1113,6 +1115,10 @@ function WorkspaceContent({
             }
           : {}),
         ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
+        // (a skeleton that has no hydrogens to add - carbon dioxide's atoms, say, where Meno could not tell: whole, as the chemist says; never a PDB entry's chains)
+        ...(!menuMolecule.biopolymer && isSkeleton(menuMolecule)
+          ? { onWholeWithoutH: () => store.getState().changeMolecule3d("complete without hydrogens", menuMolecule.id, (m) => ({ ...m, wholeWithoutH: true })) }
+          : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length
           ? {
               lists: resultsOn(menuMolecule.calc?.results, "list").map((l, _, all) => ({
@@ -1751,6 +1757,10 @@ function WorkspaceContent({
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
               return chosen.length ? knownOfMolecules(chosen, style3dOf(store.getState())) : {};
             }}
+            skeletons={(ids) => {
+              const state = store.getState();
+              return carriedOf(state).filter((m, i) => ids.includes(state.molecules3d[i].id) && isSkeleton(m)).length;
+            }}
             said={(id) => (id === "pdb" ? pdbLeavesOut((exporting.part.part.molecules3d ?? []).flatMap((m) => m.atoms)) : id === "xyz" ? xyzLeavesOut(exporting.part.part.molecules3d ?? []) : null)}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {
@@ -2237,6 +2247,13 @@ function WorkspaceContent({
               onRead: () => store.getState().readText(t.id),
               onIcon: () => store.getState().setTextIcon(t.id, !t.icon),
               ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
+              ...(() => {
+                const table = tableOfText(t.name, t.text);
+                // (beside the text, to its right, level with it - where it has a sheet on the page)
+                const room = sheetRoom(t);
+                const at = room ? { x: room.x1 + GAP + TABLE_SET.w / 2, y: (room.y0 + room.y1) / 2 } : pasteTarget();
+                return table ? { onTable: () => void store.getState().placeTable(table, at, t.name) } : {};
+              })(),
             };
           })()}
           pdf={(() => {
