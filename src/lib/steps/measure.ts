@@ -88,3 +88,26 @@ export function measured(e: Entry, measurements: readonly (readonly number[])[],
   }
   return { ...e, properties };
 }
+
+/**
+ * Measurements as typed on a Measure step's card: each its atoms counted
+ * from 1, as the card and the 3D view show them, joined by "-" - two for a
+ * distance, three for an angle, four for a dihedral - the measurements
+ * apart by commas; as the entry numbers its atoms, from 0. Or why they do
+ * not read.
+ */
+export function measurementsTyped(text: string): { atoms: number[][] } | { why: string } {
+  const parts = text
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (!parts.length) return { why: "No measurements yet" };
+  const atoms: number[][] = [];
+  for (const p of parts) {
+    if (!/^\d+(\s*-\s*\d+){1,3}$/.test(p)) return { why: `"${p}" is not two, three or four atom numbers joined by "-"` };
+    const ns = p.split("-").map((n) => Number(n.trim()));
+    if (ns.some((n) => n < 1)) return { why: `"${p}": atoms are numbered from 1` };
+    atoms.push(ns.map((n) => n - 1));
+  }
+  return { atoms };
+}

@@ -9,6 +9,8 @@ import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 import { conditionsIn, conditionText } from "../../../../lib/nodes/filter";
+import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
+import { speciesTyped } from "../../../../lib/steps/species";
 import { listsReadAs, readLists } from "./enumerate";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
@@ -34,8 +36,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, a tag, a plus in a circle (a charge), a link, arrows apart (a measure). */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "tag" | "charge" | "link" | "span";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -288,7 +290,76 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.x || v.y ? `${v.y || "the second column of numbers"} against ${v.x || "the first"}` : "The first two columns of numbers"),
   },
+  // (Meno's steps on structures - docs/STRUCTURE-STEPS.md - each on a set's entries as Meno's entry records, workflow/structureSteps)
+  {
+    // (each entry given an ID of its own under the name given, which rides along with every entry made from it: two inputs are matched on it later)
+    kind: "tag",
+    name: "Tag",
+    icon: "tag",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Tagged",
+    options: [{ id: "name", label: "Name", type: "text", default: "" }],
+    how: (v) => (String(v.name ?? "").trim() ? `Each its own ${String(v.name).trim()}` : "Name the tag"),
+  },
+  {
+    // (each entry's charge and multiplicity set - one left blank as each has it - those whose electrons cannot have them out of Failed, saying why)
+    kind: "species",
+    name: "Species",
+    icon: "charge",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "With species",
+    others: [FAILED],
+    options: [
+      { id: "charge", label: "Charge", type: "text", default: "" },
+      { id: "multiplicity", label: "Multiplicity (blank: each entry's own)", type: "text", default: "" },
+    ],
+    how: (v) => speciesHow(String(v.charge ?? ""), String(v.multiplicity ?? "")),
+  },
+  {
+    // (the entries, in the set's order, as one entry - a complex - each part where it stands; none of a part's properties carried, each named)
+    kind: "combine",
+    name: "Combine",
+    icon: "link",
+    takes: ["molecules"],
+    gives: "molecules",
+    runs: "entries",
+    made: "Combined",
+    how: () => "In the set's order, as one complex",
+  },
+  {
+    // (distances, angles and dihedrals between atoms numbered from 1, as the card and the 3D view show them, on each entry as properties)
+    kind: "measure",
+    name: "Measure",
+    icon: "span",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Measured",
+    options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
+    how: (v) => measureHow(String(v.measurements ?? "")),
+  },
 ];
+
+/** How a Species step does its work, in a line: what it sets, and what it leaves as each entry has it. */
+export function speciesHow(charge: string, multiplicity: string): string {
+  const typed = speciesTyped(charge, multiplicity);
+  if ("why" in typed) return typed.why;
+  const { charge: c, multiplicity: m } = typed.given;
+  if (c == null && m == null) return "Give a charge, a multiplicity, or both";
+  // (one left blank stays as each entry has it - the one its electrons take, where it was never given: lib/steps species)
+  const said = [c != null ? `charge ${c > 0 ? `+${c}` : c}` : "its own charge", m != null ? `multiplicity ${m}` : "its own multiplicity"];
+  return said.join(", ").replace(/^./, (x) => x.toUpperCase());
+}
+
+/** How a Measure step does its work, in a line: its measurements as typed, or why they do not read. */
+export function measureHow(text: string): string {
+  const typed = measurementsTyped(text);
+  return "why" in typed ? typed.why : typed.atoms.map(measurementName).join(", ");
+}
 
 /** How a Filter step does its work, in a line: its conditions as read, and whether all or any - or why they do not read, or that there are none. */
 export function filterHow(text: string, match: "all" | "any"): string {

@@ -2,40 +2,50 @@ import { describe, expect, it } from "vitest";
 import { asideExit, asideIn, exitsIn, exitsOf, KINDS, restHolds, type StepExit } from "./kinds";
 
 describe("a kind's exits, as a list", () => {
-  it("are, for every kind Meno has, what they were with one second exit: the first, then rest or failed where it has one", () => {
-    // (as each kind declared them before its exits became a list)
-    const had: Record<string, string[]> = {
-      generate: ["out"],
-      conformers: ["out", "failed"],
-      optimise: ["out", "failed"],
-      energy: ["out", "failed"],
-      frequencies: ["out", "failed"],
-      nci: ["out", "failed"],
-      render: ["out"],
-      "energy-window": ["out", "rest"],
-      duplicates: ["out", "rest"],
-      populations: ["out"],
-      filter: ["out", "rest"],
-      "as-conformers": ["out"],
-      choose: ["out", "rest"],
-      "check-structures": ["out", "rest"],
-      stereoisomers: ["out", "rest"],
-      descriptors: ["out", "rest"],
-      enumerate: ["out", "rest"],
-      chart: ["out"],
+  it("are, for every kind Meno has, exactly what they were with one second exit: the first, then rest or failed where it has one", () => {
+    // (each kind's exits as declared before they became a list - id, name, what each gives, and the mark - main 954b163c)
+    const first = (name: string, gives: StepExit["gives"]): StepExit => ({ id: "out", name, gives });
+    const failed = (gives: StepExit["gives"] = "same"): StepExit => ({ id: "failed", name: "Failed", gives, of: "failed" });
+    const rest = (name: string, gives: StepExit["gives"]): StepExit => ({ id: "rest", name, gives, of: "rest" });
+    const had: Record<string, StepExit[]> = {
+      generate: [first("Generated", "structures")],
+      conformers: [first("Conformers", "conformers"), failed("molecules")],
+      optimise: [first("Optimised", "same"), failed()],
+      energy: [first("Energies", "same"), failed()],
+      frequencies: [first("Frequencies", "same"), failed()],
+      nci: [first("Non-covalent interactions", "same"), failed()],
+      render: [first("Rendered", "pictures")],
+      "energy-window": [first("Within {window} kcal/mol", "conformers"), rest("Outside it", "same")],
+      duplicates: [first("Unlike", "same"), rest("Alike", "same")],
+      populations: [first("Populations at {temperature} K", "conformers")],
+      filter: [first("Filtered", "same"), rest("The rest", "same")],
+      "as-conformers": [first("Conformers", "conformers")],
+      choose: [first("Chosen", "molecules"), rest("The rest", "conformers")],
+      "check-structures": [first("Checked", "structures"), rest("Set aside", "structures")],
+      stereoisomers: [first("Stereoisomers", "structures"), rest("Set aside", "structures")],
+      descriptors: [first("With descriptors", "structures"), rest("Set aside", "structures")],
+      enumerate: [first("Made", "structures"), rest("Aside", "same")],
+      chart: [first("Chart", "chart")],
+      tag: [first("Tagged", "same")],
+      species: [first("With species", "same"), failed()],
+      combine: [first("Combined", "molecules")],
+      measure: [first("Measured", "same")],
     };
-    // (every kind there was then, each still there; one added since declares its own)
-    for (const [kind, ids] of Object.entries(had)) {
-      const k = KINDS.find((x) => x.kind === kind);
-      expect(k, kind).toBeDefined();
-      expect(exitsOf(k!.kind).map((e) => e.id), kind).toEqual(ids);
-      expect(asideExit(k!.kind)?.id, kind).toBe(ids[1]);
+    // (every kind guarded: one added declares its exits here too)
+    expect(KINDS.map((k) => k.kind).sort()).toEqual(Object.keys(had).sort());
+    for (const k of KINDS) {
+      expect(exitsOf(k.kind), k.kind).toEqual(had[k.kind]);
+      expect(asideExit(k.kind), k.kind).toEqual(had[k.kind][1]);
     }
     // (what the exit for what was set aside holds: as declared, or what came in)
     expect(restHolds("choose", "molecules")).toBe("conformers");
     expect(restHolds("filter", "conformers")).toBe("conformers");
     expect(restHolds("conformers", "structures")).toBe("molecules");
     expect(restHolds("render", "molecules")).toBeUndefined();
+  });
+
+  it("mark at most one exit of any kind as the one for what it sets aside or could not do", () => {
+    for (const k of KINDS) expect(exitsOf(k.kind).filter((e) => e.of).length, k.kind).toBeLessThanOrEqual(1);
   });
 
   it("take a kind with three - its first, what it sets aside, and something else it gives - in the order declared, the aside one found by its mark wherever it stands", () => {

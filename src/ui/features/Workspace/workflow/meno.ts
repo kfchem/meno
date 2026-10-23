@@ -11,6 +11,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, entryOfSet, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
+import { combinedSet, measuredSet, speciesSet, taggedSet } from "./structureSteps";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -53,6 +54,14 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
     case "filter":
       return filtered(entries, holds, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
+    case "tag":
+      return taggedSet(entries, holds, String(options.name ?? ""));
+    case "species":
+      return speciesSet(entries, holds, String(options.charge ?? ""), String(options.multiplicity ?? ""));
+    case "combine":
+      return combinedSet(entries);
+    case "measure":
+      return measuredSet(entries, holds, String(options.measurements ?? ""));
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }

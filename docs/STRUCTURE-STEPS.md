@@ -3,8 +3,12 @@
 The workflow steps on structures that Meno does itself
 (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures). Each does
 one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
-`src/lib/steps`, pure, with no page and no plugin. Their cards follow the
-ports-and-exits work. Each is tested against answers known by construction,
+`src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
+*Combine* and *Measure* are steps of a workflow (docs/WORKFLOWS.md, *Kinds of
+step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
+entry records, and gives each back as a step's entry - all it held kept
+where it is that entry still, what was worked out at another structure,
+places or state never carried (`setEntryOfEntry`). The rest follow. Each is tested against answers known by construction,
 not only against its own code (`src/lib/steps/structures.test.ts`).
 
 ## Species
