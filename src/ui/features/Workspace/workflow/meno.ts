@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, entryOfSet, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, MARKS_UNREAD, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
@@ -265,7 +265,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   if (!entries.every(hasEnergy)) return NO_ENERGY;
   // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
   //  frequencies are another matter: they would refuse it where the window is on free energies, which it is not)
-  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged"));
+  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged" || e.marksUnread));
   if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
@@ -447,10 +447,14 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
  * where one is no minimum: the first whose optimisation did not converge,
  * or that its calculation judged has an imaginary frequency, named with
  * it, for the chemist to take it out (the maintainer, 2026-10-22: each
- * program's own judgement of which are imaginary). Null where none is.
+ * program's own judgement of which are imaginary) - or whose file's marks
+ * of that did not read (`SetEntry.marksUnread`). Null where none is.
  */
 export function notAllMinima(entries: readonly SetEntry[]): string | null {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+  // (its file's marks of which frames failed did not read: whether it is a minimum is not known)
+  const unread = entries.find((x) => x.marksUnread);
+  if (unread) return `${name(unread)}: ${MARKS_UNREAD} - take it out first`;
   const unconverged = entries.find((x) => x.failed?.kind === "not-converged");
   if (unconverged) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum - take it out first`;
   const e = entries.find((x) => x.imaginary?.length);

@@ -139,6 +139,21 @@ describe("a molecule's frames, results and stereo labels as it is edited", () =>
     expect(copy.edited).toEqual({ from: "frame 2" });
   });
 
+  it("makes an edited copy of a frame that was no entry none still, said as it was: it is that geometry", () => {
+    // an optimisation's three geometries, its last never converged - none an entry
+    const opt = { ...butane(), frames: [placesOf(butane(), 0), placesOf(butane(), 0)], entryFrames: [], notConverged: true as const };
+    expect(editedCopy(opt, 2, placesOf(opt, 2), undefined, { x: 0, y: 0 })).toMatchObject({ entryFrames: [], notConverged: true });
+    // a scan's point that converged is an entry, and its copy one too; a step on the way is none, and not converged
+    const scan = { ...butane(), frames: [placesOf(butane(), 0), placesOf(butane(), 0)], entryFrames: [1, 2] };
+    const point = editedCopy(scan, 1, placesOf(scan, 1), undefined, { x: 0, y: 0 });
+    expect([point.entryFrames, point.notConverged]).toEqual([undefined, undefined]);
+    expect(editedCopy(scan, 0, placesOf(scan, 0), undefined, { x: 0, y: 0 })).toMatchObject({ entryFrames: [], notConverged: true });
+    // why none was, where that was said: kept
+    const cut = { ...butane(), frames: [placesOf(butane(), 0)], entryFrames: [], noEntryWhy: "cut" as const };
+    const copy = editedCopy(cut, 1, placesOf(cut, 1), undefined, { x: 0, y: 0 });
+    expect([copy.entryFrames, copy.noEntryWhy, copy.notConverged]).toEqual([[], "cut", undefined]);
+  });
+
   it("swaps R and S at a centre turned inside out, and E and Z at a double bond turned past square", () => {
     // a centre (0) with three neighbours; the third moved through to the other side
     const m = {

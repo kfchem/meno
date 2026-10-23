@@ -6,7 +6,7 @@
  * it is shown, is the workspace's (ui/features/Workspace/workflow/kinds).
  */
 
-export const STEP_KINDS = ["conformers", "optimise", "energy", "frequencies", "nci", "render", "energy-window", "duplicates", "populations", "as-conformers", "choose", "filter"] as const;
+export const STEP_KINDS = ["generate", "conformers", "optimise", "energy", "frequencies", "nci", "render", "energy-window", "duplicates", "populations", "as-conformers", "choose", "filter"] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */

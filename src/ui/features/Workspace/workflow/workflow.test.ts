@@ -23,6 +23,7 @@ import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
+import { inputsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
@@ -934,6 +935,19 @@ describe("Quick Add's calculations", () => {
     expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies"]]);
     expect(pluginById("orca")?.name).toBe("ORCA interface");
     expect(doerOf({ kind: "energy", by: "orca" })).toEqual({ id: "orca", name: "ORCA" });
+  });
+
+  it("offer a step that takes nothing in on empty space alone - never from a wire, which it has nowhere to take", () => {
+    const doc = addStep(page(), "as-conformers", 5, 0);
+    useReaders.setState({ state: { reinvent: "added" }, problem: {} });
+    expect(offered(doc).find(([who]) => who === "REINVENT 4")).toEqual(["REINVENT 4", ["generate"]]);
+    expect(offered(doc, { set: 1 }).find(([who]) => who === "REINVENT 4")).toBeUndefined();
+    // (and nothing can be wired into one put down)
+    const gen = addStep(doc, "generate", 9, 0, undefined, "reinvent");
+    const id = gen.steps![gen.steps!.length - 1].id;
+    expect(canWire(gen, { set: 1 }, id)).toBe(false);
+    expect(connect(gen, { set: 1 }, id)).toBe(gen);
+    expect(inputsOf("generate")).toEqual([]);
   });
 });
 
