@@ -13,9 +13,30 @@
 import { axisIn, leftIn, rowNamer, type Axis, type ChartLeft } from "./chart";
 import type { Table, TableColumn } from "./table";
 import { factor, isUnit, sameDimension } from "./units";
+import { imaginaryWords } from "./calc/output";
 
-/** A level: its name; its energy relative to the reference, in kcal/mol; how many entries it is the lowest of, and that lowest's row, entry and number. */
-export type DiagramLevel = { name: string; value: number; lowestOf: number; lowest: { row: number; entry?: string; number?: number } };
+/**
+ * A level: its name; its energy relative to the reference, in kcal/mol; how
+ * many entries it is the lowest of, and that lowest's row, entry and number
+ * - and its imaginary frequencies, where known: none ([]), those its
+ * calculation judged it has, or not worked out (its frequencies were not
+ * computed). A level is drawn as it is either way: which should be a saddle
+ * point the diagram cannot tell, so it says.
+ */
+export type DiagramLevel = { name: string; value: number; lowestOf: number; lowest: { row: number; entry?: string; number?: number; imaginary?: number[] | "not computed" } };
+
+/** A level's imaginary frequencies as it says them, pointed at: "has 1 imaginary frequency, 300.0i cm-1", "no imaginary frequency", or "frequencies not computed". */
+export const frequenciesSaid = (imaginary: number[] | "not computed") =>
+  imaginary === "not computed" ? "frequencies not computed" : imaginary.length ? `has ${imaginaryWords(imaginary)}` : "no imaginary frequency";
+
+/** The level a row of molecules seen as a table is of: its title, else its name, else its group (as the molecule is called); "" where it has none. */
+export function levelNamer(table: Pick<Table, "columns">): (r: readonly unknown[]) => string {
+  const nameAt = ["title", "name", "group"].map((name) => table.columns.findIndex((c) => c.name === name)).filter((k) => k >= 0);
+  return (r) => {
+    for (const k of nameAt) if (typeof r[k] === "string" && r[k]) return r[k] as string;
+    return "";
+  };
+}
 
 export type DiagramValue = {
   kind: "diagram";
@@ -55,11 +76,7 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
   const at = (name: string) => table.columns.findIndex((c) => c.name === name);
   const j = at(quantity);
   // (the level each row is of: its title, its name, or its group, as the molecule is called)
-  const nameAt = ["title", "name", "group"].map(at).filter((k) => k >= 0);
-  const levelOf = (r: readonly unknown[]) => {
-    for (const k of nameAt) if (typeof r[k] === "string" && r[k]) return r[k] as string;
-    return "";
-  };
+  const levelOf = levelNamer(table);
   if (j < 0) {
     // (worked out in more than one way: each way a column of its own, and which levels have which)
     const ways = table.columns.flatMap((c, k) => (baseOf(c.name) === quantity && c.kind === "number" ? [{ c, k }] : []));
@@ -158,7 +175,12 @@ export function diagramIn(v: unknown): DiagramValue | undefined {
       name: l.name,
       value: l.value!,
       lowestOf: l.lowestOf!,
-      lowest: { row: low.row!, ...(typeof low.entry === "string" ? { entry: low.entry } : {}), ...(Number.isFinite(low.number) ? { number: low.number } : {}) },
+      lowest: {
+        row: low.row!,
+        ...(typeof low.entry === "string" ? { entry: low.entry } : {}),
+        ...(Number.isFinite(low.number) ? { number: low.number } : {}),
+        ...(low.imaginary === "not computed" || (Array.isArray(low.imaginary) && low.imaginary.every(Number.isFinite)) ? { imaginary: low.imaginary } : {}),
+      },
     });
   }
   const links: [number, number][] = [];

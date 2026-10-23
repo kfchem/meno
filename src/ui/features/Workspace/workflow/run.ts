@@ -13,15 +13,15 @@ import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
-import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
+import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
-import { diagramOf, diagramSaid, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramOf, diagramSaid, levelNamer, type DiagramValue } from "../../../../lib/energyDiagram";
 import { exitsOf, inputsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
-import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
+import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
@@ -147,8 +147,13 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
 function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: string): WorkspaceDocument {
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
-  const levels = tableInto(doc, step.id, "levels");
-  if (!levels) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into Levels"));
+  const seen = moleculesSeen(doc, step.id, "levels");
+  if (!seen) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into Levels"));
+  const levels = seen.table;
+  // (a level stands on its entries' energies as results: one that failed, did not converge or whose marks did not read refuses it - never the lowest of the rest, which may not be its lowest)
+  const levelOf = levelNamer(levels);
+  const bad = notResults(seen.entries, (k) => levelOf(levels.rows[k]) || "A level");
+  if (bad) return setRan(keepRun(doc, step), step.id, said(false, bad));
   const joined = wireInto(doc, step.id, "connects");
   const connects = joined ? tableWired(doc, step.id, "connects") : null;
   if (joined && !connects) return setRan(keepRun(doc, step), step.id, said(false, "Connects holds no table"));
@@ -156,7 +161,9 @@ function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key:
   const text = (v: unknown) => (typeof v === "string" ? v : undefined);
   const d = diagramOf(levels, { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}) }, connects ?? undefined);
   if ("why" in d) return setRan(keepRun(doc, step), step.id, said(false, d.why));
-  return setRan(placeChart(keepRun(doc, step), step, d), step.id, said(true, diagramSaid(d)));
+  // (each level with the imaginary frequencies of the entry it stands at: said, not judged)
+  const withFrequencies = { ...d, levels: d.levels.map((l) => ({ ...l, lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) } })) };
+  return setRan(placeChart(keepRun(doc, step), step, withFrequencies), step.id, said(true, diagramSaid(d)));
 }
 
 /** `doc` with a chart a step made in its result set: the set it made before - emptied of what it held - or one made to the right of it, as large as a chart is drawn. */

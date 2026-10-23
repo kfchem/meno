@@ -482,6 +482,25 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
 }
 
 /**
+ * Of entries a value is read from as a result - an energy diagram's levels
+ * - those that are none: one that failed, by any kind (not converged,
+ * refused, an error...), or whose file's marks did not read
+ * (`MARKS_UNREAD`) - each named by `name` and its number, in the words a
+ * step's line counts them in (`FAILURE_WORDS`), for the chemist to take it
+ * out first. As `notAllMinima` refuses for Energy window and Populations,
+ * but every one named, and every kind of failure: a level's lowest may be
+ * the one that failed, and the lowest of the rest is then not its energy.
+ * Imaginary frequencies are not among them: which level should be a saddle
+ * point is the chemist's to say. Null where none is.
+ */
+export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
+  const bad = entries.flatMap((e, k) =>
+    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind]}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
+  );
+  return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first` : null;
+}
+
+/**
  * Each conformer's Boltzmann population within its compound at `kelvin`.
  * Of a part of a search's conformers (`partOf`), shares over those given,
  * and it says so: they are not the compound's populations.

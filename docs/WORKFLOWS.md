@@ -2163,6 +2163,18 @@ molecules of one geometry - which a step that works on entries refuses
 - The axis names the quantity relative to the reference, its unit and
   what worked it out: "ΔE (kcal/mol) · xtb · GFN2-xTB · gas phase",
   "ΔG (kcal/mol) · … · 298.15 K".
+- **Only results stand as levels**: where any entry under a level failed
+  - not converged, refused, an error, of any kind - or its file's marks
+  of that did not read, the step refuses and draws nothing, naming each
+  ("Not every entry is a result to stand on: TS #2 not converged - take
+  it out first"), as Energy window and Populations refuse one. The lowest
+  of the rest is never taken: the one that failed may be the level's
+  lowest (meno `notResults`).
+- **Imaginary frequencies are said, not judged**: which level should be a
+  saddle point the step cannot tell, so each level, pointed at, says those
+  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm-1",
+  "no imaginary frequency", or "frequencies not computed" (lib/
+  energyDiagram `frequenciesSaid`, entries `imaginaryOf`).
 - **The lines**: each row of the table into *Connects* - its
   columns *from* and *to*, naming levels - is one; with no table, each
   level is joined to the next, in the order they come. A row naming no

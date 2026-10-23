@@ -881,6 +881,12 @@ function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
   };
 }
 
+/** An entry's imaginary frequencies, as its calculation judged them (cm-1): none where its vibrations were worked out and it has none; "not computed" where they were not. */
+export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc">): number[] | "not computed" {
+  if (e.imaginary?.length) return [...e.imaginary];
+  return e.calc?.results?.some((x) => x.on === "list" && x.id === "vibrations") ? [] : "not computed";
+}
+
 /** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name. */
 function menoProperties(e: SetEntry): Record<string, Property> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };

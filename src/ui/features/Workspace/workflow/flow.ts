@@ -140,8 +140,18 @@ export function tableWired(doc: Flow, step: number, port?: string): Table | null
  * structures drawn, pictures or a chart.
  */
 export function tableInto(doc: Flow, step: number, port?: string): Table | null {
-  const table = tableWired(doc, step, port);
-  if (table) return table;
+  return tableWired(doc, step, port) ?? moleculesSeen(doc, step, port)?.table ?? null;
+}
+
+/**
+ * Molecules in 3D that come into a step seen as a table (`tableInto`), and
+ * the entries its rows are, in the same order - what each row stands on: a
+ * failed or unconverged conformer, one whose marks did not read, its
+ * imaginary frequencies. None where what comes in is a table, structures
+ * drawn, or nothing.
+ */
+export function moleculesSeen(doc: Flow, step: number, port?: string): { table: Table; entries: SetEntry[] } | null {
+  if (tableWired(doc, step, port)) return null;
   const input = inputOf(doc, step, port);
   if (!input || input.holds === "structures") return null;
   const titles = new Map(input.molecules.flatMap((m) => (m.title ? [[m.id, m.title] as const] : [])));
@@ -168,7 +178,7 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
     }),
   );
   // (said after the row's id)
-  return { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) };
+  return { table: { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) }, entries };
 }
 
 /** The molecule in 3D on the page, and its frame, a row of molecules seen as a table is of (`tableInto`): none where it names none, or that molecule is not on the page. */

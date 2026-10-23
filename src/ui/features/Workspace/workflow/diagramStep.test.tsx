@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { diagramIn, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramIn, frequenciesSaid, type DiagramValue } from "../../../../lib/energyDiagram";
 import { readTable } from "../../../../lib/table";
 import { factor } from "../../../../lib/units";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
-import { countOf } from "./entries";
+import { countOf, MARKS_UNREAD } from "./entries";
 import { canWire, inputKey, resultOf, stateOf } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
 import { runStep, whyNot, type RunWith } from "./run";
@@ -115,6 +115,47 @@ describe("an Energy diagram step", () => {
     doc = updateStep(doc, filter, { options: { conditions: "energy <" } });
     doc = runStep(doc, step, { ...W, now: 3000 });
     expect([ran(filter).ok, ran(step).said]).toEqual([false, "The step before it failed"]);
+  });
+
+  /** The page's TS, P or R given `marks`, its diagram run: what the step says, and the diagram it made, none where none. */
+  const marked = (title: string, marks: Partial<Molecule3D>) => {
+    const made = page();
+    const doc = { ...made.doc, molecules3d: made.doc.molecules3d!.map((m) => (m.title === title ? { ...m, ...marks } : m)) };
+    const ran = runStep(doc, made.step, W);
+    return [ran.steps!.find((x) => x.id === made.step)!.ran!.said, resultOf(ran, made.step)?.chart ?? null];
+  };
+
+  // (refused where an entry under a level is no result, naming it, and nothing drawn: TS's #2, its lowest, not converged - not
+  //  the lowest of the rest either, which may not be the level's lowest; P failed, its marks unread, refused)
+  it.each([
+    ["TS", { failed: [null, { kind: "not-converged" as const, why: "stopped at 200 cycles" }] }, "TS #2 not converged"],
+    ["P", { failed: [{ kind: "not-converged" as const, why: "stopped at 200 cycles" }] }, "P #1 not converged"],
+    ["P", { marksUnread: true as const }, `P #1: ${MARKS_UNREAD}`],
+    ["P", { failed: [{ kind: "refused" as const, why: "an element it has no parameters for" }] }, "P #1 refused"],
+  ])("refuses where %s's entry is no result (%j), naming it, and draws nothing", (title, marks, named) => {
+    expect(marked(title, marks)).toEqual([`Not every entry is a result to stand on: ${named} - take it out first`, null]);
+  });
+
+  it("names every entry that is no result, not the first alone", () => {
+    expect(marked("TS", { failed: [{ kind: "program-error", why: "x" }, { kind: "not-converged", why: "y" }] })[0]).toBe(
+      "Not every entry is a result to stand on: TS #1 the program stopped with an error; TS #2 not converged - take them out first",
+    );
+  });
+
+  it("carries each level's imaginary frequencies, of the entry it stands at - drawn all the same, and said pointed at", () => {
+    const made = page();
+    // (R judged to have one imaginary frequency; TS and P with no vibrations worked out)
+    const doc = { ...made.doc, molecules3d: made.doc.molecules3d!.map((m) => (m.title === "R" ? { ...m, calc: { ...m.calc!, imaginary: [-300] } } : m)) };
+    const d = diagramOf(runStep(doc, made.step, W), made.step)!;
+    expect(d.levels.map((l) => [l.name, l.lowest.imaginary])).toEqual([
+      ["R", [-300]],
+      ["TS", "not computed"],
+      ["P", "not computed"],
+    ]);
+    expect(d.levels.map((l) => frequenciesSaid(l.lowest.imaginary!))).toEqual(["has 1 imaginary frequency, 300.0i cm-1", "frequencies not computed", "frequencies not computed"]);
+    expect(frequenciesSaid([])).toBe("no imaginary frequency");
+    // (and kept in the file)
+    expect(diagramIn(JSON.parse(JSON.stringify(d)))!.levels.map((l) => l.lowest.imaginary)).toEqual([[-300], "not computed", "not computed"]);
   });
 
   it("says which level's energy was worked out otherwise - and makes nothing", () => {

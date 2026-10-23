@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
 import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
-import { diagramSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
 import { CHART_PX } from "./look";
 
 /** How many of a table's rows its frame shows. */
@@ -229,6 +229,8 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
     ? [
         `${pointed.name} \u00b7 ${relative(pointed.value)} kcal/mol`,
         ...(pointed.lowestOf > 1 ? [`lowest of ${pointed.lowestOf}${pointed.lowest.number != null ? `: #${pointed.lowest.number}` : ""}`] : []),
+        // (its imaginary frequencies, as the entry it stands at has them - said, whatever it should be)
+        ...(pointed.lowest.imaginary == null ? [] : [frequenciesSaid(pointed.lowest.imaginary)]),
       ].join(" \u00b7 ")
     : `${diagramSaid(diagram)}${rowsLeft ? ` (${diagram.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}`;
   return (
