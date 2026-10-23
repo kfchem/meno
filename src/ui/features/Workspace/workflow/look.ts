@@ -79,6 +79,8 @@ export const SET_PAD = 14 * PX;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
+/** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
+export const SUMMARY_PX = { w: 480, h: 448 };
 export const NAME_DOWN = 18 * PX;
 /** A result set's distance from its step, and between molecules in it. */
 export const GAP = 64 * PX;

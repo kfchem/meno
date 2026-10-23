@@ -791,6 +791,29 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((s) => s.id === step)!.ran!.said).toBe(`0:01 \u00b7 2 of 2 \u00b7 ${over}`);
   });
 
+  it("keeps what a conformer stands for through an optimisation: its degeneracy, and its mirror image's atoms where Duplicates counted one in", async () => {
+    const { doc, st, step } = editor();
+    // (water as a conformer set of two, the first standing for its mirror image too - its hydrogens swapped)
+    doc.edit("conformers", (d) => ({
+      ...d,
+      molecules3d: d.molecules3d!.map((m) => ({ ...m, frames: [[0, 0, 0.01, 0, 0.77, 0.6, 0, -0.75, 0.58]], conformerSet: true, degeneracies: [2, 1], mirrors: [[0, 2, 1], null] })),
+    }));
+    expect(setEntries(st().molecules3d, "conformers").map((e) => [e.degeneracy, e.mirror ?? null])).toEqual([
+      [2, [0, 2, 1]],
+      [1, null],
+    ]);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(out.map((m) => [m.degeneracies, m.mirrors])).toEqual([[[2, 1], [[0, 2, 1], null]]]);
+  });
+
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
     const { doc, st, step } = editor();
     const ran = st().runStep(step);
@@ -985,10 +1008,32 @@ describe("a plugin's conformer search, and its duplicates", () => {
     const step = st().addStep("duplicates", "rdkit", 10, 20);
     st().connect({ set }, step);
     await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { rmsd: 0.125 }, "molecules");
+    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { mirrors: "apart" }, "molecules");
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
     // (the one set aside, in the step's second exit's set)
     expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
+    // (compounds it took atom against atom, too many ways onto themselves to try: said, a duplicate of one could be missed)
+    worker.run.mockImplementationOnce(async () => ({ kept: [0, 1], capped: 1 }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "2 of 2 kept \u00b7 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed" });
+  });
+
+  it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {
+    const { doc, st } = editor();
+    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
+    const set = st().sets[0].id;
+    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    st().updateStep(step, { options: { mirrors: "counted" } });
+    st().connect({ set }, step);
+    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 2, 1] }] }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept \u00b7 1 mirror image counted in (degeneracy 2)" });
+    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(setEntries(out, "molecules").map((e) => [e.degeneracy, e.mirror])).toEqual([[2, [0, 2, 1]]]);
+    // (one not as said - not a permutation of its atoms: none taken)
+    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 0, 1] }] }) as never);
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "1 of 2 kept" });
   });
 });
 

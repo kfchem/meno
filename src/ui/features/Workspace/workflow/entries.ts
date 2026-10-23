@@ -276,6 +276,13 @@ export type SetEntry = {
   multiplicity?: number;
   /** How many forms of it a conformer search found alike - its rotamers - where it said (CREST's degeneracy): its Boltzmann weight counts each. */
   degeneracy?: number;
+  /**
+   * Where its mirror image was counted in (Duplicates, its degeneracy
+   * counting both): the atoms the mirror image swaps - its atom i plays the
+   * part of atom `mirror[i]` in its mirror image. An average by atom over its
+   * conformers takes the mirror image's values so; one that cannot refuses.
+   */
+  mirror?: number[];
   /** Which stereoisomer it is, from its own geometry, where that has been asked (workflow/configurations). */
   stereo?: EntryStereo;
   /** Why a program step could not do it, where one could not (workflow/failures): an entry of a step's Failed exit. */
@@ -424,6 +431,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(energies && Number.isFinite(energies[f]) ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
+        ...(m.mirrors?.length === n && m.mirrors[f] ? { mirror: m.mirrors[f]! } : {}),
         ...(m.name ? { name: m.name } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
@@ -557,6 +565,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...thermoOf(e, at.geometry),
     ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
     // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
     ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),

@@ -58,6 +58,18 @@ export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly numb
 }
 
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
+/** A step's jobs' raw outputs kept in the workspace's file, or not (*Don't keep raw outputs*, workflow/keptJobs). */
+export function keepRawOutputs(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
+  return {
+    ...doc,
+    steps: (doc.steps ?? []).map((s) => {
+      if (s.id !== id) return s;
+      const { keepRaw: _, ...rest } = s;
+      return keep ? rest : { ...rest, keepRaw: false as const };
+    }),
+  };
+}
+
 export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
   if (!set?.made || (set.keep !== false) === keep) return doc;

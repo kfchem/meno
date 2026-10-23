@@ -47,4 +47,9 @@
 
 !macro NSIS_HOOK_PREUNINSTALL
   ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-ole'
+  ; Meno's listing in Default apps, for the formats the user had it offered
+  ; for in Settings (src/defaults.rs): Meno takes out exactly what it wrote,
+  ; its one value in the shared RegisteredApplications key and its own keys
+  ; - never a key another program's values may be in.
+  ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --unregister-defaults'
 !macroend
