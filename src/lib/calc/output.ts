@@ -200,11 +200,18 @@ function sourceOf(v: unknown): CalcSource | undefined {
  * A molecule's calculation as a file carries it, where it reads as one for
  * `atoms` atoms in `frames` frames; otherwise nothing. Its results are read
  * as a plugin's are, and those that are no longer this molecule's left out.
+ * One read by no reader is kept too, where it says something: the charge
+ * and spin a step was given and kept (workflow/run `speciesKept`), or what
+ * made a molecule - a plugin, its force field - where no output was read
+ * (stepRuns, conformers made of a drawing). Read back, it is what the
+ * session held, so that a later step is told the same charge and spin.
  */
 export function readCalc(given: unknown, atoms: number, frames: number): CalcInfo | undefined {
   const c = given as Record<string, unknown> | null | undefined;
   const readers = Array.isArray(c?.readers) ? c.readers.filter((r): r is string => typeof r === "string" && !!r.trim()) : [];
-  if (!c || typeof c !== "object" || !readers.length) return undefined;
+  if (!c || typeof c !== "object") return undefined;
+  // (by no reader - its list there, and empty, as Meno writes one - kept only where it holds what was given: a charge, a multiplicity, or what made it)
+  if (!readers.length && (!Array.isArray(c.readers) || (!isNum(c.charge) && !isNum(c.multiplicity) && !text(c.program) && !text(c.method)))) return undefined;
   const results = Array.isArray(c.results) ? c.results : [];
   const unread = Array.isArray(c.unread)
     ? c.unread.flatMap((u: unknown) => {
