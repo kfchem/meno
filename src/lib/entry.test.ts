@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atOneGeometry, ENTRY_SCHEMA, FREQUENCY, frameCount, geometryKey, ridingAlong, stereoIdentity, valueFault, type By, type Entry, type EntryStereo, type Property } from "./entry";
+import { atOneGeometry, ENTRY_SCHEMA, FREQUENCY, frameCount, geometryKey, propertyIn, ridingAlong, stereoIdentity, valueFault, type By, type Entry, type EntryStereo, type Property } from "./entry";
 import { speciesOf } from "./io/writers";
 
 const water = (dx = 0) => [0 + dx, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
@@ -134,3 +134,14 @@ describe("a molecule's species, by Meno's one rule", () => {
     expect(speciesOf(anion, { multiplicity: 3 })!.from).toEqual({ charge: "atoms", multiplicity: "given" });
   });
 });
+
+describe("a property's structure, as a file holds it", () => {
+  it("reads back the structure a value was worked out from, and refuses one that is no key", () => {
+    const p = { value: 136.24, unit: "g/mol", of: "k1", status: "computed" };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    expect(propertyIn({ ...p, of: 7 })).toBeUndefined();
+    const { of: _, ...plain } = p;
+    expect(propertyIn(plain)).toEqual(plain);
+  });
+});
+

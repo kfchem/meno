@@ -69,6 +69,23 @@ describe("a PDF page's figures", () => {
     expect(figures[0][2]).toBeGreaterThanOrEqual(208);
   });
 
+  it("are one across a wide label between a structure's two parts - an OSiPh2tBu, 60 or 90 points - never cut in two at it", () => {
+    for (const w of [60, 90]) {
+      const left = structureAt(100, 300);
+      const label = text([174, 304, 174 + w, 314]);
+      const right = structureAt(176 + w, 300);
+      const figures = figuresOf([...left, label, ...right]);
+      expect([w, figures.length]).toEqual([w, 1]);
+    }
+  });
+
+  it("are not joined through a line of words, taller than one line, between two figures", () => {
+    const left = structureAt(100, 300);
+    const words = text([174, 290, 274, 330]);
+    const right = structureAt(276, 300);
+    expect(figuresOf([...left, words, ...right])).toHaveLength(2);
+  });
+
   it("are a small structure too, its labels taking it to 18 points, but no icon in a line of words nor a bullet", () => {
     // (an acetate drawn small: a bond 10 points long to the carbonyl's carbon, its two lines up to an O, one down to the other O)
     const acetate = [path([100, 306, 110, 312]), path([109, 296, 110, 306]), path([111, 296, 112, 306]), path([110, 312, 118, 316])];

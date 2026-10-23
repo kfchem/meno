@@ -1,5 +1,6 @@
 import {
   AdjustmentsHorizontalIcon,
+  ArrowsRightLeftIcon,
   ArrowTrendingDownIcon,
   Bars3CenterLeftIcon,
   BoltIcon,
@@ -8,7 +9,9 @@ import {
   CpuChipIcon,
   CursorArrowRaysIcon,
   FunnelIcon,
+  LinkIcon,
   PhotoIcon,
+  PlusCircleIcon,
   PresentationChartLineIcon,
   QueueListIcon,
   RectangleGroupIcon,
@@ -16,6 +19,7 @@ import {
   SparklesIcon,
   Square2StackIcon,
   Square3Stack3DIcon,
+  TagIcon,
 } from "@heroicons/react/24/outline";
 import type { ComponentType, SVGProps } from "react";
 import type { StepIcon } from "./kinds";
@@ -42,6 +46,10 @@ const ICONS: Record<StepIcon, Icon> = {
   sliders: AdjustmentsHorizontalIcon,
   sparks: SparklesIcon,
   levels: Bars3CenterLeftIcon,
+  tag: TagIcon,
+  charge: PlusCircleIcon,
+  link: LinkIcon,
+  span: ArrowsRightLeftIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

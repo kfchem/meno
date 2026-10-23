@@ -1475,6 +1475,42 @@ Not yet:
 - **A scheme in a picture** - a figure that is a picture - is read by the
   plugin as one structure, not as a scheme.
 
+### Structures picked from a PDF (decided 2026-10-23)
+
+In a PDF whose structures are drawn with lines, a structure is picked as
+words are: by itself, not by a box drawn round it.
+- **Pointed at, it is lit whole**, as a word under the pointer is: its
+  bonds and its own labels. Never another structure, an arrow, a "+", or
+  words beside it.
+- **Dragged out, it comes off the page as Meno's own drawing of it**,
+  following the pointer, and let go on the canvas it is put down there:
+  read from the lines, with its labels, wedges and charges, a bond as long
+  as Meno draws one. Let go anywhere else, it goes back.
+- **Clicked, it is selected**, and Shift adds another. Its right-click menu
+  has *Put on the page* and *Copy*.
+- **Its own labels are its**: a press on a label's letters takes the
+  structure, not the text. Words outside a structure, a compound's number
+  under it among them, stay text.
+- **A structure in a scheme is taken alone.** The whole scheme, its arrows
+  and words with it, is still taken by a box and *Read as structure*.
+- **A picture**, not lines, is still taken by a box, as before.
+- **Never read in part.** A structure with letters or words inside it that
+  no atom took is refused, with why, and nothing of it is put down. An atom
+  the reader is unsure of comes marked as such, as *Read as structure* marks
+  one.
+- In the column first. The PDF on the page, whose presses move the view,
+  comes later.
+
+**A structure, and where it lies** (`utils/pageStructures`):
+- each figure of the page is read as *Read as structure* reads one (the
+  one reading, `schemeDrawn`), and split into its structures: an atom and
+  every atom bonded to it, on and on. A lone labelled atom - an ion -
+  within 1.6 bonds of a structure is that structure's (sodium acetate is
+  one structure);
+- where each lies is its bonds and its labels' boxes, on the page;
+- the pointer takes the nearest within a third of a bond of one of its
+  bonds or labels, and none where an arrow, a "+" or words lie nearer.
+
 ### A picture read (part B, built 2026-10-11)
 
 *Read as structure* reads, by the plugin chosen for the role *Structures
