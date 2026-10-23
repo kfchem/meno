@@ -584,7 +584,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const as = { kind: still.kind, ...(still.options ? { options: still.options } : {}) };
       return void doc.edit("run", (x) => setRan(keepRun(x, still), id, { at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: key, took, ...as }));
     }
-    const of = input.structures.length;
+    const of = drawnIn(input);
     // (each not made said: those that could not be, and those whose stereo is left open)
     const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : [])];
     // (made, but said: their stereo not held - only those that were made)
