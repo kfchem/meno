@@ -1529,6 +1529,11 @@ As step 3 was built:
     Otherwise neither is given: never cclib's "DFT", never an auxiliary
     basis ("def2-mTZVPP/J"), and no basis after a composite method, whose
     own it is.
+  - The PySCF plugin, which reads ORCA outputs for their orbitals, gives
+    none of an ORCA output's energies, method or basis. Meno takes each
+    from the first reader that gives one (lib/calc/read `combine`), so
+    cclib's SCF energies and "DFT" would otherwise stand in for the cclib
+    plugin's where it gives none.
   - Gaussian and xTB have no such gap. Gaussian folds an empirical
     dispersion into the nuclear repulsion, so *SCF Done* holds it. xtb's
     *TOTAL ENERGY* holds its dispersion.

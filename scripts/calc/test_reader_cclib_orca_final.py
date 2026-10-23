@@ -168,5 +168,55 @@ class WholeOutputs(unittest.TestCase):
             self.assertIsNotNone(said(r, "thermo.free-energy"))
 
 
+class PyscfLeavesOrcaToCclib(unittest.TestCase):
+    """The PySCF plugin's worker, which reads ORCA outputs for their orbitals, gives none of an ORCA output's
+    energies, method or basis: Meno takes each from the first reader that gives one, so cclib's SCF energies
+    and "DFT" would stand in for the cclib plugin's where it gives none. Its PySCF is not needed for this,
+    and is stood in for."""
+
+    @classmethod
+    def setUpClass(cls):
+        import sys
+        import types
+        from unittest import mock
+
+        stub = types.ModuleType("pyscf")
+        stub.tools = types.ModuleType("pyscf.tools")
+        stub.tools.molden = types.ModuleType("pyscf.tools.molden")
+        cls.patch = mock.patch.dict(sys.modules, {"pyscf": stub, "pyscf.tools": stub.tools, "pyscf.tools.molden": stub.tools.molden})
+        cls.patch.start()
+        spec = importlib.util.spec_from_file_location("reader_pyscf_stubbed", ROOT / "src-tauri/resources/plugins/pyscf/worker.py")
+        cls.pyscf = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.pyscf)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.patch.stop()
+
+    def data(self, package):
+        import types
+
+        from cclib.parser.utils import convertor
+
+        return types.SimpleNamespace(
+            metadata={"package": package, "methods": ["DFT"], "basis_set": "def2-mTZVPP/J"},
+            atomnos=[6, 7, 1],
+            atomcoords=[[[0, 0, 0], [0, 0, 1.156], [0, 0, -1.066]]],
+            scfenergies=[convertor(-93.40062286, "hartree", "eV")],
+            charge=0,
+            mult=1,
+        )
+
+    def test_none_of_an_orca_output_s_energy_method_or_basis(self):
+        m = self.pyscf.molecule_of(self.data("ORCA"))
+        self.assertEqual((m["energies"], m["method"], m["basis"]), (None, None, None))
+        self.assertEqual(len(m["frames"]), 1)
+
+    def test_another_program_s_as_before(self):
+        m = self.pyscf.molecule_of(self.data("Gaussian"))
+        self.assertEqual((m["method"], m["basis"]), ("DFT", "def2-mTZVPP/J"))
+        self.assertAlmostEqual(m["energies"][0], -93.40062286, delta=1e-8)
+
+
 if __name__ == "__main__":
     unittest.main()
