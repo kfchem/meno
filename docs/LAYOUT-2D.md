@@ -985,7 +985,10 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
   part with its substituents far apart); a metal complex or an axis of
   chirality in the part; a part that holds a cage, drawn in perspective;
   a part that is the whole structure, in pieces, or not bonded to the
-  rest.
+  rest; a part whose bonds to the rest alike could be paired with the
+  rest's atoms more ways than are compared (96), or whose symmetries the
+  search cannot all find - a few of the ways would go by the order of the
+  atoms.
 - **Stereochemistry.** The rest's wedges and drawn H's are kept, except
   at a centre in the part or bonded to it. Those centres are given theirs
   afresh, as `layout2D` places them. The whole drawing is then read back

@@ -127,12 +127,15 @@ function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[]
     .filter((b) => part.has(b.a) || part.has(b.b))
     .map((b) => ({ ...b, a: sub2.get(b.a)!, b: sub2.get(b.b)!, ...(b.stereo ? { stereo: { ...b.stereo, refs: [sub2.get(b.stereo.refs[0])!, sub2.get(b.stereo.refs[1])!] as [number, number] } } : {}) }));
   const subInput: LayoutInput = { atoms: subAtoms, bonds: subBonds };
+  // (every way of pairing stubs alike with the rest's atoms is compared, or none: a few of them would go by the order of the atoms)
+  const pairings = pairingsOf(subInput, inPart.length);
+  if ("why" in pairings) return { refused: pairings.why };
   const laid = layout2D(subInput);
   if (laid.depth.some((d) => d != null) || laid.solid.some(Boolean)) return { refused: "The part holds a cage, drawn in perspective, so the structure is drawn whole." };
 
   // the part's drawing as each of its symmetries has it - its stubs alike paired with the rest's atoms each way, not only as the order of the atoms pairs them - and each mirrored
   const drawings: Point[][] = [];
-  for (const g of pairingsOf(subInput, inPart.length)) {
+  for (const g of pairings) {
     const p = subAtoms.map((_, k) => ({ x: laid.x[g[k]], y: laid.y[g[k]] }));
     drawings.push(p, p.map((q) => ({ x: -q.x, y: q.y })));
   }
@@ -223,23 +226,24 @@ function branchOf(mol: Molecule, f: number, a: number, part: ReadonlySet<number>
  * `stubs`), one for each place they take its stubs to, the identity
  * first: stubs alike - a gem-dimethyl's two methyls - paired with the
  * rest's atoms each way. One that moves only the part's own atoms gives
- * the same drawing, element for element, so one of each is enough. As
- * many as are tried.
+ * the same drawing, element for element, so one of each is enough. Or why
+ * not: more of them than are tried, or symmetries left unfound.
  */
-function pairingsOf(input: LayoutInput, stubs: number): number[][] {
+function pairingsOf(input: LayoutInput, stubs: number): number[][] | { why: string } {
   const identity = input.atoms.map((_, k) => k);
-  const generators = symmetryOrbits(input).automorphisms;
+  const { automorphisms: generators, complete } = symmetryOrbits(input);
+  if (!complete) return { why: "The part is too symmetric for each of its symmetries to be found, so the structure is drawn whole." };
   const where = (g: readonly number[]) => g.slice(stubs).join(",");
   const found = new Map([[where(identity), identity]]);
   const todo = [identity];
-  while (todo.length && found.size < PAIRINGS_TRIED) {
+  while (todo.length) {
     const g = todo.shift()!;
     for (const h of generators) {
       const gh = g.map((k) => h[k]);
       if (found.has(where(gh))) continue;
+      if (found.size >= PAIRINGS_TRIED) return { why: "The part has too many bonds to the rest that are alike to compare each way of pairing them, so the structure is drawn whole." };
       found.set(where(gh), gh);
       todo.push(gh);
-      if (found.size >= PAIRINGS_TRIED) break;
     }
   }
   return [...found.values()];

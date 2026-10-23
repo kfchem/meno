@@ -124,6 +124,20 @@ describe("a part drawn afresh between fixed neighbours", () => {
     expect(refused("c1ccccc1", [0])).toBe("The part is the whole structure, so it is drawn whole.");
   });
 
+  it("is refused, and says why, where its bonds to the rest alike can be paired more ways than are compared, or its symmetries cannot all be found", () => {
+    // (each way would have to be compared, or the drawing would go by the order of the atoms)
+    const refused = (smiles: string, part: (i: number, bonds: number) => boolean) => {
+      const g = fromSmiles(smiles);
+      const atoms = g.atoms.map((_, i) => i).filter((i) => part(i, g.bonds.filter((b) => b.a === i || b.b === i).length));
+      const r = layoutAround(g, atoms, { at: g.atoms.map((_, i) => (atoms.includes(i) ? null : { x: Math.cos(i), y: Math.sin(i) })) });
+      return "refused" in r ? r.refused : null;
+    };
+    // (1,3,5-tri-tert-butylbenzene's ring and its three quaternary carbons the part, its nine methyls the rest)
+    expect(refused("CC(C)(C)c1cc(C(C)(C)C)cc(C(C)(C)C)c1", (_, bonds) => bonds > 1)).toBe("The part has too many bonds to the rest that are alike to compare each way of pairing them, so the structure is drawn whole.");
+    // (tri-tert-butylmethane, one methyl the rest: its symmetries more than the search finds)
+    expect(refused("CC(C)(C)C(C(C)(C)C)C(C)(C)C", (i) => i !== 0)).toBe("The part is too symmetric for each of its symmetries to be found, so the structure is drawn whole.");
+  });
+
   it("is refused where the part holds a cage, drawn in perspective", () => {
     // (ethylcubane, its cube the part: the ethyl placed by hand, so that only the part is laid out)
     const g = fromSmiles("CCC12C3C4C1C5C2C3C45");
