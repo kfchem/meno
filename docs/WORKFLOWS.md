@@ -2074,6 +2074,24 @@ it.
   a name that is Meno's own and one an entry carries of its own too is
   refused ("which is meant cannot be told"), never read as either; the
   entry's own goes on with it, unread.
+- **Structures drawn** - *Generate*'s, after *Check structures*,
+  *Stereoisomers* or *Descriptors* - are read by their record alone (meno
+  `filteredDrawn`): the properties a step gave each (`DrawnRecord.properties`:
+  a model's NLL, Descriptors' "mw" in g/mol and "tpsa" in Å²), each with
+  its unit and what worked it out; the drawing itself is not read, and
+  Meno has no names of its own on them. A structure edited since its
+  properties were given has none left (its record's `of` no longer its
+  structure's: workflow/entries `recordNow`): it goes to *The rest*
+  saying so, its conditions not asked, and counted by that on the line
+  ("rest 1 (1: its properties were for the structure before the edit)";
+  lib/nodes `filter`, its `unread`). Its exits hold structures drawn:
+  those kept as they came, but for the status an earlier step gave them -
+  kept, none is set aside, whatever it came in saying; and *The rest* each
+  with its record saying why it was set aside, after an earlier step's
+  why where one gave it ("Same as 2; not mw < 500 g/mol (612.4 g/mol)").
+  More than are laid out on the page
+  come in held in their set, and go out so (`LARGE_SET`), as any step's
+  structures drawn do.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
@@ -2090,9 +2108,7 @@ it.
 A descriptor's unit reads as Meno's units table has it: "mw < 500
 g/mol", "tpsa < 90 Å²" (or Å2).
 
-Not yet: structures drawn - *Generate*'s output and *Descriptors'* -
-read from their record (`DrawnEntry.record.properties`), which comes in
-a PR of its own; conditions picked from what comes in rather than typed.
+Not yet: conditions picked from what comes in rather than typed.
 
 ### Charts (2026-10-22)
 
