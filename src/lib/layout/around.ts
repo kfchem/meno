@@ -57,19 +57,26 @@ export function layoutAround(input: LayoutInput, part: readonly number[], fixed:
     wedges: fixed.stereo.wedges.map((w) => ({ ...w, from: to[w.from], to: w.to < 0 ? w.to : to[w.to] })),
     hydrogens: fixed.stereo.hydrogens.map((h) => ({ on: to[h.on], at: h.at })),
   };
-  // (each atom named in words by its place as given)
-  const said = (a: number) => `${own.atoms[a].el}${back[a] + 1}`;
-  const r = inOwnOrder(own, new Set(part.map((a) => to[a])), at, stereo, said);
+  // (and read back against the structure as given, so that what it says of an atom is said of it as given)
+  const readBack = (layout: Layout2D) => notAsGiven(input, restored(layout, to));
+  const r = inOwnOrder(own, new Set(part.map((a) => to[a])), at, stereo, (a) => back[a], readBack);
   if ("refused" in r) return r;
   const named = (atoms: readonly number[]) => atoms.map((a) => back[a]).sort((p, q) => p - q);
   return { ...r, layout: restored(r.layout, to), part: named(r.part), taken: named(r.taken), moved: r.moved.map(named) };
 }
 
-/** The part drawn, with the atoms in the molecule's own order; `said`, an atom in words: its element and its place as given, counted from 1. */
-function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[], stereo: Stereo | undefined, said: (a: number) => string): Around {
+/**
+ * The part drawn, with the atoms in the molecule's own order; `given`,
+ * each atom's index as given, by which words name it (as readBack.ts
+ * does);
+ * `readBack`, what a drawing does not show as given (readBack.ts
+ * `notAsGiven`, against the structure as given).
+ */
+function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[], stereo: Stereo | undefined, given: (a: number) => number, readBack: (layout: Layout2D) => string[]): Around {
   const n = input.atoms.length;
+  const said = (a: number) => `${input.atoms[a].el}${given(a)}`;
   const mol = perceive(input);
-  const part = new Set(given);
+  const part = new Set(asked);
   // (a cut through a ring system would leave half its rings to bend: the system is taken whole)
   for (let grew = true; grew; ) {
     grew = false;
@@ -80,7 +87,7 @@ function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[]
     }
   }
   const inPart = [...part].sort((p, q) => p - q);
-  const taken = inPart.filter((a) => !given.has(a));
+  const taken = inPart.filter((a) => !asked.has(a));
   if (part.size === n) return { refused: "The part is the whole structure, so it is drawn whole." };
   const metal = inPart.find((a) => isMetal(input.atoms[a].el) || input.atoms[a].el === "*" || input.atoms[a].pi);
   if (metal != null) return { refused: `${said(metal)} makes the part a metal complex, which is drawn whole.` };
@@ -160,13 +167,13 @@ function inOwnOrder(input: LayoutInput, given: Set<number>, at: (Point | null)[]
   candidates.sort((p, q) => (Math.abs(p.mismatch - q.mismatch) > 1e-6 ? p.mismatch - q.mismatch : Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : 0));
   let why = "";
   for (const c of candidates) {
-    const wrong = notAsGiven(input, c.layout);
+    const wrong = readBack(c.layout);
     if (wrong.length) {
       why ||= wrong[0];
       continue;
     }
     const layout = inUnit(c.layout, unit, at, part, c.moved);
-    return { layout, part: inPart, taken, moved: c.moved, mismatch: c.mismatch, crowded: crowding(input, c.layout, part, c.moved, said) };
+    return { layout, part: inPart, taken, moved: c.moved, mismatch: c.mismatch, crowded: crowding(input, c.layout, part, c.moved, given) };
   }
   return { refused: `Drawn so, it would not read back as the structure given (${why}), so the structure is drawn whole.` };
 }
@@ -340,14 +347,15 @@ function inUnit(out: Layout2D, unit: number, at: readonly (Point | null)[], part
   };
 }
 
-/** Where the part, or a branch moved, crowds the drawing: atoms nearer than half a bond, bonds crossing - in words, each atom by its place as given (`said`), in that order. */
-function crowding(input: LayoutInput, out: Layout2D, part: ReadonlySet<number>, moved: readonly number[][], said: (a: number) => string): string[] {
+/** Where the part, or a branch moved, crowds the drawing: atoms nearer than half a bond, bonds crossing - in words, each atom by its index as given (`given`), in that order. */
+function crowding(input: LayoutInput, out: Layout2D, part: ReadonlySet<number>, moved: readonly number[][], given: (a: number) => number): string[] {
+  const said = (a: number) => `${input.atoms[a].el}${given(a)}`;
   const n = input.atoms.length;
   const touched = new Set([...part, ...moved.flat()]);
   const p = (a: number) => ({ x: out.x[a], y: out.y[a] });
   const bonded = new Set(input.bonds.map((b) => key(b.a, b.b)));
   // (by their places as given: the same words whatever order the atoms came in)
-  const place = (a: number) => Number(said(a).replace(/^\D+/, ""));
+  const place = given;
   const pair = (u: number, v: number) => (place(u) < place(v) ? [u, v] : [v, u]);
   const words: [number, number, string][] = [];
   for (let i = 0; i < n; i++)

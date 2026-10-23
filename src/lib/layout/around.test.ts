@@ -58,7 +58,7 @@ describe("a part drawn afresh between fixed neighbours", () => {
     if ("refused" in r) throw new Error(r.refused);
     expect(at(r.layout, 8)).toEqual(fixed.at[8]);
     expect(at(r.layout, 9)).toEqual(fixed.at[9]);
-    expect(r.crowded).toContain("C3 and Cl9 are on top of each other");
+    expect(r.crowded).toContain("C2 and Cl8 are on top of each other");
   });
 
   it("on two bonds: a benzene swapped for a pyridine, its substituents where they were within a hair, each moved as a whole", () => {
@@ -119,8 +119,8 @@ describe("a part drawn afresh between fixed neighbours", () => {
       const r = layoutAround(g, part, restOf(layout2D(g), part));
       return "refused" in r ? r.refused : null;
     };
-    expect(refused("CC=C1CCCCC1", [2, 3, 4, 5, 6, 7])).toBe("The part is joined to the rest by a double bond (C2-C3), so the structure is drawn whole.");
-    expect(refused("CC[Zn]CC", [2])).toBe("Zn3 makes the part a metal complex, which is drawn whole.");
+    expect(refused("CC=C1CCCCC1", [2, 3, 4, 5, 6, 7])).toBe("The part is joined to the rest by a double bond (C1-C2), so the structure is drawn whole.");
+    expect(refused("CC[Zn]CC", [2])).toBe("Zn2 makes the part a metal complex, which is drawn whole.");
     expect(refused("c1ccccc1", [0])).toBe("The part is the whole structure, so it is drawn whole.");
   });
 
@@ -149,7 +149,7 @@ describe("a part drawn afresh between fixed neighbours", () => {
     const wedges = drawn.wedges.map((w) => ({ ...w, stereo: w.stereo === "up" ? ("down" as const) : ("up" as const) }));
     expect(wedges.length).toBeGreaterThan(0);
     const r = layoutAround(g, [6], { ...restOf(drawn, [6]), stereo: { wedges, hydrogens: drawn.hydrogens } });
-    expect("refused" in r && r.refused.startsWith("Drawn so, it would not read back as the structure given")).toBe(true);
+    expect(r).toEqual({ refused: "Drawn so, it would not read back as the structure given (C1 (flat): the other configuration), so the structure is drawn whole." });
   });
 
   it("comes out the same whatever order the atoms are given in, its wedges too", () => {
