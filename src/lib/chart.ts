@@ -7,25 +7,35 @@
  * said, never dropped unsaid.
  */
 import type { At, By } from "./entry";
-import { fieldsIn, type Table } from "./table";
+import { fieldsIn, WHAT_COLUMN, type Table } from "./table";
 import { isUnit, type Unit } from "./units";
 
 /** An axis: the column it is of - its name, unit, and what worked it out and where, where known. */
 export type Axis = { name: string; unit: Unit | "none"; by?: By; at?: At };
 
-/** A point: its values, its row in the table (from 0), and the entry it is of, where the table has a column of entries. */
-export type ChartPoint = { x: number; y: number; row: number; entry?: string };
+/** A point: its values, its row in the table (from 0), the entry it is of, where the table has a column of entries, and what its row is, where the table says (`WHAT_COLUMN`). */
+export type ChartPoint = { x: number; y: number; row: number; entry?: string; is?: string };
 
-export type ChartValue = { x: Axis; y: Axis; points: ChartPoint[]; left: { count: number; why: string }[] };
+/** Rows left out, by what they lack: how many, and each named - its entry and what it is, where the table says, or its row (from 1). */
+export type ChartLeft = { count: number; why: string; rows: string[] };
+
+export type ChartValue = { x: Axis; y: Axis; points: ChartPoint[]; left: ChartLeft[] };
 
 /** An axis as its label says it: its name, its unit in brackets. */
 export const axisLabel = (a: Axis) => (a.unit === "none" ? a.name : `${a.name} (${a.unit})`);
 
+/** What worked a number out, as its label says it: the program, model or plugin, the method, and the conditions - temperature, pressure, solvent; none where none is known. */
+export const howOf = (a: { by?: By; at?: At }) =>
+  [a.by?.program ?? a.by?.model ?? a.by?.plugin, a.by?.method, a.at?.kelvin != null ? `${a.at.kelvin} K` : undefined, a.at?.atm != null ? `${a.at.atm} atm` : undefined, a.at?.solvent]
+    .filter(Boolean)
+    .join(" \u00b7 ");
+
 /**
  * `table` charted: column `x` against column `y`, each a column of numbers -
  * none given, its first two. Each row with a number in both is a point,
- * carrying its row and its entry (the table's first column of entries);
- * the rest counted, by what they lack. Why not, where it cannot be: a
+ * carrying its row, its entry (the table's first column of entries) and
+ * what it is (`WHAT_COLUMN`); the rest counted, by what they lack, and each
+ * named. Why not, where it cannot be: a
  * column named that is not there, or is no column of numbers, or fewer than
  * two such columns where none is named.
  */
@@ -44,21 +54,26 @@ export function chartOfTable(table: Table, x?: string, y?: string): ChartValue |
   const axis = (c: Table["columns"][number]): Axis =>
     c.kind === "number" ? { name: c.name, unit: c.unit, ...(c.by ? { by: c.by } : {}), ...(c.at ? { at: c.at } : {}) } : { name: c.name, unit: "none" };
   const entryColumn = table.columns.findIndex((c) => c.kind === "entry");
+  const whatColumn = table.columns.findIndex((c) => c.kind === "text" && c.name === WHAT_COLUMN);
   const points: ChartPoint[] = [];
-  let noX = 0;
-  let noY = 0;
+  const noX: string[] = [];
+  const noY: string[] = [];
   table.rows.forEach((r, row) => {
     const vx = r[px.j];
     const vy = r[py.j];
     const okX = typeof vx === "number" && Number.isFinite(vx);
     const okY = typeof vy === "number" && Number.isFinite(vy);
-    if (!okX) noX++;
-    else if (!okY) noY++;
-    if (!okX || !okY) return;
     const entry = entryColumn >= 0 ? r[entryColumn] : null;
-    points.push({ x: vx as number, y: vy as number, row, ...(typeof entry === "string" ? { entry } : {}) });
+    const is = whatColumn >= 0 ? r[whatColumn] : null;
+    if (!okX || !okY) {
+      // (named as the table names it: its entry and what it is, or its row)
+      const named = typeof entry === "string" ? (typeof is === "string" ? `${entry} (${is})` : entry) : `row ${row + 1}`;
+      (okX ? noY : noX).push(named);
+      return;
+    }
+    points.push({ x: vx as number, y: vy as number, row, ...(typeof entry === "string" ? { entry } : {}), ...(typeof is === "string" ? { is } : {}) });
   });
-  const left = [...(noX ? [{ count: noX, why: `with no ${px.c.name}` }] : []), ...(noY ? [{ count: noY, why: `with no ${py.c.name}` }] : [])];
+  const left = [...(noX.length ? [{ count: noX.length, why: `with no ${px.c.name}`, rows: noX }] : []), ...(noY.length ? [{ count: noY.length, why: `with no ${py.c.name}`, rows: noY }] : [])];
   return { x: axis(px.c), y: axis(py.c), points, left };
 }
 
@@ -107,8 +122,15 @@ export function chartIn(v: unknown): ChartValue | undefined {
   const points: ChartPoint[] = [];
   for (const p of c.points as Partial<ChartPoint>[]) {
     if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isInteger(p.row) || p.row! < 0) return undefined;
-    points.push({ x: p.x!, y: p.y!, row: p.row!, ...(typeof p.entry === "string" ? { entry: p.entry } : {}) });
+    points.push({ x: p.x!, y: p.y!, row: p.row!, ...(typeof p.entry === "string" ? { entry: p.entry } : {}), ...(typeof p.is === "string" ? { is: p.is } : {}) });
   }
-  const left = Array.isArray(c.left) ? (c.left as { count?: unknown; why?: unknown }[]).flatMap((l) => (Number.isInteger(l?.count) && (l.count as number) > 0 && typeof l.why === "string" ? [{ count: l.count as number, why: l.why }] : [])) : [];
+  // (rows left: each count kept; their names where they read, one for each)
+  const left = Array.isArray(c.left)
+    ? (c.left as { count?: unknown; why?: unknown; rows?: unknown }[]).flatMap((l) =>
+        Number.isInteger(l?.count) && (l.count as number) > 0 && typeof l.why === "string"
+          ? [{ count: l.count as number, why: l.why, rows: Array.isArray(l.rows) && l.rows.length === l.count && l.rows.every((r) => typeof r === "string") ? (l.rows as string[]) : [] }]
+          : [],
+      )
+    : [];
   return { x, y, points, left };
 }

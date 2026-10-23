@@ -43,7 +43,7 @@ describe("a Chart step", () => {
         [137.6, 137.8, 3],
         [21.3, 21.4, 4],
       ],
-      [{ count: 1, why: "with no measured" }],
+      [{ count: 1, why: "with no measured", rows: ["row 3"] }],
     ]);
   });
 
@@ -136,12 +136,60 @@ describe("a Chart step", () => {
     // (the conformer set's two, numbered as its conformers; the molecule's one, its own)
     const t = tableInto(doc, 2)!;
     const at = (name: string) => t.columns.findIndex((c) => c.name === name);
-    expect(t.rows.map((r) => [r[0], r[at("group")], r[at("number")]])).toEqual([
-      ["molecule:1#0", "a", 1],
-      ["molecule:1#1", "a", 2],
-      ["molecule:2#0", "b", 1],
+    expect(t.rows.map((r) => [r[0], r[at("what")], r[at("group")], r[at("number")]])).toEqual([
+      ["molecule:1#0", "conformer 1 of 2", "a", 1],
+      ["molecule:1#1", "conformer 2 of 2", "a", 2],
+      ["molecule:2#0", "molecule", "b", 1],
     ]);
     expect(runStep(doc, 2, W).steps!.find((s) => s.id === 2)!.ran).toMatchObject({ ok: true, said: "3 points" });
+  });
+
+  it("says what each row is - a molecule of several frames (a scan's) beside a conformer set, each frame said as one - and names a row left", () => {
+    const water = (x: number, frames: number, energies: number[], set: boolean): Omit<Molecule3D, "id"> => ({
+      at: { x, y: 0 },
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.96, y: 0, z: 0 },
+        { el: "H", x: -0.24, y: 0.93, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      frames: Array.from({ length: frames - 1 }, (_, k) => [0, 0, 0, 0.97 + 0.01 * k, 0, 0, -0.24, 0.94, 0]),
+      energies,
+      ...(set ? { conformerSet: true } : {}),
+    });
+    // (a conformer set of two; a scan of three frames, its last with no energy)
+    let doc = addMolecule3d(emptyWorkspaceDocument(), water(0, 2, [-5.07, -5.08], true));
+    doc = addMolecule3d(doc, water(2, 3, [-5.1, -5.09, Number.NaN], false));
+    doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
+    doc = addStep(doc, "chart", 10, 0);
+    doc = connect(doc, { set: 1 }, 2);
+    const t = tableInto(doc, 2)!;
+    const at = (name: string) => t.columns.findIndex((c) => c.name === name);
+    expect(t.columns.slice(0, 2)).toEqual([
+      { name: "id", kind: "entry" },
+      { name: "what", kind: "text" },
+    ]);
+    expect(t.rows.map((r) => [r[0], r[at("what")]])).toEqual([
+      ["molecule:1#0", "conformer 1 of 2"],
+      ["molecule:1#1", "conformer 2 of 2"],
+      ["molecule:2#0", "frame 1 of 3"],
+      ["molecule:2#1", "frame 2 of 3"],
+      ["molecule:2#2", "frame 3 of 3"],
+    ]);
+    const c = chartOf(runStep(doc, 2, W))!;
+    // (each point says what it is; the frame with no energy is named, by its molecule and frame)
+    expect(c.points.map((p) => [p.entry, p.is])).toEqual([
+      ["molecule:1#0", "conformer 1 of 2"],
+      ["molecule:1#1", "conformer 2 of 2"],
+      ["molecule:2#0", "frame 1 of 3"],
+      ["molecule:2#1", "frame 2 of 3"],
+    ]);
+    expect(c.left).toEqual([{ count: 1, why: "with no energy", rows: ["molecule:2#2 (frame 3 of 3)"] }]);
+    const html = renderToString(<ChartBody chart={c} />);
+    expect(html).toContain("1 row with no energy: molecule:2#2 (frame 3 of 3)");
   });
 
   it("takes no structures drawn, and says what it takes", () => {
@@ -162,6 +210,8 @@ describe("a Chart step", () => {
     const c = chartOf(doc)!;
     expect(chartIn({ ...c, points: [{ x: "1", y: 2, row: 0 }] })).toBeUndefined();
     expect(chartIn({ ...c, x: { name: "x", unit: "furlongs" } })).toBeUndefined();
+    // (a row left whose names do not read, one for each, keeps its count, unnamed)
+    expect(chartIn({ ...c, left: [{ count: 2, why: "with no x", rows: ["row 1"] }] })?.left).toEqual([{ count: 2, why: "with no x", rows: [] }]);
     // (one that does not read is counted, as what else a file holds that does not read is)
     const saved = JSON.parse(JSON.stringify({ sets: doc.sets, steps: doc.steps, wires: doc.wires }));
     saved.sets.find((b: { made?: { step: number } }) => b.made?.step === 2).chart.points[0].x = "1";
@@ -173,15 +223,16 @@ describe("a chart, in its set's frame", () => {
   it("labels each axis with its name, unit and what worked it out, and says how many points and why rows were left", () => {
     const c: ChartValue = {
       x: { name: "number", unit: "none" },
-      y: { name: "energy", unit: "Eh", by: { program: "prog", method: "GFN2-xTB" } },
+      y: { name: "energy", unit: "Eh", by: { program: "prog", method: "GFN2-xTB" }, at: { geometry: "own", kelvin: 298.15, atm: 1, solvent: "water" } },
       points: [
         { x: 1, y: -5.07, row: 0 },
         { x: 2, y: -5.06, row: 1 },
       ],
-      left: [{ count: 1, why: "with no energy" }],
+      left: [{ count: 1, why: "with no energy", rows: ["molecule:1#2"] }],
     };
     const html = renderToString(<ChartBody chart={c} />).split("<!-- -->").join("");
-    expect(html).toContain("energy (Eh) \u00b7 prog \u00b7 GFN2-xTB");
+    // (and the conditions it was worked out at: temperature, pressure, solvent)
+    expect(html).toContain("energy (Eh) \u00b7 prog \u00b7 GFN2-xTB \u00b7 298.15 K \u00b7 1 atm \u00b7 water");
     expect(html).toContain(">number<");
     expect(html).toContain("2 points \u00b7 1 row left (1 with no energy)");
     expect(html.match(/<circle/g)?.length).toBe(2);

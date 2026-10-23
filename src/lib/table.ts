@@ -344,6 +344,9 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
   };
 }
 
+/** The name of a column of text saying what each row is, where a table has one (molecules seen as a table: "conformer 2 of 7", "frame 3 of 12", "molecule"): a chart's point and a row it leaves say it. */
+export const WHAT_COLUMN = "what";
+
 // ---- kept in a file ----
 
 /** A number, as a value: with its unit (or none), and what worked it out and where, where known. */

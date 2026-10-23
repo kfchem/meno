@@ -6,7 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
-import { moleculesAsTable, type Table } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
@@ -134,13 +134,17 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
   if (!input || input.holds === "structures") return null;
   const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
   // (each molecule as it is - a conformer set's frames its conformers, another's each an entry of its own - in a set that mixes them too)
+  // (and each row says which: a conformer of its set, a frame of a molecule of several - a scan's, a path's - or a molecule)
   let compounds = 0;
+  const what: string[] = [];
   const entries = input.molecules.flatMap((m) => {
-    const es = setEntries([m], conformersOfOne(m) ? "conformers" : "molecules").map((e) => ({ ...e, compound: compounds + e.compound }));
+    const conformers = conformersOfOne(m);
+    const es = setEntries([m], conformers ? "conformers" : "molecules").map((e) => ({ ...e, compound: compounds + e.compound }));
     compounds += new Set(es.map((e) => e.compound)).size;
+    es.forEach((e, k) => what.push(conformers ? `conformer ${e.number} of ${es.length}` : es.length > 1 ? `frame ${(e.frame ?? k) + 1} of ${es.length}` : "molecule"));
     return es;
   });
-  return moleculesAsTable(
+  const seen = moleculesAsTable(
     entries.map((e: SetEntry) => {
       const entry = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
       const energy = entry.properties.energy;
@@ -148,6 +152,8 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
     }),
   );
+  // (said after the row's id)
+  return { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) };
 }
 
 /** The molecule in 3D on the page, and its frame, a row of molecules seen as a table is of (`tableInto`): none where it names none, or that molecule is not on the page. */

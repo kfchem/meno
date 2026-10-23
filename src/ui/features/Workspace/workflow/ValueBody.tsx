@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
-import { axisLabel, chartSaid, ticksOf, type Axis, type ChartPoint, type ChartValue } from "../../../../lib/chart";
+import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartPoint, type ChartValue } from "../../../../lib/chart";
 import { CHART_PX } from "./look";
 
 /** How many of a table's rows its frame shows. */
@@ -63,7 +63,7 @@ export function TableBody({ table }: { table: Table }) {
 
 /** A set holding a number, inside its frame: the number with its unit, and what worked it out, where known. */
 export function NumberBody({ number }: { number: NumberValue }) {
-  const how = [number.by?.program ?? number.by?.model, number.by?.method, number.at?.kelvin != null ? `${number.at.kelvin} K` : undefined].filter(Boolean).join(" · ");
+  const how = howOf(number);
   return (
     <div className="flex flex-col items-start gap-0.5" data-set-number="">
       <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">
@@ -74,9 +74,6 @@ export function NumberBody({ number }: { number: NumberValue }) {
     </div>
   );
 }
-
-/** What worked an axis's numbers out, as its label says it: the program, model or plugin and the method, and the temperature; none where none is known. */
-const howOf = (a: Pick<Axis, "by" | "at">) => [a.by?.program ?? a.by?.model ?? a.by?.plugin, a.by?.method, a.at?.kelvin != null ? `${a.at.kelvin} K` : undefined].filter(Boolean).join(" \u00b7 ");
 
 /** An axis's label in full: its name and unit, and what worked its numbers out. */
 const labelOf = (a: Axis) => [axisLabel(a), howOf(a)].filter(Boolean).join(" \u00b7 ");
@@ -112,7 +109,7 @@ export function ChartBody({ chart, onPoint, onPointDrag }: { chart: ChartValue; 
   const py = (v: number) => h - ((v - ty.from) / (ty.to - ty.from)) * h;
   const rowsLeft = chart.left.reduce((n, l) => n + l.count, 0);
   const said = pointed
-    ? `Row ${pointed.row + 1} \u00b7 ${chart.x.name} ${numberText(pointed.x)}${chart.x.unit === "none" ? "" : ` ${chart.x.unit}`} \u00b7 ${chart.y.name} ${numberText(pointed.y)}${chart.y.unit === "none" ? "" : ` ${chart.y.unit}`}`
+    ? `Row ${pointed.row + 1}${pointed.is ? ` \u00b7 ${pointed.is}` : ""} \u00b7 ${chart.x.name} ${numberText(pointed.x)}${chart.x.unit === "none" ? "" : ` ${chart.x.unit}`} \u00b7 ${chart.y.name} ${numberText(pointed.y)}${chart.y.unit === "none" ? "" : ` ${chart.y.unit}`}`
     : chartSaid(chart);
   const down = (p: ChartPoint, e: ReactPointerEvent) => {
     e.stopPropagation();
@@ -186,7 +183,7 @@ export function ChartBody({ chart, onPoint, onPointDrag }: { chart: ChartValue; 
       <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: PLOT.top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
         {labelOf(chart.y)}
       </span>
-      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={chart.left.map((l) => `${l.count} ${l.count === 1 ? "row" : "rows"} ${l.why}`).join("\n") || undefined}>
+      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={chart.left.map((l) => `${l.count} ${l.count === 1 ? "row" : "rows"} ${l.why}${l.rows.length ? `: ${l.rows.join(", ")}` : ""}`).join("\n") || undefined}>
         {said}
         {!pointed && rowsLeft ? ` (${chart.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}
       </span>
