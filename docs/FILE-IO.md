@@ -913,7 +913,9 @@ work.meno (zip)
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
     results and its notes of what could not be read, and each property of
-    a frame (`Molecule3D.properties`) that does not read.
+    a frame (`Molecule3D.properties`) that does not read. Within a
+    structure a step gave a set: each property of its record, and each
+    entry it was made from.
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of

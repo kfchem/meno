@@ -8,11 +8,15 @@
 import type { Failure } from "./failures";
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
-import { FREQUENCY, geometryKey, type At, type By, type Entry, type EntryAtom, type EntryStereo, type Property } from "../../../../lib/entry";
+import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
+import { leftOut, readEach } from "../utils/readNotes";
+import { signatureOf } from "../utils/drawnLink";
+import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
+import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { groupLetter } from "../../../../lib/nodes/base";
-import type { Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
+import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import type { SetHolds } from "./kinds";
 
 type Pt = { x: number; y: number };
@@ -102,33 +106,237 @@ function componentsByAtom(model: Model): Map<number, number> {
   return found;
 }
 
-/** What a set holds: the structures drawn (each its atoms' ids), the molecules in 3D and the pictures (by id) - its members, in their order, where it has them; else what lies inside its frame (`lyingIn`). A member gone from the page is left out; a structure member is the structures drawn now that hold any of its atoms. */
-export function setMembers(page: Page, set: Frame & { members?: readonly Member[] }): { structures: number[][]; molecules: number[]; pictures: number[] } {
-  if (!set.members) return lyingIn(page, set);
+/**
+ * What a set holds: the structures drawn (each its atoms' ids), the
+ * molecules in 3D and the pictures (by id) - its members, in their order,
+ * where it has them; else what lies inside its frame (`lyingIn`). A member
+ * gone from the page is left out; a structure member is the structures
+ * drawn now that hold any of its atoms, each with the member's record
+ * (`records`, beside the structures: none where it has none).
+ */
+export function setMembers(
+  page: Page,
+  set: Frame & { members?: readonly Member[] },
+): { structures: number[][]; records: (DrawnRecord | undefined)[]; molecules: number[]; pictures: number[] } {
+  if (!set.members) {
+    const lying = lyingIn(page, set);
+    return { ...lying, records: lying.structures.map(() => undefined) };
+  }
   const drawn = drawnIn(page.model);
   const byAtom = componentsByAtom(page.model);
   const molecules = new Set((page.molecules3d ?? []).map((m) => m.id));
   const pictures = new Set((page.pictures ?? []).map((p) => p.id));
-  const out = { structures: [] as number[][], molecules: [] as number[], pictures: [] as number[] };
-  const taken = new Set<number>();
+  const out = { structures: [] as number[][], records: [] as (DrawnRecord | undefined)[], molecules: [] as number[], pictures: [] as number[] };
+  // (each structure taken, by its place among them)
+  const taken = new Map<number, number>();
   for (const m of set.members) {
     if ("structure" in m) {
+      const mine = new Set<number>();
       for (const id of m.structure) {
         const k = byAtom.get(id);
-        if (k == null || taken.has(k)) continue;
-        taken.add(k);
+        if (k == null || mine.has(k)) continue;
+        mine.add(k);
+        const i = taken.get(k);
+        if (i != null) {
+          // (two members joined into one structure: what each came from kept, the properties of neither)
+          if (m.record) out.records[i] = joined(out.records[i], m.record);
+          continue;
+        }
+        taken.set(k, out.structures.length);
         out.structures.push(drawn[k].ids);
+        out.records.push(m.record);
       }
     } else if ("molecule" in m) {
       if (molecules.has(m.molecule) && !out.molecules.includes(m.molecule)) out.molecules.push(m.molecule);
     } else if (pictures.has(m.picture) && !out.pictures.includes(m.picture)) out.pictures.push(m.picture);
   }
+  // (each record as its structure stands now: edited since it was given, its properties are of the one before)
+  out.records = out.records.map((r, i) => recordNow(r, page.model, out.structures[i]));
   return out;
 }
 
-/** What `setMembers` found, as members: in its order, structures first, then molecules, then pictures. */
-export function membersOf(found: { structures: readonly (readonly number[])[]; molecules: readonly number[]; pictures: readonly number[] }): Member[] {
-  return [...found.structures.map((ids) => ({ structure: [...ids] })), ...found.molecules.map((molecule) => ({ molecule })), ...found.pictures.map((picture) => ({ picture }))];
+/** What `setMembers` found, as members: in its order, structures first - each with its record, where it has one - then molecules, then pictures. */
+export function membersOf(found: {
+  structures: readonly (readonly number[])[];
+  records?: readonly (DrawnRecord | undefined)[];
+  molecules: readonly number[];
+  pictures: readonly number[];
+}): Member[] {
+  return [
+    ...found.structures.map((ids, i) => structureMember(ids, found.records?.[i])),
+    ...found.molecules.map((molecule) => ({ molecule })),
+    ...found.pictures.map((picture) => ({ picture })),
+  ];
+}
+
+/**
+ * What a record is of: the structure it was given for, as a short key - so
+ * that, edited since, it is known to be another. Its identity (chem
+ * `identityOfDrawn`), each label that stands for atoms drawn out
+ * (`labelsDrawnOut`): its atoms' elements, charges, masses and unpaired
+ * electrons, its bonds, and each configuration as the drawing shows it -
+ * not how: not where it lies, which wedges say it, whether an H is drawn,
+ * nor whether a group is written by its label. So Clean-up, which draws
+ * the same structure afresh, keeps a record's properties; a changed atom,
+ * charge, bond, or configuration - its mirror image - does not. Where its
+ * wedges cannot be read, or its identity not worked out in full, the
+ * drawing itself is in the key too: any change to it is taken for one.
+ */
+export function drawnHash(model: Model, ids: readonly number[]): string {
+  // (worked out once for each structure as drawn: an edit elsewhere on the page leaves its drawing's key, and so this, as it was)
+  const labels = model.atoms.filter((a) => a.abbrev && ids.includes(a.id)).map((a) => `${a.id}:${JSON.stringify(a.abbrev)}`);
+  const drawn = `${drawnKey(model, ids)}|${labels.join(";")}`;
+  let key = identities.get(drawn);
+  if (key == null) {
+    // (wedges identity cannot read - crossed, or on an atom with a lone pair - or a search it could not finish: its configuration
+    // not in the identity, so the drawing itself is, and any change to it - Clean-up's too - is taken for a change of structure)
+    const { text, complete, unread } = identityOfDrawn(labelsDrawnOut(partOf(model, new Set(ids))));
+    key = hash(complete && !unread.length ? text : `${text}|as drawn|${drawn}`).toString(36);
+    if (identities.size >= IDENTITIES_KEPT) identities.clear();
+    identities.set(drawn, key);
+  }
+  return key;
+}
+const identities = new Map<string, string>();
+const IDENTITIES_KEPT = 4096;
+
+/** What a record says once the structure it was given for has been edited: its properties and status taken away. */
+export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";
+
+/** A record put on a structure as it is drawn now: of that structure (`of`). */
+export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => ({ ...record, of: drawnHash(model, ids) });
+
+/**
+ * The record of a structure edited since it was given, or of two joined
+ * into one, where `a` is the other's: what each came from kept, and the
+ * properties and status of neither - said so (`stale`). None where nothing
+ * is left.
+ */
+function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undefined {
+  const from = [...new Set([...(a?.from ?? []), ...(b.from ?? [])])];
+  const stale = a?.properties || a?.status || b.properties || b.status ? BEFORE_THE_EDIT : (a?.stale ?? b.stale);
+  const out: DrawnRecord = { ...(from.length ? { from } : {}), ...(stale ? { stale } : {}) };
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`). */
+function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
+  if (!record?.of || record.of === drawnHash(model, ids)) return record;
+  return joined(undefined, record);
+}
+
+/** What a record adds to a step's key (flow `inputKey`): all it says, but not what it is of - the structure's own key says that. */
+export const recordKey = ({ of: _of, ...r }: DrawnRecord): string => stableJson(r);
+
+/** A structure as a set's member: its atoms' ids, and its record where it has one. */
+export function structureMember(ids: readonly number[], record?: DrawnRecord): Member {
+  return { structure: [...ids], ...(record ? { record } : {}) };
+}
+
+/** FNV-1a over a string: a short key - for what came into a step, and for the structure a record is of. */
+export function hash(text: string, h = 0x811c9dc5): number {
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
+
+/**
+ * What a drawn structure adds to a step's key, as text: what it is - its
+ * atoms' elements, charges, masses and radicals, its bonds' orders, wedges
+ * and dative bonds (`signatureOf`) - and what its drawing says by where
+ * things lie: on which side of each double bond each neighbour is, the
+ * other end's taken together (cis or trans), and the order the neighbours
+ * go round each atom a wedge starts from. Not where it is drawn: moved
+ * whole, turned, or an atom nudged without crossing a line that matters, it
+ * is the same; mirrored, its wedged centres are not.
+ */
+const drawnKeyed = new WeakMap<Model, Map<string, string>>();
+export function drawnKey(model: Model, ids: readonly number[]): string {
+  const known = drawnKeyed.get(model) ?? new Map<string, string>();
+  drawnKeyed.set(model, known);
+  const name = ids.join(",");
+  const had = known.get(name);
+  if (had != null) return had;
+  const of = new Set(ids);
+  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
+  const near = new Map<number, number[]>();
+  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
+  for (const b of bonds) {
+    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
+    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
+  }
+  const said: string[] = [];
+  for (const a of at.values()) if (a.radical) said.push(`r${a.id}:${a.radical}`);
+  for (const b of bonds) {
+    if (b.dative) said.push(`d${b.a}-${b.b}`);
+    if (b.order === 2) {
+      // (each neighbour's side of the line through the bond, measured the same way at both ends)
+      const p = at.get(b.a)!;
+      const q = at.get(b.b)!;
+      const side = (id: number) => {
+        const n = at.get(id)!;
+        return Math.sign((q.x - p.x) * (n.y - p.y) - (q.y - p.y) * (n.x - p.x));
+      };
+      for (const n of near.get(b.a) ?? []) if (n !== b.b) for (const m of near.get(b.b) ?? []) if (m !== b.a) said.push(`${n}~${m}:${side(n) * side(m)}`);
+    }
+    if (b.stereo && b.stereo !== "none") {
+      // (round the atom it starts from, anticlockwise, from its lowest-numbered neighbour)
+      const c = at.get(b.a)!;
+      const round = (near.get(b.a) ?? [])
+        .map((id) => ({ id, angle: Math.atan2(at.get(id)!.y - c.y, at.get(id)!.x - c.x) }))
+        .sort((u, v) => u.angle - v.angle)
+        .map((u) => u.id);
+      const first = round.indexOf(Math.min(...round));
+      said.push(`w${b.a}:${[...round.slice(first), ...round.slice(0, first)].join(">")}`);
+    }
+  }
+  const key = `${signatureOf(model, ids)}|${said.sort().join(",")}`;
+  known.set(name, key);
+  return key;
+}
+
+const isText = (v: unknown): v is string => typeof v === "string";
+
+/** An entry's status as a file keeps it (lib/entry `EntryStatus`), or none where it is not one. */
+function statusIn(v: unknown): EntryStatus | undefined {
+  if (v === "done") return v;
+  const o = v as { failed?: unknown; aside?: unknown } | null;
+  if (isText(o?.failed)) return { failed: o.failed };
+  if (isText(o?.aside)) return { aside: o.aside };
+  return undefined;
+}
+
+/**
+ * A structure drawn's record as a file keeps it (`DrawnRecord`), each part
+ * read as data: the entries it came from, by id, each that is no text left
+ * out; its properties, each as lib/entry reads one (`propertyIn`), each
+ * that does not read left out - all counted (utils/readNotes); its status;
+ * what it is of, and why its properties were taken away. None where
+ * nothing of it reads.
+ */
+export function readDrawnRecord(v: unknown): DrawnRecord | undefined {
+  const r = v as { from?: unknown; properties?: unknown; status?: unknown; of?: unknown; stale?: unknown } | null;
+  if (!r || typeof r !== "object") return undefined;
+  const from = readEach(r.from, (id) => (isText(id) ? id : null), "madeFrom");
+  const properties: Record<string, Property> = {};
+  if (r.properties && typeof r.properties === "object" && !Array.isArray(r.properties)) {
+    for (const [name, p] of Object.entries(r.properties as Record<string, unknown>)) {
+      const read = name ? propertyIn(p) : undefined;
+      if (read) properties[name] = read;
+      else leftOut("property");
+    }
+  }
+  const status = statusIn(r.status);
+  const record: DrawnRecord = {
+    ...(from.length ? { from } : {}),
+    ...(Object.keys(properties).length ? { properties } : {}),
+    ...(status ? { status } : {}),
+    ...(isText(r.of) ? { of: r.of } : {}),
+    ...(isText(r.stale) ? { stale: r.stale } : {}),
+  };
+  return Object.keys(record).length ? record : undefined;
 }
 
 /** Where each of a page's structures, molecules and pictures is: what a set's gestures read (workflow/model `membersSettled`). */
@@ -245,10 +453,11 @@ export function setMolecules(page: Page, set: Frame & Pick<WorkflowSet, "members
  * One entry of a set of structures drawn, as Meno's own steps take it and
  * give it (docs/WORKFLOWS-FOUNDATION.md, *Enumerate*): its place among the
  * set's, from 0, and the structure as it is drawn - its atoms and bonds,
- * where they lie on the page, its wedges, labels and all - in 2D. Never
+ * where they lie on the page, its wedges, labels and all - in 2D - and
+ * its record, where it has one (`DrawnRecord`: what a step gave it). Never
  * made 3D here: a step after it does that, as everywhere else.
  */
-export type DrawnEntry = { place: number; drawn: Model };
+export type DrawnEntry = { place: number; drawn: Model; record?: DrawnRecord };
 
 /** One entry of a set of molecules in 3D, as a step takes it: its compound by its place among the set's, its number among that compound's conformers, its atoms and bonds, its geometry, its energy. */
 export type SetEntry = {
