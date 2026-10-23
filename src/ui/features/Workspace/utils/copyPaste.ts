@@ -605,12 +605,21 @@ function madeOf(v: unknown): Carried3D["made"] {
   return rows.length || Object.keys(said).length ? { ...said, how: rows } : undefined;
 }
 
-/** What the text a molecule was read from said of it, as a file carries it: each row read as data, as it was; one that does not read left out, and said. */
+/** How many rows of what a text said of a molecule a file is read for, and how long each may be: as a calculation's notes of what was not read (lib/calc/output `readCalc`). */
+const SAID_MOST = 100;
+const SAID_TEXT_MOST = 500;
+
+/**
+ * What the text a molecule was read from said of it, as a file carries it:
+ * each row read as data, its label and text cut at `SAID_TEXT_MOST`; one
+ * that does not read, or past the first `SAID_MOST`, left out, and said.
+ */
 function saidOf(v: unknown): Carried3D["said"] {
-  const rows = readEach(v, (r) => {
+  const rows = readEach(Array.isArray(v) ? v.slice(0, SAID_MOST) : v, (r) => {
     const row = r as { label?: unknown; text?: unknown } | null;
-    return typeof row?.label === "string" && typeof row.text === "string" ? { label: row.label, text: row.text } : null;
+    return typeof row?.label === "string" && typeof row.text === "string" ? { label: row.label.slice(0, SAID_TEXT_MOST), text: row.text.slice(0, SAID_TEXT_MOST) } : null;
   }, "said");
+  if (Array.isArray(v) && v.length > SAID_MOST) leftOut("said", v.length - SAID_MOST);
   return rows.length ? rows : undefined;
 }
 
