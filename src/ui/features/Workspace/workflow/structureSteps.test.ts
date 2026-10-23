@@ -60,6 +60,13 @@ describe("Species, as a step", () => {
     expect(bad.said).toBe("0 entries set, 1 failed");
   });
 
+  it("gives one that came in failed - to be tried again in another state - its species, its old failure gone with the old state", () => {
+    const failed = { ...water(1), failed: { kind: "not-converged" as const, why: "Its SCF did not converge" } };
+    const o = ok(runMeno("species", [failed], "molecules", { charge: "+1", multiplicity: "2" }));
+    expect(o.aside).toEqual([]);
+    expect([o.kept[0].charge, o.kept[0].multiplicity, o.kept[0].failed]).toEqual([1, 2, undefined]);
+  });
+
   it("refuses to run on what does not read as a charge or multiplicity, or on nothing given", () => {
     expect(runMeno("species", [water(1)], "molecules", { charge: "one" })).toEqual({ ok: false, said: 'The charge "one" is not a whole number' });
     expect(runMeno("species", [water(1)], "molecules", { multiplicity: "0" })).toEqual({ ok: false, said: 'The multiplicity "0" is not a whole number of 1 or more' });

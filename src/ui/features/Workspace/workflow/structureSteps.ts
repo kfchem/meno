@@ -44,7 +44,8 @@ export function speciesSet(entries: readonly SetEntry[], holds: Holds3D, charge:
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   entries.forEach((was, i) => {
-    const e = withSpecies(entryOfSet(was, String(i)), typed.given);
+    // (judged on its charge and spin alone: one that came in failed - wired from a step's Failed exit to be tried again - is given its species, not its old failure as this step's)
+    const e = withSpecies({ ...entryOfSet(was, String(i)), status: "done" }, typed.given);
     if (typeof e.status === "object" && "failed" in e.status) aside.push({ ...was, failed: { kind: "refused", why: e.status.failed } });
     else kept.push(setEntryOfEntry(e, { compound: was.compound, number: was.number }, was)!);
   });
