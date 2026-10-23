@@ -2087,7 +2087,7 @@ it.
   `STATE_FINISHED`). A text or true-or-false condition not met says the
   value, as a number's does. On a condition on any value but its state,
   an entry that is no result is never kept, though its value would pass:
-  it goes to *The rest* named, its state said ("A #2 not converged") -
+  it goes to *The rest* named, its state said ("a #2 not converged") -
   its value is not to be trusted.
 - **Structures drawn** - *Generate*'s, after *Check structures*,
   *Stereoisomers* or *Descriptors* - are read by their record alone (meno
