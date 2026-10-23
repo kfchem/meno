@@ -915,6 +915,20 @@ work.meno (zip)
     results and its notes of what could not be read. Within a structure a
     step gave a set: each property of its record, and each entry it was
     made from.
+  - **Marks of which frames failed, or are no minimum, fail closed.** A
+    molecule's marks of failure or of imaginary frequencies that do not
+    read - not one for each frame, or one that is neither a mark nor
+    none - are left out, and said ("marks of a molecule's failed
+    frames"). The molecule is kept whole - its geometry, frames, energies
+    and the rest - and marked so (`marksUnread`), which is saved with it.
+    Its frames are never taken for minima: *Populations* and *Energy
+    window* refuse it, saying "its frames' marks could not be read, so
+    whether it is a minimum is not known", its chip gives no shares, and
+    each of its entries says it as its status. The mark, like each frame's
+    failure and imaginary frequencies, goes with its frames wherever a
+    molecule is made of some of them - a step's results (*Duplicates*,
+    *Choose one*'s two exits, *Energy window*'s rest, *As conformers*) and
+    rows of a set's table taken out (workflow/entries `marksOf`).
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of

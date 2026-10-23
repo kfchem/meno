@@ -288,9 +288,12 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * An entry as a program works it out anew: what went in, without the
  * calculation it came with or what its molecule kept - how it was made,
  * what its energies were from - none of which is so of what the program
- * gives back (entries `SetEntry.calc`, `keep`).
+ * gives back (entries `SetEntry.calc`, `keep`); nor its marks - why it
+ * failed, its imaginary frequencies, that its marks did not read - which
+ * were of the geometry it came with: the new calculation's own output
+ * marks it again, or does not.
  */
-const anew = ({ calc: _calc, keep: _keep, ...entry }: SetEntry): SetEntry => entry;
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => entry;
 
 /**
  * An entry as a job worked it out (lib/calc/output): its last geometry and
