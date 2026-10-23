@@ -84,7 +84,8 @@ describe("Combine, as a step", () => {
     expect(c.bonds.slice(2)).toEqual([0, 1, 2].map((i) => ({ a1: 3, a2: 4 + i, order: 1 })));
     expect(c.xyz.slice(9)).toEqual(ammonia().xyz);
     expect([c.charge, c.multiplicity, c.energy]).toEqual([0, 1, undefined]);
-    expect(o.said).toMatch(/^2 parts as one complex/);
+    // (what each part held: the water its energy; the ammonia nothing - its place in the set not a value it held)
+    expect(o.said).toBe("2 parts as one complex. Not carried over, as each was worked out on its part alone - part 1: energy.");
   });
 });
 

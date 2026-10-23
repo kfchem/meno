@@ -54,10 +54,12 @@ export function speciesSet(entries: readonly SetEntry[], holds: Holds3D, charge:
 
 /** *Combine* (lib/steps `combined`): the entries, in the set's order, as one entry - a complex - or why they cannot be. */
 export function combinedSet(entries: readonly SetEntry[]): Outcome3D {
-  const out = combined(
-    entries.map((e, i) => entryOfSet(e, String(i))),
-    "complex",
-  );
+  // (each part without the group and number Meno reads from where it stands in its set - its place, not a value it held - so that what is said not carried is what it held)
+  const parts = entries.map((e, i) => {
+    const { group: _g, number: _n, ...properties } = entryOfSet(e, String(i)).properties;
+    return { ...entryOfSet(e, String(i)), properties };
+  });
+  const out = combined(parts, "complex");
   if ("failed" in out) return { ok: false, said: out.failed };
   const made = setEntryOfEntry(out.entry, { compound: 0, number: 1 });
   if (!made) return { ok: false, said: "The complex has no places in 3D" };
