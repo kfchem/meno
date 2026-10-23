@@ -1176,6 +1176,9 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
   return marks.sort((x, y) => x.z - y.z).map(({ z: _z, ...mark }) => mark as SolidMark);
 }
 
+/** Whether a molecule's last point, never converged, is an entry marked so (utils/io: an opened run stopped before it converged). */
+const lastUnfinished = (m: Pick<Molecule3D, "entryFrames" | "notConverged" | "frames">) => !!m.notConverged && !!m.entryFrames?.includes(m.frames?.length ?? 0);
+
 /**
  * What a molecule in 3D says over it, as it is drawn in a look, for as long
  * as it is so (the maintainer, 2026-10-10 and 2026-10-11: a picture that
@@ -1198,8 +1201,8 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
-    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy)] : []),
-    ...(m.notConverged ? [notConvergedMark(m.entryFrames?.length ?? 1)] : []),
+    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy, lastUnfinished(m))] : []),
+    ...(m.notConverged ? [notConvergedMark(m.entryFrames ? m.entryFrames.length - (lastUnfinished(m) ? 1 : 0) : 0)] : []),
     ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];
 }

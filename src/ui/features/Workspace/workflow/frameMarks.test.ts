@@ -40,6 +40,8 @@ const stopped = { kind: "stopped" as const, why: "it was stopped" };
 const marked = () => waters([0, 1, 2], { failed: [null, stopped, null], imaginary: [null, null, [-120.5]] });
 /** Three conformers whose file's marks of that did not read. */
 const unread = () => waters([0, 1, 2], { marksUnread: true });
+/** The same, without energies: what Duplicates takes as it came, ranking none (with them, one that is no minimum is refused: meno.ts). */
+const unranked = (m: Molecule3D): Molecule3D => (({ energies: _e, ...rest }) => rest)(m);
 
 /** A Meno step of `kind` run on `molecules`, a conformer set, and what its exits hold. */
 function ran(kind: Parameters<typeof runMeno>[0], molecules: Molecule3D[], options?: Parameters<typeof runMeno>[3]): RunResults {
@@ -61,12 +63,14 @@ describe("a frame's marks", () => {
   });
 
   it("come through Duplicates, Choose one - both its exits - Energy window's rest and As conformers", () => {
-    expect(marks(ran("duplicates", [marked()]).molecules[0])).toEqual({ failed: [null, stopped, null], imaginary: [null, null, [-120.5]], marksUnread: undefined });
+    expect(marks(ran("duplicates", [unranked(marked())]).molecules[0])).toEqual({ failed: [null, stopped, null], imaginary: [null, null, [-120.5]], marksUnread: undefined });
+    // (ranked by energy, a set with one that is no minimum is refused, naming it)
+    expect(runMeno("duplicates", setEntries([marked()], "conformers"), "conformers")).toMatchObject({ ok: false, said: expect.stringMatching(/: it is no minimum - take it out first$/) });
     const chosen = ran("choose", [marked()], { which: "number", number: 3 });
     expect(marks(chosen.molecules[0])).toEqual({ failed: undefined, imaginary: [[-120.5]], marksUnread: undefined });
     expect(marks(chosen.rest[0])).toEqual({ failed: [null, stopped], imaginary: undefined, marksUnread: undefined });
     expect(marks(ran("energy-window", [marked()], { window: 1.5 }).rest[0])).toEqual({ failed: undefined, imaginary: [[-120.5]], marksUnread: undefined });
-    expect(ran("duplicates", [unread()]).molecules[0].marksUnread).toBe(true);
+    expect(ran("duplicates", [unranked(unread())]).molecules[0].marksUnread).toBe(true);
     // (Energy window refuses such a set, as Populations does: whether each is a minimum is not known)
     expect(runMeno("energy-window", setEntries([unread()], "conformers"), "conformers", { window: 1.5 })).toMatchObject({ ok: false });
     const picked = ran("choose", [unread()], { which: "number", number: 2 });
@@ -79,8 +83,10 @@ describe("a frame's marks", () => {
   });
 
   it("not read are never lost on the way to Populations: what Duplicates kept of such a set is refused, and shows no shares", () => {
-    const kept = ran("duplicates", [unread()]).molecules[0];
-    const out = runMeno("populations", setEntries([{ ...kept, id: 1, at: { x: 0, y: 0 } }], "conformers"), "conformers", { temperature: 298.15 });
+    // (ranked by energy, Duplicates refuses it first; as it came, unranked, it keeps the mark - and Populations refuses it)
+    expect(runMeno("duplicates", setEntries([unread()], "conformers"), "conformers")).toMatchObject({ ok: false, said: expect.stringContaining(MARKS_UNREAD) });
+    const kept = ran("duplicates", [unranked(unread())]).molecules[0];
+    const out = runMeno("populations", setEntries([{ ...kept, energies: unread().energies, id: 1, at: { x: 0, y: 0 } }], "conformers"), "conformers", { temperature: 298.15 });
     expect(out.ok).toBe(false);
     expect(!out.ok && out.said).toContain(MARKS_UNREAD);
     expect(sharesOf(kept)).toBeUndefined();

@@ -98,7 +98,7 @@ start of a restrained minimisation towards the product.
 - **What comes from each.**
   - The structure and species are the bonding entry's: its atoms' charges,
     radicals and isotopes, its bonds, and its charge and multiplicity -
-    none where it is a skeleton, without its hydrogens.
+    none where it is a skeleton, without its hydrogens, and this is said.
   - The geometry is the geometry entry's, as it is: one 3D structure.
     Frames are taken one at a time first (*Take frames*).
 - **Properties.** Both entries' properties are kept, the geometry entry's

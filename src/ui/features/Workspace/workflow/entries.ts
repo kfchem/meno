@@ -581,6 +581,15 @@ export type SetEntry = {
 };
 
 /**
+ * The entries a step that needs whole molecules refuses, by their places:
+ * the skeletons among them, each to its Failed exit, kind "refused", with
+ * why - the rest run (lib/chem/skeleton `skeletonWhy`).
+ */
+export function skeletonEntries(kind: StepKind, entries: readonly SetEntry[]): number[] {
+  return kindInfo(kind).whole ? entries.flatMap((e, i) => (e.skeleton ? [i] : [])) : [];
+}
+
+/**
  * Why a step of `kind` is not run on `entries`, where its plugin needs whole
  * molecules (KindInfo `whole`) and some came in as skeletons - their
  * hydrogens not there (lib/chem/skeleton): counted by molecule, and said
