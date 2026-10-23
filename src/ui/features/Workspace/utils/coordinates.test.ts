@@ -68,6 +68,13 @@ describe("the charge and multiplicity a text gives a structure read from its coo
     expect(species(CATION)).toEqual([{ charge: 1, multiplicity: 1, from: { charge: "given", multiplicity: "given" } }]);
   });
 
+  it("are none given where a title ends in two numbers: its number and another are no charge and multiplicity", () => {
+    for (const title of ["Conformer 12 3", "TS 2 1"]) {
+      const [m] = coordinateMolecules(readCoordinates([title, "C 0.000000 0.000000 0.000000", "H 1.087000 0.000000 0.000000", "H -0.543500 0.941370 0.000000", "H -0.543500 -0.941370 0.000000"].join("\n")).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+      expect(m.calc, title).toBeUndefined();
+    }
+  });
+
   it("are given only where the text gives them: a structure with none stated is as its atoms say", () => {
     expect(species(TEXT).map((s) => s?.from)).toEqual([
       { charge: "given", multiplicity: "given" },
