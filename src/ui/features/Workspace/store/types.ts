@@ -761,7 +761,9 @@ export type Member = { structure: number[]; record?: DrawnRecord } | { molecule:
  * *R groups*, "the set carries its core"): its template's atoms but its R atoms,
  * the bonds between them, and where each R group is attached - each by its
  * place in a product's atoms, the same in every product - so that what
- * comes after can line them up exactly.
+ * comes after can line them up exactly. By substituents, the template's
+ * atoms but the drawn H's chosen, and each position (P1, P2) by the atom
+ * its group is bonded to.
  */
 export type SeriesCore = { atoms: number[]; bonds: [number, number][]; attach: Record<string, number[]> };
 /**
@@ -890,7 +892,7 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
+export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -1550,6 +1552,8 @@ export type EditorState = {
   hoveredStep: number | null;
   hoveredWire: number | null;
   openStep: number | null;
+  /** A step's atoms being chosen on the drawing - Enumerate's positions: a click on an atom takes it into the step's option, or out of it (`AtomsOption`). */
+  choosingAtoms: { step: number; option: string } | null;
   /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
   workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
   /**
@@ -1598,6 +1602,7 @@ export type EditorState = {
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
+  chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
   removeStep: (id: number, asked?: boolean) => void;
   /** A running step asked to be deleted: the question asked (Workspace). */

@@ -156,6 +156,9 @@ export type StepCardProps = {
   /** What running it again drops of its earlier runs, and of those it runs first (workflow/earlierRuns `droppedBy`) - none, where it drops none. */
   drops?: string;
   onOptions: (values: OptionValues) => void;
+  /** Its atoms option being chosen on the drawing, by id; and choosing begun or ended (OptionsForm `onChoose`). */
+  choosing?: string | null;
+  onChoose?: (id: string | null) => void;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
   /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
@@ -260,7 +263,7 @@ export default function StepCard(p: StepCardProps) {
               </div>
             )}
             {p.optionList.length ? (
-              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} />
+              <OptionsForm options={p.optionList} values={p.options} onChange={p.onOptions} choosing={p.choosing} onChoose={p.onChoose} />
             ) : (
               <div className="text-xs text-gh-gray">No options</div>
             )}

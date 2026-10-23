@@ -13,6 +13,7 @@ import { forFlatReaders } from "../chem/drawing";
 import { marksOf, valenceMessage } from "../chem/marks";
 import type { Model } from "../store/types";
 import { joined, readLists, templateRs, type OptionRead } from "./enumerate";
+import { readGroups } from "./substituents";
 
 /** A group on its own as the checks are asked about it: bonded to an R, as it is in a product, its bond out counted. */
 function onAnR(option: OptionRead): Model {
@@ -36,13 +37,22 @@ async function flagged(model: Model, analyse: (molblock: string) => Promise<Anal
 /**
  * What the checks flag in Enumerate's template and in each of its options
  * (`analyse`, the role's question of a molblock): each said, naming the
- * template or the option. None where nothing is flagged. Lists that do not
- * read are not asked about: the step says why they do not, before this.
+ * template or the option - an R number's, or a substituent's group, by
+ * `way`. None where nothing is flagged. Lists that do not read are not
+ * asked about: the step says why they do not, before this.
  */
-export async function valenceFlagged(template: Model, text: string, analyse: (molblock: string) => Promise<Analysis>): Promise<string[]> {
+export async function valenceFlagged(template: Model, text: string, analyse: (molblock: string) => Promise<Analysis>, way: "rgroups" | "substituents" = "rgroups"): Promise<string[]> {
   const out: string[] = [];
-  if (templateRs(template).problems.length) return out;
+  if (way === "rgroups" && templateRs(template).problems.length) return out;
   for (const said of await flagged(template, analyse)) out.push(`The template: ${said}`);
+  if (way === "substituents") {
+    const { groups, problems } = readGroups(text);
+    if (problems.length) return out;
+    for (const [k, o] of (groups as OptionRead[]).entries()) {
+      for (const said of await flagged(onAnR(o), analyse)) out.push(`Group ${k + 1} ("${o.typed.trim()}"): ${said}`);
+    }
+    return out;
+  }
   const { lists, problems } = readLists(text);
   if (problems.length) return out;
   for (const [n, options] of [...lists].sort(([p], [q]) => p - q)) {

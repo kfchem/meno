@@ -200,14 +200,16 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (input.holds !== "structures") return void fail(id, ON_DRAWN, at, key);
     // (what came in when it was asked to run: checked and run on that, as Meno's steps in turns are)
     const entries = inputEntries(d.model, input);
-    const lists = String(optionsOf(kindInfo("enumerate").options ?? [], step.options).lists ?? "");
+    const own = optionsOf(kindInfo("enumerate").options ?? [], step.options);
+    const way = own.way === "substituents" ? "substituents" : "rgroups";
+    const lists = String((way === "substituents" ? own.groups : own.lists) ?? "");
     let checked: string;
     const by = rolePlugin("checks");
     if (entries.length === 1 && by && (await chemAtHand("checks"))) {
       let flagged: string[] | null;
       try {
         const chem = await chemWorker("checks");
-        flagged = await valenceFlagged(entries[0].drawn, lists, (molblock) => chem.request("analyse", { molblock }));
+        flagged = await valenceFlagged(entries[0].drawn, lists, (molblock) => chem.request("analyse", { molblock }), way);
       } catch {
         flagged = null;
       }

@@ -2074,6 +2074,24 @@ the build settled:
     reads the core yet.
   - *Substituent swap* and *Scaffold swap* come after.
 
+### Enumerate: substituents (as built, 2026-10-23)
+
+As WORKFLOWS-FOUNDATION.md specifies (*Enumerate*, *Substituent swap*).
+*By* on the step chooses the way: R groups (the default) or Substituents, and
+the card shows only that way's options (`Option.when`).
+- **`workflow/substituents.ts`** reads the groups (`readGroups`, each line by
+  `readOption`, as an R list's) and the positions (`positionsOf`: by the
+  template's atom order, each named by its atom, with every reason that stops
+  it). `substituted` makes each combination by putting an R atom at each
+  position given a group and handing it to R groups' `joined`, so there is one
+  join, one numbering and one identity for both ways. At a heavy atom the R
+  goes where `calculateNewBondPosition` (the canvas's extend gesture) puts a
+  new bond with no pointer to follow; a drawn H is made the R in place.
+- **Positions are an `atoms` option**: the chosen atoms' ids, never
+  remembered for another step (`rememberable`), and not shown in Settings.
+- **The valence checks** ask about each group as they ask about each R
+  option (`valenceFlagged`, by way).
+
 ### Tables (2026-10-22)
 
 A table is a value of its own (docs/WORKFLOWS-FOUNDATION.md, *Values and

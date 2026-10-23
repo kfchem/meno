@@ -529,6 +529,7 @@ export const createModelSlice = (
       hoveredStep: null,
       hoveredWire: null,
       openStep: null,
+      choosingAtoms: null,
       wireDrag: null,
       wireRefused: null,
       workflowMenu: null,
