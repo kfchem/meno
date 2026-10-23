@@ -14,6 +14,8 @@ import { counter, type Watch } from "../calc/client";
 /** The requests the worker answers, and what each answers with. */
 export type ChemRequests = {
   to_smiles: { args: { molblock: string }; result: { smiles: string } };
+  /** A reaction, as an RXN file holds it, as a reaction SMILES: "reactants>agents>products". */
+  rxn_to_smiles: { args: { rxnblock: string }; result: { smiles: string } };
   from_smiles: { args: { smiles: string }; result: { molblock: string } };
   /** Hydrogens, valence, aromaticity and stereo labels, per atom and bond. */
   analyse: { args: { molblock: string }; result: Analysis };
@@ -22,6 +24,8 @@ export type ChemRequests = {
    * stereoisomers they make - but for those `like` gives a configuration.
    */
   open_stereo: { args: { molblock: string; like?: Like }; result: OpenStereo };
+  /** Only which stereocentres and double bonds are left open, by index - none of `open_stereo`'s trying each stereoisomer in 3D. */
+  stereo_left_open: { args: { molblock: string }; result: { atoms: number[]; bonds: number[] } };
   /**
    * Which stereoisomer each molecule in 3D is, read from its own geometry:
    * its elements that could be stereogenic and a key that two molecules
@@ -59,7 +63,7 @@ export type ChemRequests = {
    */
   read_picture: { args: { picture: string }; result: PictureRead };
   /** A molecule in 3D, its bond orders known, given the hydrogens its file leaves out (RDKit's AddHs, placed by geometry): its atoms in their order, the hydrogens after. */
-  add_hydrogens: { args: { molblock: string }; result: { molblock: string } };
+  add_hydrogens: { args: { molblock: string; hydrogens?: number[] }; result: { molblock: string } };
 };
 
 /**
@@ -78,7 +82,15 @@ export type PictureRead = {
   bonds: { a: number; b: number; order: 1 | 2 | 3; aromatic?: true; stereo?: "up" | "down"; narrow?: "a" | "b"; unsure?: true }[];
 };
 
-export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number };
+/**
+ * What a structure leaves open: its stereocentres and double bonds by
+ * index; how many stereoisomers they make that can be made in 3D (a
+ * bridgehead left open gives only the one its rings allow); of the double
+ * bonds, those that are cumulated (an allene's axis, whose stereoisomers are
+ * not counted); and whether none of its stereoisomers embeds with its
+ * stereo held - made then as the embedding places it.
+ */
+export type OpenStereo = { atoms: number[]; bonds: number[]; isomers: number; cumulenes?: number[]; free?: boolean };
 
 /** One molecule's configuration, as the plugin answers it: its elements and key, or why it has none. */
 export type Configured = { elements: { kind: "centre" | "double" | "axis" | "cumulene" | "other"; atoms: number[]; specified: boolean }[]; key: string } | { error: string };

@@ -218,12 +218,10 @@ pub fn load(data: &Path) -> Option<State> {
     (s.width.is_finite() && s.height.is_finite() && s.scale.is_finite()).then_some(s)
 }
 
-/// The state kept, whole or not at all: written beside and put in its place.
+/// The state kept, whole or not at all: written beside, made to reach the disk, and put in its place (savefile.rs).
 pub fn save(data: &Path, state: &State) -> std::io::Result<()> {
     std::fs::create_dir_all(data)?;
-    let tmp = data.join("window-state.json.part");
-    std::fs::write(&tmp, serde_json::to_string(state).map_err(std::io::Error::other)?)?;
-    std::fs::rename(&tmp, file(data))
+    crate::savefile::write_whole(&file(data), serde_json::to_string(state).map_err(std::io::Error::other)?.as_bytes())
 }
 
 /// The monitors there are, the primary one first.

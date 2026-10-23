@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { acceptManifest, folded, holdsMark, markAt } from "./manifest";
+import { acceptManifest, folded, holdsMark, markAt, xyzStepsFile } from "./manifest";
 import { MANIFESTS } from "./known";
 
 const good = {
@@ -16,6 +16,7 @@ const good = {
   writes: [],
   roles: [],
   xyzEnergies: [],
+  xyzSteps: [],
   steps: [],
   systems: [],
   installed: [],
@@ -29,7 +30,7 @@ describe("a plugin's manifest", () => {
   it("is read as data: what it is, what makes its environment, the kinds of file it knows and those it reads", () => {
     expect(acceptManifest(good)).toEqual(good);
     // (what it does not say, it has none of)
-    const { uses: _uses, writes: _w, xyzEnergies: _x, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
+    const { uses: _uses, writes: _w, xyzEnergies: _x, xyzSteps: _xs, roles: _r, steps: _s, systems: _y, installed: _i, downloads: _d, guide: _g, suggests: _u, files: _f, ...said } = good;
     expect(acceptManifest(said)).toEqual(good);
     // (how a program writes an XYZ frame's energy: a pattern with one capture group and a unit; what is not that is left out)
     const declared = acceptManifest({
@@ -47,10 +48,32 @@ describe("a plugin's manifest", () => {
       { id: "one", pattern: "energy:\\s*(-?\\d+\\.\\d+)", unit: "eV" },
       { id: "five", pattern: "^(\\d+)", unit: "hartree" },
     ]);
+    // (an XYZ file of an optimisation's steps: an id and a file's name, `*` any run; what is not that is left out)
+    const steps = acceptManifest({
+      ...good,
+      xyzSteps: [
+        { id: "opt", file: "xtbopt.log", comment: "^\\s*energy:\\s*-?\\d+\\.\\d+\\s+gnorm:" },
+        { id: "trj", file: "*_trj.xyz" },
+        { id: "said", comment: "^Coordinates from \\S+ E\\s" },
+        { id: "path", file: "../x.xyz" },
+        { id: "any", file: "*" },
+        { id: "broken", comment: "([unclosed" },
+        { id: "Bad", file: "a.xyz" },
+        { id: "none" },
+      ],
+    })!.xyzSteps;
+    expect(steps.map((d) => d.id)).toEqual(["opt", "trj", "said"]);
+    const known = (name: string, comments: string[] = []) => steps.some((d) => xyzStepsFile(name, comments, d));
+    expect(["opt_trj.xyz", "A_TRJ.XYZ", "opt.xyz", "opt_trj.xyz.bak", "xtbopt.log", "xtbopt.xyz", "xtboptXlog"].map((n) => known(n))).toEqual([true, true, false, false, true, false, false]);
+    // (by what each frame's comment line says, whatever its name; one frame, or one line otherwise, not)
+    expect(known("opt.log", [" energy: -5.06 gnorm: 0.06", " energy: -5.07 gnorm: 0.0003"])).toBe(true);
+    expect(known("opt.log", [" energy: -5.06 gnorm: 0.06"])).toBe(false);
+    expect(known("opt.log", [" energy: -5.06 gnorm: 0.06", "  -5.07"])).toBe(false);
+    expect(known("x.xyz", ["Coordinates from job E -1", "Coordinates from job E -2"])).toBe(true);
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -125,7 +148,7 @@ describe("a plugin's manifest", () => {
     // (RDKit's, as it carries them)
     const rdkit = MANIFESTS.find((m) => m.id === "rdkit")!;
     expect(rdkit.roles.map((r) => r.role)).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
-    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "same", "seed"]);
+    expect(rdkit.roles.find((r) => r.role === "conformers")?.options.map((o) => o.id)).toEqual(["sought", "count", "field", "iters", "seed"]);
     // (how many are sought is the molecule's to say unless a number is asked for: the number is shown only then)
     expect(rdkit.roles.find((r) => r.role === "conformers")?.options.find((o) => o.id === "count")?.when).toEqual({ id: "sought", in: ["fixed"] });
   });
@@ -140,8 +163,9 @@ describe("a plugin's manifest", () => {
         { kinds: ["optimise", "energy"], programs: ["xtb", "../bin/sh", "/usr/bin/xtb", "xtb"], options: [level] },
         { kinds: ["optimise"], programs: ["other"] },
         { kinds: ["Not A Kind", "frequencies"], programs: ["xtb"] },
-        { kinds: ["conformers"], takes: ["molecules", "drawings", "conformers"] },
+        { kinds: ["conformers"], takes: ["molecules", "drawings", "conformers", "chart"] },
         { kinds: ["duplicates"], takes: [] },
+        { kinds: ["energy-window"], takes: ["table", "number"] },
         { kind: "populations" },
       ],
     };
@@ -153,6 +177,8 @@ describe("a plugin's manifest", () => {
       // (what it takes, of what flows: none said, all its kind takes)
       { kind: "conformers", programs: [], options: [], takes: ["molecules", "conformers"] },
       { kind: "duplicates", programs: [], options: [] },
+      // (a table and a number flow too - a chart, Meno's alone, none says)
+      { kind: "energy-window", programs: [], options: [], takes: ["table", "number"] },
     ]);
     // (xTB's and ORCA's, as Meno carries them)
     const xtb = MANIFESTS.find((m) => m.id === "xtb")!;

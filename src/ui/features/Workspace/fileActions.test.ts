@@ -11,8 +11,11 @@ import {
   structureFileText,
   suggestedExportPath,
   suggestedSavePath,
+  writtenWhere,
+  keepsOld,
 } from "./fileActions";
 import { optionsFor, WRITERS } from "../../../lib/io/writers";
+import { heldElsewhere } from "../../../lib/doc/savers";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { labelBox, labelSetOf, runsWidth } from "../../../lib/chem/layout2d";
 import { MARK_HALF_HEIGHT, MARK_SCALE, MARKS_APART, STEREO_GAP, stereoPlaces, stereoTextEms } from "./chem/marks";
@@ -508,6 +511,82 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     const back = await processFileContent("d2o.pdb", text);
     expect(back.molecules3d![0].atoms.map((a) => [a.el, a.isotope])).toEqual([["O", undefined], ["H", 2], ["H", 2]]);
     expect(back.molecules3d![0].bonds.map((b) => [b.a1, b.a2])).toEqual([[0, 1], [0, 2]]);
+  });
+});
+
+describe("a workspace saved", () => {
+  /** What a save did, in turn, and the files it wrote, by path - on a file system that takes no notice of case, keeping a name as it was first written. */
+  function disk(files: Record<string, string> = {}) {
+    const done: string[] = [];
+    const written = new Map(Object.entries(files));
+    const kept = (path: string) => [...written.keys()].find((k) => k.toLowerCase() === path.toLowerCase()) ?? path;
+    const write = async (path: string, bytes: Uint8Array, keepOld: boolean) => {
+      done.push(`write ${path}${keepOld ? ", keeping the old" : ""}`);
+      const at = kept(path);
+      const old = keepOld && written.has(at) ? `${at}.bak` : null;
+      if (old) written.set(old, written.get(at)!);
+      written.set(at, new TextDecoder().decode(bytes));
+      return old;
+    };
+    const truePathOf = async (path: string) => (done.push(`true path of ${path}`), kept(path));
+    return { done, written, write, truePathOf };
+  }
+  const bytes = new TextEncoder().encode("PK new");
+
+  it("is written where the dialog said, then known by the file's one true path, as an opened one is", async () => {
+    const d = disk({ "/Users/Chem/Work/Aspirin.meno": "PK old" });
+    expect(await writtenWhere("/users/chem/work/ASPIRIN.meno", bytes, d)).toEqual({ kept: "/Users/Chem/Work/Aspirin.meno", old: null });
+    // (asked once the file is there, too: a new file has no name kept before it is written)
+    expect(d.done).toEqual(["true path of /users/chem/work/ASPIRIN.meno", "write /users/chem/work/ASPIRIN.meno", "true path of /users/chem/work/ASPIRIN.meno"]);
+  });
+
+  it("is never written over a file another tab holds: refused, naming that tab, nothing written - its own file and a free one written", async () => {
+    const d = disk({ "/w/aspirin.meno": "PK the other tab's", "/w/mine.meno": "PK mine" });
+    const tabs = [
+      { id: "t1", openedFrom: "/w/mine.meno", label: "mine.meno" },
+      { id: "t2", openedFrom: "/w/aspirin.meno", label: "aspirin.meno" },
+    ];
+    const heldBy = (path: string) => heldElsewhere(path, "t1", tabs);
+    // (Save As onto the other tab's file, however it was written)
+    await expect(writtenWhere("/W/ASPIRIN.meno", bytes, { ...d, heldBy })).rejects.toThrow('that file is open in the tab "aspirin.meno"; save there, or close it first.');
+    expect(d.written.get("/w/aspirin.meno")).toBe("PK the other tab's");
+    expect(d.done.some((x) => x.startsWith("write"))).toBe(false);
+    // (as a save's failure is said)
+    const said = await writtenWhere("/w/aspirin.meno", bytes, { ...d, heldBy }).catch((e: Error) => `Save failed: ${e.message}`);
+    expect(said).toBe('Save failed: that file is open in the tab "aspirin.meno"; save there, or close it first.');
+    // (its own file, and one no tab holds)
+    expect((await writtenWhere("/w/mine.meno", bytes, { ...d, heldBy })).kept).toBe("/w/mine.meno");
+    expect((await writtenWhere("/w/free.meno", bytes, { ...d, heldBy })).kept).toBe("/w/free.meno");
+    expect([...d.written.keys()].sort()).toEqual(["/w/aspirin.meno", "/w/free.meno", "/w/mine.meno"]);
+    expect(d.written.get("/w/mine.meno")).toBe("PK new");
+  });
+
+  it("keeps the file it was saved over beside it only where asked of that file, and says where", async () => {
+    const d = disk({ "/w/a.meno": "PK damaged" });
+    const keepOld = (path: string) => path === "/w/a.meno";
+    expect(await writtenWhere("/W/A.meno", bytes, { ...d, keepOld })).toEqual({ kept: "/w/a.meno", old: "/w/a.meno.bak" });
+    expect(d.written.get("/w/a.meno.bak")).toBe("PK damaged");
+    expect(await writtenWhere("/w/b.meno", bytes, { ...d, keepOld })).toEqual({ kept: "/w/b.meno", old: null });
+    // (a save not asked to: none)
+    const plain = disk({ "/w/a.meno": "PK old" });
+    expect((await writtenWhere("/w/a.meno", bytes, plain)).old).toBeNull();
+    expect([...plain.written.keys()]).toEqual(["/w/a.meno"]);
+  });
+});
+
+describe("a workspace that left something out as it opened, saved", () => {
+  const left = { left: { picture: 1 }, kept: false };
+  it("keeps the file it was opened from beside the first save over it - its only copy of what was left out", () => {
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, left)).toBe(true);
+    // (not once kept: the file saved then holds nothing of it)
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, { ...left, kept: true })).toBe(false);
+  });
+  it("keeps no other file, and none where nothing was left out", () => {
+    expect(keepsOld("/w/b.meno", "/w/a.meno", false, left)).toBe(false);
+    expect(keepsOld("/w/a.meno", null, false, left)).toBe(false);
+    expect(keepsOld("/w/a.meno", "/w/a.meno", false, null)).toBe(false);
+    // (as before: a file it last saved still holding one it cannot keep)
+    expect(keepsOld("/w/a.meno", "/w/a.meno", true, null)).toBe(true);
   });
 });
 

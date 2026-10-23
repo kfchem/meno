@@ -1,12 +1,11 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { appDataDir } from "@tauri-apps/api/path";
 import {
   BaseDirectory,
   exists,
-  mkdir,
   readTextFile,
-  writeTextFile,
 } from "@tauri-apps/plugin-fs";
+import { writeAppFile } from "../io/writeDocument";
+import { MOST_WORKSPACE_FILE } from "../doc/menoFile";
 import { create } from "zustand";
 import { DEFAULT_STYLE_CHOICE, type OwnStyle2D, type StyleChoice } from "../chem/style";
 import { acceptOwnStyles2d, acceptStyleChoice } from "../chem/styleFields";
@@ -74,11 +73,15 @@ export type CalculationSettings = {
   coresAll?: number;
   /** How much memory this computer's jobs may use at once, in all, in MiB; unset, three quarters of its memory. */
   memoryAll?: number;
+  /** The size, in MB, a save past which says the workspace is large (Settings, General; workflow/keptJobs); unset, 500. */
+  largeWorkspaceMB?: number;
 };
 
 /** The most cores, and memory in MiB, Settings takes. */
 export const CORES_MOST = 1024;
 export const MEMORY_MOST = 64 * 1024 * 1024;
+/** The most a workspace may come to, in MB, before a save says it is large: Settings takes up to this - the most a workspace's file may come to at all. */
+export const LARGE_WORKSPACE_MOST = MOST_WORKSPACE_FILE / 2 ** 20;
 
 /**
  * How finely the canvas is drawn (docs/WORKSPACE.md, *Drawing resolution*):
@@ -136,6 +139,8 @@ export type PluginSettings = {
 export type FileSettings = {
   read: Record<string, string>;
   also: Record<string, string[]>;
+  /** macOS: the app each format opened with before Meno was made its default there, by extension - offered back by name (lib/defaultApps). */
+  before?: Record<string, { name: string; path: string }>;
 };
 
 /** Meno keeping itself up to date (lib/update). */
@@ -212,12 +217,13 @@ export function acceptAppSettings(raw: unknown): AppSettings {
 
 /** How a workflow's jobs run, as the file holds it: the cores each takes, and the cores and memory they may use in all - whole numbers within reason. */
 function acceptCalculations(raw: unknown): CalculationSettings {
-  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown } | null;
+  const r = raw as { cores?: unknown; coresAll?: unknown; memoryAll?: unknown; largeWorkspaceMB?: unknown } | null;
   const whole = (v: unknown, most: number) => (typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= most ? v : undefined);
   const cores = whole(r?.cores, CORES_MOST);
   const coresAll = whole(r?.coresAll, CORES_MOST);
   const memoryAll = whole(r?.memoryAll, MEMORY_MOST);
-  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}) };
+  const largeWorkspaceMB = whole(r?.largeWorkspaceMB, LARGE_WORKSPACE_MOST);
+  return { ...(cores ? { cores } : {}), ...(coresAll ? { coresAll } : {}), ...(memoryAll ? { memoryAll } : {}), ...(largeWorkspaceMB ? { largeWorkspaceMB } : {}) };
 }
 
 /** The procedures saved, as the file holds them: each with an id, a name and its flow's parts as lists - read further as they are used. */
@@ -280,7 +286,14 @@ function acceptFiles(raw: unknown, before: unknown): FileSettings {
     const ids = Array.isArray(readers) ? [...new Set(readers.filter((r): r is string => typeof r === "string" && ID.test(r)))] : [];
     if (ID.test(kind) && ids.length) also[kind] = ids;
   }
-  return { read, also };
+  // (an extension's app, by a name and an absolute path of some length)
+  const apps: Record<string, { name: string; path: string }> = {};
+  for (const [ext, app] of entries((raw as { before?: unknown } | null)?.before)) {
+    const a = app as { name?: unknown; path?: unknown } | null;
+    if (/^[a-z0-9]{1,8}$/.test(ext) && typeof a?.name === "string" && a.name && a.name.length <= 200 && typeof a.path === "string" && a.path.startsWith("/") && a.path.length <= 1024)
+      apps[ext] = { name: a.name, path: a.path };
+  }
+  return { read, also, ...(Object.keys(apps).length ? { before: apps } : {}) };
 }
 
 /** The plugins taken away, the roles' choices, the programs located and the guides shown, that read: ids only. */
@@ -443,9 +456,9 @@ async function readSettingsText(): Promise<string | null> {
 
 async function writeSettingsText(text: string): Promise<void> {
   if (isTauri()) {
-    // The folder is there once the app has run, but not on a first launch.
-    await mkdir(await appDataDir(), { recursive: true }).catch(() => undefined);
-    await writeTextFile(FILE, text, { baseDir: BaseDirectory.AppData });
+    // (whole, or not at all: a file left half written would lose every
+    // setting; the folder made, on a first launch, as it is written)
+    await writeAppFile(FILE, text, "data");
     return;
   }
   globalThis.localStorage?.setItem(STORAGE_KEY, text);

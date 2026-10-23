@@ -7,7 +7,9 @@ import { labelPtOf } from "./restyle";
 import { chemMolblock } from "../../../lib/roles/molblock";
 import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
+import { reactionForSmiles } from "./chem/reactionFile";
 import { structureOnClipboard } from "./chem/fromClipboard";
+import { leftOutSaid } from "./utils/readNotes";
 import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
 import type { EditorStore } from "./store";
@@ -167,8 +169,10 @@ export function useClipboardActions(
     if (!taken || !(await copy(only))) return;
     // what was copied is what goes: the selection, or the structure, and
     // the arrows and pluses that went with it, and the molecules in 3D
-    store.getState().deleteDrawn(taken.part, taken.ids3d);
-  }, [part, copy, store]);
+    const left = store.getState().deleteDrawn(taken.part, taken.ids3d);
+    // (a set that holds its molecules itself, on no page, which the copy does not carry: left where it was, and said)
+    if (left) onError(leftByCut(left));
+  }, [part, copy, store, onError]);
 
   // (the pastes asked for at one place: a paste there again lands a step on - utils/copyPaste#pastePlace)
   const pastes = useRef<PastesAt | null>(null);
@@ -214,6 +218,9 @@ export function useClipboardActions(
         }
         pastes.current = now;
         store.getState().pasteModel(centredAt(found, at));
+        // (what the copy held that could not be read, left out: said)
+        const left = leftOutSaid(found.leftOut, "copy");
+        if (left) onError(left);
       } catch (e) {
         onError(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);
       }
@@ -227,8 +234,14 @@ export function useClipboardActions(
         const p = part()?.part;
         if (!p?.atoms.length) return;
         try {
+          // (a reaction as a reaction SMILES - never its molecules as one mixture; one it cannot be, said why)
+          const reaction = reactionForSmiles(p);
+          if (reaction && "why" in reaction) {
+            onError(`Copy as SMILES: ${reaction.why}.`);
+            return;
+          }
           const c = await chemWorker("smiles");
-          const { smiles } = await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
+          const { smiles } = reaction ? await c.request("rxn_to_smiles", { rxnblock: reaction.rxn }) : await c.request("to_smiles", { molblock: chemMolblock(forFlatReaders(p)) });
           await writeClipboard([{ flavor: "text", text: smiles }]);
         } catch (e) {
           onError(`Copy as SMILES failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -267,4 +280,11 @@ export function useClipboardActions(
  */
 export function copiedMolecules(state: Parameters<typeof carriedOf>[0], ids: readonly number[]): Carried3D[] {
   return carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
+}
+
+/** What a cut says of the sets it left in place - each holding its molecules itself, on no page, which a copy does not carry. */
+export function leftByCut(left: number): string {
+  return left === 1
+    ? "A set that holds its molecules itself was left in place: a copy does not carry them. Delete it on its own."
+    : `${left} sets that hold their molecules themselves were left in place: a copy does not carry them. Delete them on their own.`;
 }

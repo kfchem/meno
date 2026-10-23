@@ -17,7 +17,7 @@ import { chemAtHand, chemWorker } from "../../../../lib/roles/worker";
 import type { ChemClient } from "../../../../lib/roles/client";
 import { useEditor, useEditorStore, type EditorStore } from "../store";
 import type { Molecule3D } from "../store/types";
-import { blockOf, bondsAmong, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withComponents, withHydrogens, withOrders, withPartOrders } from "../utils/completeness";
+import { blockOf, bondsAmong, hasHydrogens, ligandGroups, MOST_PERCEIVED, partOf, stillUnknown, withComponents, withOrders, withPartOrders } from "../utils/completeness";
 import { ordersFromGeometry } from "../../../../lib/chem/ordersFromGeometry";
 import { componentsNamed } from "../../../../lib/net/components";
 import { isWater } from "../../../../lib/chem/biopolymer";
@@ -112,7 +112,7 @@ export async function ordersFromSmiles(store: EditorStore, id: number, atom: num
     const next = withOrders(cur, block.atoms, r.molblock);
     if (!next) return cur;
     const left = (cur.biopolymer ? stillUnknown(cur) : []).filter((i) => !block.atoms.includes(i));
-    const { unknownOrders: _was, ...rest } = next;
+    const { unknownOrders: _was, ...rest } = withOrdersBy(next, block.atoms, "assigned");
     // (all of it given, or every ligand's: known now)
     return left.length ? { ...rest, bondOrders: "unknown", unknownOrders: left } : { ...rest, bondOrders: "assigned" };
   });
@@ -136,25 +136,27 @@ export function estimateOrders(store: EditorStore, id: number, atom: number | nu
   store.getState().changeMolecule3d("bond orders", id, (cur) => {
     const next = withPartOrders(cur, atoms, r.orders, r.charges);
     const left = (cur.biopolymer ? stillUnknown(cur) : []).filter((i) => !atoms.includes(i));
-    const { unknownOrders: _was, ...rest } = next;
+    const { unknownOrders: _was, ...rest } = withOrdersBy(next, atoms, "estimated");
     return left.length ? { ...rest, bondOrders: "unknown", unknownOrders: left } : { ...rest, bondOrders: "estimated" };
   });
-}
-
-/** The hydrogens a molecule's ligand - or all of it - leaves out, added where its atoms' geometry puts them, as one undo step. */
-export async function addHydrogens(store: EditorStore, id: number, atom: number | null): Promise<void> {
-  const m = store.getState().molecules3d.find((x) => x.id === id);
-  const atoms = m && partOf(m, atom);
-  if (!m || !atoms) throw new Error("Point at the ligand to add hydrogens to.");
-  const chem = await chemWorker("drawing");
-  const block = blockOf(m, atoms);
-  const r = await chem.request("add_hydrogens", { molblock: block.molblock }, ORDERS_MS);
-  store.getState().changeMolecule3d("add hydrogens", id, (cur) => withHydrogens(cur, block.atoms, r.molblock) ?? cur);
 }
 
 /** Whether a part of a molecule (`atoms`) can be given its bond orders from a SMILES: they are unknown there. */
 export function canGiveOrders(m: Molecule3D, atoms: readonly number[] | null): boolean {
   return !!atoms?.length && stillUnknown(m).includes(atoms[0]);
+}
+
+/**
+ * A PDB entry's ligand's bond orders said to have come from where they did
+ * (`by`), by its residues (Molecule3D `ligandOrders`): how its card starts
+ * (chem/protonate). A molecule that is not an entry says it by its own
+ * `bondOrders`.
+ */
+export function withOrdersBy(m: Molecule3D, atoms: readonly number[], by: "assigned" | "dictionary" | "estimated"): Molecule3D {
+  const bp = m.biopolymer;
+  if (!bp) return m;
+  const residues = new Set(atoms.map((i) => bp.residueOf[i]));
+  return { ...m, ligandOrders: { ...m.ligandOrders, ...Object.fromEntries([...residues].map((r) => [r, by])) } };
 }
 
 /** Whether a part of a molecule (`atoms`) can be given its hydrogens: its bond orders known, it has none yet, and the molecule has one frame. */
@@ -182,7 +184,10 @@ export async function ordersFromDictionary(store: EditorStore, id: number): Prom
     const r = withComponents(cur, looked.components);
     if (!r?.given.length) return cur;
     given = r.given.length;
-    return r.molecule;
+    // (its ligands' given so, each by its residues)
+    const done = new Set(r.given);
+    const ligands = ligandGroups(r.molecule).flat().filter((i) => done.has(cur.biopolymer!.residueOf[i]));
+    return withOrdersBy(r.molecule, ligands, "dictionary");
   });
   return { given, of: residues.length, absent: looked.absent };
 }

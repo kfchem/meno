@@ -487,13 +487,15 @@ Taken on 2026-10-13:
   the two have the same conformers and shares.
 - **A metal's bonds hold** (2026-10-17). A bond drawn to a d- or f-block
   metal is embedded at its covalent length (Pyykkö's radii, as Meno's own)
-  with the metal's ligands kept apart, and the metal is given UFF's own
+  with the metal's ligands kept apart where that is sound (PLUGINS.md, *A
+  metal's ligands are kept apart*), and the metal is given UFF's own
   geometry for it: square planar for Ni, Pd, Pt and Au (their angles held
   at 90 and 180 degrees), tetrahedral or octahedral for the rest. Where UFF
   has no type for the metal - Ru, Os, Rh, Ir, W, Zr, Hf, Y - a lighter
   metal of its group stands in for its shape while its bonds are held at
   their own lengths, and no energies are given: the chip says so, and the
-  conformers are not ranked or weighted. Before, UFF without terms for a
+  conformers are not weighted. They are ordered by the stand-in's energies,
+  as the line that says how they were made says. Before, UFF without terms for a
   metal pushed it 8 to 25 Å off its ring, or stopped.
 - **A ring bound to a metal through all its atoms** (η; 2026-10-17) is
   asked about as the CTfile's multi-centre bond - a bond from the metal to a
@@ -734,6 +736,15 @@ Each result says what it belongs to, and Meno puts it there:
   energies not read" where an excited state was optimised, whose energies
   at each geometry are not the ground state's that the output also gives
   (2026-10-14).
+- **Of a job with excited states, a dipole, charges and the HOMO-LUMO gap
+  say which state they are of** (2026-10-22): "Dipole moment, ground
+  state", "Mulliken, excited state 1" - as the output says which density
+  they were worked out from (Gaussian's "Population analysis using the SCF
+  Density"; ORCA's dipole block's Method and State, and the root heading its
+  relaxed density's population analysis). Before, the same words stood for
+  either: Gaussian's TD optimisation gave the ground state's at the excited
+  state's geometry, ORCA's its root's. Where the output does not say, they
+  are left out. The orbitals are always the ground state's.
 - **No colouring.** Results are seen by pointing at them; the look stays
   as it is.
 - **Grouped and named by the plugin:** "Partial charges", "NBO".
@@ -1750,11 +1761,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
 
 - **Said over it.** *No H in file* where the molecule - for a PDB entry,
   its chains while they are drawn as atoms, or a ligand - has no
-  hydrogens and either has a carbon whose neighbours leave room for some,
-  its orders unknown (none or one, but for the end of a C≡O or C≡N; two
-  not in a line; three not in a plane: so not C60, carbon dioxide, CCl4
-  or a metal's carbonyls), or has an atom whose valence, its orders
-  known, leaves room for some; *Bond orders
+  hydrogens and is a skeleton (below: `lib/chem/skeleton.ts`); *Bond
+  orders estimated, protonation unknown* under it where a skeleton's
+  orders were estimated from its distances; *Bond orders
   unknown* where they are - for a PDB entry, while a ligand's are, or
   while its chains are drawn as atoms, whose orders no entry gives (the
   side chains round a ligand, in a look with ribbons, among them); *3
@@ -1802,8 +1811,9 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   has two S=O and a phosphate one P=O, to its shortest oxygens; a nitro
   group's charges are N+ and O-. Bonds to metals stay single. Where an
   atom's shape asks for a double bond it cannot have, nothing is changed
-  and the orders stay unknown. Otherwise they are drawn with no mark: a
-  later SMILES or CCD replaces them. Comparing lengths with bond-type
+  and the orders stay unknown. Otherwise they are drawn - with no mark
+  but on a skeleton, which says its protonation is unknown (below) - and
+  a later SMILES or CCD replaces them. Comparing lengths with bond-type
   radii, and counting a ring's electrons, are ideas from the maintainer's
   ACCeL; the code is Meno's own. Checked (2026-10-11) against 120
   molecules made in 3D by RDKit with their hydrogens taken away: all
@@ -1821,11 +1831,120 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   gives each bond the order the SMILES has for it, and each atom its
   charge. The SMILES must be the ligand's heavy atoms and bonds, all of
   them; else the card says so and nothing changes. One undo step.
-- **Hydrogens added.** Its orders known, a ligand without hydrogens has
-  *Add hydrogens* in the same menu: RDKit's `AddHs`, placed where the
-  atoms' geometry puts them, bonded to their atoms and in their residue.
-  One undo step. Not for a molecule with other frames (an NMR entry's
-  models, a trajectory), which would be left without them.
+- **How it is protonated** (the maintainer's decisions, 2026-10-21 and
+  2026-10-22). Its orders known, a molecule without hydrogens - for a PDB
+  entry, the ligand under the pointer - has *Add hydrogens…* in the same
+  menu: a card over the canvas, *How it is protonated*, with a row for
+  each of its sites and the forms to choose from, the site lit on the
+  molecule while the pointer is over its row; any other nitrogen, oxygen
+  or sulfur can be given a charge of its own (*Charge another atom…*);
+  and the charge and spin the molecule would have. Nothing is chosen for
+  the chemist: a pH model may come later.
+  - **The sites** (`lib/chem/protonation.ts`), each atom in one at most,
+    the first that takes it: a lactam (a flat ring with a nitrogen and an
+    oxygen on a carbon of it: 2-pyridone, 4-pyridone, uracil, a
+    triazolone); an azole (a flat five-membered ring with two nitrogens or
+    more: imidazole, pyrazole, a triazole, a tetrazole, an oxadiazole); a
+    cyclic amidine (a flat ring's carbon beside a ring nitrogen, with an
+    amino group on it: 2-aminopyridine, 2-aminothiazole, adenine); an
+    amidine or a guanidine; a carboxyl; a phosphate and a sulfonate (a
+    phosphorus or sulfur with four neighbours, two oxygens or more of them
+    bonded to nothing else, named by what else it carries: a phosphonate,
+    a phosphinate, a phosphoramidate, a sulfate, a sulfamate); a ring
+    nitrogen (a flat six-membered ring's, with no substituent, or a flat
+    five-membered ring's one nitrogen, doubly bonded: an oxazole's, a
+    thiazole's); a phenol and a thiol; an imine (a nitrogen outside a flat
+    ring doubly bonded to a carbon, on carbons alone - not an oxime's nor
+    a hydrazone's); an amine (a nitrogen with single bonds only, outside a
+    flat ring, and not an amide's, a sulfonamide's, a nitro group's, nor
+    an amino group a cyclic amidine holds). A ring drawn with an imine on
+    it - cytosine's or 2-aminothiazole's imino tautomer - is the same ring
+    as drawn with its amine. Two sites that would move the
+    hydrogens of one atom are one, their forms found together: a
+    biguanide's two guanidines, cytosine's lactam and its amino group. A
+    site is named by what it is made of - an azole or a ring nitrogen by
+    the atoms round its ring (a thiazole's, a pyrimidine's).
+  - **The forms.** A form is the hydrogens each atom of a site carries,
+    and its charge - every tautomer one of them, by where its hydrogens
+    are: imidazole with its hydrogen on N1 or on N3, a tetrazole's four,
+    an amidine's two, a guanidine's three, 2-pyridone and
+    2-hydroxypyridine, 2-aminopyridine's amino and imino forms, a
+    carboxylic acid's hydrogen on either oxygen, a phosphate's on any of
+    its oxygens. The orders of the bonds round a form - in a ring, its
+    whole flat ring system's - are found again for it so that every atom's
+    valence is met, and they follow the form chosen: a carboxylate's one
+    C=O, imidazolium's and guanidinium's C=N+. Two ways of drawing the
+    same hydrogens and charge are one form. A site's charge is of one
+    sign, and a ring's is one at most. Every form carries as many
+    hydrogens, less its charge, as the molecule is drawn with: a proton
+    more with its charge, never two hydrogens added to the bonds (a
+    dihydro tetrazole) nor two taken from them. Not among the forms: a
+    hydrogen on a carbon (a pyrazolone's CH form). Not sites yet: acidic
+    N-H groups - a sulfonamide's, an imide's, a barbiturate's - whose
+    nitrogen can be given a charge of its own on the card.
+  - **Bonds to metals.** A bond to a metal from an atom that cannot give
+    it a pair of its own - a carbon's on tin or lithium, a chlorine's on
+    mercury - counts in that atom's valence. One from an atom that can (a
+    nitrogen, phosphorus, arsenic, oxygen, sulfur, selenium or tellurium)
+    may be in place of a hydrogen or not: where the two leave it different
+    hydrogens, it is a site of its own, *Bond to Zn*, its forms *Covalent
+    bond* (as drawn: an amido, a thiolate, a sodium carboxylate, a
+    pyrrolide) and *Dative bond* (an amine, a thiol, the acid), and no
+    other site moves its hydrogens. A pyridine's nitrogen on a metal has
+    none either way.
+  - **A file whose rings are aromatic** (a molfile's bond type 4): its
+    rings are drawn with single and double bonds, its nitrogens' hydrogens
+    as few as Hückel's rule leaves (`lib/chem/kekulize.ts`); which nitrogen
+    carries one the file does not say, so every site starts unchosen. Where
+    a ring cannot be drawn so (a ring of five carbons), the card says which
+    atoms, and nothing can be added.
+  - **Where the card starts** (one function, `startingForms`). Where the
+    orders and charges were given by a definition - the CCD's (*As the CCD
+    defines it*), a SMILES' (*As the SMILES gives it*) or its own file's, a
+    molfile's, whose hydrogens are those its valences leave room for (*As
+    its file gives it*) - each site starts at the form they draw. Where
+    they were estimated from distances, which say nothing of how it is
+    protonated, or a file gives its rings as aromatic, every site starts
+    unchosen, and *Add hydrogens* waits until each is chosen. A bond to a
+    metal (*Bond to Zn*) starts unchosen whatever the source (the
+    maintainer, 2026-10-23): a V2000 molfile has no dative bond, so a
+    ligand such as water is often drawn with a single bond to its metal,
+    which read as drawn would be a hydroxide.
+  - **The hydrogens.** The forms chosen are drawn together - every site's
+    bonds found again at once, the card saying so where they cannot all be
+    drawn - and the hydrogens they leave room for are added by RDKit's
+    `AddHs`, as many on each atom as its form gives (`add_hydrogens`'s
+    `hydrogens`), where the atoms' geometry puts them, bonded to their
+    atoms and in their residue. A PDB entry's ligand kept as the CCD defines it is
+    given the CCD's own hydrogens instead, by their names, each where the
+    component's ideal shape puts it beside its atom: the component's atom
+    and its neighbours - and theirs, until three not in a line - fitted
+    onto the entry's by Horn's closed-form quaternion fit
+    (`lib/chem/ccdHydrogens.ts`), so that it stands as the component has
+    it however the residue is turned and bent. A bond to another residue
+    takes the place of a hydrogen of its atom - one that leaves as the
+    residue bonds (an amino acid's H2), else the one nearest the atom it
+    is bonded to (a sugar's HO4, in a chain of them) - unless it takes
+    that of an atom that left (a peptide's carbon, its OXT gone). Where an atom of the
+    component that does not leave is missing from the entry, it is not
+    made whole: the card says which, and nothing is added.
+  - **Checked before anything is written.** Each atom must then have the
+    hydrogens its form gives it - its valence met by its bonds and its
+    hydrogens, a donor's bond to a metal in place of a hydrogen or not
+    (`hydrogensRooms`). Where not, nothing is changed, and the card says at
+    which atoms. Nor is anything written where the molecule changed
+    while the card was open (an undo, say), or an atom of it moved while
+    its hydrogens were being placed, which puts them where the atoms were
+    (by more than 0.0001 Å, under any digit a file writes): it is asked
+    for again. Given other frames meanwhile, it says how many. HEM,
+    as the CCD defines it, gives its O2A and O2D a
+    charge and a hydrogen both: its hydrogens are not put on as they are,
+    and the chemist chooses its carboxyls' forms on the card.
+  - **Said over it.** A molecule so completed says *Hydrogens added*, or
+    *Hydrogens from the CCD* (`hydrogensAdded`), as they were not in its
+    file. One undo step. Not for a molecule with other frames (an NMR
+    entry's models, a trajectory), which would be left without them; nor,
+    yet, for a set of many in a workflow, which waits for the pH model.
 - **Not done: protonating a protein.** A chain's hydrogens depend on each
   residue's protonation state - histidine's tautomer, the pH, what is
   near - which is a calculation of its own, not a completion of the file.
@@ -1845,7 +1964,8 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   the component's, single, double or triple; any other residue is left as
   it was, and says so. Bonds between residues - a peptide's, a
   disulfide, a ligand's link - stay as they are. A ligand so given can be
-  given its hydrogens; chains whose every residue was given no longer say
+  given its hydrogens as the CCD defines them (*How it is protonated*,
+  above); chains whose every residue was given no longer say
   their orders are unknown, drawn as atoms. The charges are the
   dictionary's, as its components are drawn, not a protonation worked out
   for the entry. One undo step. The files come from files.wwpdb.org
@@ -1856,6 +1976,52 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   each is fetched once; only the components' names leave Meno. A PDB file
   with no chain (a ligand on its own) keeps no residue names, and is not
   looked up.
+- **A skeleton is not a molecule** (the maintainer's ruling, 2026-10-21:
+  "treating a structure without hydrogens as a molecule is itself
+  wrong"). A file of coordinates without hydrogens gives a molecule's
+  skeleton: how its atoms are protonated, and so its charge and spin, are
+  not in it. Meno's one rule for a skeleton (`lib/chem/skeleton.ts`
+  `lacksHydrogens`, for a molecule `utils/completeness.ts` `isSkeleton`):
+  none of its atoms - a ligand's, a PDB entry's chains' - is a hydrogen,
+  and some would carry one. Its orders known, an atom whose valence leaves
+  room for one would. Its orders unknown, a carbon whose neighbours leave
+  room would (none, or one, whatever it is bound to - hydrogen cyanide's
+  heavy atoms are a cyanide ion's too; two not in a line; three whose
+  angles at it sum to less than 350° with each bond a single bond's
+  length: measured over 1,454 molecules laid out by ETKDG and MMFF, the
+  833 such carbons with a hydrogen sum to 347.3° at most and have no bond
+  shorter than order 1.28 by its length, the 4,005 without one sum to
+  358.9° at least, and C60's - 348° - have a bond of order 1.63); and where no
+  carbon says so but another atom could carry one - an oxygen with one
+  bond, a nitrogen with two - the orders are estimated from the distances
+  (above) and an atom other than carbon they leave room on would: a
+  carboxylate's oxygen, an amine's nitrogen. Where they cannot be
+  estimated, it cannot be told that none is missing: a skeleton. Carbon
+  dioxide, SF6, CCl4, C60, N2 and a metal's carbonyls are whole by
+  themselves. Some whole ones are taken for skeletons, the safe way: carbon
+  monoxide and an isocyanide's end (one neighbour, as a cyanide's), ozone,
+  SO2, SO3, NO2 and N2O (their orders not estimated as they are);
+  these, and any other that is whole without hydrogens, are said so by the
+  chemist - *Complete without hydrogens* on its menu (`wholeWithoutH`,
+  one undo step; never a PDB entry's). A skeleton is given no charge or
+  spin (`lib/io/writers` `speciesOf` gives none: before, H-less
+  methylamine's 13 electrons made it a neutral doublet, and ethane's
+  heavy atoms were C2); a step whose plugin needs the whole molecule -
+  *Conformers*, *Optimise*, *Energy*, *Frequencies*, *NCI*, a plugin's
+  *Duplicates* (`whole` in `workflow/kinds.ts`) - refuses it before
+  anything is sent, saying what to do (`skeletonsRefused`); Meno's own
+  steps on its shape and energies, and *Render*, take it. It is not drawn
+  as a formula, which would say how every atom is protonated. A plugin's
+  writer, given the molecule with its charge and spin, is not given it;
+  Export says so before a file is asked for. An SD file or a copy writes
+  it as a skeleton - each atom's valence its bonds' orders summed (the
+  atom block's vvv, 15 for none; V3000's VAL, -1 for none, "CTfile
+  Formats"), so that no reader adds hydrogens - and an XYZ or PDB file as
+  it is, Export saying it has none. Estimated orders on a skeleton say so
+  over it, their formal charges only those its heavy atoms set (a nitro
+  group's, an azide's). The way on is its hydrogens added, the chemist
+  choosing how it is protonated - or, for a PDB ligand, the CCD's (*How it
+  is protonated*, above): a molecule with hydrogens is no skeleton.
 
 ## Risks
 

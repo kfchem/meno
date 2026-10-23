@@ -1,10 +1,10 @@
 import {
   exists,
   readTextFile,
-  writeTextFile,
   BaseDirectory,
   mkdir,
 } from "@tauri-apps/plugin-fs";
+import { writeAppFile } from "./io/writeDocument";
 import { filesSetUp, pixiSetUp, uvSetUp, type SetUpReach } from "./plugins/setUpSources";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -60,6 +60,12 @@ export async function pluginFilesFolder(plugin: PythonPlugin): Promise<string | 
 /** A size, for people: gigabytes to a tenth, else megabytes. */
 export const sizeOf = (bytes: number) => (bytes >= 1e9 ? `${(bytes / 1e9).toFixed(1)} GB` : `${Math.max(1, Math.round(bytes / 1e6))} MB`);
 
+/** What a plugin's own program is under, as asking to set it up says it - beside its files' licences - where its manifest says. */
+const licenceOf = (plugin: Pick<PythonPlugin, "name" | "licence">) => (plugin.licence ? ` ${plugin.name} is under the ${plugin.licence} licence.` : "");
+
+/** About how much room its environment takes once set up, where its manifest says (`setUpBytes`, as measured). */
+const roomOf = (plugin: Pick<PythonPlugin, "setUpBytes">) => (plugin.setUpBytes ? ` (about ${sizeOf(plugin.setUpBytes)} once set up)` : "");
+
 /** What a plugin downloads besides its packages, as asking to set it up says it - each file, under its licence, and its size - and where from. */
 function besides(plugin: PythonPlugin | undefined): { need: string } & SetUpReach {
   const files = setUpFiles(plugin);
@@ -101,14 +107,9 @@ async function ensureDir(rel: string, baseDir: BaseDirectory) {
   }
 }
 
-async function writeJsonSafe(
-  rel: string,
-  data: unknown,
-  baseDir: BaseDirectory
-) {
-  const parent = rel.split("/").slice(0, -1).join("/");
-  if (parent) await ensureDir(parent, baseDir);
-  await writeTextFile(rel, JSON.stringify(data, null, 2), { baseDir });
+/** `data` as JSON at `rel` in Meno's local data folder, whole or not at all: a note cut short would have an environment set up again. */
+async function writeJsonSafe(rel: string, data: unknown) {
+  await writeAppFile(rel, JSON.stringify(data, null, 2), "local");
 }
 
 type PyEnvInfo = {
@@ -245,7 +246,7 @@ export async function ensurePyEnv(
     opts
   );
   // (set up, with the files besides the user was told of)
-  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) }, BaseDirectory.AppLocalData);
+  const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) });
   const extra = besides(pluginOf(profile));
   // (who downloads what: the packages' maker, and Meno the plugin's files besides)
   const downloads = (maker: string) => `${maker}, fetched the first time it is needed, downloads ${extra.need ? "the packages, and Meno the rest" : "them"} - once`;
@@ -263,7 +264,7 @@ export async function ensurePyEnv(
       title: consentTitle(plugin),
       again: untold,
       detail:
-        `${plugin.description} It runs in a Python of its own, ` +
+        `${plugin.description}${licenceOf(plugin)} It runs in a Python of its own, ` +
         `with the ${download.packages} packages it needs` +
         (mb ? ` (about ${mb} MB)` : "") +
         `, in its data folder${extra.need}. ${downloads("pixi")}, ` +
@@ -288,10 +289,10 @@ export async function ensurePyEnv(
       title: consentTitle(plugin),
       again: untold,
       detail:
-        `${plugin.description} It runs in a Python ${info.pythonVersion} of its own, ` +
+        `${plugin.description}${licenceOf(plugin)} It runs in a Python ${info.pythonVersion} of its own, ` +
         // (a plugin that needs Python alone: no packages to fetch)
         (packages
-          ? `with the ${packages} packages it needs, in its data folder${extra.need}. ` +
+          ? `with the ${packages} packages it needs${roomOf(plugin)}, in its data folder${extra.need}. ` +
             `${downloads("Astral's uv")}` +
             (hashed ? ", every file checked against the fingerprint Meno carries for it:" : ":")
           : extra.need

@@ -1,9 +1,11 @@
 import type { TabKind } from "../../lib/core";
 import { cataloguedKinds, kindOf, kinds, MARK_REACH, textKinds, type Kind } from "../../lib/io/kinds";
 import { opensAsText } from "../features/Workspace/utils/io";
+import { keptNamedIn } from "../features/Workspace/utils/workspace";
 import { holdOutputsOf } from "../../lib/calc/asks";
 import { holdPdfsOf } from "../../lib/pdf/reader";
 import { holdPicturesOf } from "../../lib/picture/held";
+import { holdJobFilesOf, type OpenedFrom } from "../features/Workspace/workflow/keptJobs";
 import { isMenoFile, menoKindOf, NotMenoFile, readMenoFile, readStyleFile } from "../../lib/doc/menoFile";
 import { readStyleFileText, type StyleFile } from "../../lib/chem/styleFile";
 import { useNotices } from "../notices";
@@ -61,17 +63,24 @@ export function stylesOfFile(bytes: Uint8Array): OpenedStyles | null {
  * A workspace file's workspace, its JSON - where `bytes` are one - with the
  * outputs it keeps held for the session, each read from it when wanted
  * (lib/calc/asks). None where they are no workspace file; throws, saying
- * why, where they are one that does not read.
+ * why, where they are one that does not read. Its list of the files it
+ * keeps damaged or gone, they are had as its workspace names them, and the
+ * list is said to be damaged, the file by its `name`. Where it was opened
+ * from (`from`), its steps' job files are read from there as it is saved
+ * again, while it is as it was (workflow/keptJobs).
  */
-export function workspaceOfFile(bytes: Uint8Array): string | null {
+export function workspaceOfFile(bytes: Uint8Array, name = "This workspace", from?: OpenedFrom): string | null {
   if (!isMenoFile(bytes)) return null;
   // (a Meno file says what it holds: a workspace where it does not - a kind this Meno does not know, said so)
   if (menoKindOf(bytes) !== "workspace") return null;
-  const file = readMenoFile(bytes);
+  const file = readMenoFile(bytes, keptNamedIn);
+  if (file.listDamaged) useNotices.getState().show({ id: `files-list-damaged:${name}`, title: "Part of a workspace is damaged", text: `${name}: its list of the files it keeps is damaged. Its files were opened without it.` });
   holdOutputsOf(file);
   // (a PDF it keeps that cannot be held would be blank: said, by its name)
   holdPdfsOf(file, (name, why) => useNotices.getState().show({ id: `pdf-not-held:${name}`, title: "A PDF could not be opened", text: `${name}, in this workspace: ${why}.` }));
   holdPicturesOf(file);
+  // (its steps' jobs' files: written back out only when wanted, where their folders are not on this computer)
+  holdJobFilesOf(file, from);
   return file.workspace;
 }
 

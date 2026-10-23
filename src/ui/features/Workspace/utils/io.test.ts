@@ -1,13 +1,21 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { registerKinds } from "../../../../lib/io/kinds";
 import { MANIFESTS } from "../../../../lib/plugins/known";
-import { calcResult, editorModelOf, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
+import { calcResult, editorModelOf, H_CHOSEN_SAID, openedPlace, opensAsText, processFileContent, recordsLeftOutSaid, xyzComments } from "./io";
 import { useNotices } from "../../../notices";
 import sampleSdf from "../../../../samples/cholesterol.sdf?raw";
 import sampleRxn from "../../../../samples/esterification.rxn?raw";
 import sampleXyz from "../../../../samples/cholesterol.xyz?raw";
 import samplePdb from "../../../../samples/cholesterol.pdb?raw";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import type { Molecule3D } from "../store/types";
+import type { Unmarked } from "../../../../lib/calc/output";
+import { entriesIn, setEntries } from "../workflow/entries";
+import { notesOf, solidOf } from "./molecule3d";
+import { readCarried3D } from "./copyPaste";
+import { STYLE_3D } from "../../../../lib/chem/style3d";
+import { readMarks } from "./figures";
+import { implicitHydrogens } from "../../../../lib/chem/molecule";
 
 // (XYZ energies are read by the patterns of the plugins added: those of the programs that write them)
 beforeAll(() => registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id))));
@@ -175,6 +183,27 @@ describe("files of 3D structures", () => {
     expect(r.molecules3d![0].framesLeftOut).toBe(1);
   });
 
+  it("open an optimisation's steps, as a plugin knows its program's file of them - renamed too: no frame an entry, convergence not stated in it", async () => {
+    // (xtb 6.7.1 writes an optimisation's steps to xtbopt.log, ORCA 6.1.1 to <name>_trj.xyz, each frame's comment line
+    // as below: which converged is said in their outputs, not there)
+    registerKinds(MANIFESTS.filter((m) => ["xtb", "crest", "orca"].includes(m.id)));
+    const water = (comment: string, x: number) => `3\n${comment}\nO 0 0 0\nH ${x} 0 0\nH -0.24 0.93 0\n`;
+    const xtb = water(" energy: -5.068684795763 gnorm: 0.065230900969 xtb: 6.7.1 (edcfbbe)", 0.99) + water(" energy: -5.070539 gnorm: 0.000312 xtb: 6.7.1 (edcfbbe)", 0.96);
+    const orca = water("Coordinates from ORCA-job opt E -76.02", 0.99) + water("Coordinates from ORCA-job opt E -76.03", 0.96);
+    // (ORCA's relaxed scan's points, each converged, and a conformer search's: ensembles)
+    const scan = water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 1 E -113.549190716119", 0.99) + ">\n" + water("Coordinates from ORCA-job oscan Relaxed Surface Scan Step 2 E -113.545986", 0.96);
+    const crest = water("        -5.07053900", 0.96) + water("        -5.06871200", 0.99);
+    const opened = async (name: string, text: string) => (await processFileContent(name, text)).molecules3d![0];
+    for (const [name, text] of [["xtbopt.log", xtb], ["opt.log", xtb], ["water_xtbopt.log", xtb], ["opt_trj.xyz", orca], ["OPT_TRJ.XYZ", crest], ["steps.xyz", orca]]) {
+      const m = await opened(name, text);
+      expect([m.entryFrames, m.noEntryWhy, entriesIn(m)], name).toEqual([[], "unstated", 0]);
+    }
+    for (const [name, text] of [["oscan.allxyz", scan], ["crest_conformers.xyz", crest], ["ensemble.xyz", crest], ["xtbopt.xyz", water(" energy: -5.0705 gnorm: 0.0003 xtb: 6.7.1", 0.96)]]) {
+      const m = await opened(name, text);
+      expect([m.entryFrames, entriesIn(m)], name).toEqual([undefined, name === "xtbopt.xyz" ? 1 : 2]);
+    }
+  });
+
   it("keep each frame's energy, where a calculation reader finds one", async () => {
     const frame = (comment: string, x: number) => `2\n${comment}\nH 0 0 0\nH ${x} 0 0\n`;
     const crest = await processFileContent("crest_conformers.xyz", frame("  -1.1700", 0.74) + frame("  -1.1650", 0.8));
@@ -205,6 +234,26 @@ describe("files of 3D structures", () => {
     const r = await processFileContent("water.mol", water("2D", [0, 0, 0]));
     expect(r.molecules3d).toBeUndefined();
     expect(r.model.atoms).toHaveLength(3);
+  });
+});
+
+describe("an aromatic ring whose file does not say which nitrogen carries its H", () => {
+  // (imidazole, its five bonds aromatic - MOL bond type 4 - and no H stated)
+  const imidazole = "imidazole\n  test\n\n  5  5  0  0  0  0  0  0  0  0999 V2000\n    0.0000    0.8500    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.8084    0.2627    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n   -0.4996   -0.6877    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n    0.4996   -0.6877    0.0000 N   0  0  0  0  0  0  0  0  0  0  0  0\n    0.8084    0.2627    0.0000 C   0  0  0  0  0  0  0  0  0  0  0  0\n  1  2  4  0\n  2  3  4  0\n  3  4  4  0\n  4  5  4  0\n  5  1  4  0\nM  END";
+
+  it("says so over the nitrogen it is drawn on, while that atom is as read", async () => {
+    // (as the canvas takes a file it opens: useStructureEvents)
+    const r = { model: editorModelOf((await processFileContent("imidazole.mol", imidazole)).model) };
+    const { atoms } = readMarks(r.model);
+    const said = [...atoms].map(([id, words]) => [r.model.atoms.find((a) => a.id === id)!.el, words]);
+    expect(said).toEqual([["N", H_CHOSEN_SAID]]);
+    // (its H drawn on it: its two ring bonds single)
+    const id = atoms.keys().next().value!;
+    const sum = r.model.bonds.filter((b) => b.a === id || b.b === id).reduce((n, b) => n + b.order, 0);
+    expect(implicitHydrogens("N", sum)).toBe(1);
+    // (made another atom, or its bonds changed: no longer said)
+    const edited = { ...r.model, atoms: r.model.atoms.map((a) => (a.id === id ? { ...a, el: "C" } : a)) };
+    expect(readMarks(edited).atoms.size).toBe(0);
   });
 });
 
@@ -255,6 +304,141 @@ describe("a calculation's output, as a reader read it", () => {
     // (a job that gives no geometry stands as none; a file of one job, as before)
     expect(calcResult({ ...sp, jobs: [{ ...opt, frames: [] }, sp] }, ["cclib"], "x.log").molecules3d).toHaveLength(1);
     expect(calcResult(out, ["cclib"], "one.out").molecules3d![0].name).toBe("one.out");
+  });
+
+  describe("of an optimisation or a relaxed scan, the geometries it converged on are its entries", () => {
+    // (methanol, HF/STO-3G, Gaussian 16: its H-C-O-H dihedral scanned over three points - 21 geometries, the
+    // four it converged on marked as cclib marks them; their energies as the output's scan summary gives them)
+    const SCAN = [
+      -113.543862, -113.545317, -113.545941, -113.545976, -113.545985, -113.493398, -113.535107, -113.548734, -113.549175, -113.54919, -113.549191,
+      -113.488332, -113.529495, -113.545796, -113.545969, -113.545986, -113.484845, -113.533240, -113.548998, -113.549185, -113.549193,
+    ];
+    const methanol = (k: number) => [0, 0, 0, 0, 0, 1.42, 1.03, 0, -0.36, -0.515, 0.892, -0.36, -0.515, -0.892, -0.36, 0.93 - 0.01 * k, 0.01 * k, 1.74];
+    const output = (n: number, converged: boolean[], energies = SCAN.slice(0, n)) => ({
+      program: "Gaussian",
+      method: "HF",
+      atoms: ["C", "O", "H", "H", "H", "H"],
+      frames: Array.from({ length: n }, (_, k) => methanol(k)),
+      energies,
+      converged,
+    });
+    const entries = (m: Omit<Molecule3D, "id" | "at">) => setEntries([{ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D], "conformers");
+
+    it("a relaxed scan: its four points, each with the energy it converged at - not its 21 steps", () => {
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      expect(m.frames).toHaveLength(20);
+      expect(m.entryFrames).toEqual([4, 10, 15, 20]);
+      expect(entriesIn(m)).toBe(4);
+      expect(entries(m).map((e) => e.energy)).toEqual([-113.545985, -113.549191, -113.545986, -113.549193]);
+      expect(m.notConverged).toBeUndefined();
+    });
+
+    it("an optimisation: its last geometry alone", () => {
+      const [m] = calcResult(output(5, [false, false, false, false, true]), ["cclib"], "opt.log").molecules3d!;
+      expect(entries(m).map((e) => [e.frame, e.energy])).toEqual([[4, SCAN[4]]]);
+    });
+
+    it("one that never converged: no entry - no geometry that is no minimum weighed - its frames kept, said not to have", () => {
+      const [m] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      expect(m.notConverged).toBe(true);
+      expect(entries(m)).toEqual([]);
+      expect(m.frames).toHaveLength(1);
+      expect(notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary")).toContain("Not converged");
+    });
+
+    it("says how many of its frames are entries, and that the rest are steps on the way", () => {
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const molecule = { ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D;
+      // (and, as any opened output's, that its bond orders are not known)
+      expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "4 of 21 frames are entries (converged points)"]);
+    });
+
+    it("a scan stopped before its last point converged: the points it converged on - that last point a frame, no entry, said not to have", () => {
+      // (the same Gaussian scan's output cut short in its third point - 13 geometries, points 1 and 2 converged)
+      const converged = SCAN.slice(0, 13).map((_, k) => [4, 10].includes(k));
+      const [m] = calcResult(output(13, converged), ["cclib"], "scan-cut.log").molecules3d!;
+      expect(m.entryFrames).toEqual([4, 10]);
+      expect(entries(m).map((e) => e.energy)).toEqual([-113.545985, -113.549191]);
+      expect(m.frames).toHaveLength(12);
+      expect(m.notConverged).toBe(true);
+      const molecule = { ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D;
+      expect(notesOf(molecule, solidOf(molecule, STYLE_3D), "primary")).toEqual(["Bond orders unknown", "2 of 13 frames are entries (converged points)", "Last point not converged"]);
+    });
+
+    it("an optimisation stopped at its first geometry says it did not converge, as one stopped at its second does", () => {
+      const [one] = calcResult(output(1, [false]), ["cclib"], "opt1.log").molecules3d!;
+      const [two] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      const notes = (m: typeof one) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
+      expect(notes(one)).toEqual(["Bond orders unknown", "No frame is an entry (none converged)", "Not converged"]);
+      expect(notes(two)).toEqual(["Bond orders unknown", "No frame is an entry (none converged)", "Not converged"]);
+      // (and so they stay, the workspace saved and opened again: none an entry)
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...two, at: { x: 0, y: 0 } })))!;
+      expect(back.entryFrames).toEqual([]);
+      expect(entriesIn(back)).toBe(0);
+    });
+
+    const notes = (m: Omit<Molecule3D, "id" | "at">) => notesOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, solidOf({ ...m, id: 1, at: { x: 0, y: 0 } } as Molecule3D, STYLE_3D), "primary");
+
+    it("every geometry, where the reader marks none; none, where its marks are not one a geometry - convergence not stated, never every one", () => {
+      const [plain] = calcResult({ ...output(3, []), converged: undefined }, ["cclib"], "x.out").molecules3d!;
+      expect(entriesIn(plain)).toBe(3);
+      const [odd] = calcResult(output(3, [false, true]), ["cclib"], "x.out").molecules3d!;
+      expect([odd.entryFrames, odd.noEntryWhy, odd.notConverged]).toEqual([[], "unstated", undefined]);
+      expect(notes(odd)).toEqual(["Bond orders unknown", "No frame is an entry (convergence not stated in this file)"]);
+    });
+
+    it("a geometry that does not read, between others: left out with its own mark - each other kept by its own", () => {
+      // (the scan, its eighth geometry cut short: 20 read, the four points still the four, a place earlier after it)
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const o = output(21, converged);
+      const [m] = calcResult({ ...o, frames: o.frames.map((f, k) => (k === 7 ? f.slice(0, 10) : f)) }, ["cclib"], "scan.log").molecules3d!;
+      expect(m.frames).toHaveLength(19);
+      expect(m.entryFrames).toEqual([4, 9, 14, 19]);
+      expect(entriesIn(m)).toBe(4);
+      expect(m.notConverged).toBeUndefined();
+    });
+
+    it("none, where the reader says why none is: a run that did not end as it should, a path's points, convergence not stated", () => {
+      const why = (unmarked: Unmarked, n = 3) => calcResult({ ...output(n, Array(n).fill(false)), unmarked }, ["cclib"], "x.log").molecules3d![0];
+      expect(notes(why("error"))).toEqual(["Bond orders unknown", "No frame is an entry (the run ended with an error)"]);
+      expect(notes(why("cut"))).toEqual(["Bond orders unknown", "No frame is an entry (the run did not come to its end)"]);
+      expect(notes(why("path"))).toEqual(["Bond orders unknown", "No frame is an entry (points of a scan or a reaction path)"]);
+      expect(notes(why("unstated"))).toEqual(["Bond orders unknown", "No frame is an entry (convergence not stated in this file)"]);
+      // (a single point that ended with an error: no entry either)
+      const one = why("error", 1);
+      expect([one.entryFrames, entriesIn(one)]).toEqual([[], 0]);
+      expect(notes(one)).toEqual(["Bond orders unknown", "No frame is an entry (the run ended with an error)"]);
+      // (and so they stay, saved and opened again)
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...why("cut"), at: { x: 0, y: 0 } })))!;
+      expect([back.entryFrames, back.noEntryWhy]).toEqual([[], "cut"]);
+    });
+
+    it("none, where which are entries does not read as the workspace is opened again - never every one", () => {
+      const [m] = calcResult(output(5, [false, false, false, false, true]), ["cclib"], "opt.log").molecules3d!;
+      for (const bad of [[9], [2, 1], "4", [0.5], null]) {
+        const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: bad, at: { x: 0, y: 0 } })))!;
+        expect([back.entryFrames, back.noEntryWhy, entriesIn(back)], JSON.stringify(bad)).toEqual([[], "unread", 0]);
+      }
+      expect(notes(readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [9], at: { x: 0, y: 0 } })))!)).toContain("No frame is an entry (which are could not be read)");
+      // (a frame that does not read, left out: each entry kept by its place among those kept, the one left out with it)
+      const o = calcResult(output(21, SCAN.map((_, k) => [4, 10, 15, 20].includes(k))), ["cclib"], "scan.log").molecules3d![0];
+      const holed = { ...o, frames: o.frames!.map((f, k) => (k === 9 ? [0] : k === 2 ? "x" : f)), at: { x: 0, y: 0 } };
+      expect(readCarried3D(JSON.parse(JSON.stringify(holed)))!.entryFrames).toEqual([3, 13, 18]);
+      // (a why that does not read is not said; none is still none)
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [], noEntryWhy: "lost", at: { x: 0, y: 0 } })))!;
+      expect([back.entryFrames, back.noEntryWhy]).toEqual([[], undefined]);
+    });
+
+    it("kept as the workspace is saved and opened again", () => {
+      const converged = SCAN.map((_, k) => [4, 10, 15, 20].includes(k));
+      const [m] = calcResult(output(21, converged), ["cclib"], "scan.log").molecules3d!;
+      const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, at: { x: 0, y: 0 } })))!;
+      expect(back.entryFrames).toEqual([4, 10, 15, 20]);
+      const [n] = calcResult(output(2, [false, false]), ["cclib"], "opt2.log").molecules3d!;
+      expect(readCarried3D(JSON.parse(JSON.stringify({ ...n, at: { x: 0, y: 0 } })))!.notConverged).toBe(true);
+    });
   });
 
   it("keeps no energies that are not one a frame", () => {

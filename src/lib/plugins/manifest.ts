@@ -28,7 +28,7 @@
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, SET_KINDS, type SetKind, type StepKind } from "./steps";
+import { isStepKind, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
 import { GUIDE_EVENTS, GUIDE_PLACES, type GuideStep, type Suggestion } from "./guide";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
@@ -101,6 +101,15 @@ export type WriteDecl = {
  */
 export const ENERGY_UNITS = ["hartree", "eV", "kcal/mol", "kJ/mol"] as const;
 export type XyzEnergyDecl = { id: string; pattern: string; unit: (typeof ENERGY_UNITS)[number] };
+/**
+ * An XYZ file a plugin's program writes whose frames are an optimisation's
+ * steps, which of them converged not said in it (docs/FILE-IO.md): its id;
+ * its file's name - `*` any run of characters - as the program's
+ * documentation or its own output names it; and what each of its frames'
+ * comment lines says, a pattern - so that the file is known renamed too.
+ * One or both.
+ */
+export type XyzStepsDecl = { id: string; file?: string; comment?: string };
 
 /**
  * A look a render plugin declares (docs/RENDER.md, docs/PLUGINS.md): its id, what the card calls it, a short description,
@@ -156,7 +165,7 @@ export type RoleDecl = {
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: SetKind[]; files?: string[] };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[] };
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -260,6 +269,8 @@ export type Manifest = {
   homepage: string;
   /** What makes its environment; none, where it runs nothing. */
   environment?: Maker;
+  /** About how much room its environment takes once set up, in bytes, as measured - said as asking to set it up says what it fetches; unsaid, where none was measured. */
+  setUpBytes?: number;
   /** Every kind of file it knows. */
   kinds: KindDecl[];
   /** The kinds it reads, by id: its own (`kinds`), or Meno's. */
@@ -268,6 +279,8 @@ export type Manifest = {
   writes: WriteDecl[];
   /** How the XYZ files its program writes carry a frame's energy on a comment line, from that program's documentation (docs/FILE-IO.md). */
   xyzEnergies: XyzEnergyDecl[];
+  /** The XYZ files its program writes whose frames are an optimisation's steps, none of them said to be converged: none of them an entry. */
+  xyzSteps: XyzStepsDecl[];
   /** The roles it fills besides reading and writing files. */
   roles: RoleDecl[];
   /** The kinds of step it fills, each once. */
@@ -348,6 +361,42 @@ function kindOf(v: unknown): KindDecl | null {
 }
 
 /** A program's name, as a job is given it: a name, not a path. */
+/**
+ * The XYZ files a plugin says are an optimisation's steps: an id, and a
+ * file's name of letters, digits, `.`, `_`, `-` and `*`, or a pattern of
+ * its comment lines that compiles, or both - what is not that is left out.
+ */
+function acceptXyzSteps(v: unknown): XyzStepsDecl[] {
+  const out: XyzStepsDecl[] = [];
+  for (const raw of list(v)) {
+    const r = raw as Record<string, unknown> | null;
+    if (typeof r?.id !== "string" || !/^[a-z][a-z0-9-]{0,39}$/.test(r.id)) continue;
+    const file = typeof r.file === "string" && /^[A-Za-z0-9._*-]{1,80}$/.test(r.file) && /[A-Za-z0-9]/.test(r.file) ? r.file : undefined;
+    let comment = typeof r.comment === "string" && r.comment.length <= 200 ? r.comment : undefined;
+    try {
+      if (comment) new RegExp(comment);
+    } catch {
+      comment = undefined;
+    }
+    if (!file && !comment) continue;
+    out.push({ id: r.id, ...(file ? { file } : {}), ...(comment ? { comment } : {}) });
+    if (out.length >= 8) break;
+  }
+  return out;
+}
+
+/**
+ * Whether an XYZ file of more than one frame is the one a plugin's
+ * `xyzSteps` names: by its name - `*` any run of characters, the rest as it
+ * is, any case - or by its frames' comment lines, each one as the pattern
+ * says.
+ */
+export function xyzStepsFile(name: string, comments: readonly string[], decl: XyzStepsDecl): boolean {
+  if (decl.file && new RegExp(`^${decl.file.split("*").map((p) => p.replace(/\./g, "\\.")).join(".*")}$`, "i").test(name)) return true;
+  if (!decl.comment || comments.length < 2) return false;
+  const pattern = new RegExp(decl.comment);
+  return comments.every((c) => pattern.test(c));
+}
 /** The ways a plugin says its program writes an XYZ frame's energy: an id, and a pattern that compiles and has one capture group - what is not that is left out. */
 function acceptXyzEnergies(v: unknown): XyzEnergyDecl[] {
   const out: XyzEnergyDecl[] = [];
@@ -454,7 +503,8 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const s = v as Record<string, unknown> | null;
   const kinds = list(s?.kinds).filter((k): k is StepKind => typeof k === "string" && isStepKind(k));
   const programs = [...new Set(list(s?.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
-  const takes = Array.isArray(s?.takes) ? SET_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
+  // (of what flows: a kind of set, a table, a number - nothing a manifest makes up)
+  const takes = Array.isArray(s?.takes) ? VALUE_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)
@@ -742,10 +792,12 @@ export function acceptManifest(raw: unknown): Manifest | null {
     licence: text(m.licence, 60) ?? "",
     homepage: text(m.homepage, 200) ?? "",
     ...(environment ? { environment } : {}),
+    ...(Number.isInteger(m.setUpBytes) && (m.setUpBytes as number) > 0 && (m.setUpBytes as number) <= DOWNLOAD_MOST ? { setUpBytes: m.setUpBytes as number } : {}),
     kinds,
     reads: readable,
     writes,
     xyzEnergies: acceptXyzEnergies(m.xyzEnergies),
+    xyzSteps: acceptXyzSteps(m.xyzSteps),
     roles,
     steps,
     systems,

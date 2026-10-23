@@ -46,7 +46,7 @@ built* below.
 | **Office re-edit** (Windows OLE: Word or PowerPoint opens Meno) | always a record; named `office.meno` to reach it (`App.tsx`) | `readRecord` | a tab linked to the object |
 | **Calculation output**, through Open or a drop | `outputKindOf` (`lib/calc/catalog.ts`) - by content only, and only once `detectFormat` has found no structure format | every reader added that reads the kind (`readOutput`, `lib/calc/read.ts`) | a molecule in 3D with what the calculation found |
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
-| **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved, brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
+| **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved - its one true path, however the path it came by was written (*One file, one tab*) - brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
 | **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
 | **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page |
 
@@ -57,11 +57,11 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`) |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a tenth over, or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); a file a plugin knows as an optimisation's steps (`xyzSteps`: by its name - xtb's `xtbopt.log`, ORCA's `*_trj.xyz` - or, renamed, by its frames' comment lines) gives no entry, "No frame is an entry (convergence not stated in this file)" (docs/WORKFLOWS.md); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
-| PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`) | wwPDB Format v3.3; see *As step 7 was built* |
+| PDB | `readPdb` (`lib/chem/pdb.ts`) via `readStructures`, in Meno's worker: every atom, MODELs as frames, bonds from CONECT and distances | Export: molecules in 3D only (`writePdb`); what the format cannot hold - a mass number but hydrogen's D and T, a charge past 9 either way - is left out, and the Export card says so before it is written, with how many atoms lose each (`pdbLeavesOut`, 2026-10-22) | wwPDB Format v3.3; see *As step 7 was built* |
 | KET | not read | never | Open does not offer it; one dropped says "not supported yet" |
 
 ### Coordinates in a text
@@ -173,11 +173,17 @@ finds is kept as its own (`combine`); Meno checks every answer (`checked`,
 
 | Way out | Written by, where | Kinds | Carries |
 | --- | --- | --- | --- |
-| **Save, Save As** (`fileActions.ts`) | main thread, then the fs plugin | `.meno` only | everything on the page, with the files it keeps |
+| **Save, Save As** (`fileActions.ts`) | main thread, then Meno's writer of documents (`writeDocument`, `src-tauri/src/savefile.rs`) | `.meno` only | everything on the page, with the files it keeps |
 | **Export…** (the selection's menu; `fileActions.ts`, `lib/io/writers.ts`) | main thread, or the plugin that writes the kind | MOL, SDF, RXN, PDB, XYZ and SVG by Meno; for molecules in 3D, what the added plugins write | the selection: the drawing; SDF each molecule in 3D at the frame shown, or every frame a record; PDB the molecules in 3D alone; XYZ the molecules in 3D alone, their atoms only, a block a frame; SVG the page as drawn, molecules in 3D as a picture, no record |
 | **Copy, Cut** (`clipboardActions.ts`) | TS makes each flavour, Rust puts them on the clipboard (`clipboard.rs`) | Mac: the record, MOL, RXN, GVML (with EMF), PNG. Windows: the record, MDLCT and MOL, RXN, GVML, PNG, EMF, DIB, or an OLE object in place of GVML and PNG | the record carries molecules in 3D and their results; a surface promised stays a promise |
-| **Copy as SMILES** | RDKit, then the clipboard as text | SMILES | the selection's structure |
+| **Copy as SMILES** | RDKit, then the clipboard as text | SMILES; a reaction SMILES, "reactants>agents>products", where the selection shows one reaction - its molecules in their roles as an RXN file has them (`reactionForSmiles`, the worker's `rxn_to_smiles`) - and refused, saying why, where it shows more than one arrow or nothing on one side of it: never its molecules as one mixture (2026-10-22) | the selection's structure |
 | **Office live link** (Windows) | TS, then Rust `ole_update` | the record and EMF in the object | as `.meno` does, the surface shown included |
+
+Every file a chemist chooses where to put - a workspace saved, an export,
+a text, a style, a procedure, a picture or film, a PDF - is written by one
+writer, whole or not at all (*Save and Export*, *A document is written
+whole or not at all*). Meno's own files, kept in its folders - its
+settings, its environments' notes - are not.
 
 Never written: PNG or EMF as files, anything printed or dragged out.
 Plugins write nothing that leaves them (a temporary copy of the output,
@@ -369,7 +375,16 @@ PLUGINS.md's contract, with three requests for files:
     the line of what the calculation was ("job 1 of 2, optimisation").
     The answer's own fields are its last job's. A route run in steps -
     Gaussian's Opt Freq - is one job (the maintainer, 2026-10-13;
-    PLUGINS.md, *The contract*).
+    PLUGINS.md, *The contract*). An ORCA job the program went on from to
+    the next came to its end: ORCA says it once, at the end of the file,
+    and each job before the last was said, until 2026-10-22, not to have
+    come to its end. Gaussian's Link1 jobs each say their own end, and are
+    held to it: one without it did not come to its end;
+  - **`converged`**, of an optimisation's or a relaxed scan's geometries,
+    each one's being one the run found converged; and **`unmarked`**,
+    where all are false for a reason of their own: `error`, `cut`,
+    `path`, `unstated` (docs/WORKFLOWS.md, *Compound sets and conformer
+    sets*).
 - **`ask {kind, key, name, text}`** gives a promise's value.
 - **`write {kind, name, molecules, options}`** gives the file's content
   (`{text}`); Meno writes it where the chemist chose.
@@ -545,6 +560,125 @@ How these behave:
   2 - `cholesterol-2.pdb`.
 - **Copy stays as it is**: the record and the clipboard's flavours, not
   Export. The SMILES panel copies through the same clipboard as the menu.
+- **A document is written whole or not at all** (2026-10-21; `writeDocument`,
+  `lib/io/writeDocument.ts`, and `write_document`, `src-tauri/src/savefile.rs`).
+  Every file the chemist chose where to put - Save, Save As, Export, a
+  text exported, a style, a procedure, a picture, a PDF - is written beside
+  where it goes first, under a hidden name of its own (`.work.meno.<id>.part`),
+  made to reach the disk, then put in its place in one step. A save that fails
+  part way - the disk full, the drive taken away - leaves the file that was
+  there byte for byte as it was, and nothing of its own beside it; the
+  failure is said. Meno stopped as it writes leaves the file as it was too,
+  its hidden copy perhaps beside it; the next save of that file takes away
+  such a copy left more than six hours before (`sweep_parts`): one can be as
+  large as the file.
+- **A workspace's file is never larger than Meno can open again** (#555).
+  Opening reads the whole file into the page, and the reader takes no ZIP64
+  (`lib/binary/zip.ts`), so a file of 4 GB or more would never open. On a
+  Mac (32 GB, macOS 26) workspace files of 0.5, 1, 1.5 and 2 GB all opened
+  (2026-10-22); a save of a `.meno` is held to half of that, 1 GB
+  (`MOST_WORKSPACE_FILE`, `src-tauri/src/keptjobs.rs`, and
+  `lib/doc/menoFile.ts`). Past it the save is refused before the new file
+  takes the old one's place, which is left as it was, and the failure says
+  how large it would have been. This holds whatever the workspace keeps:
+  before #555 nothing held its total, and several files of up to 1 GB each
+  could add up past it.
+  - The file keeps what it had besides its bytes - it is the chemist's too
+    - as far as the system lets it be kept: a new file takes the old one's
+    place, and would else have the folder's defaults. Its permissions; on
+    a Mac and Linux its owner and group, where the system lets the user
+    give them (the user's own file; another's group the user is in); on a
+    Mac its extended attributes - a Finder tag, where it was downloaded
+    from - and its access list (copyfile(3), `COPYFILE_XATTR` and
+    `COPYFILE_ACL`, and not `COPYFILE_STAT`: the file is new, and has its
+    own time of change). On Windows it is put in place by ReplaceFileW,
+    which keeps when the file was made, its short name, its object id, its
+    access list, its security attributes, its being kept encrypted or
+    compressed, and its other streams. Only the permissions failing fails
+    the save; one of the rest that cannot be kept - another user's file, a
+    file system that keeps none - is logged, and the new work saved, never
+    lost for it.
+  - What no save that puts a new file in place can keep: hard links. A
+    file with a second name elsewhere has the new bytes under the name
+    saved to; the other name still holds the bytes as they were. On Linux
+    a file's extended attributes and access list are not carried over. A
+    file whose access list forbids deleting it (on a Mac, `deny delete`)
+    cannot be saved over: it is left as it was, and the failure said.
+  - On Windows, a file held a moment by another program - an antivirus
+    looking into the new file, a cloud drive syncing the old one - is tried
+    again: five tries over a second (`ERROR_SHARING_VIOLATION`,
+    `ERROR_LOCK_VIOLATION`, and `ERROR_ACCESS_DENIED`, as Windows says of a
+    file open elsewhere without leave to delete it; whether the file may be
+    written at all was looked at before). That look - the file opened to
+    write it, and closed again - is tried again the same way while the file
+    is held by one that lets no one else open it, as a spreadsheet program
+    holds a file it saves (`ERROR_SHARING_VIOLATION`,
+    `ERROR_LOCK_VIOLATION`); a file that may not be written
+    (`ERROR_ACCESS_DENIED`, kept read-only) fails at once. ReplaceFileW is always given a
+    hidden name to keep the old file under until the new one is in place,
+    so the file is never gone: where the system leaves it under that name
+    (`ERROR_UNABLE_TO_MOVE_REPLACEMENT_2`), it is named as it was again,
+    and the save fails; where even that cannot be done, the failure says
+    what it is now named. Done, the hidden copy is taken away. Where the
+    access list cannot be merged - the user may not set it - the file is
+    still saved, as a plain rename would have saved it
+    (`REPLACEFILE_IGNORE_MERGE_ERRORS`, `REPLACEFILE_IGNORE_ACL_ERRORS`).
+  - Saved through a link, the file the link points at is written, and the
+    link stays a link.
+  - A file that could not have been written to in place - kept read-only, a
+    folder of that name - is not written over.
+  - It writes only where the page may write through the file system plugin:
+    a file picked in Open's or Save's dialog, dropped, or opened from outside
+    Meno (that plugin's scope; for a link, the file it points at). A path
+    that steps up (`..`) is refused, as the plugin refuses it.
+  - **Meno's own files are written the same way** - `settings.json`, its
+    environments' notes (`writeAppFile`, and `write_app_file`, which writes
+    only a path inside Meno's data folder or its local one: never a whole
+    path, one that steps up, or one a link leads out of the folder by), the
+    window's size and place, and how a conda-forge environment is activated
+    (`activation.json`). A settings file left half written would lose every
+    setting. Not so written, as nothing is lost by them: the logs, which
+    are added to; what is fetched and kept to be fetched no more (a PDF
+    held, the wwPDB's components, the tools that make environments, a
+    plugin's files), each written beside and put in place, and fetched
+    again where it does not read; a job's own files, made before the job is
+    named, and its state, written beside and put in place.
+- **Never over a file another tab holds** (2026-10-21; `writtenWhere`,
+  `fileActions.ts`, and `heldElsewhere`, `lib/doc/savers.ts`). A Save As
+  onto the file another tab's workspace is saved to - known by its one
+  true path, however it was written - would write it, and that tab's next
+  save would overwrite it unseen. It is refused, as a save's failure is
+  said, naming the tab as the tab bar does: "Save failed: that file is
+  open in the tab "aspirin.meno"; save there, or close it first." Nothing
+  is written. A tab saving to its own file, or to a file no tab holds, is
+  saved.
+- **One save at a time** (`lib/doc/saveTurns.ts`). Save or Save As asked for
+  while a save of the same workspace is under way waits for it, then runs
+  once - however many times it was asked for meanwhile - writing the
+  workspace as it is when it begins; one that fails does not stop the next.
+  Ctrl/Cmd+S held down saves once, as it is pressed. What changes while a
+  save writes is still unsaved after it, as before.
+- **One file, one tab** (2026-10-21; `true_path`, `src-tauri/src/truepath.rs`,
+  and `lib/io/truePath.ts`). A workspace is known by its file's one true
+  path: the path the file system itself has for it - every link followed,
+  no step up (`..`), each name in the case it is kept in (and, on a Mac, in
+  the form of its accents it is kept in), on Windows a long name for a
+  short 8.3 one, and written plainly (`C:\...`, `\\server\share\...`) where
+  that names the same file. So a file opened again through a path written
+  otherwise - in another case, where the file system takes no notice of
+  case, as Windows' and a Mac's as it comes do; through a link - brings
+  forward the tab that holds it, never a second tab whose saves and the
+  first one's overwrite each other (`tabHolding`, `lib/doc/savers.ts`).
+  - Every way a workspace file comes in is given it: opened from outside
+    Meno, dropped or pasted, in the app (`opened.rs`); picked in Open's
+    dialog, by the page (`openEachOnce`). A save writes where the dialog
+    said, then holds the file's one true path (`writtenWhere`,
+    `fileActions.ts`): a file not there yet has its folder's, with its name
+    as given.
+  - The file system plugin's scope takes the one true path of a file
+    picked, dropped or opened from outside as the file itself: it matches
+    a path by its own one true path, and holds a file allowed by its path
+    as given and by that.
 
 As this part of step 5 was built (#155, from main beside step 3):
 
@@ -613,7 +747,8 @@ work.meno (zip)
   mimetype          first, stored: application/vnd.kfchem.meno+zip
   workspace.json    stored: the workspace, the JSON `.meno` was before
   files.json        stored: each file kept - name, kind, media type, size
-  files/<sha256>    each file kept, as it was: text deflated, the rest stored
+  files/<sha256>    each file kept, as it was: text and a step's jobs' files
+                    deflated, the rest stored
 ```
 
 - **The workspace stays JSON, uncompressed.** Measured in Node before the
@@ -634,7 +769,8 @@ work.meno (zip)
 - **A calculation's output opened is kept in the workspace** (the
   maintainer: kept, and seen as needed). Saved, the workspace keeps every
   output its molecules were read from that is held this session - opened,
-  or kept in a workspace opened. Opened, a workspace holds what it keeps
+  or kept in a workspace opened - or can be read again, unchanged, where
+  it was. Opened, a workspace holds what it keeps
   for the session. A molecule's menu shows its output in the workspace's
   column of texts (*Show <name>*); where it is held nowhere, it is read
   again where it was, or else the system's dialog asks for it
@@ -659,7 +795,8 @@ work.meno (zip)
   place among `molecules3d`;
   docs/PDF.md, step 5) with the one its column showed (`textShown`). Where a
   text was opened from is not saved, as an output kept is not. A text the
-  file does not hold is left out as the workspace opens, and named. A PDF
+  file does not hold whole is named as the workspace opens, and kept as
+  one that could not be read (below, *A file kept, damaged*). A PDF
   read in the column keeps where it was read (`reading`, in its entry in
   `pdfs`), and `pdfShown` names the one the column showed, in place of
   `textShown` (docs/PDF.md, step 2). Words on the page taken out of a PDF
@@ -686,18 +823,158 @@ work.meno (zip)
 - **Written off the page.** The files kept are compressed in a worker of
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.
-- **Nothing is unpacked to the disk.** What the file says of its sizes is
-  held to limits before anything is inflated (`lib/doc/menoFile.ts`): its
-  workspace at most 256 MB, any one file kept 1 GB, and 10,000 files.
+- **Nothing is unpacked to the disk** - but a step's jobs' files, written
+  back out when *Show files* asks for them (*A step's jobs*, below). What
+  the file says of its sizes is held to limits before anything is inflated
+  (`lib/doc/menoFile.ts`): its workspace at most 256 MB, any one file kept
+  1 GB, and 10,000 files.
 - **Nothing is taken for more, or other, than the file says.** What it
   says of a part's size is not trusted to set room aside by - a few bytes
   may say a gigabyte: each part is inflated a little at a time, stopped as
   soon as it comes to more than it says, and taken only if it comes to
-  just that (`lib/binary/zip.ts`). A workspace that does not is said to be
-  damaged; a file kept that does not is not had. And each file kept - an
+  just that, and is what the CRC-32 the zip's central directory gives for
+  it says (`lib/binary/zip.ts`) - so that a byte changed on the disk after
+  the file was written, `"x":1` read as `"x":9`, is not taken for data.
+  Office's clip format is read the same way. And each file kept - an
   output, a text, a PDF or a picture alike - is taken only if its bytes
   are what its SHA-256 says, so that no file can pass for another held
   this session.
+- **A part it cannot open without, damaged, is said to be.** Its
+  workspace (`workspace.json`), what it says it holds (`meno.json`) or
+  what it is (`mimetype`) damaged, the file is not opened, and the part is
+  named: "Its workspace is damaged, and cannot be read.", "It is a Meno
+  file damaged where it says what it holds, and cannot be read." A style
+  file whose styles are damaged likewise: "It is a style file whose styles
+  are damaged, and cannot be read." (`DamagedMenoFile`, the part named,
+  so that it can be told from a file that is no Meno file at all.)
+- **A file kept, damaged, is that file alone.** The workspace opens with
+  the rest; the one damaged - or not in the file at all - is named as it
+  opens: a text or a picture in the canvas's alert ("figure.png could not
+  be read from the workspace."), a PDF in a notice ("A PDF could not be
+  opened"), an output on its molecule when it is asked for. A text that
+  cannot be read stays in the workspace, after the texts in the column,
+  as what it is - its tab marked, and shown, "notes.txt could not be read
+  from the workspace." - never as a text: it has no words to edit, copy,
+  export, find or read, and nothing that takes the workspace's texts sees
+  it (`textsLost`, store/types `LostText`). Its sheet is not drawn on the
+  page; where it lay, what it was the text of and its place in the column
+  are kept in the workspace's JSON with its name and SHA-256. It goes when
+  the chemist closes its tab, or when a text of the same words comes (the
+  same SHA-256), which takes its place. A picture or a PDF stays where it
+  lay, crossed from corner to corner (`lib/doc/notHad`), until it is had
+  again - the same image or PDF put down afresh, or opened in another
+  workspace's file - or is taken away: never healed unseen, never let drop
+  unsaid. A PDF Meno holds whole already, where it keeps the PDFs it has
+  opened, is not damaged: it is drawn and saved from there, unmarked. Its
+  copy there is read back and checked by its SHA-256 before a save keeps
+  it, as every file kept is. A save names each of them it could not keep (below); one it
+  could - from the file saved to before, or a text's words held after all
+  - is in the file saved, and opens as itself from it, the session going
+  on with it marked as it was.
+- **A list of the files kept that is damaged, gone or not a list is not
+  believed.** The files are had without it, each by its SHA-256 and named
+  as the workspace's JSON names it - its molecules' outputs, its texts,
+  its PDFs and its pictures (`keptNamedIn`) - so that none is dropped by
+  the next save; a notice says so ("Part of a workspace is damaged": its
+  list of the files it keeps is damaged, and its files were opened without
+  it). A file the list leaves out is had the same way. A broken list alone
+  never keeps a workspace from opening.
+- **Save never drops a file still to be had, and names what it could not
+  keep.** A file the workspace has that is held nowhere this session - a
+  PDF Meno could not open (one locked with a password), a picture or an
+  output held nowhere, an output not where it was, a text that could not
+  be read - is taken from the
+  workspace file the canvas was last saved to, or opened from, where that
+  holds it whole (its CRC-32 and its SHA-256 as they should be): read
+  before the new file takes its place - by Save As too, which reads the
+  file saved to before - and only where something would else be left
+  out, through the same reach Open and Save gave Meno to that file. One to
+  be had from nowhere - damaged there too, not in it, or there being no
+  such file - does not keep the workspace from being saved, which would
+  put new work at risk: it is saved without it, and Save says so, where
+  its failures are said, until dismissed: "Saved, but figure.png is not in
+  the file: it could not be read." Where the file saved over is the one
+  it was last saved to, and that still has something of one in it,
+  damaged - or does not read as a workspace at all, so that what it holds
+  is not known - it may be the only copy, and partly to be had: it is first
+  kept beside the new one, as it is, and Save says so: "... The file as it
+  was is kept beside it as aspirin.meno.bak." (`lastHolds`, `workspaceFile`;
+  `write_document` asked with `keep-old`). Never over a copy kept before,
+  which may hold more: `aspirin.meno.bak`, else `aspirin.meno.1.bak`,
+  `aspirin.meno.2.bak` and on. The same file under a second name where the
+  file system has them (a hard link: everything it had with it), else a
+  copy of its bytes; where it cannot be kept, the file is not saved over,
+  and why is said. Kept once: the file saved then holds nothing of it, so
+  the next save keeps no copy. A save that can keep everything keeps no
+  copy. Its place in the
+  workspace's JSON is kept - by what it is known by, which the file then
+  does not hold, nor list - so that, opened again, it is named again,
+  never taken for a file that is there.
+- **What does not read is left out, counted and said - never silently.**
+  A workspace's file, or Meno's own record of a copy, can hold something
+  that does not read: damaged, or written by hand. Only an atom or a bond
+  of the drawing keeps the whole file from opening (and that is said).
+  Everything else that does not read is left out alone, and each kind is
+  counted as it is read (`utils/readNotes`). Opening says so with the
+  texts and pictures that could not be had: "1 picture, 1 step and 1 wire
+  in the file could not be read and were left out." A paste says the same
+  of the copy.
+  - **What is counted.** Whole records: arrows, plus signs, shapes, words,
+    electron-pushing arrows, molecules in 3D and their measurements,
+    pictures, slides, catalytic cycles, handwriting and its strokes, texts,
+    PDFs, their pages laid apart and the writing on them, sets, steps, wires,
+    a step's earlier runs and jobs under way. Ties whose other end is not
+    there: a set's member, a result set's step, a text's molecule and words
+    tied to an arrow. Within a molecule in 3D: a calculation's record, its
+    results and its notes of what could not be read, and each property of
+    a frame (`Molecule3D.properties`) that does not read. Within a
+    structure a step gave a set: each property of its record, and each
+    entry it was made from. Within a set holding a table:
+    a column that does not read (with its cells), a row not of the table's
+    width, and a cell not of its column's kind - none in its row, and named
+    among what the table says was not read; a table with no column that
+    reads, whole. A number a set holds that is no finite number in a unit
+    Meno knows; a field of what worked a value out, or where, that does
+    not read.
+  - **Marks of which frames failed, or are no minimum, fail closed.** A
+    molecule's marks of failure or of imaginary frequencies that do not
+    read - not one for each frame, or one that is neither a mark nor
+    none - are left out, and said ("marks of a molecule's failed
+    frames"). The molecule is kept whole - its geometry, frames, energies
+    and the rest - and marked so (`marksUnread`), which is saved with it.
+    Its frames are never taken for minima: *Populations* and *Energy
+    window* refuse it, saying "its frames' marks could not be read, so
+    whether it is a minimum is not known", its chip gives no shares, and
+    each of its entries says it as its status. The mark, like each frame's
+    failure and imaginary frequencies, goes with its frames wherever a
+    molecule is made of some of them - a step's results (*Duplicates*,
+    *Choose one*'s two exits, *Energy window*'s rest, *As conformers*) and
+    rows of a set's table taken out (workflow/entries `marksOf`).
+  - **Nothing more is left out than what does not read.** A conformer or
+    frame that does not read is left out with its own energy, number, share
+    and degeneracy. Every other frame keeps its own, and its results of
+    frames stay its own; a row of a list of a frame left out is of none.
+    It is counted with the frames its file left out (`framesLeftOut`). An
+    R/S or E/Z label of an atom or bond the molecule does not have is
+    left out alone, and so is a ligand atom of unknown orders that is not
+    one of its own. Before 2026-10-22, one damaged frame lost every
+    conformer's energy, and one label out of range lost every label.
+    The shares are kept as they were saved, of the whole ensemble.
+  - **What a file says by place is never taken for another.** A text's
+    molecule and a set's members are matched to the molecules that read by
+    their places in the file. The text and the PDF its column showed are
+    matched by their places among those listed. One that did not read is of
+    none, or shown none, and that is said. A PDF one of whose pages' sizes
+    does not read is left out whole, because every page after it would
+    otherwise be a place wrong.
+  - **Presentation is put right silently.** A colour, a width or an angle
+    out of range is read as its default, as before, and not counted.
+  - **Save says it, every time.** None of what was left out is in a file
+    saved since: "Saved, but 1 picture and 1 wire that could not be read
+    when it opened are not in the file." The first save over the file it
+    was opened from first keeps that file beside it, as above: "... The
+    file as it was is kept beside it as aspirin.meno.bak." It is the only
+    copy of what was left out.
 - **Saved within the same limits.** A workspace that would come to more
   than a workspace file is read with is not written: Save says so, with
   the sizes, rather than leave a file that would not open again.
@@ -706,6 +983,76 @@ work.meno (zip)
   nothing was added for it, and it is saved as a zip.
 - **The clipboard and Office keep the record**, JSON as before: a copy
   carries no file.
+
+### A step's jobs
+
+Decided by the maintainer (docs/WORKFLOWS-FOUNDATION.md, *Keeping*): the
+`.meno` is the whole record, raw outputs included, with a way not to keep
+them. A step's runs, the current one and those it keeps, keep their jobs'
+files in the `.meno`: the files the job was given, what its program wrote,
+and its logs. A set's *Don't keep in the file* leaves out what the set held
+(only how many, and their hash, are kept), never its step's job files. A
+step's *Don't keep raw outputs* leaves out what its program wrote, except
+the files Meno read back and the logs; each job's record names what was
+left out, with its size.
+
+- **What a job's files are.** Each job runs in a folder of its own in
+  Meno's local data folder (`jobs/<id>/`, `src-tauri/src/jobs.rs`). Kept
+  are its work folder (`work/...`: its input, as Meno wrote it, and all its
+  program wrote) and its logs (`log.txt`, what its program said;
+  `after.txt`, what the programs run after it said). Never kept: its
+  `job.json`, which holds its program's path and environment on this
+  computer, and `state.json`, Meno's own record of it. As a job is made,
+  Meno writes beside it which files it was given and which its plugin
+  reads back (`kept.json`, `src-tauri/src/keptjobs.rs`); a job made by an
+  earlier Meno has none, and all its work folder counts as raw output.
+- **Kept as they are, by their SHA-256**, each once however many jobs
+  hold it, deflated, as `files/<sha256>` with the rest. A run's record in
+  `workspace.json` lists, for each of its jobs (`steps[].ran.kept`, and
+  `steps[].runs[].kept`), every file kept - its name in the job's folder,
+  its SHA-256, size and what it is to the job (`input`, `read`, `log` or
+  `raw`) - and every file left out, with its name, its size and why (`raw`,
+  under *Don't keep raw outputs*; `not had`, where a job's folder is not on
+  this computer and the file it was opened from did not hold it).
+- **Written from the disk, not through the page.** A study's outputs come
+  to hundreds of megabytes. The page writes the workspace and lists the
+  jobs' files in `files.json`; Meno then adds their bytes from the jobs'
+  folders, each checked against its SHA-256 as it is read, to the file
+  being written, before it takes the place of the one saved before. A file
+  changed since it was listed fails the save, and the file saved before
+  stays as it was. Only a plain file inside its job's folder is read: never
+  through a link, whatever the page's list says.
+- **Kept again from the file it was opened from.** A workspace opened on
+  another computer has its jobs' files in the `.meno` it was opened from.
+  Saved again, Meno reads them from that file as the new one is written -
+  each checked against its SHA-256 - while that file is still as it was
+  opened (its size and when it was written). Where it has changed, or the
+  workspace was opened with no path, they are kept from what was held of
+  it as it was opened, through the page.
+- **Raw outputs can name this computer.** A program's output and its logs
+  often hold the user's name, the folders it ran in and the computer's
+  name: Gaussian and ORCA print the host they ran on, for one. Meno never
+  alters what a program wrote. *Don't keep raw outputs* leaves the raw
+  outputs out; the files a job was given, what Meno read back and the logs
+  are still kept.
+- **A size warning, not a choice made for you.** When a save would take a
+  workspace past a size (Settings, General: 500 MB unless changed, at most
+  1 GB) - it was not past it before, it is new, or it has grown by half of
+  that size or more since - Meno says about how large it will be, names its largest steps by what their jobs add, says that raw
+  outputs can name this computer, and offers *Don't keep their raw
+  outputs* for those steps, *Save it all*, or *Cancel*, which saves
+  nothing. Meno never leaves anything out on its own. Past what a
+  workspace's file may hold at all (1 GB, above), the card says it cannot
+  be saved as it is, and offers only *Don't keep their raw outputs*, or
+  *Cancel*.
+- **Opened on another computer**, a workspace holds its jobs' files for
+  the session, each read from it only when wanted. *Show files* on a step
+  whose job's folder is not there writes the files kept of it back out, in
+  Meno's local data folder (`jobs-kept/<id>/`), and shows them. A file
+  there already is never written over: one changed since is left as it is,
+  and named, as is each file the workspace's file does not hold. Saved
+  again there, the workspace keeps them again from the file it was opened
+  from.
 
 ### What a .meno holds
 
@@ -796,10 +1143,66 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     times it had been chosen before count. Microsoft's own pages say as
     much ("available as default ... apps for the file type"; ownership
     information in HKCU "used only when the application that it references
-    is registered"). So nothing is registered for them; Windows is to let
-    the user choose Meno as a default from Meno's own Settings instead,
-    registering only when asked. A file opened with Meno by the user's own
-    choice is taken as on macOS.
+    is registered"). So nothing is registered for them until the user asks
+    for a format in Meno's own Settings (*Meno as the default app*, below).
+    A file opened with Meno by the user's own choice is taken as on macOS.
+- **Meno as the default app, chosen in Settings** (2026-10-21; Settings,
+  Files, *Opening files*; `src-tauri/src/defaults.rs`, `lib/defaultApps.ts`):
+  each of those formats with the app that opens it now, read again each
+  time Meno comes to the front, so a default changed elsewhere shows as it
+  is. Nothing changes until a format's button is pressed.
+  - macOS 12 and later: *Use Meno* asks the system to make Meno the
+    default for the type the system gives that extension
+    (`NSWorkspace setDefaultApplicationAtURL:toOpenContentType:
+    completionHandler:`, macOS 12; "If a change requires user consent, the
+    system asks the user for consent", Apple's page for it). The app it
+    replaced is kept by name and path (`files.before` in the settings), and
+    offered back: *Use Some Viewer again*. Where that app is no longer
+    there (moved to the Trash since), its record goes and the page says so;
+    the format still opens with Meno. Before macOS 12 there is no such
+    call, so the page says to choose in the Finder instead (Get Info, Open
+    with, Change All); Meno's minimum stays 10.13. Only an installed Meno
+    can be made the default, not one run from a build folder.
+  - Windows: an app cannot set a default; the user chooses it in Windows'
+    own Settings. *Use Meno* offers Meno there for that format alone, then
+    opens Meno's own page in Default apps - `ms-settings:defaultapps?
+    registeredAppUser=Meno` on Windows 11 21H2 and 22H2 with the 2023-04
+    update and 23H2 or later, Default apps itself before (Microsoft Learn,
+    *Launch the Default Apps settings page*). What is written, under
+    HKEY_CURRENT_USER only (Microsoft Learn, *Registering an Application
+    for Use with Default Programs*): `Software\Meno\Capabilities` with
+    `ApplicationDescription` (required) and `ApplicationName`; under its
+    `FileAssociations`, one value for each format asked for, `.sdf` =
+    `Meno.File`; the ProgID `Software\Classes\Meno.File`, with its icon and
+    `shell\open\command`; and one value, `Meno`, in the shared
+    `Software\RegisteredApplications`. Then `SHChangeNotify`. Never
+    `OpenWithProgids`, never `Applications\Meno.exe`.
+  - What opens a format now is asked of Windows, never read from the
+    registry: the default ProgID (`IApplicationAssociationRegistration::
+    QueryCurrentDefault`) and the program and its name
+    (`AssocQueryString`). The user's choice is not always under the
+    `UserChoice` key: Windows 11 build 26300 (tried 2026-10-22) keeps it
+    under `UserChoiceLatest`, and the page read it right because it asks
+    Windows. Nothing in Meno reads `UserChoice` itself. Where the program
+    is Windows' own *choose an app* (`OpenWith.exe`), which Windows names
+    as if it were an app (*Select an app*, in the user's language), no app
+    opens the format yet, and the row says *No app opens it yet*.
+  - Tried on Windows 11 (2026-10-21) with exactly these keys: a
+    double-click did not go to Meno, and Meno's own page in Default apps
+    listed its formats with their defaults. But for each format claimed,
+    Windows asked which app to use the next time such a file was opened,
+    offering Meno beside the app that opened it. So a format is claimed
+    only when the user asks for it, and the page says what Windows does
+    next.
+  - *Stop offering Meno* takes that format's value out; with the last,
+    the rest goes too: the ProgID, the Capabilities, the value in
+    `RegisteredApplications` (never the key), and `Software\Meno` where
+    nothing is left in it. The uninstaller does the same with whatever is
+    left (`--unregister-defaults`, `windows/hooks.nsh`). On the last
+    format, where Meno is the default, the row says that stopping takes
+    Meno out of Default apps, so Windows asks which app to use the next
+    time such a file is opened: the choice it kept names the ProgID taken
+    out.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -

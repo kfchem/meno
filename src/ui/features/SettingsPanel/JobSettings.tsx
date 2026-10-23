@@ -1,7 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, jobsFolder, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
+import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
@@ -14,7 +14,8 @@ const MIB_PER_GB = 1024;
  * computer's runner knows its resources*): the cores each job takes, the
  * cores and memory this computer's jobs may use at once - all its cores and
  * three quarters of its memory unless set - and the files of those
- * finished, cleared. Jobs run as many at once as fit.
+ * finished - how many, and how much they hold - cleared. Jobs run as many
+ * at once as fit.
  */
 export default function JobSettings() {
   const calculations = useAppSettings((s) => s.calculations);
@@ -65,8 +66,9 @@ export default function JobSettings() {
     chooseJobsFolder(path).then(setFolder, (e) => setFolderWhy(String(e)));
   };
 
-  // the finished jobs whose files are kept
+  // the finished jobs whose files are kept, and the bytes they hold
   const [kept, setKept] = useState<number | null>(null);
+  const [bytes, setBytes] = useState<number | null>(null);
   const [clearing, setClearing] = useState(false);
   const count = useCallback(() => {
     if (!isTauri()) return;
@@ -74,6 +76,7 @@ export default function JobSettings() {
       (jobs) => setKept(jobs.filter((j) => finished(j.state)).length),
       () => setKept(null),
     );
+    finishedJobsBytes().then(setBytes, () => setBytes(null));
   }, []);
   useEffect(count, [count]);
   const clear = () => {
@@ -114,7 +117,7 @@ export default function JobSettings() {
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
           <span className="min-w-0 flex-1 text-sm text-gh-black">Finished jobs' files</span>
           <span className="text-xs text-gh-gray tabular-nums">
-            {kept === 0 ? "None" : kept === 1 ? "1 job" : `${kept} jobs`}
+            {keptText(kept, bytes)}
           </span>
           <button
             onClick={clear}

@@ -133,6 +133,10 @@ pub struct JobSpec {
     /// in its work folder, given what it was given, what they say kept apart.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub then: Vec<Then>,
+    /// The files it was given, by their paths in its work folder (`make_job` writes them): what is kept of it where what
+    /// its program made is taken out (`trim_made`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub given: Vec<String>,
 }
 
 /// A program a job runs after its own (`JobSpec::then`): by its name, its full path, and its arguments.
@@ -1582,8 +1586,9 @@ pub fn make_job(root: &Path, spec: &JobSpec, files: &[JobFile]) -> Result<(Strin
         }
         fs::write(&path, &f.text).map_err(|e| format!("{} could not be written: {e}", f.name))?;
     }
-    // (written last: a folder without it is not a job yet)
-    let text = serde_json::to_string_pretty(spec).map_err(|e| e.to_string())?;
+    // (written last: a folder without it is not a job yet - saying what it was given)
+    let spec = JobSpec { given: files.iter().map(|f| f.name.replace('\\', "/")).collect(), ..spec.clone() };
+    let text = serde_json::to_string_pretty(&spec).map_err(|e| e.to_string())?;
     fs::write(dir.join(SPEC), text).map_err(|e| format!("a job could not be written: {e}"))?;
     Ok((id, dir))
 }
@@ -1927,7 +1932,7 @@ fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
 }
 
 /// Every jobs' folder there is, the one new jobs are made in first.
-fn all_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn all_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
     Ok(jobs_roots(&crate::local_data_dir(app)?))
 }
 
@@ -2027,12 +2032,22 @@ fn job_id(label: &str) -> String {
     format!("{}-{}", slug_of(label), &uuid::Uuid::new_v4().simple().to_string()[..8])
 }
 
+/// Whether `dir` is a job's folder: one whose spec has been written (`make_job` writes it last).
+pub fn is_job(dir: &Path) -> bool {
+    dir.join(SPEC).is_file()
+}
+
 /// A job's folder, by its id - which is only ever one Meno made.
 fn job_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     if !job_id_ok(id) {
         return Err(format!("no job {id}"));
     }
-    all_roots(app)?.into_iter().map(|r| r.join(id)).find(|d| d.join(SPEC).is_file()).ok_or_else(|| format!("no job {id}"))
+    job_in(&all_roots(app)?, id).ok_or_else(|| format!("no job {id}"))
+}
+
+/// The folder of the job `id` in whichever of the jobs' folders `roots` holds it: none where none does.
+pub(crate) fn job_in(roots: &[PathBuf], id: &str) -> Option<PathBuf> {
+    roots.iter().map(|r| r.join(id)).find(|d| is_job(d))
 }
 
 /// What a plugin asks to run (docs/WORKFLOWS.md, `prepare`): its program, by
@@ -2066,6 +2081,9 @@ pub struct JobAsk {
     /// Its key (`JobSpec::key`): 64 hex digits, or none.
     #[serde(default)]
     pub key: Option<String>,
+    /// The files of its work folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (keptjobs.rs).
+    #[serde(default)]
+    pub reads: Vec<String>,
 }
 
 /// A program installed beside a job's own, asked to run after it: by its name, with its arguments.
@@ -2123,8 +2141,15 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         label: payload.label.map(|l| l.chars().take(200).collect()),
         key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
+        given: vec![],
     };
     let (id, dir) = make_job(&jobs_root(&app)?, &spec, &payload.files)?;
+    // (what it was given and what is read back of it, for a workspace that keeps no raw outputs of it: without it, every file is taken as raw)
+    let inputs = payload.files.iter().map(|f| f.name.clone()).collect();
+    let reads = payload.reads.into_iter().filter(|n| inside_name(n)).collect();
+    if let Err(e) = crate::keptjobs::write_roles(&dir, inputs, reads) {
+        crate::logfile::line("meno", &format!("a job's kept.json could not be written: {e}"));
+    }
     let started = std::env::current_exe().and_then(|exe| start_runner(&exe, &dir));
     if let Err(e) = started {
         let why = format!("its runner could not be started: {e}");
@@ -2380,6 +2405,66 @@ fn write_limits(root: &Path, limits: Limits) -> std::io::Result<()> {
     fs::rename(tmp, root.join(LIMITS))
 }
 
+/// What a finished job's program made taken out of its folder - every file in its work folder it was not given (a failed
+/// render's frames, which it can make again) and the folders that leaves empty - its log, its record and what it was
+/// given kept, to be read. How many bytes that freed.
+fn trim_made(dir: &Path) -> Result<u64, String> {
+    if !current_record(dir).is_some_and(|r| r.state.finished()) {
+        return Err("it has not finished: stop it first".into());
+    }
+    let spec = read_spec(dir).ok_or("it is not a job")?;
+    let work = dir.join(WORK);
+    let mut freed = 0;
+    for name in work_files(dir) {
+        if spec.given.contains(&name) {
+            continue;
+        }
+        let path = work.join(&name);
+        if let Ok(m) = fs::symlink_metadata(&path) {
+            if m.is_file() && fs::remove_file(&path).is_ok() {
+                freed += m.len();
+            }
+        }
+    }
+    // (the folders left empty, deepest first: one still holding a file stays)
+    fn empty(at: &Path, left: usize) {
+        let Ok(entries) = fs::read_dir(at) else { return };
+        for e in entries.flatten() {
+            if left > 0 && e.file_type().is_ok_and(|k| k.is_dir()) {
+                empty(&e.path(), left - 1);
+                let _ = fs::remove_dir(e.path());
+            }
+        }
+    }
+    empty(&work, WORK_DEEPEST);
+    Ok(freed)
+}
+
+/// What a finished job's program made taken out of its folder, its log and what it was given kept: the bytes freed.
+#[tauri::command]
+pub async fn job_trim(app: AppHandle, id: String) -> Result<u64, String> {
+    trim_made(&job_dir(&app, &id)?).map_err(|e| format!("job {id}: {e}"))
+}
+
+/// How many bytes the folders of the finished jobs in `root` hold: every file in each, as far down as its work folder
+/// is looked at.
+fn finished_bytes(root: &Path) -> u64 {
+    let Ok(entries) = fs::read_dir(root) else { return 0 };
+    entries
+        .flatten()
+        .filter(|e| !e.file_name().to_string_lossy().starts_with(TAKEN))
+        .map(|e| e.path())
+        .filter(|dir| current_record(dir).is_some_and(|r| r.state.finished()))
+        .map(|dir| files_within(&dir, WORK_DEEPEST + 1, WORK_MOST).iter().filter_map(|n| fs::symlink_metadata(dir.join(n)).ok()).map(|m| m.len()).sum::<u64>())
+        .sum()
+}
+
+/// How many bytes the finished jobs' folders hold, all together - in every jobs' folder.
+#[tauri::command]
+pub async fn jobs_finished_bytes(app: AppHandle) -> Result<u64, String> {
+    Ok(all_roots(&app)?.iter().map(|r| finished_bytes(r)).sum())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2435,6 +2520,7 @@ mod tests {
             label: None,
             key: None,
             then: vec![],
+            given: vec![],
         };
         make_job(root, &spec, &[JobFile { name: "input.txt".into(), text: "input".into() }]).unwrap().1
     }
@@ -3214,6 +3300,33 @@ mod tests {
         let _ = fs::remove_dir_all(root);
     }
 
+    #[test]
+    fn takes_out_what_a_finished_job_made_keeping_what_it_was_given_and_its_log() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        assert_eq!(read_spec(&dir).unwrap().given, vec!["input.txt".to_string()]);
+        // (running: nothing taken)
+        assert!(trim_made(&dir).is_err());
+        fs::create_dir_all(dir.join(WORK).join("frames/deep")).unwrap();
+        fs::write(dir.join(WORK).join("frames/f_0001.png"), vec![0u8; 1000]).unwrap();
+        fs::write(dir.join(WORK).join("frames/deep/f_0002.png"), vec![0u8; 24]).unwrap();
+        fs::write(dir.join(WORK).join("half.mp4"), vec![0u8; 100]).unwrap();
+        fs::write(dir.join(LOG), "TypeError: a stand-in\n").unwrap();
+        write_record(&dir, &JobRecord { ended: Some(3), code: Some(1), ..JobRecord::new(JobState::Failed, 1) }).unwrap();
+        let before = finished_bytes(&root);
+        assert!(before >= 1124, "{before}");
+        assert_eq!(trim_made(&dir).unwrap(), 1124);
+        assert_eq!(work_files(&dir), vec!["input.txt".to_string()]);
+        assert!(!dir.join(WORK).join("frames").exists());
+        assert!(dir.join(LOG).exists() && dir.join(SPEC).exists() && dir.join(RECORD).exists());
+        assert_eq!(finished_bytes(&root), before - 1124);
+        // (a job waiting or running counts for nothing)
+        let waiting = shell(&root, ECHO, 1);
+        fs::write(waiting.join(WORK).join("big.bin"), vec![0u8; 5000]).unwrap();
+        assert_eq!(finished_bytes(&root), before - 1124);
+        let _ = fs::remove_dir_all(root);
+    }
+
     /// A job's program is in its job object before it has run at all - held,
     /// it has written nothing - and runs to its end once let go (Windows).
     #[cfg(windows)]
@@ -3317,6 +3430,7 @@ mod tests {
             label: None,
             key: None,
             then: vec![],
+            given: vec![],
         }
     }
 

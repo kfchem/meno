@@ -45,7 +45,8 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
       from: [geometry.id, bonding.id],
       structure: { atoms: ba.map((a) => ({ ...a })), bonds: bonding.structure.bonds.map((b) => ({ ...b })) },
       geometry: { kind: "3d", xyz: [...g.xyz] },
-      species: { ...bonding.species, from: { ...bonding.species.from } },
+      // (the bonding's - none where it is a skeleton, its hydrogens not there)
+      species: bonding.species ? { ...bonding.species, from: { ...bonding.species.from } } : null,
       properties: {
         ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
         ...Object.fromEntries(Object.entries(geometry.properties).map(([k, p]) => [k, { ...p }])),

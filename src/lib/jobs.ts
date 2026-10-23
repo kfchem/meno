@@ -55,6 +55,8 @@ export type JobAsk = {
   key?: string;
   /** What it is called, in words - its entry's name and its step's (`water Optimise`): its folder is named from it, path-safe (`water-optimise-3f9a2c1d`). */
   label?: string;
+  /** The files of its folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (lib/doc/keptJobs). */
+  reads?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */
@@ -76,12 +78,42 @@ export const jobDigest = (id: string) => runnerOf(id).digest(id);
 export const programStamp = (path: string) => invoke<string>("program_stamp", { path });
 /** Where a job's files are, for *Show files*. */
 export const jobFolder = (id: string) => runnerOf(id).folder(id);
+
+/** What a job's file is to it, kept in a workspace (src-tauri keptjobs.rs): given it, read back of it, what its programs said, or anything else it wrote. */
+export type KeptRole = "input" | "read" | "log" | "raw";
+/** A job's file a workspace may keep: its name in the job's folder (`work/...`, `log.txt`, `after.txt`), size, SHA-256, about how much it comes to deflated, and what it is to the job - `unsure` where the job never said (made by an older Meno). */
+export type KeptJobFile = { name: string; size: number; sha256: string; deflated: number; role: KeptRole; unsure?: true };
+/** A job's files a workspace may keep, where its folder is on this computer; null where it is not. */
+export const jobKept = (id: string) => invoke<KeptJobFile[] | null>("job_kept", { id });
+/** A file the page may read, as it is now: its size, and when it was last written (ms); none where it is not there or may not be read (src-tauri keptjobs.rs `file_now`). */
+export const fileNow = (path: string) => invoke<{ size: number; mtime: number | null } | null>("file_now", { path });
+export type WrittenBack = { work: string; differs: boolean };
+/**
+ * A file a workspace kept of the job `id` written back out (src-tauri
+ * keptjobs.rs `job_write_back`): read by Meno from the workspace's file it
+ * was opened from (`from`, a path), or else sent as its bytes. Where its
+ * work folder is; and whether a file there that is not it was left as it is.
+ */
+export const writeJobBack = (id: string, name: string, sha256: string, source: { from: string } | { bytes: Uint8Array }) =>
+  "from" in source
+    ? invoke<WrittenBack>("job_write_back", new Uint8Array(), { headers: { job: id, name, sha256, from: encodeURIComponent(source.from) } })
+    : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => runnerOf(id).stop(id);
 /** A finished job's folder taken away. */
 export const removeJob = (id: string) => runnerOf(id).remove(id);
 /** Every finished job's folder taken away: how many. */
 export const clearFinishedJobs = () => runnerOf().clearFinished();
+/** What a finished job's program made taken out of its folder, its log and what it was given kept: the bytes freed. (This computer's runner's: the only one there is yet.) */
+export const trimJob = (id: string) => invoke<number>("job_trim", { id });
+/** How many bytes the finished jobs' folders hold, all together. (This computer's runner's, as `trimJob`.) */
+export const finishedJobsBytes = () => invoke<number>("jobs_finished_bytes");
+
+/** How many finished jobs' files are kept, and how much they hold where that is known: "None", "1 job, 4 MB". */
+export function keptText(kept: number, bytes: number | null): string {
+  if (kept === 0) return "None";
+  return `${kept === 1 ? "1 job" : `${kept} jobs`}${bytes == null ? "" : bytes >= 1e9 ? `, ${(bytes / 1e9).toFixed(1)} GB` : `, ${Math.max(1, Math.round(bytes / 1e6))} MB`}`;
+}
 
 /** Where this computer's jobs are made (Settings, *Calculations*, *Jobs*). */
 export type JobsFolder = {

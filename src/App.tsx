@@ -29,7 +29,7 @@ import { textTakerOf, type OpenedText } from "./ui/views/texts";
 import type { Action, State, TabInstance } from "./lib/core";
 import type { DocumentStore } from "./lib/doc";
 import { keepClipboard, keepPageUnselected, keepSystemMenuShut, openIntent, undoIntent } from "./lib/doc/shortcuts";
-import { saverOf, tabHolding } from "./lib/doc/savers";
+import { openEachOnce, saverOf, setTabsListed } from "./lib/doc/savers";
 import { useFilesAsked, useOpenAsked } from "./ui/layouts/commands";
 import { isBlankDocument, type WorkspaceDocument } from "./ui/features/Workspace/document";
 import { workspaceProblem } from "./ui/features/Workspace/utils/workspace";
@@ -44,7 +44,7 @@ import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
 import { showGuidesDue, useGuide } from "./lib/plugins/guides";
 import GuideCard from "./ui/guide/GuideCard";
-import { computerResources, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
+import { computerResources, fileNow, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
 import { madeStoreOf } from "./ui/features/Workspace/store";
 import { stopRenders } from "./ui/features/Workspace/render/renders";
@@ -165,6 +165,17 @@ export default function App() {
       unwatch();
     };
   }, []);
+
+  // The tabs, each with the path it was opened from and its label as the
+  // tab bar shows it: a save sees whether another tab holds the file it is
+  // to write (lib/doc/savers `heldElsewhere`).
+  useEffect(
+    () =>
+      setTabsListed(() =>
+        Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path, label: t.meta.label })),
+      ),
+    [],
+  );
 
   // Undo/redo belong to the active tab, not to the app as a whole.
   const activeIdRef = useRef(state.activeId);
@@ -405,6 +416,8 @@ export default function App() {
         continue;
       }
       try {
+        // (as it was before it was read: where its steps' job files are read from again as it is saved, while it is still as it was - workflow/keptJobs)
+        const was = await fileNow(path).then((f) => (f ? { path, ...f } : undefined), () => undefined);
         const bytes = await readFile(path);
         // (a file of styles: asked whether to add them - never opened as a workspace)
         const styles = stylesOfFile(bytes);
@@ -413,7 +426,7 @@ export default function App() {
           continue;
         }
         // (a workspace file: its workspace, and the outputs it keeps held)
-        const workspace = workspaceOfFile(bytes);
+        const workspace = workspaceOfFile(bytes, name, was);
         if (workspace != null) {
           workspaces.push({ name, workspace, path });
           continue;
@@ -432,13 +445,14 @@ export default function App() {
     // front only where nothing else opened is to go there - and that one
     // brought back in front, to take the rest)
     const rest = texts.length + pdfs.length + pictures.length + structures.length > 0;
-    // (one already open in a tab - by where it is saved - brought forward, not opened again: two tabs on one file overwrite each other)
+    // (one already open in a tab - by where it is saved, its one true path - brought forward, not opened again: two tabs on one file overwrite each other)
     const tabs = () => Object.values(stateRef.current.tabsById).map((t) => ({ id: t.meta.id, openedFrom: (t.content.data as { path?: string } | undefined)?.path }));
-    for (const w of workspaces) {
-      const held = tabHolding(w.path, tabs());
-      if (held) act({ type: "SELECT_TAB", id: held });
-      else openWorkspaceTab(w.name, w.workspace, w.path, !rest);
-    }
+    await openEachOnce(
+      workspaces,
+      tabs,
+      (id) => act({ type: "SELECT_TAB", id }),
+      (w) => openWorkspaceTab(w.name, w.workspace, w.path, !rest),
+    );
     if (rest && workspaces.length && front && stateRef.current.tabsById[front]) act({ type: "SELECT_TAB", id: front });
     if (texts.length) openTexts(texts, front);
     if (pdfs.length) openPdfs(pdfs, front);
@@ -486,7 +500,7 @@ export default function App() {
           askStyles(styles);
           continue;
         }
-        const workspace = workspaceOfFile(bytes);
+        const workspace = workspaceOfFile(bytes, f.name);
         if (workspace != null) {
           openWorkspaceTab(f.name, workspace);
           continue;
@@ -535,6 +549,8 @@ export default function App() {
   const tabsRef = useRef(state.tabsById);
   tabsRef.current = state.tabsById;
   useEffect(() => {
+    // (outside Tauri - the browser dev server - there is no window to watch)
+    if (!isTauri()) return;
     let unlisten: (() => void) | undefined;
     let gone = false;
     getCurrentWindow()
@@ -545,7 +561,6 @@ export default function App() {
         }
       })
       .then((u) => (gone ? u() : (unlisten = u)))
-      // Outside Tauri - the browser dev server - there is no window to watch.
       .catch(() => {});
     return () => {
       gone = true;

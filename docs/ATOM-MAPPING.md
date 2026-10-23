@@ -17,8 +17,11 @@ A reaction's atom map, in Meno, is for calculation first:
 - A map of heavy atoms only, for showing on a drawn scheme, is read off a
   full map. It never stands in for one.
 
-A map that leaves an atom out, or pairs heavy atoms only, is not a result:
-Meno says it is incomplete and writes nothing from it.
+A map that leaves an atom out, pairs heavy atoms only, or pairs an atom
+with one of another element, is not a result: Meno says it is incomplete
+and writes nothing from it. A product with other elements than the
+reactants - as many atoms or not - is refused before it is mapped, the
+elements it has more or fewer of named.
 
 ## How it is done
 
@@ -38,7 +41,7 @@ bonds with their CTfile types) and gives:
 - `maps` - every map, in ACCeL's order, best first: for each product atom,
   the reactant atom it is (from 0), -1 where none.
 - `complete` - for each map, whether it pairs every atom of both sides one
-  to one.
+  to one, each with one of its own element.
 - `productsInReactantNumbering` - for each map, the product with its atoms
   where the reactant's atoms they map to stand in the numbering, its own
   coordinates and bonds. Empty unless every map is complete, as ACCeL's

@@ -3,14 +3,15 @@
  * steps and wires, numbered from one counter - each change an edit to the
  * document, so that undo takes it back and Save keeps it.
  */
+import type { Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
-import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
+import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMembers, structureMember, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
-import { SET_PAD, SET_TOP } from "./look";
+import { PX, SET_PAD, SET_TOP, TABLE_PX } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
-import { exitsOf, inputsOf, ONE_INPUT, type StepKind } from "./kinds";
+import { exitsOf, inputsOf, ONE_INPUT, takesNothing, type StepKind } from "./kinds";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
@@ -26,6 +27,21 @@ export function addSet(doc: WorkspaceDocument, frame: Frame, made?: WorkflowSet[
   return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
 }
 
+/**
+ * `doc` with a set holding `table` - read from a file, a text on the page -
+ * put down with its middle at `at`, as large as its first rows take, named
+ * `name`: a chemist's set, holding nothing else.
+ */
+/** How large a set holding a table is put down, on the page: its first rows, and what it is. */
+export const TABLE_SET = { w: TABLE_PX.w * PX + 2 * SET_PAD, h: SET_TOP + TABLE_PX.h * PX + SET_PAD };
+
+export function addTableSet(doc: WorkspaceDocument, at: { x: number; y: number }, table: Table, name?: string): WorkspaceDocument {
+  const { w, h } = TABLE_SET;
+  const id = idOf(doc);
+  const set: WorkflowSet = { id, x0: at.x - w / 2, x1: at.x + w / 2, y0: at.y - h / 2, y1: at.y + h / 2, ...(name ? { name } : {}), members: [], table };
+  return { ...doc, nextWorkflowId: id + 1, sets: [...(doc.sets ?? []), set] };
+}
+
 /** A set's members, as given: a step's result set holding what the step made, in its order - on the page, so no collection of its own; and how many of them did not read, where some did not (`WorkflowSet.unread`). */
 export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[], unread?: number): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
@@ -36,7 +52,24 @@ export function holdCollection(doc: WorkspaceDocument, id: number, collection: N
   return withSet(doc, id, ({ unread: _u, ...b }) => ({ ...b, members: [], collection, ...(unread ? { unread } : {}) }));
 }
 
+/** A result set of structures drawn with the atoms its step put on the page (`WorkflowSet.put`) - none, where it put none. */
+export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly number[]): WorkspaceDocument {
+  return withSet(doc, id, ({ put: _was, ...b }) => (atoms.length ? { ...b, put: [...atoms] } : b));
+}
+
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
+/** A step's jobs' raw outputs kept in the workspace's file, or not (*Don't keep raw outputs*, workflow/keptJobs). */
+export function keepRawOutputs(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
+  return {
+    ...doc,
+    steps: (doc.steps ?? []).map((s) => {
+      if (s.id !== id) return s;
+      const { keepRaw: _, ...rest } = s;
+      return keep ? rest : { ...rest, keepRaw: false as const };
+    }),
+  };
+}
+
 export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
   if (!set?.made || (set.keep !== false) === keep) return doc;
@@ -148,9 +181,6 @@ export function setRan(doc: WorkspaceDocument, id: number, ran: NonNullable<Work
   return withStep(doc, id, (s) => ({ ...s, ran }));
 }
 
-/** How many of a step's earlier runs it keeps. */
-export const RUNS_KEPT = 10;
-
 /** A step's earlier runs, newest first - none, where it keeps none. */
 export function withStepRuns(doc: WorkspaceDocument, id: number, runs: StepRunKept[]): WorkspaceDocument {
   return withStep(doc, id, (s) => {
@@ -179,22 +209,27 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
 
 /**
  * `doc` without a step and the wires into it. A set its exits made that
- * holds something stays, with what it holds - a set like any the chemist
+ * holds something - molecules on the page, or a large set's own
+ * (`collection`) - stays, with what it holds: a set like any the chemist
  * drew (of conformers, where its molecules' frames are a conformer search's:
- * entries `holdsOf`) - and the wires out of it with it; one that holds
+ * entries `holdsOf`), and the wires out of it with it; one that holds
  * nothing - its step never ran, or gave nothing there - goes with the step,
  * and the wires out of it: an empty frame the chemist never drew is not
- * left behind.
+ * left behind. A set that stays and was kept out of the workspace's file
+ * (*Don't keep in the file*) is kept in it in full from then on: the step
+ * that could make its molecules again is gone, and a chemist's set is
+ * always kept.
  */
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
   if (steps.length === (doc.steps ?? []).length) return doc;
-  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length).map((b) => b.id));
+  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length && !b.collection?.length && !b.unread).map((b) => b.id));
   return {
     ...doc,
     steps,
     wires: (doc.wires ?? []).filter((w) => w.to.step !== id && !empty.has(w.from.set)),
-    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, ...rest }) => rest)(b) : b)),
+    // (a set it made, kept, a chemist's - and kept in the file in full, its *Don't keep in the file* gone with the step that could make it again, and the atoms it put on the page the chemist's, no run to take them away)
+    sets: (doc.sets ?? []).filter((b) => !empty.has(b.id)).map((b) => (b.made?.step === id ? (({ made: _m, keep: _k, put: _p, ...rest }) => rest)(b) : b)),
   };
 }
 
@@ -202,6 +237,7 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
 export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
   // (no input named: the first of the step's that takes what comes)
   const kind = doc.steps?.find((s) => s.id === to)?.kind;
+  if (kind && takesNothing(kind)) return doc;
   const port = into ?? (kind ? (inputsOf(kind).find((p) => canWire(doc, from, to, p.id))?.id ?? inputsOf(kind)[0].id) : ONE_INPUT);
   if (!canWire(doc, from, to, port)) return doc;
   const was = wireInto(doc, to, port);
@@ -248,7 +284,7 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
   const sets = doc.sets.map((set) => {
     if (!set.members) {
       changed = true;
-      return { ...set, members: membersOf(lyingIn(doc, set)) };
+      return membersLying(doc, set);
     }
     const prior = before.sets?.find((b) => b.id === set.id);
     if (samePage && prior && prior.x0 === set.x0 && prior.x1 === set.x1 && prior.y0 === set.y0 && prior.y1 === set.y1 && prior.members === set.members) return set;
@@ -257,10 +293,11 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean };
     const nowAt = new Map(now.structures.map((s) => [s.ids[0], s]));
     const list: Placed[] = [
-      ...held.structures.map((ids) => {
+      ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
         const w = wasMiddle(ids);
-        return { member: { structure: ids } as Member, at, wasIn: !!(prior && w && inside(prior, w)) };
+        // (with its record: a step's, which a structure keeps however it moves)
+        return { member: structureMember(ids, held.records[i]), at, wasIn: !!(prior && w && inside(prior, w)) };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
@@ -281,8 +318,8 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     list.sort((p, q) => keyOf(p.member) - keyOf(q.member));
     // what the edit took out
     let kept = prior ? list.filter((p) => !(p.wasIn && !inside(set, p.at))) : list;
-    // what the edit brought into a chemist's set, each at its place in reading order
-    if (!set.made && prior) {
+    // what the edit brought into a chemist's set, each at its place in reading order - but one that holds its molecules itself (a large set its step left), or a table or a number, which takes in nothing: what it holds is its own
+    if (!set.made && !set.collection && !set.table && !set.number && prior) {
       const isMember = new Set(kept.map((p) => ("structure" in p.member ? `s${p.member.structure[0]}` : "molecule" in p.member ? `m${p.member.molecule}` : `p${p.member.picture}`)));
       const heldAtoms = new Set(held.structures.flat());
       const add = (member: Member, at: { x: number; y: number }, w: { x: number; y: number } | null | undefined) => {
@@ -306,7 +343,22 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
 /** `doc` with each set that has no members yet - one read from a file saved before sets kept them - holding what lies inside its frame: read once, as the workspace opens. */
 export function membersFound(doc: WorkspaceDocument): WorkspaceDocument {
   if (!doc.sets?.some((b) => !b.members)) return doc;
-  return { ...doc, sets: doc.sets.map((b) => (b.members ? b : { ...b, members: membersOf(lyingIn(doc, b)) })) };
+  return { ...doc, sets: doc.sets.map((b) => (b.members ? b : membersLying(doc, b))) };
+}
+
+/**
+ * A set holding what lies inside its frame: each structure a copy carried a
+ * record for (`WorkflowSet.carried`) - the same atoms - with that record,
+ * of the structure as it is drawn now.
+ */
+function membersLying(doc: WorkspaceDocument, { carried, ...set }: WorkflowSet): WorkflowSet {
+  const found = lyingIn(doc, set);
+  const records = found.structures.map((ids) => {
+    const of = new Set(ids);
+    const c = carried?.find((x) => x.structure.length === ids.length && x.structure.every((id) => of.has(id)));
+    return c && (c.record.of ? recordOn(c.record, doc.model, ids) : c.record);
+  });
+  return { ...set, members: membersOf({ ...found, records }) };
 }
 
 /** Whether two lists of members are the same, in the same order. */

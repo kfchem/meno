@@ -1,3 +1,4 @@
+import { canvasAlerts } from "./utils/alerts";
 import { bondKindOf, type BondKindName } from "./utils/bondKinds";
 import type { ArrowKind, ArrowWeight } from "../../../lib/chem/reactionArrow";
 import { canTakeBond, valenceOrder } from "../../../lib/chem/molecule";
@@ -45,9 +46,13 @@ import { abbreviationFromSelection } from "./chem/abbreviationFromSelection";
 import { chainFrom } from "./components/chainFrom";
 import { structureFromSmiles } from "./chem/fromSmiles";
 import ExportCard from "./ExportCard";
+import { pdbLeavesOut } from "../../../lib/chem/pdb";
+import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
 import OrdersCard from "./OrdersCard";
-import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
-import { partOf } from "./utils/completeness";
+import ProtonationCard from "./ProtonationCard";
+import { addHydrogensAsChosen, addHydrogensFromDictionary, keptAsDictionary, protonationOf, useProtonationMark, type Protonation } from "./chem/protonate";
+import { canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
+import { isSkeleton, partOf } from "./utils/completeness";
 import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
@@ -67,6 +72,7 @@ import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
 import { addPlugin, useReaders } from "../../../lib/calc/workers";
 import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
+import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
@@ -76,6 +82,7 @@ import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
+import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -172,7 +179,7 @@ import GuideStructure from "./components/GuideStructure";
 import { guideNotice } from "../../../lib/plugins/guides";
 import { selectionFrame } from "./workflow/selectionSet";
 import { offeredSteps } from "./workflow/offered";
-import { PORT_DOWN } from "./workflow/look";
+import { GAP, PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
@@ -200,7 +207,10 @@ import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
-import { missingFor } from "./workflow/doers";
+import { byOf, MENO, missingFor } from "./workflow/doers";
+import { tableOfText } from "../../../lib/table";
+import { TABLE_SET } from "./workflow/model";
+import { heldOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -437,21 +447,17 @@ function WorkspaceContent({
   // are unknown; and those given from a SMILES, asked for on its ligand
   useBondOrders();
   const [givingOrders, setGivingOrders] = useState<{ id: number; atom: number | null } | null>(null);
-  // its ligand's hydrogens, the ones its file leaves out, added - as one undo step
-  const completeHydrogens = useCallback(
-    async (id: number, atom: number | null) => {
-      setWorking3d("Adding hydrogens…");
-      setChemError(null);
-      try {
-        await addHydrogens(store, id, atom);
-      } catch (e: unknown) {
-        setChemError(`The hydrogens could not be added: ${e instanceof Error ? e.message : String(e)}`);
-      } finally {
-        setWorking3d(null);
-      }
-    },
-    [store],
-  );
+  // its ligand's hydrogens, the ones its file leaves out, added as the chemist chooses how it is protonated - as one undo step
+  const [protonating, setProtonating] = useState<Protonation | null>(null);
+  // (each time it is asked for, a card of its own: nothing chosen for one molecule carried to another)
+  const [protonatingTurn, setProtonatingTurn] = useState(0);
+  // (while a card's hydrogens are being added, no other card: those would be added after it had gone)
+  const [addingHydrogens, setAddingHydrogens] = useState(false);
+  const adding = useRef(false);
+  useEffect(() => {
+    adding.current = addingHydrogens;
+  }, [addingHydrogens]);
+  const markProtonated = useCallback((atoms: number[] | null) => useProtonationMark.getState().mark(atoms && protonating ? { id: protonating.id, atoms } : null), [protonating]);
   // a PDB entry's residues given their orders from the wwPDB's dictionary - as one undo step
   const lookUpComponents = useCallback(
     async (id: number) => {
@@ -948,6 +954,8 @@ function WorkspaceContent({
     setCornersCard(null);
     setNaming(null);
     setGivingOrders(null);
+    // (not while its hydrogens are being added: they would be added after it had gone)
+    if (!adding.current) setProtonating(null);
   }, [talking]);
   // (a label begun - a letter typed over the atom right-clicked - shuts the menu: the label is
   // being written, and the menu would stay open over it, its keys and the label's at odds)
@@ -961,6 +969,8 @@ function WorkspaceContent({
   const inkMode = useEditor((s) => s.inkMode);
   const endInk = useCallback(() => store.getState().setInkMode(null), [store]);
   const askDeleteStep = useEditor((s) => s.askDeleteStep);
+  const askDeleteSet = useEditor((s) => s.askDeleteSet);
+  const setsNow = useEditor((s) => s.sets);
   // An undo or a redo that would take away a running step is held, and asks
   // first what deleting it asks (heard before the app's own undo, App.tsx)
   const askUndo = useEditor((s) => s.askUndo);
@@ -1104,7 +1114,18 @@ function WorkspaceContent({
               },
             }
           : {}),
-        ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
+        ...(canAddHydrogens(menuMolecule, menuPart) && !addingHydrogens
+          ? {
+              onAddHydrogens: () => {
+                setProtonatingTurn((n) => n + 1);
+                setProtonating(protonationOf(menuMolecule, menu?.atom ?? null));
+              },
+            }
+          : {}),
+        // (a skeleton that has no hydrogens to add - carbon dioxide's atoms, say, where Meno could not tell: whole, as the chemist says; never a PDB entry's chains)
+        ...(!menuMolecule.biopolymer && isSkeleton(menuMolecule)
+          ? { onWholeWithoutH: () => store.getState().changeMolecule3d("complete without hydrogens", menuMolecule.id, (m) => ({ ...m, wholeWithoutH: true })) }
+          : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length
           ? {
               lists: resultsOn(menuMolecule.calc?.results, "list").map((l, _, all) => ({
@@ -1411,12 +1432,12 @@ function WorkspaceContent({
     });
   };
 
-  const alert = importError?.text ?? files.error ?? chemError;
-  const dismissAlert = importError
-    ? dismissImportError
-    : files.error
-      ? files.dismissError
-      : () => setChemError(null);
+  // (each in a line of its own, dismissed by itself: utils/alerts)
+  const alerts = canvasAlerts({
+    import: importError ? { text: importError.text, dismiss: dismissImportError } : null,
+    files: { text: files.error, dismiss: files.dismissError },
+    chem: { text: chemError, dismiss: () => setChemError(null) },
+  });
   // Where the view starts, before there is anything to fit
   const style = useDrawingStyle();
   // words on the page: a size of their own, or the labels'; a box keeping its top as its lines change (docs/EDITOR-2D.md, *Text*)
@@ -1478,6 +1499,7 @@ function WorkspaceContent({
   // S, its texts, its style, its workflow - on the right-click menu on empty
   // space; the keys say the same. (Save is the title bar's, and Ctrl/Cmd+S.)
   const texts = useEditor((s) => s.texts);
+  const lostTexts = useEditor((s) => s.textsLost.length > 0);
   const steps = useEditor((s) => s.steps);
   const textsOpen = useEditor((s) => s.textsOpen);
   const reading = useEditor((s) => s.pdfs.some((p) => p.reading));
@@ -1497,7 +1519,7 @@ function WorkspaceContent({
     // (a talk given from the slides on the page: docs/PRESENTING.md)
     ...(slideCount ? [{ name: "Present", keys: IS_MAC ? shortcutLabel("\u21a9", true) : "F5", run: () => store.getState().present(0), divider: true }] : []),
     { name: "Fit to content", keys: shortcutLabel("1"), run: requestFit, divider: true },
-    ...(texts.length || reading
+    ...(texts.length || lostTexts || reading
       ? [
           textsOpen
             ? { name: "Hide texts", keys: "", run: () => store.getState().closeTexts() }
@@ -1508,7 +1530,7 @@ function WorkspaceContent({
                   // (the PDF it showed, rising into it again; or the text)
                   const st = store.getState();
                   if (st.pdfShown != null && st.pdfs.some((p) => p.id === st.pdfShown && p.reading)) st.readPdf(st.pdfShown);
-                  else if (st.texts.length) st.showText(st.textShown ?? st.texts[0].id);
+                  else if (st.texts.length || st.textsLost.length) st.showText(st.textShown ?? (st.texts[0] ?? st.textsLost[0]).id);
                   else if (st.pdfs.some((p) => p.reading)) st.readPdf(st.pdfs.find((p) => p.reading)!.id);
                 },
               },
@@ -1519,7 +1541,7 @@ function WorkspaceContent({
     // a workflow's steps on the page: every one that has not run or has changed, run - or all stopped
     ...(steps.length
       ? [
-          { name: "Run all", keys: "", run: () => void store.getState().runAll(), divider: true },
+          { name: "Run all", keys: "", run: () => void store.getState().runAll(), divider: true, note: runAllNote(store.getState()) },
           ...(steps.some((x) => x.running) ? [{ name: "Stop all", keys: "", run: () => store.getState().stopAll() }] : []),
         ]
       : []),
@@ -1544,31 +1566,34 @@ function WorkspaceContent({
       onPointerUpCapture={onRightUp}
     >
       {/* Import error */}
+      <div className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex flex-col items-center gap-2 pointer-events-none">
       <AnimatePresence>
-      {alert && (
+      {alerts.map((a) => (
         <motion.div
-          key="alert"
+          key={a.key}
+          layout
           {...RISE}
           role="alert"
-          className="absolute top-3 left-1/2 -translate-x-1/2 z-50 max-w-[90%] flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
+          className="pointer-events-auto flex items-start gap-2 rounded-md border border-gh-line bg-white/95 shadow-sm px-3 py-2 text-xs text-gh-black"
         >
           <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
-          <span className="break-words">{alert}</span>
-          {importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
+          <span className="break-words">{a.text}</span>
+          {a.key === "import" && importError?.suggest && importError.again && <AddToRead suggest={importError.suggest} again={importError.again} />}
           <button
             aria-label="Dismiss"
             title="Dismiss"
             onClick={(e) => {
               e.stopPropagation();
-              dismissAlert();
+              a.dismiss();
             }}
             className="h-4 w-4 shrink-0 rounded-full hover:bg-gh-line"
           >
             <XMarkIcon className="h-4 w-4" />
           </button>
         </motion.div>
-      )}
+      ))}
       </AnimatePresence>
+      </div>
       {/* a file dropped being read: a quiet mark where it was dropped - come after a moment, so that a quick one shows
           none - until what it brings is placed, or the card saying why not takes its place */}
       <AnimatePresence>
@@ -1681,8 +1706,44 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* (a save past the size Settings says, asked before it is written: fileActions) */}
+      <AnimatePresence>
+        {files.sizeAsked && (
+          <LargeWorkspaceAsk
+            key="large"
+            bytes={files.sizeAsked.bytes}
+            threshold={files.sizeAsked.threshold}
+            steps={files.sizeAsked.steps}
+            most={files.sizeAsked.most}
+            onKeepNoRaw={() => files.sizeAsked?.answer("no raw")}
+            onSaveAll={() => files.sizeAsked?.answer("all")}
+            onCancel={() => files.sizeAsked?.answer("cancel")}
+          />
+        )}
+      </AnimatePresence>
       {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
       {ownTab && <SettingsStyleAsk active={active} />}
+      <AnimatePresence>
+        {protonating && (
+          <ProtonationCard
+            key={`protonation-${protonatingTurn}`}
+            protonation={protonating}
+            onCancel={() => setProtonating(null)}
+            onMark={markProtonated}
+            onAdd={async (forms, charges) => {
+              const chosen = { forms, charges };
+              setAddingHydrogens(true);
+              try {
+                if (keptAsDictionary(protonating, chosen)) await addHydrogensFromDictionary(store, protonating);
+                else await addHydrogensAsChosen(store, protonating, chosen);
+              } finally {
+                setAddingHydrogens(false);
+              }
+              setProtonating(null);
+            }}
+          />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {givingOrders && (
           <OrdersCard
@@ -1724,6 +1785,11 @@ function WorkspaceContent({
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
               return chosen.length ? knownOfMolecules(chosen, style3dOf(store.getState())) : {};
             }}
+            skeletons={(ids) => {
+              const state = store.getState();
+              return carriedOf(state).filter((m, i) => ids.includes(state.molecules3d[i].id) && isSkeleton(m)).length;
+            }}
+            said={(id) => (id === "pdb" ? pdbLeavesOut((exporting.part.part.molecules3d ?? []).flatMap((m) => m.atoms)) : id === "xyz" ? xyzLeavesOut(exporting.part.part.molecules3d ?? []) : null)}
             onCancel={() => setExporting(null)}
             onExport={(writer, options, molecules) => {
               setExporting(null);
@@ -1828,6 +1894,21 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
+        {askDeleteSet != null && askDeleteSet.every((id) => setsNow.some((b) => b.id === id)) && (
+          <ConfirmDiscard
+            title={
+              askDeleteSet.length === 1
+                ? `Delete the set and the ${heldOwn(store.getState(), setsNow.find((b) => b.id === askDeleteSet[0])!) ?? "molecules"} it holds?`
+                : `Delete ${askDeleteSet.length} sets and the molecules they hold?`
+            }
+            message={`They are on no page: they go with ${askDeleteSet.length === 1 ? "the set" : "the sets"}. Undo brings them back until the workspace is closed.`}
+            discardLabel={askDeleteSet.length === 1 ? "Delete set" : "Delete sets"}
+            onCancel={() => store.getState().setWorkflowView({ askDeleteSet: null })}
+            onDiscard={() => store.getState().removeSet(askDeleteSet, true)}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
         {askUndo != null && (
           <ConfirmDiscard
             title={askUndo.steps > 1 ? "Delete steps that are running?" : "Delete a step that is running?"}
@@ -1926,7 +2007,8 @@ function WorkspaceContent({
             else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
             else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
             else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
-            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id);
+            // (the menu says what goes with a set that holds its molecules itself: asked there, in its words)
+            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id, true);
             else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
             else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
             else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
@@ -1960,12 +2042,18 @@ function WorkspaceContent({
             const s = menu.kind === "step" ? store.getState().steps.find((x) => x.id === menu.id) : undefined;
             if (!s) return undefined;
             const st = store.getState();
-            // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
+            // (a step deleted while its jobs were being started, and back by an undo: those it started went with it - no log or files to show)
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
-              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
-              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
+              ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id), note: runNote(st, s.id) }),
+              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () =>
+                    void st
+                      .showStepFiles(s.id)
+                      .then((said) => said && useNotices.getState().show({ id: `show-files:${s.id}`, title: "Some files were not written out", text: said }))
+                      .catch(() => {}) } : {}),
+              // (a step a plugin does runs jobs, whose files the workspace's file keeps: workflow/keptJobs)
+              ...(byOf(s) !== MENO.id ? { keepRaw: { kept: s.keepRaw !== false, set: (keep: boolean) => st.keepRawOutputs(s.id, keep) } } : {}),
               // (output Meno could not account for: each such job adopted on purpose, one at a time)
               ...(s.ran?.held && s.ran.unaccounted?.length && !s.running ? { adopt: s.ran.unaccounted.map((job) => ({ job, run: () => void st.adoptJob(s.id, job) })) } : {}),
             };
@@ -1979,6 +2067,17 @@ function WorkspaceContent({
             const parts = procedureParts(st, flowOf(st, start));
             if (parts.steps.length) setNaming(parts);
           } : undefined}
+          onOpenAsTable={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const set = store.getState().sets.find((b) => b.id === menu.id);
+            return set?.collection ? () => store.getState().readSetTable(set.id) : undefined;
+          })()}
+          setHoldsOwn={(() => {
+            if (menu.kind !== "set" || menu.id == null) return undefined;
+            const st = store.getState();
+            const set = st.sets.find((b) => b.id === menu.id);
+            return set?.collection?.length ? heldOwn(st, set) : undefined;
+          })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const set = store.getState().sets.find((b) => b.id === menu.id);
@@ -2178,6 +2277,13 @@ function WorkspaceContent({
               onRead: () => store.getState().readText(t.id),
               onIcon: () => store.getState().setTextIcon(t.id, !t.icon),
               ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
+              ...(() => {
+                const table = tableOfText(t.name, t.text);
+                // (beside the text, to its right, level with it - where it has a sheet on the page)
+                const room = sheetRoom(t);
+                const at = room ? { x: room.x1 + GAP + TABLE_SET.w / 2, y: (room.y0 + room.y1) / 2 } : pasteTarget();
+                return table ? { onTable: () => void store.getState().placeTable(table, at, t.name) } : {};
+              })(),
             };
           })()}
           pdf={(() => {
@@ -2610,7 +2716,7 @@ function TabFiles({
   children: (files: FileActions) => ReactNode;
 }) {
   // Save and export. Ctrl/Cmd+S belongs to the tab in front, like undo.
-  const files = useFileActions(nameTab);
+  const files = useFileActions(nameTab, tabId);
   const { save, saveAs } = files;
   // (a tab's own canvas can be saved as its tab is closed)
   useEffect(() => (ownTab ? setSaver(tabId, save) : undefined), [ownTab, tabId, save]);
@@ -2621,6 +2727,8 @@ function TabFiles({
     if (!active) return;
     const onKeyDown = (e: KeyboardEvent) => {
       const intent = saveIntent(e);
+      // (the keys held: saved once, as they were pressed - and still not the webview's)
+      if (!intent && e.repeat && saveIntent({ key: e.key, ctrlKey: e.ctrlKey, metaKey: e.metaKey, shiftKey: e.shiftKey })) e.preventDefault();
       if (!intent) return;
       e.preventDefault();
       void (intent === "save" ? save() : saveAs());

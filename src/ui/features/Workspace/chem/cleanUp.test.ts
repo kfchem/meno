@@ -26,6 +26,9 @@ const atom = (id: number, x: number, y: number, el = "C") => ({ id, x, y, r: 0.9
  * How many times as long `run` takes on `large` as on `small`: the least
  * processor time of nine runs of each, taken by turns - so that a machine
  * busy with other work, or a pause to collect garbage, slows neither alone.
+ * Each run is `run` over and over until 50 ms of processor time have gone,
+ * that time shared out between them: Windows counts processor time in steps
+ * of about 15.6 ms, so a quicker run would read as 0 ms or as one step.
  */
 function slower<T>(small: T, large: T, run: (x: T) => void): number {
   const least = [Infinity, Infinity];
@@ -34,9 +37,15 @@ function slower<T>(small: T, large: T, run: (x: T) => void): number {
   for (let k = 0; k < 9; k++) {
     [small, large].forEach((x, i) => {
       const started = process.cpuUsage();
-      run(x);
-      const used = process.cpuUsage(started);
-      least[i] = Math.min(least[i], used.user + used.system);
+      let times = 0;
+      let spent = 0;
+      do {
+        run(x);
+        times++;
+        const used = process.cpuUsage(started);
+        spent = used.user + used.system;
+      } while (spent < 50_000);
+      least[i] = Math.min(least[i], spent / times);
     });
   }
   return least[1] / least[0];
@@ -173,7 +182,11 @@ describe("fragmentOf and partOf", () => {
       expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
     }
     expect(slower(small, large, find)).toBeLessThan(24);
-  });
+    // (nine turns of at least 50 ms of processor time for each size: about
+    // 1.2 s of it in all, alone or not. On a busy machine the ratio held -
+    // 9.7 to 11.3 with eight copies running at a load average of 50 - and
+    // the time did not, which Vitest's 5 s cut short)
+  }, measured(1_200));
 });
 
 describe("cleanUp", () => {

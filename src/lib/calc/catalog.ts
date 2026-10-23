@@ -65,6 +65,8 @@ export type PythonPlugin = ReaderBase &
     installed: readonly InstalledDecl[];
     /** The files it needs downloaded besides its environment - a model's weights - fetched as it is set up (src-tauri/src/plugfiles.rs). */
     downloads: readonly DownloadDecl[];
+    /** About how much room its environment takes once set up, in bytes, as measured (its manifest's `setUpBytes`). */
+    setUpBytes?: number;
     /** Its Python environment's profile, and its lock and worker, in its folder among Meno's resources. */
     profile: `plugin-${string}`;
     lock: string;
@@ -101,6 +103,7 @@ export const pluginOf = (m: Manifest): Plugin => {
     steps: m.steps,
     installed: m.installed,
     downloads: m.downloads,
+    ...(m.setUpBytes ? { setUpBytes: m.setUpBytes } : {}),
     roleOptions: Object.fromEntries(m.roles.filter((r) => r.options.length).map((r) => [r.role, r.options])),
     roleLooks: Object.fromEntries(m.roles.filter((r) => r.looks?.length).map((r) => [r.role, r.looks!])),
     roleMotions: Object.fromEntries(m.roles.filter((r) => r.motions?.length).map((r) => [r.role, r.motions!])),

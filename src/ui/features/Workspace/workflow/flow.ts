@@ -4,11 +4,10 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { Model, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
-import { signatureOf } from "../utils/drawnLink";
-import { holdsOf, setMembers, setMolecules } from "./entries";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, type SetHolds, type SetKind } from "./kinds";
-import { byOf, optionsFor, takesBy } from "./doers";
+import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import { drawnKey, hash, holdsOf, plainAmong, recordKey, setMembers, setMolecules } from "./entries";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -60,43 +59,56 @@ export function stepsBefore(doc: Flow, step: number): number[] {
   return out;
 }
 
-/** Whether a wire may go from `from` into the step `to`: the step - done by whom it is - takes what it gives, or what that is is not known yet; and no loop is made. */
+/** Whether a wire may go from `from` into the step `to` (`wireRefusal`: none). */
 export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): boolean {
-  const step = stepOf(doc, to);
-  if (!step) return false;
-  const set = findSet(doc, from.set);
-  if (!set || set.made?.step === to) return false;
-  // (nothing it gives may come back round to it)
-  const madeBy = set.made?.step;
-  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return false;
-  const holds = givesOf(doc, from);
-  // (pictures - a Render step's - no step takes)
-  if (holds === "pictures") return false;
-  // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
-  const takes = portOf(step.kind, port).takes;
-  if (holds == null) return true;
-  return inputsOf(step.kind).length > 1 ? takes.includes(holds) : takesBy(step.kind, byOf(step), holds);
+  return wireRefusal(doc, from, to, port) == null;
 }
 
-/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn, in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
-export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][] } | null {
+/** A kind of set, as a step's card says what it takes and what came. */
+const SET_WORDS: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "a conformer set", table: "a table", number: "a number" };
+
+/**
+ * Why a wire may not go from `from` into the step `to`, in plain words;
+ * none where it may: the step - done by whom it is - takes what it gives,
+ * or what that is is not known yet; and no loop is made.
+ */
+export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string = ONE_INPUT): string | null {
+  const step = stepOf(doc, to);
+  const set = findSet(doc, from.set);
+  if (!step || !set) return "It is not there";
+  // (a step that takes nothing in has nothing to wire to)
+  if (takesNothing(step.kind)) return "It takes nothing in";
+  if (set.made?.step === to) return "It is what this step gives";
+  // (nothing it gives may come back round to it)
+  const madeBy = set.made?.step;
+  if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
+  const holds = givesOf(doc, from);
+  // (pictures - a Render step's - and charts no step takes)
+  if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
+  if (holds == null) return null;
+  // (a set mixing conformer sets with other molecules, which no step takes: which are the others)
+  const mixed = holds === "molecules" && !set.made ? plainAmong(setMolecules(doc, set)) : null;
+  if (mixed) return mixed;
+  // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
+  const several = inputsOf(step.kind).length > 1;
+  const takes = portOf(step.kind, port).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
+  // (molecules or conformer sets into a port that takes a table, seen as one: kinds `takenBy`)
+  if (takenBy(takes, holds)) return null;
+  const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
+  return `It takes ${wants}, not ${SET_WORDS[holds]}`;
+}
+
+/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn - each with its record, where it has one - in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
+export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[] } | null {
   const from = wireInto(doc, step, port)?.from;
   if (!from) return null;
   const set = findSet(doc, from.set);
   if (!set) return null;
   const holds = holdsOf(doc, set);
-  if (holds === "pictures") return null;
-  const { structures } = setMembers(doc, set);
-  return { holds, molecules: setMolecules(doc, set), structures };
-}
-
-/** FNV-1a over a string: a short key for what came into a step. */
-function hash(text: string, h = 0x811c9dc5): number {
-  for (let i = 0; i < text.length; i++) {
-    h ^= text.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h;
+  // (a table, a number, a chart - no entries to give a step that works on them)
+  if (!isSetKind(holds)) return null;
+  const { structures, records } = setMembers(doc, set);
+  return { holds, molecules: setMolecules(doc, set), structures, records };
 }
 
 /**
@@ -112,75 +124,29 @@ function keyTexts(m: Molecule3D): readonly string[] {
       // (an atom's charge, radical and isotope too: a step run on the neutral molecule has not run on its anion)
       m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
       `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
-      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}`,
+      `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}`,
+      JSON.stringify(m.properties ?? null),
     ];
     keyed.set(m, texts);
   }
   return texts;
 }
 
-/**
- * What a drawn structure adds to a step's key, as text: what it is - its
- * atoms' elements, charges, masses and radicals, its bonds' orders, wedges
- * and dative bonds (`signatureOf`) - and what its drawing says by where
- * things lie: on which side of each double bond each neighbour is, the
- * other end's taken together (cis or trans), and the order the neighbours
- * go round each atom a wedge starts from. Not where it is drawn: moved
- * whole, turned, or an atom nudged without crossing a line that matters, it
- * is the same; mirrored, its wedged centres are not.
- */
-const drawnKeyed = new WeakMap<Model, Map<string, string>>();
-function drawnKey(model: Model, ids: readonly number[]): string {
-  const known = drawnKeyed.get(model) ?? new Map<string, string>();
-  drawnKeyed.set(model, known);
-  const name = ids.join(",");
-  const had = known.get(name);
-  if (had != null) return had;
-  const of = new Set(ids);
-  const at = new Map(model.atoms.filter((a) => of.has(a.id)).map((a) => [a.id, a]));
-  const near = new Map<number, number[]>();
-  const bonds = model.bonds.filter((b) => at.has(b.a) && at.has(b.b));
-  for (const b of bonds) {
-    near.set(b.a, [...(near.get(b.a) ?? []), b.b]);
-    near.set(b.b, [...(near.get(b.b) ?? []), b.a]);
-  }
-  const said: string[] = [];
-  for (const a of at.values()) if (a.radical) said.push(`r${a.id}:${a.radical}`);
-  for (const b of bonds) {
-    if (b.dative) said.push(`d${b.a}-${b.b}`);
-    if (b.order === 2) {
-      // (each neighbour's side of the line through the bond, measured the same way at both ends)
-      const p = at.get(b.a)!;
-      const q = at.get(b.b)!;
-      const side = (id: number) => {
-        const n = at.get(id)!;
-        return Math.sign((q.x - p.x) * (n.y - p.y) - (q.y - p.y) * (n.x - p.x));
-      };
-      for (const n of near.get(b.a) ?? []) if (n !== b.b) for (const m of near.get(b.b) ?? []) if (m !== b.a) said.push(`${n}~${m}:${side(n) * side(m)}`);
-    }
-    if (b.stereo && b.stereo !== "none") {
-      // (round the atom it starts from, anticlockwise, from its lowest-numbered neighbour)
-      const c = at.get(b.a)!;
-      const round = (near.get(b.a) ?? [])
-        .map((id) => ({ id, angle: Math.atan2(at.get(id)!.y - c.y, at.get(id)!.x - c.x) }))
-        .sort((u, v) => u.angle - v.angle)
-        .map((u) => u.id);
-      const first = round.indexOf(Math.min(...round));
-      said.push(`w${b.a}:${[...round.slice(first), ...round.slice(0, first)].join(">")}`);
-    }
-  }
-  const key = `${signatureOf(model, ids)}|${said.sort().join(",")}`;
-  known.set(name, key);
-  return key;
-}
-
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
+  // (a step that takes nothing in runs on its options alone, and who does it)
+  // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
+  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
   const input = inputOf(doc, step.id);
   if (!input) return "";
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
   for (const m of input.molecules) for (const text of keyTexts(m)) h = hash(text, h);
-  for (const s of input.structures) h = hash(drawnKey(doc.model, s), h);
+  input.structures.forEach((s, i) => {
+    h = hash(drawnKey(doc.model, s), h);
+    // (and its record: the same structure with another value from the step before has not been run on)
+    const record = input.records[i];
+    if (record) h = hash(recordKey(record), h);
+  });
   return h.toString(36);
 }
 
@@ -197,11 +163,57 @@ export type StepState = "no-input" | "ready" | "waiting" | "running" | "done" | 
 export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   // (its jobs under way: the card says which, as they were last looked at)
   if (step.running) return "running";
-  const into = wireInto(doc, step.id);
+  // (a step that takes nothing in is ready as it is)
+  const into = takesNothing(step.kind) || !!wireInto(doc, step.id);
   if (!step.ran) return into ? "ready" : "no-input";
   // (what comes from a step not run yet, or run since, has changed)
   if (!into) return "changed";
   const key = inputKey(doc, step, by);
   if (key !== step.ran.input) return "changed";
   return step.ran.ok ? "done" : step.ran.stopped ? "stopped" : "failed";
+}
+
+/**
+ * The steps to run to run `id`, in order: the furthest back before it
+ * that has not run, has changed, failed, stopped or is running - however many done
+ * lie between - and every step from it to `id`, which take anew what it
+ * gives.
+ */
+export function chainTo(doc: Flow, id: number): number[] {
+  const back = stepsBefore(doc, id).slice(0, 200);
+  let far = -1;
+  back.forEach((sid, k) => {
+    const s = stepOf(doc, sid);
+    if (s && (s.running || stateOf(doc, s, byOf(s)) !== "done")) far = k;
+  });
+  return [...back.slice(0, far + 1).reverse(), id];
+}
+
+/** The steps after a step: those that take what it gives, and those after them. */
+export function stepsAfter(doc: Flow, id: number): number[] {
+  const out: number[] = [];
+  const seen = new Set([id]);
+  const queue = [id];
+  while (queue.length) {
+    const at = queue.shift()!;
+    // (every exit's set: what any of them gives comes down to the steps wired from it)
+    const made = new Set((doc.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
+    for (const wire of doc.wires ?? []) {
+      if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
+        seen.add(wire.to.step);
+        out.push(wire.to.step);
+        queue.push(wire.to.step);
+      }
+    }
+  }
+  return out;
+}
+
+/** The steps a run of `targets` runs (store `runSteps`): each, and those before it it runs first (`chainTo`). */
+export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [...new Set(targets.flatMap((t) => chainTo(doc, t)))];
+
+/** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
+export function allToRun(doc: Flow): number[] {
+  const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
+  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
 }

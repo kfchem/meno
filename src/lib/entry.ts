@@ -12,7 +12,7 @@
  */
 import type { Radical } from "./chem/molecule";
 import type { Species } from "./io/writers";
-import type { Unit } from "./units";
+import { isUnit, type Unit } from "./units";
 
 /** The entry's version, as a plugin is given it and a workspace keeps it: a reader refuses a version it does not know. */
 export const ENTRY_SCHEMA = 1;
@@ -149,13 +149,16 @@ export type EntryStereo = { perceived: true; elements: StereoElement[]; key: str
 /**
  * Which stereoisomer an entry is, as one text that two entries share
  * exactly when they are one: the key, with the plugin and version that made
- * it - keys of two versions are not compared. None where it is not known:
- * not perceived, or an element left unspecified, which matches nothing -
- * not even another unspecified one. CIP labels are never in it.
+ * it - keys of two versions are not compared - as a JSON list, so that no
+ * two of them run together into one text. None where it is not known: not
+ * perceived, an element left unspecified, which matches nothing - not even
+ * another unspecified one - or no plugin or version said, for a key no one
+ * vouches for. CIP labels are never in it.
  */
 export function stereoIdentity(stereo: EntryStereo | undefined): string | null {
   if (!stereo?.perceived || stereo.elements.some((e) => !e.specified)) return null;
-  return `${stereo.by.plugin ?? "?"}@${stereo.by.version ?? "?"}:${stereo.key}`;
+  if (!stereo.by.plugin || !stereo.by.version) return null;
+  return JSON.stringify([stereo.by.plugin, stereo.by.version, stereo.key]);
 }
 
 /** An entry's status: done, failed (why), or set aside (why). */
@@ -168,7 +171,8 @@ export type Entry = {
   from: string[];
   structure: { atoms: EntryAtom[]; bonds: EntryBond[] };
   geometry: Geometry;
-  species: Species;
+  /** Its charge and spin multiplicity (lib/io/writers `speciesOf`); none for a skeleton, its hydrogens not there (lib/chem/skeleton). */
+  species: Species | null;
   properties: Record<string, Property>;
   /** Which stereoisomer it is; absent until perceived. */
   stereo?: EntryStereo;
@@ -253,3 +257,46 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
   return null;
 }
 
+
+const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment"] as const;
+
+/**
+ * A property of one value - a number, a text, true or false - as a file or
+ * a plugin gives it, read back: its value, its unit, what worked it out and
+ * where (each field a text, a temperature and a pressure numbers), and
+ * whether it was. None where any of that does not read, or its value is
+ * of another kind - a list or a table, which a molecule on the page does
+ * not keep as a property.
+ */
+export function propertyIn(v: unknown): Property | undefined {
+  const p = v as { value?: unknown; unit?: unknown; at?: unknown; by?: unknown; status?: unknown } | null;
+  if (!p || typeof p !== "object") return undefined;
+  const value = p.value;
+  if (!((typeof value === "number" && Number.isFinite(value)) || typeof value === "string" || typeof value === "boolean")) return undefined;
+  if (!(p.unit === "none" || (typeof p.unit === "string" && isUnit(p.unit)))) return undefined;
+  const st = p.status as { failed?: unknown; notApplicable?: unknown } | string | null | undefined;
+  const status: PropertyStatus | undefined =
+    st === "computed" ? "computed" : typeof st === "object" && st ? (typeof st.failed === "string" ? { failed: st.failed } : typeof st.notApplicable === "string" ? { notApplicable: st.notApplicable } : undefined) : undefined;
+  if (!status) return undefined;
+  let by: By | undefined;
+  if (p.by != null) {
+    const b = p.by as Record<string, unknown>;
+    if (typeof b !== "object" || BY_FIELDS.some((f) => b[f] != null && typeof b[f] !== "string")) return undefined;
+    by = Object.fromEntries(BY_FIELDS.flatMap((f) => (typeof b[f] === "string" ? [[f, b[f]]] : [])));
+  }
+  let at: At | undefined;
+  if (p.at != null) {
+    const a = p.at as { geometry?: unknown; kelvin?: unknown; atm?: unknown; solvent?: unknown };
+    if (typeof a !== "object" || typeof a.geometry !== "string") return undefined;
+    if ((a.kelvin != null && !Number.isFinite(a.kelvin)) || (a.atm != null && !Number.isFinite(a.atm)) || (a.solvent != null && typeof a.solvent !== "string")) return undefined;
+    at = { geometry: a.geometry, ...(a.kelvin != null ? { kelvin: a.kelvin as number } : {}), ...(a.atm != null ? { atm: a.atm as number } : {}), ...(a.solvent != null ? { solvent: a.solvent as string } : {}) };
+  }
+  return { value, unit: p.unit as Unit | "none", ...(at ? { at } : {}), ...(by ? { by } : {}), status };
+}
+
+/** Properties by name as a file or a plugin gives them, read back (`propertyIn`): those that read; none where none do. */
+export function propertiesIn(v: unknown): Record<string, Property> | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const out = Object.fromEntries(Object.entries(v as Record<string, unknown>).flatMap(([k, p]) => (k && propertyIn(p) ? [[k, propertyIn(p)!]] : [])));
+  return Object.keys(out).length ? out : undefined;
+}

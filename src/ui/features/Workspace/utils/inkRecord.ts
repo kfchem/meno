@@ -5,6 +5,7 @@
  * three numbers to a point.
  */
 import type { Ink } from "../store/types";
+import { leftOut } from "./readNotes";
 
 const COLOUR = /^#[0-9a-f]{6}$/i;
 const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
@@ -17,6 +18,8 @@ export function readInkPiece(raw: unknown): Omit<Ink, "id"> | null {
     s && Array.isArray(s.points) && s.points.length >= 3 && s.points.length % 3 === 0 && s.points.every(isNum) ? [{ points: s.points as number[], ...(s.pressure === true ? { pressure: true as const } : {}) }] : [],
   );
   if (!strokes.length) return null;
+  // (a piece that reads, but for some of its strokes: those said)
+  leftOut("stroke", k.strokes.length - strokes.length);
   return {
     pen: k.pen,
     width: k.width === 0 || k.width === 2 ? k.width : 1,
