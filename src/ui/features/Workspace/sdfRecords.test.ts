@@ -8,13 +8,13 @@
 import { describe, expect, it } from "vitest";
 import { readStructures } from "../../../lib/io/structures";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
-import { structureFileText } from "./fileActions";
-import type { Drawn, DrawnRecord } from "./store/types";
-import { BEFORE_THE_EDIT, recordHow, recordNumber, recordOn, recordWhy, setMembers } from "./workflow/entries";
+import { structureFileText, withHeld } from "./fileActions";
+import type { Drawn, DrawnModel, DrawnRecord } from "./store/types";
+import { BEFORE_THE_EDIT, numberedRecord, recordHow, recordNumber, recordOn, recordWhy, setMembers } from "./workflow/entries";
 import { resultOf } from "./workflow/flow";
 import { addSet, addStep, connect } from "./workflow/model";
 import { partsOf } from "./workflow/parts";
-import { runStep, type RunWith } from "./workflow/run";
+import { placeResults, runStep, type RunWith } from "./workflow/run";
 import { template } from "./workflow/testdata/enumerationCases";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
@@ -175,6 +175,43 @@ describe("a workflow's structures drawn, written to an SD file", () => {
       ["State", "finished"],
       ["note", "first\n > <fake>\n99\n \n $$$$\nlast"],
     ]);
+  });
+
+  it("writes every structure a set holds, those it shows and those it holds off the page alike, a record each in its order", () => {
+    // (a step's 120 products, each its number: more than the page shows - the rest held in the set)
+    const product = (k: number): DrawnModel => ({
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0 },
+        { id: 2, el: "C", x: 1.56, y: 0.9 },
+        { id: 3, el: k % 2 ? "Cl" : "Br", x: 3.12, y: 0 },
+      ] as never,
+      bonds: [
+        { id: 4, a: 1, b: 2, order: 1 },
+        { id: 5, a: 2, b: 3, order: 1 },
+      ] as never,
+      record: numberedRecord(k + 1, `product ${k + 1}`),
+    });
+    let doc = addStep(emptyWorkspaceDocument(), "descriptors", 0, 0);
+    const step = doc.steps![0];
+    doc = placeResults(doc, step, { molecules: [], rest: [], holds: "structures", drawn: { made: Array.from({ length: 120 }, (_, k) => product(k)), rest: [] } }, W);
+    const out = resultOf(doc, step.id, "out")!;
+    const shown = setMembers(doc, out).structures.length;
+    expect([shown > 0, shown < 120, shown + (out.drawnCollection?.length ?? 0)]).toEqual([true, true, 120]);
+    const part = { ...doc.model, arrows: [], pluses: [], flow: partsOf(doc, new Set([out.id]), new Set([step.id])) } as unknown as Drawn;
+    const read = records(structureFileText(withHeld(part, { sets: doc.sets! }), "/x/w.sdf"));
+    // (none of what is drawn besides: the 120, in the set's order, each its number and how)
+    expect(read.map((r) => r.title)).toEqual(Array.from({ length: 120 }, (_, k) => `w ${k + 1}`));
+    expect(read[119].items).toEqual([
+      ["State", "finished"],
+      ["number", "120"],
+      ["made.how", "product 120"],
+    ]);
+    // (each held one its own structure: its halogen as it was made)
+    const text = structureFileText(withHeld(part, { sets: doc.sets! }), "/x/w.sdf");
+    expect(readStructures("sdf", "w.sdf", text).records).toHaveLength(120);
+    expect(text.split("$$$$\n").filter((r) => r.trim()).map((r) => (/ Br /.test(r) ? "Br" : "Cl"))).toEqual(Array.from({ length: 120 }, (_, k) => (k % 2 ? "Cl" : "Br")));
+    // (without what it holds - the page's alone - not all of them: what Export is given, from what is selected, holds them all)
+    expect(records(structureFileText(part, "/x/w.sdf"))).toHaveLength(shown);
   });
 
   it("writes what is drawn as one record, as before, where no set is selected with it", () => {

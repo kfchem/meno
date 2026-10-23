@@ -237,11 +237,11 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   // (each structure a set carries a record of - a step's result, its products or what it worked out - a record of its own,
   // with what its record says as data items; the rest of what is drawn one record, as before)
   const inSets = setRecordsOf(drawn, loose);
-  const taken = new Set(inSets.flatMap((r) => r.ids));
+  const taken = new Set(inSets.flatMap((r) => ("ids" in r ? r.ids : [])));
   const rest = { ...loose, atoms: loose.atoms.filter((a) => !taken.has(a.id)), bonds: loose.bonds.filter((b) => !taken.has(b.a) && !taken.has(b.b)) };
   const ofSets = inSets.map((r, k) => {
-    const ids = new Set(r.ids);
-    const one = { ...loose, atoms: loose.atoms.filter((a) => ids.has(a.id)), bonds: loose.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
+    const ids = "ids" in r ? new Set(r.ids) : null;
+    const one = "model" in r ? r.model : { ...loose, atoms: loose.atoms.filter((a) => ids!.has(a.id)), bonds: loose.bonds.filter((b) => ids!.has(b.a) && ids!.has(b.b)) };
     const number = recordNumber(r.record);
     return writeMolfile(forFlatReaders(one), { title: `${title} ${number ?? k + 1}`, version }) + recordData(r.record) + "$$$$\n";
   });
@@ -258,20 +258,31 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
  * (workflow/parts `partsOf`: a set selected carries its structures' records
  * by their atoms' ids), each once, in its set's order - its record as its
  * structure stands now (workflow/entries `recordNow`: edited since it was
- * given, its properties and state taken away, said so). Only those whose
- * atoms are all among `drawing`'s.
+ * given, its properties and state taken away, said so); only those whose
+ * atoms are all among `drawing`'s. After them, each set's structures it
+ * holds off the page (`Drawn.held`), in its order, each with its own record:
+ * holding is for the page alone, and every one of them is written.
  */
-function setRecordsOf(drawn: Drawn, drawing: Model): { ids: number[]; record: DrawnRecord }[] {
+function setRecordsOf(drawn: Drawn, drawing: Model): ({ ids: number[]; record: DrawnRecord } | { model: Model; record: DrawnRecord })[] {
   const here = new Set(drawing.atoms.map((a) => a.id));
   const seen = new Set<number>();
-  return (drawn.flow?.sets ?? []).flatMap((set) =>
-    (set.carried ?? []).flatMap((c) => {
+  return (drawn.flow?.sets ?? []).flatMap((set) => [
+    ...(set.carried ?? []).flatMap((c) => {
       if (!c.structure.length || !c.structure.every((id) => here.has(id) && !seen.has(id))) return [];
       c.structure.forEach((id) => seen.add(id));
-      const record = recordNow(c.record, drawing, c.structure);
-      return record ? [{ ids: c.structure, record }] : [{ ids: c.structure, record: {} }];
+      return [{ ids: c.structure, record: recordNow(c.record, drawing, c.structure) ?? {} }];
     }),
-  );
+    ...(drawn.held?.[set.id] ?? []).map(({ record, ...model }) => ({ model, record: recordNow(record, model, model.atoms.map((a) => a.id)) ?? {} })),
+  ]);
+}
+
+/** What is exported, `part`, with the structures each set selected in it holds off the page (`Drawn.held`), as `state` holds them. */
+export function withHeld(part: Drawn, state: Pick<EditorState, "sets">): Drawn {
+  const held = Object.fromEntries((part.flow?.sets ?? []).flatMap((s) => {
+    const own = state.sets.find((b) => b.id === s.id)?.drawnCollection;
+    return own?.length ? [[s.id, own]] : [];
+  }));
+  return Object.keys(held).length ? { ...part, held } : part;
 }
 
 /** A data item's name as an SD file can hold it: on one line, no angle brackets (CTfile Formats, the SDfile's data header). */
@@ -778,7 +789,8 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         }
         const kind = writer.id as WriterId;
         // (the part, or everything on the canvas - the molecules in 3D as they are seen)
-        const drawn = part ?? { ...drawnOf(state), molecules3d: carriedOf(state) };
+        // (and of a set selected, what it holds off the page too: every structure it holds is written)
+        const drawn = part ? withHeld(part, state) : { ...drawnOf(state), molecules3d: carriedOf(state) };
         if (kind === "svg") {
           // The style the canvas is drawn in: the document's own, or the app's.
           const style = styleOf(state.docStyle);
