@@ -36,18 +36,24 @@ const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =
  * which are the set's: put down elsewhere, it holds what then lies inside it
  * (workflow/model `membersSettled`) - its structures drawn with the records
  * they had (`WorkflowSet.carried`) - and a step's exit is empty until its
- * step runs again - its molecules never copied twice.
+ * step runs again - its molecules never copied twice. A set put down
+ * without its step carries the structures drawn it holds off the page -
+ * those it did not show (`drawnCollection`) - all of them: put down, it
+ * holds those it shows and those, as it did.
  */
 export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet<number>): FlowParts {
   return {
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection: _d, unread: _u, carried: _r, core: _co, ...b }) => {
+      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection, unread: _u, carried: _r, core: _co, ...b }) => {
         // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
         const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
-        const set = b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b;
-        return carried.length ? { ...set, carried } : set;
+        const withStep = !!b.made && steps.has(b.made.step);
+        const set = b.made && !withStep ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b;
+        // (and, without its step, those it holds off the page: never a copy of the shown alone)
+        const held = !withStep && drawnCollection?.length ? { drawnCollection } : {};
+        return { ...set, ...held, ...(carried.length ? { carried } : {}) };
       }),
     steps: (doc.steps ?? [])
       .filter((s) => steps.has(s.id))

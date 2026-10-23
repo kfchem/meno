@@ -74,6 +74,7 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
@@ -210,7 +211,7 @@ import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
-import { heldOwn } from "./workflow/entries";
+import { heldOwn, holdsOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -1997,27 +1998,7 @@ function WorkspaceContent({
           key={`${menu.x},${menu.y}`}
           target={menu}
           onClose={closeMenu}
-          onDelete={() => {
-            const st = store.getState();
-            if (menu.kind === "arrow" && menu.id != null) st.removeArrow(menu.id);
-            else if (menu.kind === "caption" && menu.id != null) st.removeCaption(menu.id);
-            else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
-            else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
-            else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
-            else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
-            else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
-            else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
-            // (the menu says what goes with a set that holds its molecules itself: asked there, in its words)
-            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id, true);
-            else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
-            else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
-            else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
-            else if (menu.kind === "push" && menu.id != null) st.removePush(menu.id);
-            else if (menu.kind === "measure3d" && menu.id != null && menu.measure != null) st.removeMeasure3d(menu.id, menu.measure);
-            else if (menu.selection === "here") st.deleteSelection();
-            else if (menu.kind === "molecule3d" && menu.id != null) st.removeMolecule3d(menu.id);
-            else if (menu.kind && menu.id != null) deletePart(menu.kind, menu.id);
-          }}
+          onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
           molecule3d={menu3d}
           records={menuRecords}
           measure3d={measure3dMenu}
@@ -2076,7 +2057,7 @@ function WorkspaceContent({
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const st = store.getState();
             const set = st.sets.find((b) => b.id === menu.id);
-            return set?.collection?.length ? heldOwn(st, set) : undefined;
+            return set && holdsOwn(set) ? heldOwn(st, set) : undefined;
           })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;

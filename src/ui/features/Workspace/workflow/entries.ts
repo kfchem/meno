@@ -1116,6 +1116,9 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
 }
 
 /** What a set holds itself, on no page (`collection`), said - "118 molecules", "400 conformers" - for what goes with it when it is deleted; none where it holds none. */
+/** Whether a set holds what is on no page - a large set's molecules in 3D (`collection`), structures drawn it does not show (`drawnCollection`) - which go with it: deleting it asks first. */
+export const holdsOwn = (set: Pick<WorkflowSet, "collection" | "drawnCollection"> | undefined): boolean => !!(set?.collection?.length || set?.drawnCollection?.length);
+
 export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
   // (structures drawn it holds off the page - those it does not show: they go with it; those it shows are the page's)
   if (set.drawnCollection?.length) return `${set.drawnCollection.length.toLocaleString("en-US")} ${set.drawnCollection.length === 1 ? "structure" : "structures"}`;
