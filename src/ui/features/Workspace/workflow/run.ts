@@ -17,8 +17,8 @@ import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entri
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto } from "./flow";
 import { chartOfTable, chartSaid } from "../../../../lib/chart";
-import { exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
-import { takesBy } from "./doers";
+import { exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
@@ -93,7 +93,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
   // (a step that takes nothing in needs only someone to do it)
-  if (takesNothing(step.kind)) return by ? null : "Nothing added does this step";
+  if (takesNothingBy(step.kind, by)) return by ? null : "Nothing added does this step";
   const input = inputOf(doc, step.id);
   // (a table wired in - a set's, or molecules seen as one: no entries of its own to give)
   const holds = input?.holds ?? (tableWired(doc, step.id) ? "table" : null);
