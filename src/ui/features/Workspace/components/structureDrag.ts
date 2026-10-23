@@ -8,6 +8,7 @@
  * and nothing is taken.
  */
 import { styleOf } from "../../../../lib/chem/style";
+import { DURATION } from "../../../theme/motion";
 import type { EditorStore } from "../store";
 import type { Model, PdfItem } from "../store/types";
 import { drawingSvg, exportPxPerWorld } from "../fileActions";
@@ -34,8 +35,8 @@ export function movedTo(model: Model, at: { x: number; y: number }): Model {
 }
 
 /** How long a structure put down is drawn over itself on the page, and how long one let go elsewhere takes to go back, in ms. */
-export const HANDOVER_MS = 140;
-export const BACK_MS = 320;
+export const HANDOVER_MS = DURATION.base * 1000;
+export const BACK_MS = DURATION.move * 1000;
 
 /**
  * A structure of a PDF's page carried out from where the pointer pressed it

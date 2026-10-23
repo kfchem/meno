@@ -6,7 +6,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { PRESS_WIDENED, structureAt, structuresOf, type PageStructure } from "../utils/pageStructures";
 import { dragStructure, inRow, movedTo, setStructureSay } from "./structureDrag";
-import { marksOn } from "./pdfMarks";
+import { marksOn, shadesNow } from "./pdfMarks";
 import { PICKED_POINTED_SHADE, POINTED_SHADE, SELECTION_SHADE } from "./selectionShade";
 
 // (the window and the page as the pointer sees them, bare: no canvas under any point)
@@ -77,14 +77,30 @@ describe("structures picked from a PDF, in the editor", () => {
     for (const b of row.bonds) expect(row.atoms.some((a) => a.id === b.a) && row.atoms.some((a) => a.id === b.b)).toBe(true);
   });
 
-  it("are shaded on the page as the canvas shades a selection - a disc on each atom, a band along each bond, its own colours - picked, pointed at, and both", () => {
+  it("are shaded on the page as the canvas shades a selection - a disc on each atom, a band along each bond - each in its own shade once it has come: pointed at, picked, both", () => {
     const pdf = { id: 1, sha256: "a".repeat(64) };
-    const shade = (lit: PageStructure | null, picked: PageStructure[]) => marksOn(pdf, 0, null, [], null, () => {}, null, null, { lit, picked });
-    const [picked] = shade(null, [ring]);
+    const [picked] = marksOn(pdf, 0, null, [], null, () => {}, null, null, { lit: null, picked: [ring] });
     expect(picked.shade).toEqual({ atoms: ring.atoms, bonds: ring.bonds, bond: ring.reach * 3 });
-    expect(picked.color).toBe(SELECTION_SHADE);
-    expect(shade(ring, [])[0].color).toBe(POINTED_SHADE);
-    expect(shade(ring, [ring]).map((m) => m.color)).toEqual([PICKED_POINTED_SHADE]);
+    const done = (wanted: (readonly [PageStructure, string])[], page: string) => {
+      shadesNow(page, wanted, 0);
+      return shadesNow(page, wanted, 1000).map((x) => x.color.hex);
+    };
+    expect(done([[ring, SELECTION_SHADE]], "p1")).toEqual([SELECTION_SHADE]);
+    expect(done([[ring, POINTED_SHADE]], "p2")).toEqual([POINTED_SHADE]);
+    expect(done([[ring, PICKED_POINTED_SHADE]], "p3")).toEqual([PICKED_POINTED_SHADE]);
+  });
+
+  it("come into their shade and go out of it over a moment, eased - never at once", () => {
+    const at = (t: number, wanted: (readonly [PageStructure, string])[]) => shadesNow("p9", wanted, t);
+    const on = [[ring, SELECTION_SHADE] as const];
+    expect(at(0, on)[0].color).toEqual({ hex: "#ffffff", moving: true });
+    const mid = at(60, on)[0].color;
+    expect([mid.hex !== "#ffffff", mid.hex !== SELECTION_SHADE, mid.moving]).toEqual([true, true, true]);
+    expect(at(200, on)[0].color).toEqual({ hex: SELECTION_SHADE, moving: false });
+    // (let go: going out from where it was, then gone)
+    expect(at(200, [])[0].color.moving).toBe(true);
+    expect(at(260, [])[0].color.hex).not.toBe(SELECTION_SHADE);
+    expect(at(400, [])).toEqual([]);
   });
 });
 

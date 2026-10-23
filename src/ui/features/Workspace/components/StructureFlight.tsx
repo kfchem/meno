@@ -11,10 +11,11 @@ import { useEffect, useState } from "react";
 import { useEditor, useEditorStore } from "../store";
 import { canvasPxPerUnit } from "./wordsDrag";
 import { BACK_MS, HANDOVER_MS } from "./structureDrag";
+import { DURATION } from "../../../theme/motion";
 
-/** How long it takes to lift off, and to grow or shrink as it goes over the canvas or off it, in ms. */
-const LIFT_MS = 180;
-const SIZE_MS = 160;
+/** How long it takes to lift off, and to grow or shrink as it goes over the canvas or off it, in ms: what comes into view, as a mark does. */
+const LIFT_MS = DURATION.base * 1000;
+const SIZE_MS = DURATION.base * 1000;
 
 export default function StructureFlight() {
   const store = useEditorStore();
@@ -59,7 +60,16 @@ export default function StructureFlight() {
         opacity: back || landed ? 0 : 1,
         transform: lifted && !back && !landed ? "scale(1.04)" : "scale(1)",
         filter: lifted && !back && !landed ? "drop-shadow(0 6px 10px rgba(0,0,0,0.18))" : "none",
-        transition: `left ${back ? BACK_MS : 0}ms ease-out, top ${back ? BACK_MS : 0}ms ease-out, width ${ms}ms ease-out, height ${ms}ms ease-out, opacity ${ms}ms ease-out, transform ${LIFT_MS}ms ease-out, filter ${LIFT_MS}ms ease-out`,
+        // (Meno's easing, and its leaving one for what goes - theme/motion, App.css)
+        transition: [
+          `left ${back ? BACK_MS : 0}ms var(--ease-meno)`,
+          `top ${back ? BACK_MS : 0}ms var(--ease-meno)`,
+          `width ${ms}ms var(--ease-meno)`,
+          `height ${ms}ms var(--ease-meno)`,
+          `opacity ${ms}ms ${back || landed ? "var(--ease-meno-leave)" : "var(--ease-meno)"}`,
+          `transform ${LIFT_MS}ms var(--ease-meno)`,
+          `filter ${LIFT_MS}ms var(--ease-meno)`,
+        ].join(", "),
       }}
     />
   );
