@@ -172,10 +172,10 @@ pub async fn job_kept(app: AppHandle, id: String) -> Result<Option<Vec<KeptJobFi
     if !jobs::job_id_ok(&id) {
         return Err(format!("no job {id}"));
     }
-    let dir = jobs::jobs_root(&app)?.join(&id);
-    if !jobs::is_job(&dir) {
+    // (in whichever jobs' folder holds it: the working folder chosen, or Meno's own)
+    let Some(dir) = jobs::job_in(&jobs::all_roots(&app)?, &id) else {
         return Ok(None);
-    }
+    };
     tauri::async_runtime::spawn_blocking(move || Some(kept_files(&dir))).await.map_err(|e| e.to_string())
 }
 
@@ -274,13 +274,13 @@ fn carried<W: Write>(sources: &mut Sources, from: &Path, sha256: &str, out: &mut
 
 /// Adds job files to the workspace file `zip` - a zip, as the page wrote it,
 /// which lists them already (`files.json`) - each from its job's folder in
-/// `jobs_root`, as `files/<sha256>`, deflated; one it holds already, or
+/// whichever of the jobs' folders `jobs_roots` holds it, as `files/<sha256>`, deflated; one it holds already, or
 /// added already, once - or, carried (`from`), from the workspace file it
 /// was opened from, read from it as it is written. Fails, saying which,
 /// where a file is no longer there, is not a plain file in its job's
 /// folder, or is no longer what its SHA-256 says: the file is then not to
 /// be kept as it is (docs/FILE-IO.md, *Saving*).
-pub fn append_job_files<F: Read + Write + Seek>(zip: F, jobs_root: &Path, appended: &[Appended]) -> Result<F, String> {
+pub fn append_job_files<F: Read + Write + Seek>(zip: F, jobs_roots: &[PathBuf], appended: &[Appended]) -> Result<F, String> {
     let archive = zip::ZipArchive::new(zip).map_err(|e| format!("the workspace's file as written: {e}"))?;
     let mut held: HashSet<String> = archive.file_names().map(str::to_string).collect();
     let mut out = zip::ZipWriter::new_append(archive.into_inner()).map_err(|e| format!("the workspace's file as written: {e}"))?;
@@ -304,7 +304,8 @@ pub fn append_job_files<F: Read + Write + Seek>(zip: F, jobs_root: &Path, append
             continue;
         }
         let gone = |e: io::Error| format!("{} could not be kept: {e}", a.name);
-        let mut file = open_inside(&jobs_root.join(&a.job), &a.name).map_err(gone)?;
+        let dir = jobs::job_in(jobs_roots, &a.job).ok_or_else(|| gone(io::Error::from(io::ErrorKind::NotFound)))?;
+        let mut file = open_inside(&dir, &a.name).map_err(gone)?;
         out.start_file(entry.as_str(), options).map_err(|e| e.to_string())?;
         let mut sha = Sha256::new();
         loop {
@@ -521,7 +522,7 @@ mod tests {
         let files = kept_files(&dir);
         let mut appended: Vec<Appended> = files.iter().map(|f| Appended { sha256: f.sha256.clone(), job: ID.into(), name: f.name.clone(), from: None }).collect();
         appended.push(appended[0].clone());
-        let out = append_job_files(Cursor::new(base_zip("{}")), &root, &appended).unwrap().into_inner();
+        let out = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &appended).unwrap().into_inner();
         let mut z = zip::ZipArchive::new(Cursor::new(out)).unwrap();
         let names: Vec<String> = z.file_names().map(str::to_string).collect();
         assert_eq!(names.len(), 3 + files.len());
@@ -537,13 +538,33 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    // (a working folder chosen for jobs is the first jobs' folder; jobs made in Meno's own before are still kept)
+    #[test]
+    fn takes_a_jobs_files_from_whichever_jobs_folder_holds_it() {
+        let chosen = temp("chosen");
+        let own = temp("own");
+        let dir = job(&own);
+        let f = kept_files(&dir).into_iter().find(|f| f.name == "log.txt").unwrap();
+        let one = Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None };
+        let out = append_job_files(Cursor::new(base_zip("{}")), &[chosen.clone(), own.clone()], std::slice::from_ref(&one)).unwrap().into_inner();
+        let mut z = zip::ZipArchive::new(Cursor::new(out)).unwrap();
+        let mut bytes = Vec::new();
+        z.by_name(&format!("files/{}", one.sha256)).unwrap().read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"ran\n");
+        // (in neither: said, and nothing taken from elsewhere)
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&chosen), &[one]).unwrap_err();
+        assert!(err.starts_with("log.txt could not be kept"), "{err}");
+        fs::remove_dir_all(chosen).unwrap();
+        fs::remove_dir_all(own).unwrap();
+    }
+
     #[test]
     fn a_file_changed_since_it_was_listed_fails_the_save() {
         let root = temp("changed");
         let dir = job(&root);
         let f = kept_files(&dir).into_iter().find(|f| f.name == "work/input.inp").unwrap();
         fs::write(dir.join("work/input.inp"), "! changed\n").unwrap();
-        let err = append_job_files(Cursor::new(base_zip("{}")), &root, &[Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None }]).unwrap_err();
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: f.sha256, job: ID.into(), name: f.name, from: None }]).unwrap_err();
         assert_eq!(err, "work/input.inp changed while the workspace was saved");
         fs::remove_dir_all(root).unwrap();
     }
@@ -558,7 +579,7 @@ mod tests {
         fs::write(&path, b"the workspace saved before").unwrap();
         let page = base_zip("{}");
         // (as write_document writes a workspace: what the page wrote, then the job files added, in the hidden file)
-        let save = |appended: &[Appended]| crate::savefile::replace_keeping(&path, false, |f| crate::savefile::document_written(f, &page, Some((&root, appended)), Some(MOST_WORKSPACE_FILE)));
+        let save = |appended: &[Appended]| crate::savefile::replace_keeping(&path, false, |f| crate::savefile::document_written(f, &page, Some((std::slice::from_ref(&root), appended)), Some(MOST_WORKSPACE_FILE)));
         save(&appended).unwrap();
         let mut z = zip::ZipArchive::new(File::open(&path).unwrap()).unwrap();
         assert_eq!(z.len(), 3 + files.len());
@@ -579,10 +600,10 @@ mod tests {
         let root = temp("outside");
         job(&root);
         for name in ["job.json", "state.json", "work/../job.json", "../x", "/etc/passwd", "work/"] {
-            let err = append_job_files(Cursor::new(base_zip("{}")), &root, &[Appended { sha256: "0".repeat(64), job: ID.into(), name: name.into(), from: None }]).unwrap_err();
+            let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: "0".repeat(64), job: ID.into(), name: name.into(), from: None }]).unwrap_err();
             assert!(err.starts_with("not a job's file"), "{name}: {err}");
         }
-        let err = append_job_files(Cursor::new(base_zip("{}")), &root, &[Appended { sha256: "0".repeat(64), job: "../x".into(), name: "log.txt".into(), from: None }]).unwrap_err();
+        let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: "0".repeat(64), job: "../x".into(), name: "log.txt".into(), from: None }]).unwrap_err();
         assert!(err.starts_with("not a job's file"));
         fs::remove_dir_all(root).unwrap();
     }
@@ -637,7 +658,7 @@ mod tests {
         // (and, named by the page all the same, refused)
         let sha256 = hex(&Sha256::digest(b"not a job's"));
         for name in ["work/linked.out", "work/up/secret.txt"] {
-            let err = append_job_files(Cursor::new(base_zip("{}")), &root, &[Appended { sha256: sha256.clone(), job: ID.into(), name: name.into(), from: None }]).unwrap_err();
+            let err = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[Appended { sha256: sha256.clone(), job: ID.into(), name: name.into(), from: None }]).unwrap_err();
             assert!(err.contains("could not be kept"), "{name}: {err}");
         }
         fs::remove_dir_all(root).unwrap();
@@ -657,13 +678,13 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(&from, z.finish().unwrap().into_inner()).unwrap();
         let one = Appended { sha256: sha256.clone(), job: ID.into(), name: "work/run.out".into(), from: Some(from.clone()) };
-        let made = append_job_files(Cursor::new(base_zip("{}")), &root, std::slice::from_ref(&one)).unwrap().into_inner();
+        let made = append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), std::slice::from_ref(&one)).unwrap().into_inner();
         let mut bytes = Vec::new();
         zip::ZipArchive::new(Cursor::new(made)).unwrap().by_name(&format!("files/{sha256}")).unwrap().read_to_end(&mut bytes).unwrap();
         assert_eq!(bytes, out);
         // (one it does not hold, or holds as something else: the save fails)
         let other = Appended { sha256: "a".repeat(64), ..one.clone() };
-        assert!(append_job_files(Cursor::new(base_zip("{}")), &root, &[other]).unwrap_err().contains("no longer holds"));
+        assert!(append_job_files(Cursor::new(base_zip("{}")), std::slice::from_ref(&root), &[other]).unwrap_err().contains("no longer holds"));
         // (and written back out from it, for Show files)
         let mut sources = Sources::new();
         let mut buf = vec![0u8; CHUNK];

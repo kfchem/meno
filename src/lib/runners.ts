@@ -22,6 +22,8 @@ export type Runner = {
   log(id: string, from: number): Promise<{ text: string; next: number }>;
   files(id: string): Promise<string[]>;
   read(id: string, name: string): Promise<string>;
+  /** What a job gave, as one digest: its log and every file it wrote, hashed (jobs.rs `digest_of`). */
+  digest(id: string): Promise<string>;
   /** Where a job's files are, where the chemist can open them. */
   folder(id: string): Promise<string>;
   stop(id: string): Promise<void>;
@@ -40,6 +42,7 @@ export const THIS_COMPUTER: Runner = {
   log: (id, from) => invoke<{ text: string; next: number }>("job_log", { id, from }),
   files: (id) => invoke<string[]>("job_files", { id }),
   read: (id, name) => invoke<string>("job_read", { id, name }),
+  digest: (id) => invoke<string>("job_digest", { id }),
   folder: (id) => invoke<string>("job_folder", { id }),
   stop: (id) => invoke<void>("job_stop", { id }),
   remove: (id) => invoke<void>("job_remove", { id }),

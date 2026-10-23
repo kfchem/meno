@@ -34,6 +34,7 @@ import math
 import re
 import os
 import sys
+import time
 
 from rdkit import Chem, RDLogger, rdBase
 from rdkit.Geometry import Point3D
@@ -50,6 +51,7 @@ from rdkit.Chem import (
 )
 from rdkit.Chem.EnumerateStereoisomers import (
     EnumerateStereoisomers,
+    GetStereoisomerCount,
     StereoEnumerationOptions,
 )
 
@@ -398,6 +400,9 @@ def op_analyse(m):
 
 #: The most stereoisomers a structure is made in, all at once.
 MOST_ISOMERS = 32
+#: How long *Stereoisomers* looks at one structure before it sets it aside, alone (seconds): its stereoisomers each
+#: tried in 3D, a camphor's in some 10 s.
+EXAMINE_S = 30
 #: How many conformers are tried of a molecule in which nothing turns and no ring can flip - RDKit's own
 #: number for an embedding, which is as many shapes as such a molecule has.
 FEW_CONFORMERS = 10
@@ -488,18 +493,30 @@ def isomers_of(mol):
     return embeddable(mol) or [mol]
 
 
-def embeddable(mol):
+class TooLong(Exception):
+    """A structure's stereoisomers not all tried by the time given (`embeddable`'s `deadline`)."""
+
+
+def embeddable(mol, deadline=None):
     """The stereoisomers `isomers_of` gives, but none where no one of them embeds with its stereo held.
 
     Worked out once for each structure as it is asked about - its atoms, bonds and stereo as given, in their order
     (`EMBEDDABLE`): a step asks `open_stereo` and then `conformers` of the same structure, and trying to embed each
-    stereoisomer is slow (a camphor some 10 s). The tries themselves are never cut short. Each caller is given
-    copies of its own."""
+    stereoisomer is slow (a camphor some 10 s). The tries themselves are never cut short; but where a `deadline` is
+    given (time.monotonic()), TooLong is raised once it has passed, looked at as each stereoisomer embedded comes
+    back - between RDKit's tries, never within one - and nothing is kept of it. Each caller is given copies of its
+    own."""
     key = Chem.MolToMolBlock(mol, includeStereo=True, kekulize=False)
     made = EMBEDDABLE.get(key)
     if made is None:
         options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS, tryEmbedding=True)
-        made = list(EnumerateStereoisomers(mol, options=options))
+        made = []
+        for isomer in EnumerateStereoisomers(mol, options=options):
+            if deadline is not None and time.monotonic() > deadline:
+                raise TooLong()
+            made.append(isomer)
+        if deadline is not None and time.monotonic() > deadline:
+            raise TooLong()
         if len(EMBEDDABLE) >= EMBEDDABLE_KEPT:
             EMBEDDABLE.pop(next(iter(EMBEDDABLE)))
         EMBEDDABLE[key] = made
@@ -2333,7 +2350,12 @@ def stereoisomers_one(blocks, aside):
     and double bond given, as a drawing - or, `aside`, set aside. An
     allene's axis left open is always set aside (no stereoisomer of it is
     given), and so is one with more than MOST_ISOMERS stereoisomers, whole:
-    never some of them."""
+    never some of them. Those are counted only as far as one past the most,
+    never all: twenty double bonds left open give a million. One not looked
+    at within EXAMINE_S - its stereoisomers tried in 3D - is set aside
+    alone, the others as they are."""
+    started = time.monotonic()
+    too_long = {"aside": f"took more than {EXAMINE_S} s to examine", "kind": "too long"}
     mol = drawing_of_parts(blocks)
     if mol is None:
         return {"aside": "it could not be read", "kind": "unreadable"}
@@ -2347,12 +2369,22 @@ def stereoisomers_one(blocks, aside):
         return {"as": "drawn"}
     if open_cumulenes(mol, bonds):
         return {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"}
-    # (how many the open elements could give at most, before any is made: over the most, set aside whole)
-    if 2 ** (len(atoms) + len(bonds)) > MOST_ISOMERS:
-        counted = list(EnumerateStereoisomers(mol, options=StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)))
-        if len(counted) > MOST_ISOMERS:
-            return {"aside": f"{len(counted)} stereoisomers, more than the {MOST_ISOMERS} made of one", "kind": "too many"}
-    made = embeddable(mol)
+    # (how many the open elements could give at most, before any is made: over the most, counted only to one
+    #  past it - all of them would be a million for twenty double bonds - and set aside whole, saying the most it
+    #  could be. Counted unique, one past the most is reached at once but where many of the bound are alike - a
+    #  symmetric structure with many open: rare, and looked at no longer than any other, below)
+    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)
+    most = GetStereoisomerCount(mol, options=options)
+    if most > MOST_ISOMERS:
+        for counted, _ in enumerate(EnumerateStereoisomers(mol, options=options), 1):
+            if counted > MOST_ISOMERS:
+                return {"aside": f"more than the {MOST_ISOMERS} stereoisomers made of one (up to {most})", "kind": "too many"}
+            if time.monotonic() > started + EXAMINE_S:
+                return too_long
+    try:
+        made = embeddable(mol, started + EXAMINE_S)
+    except TooLong:
+        return too_long
     if len(made) <= 1:
         return {"as": "drawn"}
     if aside:

@@ -59,7 +59,7 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
             list
         }
     };
-    let jobs_root = if appended.is_empty() { None } else { Some(crate::jobs::jobs_root(&app)?) };
+    let jobs_root = if appended.is_empty() { None } else { Some(crate::jobs::all_roots(&app)?) };
     // (a job file carried from the workspace's file it was opened from: one the page could have read)
     if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f)) {
         return Err(format!("Meno may not read {}", from.display()));
@@ -95,7 +95,7 @@ fn most_for(path: &Path, with_jobs: bool) -> Option<u64> {
 /// (`replace_keeping`): with the job files to add (`jobs`: the jobs' folder,
 /// and the files), each added from the disk; and, a workspace's file, no
 /// more than `most` - else failing, before it takes the old one's place.
-pub(crate) fn document_written(file: &mut File, bytes: &[u8], jobs: Option<(&Path, &[crate::keptjobs::Appended])>, most: Option<u64>) -> io::Result<()> {
+pub(crate) fn document_written(file: &mut File, bytes: &[u8], jobs: Option<(&[PathBuf], &[crate::keptjobs::Appended])>, most: Option<u64>) -> io::Result<()> {
     file.write_all(bytes)?;
     if let Some((root, appended)) = jobs {
         crate::keptjobs::append_job_files(&mut *file, root, appended).map_err(io::Error::other)?;

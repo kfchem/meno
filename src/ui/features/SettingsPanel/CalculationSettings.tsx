@@ -29,7 +29,7 @@ export default function CalculationSettings() {
             {kindsOf(d.id).map((kind) => {
               const k = kindInfo(kind);
               // (lines a step reads - Enumerate's R groups - are its own, each for its template: no default of them)
-              const options = optionsFor(kind, d.id).filter((o) => o.type !== "lines");
+              const options = optionsFor(kind, d.id).filter((o) => o.type !== "lines" && o.type !== "atoms");
               const role = stepRole(kind, d.id);
               return (
                 <div key={kind} className="divide-y divide-gh-line/60">

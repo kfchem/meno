@@ -6,11 +6,12 @@
  * it keeps, which it sets aside, and what it found; or why it could not.
  */
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
-import { stereoIdentity } from "../../../../lib/entry";
+import { stereoIdentity, type Entry } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, entryOfSet, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
+import { positionIds, substituted } from "./substituents";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -63,7 +64,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
  * options (over its kind's defaults) - laid out in the workspace's `style`
  * where it draws anything: what it keeps, and what it sets aside, as
  * structures drawn, each with what the step says of it. *Enumerate*
- * (workflow/enumerate) is the one that does.
+ * (workflow/enumerate) and *Filter* do.
  */
 export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own?: OptionValues, style?: StyleChoice, said: readonly string[] = []): DrawnOutcome {
   if (!entries.length) return { ok: false, said: "Nothing came in" };
@@ -71,13 +72,20 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
     case "enumerate": {
       if (entries.length > 1) return { ok: false, said: `Enumerate takes one structure drawn, its template: ${entries.length} came in` };
       const options = optionsOf(kindInfo(kind).options ?? [], own);
-      const r = enumerated(entries[0].drawn, String(options.lists ?? ""), style);
+      const r =
+        options.way === "substituents"
+          ? substituted(entries[0].drawn, positionIds(String(options.positions ?? "")), String(options.groups ?? ""), options.combine === "together" ? "together" : "one", style)
+          : enumerated(entries[0].drawn, String(options.lists ?? ""), style);
       if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
       const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: numberedRecord(m.number, m.how, why) });
       // (its valence as it was checked before it ran, where it was: never claimed where it was not)
       // (run with nothing asked first - in another step's run, as one before it: neither its valence nor its configurations left open looked at, and said so)
       const valence = said.length ? said : ["Valence not checked", "Configurations left open not looked for"];
       return { ok: true, holds: "structures", kept: r.made.map((m) => as(m)), aside: r.aside.map((m) => as(m, m.why)), said: [...r.said, ...valence].join(" \u00b7 "), core: r.core };
+    }
+    case "filter": {
+      const options = optionsOf(kindInfo(kind).options ?? [], own);
+      return filteredDrawn(entries, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
     }
     default:
       return { ok: false, said: "Meno does not do this itself on structures drawn" };
@@ -252,6 +260,50 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
   const back = (es: readonly { id: string }[]) => es.map((e) => entries[Number(e.id)]);
   return { ok: true, holds, kept: back(out.exits.kept), aside: back(out.exits.rest), said: out.said };
 }
+
+/**
+ * *Filter* on structures drawn (lib/nodes `filter`): each read by its
+ * record alone - the properties a step gave it (Descriptors' molecular
+ * weight, a model's NLL), each with its unit and what worked it out - the
+ * drawing itself not read. Those kept as they came, but for what an
+ * earlier step said of them: kept, none is set aside. The rest each with
+ * its record saying why - after why an earlier step set it aside, where
+ * one did. One edited since its properties were given has none left to
+ * read (workflow/entries `recordNow`): it goes to the rest saying so (its
+ * record's `stale`), counted by that on the line.
+ */
+function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all" | "any"): DrawnOutcome {
+  const read = conditionsIn(text);
+  if ("why" in read) return { ok: false, said: read.why };
+  const out = filter(entries.map(recordAsEntry), { conditions: read.conditions, match, unread: (e) => entries[Number(e.id)].record?.stale ?? null });
+  if (!out.ok) return out;
+  // (kept: its record without the status it came in with - an earlier step's "aside" is not what this one says of it)
+  const kept = out.exits.kept.map((e) => {
+    const was = entries[Number(e.id)];
+    const { status: _status, ...rest } = was.record ?? {};
+    const { record: _record, ...drawn } = was;
+    return Object.keys(rest).length ? { ...drawn, record: rest } : drawn;
+  });
+  // (set aside: why, on its record - after an earlier step's why, where one set it aside or it failed; its properties as they were)
+  const aside = out.exits.rest.map((e) => {
+    const was = entries[Number(e.id)];
+    const now = typeof e.status === "object" && "aside" in e.status ? e.status.aside : "";
+    const before = typeof was.record?.status === "object" ? ("aside" in was.record.status ? was.record.status.aside : was.record.status.failed) : "";
+    return { ...was, record: { ...was.record, status: { aside: before ? `${before}; ${now}` : now } } };
+  });
+  return { ok: true, holds: "structures", kept, aside, said: out.said };
+}
+
+/** A structure drawn as Filter reads it, by its place: its record's properties, what it was made from and its status - its drawing no part of it (no structure, no geometry). */
+const recordAsEntry = (e: DrawnEntry, i: number): Entry => ({
+  id: String(i),
+  from: e.record?.from ?? [],
+  structure: { atoms: [], bonds: [] },
+  geometry: { kind: "none" },
+  species: null,
+  properties: e.record?.properties ?? {},
+  status: e.record?.status ?? "done",
+});
 
 /** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
 function onesSaid(entries: readonly SetEntry[]): string {
@@ -494,7 +546,7 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
  */
 export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
   const bad = entries.flatMap((e, k) =>
-    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind]}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
+    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind] ?? e.failed.kind}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
   );
   return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first` : null;
 }

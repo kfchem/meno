@@ -2042,7 +2042,7 @@ function WorkspaceContent({
             const s = menu.kind === "step" ? store.getState().steps.find((x) => x.id === menu.id) : undefined;
             if (!s) return undefined;
             const st = store.getState();
-            // (a step deleted and back by an undo: its jobs' folders went with it, so no log or files to show)
+            // (a step deleted while its jobs were being started, and back by an undo: those it started went with it - no log or files to show)
             const jobs = !!(s.running?.jobs.length || (s.ran?.jobs?.length && st.jobsKept(s)));
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
@@ -2054,6 +2054,8 @@ function WorkspaceContent({
                       .catch(() => {}) } : {}),
               // (a step a plugin does runs jobs, whose files the workspace's file keeps: workflow/keptJobs)
               ...(byOf(s) !== MENO.id ? { keepRaw: { kept: s.keepRaw !== false, set: (keep: boolean) => st.keepRawOutputs(s.id, keep) } } : {}),
+              // (output Meno could not account for: each such job adopted on purpose, one at a time)
+              ...(s.ran?.held && s.ran.unaccounted?.length && !s.running ? { adopt: s.ran.unaccounted.map((job) => ({ job, run: () => void st.adoptJob(s.id, job) })) } : {}),
             };
           })()}
           onStepOptions={() => {

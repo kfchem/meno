@@ -10,13 +10,22 @@ const TOO_LARGE = "(too large)";
 /** Where set, what each job's start waits on once its folder is made - a step's jobs started one by one, as the runner does. */
 let holdStart: Promise<void> | null = null;
 const idOf = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+/** What a job gave, as one digest - of its log and files, as the test has them: 64 hex digits, as the runner's. */
+function digestOf(id: string): string {
+  const j = jobs.get(id)!;
+  let h = 7;
+  for (const c of JSON.stringify([j.log, Object.entries(j.files).sort()])) h = (h * 31 + c.charCodeAt(0)) | 0;
+  return (h >>> 0).toString(16).padStart(64, "0");
+}
+/** Each program installed separately as it is now (its stamp), by where it is; one not there cannot be told. */
+const stamps: Record<string, string> = {};
 
 vi.mock("../../../../lib/jobs", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/jobs")>()),
   startJob: async (ask: JobAsk) => {
     asked.started.push(ask);
     const id = idOf(next++);
-    jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "waiting", created: Date.now(), log: "", files: {} });
+    jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "waiting", created: Date.now(), log: "", files: {}, ...(ask.key ? { key: ask.key } : {}) });
     if (holdStart) await holdStart;
     return id;
   },
@@ -27,6 +36,11 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
     return { text: log.slice(from), next: log.length };
   },
   jobFiles: async (id: string) => Object.keys(jobs.get(id)?.files ?? {}),
+  jobDigest: async (id: string) => digestOf(id),
+  programStamp: async (path: string) => {
+    if (!stamps[path]) throw `${path}: not there`;
+    return stamps[path];
+  },
   readJobFile: async (id: string, name: string) => {
     const text = jobs.get(id)!.files[name];
     if (text === TOO_LARGE) throw `${name} is too large to read: 300 MB, past 256 MB`;
@@ -144,6 +158,7 @@ import { useInstalled } from "../../../../lib/plugins/installed";
 import { createWorkspaceDocument, addMolecule3d } from "../document";
 import { readWorkflow } from "../workflow/saved";
 import { readWorkspace, workspaceFile, workspaceText } from "../utils/workspace";
+import { calcLine } from "../../../../lib/calc/output";
 import { heldOutput } from "../../../../lib/calc/asks";
 import { readMenoFile } from "../../../../lib/doc/menoFile";
 import { registerKinds } from "../../../../lib/io/kinds";
@@ -194,7 +209,7 @@ function waters(n: number) {
 }
 
 /** A job of the test's ended: done with what it wrote, or as `state` says. */
-const end = (n: number, state: Job["state"] = "done", more: Partial<Job> = {}) =>
+const end = (n: number, state: Job["state"] = "done", more: Partial<Job & { files: Record<string, string>; log: string }> = {}) =>
   Object.assign(jobs.get(idOf(n))!, { state, started: 1000, ended: 2000, ...(state === "done" ? { files: { "xtbopt.log": "-5.0705" } } : {}), ...more });
 
 describe("a step that runs a plugin's program", () => {
@@ -219,7 +234,7 @@ describe("a step that runs a plugin's program", () => {
     expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
     expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
-    expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"] }]);
+    expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"], key: expect.stringMatching(/^[0-9a-f]{64}$/) }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)
     expect(doc.history()).toMatchObject({ dirty: true, undoLabel: "wire" });
     expect(readWorkflow({ sets: st().sets, steps: st().steps, wires: st().wires })?.steps[0].running).toEqual(running);
@@ -610,7 +625,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps.find((x) => x.id === step)!.kind).toBe("frequencies");
   });
 
-  it("asks before a running step is deleted - and, deleted, stops its jobs and takes their files away", async () => {
+  it("asks before a running step is deleted - and, deleted, stops its jobs, their files left until finished jobs are cleared", async () => {
     const { st, step } = editor();
     void st().runStep(step);
     await settle();
@@ -623,6 +638,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().askDeleteStep).toBeNull();
     await settle();
     expect(asked.stopped).toEqual([idOf(1)]);
+    expect(asked.removed).toEqual([]);
   });
 
   it("deleted while it runs - the only step running, its jobs looked at no more - ends its run: nothing waits on it for good", async () => {
@@ -672,6 +688,34 @@ describe("a step that runs a plugin's program", () => {
     expect(asked.stopped).toEqual([idOf(1)]);
     expect(asked.removed).toEqual([idOf(1)]);
     expect(st().steps).toHaveLength(0);
+  });
+
+  it("deleted while its jobs are being started, takes away only those it started - never one taken up again", async () => {
+    const { st, step } = waters(2);
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await first;
+    expect(asked.started).toHaveLength(2);
+    // (run again: the first entry's job the same - taken up again - the second's another, held as it starts)
+    const job = (entry: number, level: string) => ({ entries: [entry], program: "xtb", args: ["input.xyz", "--opt", level], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["xtbopt.log"] });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [job(0, "normal"), job(1, "tight")] }) as never);
+    let go = () => {};
+    holdStart = new Promise((r) => (go = r));
+    const ran = st().runStep(step);
+    for (let i = 0; i < 8 && asked.started.length < 3; i++) await settle();
+    expect(asked.started).toHaveLength(3);
+    st().removeStep(step, true);
+    holdStart = null;
+    end(3, "stopped");
+    go();
+    await ran;
+    for (let i = 0; i < 4; i++) await settle();
+    expect(asked.removed).toEqual([idOf(3)]);
+    expect(asked.stopped).toEqual([idOf(3)]);
   });
 
   it("brings in what the jobs done gave where another went without finishing - that one out of its Failed exit, with why", async () => {
@@ -808,6 +852,182 @@ describe("a step that runs a plugin's program", () => {
     await st().lookAtJobs();
     await ran;
     expect(st().steps.find((s) => s.id === step)!.ran!.said).toBe(`0:01 \u00b7 2 of 2 \u00b7 ${over}`);
+  });
+
+  it("takes up again a job it ran to the end, its key the same - starting none - and runs one whose key changed", async () => {
+    const { st, step } = editor();
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await first;
+    const ran = st().steps.find((s) => s.id === step)!.ran!;
+    expect(ran.keys).toHaveLength(1);
+    expect(asked.started).toHaveLength(1);
+    // (run again, nothing changed: its job's key ran to the end - not run again, what it gave taken up again)
+    await st().runStep(step);
+    await settle();
+    await settle();
+    await st().lookAtJobs();
+    await settle();
+    expect(asked.started).toHaveLength(1);
+    const again = st().steps.find((s) => s.id === step)!.ran!;
+    expect(again).toMatchObject({ ok: true, jobs: [idOf(1)], keys: ran.keys });
+    expect(again.said).toMatch(/ \u00b7 Reused$/);
+    // (another level: its plugin asks for another run - another key, run)
+    st().updateStep(step, { options: { level: "tight" } });
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], program: "xtb", args: ["input.xyz", "--opt", "tight"], files: [{ name: "input.xyz", text: "3\n\n" }], reads: ["xtbopt.log"] }] }) as never);
+    const third = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(2);
+    end(2);
+    await st().lookAtJobs();
+    await third;
+    expect(st().steps.find((s) => s.id === step)!.ran!.keys).not.toEqual(ran.keys);
+  });
+
+  it("takes a job up again only while it gives what it gave: its files changed since, the step stops on it", async () => {
+    const { st, step } = editor();
+    const first = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await first;
+    expect(st().steps.find((s) => s.id === step)!.ran!.gave).toEqual([digestOf(idOf(1))]);
+    // (kept with the workspace, beside its key)
+    expect(readWorkspace(workspaceText(st()))!.workflow!.steps.find((s) => s.id === step)!.ran!.gave).toEqual([digestOf(idOf(1))]);
+    // (its output written over since - by hand, say, or by another program: taken up again, it is not what was read)
+    jobs.get(idOf(1))!.files["xtbopt.log"] = "-9.9999";
+    await st().runStep(step);
+    await settle();
+    await settle();
+    await st().lookAtJobs();
+    await settle();
+    expect(asked.started).toHaveLength(1);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({
+      ok: false,
+      said: `Output Meno cannot account for: ${idOf(1)} (its files have changed since they were read)`,
+      unaccounted: [idOf(1)],
+    });
+  });
+
+  it("keys a program installed separately by itself as it is now: replaced, its job runs again; not to be told, none is taken up again", async () => {
+    useReaders.setState({ state: { orca: "added" }, problem: {} });
+    installedAt.orca = "/Applications/orca_6/orca";
+    stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n1";
+    const orca = () => ({ jobs: [{ entries: [0], program: "orca", args: ["input.inp"], files: [{ name: "input.inp", text: "! SP\n" }], reads: [] }] }) as never;
+    const [prepare, collect] = [worker.prepare.getMockImplementation()!, worker.collect.getMockImplementation()!];
+    worker.prepare.mockImplementation(async () => orca());
+    worker.collect.mockImplementation(async () => ({ read: [{ kind: "orca", log: true, name: "water.out" }] }) as never);
+    try {
+      const { st } = editor();
+      const step = st().addStep("energy", "orca", 10, 10);
+      st().connect({ set: st().sets[0].id }, step);
+      const runOnce = async (n: number) => {
+        const ran = st().runStep(step);
+        await settle();
+        await settle();
+        if (jobs.has(idOf(n)) && jobs.get(idOf(n))!.state === "waiting") end(n, "done", { log: "ORCA's output" });
+        await st().lookAtJobs();
+        await ran;
+        return st().steps.find((s) => s.id === step)!.ran!;
+      };
+      const once = await runOnce(1);
+      expect(once.ok).toBe(true);
+      // (the same program as it was: taken up again)
+      expect((await runOnce(2)).said).toMatch(/ \u00b7 Reused$/);
+      expect(asked.started).toHaveLength(1);
+      // (replaced - though it says the same version: another key, run)
+      stamps["/Applications/orca_6/orca"] = "/Applications/orca_6/orca\n1000\n2";
+      const replaced = await runOnce(2);
+      expect(asked.started).toHaveLength(2);
+      expect(replaced.keys).not.toEqual(once.keys);
+      // (not to be told: run, nothing taken up again)
+      delete stamps["/Applications/orca_6/orca"];
+      await runOnce(3);
+      expect(asked.started).toHaveLength(3);
+    } finally {
+      worker.prepare.mockImplementation(prepare);
+      worker.collect.mockImplementation(collect);
+    }
+  });
+
+  it("stops on output it cannot account for - a job whose key is not its own, or one made before its run began - naming it, bringing nothing in", async () => {
+    const { st, step } = waters(2);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    // (one job's folder holding another job's - its key not the one asked for - and the other made long before)
+    Object.assign(jobs.get(idOf(1))!, { key: "0".repeat(64) });
+    end(1);
+    end(2, "done", { created: Date.now() - 3_600_000 });
+    await st().lookAtJobs();
+    await ran;
+    const done = st().steps.find((s) => s.id === step)!.ran!;
+    expect(done.ok).toBe(false);
+    expect(done.said).toBe(`Output Meno cannot account for: ${idOf(1)} (its key is not the one it was asked for with); ${idOf(2)} (made before this run began)`);
+    expect(st().molecules3d).toHaveLength(2);
+    // (adopted one at a time, on purpose: the other still stops it - kept so in the workspace's file)
+    await st().adoptJob(step, idOf(1));
+    const one = st().steps.find((s) => s.id === step)!.ran!;
+    expect(one.said).toBe(`Output Meno cannot account for: ${idOf(2)} (made before this run began)`);
+    expect(Object.keys(one.held!.adopted!)).toEqual([idOf(1)]);
+    const saved = readWorkspace(workspaceText(st()))!;
+    expect(saved.workflow!.steps.find((s) => s.id === step)!.ran).toMatchObject({ unaccounted: [idOf(2)], held: { adopted: { [idOf(1)]: expect.any(Number) } } });
+    // (the second adopted: what they gave comes in, said adopted, each with when)
+    await st().adoptJob(step, idOf(2));
+    const both = st().steps.find((s) => s.id === step)!.ran!;
+    expect(both.ok).toBe(true);
+    expect(both.said).toMatch(/ \u00b7 2 adopted$/);
+    expect(Object.keys(both.adopted!)).toEqual([idOf(1), idOf(2)]);
+    expect(st().molecules3d).toHaveLength(4);
+    // (what they gave says so, wherever its calculation is shown)
+    const made = setMembers(st(), resultOf(st(), step)!).molecules.map((m) => st().molecules3d.find((x) => x.id === m)!);
+    expect(made.map((m) => m.calc?.adopted)).toEqual([both.adopted![idOf(1)], both.adopted![idOf(2)]]);
+    expect(calcLine(made[0].calc!)).toMatch(/^adopted output \u00b7 xtb 6\.7\.1/);
+    // (a job never stopped on is not adopted)
+    await st().adoptJob(step, idOf(9));
+    expect(st().steps.find((s) => s.id === step)!.ran).toBe(both);
+  });
+
+  it("stops on a job folder with no record of how it ran - and, adopted, reads it as one done", async () => {
+    const { st, step } = editor();
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1, "gone", { why: "it has no record of how it ran", files: { "xtbopt.log": "-5.0705" } });
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: `Output Meno cannot account for: ${idOf(1)} (its folder has no record of how it ran)`, unaccounted: [idOf(1)] });
+    await st().adoptJob(step, idOf(1));
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, adopted: { [idOf(1)]: expect.any(Number) } });
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toMatch(/ \u00b7 1 adopted$/);
+  });
+
+  it("deleted, keeps the folder of a job another step's run took up again", async () => {
+    const { st, step } = editor();
+    const run = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    await st().lookAtJobs();
+    await run;
+    // (a second step on the same set, the same: it takes the first's job up again)
+    const set = st().sets[0].id;
+    const twin = st().addStep("optimise", "xtb", 10, 30);
+    st().connect({ set }, twin);
+    await st().runStep(twin);
+    await settle();
+    await settle();
+    await st().lookAtJobs();
+    await settle();
+    expect(st().steps.find((s) => s.id === twin)!.ran).toMatchObject({ jobs: [idOf(1)] });
+    st().removeStep(step);
+    await settle();
+    expect(asked.removed).not.toContain(idOf(1));
   });
 
   it("keeps what a conformer stands for through an optimisation: its degeneracy, and its mirror image's atoms where Duplicates counted one in", async () => {

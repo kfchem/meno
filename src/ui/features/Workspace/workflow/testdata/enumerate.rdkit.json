@@ -84,6 +84,24 @@
    "expected": "FCCl"
   },
   {
+   "name": "a stereocentre's R1, bulky groups #1",
+   "molfile": "ff25082d3ef04da27f29a27e0a8f68d8e36f9f2e57fd72ccf32b9dac9818dbf7",
+   "smiles": "CC(C)(C)[C@@H](F)Cl",
+   "expected": "CC(C)(C)[C@@H](F)Cl"
+  },
+  {
+   "name": "a stereocentre's R1, bulky groups #2",
+   "molfile": "4fff1b39ceba8b558991a298a9089d63cfe5ed08569bb6c6b64678fd46d54c05",
+   "smiles": "F[C@@H](Cl)C(F)(F)F",
+   "expected": "F[C@@H](Cl)C(F)(F)F"
+  },
+  {
+   "name": "a stereocentre's R1, bulky groups #3",
+   "molfile": "a88cce5af318a89160125c34042608d5662d87c533b351b3e16f8ea97717bff4",
+   "smiles": "CC(C)(O)[C@@H](F)Cl",
+   "expected": "CC(C)(O)[C@@H](F)Cl"
+  },
+  {
    "name": "a double bond's R1 #1",
    "molfile": "8947b597bfc27200dec1711e3f6f367a351b52de31f8402f4190ece6c3353cee",
    "smiles": "C/C=C/F",
@@ -148,6 +166,936 @@
    "molfile": "b40c6e9bf3a35be1ee8b57cb2263f0107c3302517bfea0581cef3384fd4c0a23",
    "smiles": "CN(C)c1ccccc1",
    "expected": "CN(C)c1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #1",
+   "molfile": "4887247b57ccfe43669b5e6dbb300838066ef92317517a84193aba9571429a7d",
+   "smiles": "Cc1ccccc1",
+   "expected": "Cc1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #2",
+   "molfile": "20f1fdadae8c142d56ef65539a111f6f64c5f241b2cc5dd6d9cec909c5038509",
+   "smiles": "Clc1ccccc1",
+   "expected": "Clc1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #3",
+   "molfile": "f50c790e61740ceb517c0a94f5600703892c4de33a00afe887ef7fcb89f60848",
+   "smiles": "COc1ccccc1",
+   "expected": "COc1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #4",
+   "molfile": "f50c790e61740ceb517c0a94f5600703892c4de33a00afe887ef7fcb89f60848",
+   "smiles": "COc1ccccc1",
+   "expected": "COc1ccccc1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #1",
+   "molfile": "e375e515ceb38086ea32f692556851e7251e6e41d9ed3d856ab3fae33a97f64b",
+   "smiles": "Cc1ccc(C)c(Cl)c1",
+   "expected": "Cc1ccc(C)c(Cl)c1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #2",
+   "molfile": "61ef52e8a133dfed633071d803ef6efe46d22bb7dd90efa4b3781bee8e122e0f",
+   "smiles": "Cc1ccc(C)c(F)c1",
+   "expected": "Cc1ccc(C)c(F)c1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #3",
+   "molfile": "59d4ed55b3b2bd85996cbd60eacc63434833f0dc98b1493a9d46207129767651",
+   "smiles": "Cc1ccc(C)c(Cl)c1",
+   "expected": "Cc1ccc(C)c(Cl)c1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #4",
+   "molfile": "cb4b4c9688acdc58cc5ae9e1f1ba496e3c139534ccaed6634f42665b373edb90",
+   "smiles": "Cc1ccc(C)c(F)c1",
+   "expected": "Cc1ccc(C)c(F)c1"
+  },
+  {
+   "name": "substituents: two alike, together #1",
+   "molfile": "a9e30ef97ee466c77d5b099bc0aef63e91e31c924636d5d0ae26b55669d795c0",
+   "smiles": "Cc1ccc(C)cc1",
+   "expected": "Cc1ccc(C)cc1"
+  },
+  {
+   "name": "substituents: two alike, together #2",
+   "molfile": "4d2fdd21a7a8395dee222e203220713ad5ac4ba674acc57dfb1078f023b494ac",
+   "smiles": "Cc1ccc(C)c(C)c1",
+   "expected": "Cc1ccc(C)c(C)c1"
+  },
+  {
+   "name": "substituents: two alike, together #3",
+   "molfile": "e048b9ace9f1574fe1afcfab852318f2bb0c8c18307d99fd2833c9ccaa6b4b3e",
+   "smiles": "Cc1ccc(C)c(C)c1",
+   "expected": "Cc1ccc(C)c(C)c1"
+  },
+  {
+   "name": "substituents: two alike, together #4",
+   "molfile": "8f942f59934e0dbd3e76442edee0933f1e6ef67c5ff13302ea80390990897784",
+   "smiles": "Cc1cc(C)c(C)c(C)c1",
+   "expected": "Cc1cc(C)c(C)c(C)c1"
+  },
+  {
+   "name": "substituents: a wedged centre's undrawn H #1",
+   "molfile": "505e889f7f74fa1f4f7a2613fd541e9fe34a76d14470d94fe2eaf5e077ead3cf",
+   "smiles": "C[C@@](F)(Cl)Br",
+   "expected": "C[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a wedged centre's undrawn H #2",
+   "molfile": "e3a127396c7d302666f1dd42f6cb672b008a97282b44946df65e84ee05a3228a",
+   "smiles": "CC[C@@](F)(Cl)Br",
+   "expected": "CC[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a drawn H #1",
+   "molfile": "2752d4ed8952b763a23ee69a49c58aa894dcb6a8e7de55aa83051c3985818c57",
+   "smiles": "C[C@@](F)(Cl)Br",
+   "expected": "C[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a drawn H #2",
+   "molfile": "1ffe17fecfdfefdc405a4d428898cc77b252156f8ae81351c5ffd4103aa71d19",
+   "smiles": "CO[C@@](F)(Cl)Br",
+   "expected": "CO[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a CH2 beside a stereocentre #1",
+   "molfile": "4fe0a5a1b8679d0029d2637c3cd4541605b7b555b2c2fdebe629df625daaddcb",
+   "smiles": "CC(Cl)[C@H](C)F",
+   "expected": "CC(Cl)[C@H](C)F"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #1",
+   "molfile": "41ecd1f6bf311f90849617275db93e507623c7a5e702712aebc24d72805a658a",
+   "smiles": "CCC(C)[C@H](N)C(=O)O",
+   "expected": "CCC(C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #2",
+   "molfile": "fd81d89c1b03bd410cc456bb50717bd5a231745a2be4a4959a5e1c456fe4bf4f",
+   "smiles": "COCC(C)[C@H](N)C(=O)O",
+   "expected": "COCC(C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #3",
+   "molfile": "9f9b51229aa413de6aec32c30c961d91aa853e13da3ca5563a404dfa59c13acb",
+   "smiles": "CC(CCl)[C@H](N)C(=O)O",
+   "expected": "CC(CCl)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #4",
+   "molfile": "01a0f0aecbb1d89fc9ef705af61a5cc99b3a7716e69d03de6c90b6639dc6901c",
+   "smiles": "CC(C)(C)[C@H](N)C(=O)O",
+   "expected": "CC(C)(C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #5",
+   "molfile": "667f057765c0396f726ebe365be251f0f2dcab4657bb5a898c1705757ba04e9c",
+   "smiles": "COC(C)(C)[C@H](N)C(=O)O",
+   "expected": "COC(C)(C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #6",
+   "molfile": "886310ed95238ce3935e674056661918beb08c2a5dc5cbc876665823a46710c9",
+   "smiles": "CC(C)(Cl)[C@H](N)C(=O)O",
+   "expected": "CC(C)(Cl)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #7",
+   "molfile": "2e754c410c8cd6e9ec000d6f3be5a257d5d58a9a3cec05011a7cd6a2b8371ab2",
+   "smiles": "CCC(C)[C@H](N)C(=O)O",
+   "expected": "CCC(C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #8",
+   "molfile": "6e3c3aafb5edd4b0f06be670d730e785af2e8b140205e39a3c9b5f73a04a62ce",
+   "smiles": "COCC(C)[C@H](N)C(=O)O",
+   "expected": "COCC(C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #9",
+   "molfile": "bf3ab8d40da74d89e9a2e8cc5549b041a46be2bd957d03777c493c90cd01f668",
+   "smiles": "CC(CCl)[C@H](N)C(=O)O",
+   "expected": "CC(CCl)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #10",
+   "molfile": "121a6bfcd8d5baebce79902d35f6d2addcfe7ce4218e0a6c7a31917c45179601",
+   "smiles": "CC(C)[C@](C)(N)C(=O)O",
+   "expected": "CC(C)[C@](C)(N)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #11",
+   "molfile": "37b5ee9e1fe3627b82f8b636c00d573977aca56d7c49122d55f9c7c214e8cbec",
+   "smiles": "CO[C@@](N)(C(=O)O)C(C)C",
+   "expected": "CO[C@@](N)(C(=O)O)C(C)C"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #12",
+   "molfile": "bf6f31853f5bdef9363831e4ac775ddb5c2e605a8c9c335316a562be56b9af82",
+   "smiles": "CC(C)[C@@](N)(Cl)C(=O)O",
+   "expected": "CC(C)[C@@](N)(Cl)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #13",
+   "molfile": "e79a1bf343e0b1362ef4235b47c401047bdbff2c7038aba3d14fbf38ee5d3a12",
+   "smiles": "CN[C@H](C(=O)O)C(C)C",
+   "expected": "CN[C@H](C(=O)O)C(C)C"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #14",
+   "molfile": "33da610613c04705e99bd3b32ed56b113e318e0f3891ed48ab691e8ee5236ccd",
+   "smiles": "CON[C@H](C(=O)O)C(C)C",
+   "expected": "CON[C@H](C(=O)O)C(C)C"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #15",
+   "molfile": "8dfe9641ad9f4bd1d704cfdae98350f4c9cd73cafd95de61e327a700bc55bc06",
+   "smiles": "CC(C)[C@H](NCl)C(=O)O",
+   "expected": "CC(C)[C@H](NCl)C(=O)O"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #16",
+   "molfile": "d1d6387bc63985e33f6b47c81e49de766a5559dd168311afd6c9a41041d45ec2",
+   "smiles": "COC(=O)[C@@H](N)C(C)C",
+   "expected": "COC(=O)[C@@H](N)C(C)C"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #17",
+   "molfile": "644bb5250a77b532b242421a62ebce9877b9427d99a9551d4e774bc386b348bd",
+   "smiles": "COOC(=O)[C@@H](N)C(C)C",
+   "expected": "COOC(=O)[C@@H](N)C(C)C"
+  },
+  {
+   "name": "differential: CC(C)[C@H](N)C(=O)O #18",
+   "molfile": "5ded1453765b5fc9368c4c333c178ab684d0be3790baf64c4f14086458b1d530",
+   "smiles": "CC(C)[C@H](N)C(=O)OCl",
+   "expected": "CC(C)[C@H](N)C(=O)OCl"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #1",
+   "molfile": "d50585eb2551ad4a74c289aec76739efe40ce4d6b9663249a0fda851f66e7aad",
+   "smiles": "CN[C@H](C(=O)O)[C@@H](C)O",
+   "expected": "CN[C@H](C(=O)O)[C@@H](C)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #2",
+   "molfile": "039cf3fc466a7dbad9695677095c36e40c56aea1f6fb87dfb71554b28ae7115f",
+   "smiles": "CON[C@H](C(=O)O)[C@@H](C)O",
+   "expected": "CON[C@H](C(=O)O)[C@@H](C)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #3",
+   "molfile": "1ee8154416a5a27ee3078e9362b18603bc9ca1b02d6f4b6410c286f169ee3887",
+   "smiles": "C[C@@H](O)[C@H](NCl)C(=O)O",
+   "expected": "C[C@@H](O)[C@H](NCl)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #4",
+   "molfile": "c167eccae8af6a9d420b067254d866f92a8874b2f2b3867c5bca406d826958ab",
+   "smiles": "C[C@@H](O)[C@](C)(N)C(=O)O",
+   "expected": "C[C@@H](O)[C@](C)(N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #5",
+   "molfile": "aaf7bde851671d2701e46c3fd8119ec8360418002b2ce60afd8d0787142ec372",
+   "smiles": "CO[C@@](N)(C(=O)O)[C@@H](C)O",
+   "expected": "CO[C@@](N)(C(=O)O)[C@@H](C)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #6",
+   "molfile": "ad810e7e484615bcfbab87ebe47d50ef4a70e40616caa802dd6913163c348d00",
+   "smiles": "C[C@@H](O)[C@@](N)(Cl)C(=O)O",
+   "expected": "C[C@@H](O)[C@@](N)(Cl)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #7",
+   "molfile": "068a05c05ff339a11d3580aab45f437aaa503a4aa1ae36ee5870f953e6e9cd96",
+   "smiles": "COC(=O)[C@@H](N)[C@@H](C)O",
+   "expected": "COC(=O)[C@@H](N)[C@@H](C)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #8",
+   "molfile": "b5be74f7fcd60ec170cef8b9978b31d2da68697e3f82d0efc624775f4335a1e9",
+   "smiles": "COOC(=O)[C@@H](N)[C@@H](C)O",
+   "expected": "COOC(=O)[C@@H](N)[C@@H](C)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #9",
+   "molfile": "4c4af22dad1e2d7719b4b1acf6d97b2eba39b7323341bed71d36ea872d20f70f",
+   "smiles": "C[C@@H](O)[C@H](N)C(=O)OCl",
+   "expected": "C[C@@H](O)[C@H](N)C(=O)OCl"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #10",
+   "molfile": "bd2001a08b252ebf28d93ed262de7fc3dfb0102b56671f3429402f11960ddf21",
+   "smiles": "CC(C)(O)[C@H](N)C(=O)O",
+   "expected": "CC(C)(O)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #11",
+   "molfile": "1eb5becb6984001a332d35e0864d8c07b426db6f94956f972af1927a408e328a",
+   "smiles": "CO[C@](C)(O)[C@H](N)C(=O)O",
+   "expected": "CO[C@](C)(O)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #12",
+   "molfile": "5262322d890ceb9d575676eb6390d412e8622d8affca4f749297fb3cac12bffd",
+   "smiles": "C[C@](O)(Cl)[C@H](N)C(=O)O",
+   "expected": "C[C@](O)(Cl)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #13",
+   "molfile": "16f27b458e6b100670775e1b2db468688a53308898a2f7e9cce9848c161e3ae0",
+   "smiles": "CC[C@@H](O)[C@H](N)C(=O)O",
+   "expected": "CC[C@@H](O)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #14",
+   "molfile": "4af595cda15b97768e9c33ff88ace32a660847db473986496aa03ebb36ed652d",
+   "smiles": "COC[C@@H](O)[C@H](N)C(=O)O",
+   "expected": "COC[C@@H](O)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #15",
+   "molfile": "1781851f973951df4d8efd458c14e0c7771ac1254a9689f321cc02453d043d5d",
+   "smiles": "N[C@H](C(=O)O)[C@H](O)CCl",
+   "expected": "N[C@H](C(=O)O)[C@H](O)CCl"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #16",
+   "molfile": "c6e9ffd61dbaeee5a78c5fd21f7c4387691f6f35146ebeae08e543ed49da51b8",
+   "smiles": "CO[C@H](C)[C@H](N)C(=O)O",
+   "expected": "CO[C@H](C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #17",
+   "molfile": "3a290483e88b8da5212ca9dc300424107aef51cf7dffa9f1816d4995f0c0455b",
+   "smiles": "COO[C@H](C)[C@H](N)C(=O)O",
+   "expected": "COO[C@H](C)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: N[C@H](C(=O)O)[C@@H](C)O #18",
+   "molfile": "573794a746bfc3598982db819eaf974caaba5b7ed3be4d2e8f5020ed149d9fa3",
+   "smiles": "C[C@@H](OCl)[C@H](N)C(=O)O",
+   "expected": "C[C@@H](OCl)[C@H](N)C(=O)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #1",
+   "molfile": "5bdc525b20af5895b7aafe260cb4ae3fb2ad67105c99c300f5b1245f42efe618",
+   "smiles": "CCC[C@H](C)[C@@H](C)O",
+   "expected": "CCC[C@H](C)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #2",
+   "molfile": "e862eb800890704656742c3597d333138f32b3df118ca89f4f7fc5c25a30b30d",
+   "smiles": "COCC[C@H](C)[C@@H](C)O",
+   "expected": "COCC[C@H](C)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #3",
+   "molfile": "724d6b73ace2d6d921a2b8603069563420dec3e607d4f91ddad306384aa51a11",
+   "smiles": "C[C@@H](O)[C@@H](C)CCCl",
+   "expected": "C[C@@H](O)[C@@H](C)CCCl"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #4",
+   "molfile": "a2d01168e83b0f27e39cb0565f42f0ae6febb11d9916529866fab754504b60a8",
+   "smiles": "CC(C)[C@H](C)[C@@H](C)O",
+   "expected": "CC(C)[C@H](C)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #5",
+   "molfile": "443a8882c4080a4de5f35d57fb296b114942013c7f8066dd1e8e7a791fc3896d",
+   "smiles": "COC(C)[C@H](C)[C@@H](C)O",
+   "expected": "COC(C)[C@H](C)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #6",
+   "molfile": "64b5a250d92a0e34237916e26403761fe53c3fdbf6d162a301c7cf3315ed9017",
+   "smiles": "CC(Cl)[C@H](C)[C@@H](C)O",
+   "expected": "CC(Cl)[C@H](C)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #7",
+   "molfile": "c0391b915880ff144ce2642bfa18e7d7f8889d3da64a36f0ab4fa554ee67a0ba",
+   "smiles": "CCC(C)(C)[C@@H](C)O",
+   "expected": "CCC(C)(C)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #8",
+   "molfile": "a5756d5d1c8d791ff4ab0d95fd001fe40009b628770bb3c75812b884f1d983dc",
+   "smiles": "CC[C@@](C)(OC)[C@@H](C)O",
+   "expected": "CC[C@@](C)(OC)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #9",
+   "molfile": "71019cc4205d56fbd0c1c7f483210839b4e52786c697ebc30b7610360c691285",
+   "smiles": "CC[C@@](C)(Cl)[C@@H](C)O",
+   "expected": "CC[C@@](C)(Cl)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #10",
+   "molfile": "4301b79686cceab1a3f39f1f03a30ae7d9c62905efd761011db009f5c59d78c8",
+   "smiles": "CCC(CC)[C@@H](C)O",
+   "expected": "CCC(CC)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #11",
+   "molfile": "27e3f8d47990cab2be00a682a7c095829d9400637e576a8ddfad37c99a29b306",
+   "smiles": "CC[C@H](COC)[C@@H](C)O",
+   "expected": "CC[C@H](COC)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #12",
+   "molfile": "ad44f5f90fd7cf85d6f49dcafd1a9bf6b06db96aeb7b8de4b3363bdcd0f18613",
+   "smiles": "CC[C@H](CCl)[C@@H](C)O",
+   "expected": "CC[C@H](CCl)[C@@H](C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #13",
+   "molfile": "9a6ce648844eeaf1c763c3f9b223cf7ac759e11a0f08490ee9f76707c5d20f85",
+   "smiles": "CC[C@H](C)C(C)(C)O",
+   "expected": "CC[C@H](C)C(C)(C)O"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #14",
+   "molfile": "b905c9c9616ee3db7ee21c4f307fa416068db830fd7606f9edc9b5e5d405ff9e",
+   "smiles": "CC[C@H](C)[C@@](C)(O)OC",
+   "expected": "CC[C@H](C)[C@@](C)(O)OC"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #15",
+   "molfile": "d92169a2e2c8775edf007f6defe3da8c7ec31914a5e3f7713b651d89bb63ae65",
+   "smiles": "CC[C@H](C)[C@@](C)(O)Cl",
+   "expected": "CC[C@H](C)[C@@](C)(O)Cl"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #16",
+   "molfile": "76e3b95f2a9066342e8987cf23a98be6db2d0107e2ac45b21d2fd1bd394f63b9",
+   "smiles": "CC[C@@H](O)[C@@H](C)CC",
+   "expected": "CC[C@@H](O)[C@@H](C)CC"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #17",
+   "molfile": "4803144d36d6b75da57034ecca60e92a910b219f635ac9a6e443108e9bf7b32b",
+   "smiles": "CC[C@H](C)[C@H](O)COC",
+   "expected": "CC[C@H](C)[C@H](O)COC"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #18",
+   "molfile": "079850d679b066bebab78fc4573a16eec4ce2298333e68cfe532d96895a8039e",
+   "smiles": "CC[C@H](C)[C@H](O)CCl",
+   "expected": "CC[C@H](C)[C@H](O)CCl"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #19",
+   "molfile": "3bb60e546deaf87abe5f6ab8c65f81a424f734cfe03e960b162c568bca014688",
+   "smiles": "CC[C@H](C)[C@@H](C)OC",
+   "expected": "CC[C@H](C)[C@@H](C)OC"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #20",
+   "molfile": "d5494156153258911a928def817762cb644b97c88f9f10e0a9c076dc43509fa7",
+   "smiles": "CC[C@H](C)[C@@H](C)OOC",
+   "expected": "CC[C@H](C)[C@@H](C)OOC"
+  },
+  {
+   "name": "differential: CC[C@H](C)[C@@H](C)O #21",
+   "molfile": "4084f17405fea3becfbbcf465a5212ffc2b0d95ad5766c3cd19e1d84107a6b42",
+   "smiles": "CC[C@H](C)[C@@H](C)OCl",
+   "expected": "CC[C@H](C)[C@@H](C)OCl"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #1",
+   "molfile": "ef6e0a623a43b43f769bc974021873ac1c316f91f7245d59879877327a89c0f2",
+   "smiles": "CC[C@H]1CC[C@@H](C)CC1",
+   "expected": "CC[C@H]1CC[C@@H](C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #2",
+   "molfile": "802ef881b8029bef403290f189be4f69956558a726a7d255fc9fd05aa51ec48c",
+   "smiles": "COC[C@H]1CC[C@@H](C)CC1",
+   "expected": "COC[C@H]1CC[C@@H](C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #3",
+   "molfile": "f590c275d7c3efba81c72770886552d852ede2736cac10f8dfea45b8bcf2cefb",
+   "smiles": "C[C@H]1CC[C@@H](CCl)CC1",
+   "expected": "C[C@H]1CC[C@@H](CCl)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #4",
+   "molfile": "f20dd623e09044b0e6a4968e84e3eeac9822a90c0253112f3d1b629096c9e77d",
+   "smiles": "CC1CCC(C)(C)CC1",
+   "expected": "CC1CCC(C)(C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #5",
+   "molfile": "feeba561ee615f5877e58822279447c57bdb2b3366b2c15f8873ece232a4cb93",
+   "smiles": "CO[C@]1(C)CC[C@@H](C)CC1",
+   "expected": "CO[C@]1(C)CC[C@@H](C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #6",
+   "molfile": "4a46543c812171d9a9c39bd390a3be5dbca36f76da7314cde16a7216a16dbbeb",
+   "smiles": "C[C@H]1CC[C@](C)(Cl)CC1",
+   "expected": "C[C@H]1CC[C@](C)(Cl)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #7",
+   "molfile": "99c74046d8bcde08da758938997622a1aca9f35b94e616035f4c461e74b00ecb",
+   "smiles": "CC1C[C@@H](C)CC[C@H]1C",
+   "expected": "CC1C[C@@H](C)CC[C@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #8",
+   "molfile": "a777709f7b0afad862c2bb95c05fb60f287f832f66070b05546204d42a266d07",
+   "smiles": "COC1C[C@@H](C)CC[C@H]1C",
+   "expected": "COC1C[C@@H](C)CC[C@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #9",
+   "molfile": "e9bdcefed0895a6bf9b7ccc3fb2db1a9383eea107c59942235d8ab2a2e7723b2",
+   "smiles": "C[C@H]1CC[C@@H](C)C(Cl)C1",
+   "expected": "C[C@H]1CC[C@@H](C)C(Cl)C1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #10",
+   "molfile": "4edff33694eb096e6e2b855c4fbde59ba84165e4427e7d3b67f51a5741c7b32f",
+   "smiles": "CC1C[C@H](C)CC[C@@H]1C",
+   "expected": "CC1C[C@H](C)CC[C@@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #11",
+   "molfile": "0375a0ed097f35f05e4030b2a5a572187b0762823d27bbdfb6a27a0609bf7414",
+   "smiles": "COC1C[C@H](C)CC[C@@H]1C",
+   "expected": "COC1C[C@H](C)CC[C@@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #12",
+   "molfile": "9f4935e982d497ada430241f4e451223f01eb66dd6acab447742f8a6862c0577",
+   "smiles": "C[C@@H]1CC[C@H](C)C(Cl)C1",
+   "expected": "C[C@@H]1CC[C@H](C)C(Cl)C1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #13",
+   "molfile": "944ed361b9db34945d458f6ac389f90de930c52b2b2519f3abf4af4aef97d2ad",
+   "smiles": "CC1CCC(C)(C)CC1",
+   "expected": "CC1CCC(C)(C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #14",
+   "molfile": "e6e167a8660c8cb78617e267847b5031cb5d21a66aa58bb2daadd9d07c0f5570",
+   "smiles": "CO[C@]1(C)CC[C@@H](C)CC1",
+   "expected": "CO[C@]1(C)CC[C@@H](C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #15",
+   "molfile": "d9995f578d239b690f87445cbd19182c3d1f7631345b69c2e248589e517d8b35",
+   "smiles": "C[C@H]1CC[C@](C)(Cl)CC1",
+   "expected": "C[C@H]1CC[C@](C)(Cl)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #16",
+   "molfile": "c2efa1bc1a93c9e32010a5ac20cbb99e45d76581b9356ed10bbd4a3a37fff0d1",
+   "smiles": "CC[C@H]1CC[C@@H](C)CC1",
+   "expected": "CC[C@H]1CC[C@@H](C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #17",
+   "molfile": "ca37323b70f0ef8faef9d40671107b847a5a9221c7396bc4ab29f86471613850",
+   "smiles": "COC[C@H]1CC[C@@H](C)CC1",
+   "expected": "COC[C@H]1CC[C@@H](C)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #18",
+   "molfile": "b72afcd0e6df5da4657c0ff9cdeec89ee7b06945a7db605a60e5eb07178c7f61",
+   "smiles": "C[C@H]1CC[C@@H](CCl)CC1",
+   "expected": "C[C@H]1CC[C@@H](CCl)CC1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #19",
+   "molfile": "1c9f103c714b79a0788f1f85136be3bb94b62b198a97087ecf91a788740a4f47",
+   "smiles": "CC1C[C@@H](C)CC[C@H]1C",
+   "expected": "CC1C[C@@H](C)CC[C@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #20",
+   "molfile": "f7eb6d1e044d7aac8d274c0dbc2fa73697f46636028d94e8d203beb50cb31ca5",
+   "smiles": "COC1C[C@@H](C)CC[C@H]1C",
+   "expected": "COC1C[C@@H](C)CC[C@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #21",
+   "molfile": "2488cc702c7d42737ef578667ca0676275d7055d828528877b653a40ca9bd478",
+   "smiles": "C[C@H]1CC[C@@H](C)C(Cl)C1",
+   "expected": "C[C@H]1CC[C@@H](C)C(Cl)C1"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #22",
+   "molfile": "4ef4ec1f70cb3e02a9b22e5a56d8b19aad9f43711b20ffa0511f3bf00550679f",
+   "smiles": "CC1C[C@H](C)CC[C@@H]1C",
+   "expected": "CC1C[C@H](C)CC[C@@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #23",
+   "molfile": "ae82ce703ae5b2ca63eff87bb81ec4f7d0096915cfb07dd55a3f037c0371dd44",
+   "smiles": "COC1C[C@H](C)CC[C@@H]1C",
+   "expected": "COC1C[C@H](C)CC[C@@H]1C"
+  },
+  {
+   "name": "differential: C[C@H]1CC[C@@H](C)CC1 #24",
+   "molfile": "b152939dc8871d24c56214c1b5fcd9c5de961cfcc68773ab14b34aef73e65828",
+   "smiles": "C[C@@H]1CC[C@H](C)C(Cl)C1",
+   "expected": "C[C@@H]1CC[C@H](C)C(Cl)C1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #1",
+   "molfile": "d2b943e4c7e2bd6d80e2d5d4543251376267b32ee19e5b83c54931c4723fa8d3",
+   "smiles": "COC[C@H]1OC(O)C[C@@H]1O",
+   "expected": "COC[C@H]1OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #2",
+   "molfile": "4f672f958c56e4e7dcb070cda6d4048c86304e4c42d8065ce93c2f74cba06bf5",
+   "smiles": "COOC[C@H]1OC(O)C[C@@H]1O",
+   "expected": "COOC[C@H]1OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #3",
+   "molfile": "dcd32020abe14cf66d98c61500223431237d8960a5f7dc2ebd38158247a2406a",
+   "smiles": "OC1C[C@H](O)[C@@H](COCl)O1",
+   "expected": "OC1C[C@H](O)[C@@H](COCl)O1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #4",
+   "molfile": "22a9f0ea6a5da5b891545a5bd0adf2323e76fef0c07f43d211dae69602e4e922",
+   "smiles": "CC(O)[C@H]1OC(O)C[C@@H]1O",
+   "expected": "CC(O)[C@H]1OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #5",
+   "molfile": "e9ce85c959ff811e6b259690b347ba2951ec90236ac0c5992f1b6dbba2e385fe",
+   "smiles": "COC(O)[C@H]1OC(O)C[C@@H]1O",
+   "expected": "COC(O)[C@H]1OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #6",
+   "molfile": "1f6bea688922c8aedebe7167a1c6cf36901a5b680a105a4cfa8594a370e3ccbb",
+   "smiles": "OC1C[C@H](O)[C@@H](C(O)Cl)O1",
+   "expected": "OC1C[C@H](O)[C@@H](C(O)Cl)O1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #7",
+   "molfile": "0fc8fab10f5e192252cfab93d095a449e09a7b17bf820b215c426e123a1295b4",
+   "smiles": "C[C@]1(CO)OC(O)C[C@@H]1O",
+   "expected": "C[C@]1(CO)OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #8",
+   "molfile": "642927043f27eb3461e383f4ae7046238824c980e33df58848399ab4bf851a45",
+   "smiles": "CO[C@]1(CO)OC(O)C[C@@H]1O",
+   "expected": "CO[C@]1(CO)OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #9",
+   "molfile": "2ea1c22df71d0123f6430c799a8ab8ced0dda810328c0a6c7666fcdfacdabc9a",
+   "smiles": "OC[C@@]1(Cl)OC(O)C[C@@H]1O",
+   "expected": "OC[C@@]1(Cl)OC(O)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #10",
+   "molfile": "2496a46b3b3100e7f58e488a949908073731a03cc348a53961dde19c15286349",
+   "smiles": "CC1(O)C[C@H](O)[C@@H](CO)O1",
+   "expected": "CC1(O)C[C@H](O)[C@@H](CO)O1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #11",
+   "molfile": "7b96f10c671e3f541733256718557863c450d06e7ff09b1ab7f7601079bf8613",
+   "smiles": "COC1(O)C[C@H](O)[C@@H](CO)O1",
+   "expected": "COC1(O)C[C@H](O)[C@@H](CO)O1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #12",
+   "molfile": "a60c671197c7dbeb80cb6a5e88388fb4ce21499884b59579e170b770f1ec353c",
+   "smiles": "OC[C@H]1OC(O)(Cl)C[C@@H]1O",
+   "expected": "OC[C@H]1OC(O)(Cl)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #13",
+   "molfile": "2ceedcc4c1c750f2b0cbdc422caad2a0a90960aca8f014f8eae7d61bf3ad2a2e",
+   "smiles": "COC1C[C@H](O)[C@@H](CO)O1",
+   "expected": "COC1C[C@H](O)[C@@H](CO)O1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #14",
+   "molfile": "8887baffcd91c4c644512e78297cdfd38f0ad90c6983b825586f3fd5c85d4ae6",
+   "smiles": "COOC1C[C@H](O)[C@@H](CO)O1",
+   "expected": "COOC1C[C@H](O)[C@@H](CO)O1"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #15",
+   "molfile": "421587808e20548e758d6c9f5211cce1a7e70900b4439600118d1066c7a4b1bd",
+   "smiles": "OC[C@H]1OC(OCl)C[C@@H]1O",
+   "expected": "OC[C@H]1OC(OCl)C[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #16",
+   "molfile": "d231dce54375dc286c121c046ef9a5f530df12f7503e1652dc73b5e2784bc926",
+   "smiles": "CC1C(O)O[C@H](CO)[C@H]1O",
+   "expected": "CC1C(O)O[C@H](CO)[C@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #17",
+   "molfile": "b7e2391882ab83074a27e9f3d88eaf48cb5f2415026a6395e5aa79c6afa0427c",
+   "smiles": "COC1C(O)O[C@H](CO)[C@H]1O",
+   "expected": "COC1C(O)O[C@H](CO)[C@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #18",
+   "molfile": "138b5b4ebdceda4df5df387a3ac96bbc9ab3e920bb011bca8676b3db4d0e878c",
+   "smiles": "OC[C@H]1OC(O)C(Cl)[C@@H]1O",
+   "expected": "OC[C@H]1OC(O)C(Cl)[C@@H]1O"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #19",
+   "molfile": "87dbbd2b8962eb5087873d0cd7b3d87d2df6e372f6f989ea916a1a842c2dddd0",
+   "smiles": "C[C@]1(O)CC(O)O[C@@H]1CO",
+   "expected": "C[C@]1(O)CC(O)O[C@@H]1CO"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #20",
+   "molfile": "39c0566a0934568a987b70d824c91aa6581a95c414341b7b0c98a4478cde7e7d",
+   "smiles": "CO[C@]1(O)CC(O)O[C@@H]1CO",
+   "expected": "CO[C@]1(O)CC(O)O[C@@H]1CO"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #21",
+   "molfile": "d0b55640731ab693adf2c9edc4710c6c20e8ef0b17e7cd92dcbfd40d4894ae6c",
+   "smiles": "OC[C@H]1OC(O)C[C@@]1(O)Cl",
+   "expected": "OC[C@H]1OC(O)C[C@@]1(O)Cl"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #22",
+   "molfile": "17bda1e58c3d910a96178946d4b36f9303b217ed342a730872ab1f3fafbe691e",
+   "smiles": "CO[C@H]1CC(O)O[C@@H]1CO",
+   "expected": "CO[C@H]1CC(O)O[C@@H]1CO"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #23",
+   "molfile": "459d4d29ada9e53994fb656b58e9367a0d921dbb07038d9ed3491141877054da",
+   "smiles": "COO[C@H]1CC(O)O[C@@H]1CO",
+   "expected": "COO[C@H]1CC(O)O[C@@H]1CO"
+  },
+  {
+   "name": "differential: OC[C@H]1OC(O)C[C@@H]1O #24",
+   "molfile": "ec2788db2b5b7a5f488fa298eb14be2cf486a4892e421b04469ec4aa622aa3fd",
+   "smiles": "OC[C@H]1OC(O)C[C@@H]1OCl",
+   "expected": "OC[C@H]1OC(O)C[C@@H]1OCl"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #1",
+   "molfile": "a3d65fe4154469b8296087e395bdfa5abd8a6d7e06b48bd6b969597eef7b688e",
+   "smiles": "CC[C@@H](O)c1ccccc1",
+   "expected": "CC[C@@H](O)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #2",
+   "molfile": "322e6d4881278220370bb303a243ba22ff81444a35c6a85f6da9b479d577b655",
+   "smiles": "COC[C@@H](O)c1ccccc1",
+   "expected": "COC[C@@H](O)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #3",
+   "molfile": "6d0bb2ab6e78df73d388c3d0b1c27e5c246eac64f43275ffb6ff6144ad13c69d",
+   "smiles": "O[C@H](CCl)c1ccccc1",
+   "expected": "O[C@H](CCl)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #4",
+   "molfile": "2a6697c1d3fe9ba77f898f85adc719a9271314f7c20791adc65024d988cfc1e3",
+   "smiles": "CC(C)(O)c1ccccc1",
+   "expected": "CC(C)(O)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #5",
+   "molfile": "0089b3d328cdb525fefe22af7f3c5bdb43af619b35c4b4cd918f578c6cb7a94a",
+   "smiles": "CO[C@](C)(O)c1ccccc1",
+   "expected": "CO[C@](C)(O)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #6",
+   "molfile": "629e5ca65afb3f00ad23dedbc9b94d0c7e7423db755b0b18e07169059508f967",
+   "smiles": "C[C@](O)(Cl)c1ccccc1",
+   "expected": "C[C@](O)(Cl)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #7",
+   "molfile": "c17b1a591f9a5d5b7090be209cb6696d047d90d6433cd9893777c34da27fd873",
+   "smiles": "CO[C@H](C)c1ccccc1",
+   "expected": "CO[C@H](C)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #8",
+   "molfile": "8a52375d4f9d695f6744c3975dac483bcdf5a52eb76425b92cf23eec13e05d7a",
+   "smiles": "COO[C@H](C)c1ccccc1",
+   "expected": "COO[C@H](C)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #9",
+   "molfile": "cc938c695f9600aaa74a43f6b7b0556456d9162583d17ae26cbb170aa2f524a3",
+   "smiles": "C[C@@H](OCl)c1ccccc1",
+   "expected": "C[C@@H](OCl)c1ccccc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #10",
+   "molfile": "7fce7721532a154dfabad316fd153256e5637fdcb89656cd74898412cdb95105",
+   "smiles": "Cc1ccccc1[C@@H](C)O",
+   "expected": "Cc1ccccc1[C@@H](C)O"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #11",
+   "molfile": "9a4559b5cc47b03a4fc568b10ae59b7f11458e0d03ad8c2630fba1e9430173e1",
+   "smiles": "COc1ccccc1[C@@H](C)O",
+   "expected": "COc1ccccc1[C@@H](C)O"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #12",
+   "molfile": "bd1f8c8393f1d1693e3c93d2a08f5dbf177cc01d49dce0e2f7e079204c3729ab",
+   "smiles": "C[C@@H](O)c1ccccc1Cl",
+   "expected": "C[C@@H](O)c1ccccc1Cl"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #13",
+   "molfile": "5dd09fa732e2f0a824775d00affb7657f6d0cb69a1a2c78f363dc1d5d597d7ae",
+   "smiles": "Cc1cccc([C@@H](C)O)c1",
+   "expected": "Cc1cccc([C@@H](C)O)c1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #14",
+   "molfile": "68a43923aae962206210253d8d37852c6833e0ea4dd9f8016690eb79ef292c24",
+   "smiles": "COc1cccc([C@@H](C)O)c1",
+   "expected": "COc1cccc([C@@H](C)O)c1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #15",
+   "molfile": "eff258ec08ecccbdea6804f7366f3e3990896f4557a5b43c4d694c11566ceaeb",
+   "smiles": "C[C@@H](O)c1cccc(Cl)c1",
+   "expected": "C[C@@H](O)c1cccc(Cl)c1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #16",
+   "molfile": "eda37217ccd72ba0f36ccae67f6a6484bdd99e20f50fe460e76092565db97b5d",
+   "smiles": "Cc1ccc([C@@H](C)O)cc1",
+   "expected": "Cc1ccc([C@@H](C)O)cc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #17",
+   "molfile": "05e200d7812a92e55f6ff26712cb2c6f157889890b5d0e508d2de79c85af8a52",
+   "smiles": "COc1ccc([C@@H](C)O)cc1",
+   "expected": "COc1ccc([C@@H](C)O)cc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #18",
+   "molfile": "9d127377915652759231418a236f3ece713f53764247b1f702ca6c12c2170d97",
+   "smiles": "C[C@@H](O)c1ccc(Cl)cc1",
+   "expected": "C[C@@H](O)c1ccc(Cl)cc1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #19",
+   "molfile": "7c4d8e982080f6163c5bfd8e93a2edd1bbe21f1a5fe02850507a2bf293fffe9a",
+   "smiles": "Cc1cccc([C@@H](C)O)c1",
+   "expected": "Cc1cccc([C@@H](C)O)c1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #20",
+   "molfile": "72bb0f9b574fcf4f1c9e0ab8d573f4398f2dfe743c9b05c90918006e83361bb3",
+   "smiles": "COc1cccc([C@@H](C)O)c1",
+   "expected": "COc1cccc([C@@H](C)O)c1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #21",
+   "molfile": "9c6b2d81a4978bcc7ea160c26dd9c2b410e9d0683413cbb39922bc3fce73c584",
+   "smiles": "C[C@@H](O)c1cccc(Cl)c1",
+   "expected": "C[C@@H](O)c1cccc(Cl)c1"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #22",
+   "molfile": "eda40de1aaeaacf5ad1b433237dd6843eb707119baff6c66d83ae13ac05aabee",
+   "smiles": "Cc1ccccc1[C@@H](C)O",
+   "expected": "Cc1ccccc1[C@@H](C)O"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #23",
+   "molfile": "0db3f16f3cc3b4f63cc3395440589cdf337df46c8f69bf9883317b2ad53668ec",
+   "smiles": "COc1ccccc1[C@@H](C)O",
+   "expected": "COc1ccccc1[C@@H](C)O"
+  },
+  {
+   "name": "differential: C[C@@H](O)c1ccccc1 #24",
+   "molfile": "6e318f90229be7e846f37f887d32f37e67a3b1ac2abfac704218f6c6bbe17c77",
+   "smiles": "C[C@@H](O)c1ccccc1Cl",
+   "expected": "C[C@@H](O)c1ccccc1Cl"
+  },
+  {
+   "name": "differential: F/C=C/C #1",
+   "molfile": "f3c05641311bf37138230b960b9760b36f2d7d9ba9585f2efd38a750e2a7c806",
+   "smiles": "C/C=C(\\C)F",
+   "expected": "C/C=C(\\C)F"
+  },
+  {
+   "name": "differential: F/C=C/C #2",
+   "molfile": "05a68bc1968a71bea799284af60aaaa982749b979584be232d29361c799aed38",
+   "smiles": "C/C=C(/F)OC",
+   "expected": "C/C=C(/F)OC"
+  },
+  {
+   "name": "differential: F/C=C/C #3",
+   "molfile": "ef96875ec9a51bd8659e0c8de8a7e1353ec628c00a5b9b74bad486a472c82350",
+   "smiles": "C/C=C(/F)Cl",
+   "expected": "C/C=C(/F)Cl"
+  },
+  {
+   "name": "differential: F/C=C/C #4",
+   "molfile": "a6ec0eddb9e5541284ee4d6f740b0e52b4b2a9600772a58fbdf8c8e9a63775e6",
+   "smiles": "CC(C)=CF",
+   "expected": "CC(C)=CF"
+  },
+  {
+   "name": "differential: F/C=C/C #5",
+   "molfile": "3a6617a2317377d0c940362283211e807050c63318a749cdf6990405bcdef5ab",
+   "smiles": "CO/C(C)=C\\F",
+   "expected": "CO/C(C)=C\\F"
+  },
+  {
+   "name": "differential: F/C=C/C #6",
+   "molfile": "c053a3d709fcc5cb9332517f96a43cd665656271bda34cec7da878d1e6be3457",
+   "smiles": "C/C(Cl)=C/F",
+   "expected": "C/C(Cl)=C/F"
+  },
+  {
+   "name": "differential: F/C=C/C #7",
+   "molfile": "f9e41cec6d8b1e8c684461128b67af41aa851b5856fa8a7ee397608967bf52bc",
+   "smiles": "CC/C=C/F",
+   "expected": "CC/C=C/F"
+  },
+  {
+   "name": "differential: F/C=C/C #8",
+   "molfile": "aa40025d6b125482564a419822f9e78aac68fc2f8b62cea8cfee4623a78078a0",
+   "smiles": "COC/C=C/F",
+   "expected": "COC/C=C/F"
+  },
+  {
+   "name": "differential: F/C=C/C #9",
+   "molfile": "72b909a9664af6db841d1daac82b90eb45c13c5df6ca25d782fdd57c94f2c479",
+   "smiles": "F/C=C/CCl",
+   "expected": "F/C=C/CCl"
   }
  ]
 }
