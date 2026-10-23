@@ -89,7 +89,7 @@ function boxRound(points: readonly Point[], boxes: readonly Box[]): Box {
   return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
 }
 
-/** The atoms of a figure read, in its structures: each atom's structure's place, by atom - lone labelled atoms near one joining it. */
+/** The atoms of a figure read, in its structures: each atom's structure's place, by atom - lone labelled atoms near one joining it, and none that is one line with no label, or a lone atom by no structure. */
 function structuresIn(f: FigureRead): number[][] {
   const up = f.atoms.map((_, i) => i);
   const top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i])));
@@ -111,10 +111,12 @@ function structuresIn(f: FigureRead): number[][] {
       const d = Math.min(...g.map((j) => dist(a, f.atoms[j])));
       if (d <= near) [best, near] = [g, d];
     }
+    // (one by no structure is words, not a structure of its own: a "DP4+" in a figure, a lone H)
     if (best) best.push(i);
-    else found.push([i]);
   });
-  return found.map((g) => g.sort((p, q) => p - q));
+  // (nor is one line with no label at either end: a chart's tick, a table's rule, a bracket's piece - no structure is that)
+  const bondsOf = (g: number[]) => f.bonds.filter((b) => g.includes(b.a)).length;
+  return found.filter((g) => bondsOf(g) > 1 || g.some((i) => f.atoms[i].label)).map((g) => g.sort((p, q) => p - q));
 }
 
 /** Letters of `left` - those no atom of the figure took - that lie within a structure: in its box, and within a bond of one of its bonds. */

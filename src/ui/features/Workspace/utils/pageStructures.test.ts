@@ -39,6 +39,13 @@ describe("the structures of a figure, each taken whole", () => {
     expect(formula(found[0])).toContain("Na1");
   });
 
+  it("finds none in one line with no label - a chart's tick, a table's rule - nor in a lone word: they are no structures", () => {
+    const line: FigureDrawn = { paths: [{ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 100, 100], ["L", 120, 100]] }], letters: [], pictures: [] };
+    expect(structuresOf(line, 0, "pdf", 0, [])).toEqual([]);
+    const lone: FigureDrawn = { paths: [], letters: [{ c: "H", box: [100, 100, 106, 108], at: [100, 108], size: 9 }], pictures: [] };
+    expect(structuresOf(lone, 0, "pdf", 0, [])).toEqual([]);
+  });
+
   it("finds none in a figure with no lines: a picture", () => {
     expect(structuresOf({ paths: [], letters: [], pictures: [[0, 0, 100, 100]] }, 0, "pdf", 0, [])).toEqual([]);
   });
