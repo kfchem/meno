@@ -2331,15 +2331,22 @@ function WorkspaceContent({
                       const s = pickedStructure(p.sha256, k);
                       return s && "model" in s.read ? [s.read.model] : [];
                     });
-                    if (!models.length) return {};
+                    // (a pick whose figure is no longer read - and kept - is said, never left out unsaid)
+                    const missing = st.pdfStructures.picks.length - models.length;
+                    const said = () => missing && setChemError(missing === 1 ? "1 picked structure is not available: point at it again to read it." : `${missing} picked structures are not available: point at them again to read them.`);
+                    if (!models.length) return { onPutStructures: said, onCopyStructures: said };
                     const model = inRow(models, NOMINAL_BOND_LENGTH);
                     return {
                       onPutStructures: () => {
+                        said();
                         const now = store.getState();
                         const style = styleOf(now.docStyle);
                         now.putRead(placedBeside({ model }, pdfRoom(p), pageBoxes(now, style), style).model);
                       },
-                      onCopyStructures: () => void writeClipboard(clipItems(model)).catch((e: unknown) => setChemError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`)),
+                      onCopyStructures: () => {
+                        said();
+                        void writeClipboard(clipItems(model)).catch((e: unknown) => setChemError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`));
+                      },
                     };
                   })()
                 : {}),

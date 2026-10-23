@@ -7,6 +7,7 @@ import { createWorkspaceDocument } from "../document";
 import { PRESS_WIDENED, structureAt, structuresOf, type PageStructure } from "../utils/pageStructures";
 import { dragStructure, inRow, movedTo, setStructureSay } from "./structureDrag";
 import { marksOn } from "./pdfMarks";
+import { PICKED_POINTED_SHADE, POINTED_SHADE, SELECTION_SHADE } from "./selectionShade";
 
 // (the window and the page as the pointer sees them, bare: no canvas under any point)
 Object.assign(globalThis, { window: Object.assign(new EventTarget(), { setTimeout, clearTimeout }), document: { elementFromPoint: () => null } });
@@ -76,11 +77,14 @@ describe("structures picked from a PDF, in the editor", () => {
     for (const b of row.bonds) expect(row.atoms.some((a) => a.id === b.a) && row.atoms.some((a) => a.id === b.b)).toBe(true);
   });
 
-  it("are lit along their bonds and over their labels on the page: picked stronger than pointed at", () => {
-    const marks = marksOn({ id: 1, sha256: "a".repeat(64) }, 0, null, [], null, () => {}, null, null, { lit: null, picked: [ring] });
-    expect(marks).toHaveLength(1);
-    expect(marks[0].bars).toHaveLength(ring.bonds.length);
-    expect(marks[0].rects).toEqual(ring.labels);
+  it("are shaded on the page as the canvas shades a selection - a disc on each atom, a band along each bond, its own colours - picked, pointed at, and both", () => {
+    const pdf = { id: 1, sha256: "a".repeat(64) };
+    const shade = (lit: PageStructure | null, picked: PageStructure[]) => marksOn(pdf, 0, null, [], null, () => {}, null, null, { lit, picked });
+    const [picked] = shade(null, [ring]);
+    expect(picked.shade).toEqual({ atoms: ring.atoms, bonds: ring.bonds, bond: ring.reach * 3 });
+    expect(picked.color).toBe(SELECTION_SHADE);
+    expect(shade(ring, [])[0].color).toBe(POINTED_SHADE);
+    expect(shade(ring, [ring]).map((m) => m.color)).toEqual([PICKED_POINTED_SHADE]);
   });
 });
 

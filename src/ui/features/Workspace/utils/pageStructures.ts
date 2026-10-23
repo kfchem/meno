@@ -26,6 +26,8 @@ export type PageStructure = {
   labels: Box[];
   /** A box round all of it. */
   box: Box;
+  /** Its bonds' open ends: atoms of one bond, with no label - where a label not read would be set. */
+  ends: Point[];
   /** How near the pointer must come to a bond or a label to take it: a third of a bond as the figure draws one. */
   reach: number;
   /** What it reads as - its middle at naught, a bond as long as Meno draws one - or why it is not read whole. */
@@ -138,16 +140,11 @@ export function structuresOf(given: FigureDrawn, figure: number, sha256: string,
   return figureOn(given, figure, sha256, page, beside, known).structures;
 }
 
-/** Whether a box lies at least half within another, by its area - a line or a point, by its length, or wholly. */
-export function mostlyWithin(b: Box, f: Box): boolean {
-  const w = Math.max(0, Math.min(b[2], f[2]) - Math.max(b[0], f[0]));
-  const h = Math.max(0, Math.min(b[3], f[3]) - Math.max(b[1], f[1]));
-  const bw = b[2] - b[0];
-  const bh = b[3] - b[1];
-  if (bw <= 0 && bh <= 0) return b[0] >= f[0] && b[0] <= f[2] && b[1] >= f[1] && b[1] <= f[3];
-  if (bw <= 0) return b[0] >= f[0] && b[0] <= f[2] && h >= bh / 2;
-  if (bh <= 0) return b[1] >= f[1] && b[1] <= f[3] && w >= bw / 2;
-  return w * h >= (bw * bh) / 2;
+/** Whether a box's middle lies within another: what of a page is a figure's own - its labels, though their boxes pass its edge - and not what is set between two figures, most of it outside. */
+export function centreWithin(b: Box, f: Box): boolean {
+  const cx = (b[0] + b[2]) / 2;
+  const cy = (b[1] + b[3]) / 2;
+  return cx >= f[0] && cx <= f[2] && cy >= f[1] && cy <= f[3];
 }
 
 /** What a page is made of, as `pageStructuresOf` is given it: each thing's kind and box (lib/pdf/figures `PageObject`), and the words a box of it holds, where words are known. */
@@ -165,11 +162,14 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
   figures.forEach((box, k) => {
     const drawn = drawnOf(k);
     if (!drawn) return;
-    // (all of the page that is not most of it within this figure - its own labels' boxes, a letter's full height, may pass its
-    // edge a little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
-    const beside = made.objects.filter((o) => !mostlyWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    // (all of the page whose middle is not within this figure - its own labels' boxes, a letter's full height, may pass its edge a
+    // little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
+    const beside = made.objects.filter((o) => !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
     const read = figureOn(drawn, k, sha256, page, beside, known);
-    structures.push(...read.structures);
+    // (and the words of the page within this figure that are none of a structure's labels, at one of its open ends: a label
+    // its figure's drawing did not hold, the structure refused - a compound's number aside)
+    const own = made.objects.filter((o) => o.kind === "text" && centreWithin(o.box, box));
+    structures.push(...read.structures.map((st) => endWordsChecked(st, own, made.wordsIn)));
     marks.push(read.marks);
   });
   return { structures, marks };
@@ -211,6 +211,9 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     });
     const box = boxRound(atoms, labels);
     const reach = f.bond * REACH;
+    const degree = new Map<number, number>();
+    for (const b of mine) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
+    const ends = ids.filter((i) => degree.get(i) === 1 && !f.atoms[i].label).map((i) => back(f.atoms[i]));
     // (its own reading: its atoms and bonds alone, its middle at naught, each atom tied to where it lies on the page)
     const part: FigureRead = { atoms: ids.map((i) => f.atoms[i]), bonds: mine.map((b) => ({ ...b, a: at.get(b.a)!, b: at.get(b.b)! })), bond: f.bond, left: { letters: [] } };
     const mid = { x: (Math.min(...part.atoms.map((a) => a.x)) + Math.max(...part.atoms.map((a) => a.x))) / 2, y: (Math.min(...part.atoms.map((a) => a.y)) + Math.max(...part.atoms.map((a) => a.y))) / 2 };
@@ -222,6 +225,7 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
       atoms,
       labels,
       box,
+      ends,
       reach,
       read: model ? { model } : { none: `Part of this structure could not be read ("${within}"), so none of it is taken.` },
     };
@@ -230,14 +234,14 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
 
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */
 const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
-/** How near a bond's open end words of its figure may come before they are taken for a label not read: a third of a bond. */
-const AT_END = 0.3;
+/** How near a bond's open end words of its figure may come before they are taken for a label not read: a bond. */
+const AT_END = 1;
 
 /**
- * A structure refused where words of its own figure - not a compound's
- * number - lie right at the open end of one of its bonds (an atom of one
- * bond, with no label): a label too wide or too tall to be read as one, the
- * rest of the structure perhaps past it, in another figure.
+ * A structure refused where words of its own figure - not its labels, nor a
+ * compound's number - lie within a bond of the open end of one of its bonds
+ * (an atom of one bond, with no label): a label too wide, too tall or too far
+ * to be read as one, the rest of the structure perhaps past it.
  */
 function atEndChecked(st: PageStructure, f: FigureRead, words: readonly { text: string; box: Box }[], back: (p: Point) => Point): PageStructure {
   if ("none" in st.read) return st;
@@ -247,6 +251,21 @@ function atEndChecked(st: PageStructure, f: FigureRead, words: readonly { text: 
   const mine = new Set(st.atoms.map((p) => `${p.x},${p.y}`));
   const word = words.find((w) => !COMPOUND_NUMBER.test(w.text.trim()) && ends.some((a) => mine.has(`${back(a).x},${back(a).y}`) && toBox(a, w.box) <= AT_END * f.bond));
   return word ? { ...st, read: { none: `Part of this structure could not be read ("${word.text.trim()}" lies beside it), so none of it is taken.` } } : st;
+}
+
+/** A structure refused where a word of the page within its figure - none of its labels, no compound's number - lies within a bond of one of its open ends. */
+function endWordsChecked(st: PageStructure, own: readonly PageObject[], wordsIn?: (box: Box) => string): PageStructure {
+  if ("none" in st.read || !st.ends.length) return st;
+  const bond = st.reach / REACH;
+  const near = own.find((o) => {
+    if (st.labels.some((l) => boxToBox(l, o.box) === 0)) return false;
+    const text = wordsIn?.(o.box) ?? "";
+    if (COMPOUND_NUMBER.test(text.trim())) return false;
+    return st.ends.some((e) => toBox(e, o.box) <= AT_END * bond);
+  });
+  if (!near) return st;
+  const text = wordsIn?.(near.box)?.trim();
+  return { ...st, read: { none: `Part of this structure could not be read (${text ? `"${text}" lies beside it` : "words beside it were not read"}), so none of it is taken.` } };
 }
 
 /**
