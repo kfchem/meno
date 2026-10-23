@@ -160,10 +160,11 @@ export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds" | "charge" | 
  * else what its atoms say. Entries that differ in them are different
  * species - an anion read from a calculation is no conformer of its neutral.
  */
-function speciesOf(e: Pick<SetEntry, "atoms" | "charge" | "multiplicity">): string {
+function speciesOf(e: Pick<SetEntry, "atoms" | "charge" | "multiplicity" | "skeleton">): string {
   const atoms = e.atoms.map((a) => ({ el: a.el, x: 0, y: 0, z: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) }));
-  const { charge, multiplicity } = speciesBy({ atoms, bonds: [] }, e);
-  return `${charge} ${multiplicity}`;
+  // (a skeleton's has none: such entries go together, as they are - their shapes alone are compared)
+  const species = speciesBy({ atoms, bonds: [], ...(e.skeleton ? { skeleton: true } : {}) }, e);
+  return species ? `${species.charge} ${species.multiplicity}` : "skeleton";
 }
 
 /**

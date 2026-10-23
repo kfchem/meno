@@ -1,3 +1,4 @@
+import { numberText } from "../../../../lib/calc/results";
 import * as THREE from "three";
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -626,6 +627,10 @@ export default function Workflow2D() {
             ? "Not run yet"
             : !count.entries
             ? "Empty"
+            : count.holds === "table"
+              ? plural(count.entries, "row")
+            : count.holds === "number" && b.number
+              ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
             : count.holds === "pictures"
               ? plural(count.entries, "picture")
               : count.holds === "structures"

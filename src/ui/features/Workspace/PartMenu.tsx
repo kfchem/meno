@@ -125,6 +125,8 @@ export type MenuMolecule3D = {
   onEstimateOrders?: () => void;
   /** The hydrogens its file leaves out - its ligand's - added: unset, where it has them or its bond orders are not known. */
   onAddHydrogens?: () => void;
+  /** Said to be whole without hydrogens - it has none to add (lib/chem/skeleton): unset, where it is no skeleton, or a PDB entry. */
+  onWholeWithoutH?: () => void;
   /** Its frames all shown at once, or one: unset, where it has one only; `conformers`, whether they are a conformer set's. */
   overlay?: { on: boolean; conformers: boolean; set: (on: boolean) => void };
   /** Its calculation's lists - its vibrations, its orbitals - each opened under it by name: none, where it gave none. */
@@ -296,7 +298,7 @@ export default function PartMenu({
   /** The figure in the box drawn on the PDF right-clicked, or the picture right-clicked cut out of a PDF, read as a structure drawn beside it (docs/PDF.md, *Stage 5*). */
   onReadStructure?: () => void;
   /** What a text whose sheet was right-clicked can do: read in the column, made an icon or full size. */
-  text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void };
+  text?: { icon: boolean; onRead: () => void; onIcon: () => void; onStructures?: () => void; onTable?: () => void };
   /** The whole flow a step or a set right-clicked is part of, saved as a procedure, named. */
   onSaveProcedure?: () => void;
   /** A step's result set right-clicked: whether its molecules are kept in the workspace's file, and that changed. */
@@ -528,6 +530,7 @@ export default function PartMenu({
           ...(molecule3d.onOrdersFromSmiles ? [{ name: "Bond orders from SMILES…", keys: "", run: molecule3d.onOrdersFromSmiles }] : []),
           ...(molecule3d.onEstimateOrders ? [{ name: "Estimate bond orders from distances", keys: "", run: molecule3d.onEstimateOrders }] : []),
           ...(molecule3d.onAddHydrogens ? [{ name: "Add hydrogens", keys: "", run: molecule3d.onAddHydrogens }] : []),
+          ...(molecule3d.onWholeWithoutH ? [{ name: "Complete without hydrogens", keys: "", run: molecule3d.onWholeWithoutH }] : []),
         ].map((item, k) => (k === 0 ? { ...item, divider: true } : item)),
       ]
     : [];
@@ -724,6 +727,8 @@ export default function PartMenu({
                 { name: "Read", keys: "", run: text.onRead, icon: MENU_ICONS.read },
                 { name: text.icon ? "Show full size" : "Minimize to an icon", keys: "", run: text.onIcon, icon: text.icon ? MENU_ICONS.fullSize : MENU_ICONS.toIcon },
                 ...(text.onStructures ? [{ name: "3D structures", keys: "", run: text.onStructures }] : []),
+                // (a text that reads as a table - a CSV, a TSV - put on the page as a set holding it, for the steps that take tables)
+                ...(text.onTable ? [{ name: "Put on the page as a table", keys: "", run: text.onTable }] : []),
               ]
             : []),
           del("Delete text"),

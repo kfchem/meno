@@ -8,8 +8,8 @@
  * SMILES, hydrogens where the atoms' geometry puts them). Pure: over the
  * molecule, and the MOL blocks the worker answers with.
  */
+import { lacksHydrogens as lacking } from "../../../../lib/chem/skeleton";
 import type { Unmarked } from "../../../../lib/calc/output";
-import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { chainRuns, isWater } from "../../../../lib/chem/biopolymer";
@@ -19,6 +19,8 @@ import type { Molecule3D } from "../store/types";
 /** What a molecule says of what its file leaves out, on the canvas and in a picture of it. */
 export const NO_H_MARK = "No H in file";
 export const ORDERS_MARK = "Bond orders unknown";
+/** What a skeleton says whose orders were estimated from its atoms' distances: its formal charges only those its heavy atoms set (a nitro group's, an azide's), how it is protonated not known. */
+export const ESTIMATED_MARK = "Bond orders estimated, protonation unknown";
 /** What a molecule says of the frames its file gave that were left out as it was read (lib/io/structures): "1 frame left out", "3 frames left out". */
 export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? "" : "s"} left out`;
 /** What a molecule says where atoms of it stood in one place as it was read: a damaged file, or none of a molecule's. */
@@ -123,13 +125,12 @@ export function ordersUnknown(m: Known, chainsAsAtoms: boolean): boolean {
 
 /**
  * Whether a molecule's file leaves out its hydrogens, as a look draws it:
- * some of it has none - all of it; for a PDB entry, its chains, where they
- * are drawn as atoms, or a ligand - and either its bond orders are unknown
- * and it has a carbon whose neighbours leave room for some
- * (`wantsHydrogens`), or, its orders known, an atom of it takes hydrogens
- * its valence leaves room for.
+ * some of it is a skeleton (lib/chem/skeleton `lacksHydrogens`) - all of
+ * it; for a PDB entry, its chains, where they are drawn as atoms, or a
+ * ligand - unless the chemist has said it is whole without any.
  */
-export function noHydrogensInFile(m: Known, chainsAsAtoms = true): boolean {
+export function noHydrogensInFile(m: Known & Pick<Molecule3D, "wholeWithoutH">, chainsAsAtoms = true): boolean {
+  if (m.wholeWithoutH) return false;
   const bp = m.biopolymer;
   if (!bp) return lacksHydrogens(m, m.atoms.map((_, i) => i), m.bondOrders === "unknown");
   const open = new Set(stillUnknown(m));
@@ -138,58 +139,17 @@ export function noHydrogensInFile(m: Known, chainsAsAtoms = true): boolean {
   return ligandGroups(m).some((g) => lacksHydrogens(m, g, open.has(g[0])));
 }
 
-/** Whether some atoms of a molecule have no hydrogens among them and would: a carbon among them that would (`wantsHydrogens`), their orders unknown (`unknown`); else an atom with room for some. */
-function lacksHydrogens(m: Pick<Molecule3D, "atoms" | "bonds">, atoms: readonly number[], unknown: boolean): boolean {
-  if (atoms.some((i) => m.atoms[i].el === "H")) return false;
-  if (unknown) {
-    const near: number[][] = m.atoms.map(() => []);
-    for (const b of m.bonds) {
-      near[b.a1]?.push(b.a2);
-      near[b.a2]?.push(b.a1);
-    }
-    return atoms.some((i) => m.atoms[i].el === "C" && wantsHydrogens(m.atoms, i, near[i]));
-  }
-  const sum = new Float64Array(m.atoms.length);
-  for (const b of m.bonds) {
-    const order = b.order === 4 ? 1.5 : b.order >= 1 && b.order <= 3 ? b.order : 0;
-    sum[b.a1] += order;
-    sum[b.a2] += order;
-  }
-  return atoms.some((i) => implicitHydrogens(m.atoms[i].el, Math.round(sum[i]), m.atoms[i].charge ?? 0, m.atoms[i].radical) > 0);
-}
-
-/** Two of a carbon's neighbours further round it than this, in degrees, stand in a line with it. */
-const IN_A_LINE = 165;
-/** Three of its neighbours whose angles at it come to this, in degrees, or more stand in a plane with it (360 flat; 328.4 a tetrahedron's corner). */
-const IN_A_PLANE = 350;
-/** The end of a triple bond from a carbon to oxygen or nitrogen, in ångströms, at most: carbon monoxide's 1.13, an isocyanide's 1.17 (a C=O or C=N is 1.2 or more). */
-const TRIPLE_END = 1.18;
+/** Whether some atoms of a molecule are a skeleton, their orders unknown (`unknown`) or known: Meno's one rule (lib/chem/skeleton). */
+const lacksHydrogens = (m: Pick<Molecule3D, "atoms" | "bonds">, atoms: readonly number[], unknown: boolean) => lacking(m.atoms, m.bonds, unknown, atoms);
 
 /**
- * Whether a carbon, its bond orders unknown, would carry hydrogens, by
- * where its neighbours stand (`near`): with none, or one - but for the end
- * of a C≡O or C≡N, carbon monoxide's or an isocyanide's; two, not in a
- * line; three, not in a plane. With four, two in a line (carbon dioxide, a
- * nitrile, a metal's carbonyl, an alkyne's middle) or three in a plane
- * (C60, a ring carbon with no hydrogen of its own) it has room for none.
+ * Whether a molecule in 3D is a skeleton: its hydrogens, or some of them -
+ * a PDB entry's chains', a ligand's - not there, and the chemist has not
+ * said it is whole without any. Such a molecule is given no charge or
+ * spin, no calculation is run on it and it is not drawn as a formula
+ * (lib/chem/skeleton).
  */
-function wantsHydrogens(atoms: Molecule3D["atoms"], i: number, near: readonly number[]): boolean {
-  const c = atoms[i];
-  const way = (j: number) => [atoms[j].x - c.x, atoms[j].y - c.y, atoms[j].z - c.z];
-  const angle = (j: number, k: number) => {
-    const [u, v] = [way(j), way(k)];
-    const dot = u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-    return (Math.acos(Math.max(-1, Math.min(1, dot / (Math.hypot(...u) * Math.hypot(...v))))) * 180) / Math.PI;
-  };
-  if (near.length === 0) return true;
-  if (near.length === 1) {
-    const o = atoms[near[0]];
-    return !((o.el === "O" || o.el === "N") && Math.hypot(...way(near[0])) <= TRIPLE_END);
-  }
-  if (near.length === 2) return angle(near[0], near[1]) < IN_A_LINE;
-  if (near.length === 3) return angle(near[0], near[1]) + angle(near[0], near[2]) + angle(near[1], near[2]) < IN_A_PLANE;
-  return false;
-}
+export const isSkeleton = (m: Known & Pick<Molecule3D, "wholeWithoutH">): boolean => noHydrogensInFile(m, true);
 
 /** Whether some of the molecule, or of `atoms`, has hydrogens: bond orders are sought from its shape only then. */
 export function hasHydrogens(m: Pick<Molecule3D, "atoms">, atoms?: readonly number[]): boolean {

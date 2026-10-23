@@ -77,8 +77,8 @@ describe("a Filter step", () => {
   });
 
   it("says why, and makes nothing, where its conditions do not read, or there are none", () => {
-    const bad = runStep(filtering([water([{ nll: nll(1) }])], "mw < 500 g/mol"), 2, W);
-    expect(ran(bad)).toMatchObject({ ok: false, said: '"mw < 500 g/mol": g/mol is no unit Meno knows' });
+    const bad = runStep(filtering([water([{ nll: nll(1) }])], "mw < 500 furlongs"), 2, W);
+    expect(ran(bad)).toMatchObject({ ok: false, said: '"mw < 500 furlongs": furlongs is no unit Meno knows' });
     const none = runStep(filtering([water([{ nll: nll(1) }])], ""), 2, W);
     expect(ran(none)).toMatchObject({ ok: false, said: "No condition to filter by" });
   });

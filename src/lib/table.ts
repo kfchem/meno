@@ -343,3 +343,117 @@ export function moleculesAsTable(entries: readonly Entry[]): Table {
     ],
   };
 }
+
+// ---- kept in a file ----
+
+/** A number, as a value: with its unit (or none), and what worked it out and where, where known. */
+export type NumberValue = { value: number; unit: Unit | "none"; by?: By; at?: At };
+
+const isText = (v: unknown): v is string => typeof v === "string";
+
+/** What a file kept that does not read, as reading it counts it: a whole table or number; a table's column, row or cell; a field of what worked a value out or where. */
+export type Unreadable = "table" | "tableColumn" | "tableRow" | "tableCell" | "number" | "valueField";
+/** Told of each thing that does not read, and how many (`Unreadable`): a caller counts them, as a workspace's file says what it left out. */
+export type Lost = (what: Unreadable, n?: number) => void;
+const NO_COUNT: Lost = () => {};
+
+/** What a file kept of what worked a number out, or where: its text fields as they are - and the numbers `numbers` names - none where nothing reads; each field that does not read told `lost`. */
+function fieldsIn<T extends object>(v: unknown, numbers: readonly string[] = [], lost: Lost = NO_COUNT): T | undefined {
+  if (v == null) return undefined;
+  if (typeof v !== "object") {
+    lost("valueField");
+    return undefined;
+  }
+  const out: Record<string, string | number> = {};
+  for (const [k, x] of Object.entries(v)) {
+    if (isText(x) || (numbers.includes(k) && typeof x === "number" && Number.isFinite(x))) out[k] = x;
+    else lost("valueField");
+  }
+  return Object.keys(out).length ? (out as T) : undefined;
+}
+
+/** A column as a file keeps it, read back; none where its name, kind or unit does not read. */
+function columnIn(c: { name?: unknown; kind?: unknown; unit?: unknown; by?: unknown; at?: unknown } | null, lost: Lost): TableColumn | undefined {
+  if (!c || !isText(c.name)) return undefined;
+  if (c.kind === "number") {
+    if (!(c.unit === "none" || (isText(c.unit) && isUnit(c.unit)))) return undefined;
+    const by = fieldsIn<By>(c.by, [], lost);
+    const at = fieldsIn<At>(c.at, ["kelvin", "atm"], lost);
+    return { name: c.name, kind: "number", unit: c.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) };
+  }
+  return c.kind === "text" || c.kind === "bool" || c.kind === "entry" ? { name: c.name, kind: c.kind } : undefined;
+}
+
+/**
+ * A table as a workspace's file keeps it, read back: its columns - a
+ * number's unit read against Meno's units table - and its rows, each as
+ * many cells as there were columns, each of its column's kind or none; what
+ * was not read when it was made, and what was left, as they were. What does
+ * not read is left out alone and told `lost`, never the table with it: a
+ * column (its cells with it), a row not of the table's width, a cell not of
+ * its column's kind - none in its row, and named among what was not read.
+ * None where it is no table, or no column reads.
+ */
+export function tableIn(v: unknown, lost: Lost = NO_COUNT): Table | undefined {
+  const t = v as { columns?: unknown; rows?: unknown; unread?: unknown; left?: unknown } | null;
+  if (!t || typeof t !== "object" || !Array.isArray(t.columns) || !Array.isArray(t.rows)) {
+    lost("table");
+    return undefined;
+  }
+  const read = (t.columns as unknown[]).map((c) => columnIn(c as Parameters<typeof columnIn>[0], lost));
+  const kept = read.flatMap((c, j) => (c ? [j] : []));
+  if (kept.length < read.length) lost("tableColumn", read.length - kept.length);
+  if (!kept.length) {
+    lost("table");
+    return undefined;
+  }
+  const columns = kept.map((j) => read[j]!);
+  const fits = (c: unknown, col: TableColumn) => c === null || (col.kind === "number" ? typeof c === "number" && Number.isFinite(c) : col.kind === "bool" ? typeof c === "boolean" : typeof c === "string");
+  const rows: Cell[][] = [];
+  const badCells: Unread[] = [];
+  for (const r of t.rows as unknown[]) {
+    if (!Array.isArray(r) || r.length !== read.length) {
+      lost("tableRow");
+      continue;
+    }
+    const row = rows.length;
+    rows.push(
+      kept.map((j, k) => {
+        if (fits(r[j], columns[k])) return r[j] as Cell;
+        badCells.push({ row, column: columns[k].name, text: String(r[j]), why: "did not read from the file" });
+        return null;
+      }),
+    );
+  }
+  if (badCells.length) lost("tableCell", badCells.length);
+  const unread = Array.isArray(t.unread)
+    ? (t.unread as Partial<Unread>[]).flatMap((u) => (Number.isInteger(u?.row) && isText(u?.column) && isText(u?.text) && isText(u?.why) ? [{ row: u.row!, column: u.column!, text: u.text!, why: u.why! }] : []))
+    : [];
+  const left = Array.isArray(t.left) ? (t.left as { column?: unknown; why?: unknown }[]).flatMap((l) => (isText(l?.column) && isText(l?.why) ? [{ column: l.column, why: l.why }] : [])) : [];
+  return { columns, rows, unread: [...unread, ...badCells], left };
+}
+
+/** A number as a workspace's file keeps it, read back: a finite value, its unit from Meno's units table or none; none where it does not read - told `lost`, with each field of what worked it out that does not. */
+export function numberIn(v: unknown, lost: Lost = NO_COUNT): NumberValue | undefined {
+  const n = v as { value?: unknown; unit?: unknown; by?: unknown; at?: unknown } | null;
+  if (!n || typeof n.value !== "number" || !Number.isFinite(n.value) || !(n.unit === "none" || (isText(n.unit) && isUnit(n.unit)))) {
+    lost("number");
+    return undefined;
+  }
+  const by = fieldsIn<By>(n.by, [], lost);
+  const at = fieldsIn<At>(n.at, ["kelvin", "atm"], lost);
+  return { value: n.value, unit: n.unit as Unit | "none", ...(by ? { by } : {}), ...(at ? { at } : {}) };
+}
+
+/**
+ * A text read as a table, where it is one: a file named .csv or .tsv that
+ * reads to a column at least; or another text that reads to two columns or
+ * more, every row of them - none where it does not, so that prose is not
+ * offered as a table.
+ */
+export function tableOfText(name: string, text: string): Table | null {
+  const t = readTable(text);
+  if (!t.columns.length || !t.rows.length) return null;
+  if (/\.(csv|tsv)$/i.test(name)) return t;
+  return t.columns.length >= 2 && !t.unread.some((u) => u.why.endsWith("columns")) ? t : null;
+}

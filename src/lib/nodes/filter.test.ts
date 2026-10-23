@@ -92,7 +92,9 @@ describe("conditions as typed", () => {
   it("says why of the first that does not read", () => {
     expect(conditionsIn("nll 30")).toEqual({ why: '"nll 30" compares nothing: it takes a property, then < ≤ > ≥ = or ≠, then a value' });
     expect(conditionsIn("< 30")).toEqual({ why: '"< 30" names no property' });
-    expect(conditionsIn("mw < 500 g/mol")).toEqual({ why: '"mw < 500 g/mol": g/mol is no unit Meno knows' });
+    expect(conditionsIn("mw < 500 furlongs")).toEqual({ why: '"mw < 500 furlongs": furlongs is no unit Meno knows' });
+    // (one Meno knows, by its name or as it is written: g/mol, Å2 or Å²)
+    expect(conditionsIn("mw < 500 g/mol; tpsa < 90 Å²")).toEqual({ conditions: [{ property: "mw", compare: "<", value: 500, unit: "g/mol" }, { property: "tpsa", compare: "<", value: 90, unit: "Å2" }] });
     expect(conditionsIn("nll <")).toEqual({ why: '"nll <" has nothing to compare with' });
   });
 

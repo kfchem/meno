@@ -22,20 +22,20 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, setEntries, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
-import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
+import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { drawnEntries, energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoInTurns } from "../../workflow/meno";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { DrawnRecord, EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, finishEntry } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
@@ -175,6 +175,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (takesNothing(step.kind)) return runGenerate(id, plugin, at);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
     if (step.kind === "render") return renderEach(id, plugin, at);
+    // (a plugin's step that gives structures drawn of structures drawn: at once, in its worker)
+    if (kindInfo(step.kind).gives === "structures" && inputOf(d, id)?.holds === "structures") return runDrawnAtOnce(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
     return runAtOnce(id, plugin, at);
   }
@@ -238,7 +240,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    */
   const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): Holds3D | null => {
     const g = kindInfo(kind).gives;
-    const made = g === "same" || g === "pictures" ? holds : g;
+    const made = isSetKind(g) ? g : holds;
     return made === "structures" ? null : made;
   };
 
@@ -504,6 +506,93 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   }
 
   /**
+   * A step a plugin does at once on structures drawn (`run`, docs/PLUGINS.md,
+   * *Steps on structures drawn*): each structure given as its MOL blocks,
+   * one for each of its parts, and what the plugin says of each taken in,
+   * in their order - kept as drawn, with its record; made anew, each of its
+   * drawings read and laid out as a SMILES's are (chem/fromSmiles
+   * `drawingOf`), each with the record of the one it was made of; or set
+   * aside, its record saying why. Nothing taken in part.
+   */
+  async function runDrawnAtOnce(id: number, plugin: PythonPlugin, at: number): Promise<void> {
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, plugin.id);
+    const input = inputOf(d, id)!;
+    const entries = drawnEntries(d.model, input.structures, input.records);
+    if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    let answers;
+    const made: DrawnEntry[][] = [];
+    try {
+      const client = await pluginClient(plugin);
+      const given = input.structures.map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
+      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures"), entries.length);
+      if (typeof answers === "string") return void fail(id, answers, at, key);
+      const style = styleOf(get().docStyle);
+      for (const [i, a] of answers.entries()) {
+        if (!("made" in a)) {
+          made.push([]);
+          continue;
+        }
+        // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
+        try {
+          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: await drawingOf(block, style) }))));
+        } catch {
+          made.push([]);
+          answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
+        }
+      }
+    } catch (e) {
+      return void fail(id, message(e), at, key);
+    }
+    // (a record without the status it came in with: what this step says of it is its own)
+    const carried = (e: DrawnEntry) => {
+      const { status: _status, ...rest } = e.record ?? {};
+      return Object.keys(rest).length ? rest : undefined;
+    };
+    // (one made anew - a stereoisomer of it - is another structure: none of the values worked out of the one it was made
+    //  of, which were not of it, but what that came from; which of how many it is, and its own SMILES; and that one's
+    //  SMILES, where it had one, as what it was made from)
+    const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
+      const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
+      const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
+      const parent = e.record?.properties?.smiles?.value;
+      return {
+        ...(e.record?.from?.length ? { from: e.record.from } : {}),
+        properties: {
+          made: said(`${k + 1} of ${a.made.length}`),
+          ...(a.smiles ? { smiles: said(a.smiles[k]) } : {}),
+          ...(typeof parent === "string" ? { made_from: said(parent) } : {}),
+        },
+      };
+    };
+    // (each value as an entry's property: worked out by the plugin, its version and the program it runs, and how)
+    const program = plugin.uses?.[0] ? `${plugin.uses[0].name} ${plugin.uses[0].version}` : undefined;
+    const valueOf = (p: DrawnValue): Property => ({
+      value: p.value,
+      unit: p.unit,
+      status: "computed",
+      by: { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), ...(p.method ? { method: p.method } : {}) },
+    });
+    const kept: DrawnEntry[] = [];
+    const aside: DrawnEntry[] = [];
+    answers.forEach((a, i) => {
+      const e = entries[i];
+      // (kept as drawn - with what the step worked out of it, where it did, on its record beside what it had)
+      if ("as" in a)
+        kept.push(
+          a.properties
+            ? { ...e, record: { ...e.record, properties: { ...e.record?.properties, ...Object.fromEntries(Object.entries(a.properties).map(([name, p]) => [name, valueOf(p)])) } } }
+            : e,
+        );
+      else if ("made" in a) made[i].forEach((m, k) => kept.push({ place: kept.length, drawn: m.drawn, record: madeRecord(e, k, a) }));
+      else aside.push({ ...e, record: { ...carried(e), status: { aside: a.aside } } });
+    });
+    doc.edit("run", (x) => ranAs(x, id, { ok: true, holds: "structures", kept, aside, said: drawnSaid(answers) }, key, { ...w, byOf, now: at }));
+  }
+
+  /**
    * How long a step that makes structures from nothing may take at once (ms): a model sampling, on a computer busy
    * with other work. A wall-clock limit only ever fails the whole run: what one asking makes is the same however
    * long it took.
@@ -595,6 +684,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!gives) return void fail(id, ON_DRAWN, at, key);
     const entries = setEntries(input.molecules, input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
+    const refused = skeletonsRefused(step.kind, entries);
+    if (refused) return void fail(id, refused, at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
     let counted = new Map<number, { degeneracy: number; mirror: number[] }>();
@@ -632,6 +724,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = jobEntries(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
+    const skeletons = skeletonsRefused(step.kind, entries);
+    if (skeletons) return void fail(id, skeletons, at, key);
     taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { cores } = runningOf(useAppSettings.getState().calculations);

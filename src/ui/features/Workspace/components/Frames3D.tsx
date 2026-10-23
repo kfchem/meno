@@ -78,6 +78,7 @@ export function FramesChip({
   onFrame,
   below,
   populations,
+  noShares,
   numbers,
   about,
   results,
@@ -102,6 +103,8 @@ export function FramesChip({
   below?: ReactNode;
   /** A conformer set's: how much of it each conformer is - at room temperature, or as a Populations step found. */
   populations?: number[];
+  /** Why it shows no shares, where it would: a frame that is no minimum, named (utils/molecule3d `sharesWithheld`) - said, opened. */
+  noShares?: string;
   /** A conformer set's: each conformer's number among its compound's, where a step set some aside (docs/WORKFLOWS.md). */
   numbers?: number[];
   /** What the calculation it was read from was, in a line (lib/calc `calcLine`). */
@@ -227,6 +230,7 @@ export function FramesChip({
   const madeRows = made ? [...(made.method ? [{ label: "Method", text: made.method }] : []), ...made.how] : [];
   if (madeRows.length) details.push({ group: "How it was made", rows: madeRows.map((r) => ({ label: r.label, text: r.text })) });
   if (fromText?.length) details.push({ group: "In the text", rows: fromText.map((r) => ({ label: r.label, text: r.text })) });
+  if (noShares) details.push({ group: "Shares", rows: [{ label: "None", text: noShares }] });
   // (why the one told failed, and what its calculation warned of: said on it, and in full, opened - in the program's own words)
   const failure = failed?.[told] ?? undefined;
   const saddle = imaginary?.[told];

@@ -6,7 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { drawnKey, hash, holdsOf, plainAmong, recordKey, setMembers, setMolecules } from "./entries";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takesNothing, type SetHolds, type SetKind } from "./kinds";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
 import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
@@ -65,7 +65,7 @@ export function canWire(doc: Flow, from: WireEnd, to: number, port: string = ONE
 }
 
 /** A kind of set, as a step's card says what it takes and what came. */
-const SET_WORDS: Record<SetKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "a conformer set" };
+const SET_WORDS: Record<ValueKind, string> = { structures: "structures drawn", molecules: "molecules in 3D", conformers: "a conformer set", table: "a table", number: "a number" };
 
 /**
  * Why a wire may not go from `from` into the step `to`, in plain words;
@@ -83,8 +83,8 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   const madeBy = set.made?.step;
   if (madeBy != null && [madeBy, ...stepsBefore(doc, madeBy)].includes(to)) return "It comes from this step: a wire back would make a loop";
   const holds = givesOf(doc, from);
-  // (pictures - a Render step's - no step takes)
-  if (holds === "pictures") return "Pictures go into no step";
+  // (pictures - a Render step's - and charts no step takes)
+  if (holds === "pictures" || holds === "chart") return holds === "chart" ? "A chart goes into no step" : "Pictures go into no step";
   if (holds == null) return null;
   // (a set mixing conformer sets with other molecules, which no step takes: which are the others)
   const mixed = holds === "molecules" && !set.made ? plainAmong(setMolecules(doc, set)) : null;
@@ -92,7 +92,8 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   // (the input it goes to takes what it gives; a kind that takes one holds to what the doer takes of it)
   const several = inputsOf(step.kind).length > 1;
   const takes = portOf(step.kind, port).takes.filter((k) => several || takesBy(step.kind, byOf(step), k));
-  if (takes.includes(holds)) return null;
+  // (molecules or conformer sets into a port that takes a table, seen as one: kinds `takenBy`)
+  if (takenBy(takes, holds)) return null;
   const wants = takes.length ? takes.map((k) => SET_WORDS[k]).join(" or ") : "nothing that is given";
   return `It takes ${wants}, not ${SET_WORDS[holds]}`;
 }
@@ -104,7 +105,8 @@ export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKin
   const set = findSet(doc, from.set);
   if (!set) return null;
   const holds = holdsOf(doc, set);
-  if (holds === "pictures") return null;
+  // (a table, a number, a chart - no entries to give a step that works on them)
+  if (!isSetKind(holds)) return null;
   const { structures, records } = setMembers(doc, set);
   return { holds, molecules: setMolecules(doc, set), structures, records };
 }

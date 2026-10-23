@@ -10,6 +10,7 @@ import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
 import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
 import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
@@ -70,7 +71,10 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     return mass != null ? { ...a, mass } : a;
   });
   // (a molecule read from a calculation: the state it was in there; else what its atoms say - Meno's one rule)
-  const { charge, multiplicity } = speciesOf(molecule, e);
+  const species = speciesOf({ ...molecule, ...(e.skeleton ? { skeleton: true } : {}) }, e);
+  // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
+  if (!species) throw new Error(skeletonWhy());
+  const { charge, multiplicity } = species;
   return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity };
 }
 
@@ -362,6 +366,75 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
   if (kind !== "conformers" || holds !== "conformers") return [...entries];
   const seen = new Set<number>();
   return entries.filter((e) => !seen.has(e.compound) && !!seen.add(e.compound));
+}
+
+/**
+ * What a plugin's step on structures drawn said of one of them (`run`,
+ * docs/PLUGINS.md, *Steps on structures drawn*): kept as drawn; made anew,
+ * as drawings - a MOL block each, its stereoisomers, say, and each one's
+ * own SMILES beside, where given; or set aside, why and what kind of
+ * reason it is.
+ */
+export type DrawnAnswer = { as: "drawn"; properties?: Record<string, DrawnValue> } | { made: string[]; smiles?: string[] } | { aside: string; kind: string };
+/** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
+export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };
+
+/** The most structures a step on structures drawn makes of one. */
+export const MADE_OF_ONE = 64;
+
+/** What a plugin's step on structures drawn said of each of `count`, in their order; why not, where it said nothing Meno can take - nothing taken in part. */
+export function readDrawnAnswers(raw: unknown, count: number): DrawnAnswer[] | string {
+  const list = (raw as { structures?: unknown } | null)?.structures;
+  if (!Array.isArray(list) || list.length !== count) return "It said nothing Meno can take";
+  const out: DrawnAnswer[] = [];
+  for (const a of list as { as?: unknown; made?: unknown; aside?: unknown; kind?: unknown }[]) {
+    if (a?.as === "drawn") {
+      const given = (a as { properties?: unknown }).properties;
+      if (given == null) {
+        out.push({ as: "drawn" });
+        continue;
+      }
+      if (typeof given !== "object" || Array.isArray(given)) return "It said nothing Meno can take";
+      const properties: Record<string, DrawnValue> = {};
+      for (const [name, p] of Object.entries(given as Record<string, { value?: unknown; unit?: unknown; method?: unknown }>)) {
+        const v = p?.value;
+        const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+        const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+        if (value == null || unit == null || !name.trim()) return "It said nothing Meno can take";
+        properties[name] = { value, unit, ...(typeof p.method === "string" && p.method.trim() ? { method: p.method.trim().slice(0, 200) } : {}) };
+      }
+      out.push({ as: "drawn", properties });
+    }
+    else if (Array.isArray(a?.made) && a.made.length && a.made.length <= MADE_OF_ONE && a.made.every((b) => typeof b === "string" && b.length)) {
+      // (each one's own SMILES, where given one for each: else none)
+      const smiles = (a as { smiles?: unknown }).smiles;
+      const named = Array.isArray(smiles) && smiles.length === a.made.length && smiles.every((x) => typeof x === "string" && x.length && x.length <= 2000);
+      out.push({ made: a.made as string[], ...(named ? { smiles: smiles as string[] } : {}) });
+    }
+    else if (typeof a?.aside === "string" && a.aside.trim()) out.push({ aside: a.aside.trim().slice(0, 200), kind: typeof a.kind === "string" && a.kind.trim() ? a.kind.trim().slice(0, 40) : "other" });
+    else return "It said nothing Meno can take";
+  }
+  return out;
+}
+
+/**
+ * What a step on structures drawn says it did: how many it kept of how
+ * many, or - where it made any anew - how many came in and went out, and
+ * how many it made of how many; and how many it set aside, by kind,
+ * the most first: *40 in · 52 out · 14 made from 2 · 3 set aside (2:
+ * stereo open; 1: too many)*.
+ */
+export function drawnSaid(answers: readonly DrawnAnswer[]): string {
+  const n = answers.length;
+  const made = answers.filter((a): a is { made: string[] } => "made" in a);
+  const madeCount = made.reduce((k, a) => k + a.made.length, 0);
+  const kept = answers.filter((a) => "as" in a).length + madeCount;
+  const kinds = new Map<string, number>();
+  for (const a of answers) if ("aside" in a) kinds.set(a.kind, (kinds.get(a.kind) ?? 0) + 1);
+  const aside = n - answers.filter((a) => !("aside" in a)).length;
+  const head = made.length ? `${n} in \u00b7 ${kept} out \u00b7 ${madeCount} made from ${made.length}` : `${kept} of ${n} kept`;
+  const why = [...kinds].sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c}: ${k}`).join("; ");
+  return aside ? `${head} \u00b7 ${aside} set aside (${why})` : head;
 }
 
 /** What a plugin did at once (`run`): the entries it kept, by their place among those it was given; why not, where it said nothing it can be taken at. */
