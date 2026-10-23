@@ -55,6 +55,9 @@ function segmentToBox(a: Point, b: Point, box: Box): number {
 /** How far a box lies from another: naught where they meet. */
 const boxToBox = (p: Box, q: Box) => Math.hypot(Math.max(q[0] - p[2], 0, p[0] - q[2]), Math.max(q[1] - p[3], 0, p[1] - q[3]));
 
+/** How much further than its reach a press takes a structure: within half a bond of its bonds, atoms and labels, before words beside it - a scheme's conditions, a line of text - are pressed. */
+export const PRESS_WIDENED = 1.5;
+
 /** What else a figure has drawn that is no structure's - its arrows, "+" signs and words - where the pointer finds nothing to take. */
 export type PageMarks = { segments: [Point, Point][]; points: Point[]; boxes: Box[] };
 
@@ -150,8 +153,9 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
   figures.forEach((box, k) => {
     const drawn = drawnOf(k);
     if (!drawn) return;
-    // (all of the page not within this figure: its words named, where they are known)
-    const beside = made.objects.filter((o) => !(o.box[0] >= box[0] - 0.5 && o.box[1] >= box[1] - 0.5 && o.box[2] <= box[2] + 0.5 && o.box[3] <= box[3] + 0.5)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    // (all of the page that does not reach into this figure - its own labels' boxes, a letter's full height, may pass its edge a
+    // little - its words named, where they are known)
+    const beside = made.objects.filter((o) => o.box[2] < box[0] || o.box[0] > box[2] || o.box[3] < box[1] || o.box[1] > box[3]).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
     const read = figureOn(drawn, k, sha256, page, beside, known);
     structures.push(...read.structures);
     marks.push(read.marks);
@@ -252,21 +256,27 @@ function besideChecked(st: PageStructure, beside: readonly Beside[], bond: numbe
  * The structure on a page the pointer is over, at `x`, `y` in the page's
  * points: the nearest whose bonds, atoms or labels lie within its reach -
  * so a point between two is the nearer's, never both - and none where an
- * arrow, a "+" or words of `marks` lie nearer still.
+ * arrow or a "+" of `marks` lies nearer still, or, pointed at, on its
+ * words. `widened` takes its
+ * reach further: a press takes a structure within half a bond of it, before
+ * any words about it (`PRESS_WIDENED`).
  */
-export function structureAt(structures: readonly PageStructure[], x: number, y: number, marks?: PageMarks): PageStructure | null {
+export function structureAt(structures: readonly PageStructure[], x: number, y: number, marks?: PageMarks, widened = 1): PageStructure | null {
   const p = { x, y };
   let best: PageStructure | null = null;
   let near = Infinity;
   for (const s of structures) {
-    if (toBox(p, s.box) > s.reach) continue;
+    const reach = s.reach * widened;
+    if (toBox(p, s.box) > reach) continue;
     const d = Math.min(...s.bonds.map(([a, b]) => toSegment(p, a, b)), ...s.labels.map((b) => toBox(p, b)), ...s.atoms.map((a) => dist(p, a)));
-    if (d <= s.reach && d < near) [best, near] = [s, d];
+    if (d <= reach && d < near) [best, near] = [s, d];
   }
-  // (nearer an arrow, a "+" or words than to it: on those, not on the structure)
+  // (nearer an arrow or a "+" than to it: on those, not on the structure - and on words, pointed at, the words'; a press within
+  // its widened reach takes the structure before any words: a scheme's conditions set close by never take it from under it)
   if (best && marks) {
-    const other = Math.min(Infinity, ...marks.segments.map(([a, b]) => toSegment(p, a, b)), ...marks.points.map((q) => dist(p, q)), ...marks.boxes.map((b) => toBox(p, b)));
+    const other = Math.min(Infinity, ...marks.segments.map(([a, b]) => toSegment(p, a, b)), ...marks.points.map((q) => dist(p, q)));
     if (other < near) return null;
+    if (widened === 1 && marks.boxes.some((b) => toBox(p, b) === 0)) return null;
   }
   return best;
 }

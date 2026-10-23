@@ -10,6 +10,7 @@ import type { EditorState, PdfFound, PdfItem, PdfSelection } from "../store/type
 import { onPage } from "../utils/pdfSelection";
 import type { Mark } from "./pdfPictures";
 import { spotMark } from "./figureTie";
+import type { PageStructure } from "../utils/pageStructures";
 
 /** How long a place shown is marked, in ms: held, then fading. */
 export const FLASH_MS = 1800;
@@ -25,6 +26,8 @@ export function flashOf(start: number, now: number): number {
 
 /** How words selected are marked, places found, and a box drawn. */
 const SELECTED = 0.3;
+/** How a structure under the pointer is lit: less than one picked. */
+const LIT = 0.24;
 const BOX = 0.08;
 export const FOUND_COLOR = "#d4a72c";
 const FOUND = 0.3;
@@ -40,8 +43,13 @@ export function marksOn(
   came: () => void,
   flash: EditorState["pdfFlash"] = null,
   box: EditorState["pdfBox"] = null,
+  structures: { lit: PageStructure | null; picked: readonly PageStructure[] } = { lit: null, picked: [] },
 ): Mark[] {
   const out: Mark[] = [];
+  // (structures picked, and the one under the pointer: lit along their bonds and over their labels, as words are - docs/PDF.md, *Structures picked from a PDF*)
+  for (const [s, o] of [...structures.picked.map((x) => [x, SELECTED] as const), ...(structures.lit && !structures.picked.includes(structures.lit) ? [[structures.lit, LIT] as const] : [])]) {
+    out.push({ rects: s.labels, bars: s.bonds.map(([a, b]) => ({ a, b, w: s.reach * 1.5 })), color: COLORS.highlight, opacity: o });
+  }
   // (an atom read from a figure here, lit: a ring where it was drawn)
   const spot = spotMark(pdf.sha256, page);
   if (spot) out.push(spot);

@@ -49,7 +49,15 @@ const KEEP_MS = 4000;
 export const UNDER_MOST = 24;
 
 /** Marks on a page: boxes, in points from its top left, in a colour - words selected, or found. */
-export type Mark = { rects: readonly (readonly [number, number, number, number])[]; color: string; opacity: number; edge?: boolean; ring?: boolean };
+export type Mark = {
+  rects: readonly (readonly [number, number, number, number])[];
+  color: string;
+  opacity: number;
+  edge?: boolean;
+  ring?: boolean;
+  /** Bands along lines of the page - a structure's bonds, lit as a word is - each from one end to the other, `w` wide (points). */
+  bars?: readonly { a: { x: number; y: number }; b: { x: number; y: number }; w: number }[];
+};
 
 /** A picture of a page or a part of one, as WebGL has it, and when it came. */
 export type Pic = { tex: THREE.Texture; born: number };
@@ -435,6 +443,20 @@ export function Page(props: {
           </group>
           ),
         ),
+      )}
+      {props.marks?.flatMap((m, k) =>
+        (m.bars ?? []).map((bar, i) => {
+          const [ax, ay] = [left + bar.a.x * unit, topY - bar.a.y * unit];
+          const [bx, by] = [left + bar.b.x * unit, topY - bar.b.y * unit];
+          const len = Math.hypot(bx - ax, by - ay) + bar.w * unit;
+          return (
+            // (a band along a bond, its ends round past the atoms by half its width: a structure lit)
+            <mesh key={`b${k}:${i}`} position={[(ax + bx) / 2, (ay + by) / 2, 0.0025]} rotation={[0, 0, Math.atan2(by - ay, bx - ax)]} scale={[len, bar.w * unit, 1]}>
+              <planeGeometry args={[1, 1]} />
+              <meshBasicMaterial color={m.color} transparent opacity={m.opacity * opacity} depthWrite={false} toneMapped={false} />
+            </mesh>
+          );
+        }),
       )}
       {props.ink?.length ? <PageInk ink={props.ink} left={left} topY={topY} unit={unit} opacity={opacity} /> : null}
       <lineSegments geometry={edges} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>

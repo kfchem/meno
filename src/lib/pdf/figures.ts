@@ -57,8 +57,17 @@ export async function figuresOn(sha256: string, page: number): Promise<Box[]> {
   if (h && h !== "asked") return h;
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
   const figures = figuresOf(objects);
+  objectsKept.set(key, objects);
   had.set(key, figures);
   return figures;
+}
+
+/** What each page whose figures were worked out is made of, kept with them. */
+const objectsKept = new Map<string, PageObject[]>();
+
+/** What a page is made of - each thing's kind and box - once its figures have been worked out (`figuresHad`); else none. */
+export function objectsHad(sha256: string, page: number): PageObject[] | null {
+  return objectsKept.get(`${sha256}:${page}`) ?? null;
 }
 
 /** How near pictures and paths are to be one figure's, in points; how near words to be its labels; how large a figure is at the least, one way and the other. */

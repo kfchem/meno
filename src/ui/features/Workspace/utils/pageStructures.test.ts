@@ -145,6 +145,12 @@ describe("every structure on a page", () => {
     expect(structures.map((s) => s.read)).toEqual([{ none: 'Part of this structure could not be read ("OSiPh2tBu" lies beside it), so none of it is taken.' }]);
   });
 
+  it("reads a structure whole whose own label's box passes its figure's edge a little - a letter's full height - as PDFium boxes one", () => {
+    const own = { kind: "text" as const, box: [right - 2, y - 6, figure[2] + 3, y + 6] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [own], wordsIn: () => "O" }, [figure], () => drawn, "pdf", 0);
+    expect("model" in structures[0].read).toBe(true);
+  });
+
   it("reads a structure whole where all else on the page lies far from it", () => {
     const far = { kind: "text" as const, box: [figure[2] + 3 * bond, y - 4, figure[2] + 3 * bond + 60, y + 4] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [far] }, [figure], () => drawn, "pdf", 0);
