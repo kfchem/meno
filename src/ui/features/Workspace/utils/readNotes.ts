@@ -33,6 +33,7 @@ const NOUNS = {
   calc: ["record of a calculation", "records of calculations"],
   calcResult: ["calculation result", "calculation results"],
   calcUnread: ["note of what a calculation reader could not read", "notes of what calculation readers could not read"],
+  said: ["note of what a text said of a molecule", "notes of what texts said of molecules"],
   picture: ["picture", "pictures"],
   slide: ["slide", "slides"],
   cycle: ["catalytic cycle", "catalytic cycles"],
