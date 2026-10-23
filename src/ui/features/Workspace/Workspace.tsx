@@ -187,16 +187,20 @@ import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
 import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
 import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
+import { inRow } from "./components/structureDrag";
+import { pickedStructure } from "./utils/pdfStructures";
+import StructureFlight from "./components/StructureFlight";
+import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
 import { useTextMenu } from "../TextEditor/textMenu";
 import { coordinateMolecules } from "./utils/coordinates";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
-import { readMarks } from "./utils/figures";
+import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
-import { centredAt } from "./utils/copyPaste";
+import { centredAt, clipItems } from "./utils/copyPaste";
 import { putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
@@ -741,7 +745,12 @@ function WorkspaceContent({
   // where words taken out of a PDF are let go (components/wordsDrag)
   useEffect(() => {
     setCanvasPlace(store, { canvas: () => domRef.current, worldAt: (x, y) => clientToWorld(x, y) });
-    return () => setCanvasPlace(store, null);
+    // (and why a structure picked from a PDF was not taken, said where the chemistry's notices are: components/structureDrag)
+    setStructureSay(store, setChemError);
+    return () => {
+      setCanvasPlace(store, null);
+      setStructureSay(store, null);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);
   // a PDF's menu, asked for by the column it is read in, where it was right-clicked
@@ -1668,6 +1677,8 @@ function WorkspaceContent({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* (a structure carried out of a PDF, over everything: components/StructureFlight) */}
+      <StructureFlight />
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
@@ -2294,6 +2305,32 @@ function WorkspaceContent({
                 : st.pdfBox?.id === p.id
                   ? { onStructures: () => void structuresFrom(boxedPlaced(st.pdfBox!, p), p.name, st.pdfBox!.page, st.pdfBox!.page, pasteTarget()) }
                   : {}),
+              // (structures picked in it: put on the page beside it, one step - or copied - read as each was)
+              ...(st.pdfStructures?.id === p.id
+                ? (() => {
+                    const models = st.pdfStructures.picks.flatMap((k) => {
+                      const s = pickedStructure(p.sha256, k);
+                      return s && "model" in s.read ? [s.read.model] : [];
+                    });
+                    // (a pick whose figure is no longer read - and kept - is said, never left out unsaid)
+                    const missing = st.pdfStructures.picks.length - models.length;
+                    const said = () => missing && setChemError(missing === 1 ? "1 picked structure is not available: point at it again to read it." : `${missing} picked structures are not available: point at them again to read them.`);
+                    if (!models.length) return { onPutStructures: said, onCopyStructures: said };
+                    const model = inRow(models, NOMINAL_BOND_LENGTH);
+                    return {
+                      onPutStructures: () => {
+                        said();
+                        const now = store.getState();
+                        const style = styleOf(now.docStyle);
+                        now.putRead(placedBeside({ model }, pdfRoom(p), pageBoxes(now, style), style).model);
+                      },
+                      onCopyStructures: () => {
+                        said();
+                        void writeClipboard(clipItems(model)).catch((e: unknown) => setChemError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`));
+                      },
+                    };
+                  })()
+                : {}),
               // (a box drawn on it: put on the page, or copied, as a picture)
               ...(st.pdfBox?.id === p.id
                 ? (() => {
