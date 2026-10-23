@@ -183,6 +183,39 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
   },
+  // (structures drawn looked over as they are, each kept as drawn or set aside saying why: never one changed - a plugin's, its options its own)
+  {
+    kind: "check-structures",
+    name: "Check structures",
+    icon: "band",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "program",
+    made: "Checked",
+    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+  },
+  // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside: a plugin's, its options its own)
+  {
+    kind: "stereoisomers",
+    name: "Stereoisomers",
+    icon: "twins",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "program",
+    made: "Stereoisomers",
+    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+  },
+  // (each structure drawn with numbers worked out of it as drawn - its molecular weight, logP and the like - on its record: a plugin's)
+  {
+    kind: "descriptors",
+    name: "Descriptors",
+    icon: "bars",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "program",
+    made: "With descriptors",
+    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+  },
 ];
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;

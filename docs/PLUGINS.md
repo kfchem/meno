@@ -834,7 +834,30 @@ The same for every plugin and for Meno's own parts:
     as a permutation - and an entry given carries its `degeneracy`, where
     it has one. `"capped": 2` says how many compounds it took atom against
     atom, their ways onto themselves too many to try: a duplicate of one
-    could be missed, and the step says so.
+    could be missed, and the step says so;
+  - **steps on structures drawn** (`run` with `holds` "structures":
+    RDKit's *Check structures* and *Stereoisomers*): each entry is a
+    structure as `{molblocks}`, a MOL block for each of its parts, and
+    the answer is `{"structures": [...]}`, one for each, in their order:
+    `{"as": "drawn"}`, kept as it is - with `"properties"`, where the step
+    works numbers out of it (*Descriptors*): each `{value, unit, method}`,
+    its unit from Meno's units table (g/mol and Å² among them) or "none",
+    kept on its record as `computed` by the plugin, its version, the
+    program and the method; `{"made": [block, ...], "smiles":
+    [...]}`, made anew as drawings (V3000, laid out in 2D, wedged), each
+    one's own SMILES beside it, which Meno reads and lays out as it does a
+    SMILES's (`chem/fromSmiles` `drawingOf`), at most 64 of one - one it
+    cannot draw sets the structure aside whole, *could not be drawn*; or
+    `{"aside": why, "kind": kind}`, set aside, why in a few plain words
+    and a short kind to count it by on the step's line (*3 set aside (2:
+    radical; 1: parts)*). A made one is another structure, with a record
+    of its own (WORKFLOWS.md, *A structure drawn's record*): what the one
+    it was made of came from (`from`), which of how many it is (`made`:
+    *1 of 2*), its own SMILES (`smiles`) and that of the one it was made of
+    (`made_from`), where that had one - never that one's values, which
+    were not worked out of it (an NLL of a SMILES with its stereo left
+    open). One set aside keeps its record, its status saying why. An answer that is
+    not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,
