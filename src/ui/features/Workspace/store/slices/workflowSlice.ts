@@ -15,6 +15,7 @@ import { byOf, kindsOf, optionsFor } from "../../workflow/doers";
 import type { StepKind } from "../../workflow/kinds";
 import * as wf from "../../workflow/model";
 import { appendParts, partsBounds } from "../../workflow/parts";
+import { placeCard } from "../../workflow/place";
 import { proceduresSaved } from "../../workflow/procedures";
 import { fitResultSets, placeAsSet, type RunWith } from "../../workflow/run";
 import { holdsOwn, type Frame } from "../../workflow/entries";
@@ -108,7 +109,11 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       const id = doc.getState().nextWorkflowId ?? 1;
       // (with the defaults Settings has for its kind, done by it)
       const options = valuesOf(optionsFor(kind, by), useAppSettings.getState().options[stepRole(kind, by)]);
-      doc.edit("add step", (d) => wf.addStep(d, kind, x, y, options, by));
+      // (where it was put down, or lower where something is there: never over a set, a card or a wire)
+      doc.edit("add step", (d) => {
+        const at = placeCard(d, x, y);
+        return wf.addStep(d, kind, at.x, at.y, options, by);
+      });
       return id;
     },
     moveStep: (id: number, x: number, y: number, gesture?: string) => doc.edit("move step", (d) => wf.moveStep(d, id, x, y), coalesce("step-move", id, gesture)),

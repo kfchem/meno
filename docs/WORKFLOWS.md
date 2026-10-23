@@ -1919,6 +1919,11 @@ page could not be read after one run.
     where something else is there (`keepExitsUnder`). A step's empty
     exit frames, made as it is added, go clear in the same way (model
     `withExits`).
+  - **A card put down** (Quick Add, or a wire let go on empty space)
+    goes where it was put, or lower where that is over a set, a card, a
+    structure or a wire, as far as it must (place `placeCard`). Put down
+    near the window's edge, or moved lower, it is brought into view with
+    the sets it will give, as what is put down is shown.
 - **How many it shows** (look `DRAWN_ON_PAGE`, the maintainer,
   2026-10-23): as many of its structures as take no more than 400 square
   bond lengths of the page between them - each its drawing's box and its

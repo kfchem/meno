@@ -2,8 +2,9 @@
  * Where a workflow's sets go on the page (docs/WORKFLOWS.md, *Where a
  * result set goes*): clear of its other sets, its steps' cards, its
  * structures, its molecules in 3D and its wires - never over one. One
- * place for the rule, for a step's result sets as it runs (run) and its
- * exits' frames as it is added (model `withExits`).
+ * place for the rule, for a step's result sets as it runs (run), its
+ * exits' frames as it is added (model `withExits`), and a card put down
+ * (`placeCard`).
  */
 import type { WorkspaceDocument } from "../document";
 import { inside, type Frame } from "./entries";
@@ -127,6 +128,18 @@ export function placeBelow(doc: WorkspaceDocument, x: number, top: number, width
       if (clearIn(taken, f, lines)) return f;
     }
   return frameAt(x, lowest - BETWEEN, width, height);
+}
+
+/**
+ * Where a step's card goes, put down with its top left at (x, y) - where a
+ * wire was let go, or Quick Add opened: there, where it is clear of the
+ * page's sets, cards, structures, molecules and wires; else lower, half a
+ * card at a time, as far as it must (`placeBelow`) - never over one. Its
+ * top left.
+ */
+export function placeCard(doc: WorkspaceDocument, x: number, y: number): { x: number; y: number } {
+  const f = placeBelow(doc, x, y, CARD_W, CARD_H);
+  return { x: f.x0, y: f.y1 };
 }
 
 /**
