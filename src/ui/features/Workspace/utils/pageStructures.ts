@@ -138,6 +138,18 @@ export function structuresOf(given: FigureDrawn, figure: number, sha256: string,
   return figureOn(given, figure, sha256, page, beside, known).structures;
 }
 
+/** Whether a box lies at least half within another, by its area - a line or a point, by its length, or wholly. */
+export function mostlyWithin(b: Box, f: Box): boolean {
+  const w = Math.max(0, Math.min(b[2], f[2]) - Math.max(b[0], f[0]));
+  const h = Math.max(0, Math.min(b[3], f[3]) - Math.max(b[1], f[1]));
+  const bw = b[2] - b[0];
+  const bh = b[3] - b[1];
+  if (bw <= 0 && bh <= 0) return b[0] >= f[0] && b[0] <= f[2] && b[1] >= f[1] && b[1] <= f[3];
+  if (bw <= 0) return b[0] >= f[0] && b[0] <= f[2] && h >= bh / 2;
+  if (bh <= 0) return b[1] >= f[1] && b[1] <= f[3] && w >= bw / 2;
+  return w * h >= (bw * bh) / 2;
+}
+
 /** What a page is made of, as `pageStructuresOf` is given it: each thing's kind and box (lib/pdf/figures `PageObject`), and the words a box of it holds, where words are known. */
 export type PageMade = { objects: readonly PageObject[]; wordsIn?: (box: Box) => string };
 
@@ -153,9 +165,9 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
   figures.forEach((box, k) => {
     const drawn = drawnOf(k);
     if (!drawn) return;
-    // (all of the page that does not reach into this figure - its own labels' boxes, a letter's full height, may pass its edge a
-    // little - its words named, where they are known)
-    const beside = made.objects.filter((o) => o.box[2] < box[0] || o.box[0] > box[2] || o.box[3] < box[1] || o.box[1] > box[3]).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    // (all of the page that is not most of it within this figure - its own labels' boxes, a letter's full height, may pass its
+    // edge a little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
+    const beside = made.objects.filter((o) => !mostlyWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
     const read = figureOn(drawn, k, sha256, page, beside, known);
     structures.push(...read.structures);
     marks.push(read.marks);

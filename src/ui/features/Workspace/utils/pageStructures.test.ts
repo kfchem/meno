@@ -4,7 +4,7 @@ import aldol from "../../../../lib/figure/fixtures/aldol-rdkitrxn.json";
 import camphor from "../../../../lib/figure/fixtures/camphor-rdkitacs.json";
 import acetate from "../../../../lib/figure/fixtures/sodium-acetate-rdkit.json";
 import { schemeDrawn } from "./figures";
-import { figureOn, pageStructuresOf, structureAt, structuresOf, type PageStructure } from "./pageStructures";
+import { figureOn, mostlyWithin, pageStructuresOf, structureAt, structuresOf, type PageStructure } from "./pageStructures";
 
 const read = (s: PageStructure) => {
   if ("none" in s.read) throw new Error(s.read.none);
@@ -151,6 +151,15 @@ describe("every structure on a page", () => {
     expect("model" in structures[0].read).toBe(true);
   });
 
+  it("refuses a structure whose wide label straddles its figure's edge and the next figure's - reaching into both, most of it outside - naming the words", () => {
+    // (60 points of label from 3 points inside its figure, the other half's bonds 2 points past its end)
+    const label = { kind: "text" as const, box: [figure[2] - 3, y - 4, figure[2] + 57, y + 4] as [number, number, number, number] };
+    const halfB = { kind: "path" as const, box: [figure[2] + 59, y - 8, figure[2] + 59 + 3 * bond, y + 8] as [number, number, number, number] };
+    const figureB = [figure[2] + 50, y - 10, figure[2] + 60 + 3 * bond, y + 10] as [number, number, number, number];
+    const { structures } = pageStructuresOf({ objects: [label, halfB], wordsIn: () => "OSiPh2tBu" }, [figure, figureB], (k) => (k === 0 ? drawn : null), "pdf", 0);
+    expect("none" in structures[0].read).toBe(true);
+  });
+
   it("reads a structure whole where all else on the page lies far from it", () => {
     const far = { kind: "text" as const, box: [figure[2] + 3 * bond, y - 4, figure[2] + 3 * bond + 60, y + 4] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [far] }, [figure], () => drawn, "pdf", 0);
@@ -188,5 +197,14 @@ describe("words at a bond's open end, in the structure's own figure", () => {
     if ("none" in s.read) return;
     const odd = s.read.model.atoms.filter((a) => a.el.length > 3);
     expect(odd.every((a) => !!a.unsure)).toBe(true);
+  });
+});
+
+describe("what of a page is a figure's own", () => {
+  it("is what lies at least half within it: a label passing its edge by a letter's height is its own, one mostly outside is not", () => {
+    expect(mostlyWithin([90, 10, 102, 22], [0, 0, 100, 100])).toBe(true);
+    expect(mostlyWithin([97, 10, 157, 18], [0, 0, 100, 100])).toBe(false);
+    expect(mostlyWithin([120, 10, 130, 20], [0, 0, 100, 100])).toBe(false);
+    expect(mostlyWithin([10, 50, 90, 50], [0, 0, 100, 100])).toBe(true);
   });
 });
