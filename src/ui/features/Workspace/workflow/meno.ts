@@ -11,6 +11,7 @@ import type { OptionValues } from "../../../../lib/options";
 import { compoundLetter, entryOfSet, entryState, FINISHED, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
+import { positionIds, substituted } from "./substituents";
 import type { StyleChoice } from "../../../../lib/chem/style";
 import type { SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
@@ -71,7 +72,10 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
     case "enumerate": {
       if (entries.length > 1) return { ok: false, said: `Enumerate takes one structure drawn, its template: ${entries.length} came in` };
       const options = optionsOf(kindInfo(kind).options ?? [], own);
-      const r = enumerated(entries[0].drawn, String(options.lists ?? ""), style);
+      const r =
+        options.way === "substituents"
+          ? substituted(entries[0].drawn, positionIds(String(options.positions ?? "")), String(options.groups ?? ""), options.combine === "together" ? "together" : "one", style)
+          : enumerated(entries[0].drawn, String(options.lists ?? ""), style);
       if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
       const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: numberedRecord(m.number, m.how, why) });
       // (its valence as it was checked before it ran, where it was: never claimed where it was not)
@@ -580,7 +584,7 @@ export const STATE_FINISHED = `state = ${FINISHED}`;
 
 export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
   const bad = entries.flatMap((e, k) =>
-    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind]}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
+    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind] ?? e.failed.kind}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
   );
   return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first (a Filter on "${STATE_FINISHED}")` : null;
 }

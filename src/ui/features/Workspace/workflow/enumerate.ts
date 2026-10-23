@@ -27,6 +27,7 @@ import { identityInputOf } from "../chem/identityOf";
 import { degrees, narrowEnd } from "../chem/drawing";
 import type { Model, SeriesCore } from "../store/types";
 import { labelReading, readLabel } from "../utils/labelTyping";
+import { changedAt, wedgesHeld } from "./stereoKept";
 
 /** The most combinations Enumerate makes in one run (the specification's limit, *What stops the step before it runs*). */
 export const MOST_COMBINATIONS = 10_000;
@@ -231,16 +232,26 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
   const seen = new Map<string, number>();
   let missed = 0;
   const choice = options.map(() => 0);
+  const refused: string[] = [];
+  const atomName = (id: number) => {
+    const i = template.atoms.findIndex((a) => a.id === id);
+    return `${template.atoms[i].el}${i + 1}`;
+  };
   for (let number = 1; number <= count; number++) {
-    const drawnNow = joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style);
+    // (each wedge narrow where it was, and the product's configurations read back and held to the template's: stereoKept)
+    const drawnNow = wedgesHeld(template, joined(template, numbers.map((n, k) => [n, rs.get(n)!, options[k][choice[k]]] as const), style));
     const how = numbers.map((n, k) => `R${n} = ${label(options[k][choice[k]])}`).join(", ");
-    const found = identity(identityInputOf(drawnNow).input);
-    if (!found.complete) missed++;
-    const first = seen.get(found.text);
-    if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
+    const changed = changedAt(template, drawnNow, new Map());
+    if (changed.length) refused.push(`${how}: would change the configuration at ${changed.map(atomName).join(", ")}`);
     else {
-      seen.set(found.text, number);
-      made.push({ number, drawn: drawnNow, how });
+      const found = identity(identityInputOf(drawnNow).input);
+      if (!found.complete) missed++;
+      const first = seen.get(found.text);
+      if (first != null) aside.push({ number, drawn: drawnNow, how, why: `Same as ${first}` });
+      else {
+        seen.set(found.text, number);
+        made.push({ number, drawn: drawnNow, how });
+      }
     }
     // (the next combination: the last list turns fastest, R1 outermost)
     for (let k = choice.length - 1; k >= 0; k--) {
@@ -248,6 +259,11 @@ export function enumerated(template: Model, text: string, style?: StyleChoice): 
       if (choice[k] < options[k].length) break;
       choice[k] = 0;
     }
+  }
+  // (a product that would say another configuration than its template's: never made - the step stops, naming it)
+  if (refused.length) {
+    const shown = refused.slice(0, 5);
+    return { ok: false, problems: [...shown, ...(refused.length > shown.length ? [`and ${refused.length - shown.length} more like them`] : [])] };
   }
   // (the core every product shares, by its atoms' places: the template's first in each, each R's place its group's attach atom)
   const place = new Map(template.atoms.map((a, i) => [a.id, i]));

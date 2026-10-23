@@ -136,6 +136,10 @@ describe("an Energy diagram step", () => {
     expect(marked(title, marks)).toEqual([`Not every entry is a result to stand on: ${named} - take it out first (a Filter on "state = finished")`, null]);
   });
 
+  it("names a failure of a kind Meno does not know by that kind, as it came", () => {
+    expect(marked("P", { failed: [{ kind: "lost-in-transit" as never, why: "x" }] })[0]).toBe("Not every entry is a result to stand on: P #1 lost-in-transit - take it out first");
+  });
+
   it("names every entry that is no result, not the first alone", () => {
     expect(marked("TS", { failed: [{ kind: "program-error", why: "x" }, { kind: "not-converged", why: "y" }] })[0]).toBe(
       "Not every entry is a result to stand on: TS #1 the program stopped with an error; TS #2 not converged - take them out first (a Filter on \"state = finished\")",

@@ -18,7 +18,7 @@ import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue } from "../../../../lib/energyDiagram";
-import { exitsOf, inputsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
@@ -210,7 +210,7 @@ export function inputEntries(model: Model, input: { structures: readonly (readon
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
   const set = resultOf(doc, step.id);
   if (!set?.made?.holds || !isSetKind(set.made.holds)) return undefined;
-  const second = exitsOf(step.kind)[1];
+  const second = asideExit(step.kind);
   if (set.made.holds === "structures") {
     // (each structure as it is drawn now: moved, or an atom changed by hand since, as it is)
     const drawn = (b: WorkflowSet | undefined): DrawnModel[] => {
@@ -425,15 +425,16 @@ export function placeResults(
   turns?: readonly (Turn3D | undefined)[],
 ): WorkspaceDocument {
   const { molecules: made, rest, holds, unread, restUnread } = results;
-  const exits = exitsOf(step.kind);
+  const first = exitsOf(step.kind)[0];
+  const aside = asideExit(step.kind);
   if (holds === "structures") {
     // (with how many of each did not read from a file, said in its frame as molecules' are)
-    doc = keepExitsUnder(fillDrawn(doc, step, exits[0].id, results.drawn?.made ?? [], results.drawn?.core, unread), step);
-    return exits[1] ? fillDrawn(doc, step, exits[1].id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
+    doc = keepExitsUnder(fillDrawn(doc, step, first.id, results.drawn?.made ?? [], results.drawn?.core, unread), step);
+    return aside ? fillDrawn(doc, step, aside.id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
   }
-  doc = keepExitsUnder(fillExit(doc, step, exits[0].id, made, holds, unread, w, turns), step);
-  // (what it set aside, in its second exit's set: counted and in plain view, and it can be wired on)
-  if (exits[1]) doc = fillExit(doc, step, exits[1].id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
+  doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
+  // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on)
+  if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
   return doc;
 }
 

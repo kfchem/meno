@@ -700,8 +700,8 @@ A 3D structure is never made here. It comes from a step after it, such as
 **Three ways**, each one PR:
 1. **R groups**: each R1, R2 and so on in the drawing, given a list of
    groups. Specified in full below.
-2. **Substituent swap**: atoms marked on a drawing, with a list of groups,
-   each put in place of a hydrogen there. Outlined below.
+2. **Substituent swap**: atoms chosen on a drawing, with a list of groups,
+   each put in place of a hydrogen there. Specified below.
 3. **Scaffold swap**: a marked part of a drawing replaced by another with
    the same number of bonds out. Outlined below.
 
@@ -924,17 +924,90 @@ reader:
   groups' atoms are numbered in the order of the two R atoms;
 - **the RDKit fixture**, as above.
 
-#### Substituent swap (outline)
+#### Substituent swap
 
-The chemist marks atoms on a drawing and gives a list of groups, read as
-the R lists are. One hydrogen on a marked atom is replaced by each group in
-turn, one marked atom at a time, in the order the atoms are numbered. The
-numbering, the join, the order, the duplicates and *aside* are as for R
-groups. A marked atom with no hydrogen stops the step, named. Where a
-marked atom's hydrogens are not alike (a CH2 next to a stereocentre), the
-group makes a stereocentre left open, counted as above. How atoms are
-marked on the canvas, and whether several marked atoms are combined, are
-decided in its PR, and this section is updated before it is built.
+Agreed 2026-10-23. One Enumerate step, with a choice of way: *By* R groups
+(the default, so a step saved before keeps what it did) or Substituents. Each
+way shows only its own options.
+
+**Positions.** The chemist chooses atoms of the template on its drawing.
+They are kept on the step, never in the drawing: nothing is added to it, so
+it stays the parent compound. The chosen atoms are marked, numbered, only
+while the step is selected.
+- **Numbered by the template's own atom order**, the lowest first, never
+  the order they were chosen in, and named by their atom: *Position 2
+  (C7)*.
+- **A heavy atom with a hydrogen it does not draw**: one of those hydrogens
+  is replaced. The group goes where the canvas would draw a new bond from
+  that atom (its widest gap, with no pointer to follow).
+- **A drawn H**: that H is replaced in place, as an R atom is. Its bond and
+  any wedge on it are kept, and its number goes to the group's attach atom.
+
+**The groups.** One list, one to a line, each line read as an R group's
+option is (*R groups*, *The lists*), its reading shown beside it.
+
+**Combined one of two ways:**
+- **One at a time** (the default): each product has one group at one
+  position. Positions × groups combinations, the first position's groups
+  first, each in the list's order. `H` would only remake the drawing, and
+  stops the step.
+- **Together**: every position takes a group in each product, as R groups
+  do with one list for every R. Groups to the power of positions
+  combinations, the first position outermost. `H` leaves a position as it
+  is drawn.
+
+**The rule is the R groups' rule.** Each position becomes an R atom (at a
+heavy atom, a new one where the group goes), and is drawn out by the same
+join (`expandAbbreviation`). So the numbering, the order's numbers, *aside*
+and *Same as n*, the valence checks, the stereocentres left open and the
+10,000 limit are as for R groups. A template atom has the same number in
+every product. A group at a heavy atom's hydrogen has its attach atom after
+the template's atoms. A wedged centre whose undrawn hydrogen is replaced
+keeps its arrangement, with the group where the hydrogen was.
+
+**Configurations kept.** Replacing a hydrogen keeps the arrangement in
+space: the group goes where the hydrogen was.
+- **A centre whose own undrawn hydrogen is replaced** is wedged anew to say
+  the configuration it had. A wedge with three bonds in the page reads
+  otherwise than a wedge with the hydrogen left out, so the old wedge alone
+  would invert it.
+- **Every wedge keeps its narrow end.** A bond added to an atom changes how
+  the drawing counts its bonds, and with them which end of a wedge reads as
+  narrow, so a wedge would move to the next atom.
+- **A stereocentre the group makes** (one of a CH2's two hydrogens) is left
+  open, with no configuration made up. *Stereoisomers* can enumerate it.
+- **The guard behind them.** Every product is read back as the canvas reads
+  a drawing, and each configuration of the template, at its atoms, mapped,
+  is held to it. A product that would change one, lose one, or say one the
+  template does not, is never made: the step stops, naming it (*Position 1
+  (C4) = Me: would change the configuration at C4*). This holds one at a
+  time and together, and for groups with configurations of their own.
+- **Tested against RDKit** by a differential in the fixture: stereo-rich
+  templates, every atom with an undrawn hydrogen in turn, each with several
+  groups, the compound for each made by RDKit by putting the group in that
+  hydrogen's place.
+
+**What stops the step before it runs**, naming the position or the line:
+no positions chosen; a chosen atom no longer in the drawing; a chosen atom
+with no hydrogen, or whose hydrogens are all drawn (*choose the H*); a drawn
+H that is not plain (as *a plain hydrogen* is defined above); an atom inside
+a label (*expand it to choose in it*); a drawing with R groups (*enumerate
+them by R groups first*); a line that does not read; `H` one at a time; more
+than 10,000 combinations.
+
+**Each entry says how it was made**: *Position 2 (C7) = OMe*, or, together,
+every position's choice. **The set's core** is the template's atoms but the
+drawn H's chosen, with each position (`P1`, `P2`) given by the atom its
+group is bonded to.
+
+**Its known answers** are tested as R groups' are, and its products join
+theirs in the RDKit fixture: a ring CH, two positions alike one at a time
+and together, a wedged centre's undrawn hydrogen, a drawn H with its wedge,
+and a CH2 beside a stereocentre (the centre it makes left open).
+
+**Later:** a set as input (a set made by Enumerate carries its core, so the
+positions could be stated once for every product) comes after the scaffold
+swap, which changes what a set's core is.
 
 #### Scaffold swap (outline)
 
@@ -1522,7 +1595,7 @@ in its own PRs, after 5, one after another:
   take and give molecules in 3D only. P2 adds structures drawn in 2D as a
   value that passes into such a step and comes out of it as a result set;
 - **P3**, R groups, with its known answers and the RDKit fixture;
-- **P4**, substituent swap;
+- **P4**, substituent swap (*Substituent swap*);
 - **P5**, scaffold swap.
 
 **When the cases run:**

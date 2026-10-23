@@ -111,6 +111,17 @@ describe("Enumerate's known answers", () => {
     expect(identityOfDrawn(r.made[0].drawn).text).not.toBe(identityOfDrawn(drawnFromSmiles("F[C@@H](C)Cl")).text);
   });
 
+  it("a bulky group next to a wedged centre: the wedge kept narrow at its centre, the configuration as drawn and none made up at the group", () => {
+    for (const [t, l, smiles] of [
+      ["F[C@H](*)Cl", "R1: tBu", "F[C@H](C(C)(C)C)Cl"],
+      ["*[C@H](F)Cl", "R1: CF3", "FC(F)(F)[C@H](F)Cl"],
+      ["C[C@H](*)[C@@H](C)O", "R1: *C(F)(F)F", "C[C@H](C(F)(F)F)[C@@H](C)O"],
+    ] as const) {
+      const r = ok(enumerated(template(t), l));
+      expect([t, identityOfDrawn(r.made[0].drawn).text]).toEqual([t, identityOfDrawn(drawnFromSmiles(smiles)).text]);
+    }
+  });
+
   it("R1 = H next to a wedge: the compound drawn without that H, its configuration carried to the atom it is on", () => {
     const r = ok(enumerated(template("F[C@](*)(Cl)Br"), "R1: H"));
     expect(identityOfDrawn(r.made[0].drawn).text).toBe(identityOfDrawn(drawnFromSmiles("F[C@H](Cl)Br")).text);

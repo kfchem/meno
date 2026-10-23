@@ -117,6 +117,8 @@ export type CalcInfo = {
   warnings?: Warning[];
   /** The imaginary frequencies the program judged its last geometry has, in cm-1, negative (`ReaderOutput.imaginary`): a mark that it is no minimum. */
   imaginary?: number[];
+  /** When the chemist adopted the output it was read from - one Meno could not account for, taken on purpose (lib/jobKeys) - ms since 1970. */
+  adopted?: number;
 };
 
 /** A program's imaginary frequencies as Meno keeps them: each a number below 0, in cm-1; none, where they are not that. */
@@ -232,11 +234,13 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
     sourceOf(c.source),
     unread,
   );
+  // (adopted, with when: kept as it was)
+  const adopted = isNum(c.adopted) ? { adopted: c.adopted } : {};
   // (its wavefunction, kept by Meno: never found where it was, so no place)
   const wavefunction = sourceOf(c.wavefunction);
-  if (!wavefunction) return calc;
+  if (!wavefunction) return { ...calc, ...adopted };
   const { path: _, ...kept } = wavefunction;
-  return { ...calc, wavefunction: kept };
+  return { ...calc, ...adopted, wavefunction: kept };
 }
 
 /**
@@ -246,6 +250,12 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
  * What the output does not say is left out.
  */
 export function calcLine(c: CalcInfo): string {
+  // (output Meno could not account for, adopted by the chemist: said first, wherever it is shown)
+  if (c.adopted != null) return ["adopted output", calcLineOf(c)].filter(Boolean).join(" · ");
+  return calcLineOf(c);
+}
+
+function calcLineOf(c: CalcInfo): string {
   const program = [c.program, c.version].filter(Boolean).join(" ");
   const job = c.job ? `job ${c.job.number} of ${c.job.of}${c.job.kind ? `, ${c.job.kind.toLowerCase()}` : ""}` : "";
   const method = levelOf(c);
