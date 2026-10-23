@@ -715,11 +715,17 @@ As this part of step 5 was built (#155, from main beside step 3):
     aside) and `Failed` or `Set aside`, why; `Stale` where the structure
     was edited since its values were worked out (none of them written
     then); `From`, what it was made from; and each property under its own
-    name, its unit beside it as the page shows it (`mw (g/mol)`) - its
-    number, `made.how`, the values of what it was made from
-    (`made_from.nll`) among them - a number with every digit it is held
-    to, and one not worked out saying why in place of a value. The rest of
-    what is drawn is one record, as before.
+    name - a number worked out with its unit beside it as the page shows
+    it (`mw (g/mol)`) - its number, `made.how`, the values of what it was
+    made from (`made_from.nll`) among them: a number with every digit it
+    is held to; one not worked out saying why in place of a value, under
+    its bare name. A value worked out of the structure as it is is written
+    whatever a later step did, beside its `State`: a step on structures
+    drawn answers for a structure whole, and one it set aside or failed
+    is given none of its values. A text value's lines never end its item
+    nor begin another: a blank line is written as one space, and one
+    beginning `>` or `$$$$` with a space before it. The rest of what is
+    drawn is one record, as before.
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
     and in attributes alike, and what XML cannot hold at all (the controls

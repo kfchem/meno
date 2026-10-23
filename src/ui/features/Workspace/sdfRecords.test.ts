@@ -44,7 +44,8 @@ function records(text: string): { title: string; items: [string, string][] }[] {
         const name = /^>\s*<(.*)>$/.exec(lines[i]);
         if (!name) continue;
         const data: string[] = [];
-        while (lines[i + 1]?.trim()) data.push(lines[++i]);
+        // (to the empty line that ends it)
+        while (lines[i + 1] != null && lines[i + 1] !== "") data.push(lines[++i]);
         items.push([name[1], data.join("\n")]);
       }
       return { title: lines[0], items };
@@ -95,6 +96,7 @@ describe("a workflow's structures drawn, written to an SD file", () => {
         smiles: { value: "Cc1ccc(Cl)cc1", unit: "none", by, status: "computed" },
         aromatic: { value: true, unit: "none", by, status: "computed" },
         logp: { value: 0, unit: "none", by, status: { failed: "the model gave no value" } },
+        tpsa: { value: 0, unit: "\u00c5^2" as never, by, status: { notApplicable: "it has no polar atoms" } },
       },
     };
     const withRecord = (d: WorkspaceDocument, ids: number[], r: DrawnRecord): WorkspaceDocument => ({
@@ -114,11 +116,65 @@ describe("a workflow's structures drawn, written to an SD file", () => {
         ["mw (g/mol)", "142.5861234567891"],
         ["smiles", "Cc1ccc(Cl)cc1"],
         ["aromatic", "true"],
+        // (not worked out: its bare name - no unit of a value it has not)
         ["logp", "not worked out: the model gave no value"],
+        ["tpsa", "not applicable: it has no polar atoms"],
       ],
     });
     // (none of its values, nor its state, written for the one edited since: said so)
     expect(read[2]).toEqual({ title: "w 2", items: [["Stale", BEFORE_THE_EDIT], ["From", "seed 3"]] });
+  });
+
+  /** `doc`'s out set with its first structure's record `r`, on the structure as it is. */
+  const firstWith = (r: DrawnRecord) => {
+    const { doc, step } = enumerated();
+    const out = resultOf(doc, step, "out")!;
+    const [first] = setMembers(doc, out).structures;
+    const page = {
+      ...doc,
+      sets: doc.sets!.map((s) => (s.id !== out.id ? s : { ...s, members: s.members!.map((m) => ("structure" in m && [...m.structure].sort().join() === [...first].sort().join() ? { structure: m.structure, record: recordOn(r, doc.model, first) } : m)) })),
+    };
+    return records(written(page, [out.id], [step]))[1];
+  };
+
+  it("keeps what was worked out of a structure a later step set aside - true of it still - beside its state, and none of the values that step did not give", () => {
+    // (Generate, then Descriptors set it aside: a structure-step plugin answers for a structure whole - set aside, it is given none of
+    //  that step's values - and what it had before stays, of it as it is)
+    const by = { plugin: "a generator", version: "0.4" };
+    const r: DrawnRecord = {
+      from: ["seed 3"],
+      status: { aside: "the descriptors could not be worked out: the model ran out of memory" },
+      properties: { "made_from.nll": { value: -12.5, unit: "none", by, status: "computed" }, mw: { value: 142.5861234567891, unit: "g/mol", by, status: "computed" } },
+    };
+    expect(firstWith(r).items).toEqual([
+      ["State", "set aside"],
+      ["Set aside", "the descriptors could not be worked out: the model ran out of memory"],
+      ["From", "seed 3"],
+      ["made_from.nll", "-12.5"],
+      ["mw (g/mol)", "142.5861234567891"],
+    ]);
+    // (and one the step marked failed itself, beside a value from before it: that one not worked out, the earlier as it is)
+    const failed: DrawnRecord = {
+      status: { failed: "the descriptor step failed" },
+      properties: { "made_from.nll": { value: -12.5, unit: "none", by, status: "computed" }, logp: { value: 0, unit: "none", by, status: { failed: "the descriptor step failed" } } },
+    };
+    expect(firstWith(failed).items).toEqual([
+      ["State", "failed"],
+      ["Failed", "the descriptor step failed"],
+      ["made_from.nll", "-12.5"],
+      ["logp", "not worked out: the descriptor step failed"],
+    ]);
+  });
+
+  it("writes a text value so that no line of it ends the item or begins another: a data header, a record's end, a blank line", () => {
+    const by = { plugin: "a plugin", version: "1" };
+    const text = "first\n> <fake>\n99\n\n$$$$\nlast";
+    const item = firstWith({ status: "done", properties: { note: { value: text, unit: "none", by, status: "computed" } } });
+    // (one item, as it was given - read back whole, no fake one beside it)
+    expect(item.items).toEqual([
+      ["State", "finished"],
+      ["note", "first\n > <fake>\n99\n \n $$$$\nlast"],
+    ]);
   });
 
   it("writes what is drawn as one record, as before, where no set is selected with it", () => {

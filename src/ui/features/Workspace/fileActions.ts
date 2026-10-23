@@ -277,13 +277,17 @@ function setRecordsOf(drawn: Drawn, drawing: Model): { ids: number[]; record: Dr
 /** A data item's name as an SD file can hold it: on one line, no angle brackets (CTfile Formats, the SDfile's data header). */
 const itemName = (name: string) => name.replace(/[<>\r\n]+/g, " ").trim() || "value";
 
-/** A data item's lines as an SD file can hold them: no blank line, which ends it, nor one that ends the record. */
+/**
+ * A data item's lines as an SD file can hold them, so that the item never
+ * ends early nor another seems to begin: a blank line - which ends an item -
+ * a line holding one space; one beginning ">" - a data header - or "$$$$" -
+ * the record's end - with a space before it.
+ */
 const itemLines = (text: string) =>
   text
     .split(/\r?\n/)
-    .filter((l) => l.trim())
-    .map((l) => (/^\${4}/.test(l) ? ` ${l}` : l))
-    .join("\n") || "-";
+    .map((l) => (!l.trim() ? " " : /^(>|\${4})/.test(l) ? ` ${l}` : l))
+    .join("\n");
 
 /** A property's value as an SD data item says it: a number as it is held, every digit; a text as it is; a list or a vector its numbers in turn; anything else as Meno's own record holds it. */
 function valueData(v: Property["value"]): string {
@@ -299,18 +303,22 @@ function valueData(v: Property["value"]): string {
  * A structure's record as an SD file's data items, after its molfile: its
  * state - finished, failed or set aside, and why; that its properties were
  * taken away as it was edited (`Stale`); what it was made from (`From`);
- * and each of its properties under its own name, its unit beside it as the
- * page shows it ("mw (g/mol)") - its number, how it was made, the values of
- * what it was made from (`made_from.nll`) among them. A property not worked
- * out says why in place of a value, so that no reader takes a value for one.
+ * and each of its properties under its own name - a number worked out with
+ * its unit beside it as the page shows it ("mw (g/mol)") - its number, how
+ * it was made, the values of what it was made from (`made_from.nll`) among
+ * them. A property not worked out says why in place of a value, under its
+ * bare name, so that no reader takes a value for one. A value worked out of
+ * the structure as it is stays true whatever a later step did: a structure
+ * a step set aside or failed keeps it, beside its State saying so.
  */
 function recordData(r: DrawnRecord): string {
   const item = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
   const s = r.status;
   const state = s == null ? [] : s === "done" ? [item("State", "finished")] : "failed" in s ? [item("State", "failed"), item("Failed", s.failed)] : [item("State", "set aside"), item("Set aside", s.aside)];
   const props = Object.entries(r.properties ?? {}).map(([name, p]) => {
-    const label = p.unit === "none" ? name : `${name} (${p.unit})`;
     const st = p.status;
+    // (its unit beside its name only where it is a number worked out: one not worked out has no value its unit is of)
+    const label = st === "computed" && typeof p.value === "number" && p.unit !== "none" ? `${name} (${p.unit})` : name;
     return item(label, st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
   });
   return [...state, ...(r.stale ? [item("Stale", r.stale)] : []), ...(r.from?.length ? [item("From", r.from.join(" "))] : []), ...props].join("");
