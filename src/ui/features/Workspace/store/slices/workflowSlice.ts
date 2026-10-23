@@ -93,7 +93,7 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     removeSet: (id: number | readonly number[], asked = false) => {
       const ids = typeof id === "number" ? [id] : [...id];
       // (one that holds its molecules itself, on no page, is asked about first: they go with it)
-      if (!asked && ids.some((x) => doc.getState().sets?.find((b) => b.id === x)?.collection?.length)) return set({ askDeleteSet: ids });
+      if (!asked && ids.some((x) => { const b = doc.getState().sets?.find((y) => y.id === x); return !!(b?.collection?.length || b?.drawnCollection?.length); })) return set({ askDeleteSet: ids });
       if (doc.edit(ids.length > 1 ? "delete sets" : "delete set", (d) => ids.reduce((n, x) => wf.removeSet(n, x), d)))
         set((prev: EditorState) => ({
           ...prev,

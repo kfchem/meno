@@ -17,6 +17,7 @@ import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
+import { numberText } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -485,6 +486,36 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   const entries = structures.length + (set.drawnCollection?.length ?? 0) + frames;
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
+
+/** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
+export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
+  // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
+  // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
+  return b.notKept && !count.entries
+    ? `Not kept · ${b.notKept.count}`
+    : b.made && !b.made.holds
+    ? "Not run yet"
+    : !count.entries
+    ? "Empty"
+    : count.holds === "table"
+      ? plural(count.entries, "row")
+    : count.holds === "number" && b.number
+      ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
+    : count.holds === "chart"
+      ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
+    : count.holds === "pictures"
+      ? plural(count.entries, "picture")
+      : count.holds === "structures"
+        ? // (more than the page shows - look DRAWN_ON_PAGE - how many it shows of how many it holds)
+          b.drawnCollection?.length && count.entries > b.drawnCollection.length
+          ? `${(count.entries - b.drawnCollection.length).toLocaleString("en-US")} of ${plural(count.entries, "structure")} shown`
+          : plural(count.entries, "structure")
+        : count.holds === "molecules"
+          ? plural(count.compounds, "compound")
+          : `${plural(count.compounds, "compound")} · ${count.entries}`;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
@@ -1086,6 +1117,8 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
 
 /** What a set holds itself, on no page (`collection`), said - "118 molecules", "400 conformers" - for what goes with it when it is deleted; none where it holds none. */
 export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
+  // (structures drawn it holds off the page - those it does not show: they go with it; those it shows are the page's)
+  if (set.drawnCollection?.length) return `${set.drawnCollection.length.toLocaleString("en-US")} ${set.drawnCollection.length === 1 ? "structure" : "structures"}`;
   if (!set.collection?.length) return undefined;
   const { holds, entries } = countOf(page, set);
   const noun = holds === "conformers" ? "conformer" : "molecule";

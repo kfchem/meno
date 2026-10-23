@@ -55,7 +55,8 @@ const ran = (doc: WorkspaceDocument) => doc.steps!.find((s) => s.id === FILTER(d
 /** Each record's properties a Filter exit's set holds, by name: its value, or null where it has none. */
 function held(doc: WorkspaceDocument, exit: string, names: string[]) {
   const set = resultOf(doc, FILTER(doc), exit)!;
-  const records = set.drawnCollection ? set.drawnCollection.map((m) => m.record) : setMembers(doc, set).records;
+  // (those on the page, then those it holds off it)
+  const records = [...setMembers(doc, set).records, ...(set.drawnCollection ?? []).map((m) => m.record)];
   return records.map((r) => names.map((n) => r?.properties?.[n]?.value ?? null));
 }
 
@@ -151,14 +152,14 @@ describe("a Filter step on structures drawn", () => {
     expect(status(s, "rest")).toEqual([[70, { aside: "not state = finished (failed: no conformer could be made)" }]]);
   });
 
-  it("takes a set held whole (more than are laid out on the page), and holds its own so where it keeps as many", () => {
+  it("takes all of a set that holds more than the page shows, and keeps all it keeps so - shown, the rest held - none lost", () => {
     const many = Array.from({ length: LARGE_SET + 10 }, (_, k) => chloroethane({ mw: mw(100 + k), nll: nll(k % 7) }));
     const doc0 = filtering(many, "nll < 6");
     const doc = runStep(doc0, FILTER(doc0), W);
     // (k % 7 is 6 for 8 of the 60)
     expect(ran(doc)?.said).toBe(`${LARGE_SET + 2} of ${LARGE_SET + 10} entries kept · rest 8 (8: not nll < 6 (6))`);
     const out = resultOf(doc, FILTER(doc), "out")!;
-    expect(out.drawnCollection).toHaveLength(LARGE_SET + 2);
+    expect(setMembers(doc, out).structures.length + out.drawnCollection!.length).toBe(LARGE_SET + 2);
     expect(held(doc, "out", ["mw"]).slice(0, 7)).toEqual([[100], [101], [102], [103], [104], [105], [107]]);
     expect(held(doc, "rest", ["mw"])).toEqual(Array.from({ length: 8 }, (_, k) => [106 + 7 * k]));
   });
