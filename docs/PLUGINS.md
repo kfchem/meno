@@ -760,7 +760,10 @@ The same for every plugin and for Meno's own parts:
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
-    {molblock}` (its bond orders from a SMILES, its hydrogens added);
+    {molblock, hydrogens?}` (its bond orders from a SMILES, its hydrogens
+    added - as many on each atom as `hydrogens` says, by atom, where it is
+    given, its valence not checked: whether a bond to a metal is in place
+    of a hydrogen is the chemist's to say);
     `read_picture {picture}` (structures read from pictures: a PNG or a
     JPEG in base64, answered with the structure's atoms where the picture
     has them, in its pixels - each an element with its charge, or a label

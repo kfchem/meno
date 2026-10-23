@@ -456,6 +456,15 @@ export type Molecule3D = {
   bondOrders?: "unknown" | "perceived" | "assigned" | "dictionary" | "estimated";
   /** Whole without hydrogens, as the chemist has said of a molecule Meno took for a skeleton (lib/chem/skeleton): it has none to add. */
   wholeWithoutH?: true;
+  /**
+   * The hydrogens its file left out, added - each part's (all of it; for a
+   * PDB entry, a ligand's), by its atoms then: as the chemist chose how it
+   * is protonated ("chosen"), or as the CCD defines them ("dictionary").
+   * Said over it, as they were not in its file (utils/completeness).
+   */
+  hydrogensAdded?: { by: "chosen" | "dictionary"; atoms: number[] }[];
+  /** Where a PDB entry's ligands' bond orders, and their charges, came from, by residue: a SMILES, the CCD, an estimate from distances. */
+  ligandOrders?: Record<number, "assigned" | "dictionary" | "estimated">;
   /** The atoms of a PDB entry's ligands whose bonds' orders are still unknown, where others' were found. */
   unknownOrders?: number[];
   /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */
