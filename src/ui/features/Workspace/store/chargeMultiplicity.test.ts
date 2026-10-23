@@ -420,12 +420,13 @@ const chem = {
  * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
  * Render gives pictures, and Chart and Energy diagram charts, which have no charge; a kind that takes nothing in (Generate) is given no
  * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
- * alone.
+ * alone. Species sets them, as it is asked, and Combine makes the parts one complex, its charge and multiplicity theirs
+ * together: each against its own known answers (lib/steps structures.test, workflow/structureSteps.test).
  */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures"));
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures") && kind !== "species" && kind !== "combine");
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -494,6 +495,9 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
     const id = st().addStep(kind, by, 1000 * i, 0);
     // (a Filter keeping every entry - each has its number - so that what it passes on is all it was given)
     if (kind === "filter") st().updateStep(id, { options: { conditions: "number \u2265 1", match: "all" } });
+    // (a Tag named, and a Measure asked a distance every entry has: neither runs without)
+    if (kind === "tag") st().updateStep(id, { options: { name: `t${i}` } });
+    if (kind === "measure") st().updateStep(id, { options: { measurements: "1-2" } });
     st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });
@@ -506,9 +510,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn)
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn; Species and Combine change them by design, each tested on its own)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram", "species", "combine"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

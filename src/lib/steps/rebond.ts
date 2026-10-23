@@ -12,12 +12,15 @@
  * - **Geometry**: the geometry entry's, as it is: one 3D structure. Frames
  *   are taken one at a time first (*Take frames*).
  * - **Properties**: both entries', the geometry entry's where both have one
- *   of a name, each still saying the geometry it was worked out at.
+ *   of a name, each still saying the geometry it was worked out at. A
+ *   value of a structure (a descriptor's) that is no longer the entry's is
+ *   marked not applicable, and said (./restructure).
  * - **Group**: *a → b*, the geometry entry's group and the bonding entry's
  *   (each its own id where it has none).
  * - **Lineage**: both entries.
  */
 import type { Entry } from "../entry";
+import { restructured } from "./restructure";
 
 export type Rebonded = { entry: Entry; said: string[] } | { failed: string };
 
@@ -41,21 +44,22 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
     };
   // (the bonding a skeleton, its hydrogens not there: no charge or spin to give the entry, as Combine says of a part)
   const said = bonding.species ? [] : ["The bonding has no hydrogens, so the entry's charge and spin are not known either."];
-  return {
-    entry: {
-      id,
-      from: [geometry.id, bonding.id],
-      structure: { atoms: ba.map((a) => ({ ...a })), bonds: bonding.structure.bonds.map((b) => ({ ...b })) },
-      geometry: { kind: "3d", xyz: [...g.xyz] },
-      // (the bonding's - none where it is a skeleton, its hydrogens not there)
-      species: bonding.species ? { ...bonding.species, from: { ...bonding.species.from } } : null,
-      properties: {
-        ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
-        ...Object.fromEntries(Object.entries(geometry.properties).map(([k, p]) => [k, { ...p }])),
-        group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", status: "computed" },
-      },
-      status: "done",
+  const made: Entry = {
+    id,
+    from: [geometry.id, bonding.id],
+    structure: { atoms: ba.map((a) => ({ ...a })), bonds: bonding.structure.bonds.map((b) => ({ ...b })) },
+    geometry: { kind: "3d", xyz: [...g.xyz] },
+    // (the bonding's - none where it is a skeleton, its hydrogens not there)
+    species: bonding.species ? { ...bonding.species, from: { ...bonding.species.from } } : null,
+    properties: {
+      ...Object.fromEntries(Object.entries(bonding.properties).map(([k, p]) => [k, { ...p }])),
+      ...Object.fromEntries(Object.entries(geometry.properties).map(([k, p]) => [k, { ...p }])),
+      group: { value: `${groupOf(geometry)} → ${groupOf(bonding)}`, unit: "none", status: "computed" },
     },
-    said,
+    status: "done",
   };
+  // (values of the structure either was, now another: kept, marked, and said - never shown as current)
+  const { entry, stale } = restructured(made, "Re-bond");
+  if (stale.length) said.push(`${stale.join(", ")} ${stale.length === 1 ? "was" : "were"} worked out on another structure, so ${stale.length === 1 ? "it is" : "they are"} marked not applicable.`);
+  return { entry, said };
 }

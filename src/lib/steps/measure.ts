@@ -54,6 +54,9 @@ export function measurementName(atoms: readonly number[]): string {
   return `${["distance", "angle", "dihedral"][atoms.length - 2]} ${atoms.map((a) => a + 1).join("-")}`;
 }
 
+/** Whether a property's name is a measurement's, as `measurementName` names one. */
+export const isMeasurementName = (name: string): boolean => /^(distance \d+-\d+|angle \d+-\d+-\d+|dihedral \d+-\d+-\d+-\d+)$/.test(name);
+
 function valueAt(xyz: readonly number[], atoms: readonly number[]): number {
   const p = atoms.map((n) => at(xyz, n));
   return atoms.length === 2 ? distance(p[0], p[1]) : atoms.length === 3 ? angle(p[0], p[1], p[2]) : dihedral(p[0], p[1], p[2], p[3]);
@@ -84,4 +87,27 @@ export function measured(e: Entry, measurements: readonly (readonly number[])[],
     else properties[name] = { value: "", unit, status: { notApplicable: g.kind === "2d" ? "The entry is drawn, not in 3D." : "The entry has no places." }, by };
   }
   return { ...e, properties };
+}
+
+/**
+ * Measurements as typed on a Measure step's card: each its atoms counted
+ * from 1, as the card and the 3D view show them, joined by "-" - two for a
+ * distance, three for an angle, four for a dihedral - the measurements
+ * apart by commas; as the entry numbers its atoms, from 0. Or why they do
+ * not read.
+ */
+export function measurementsTyped(text: string): { atoms: number[][] } | { why: string } {
+  const parts = text
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (!parts.length) return { why: "No measurements yet" };
+  const atoms: number[][] = [];
+  for (const p of parts) {
+    if (!/^\d+(\s*-\s*\d+){1,3}$/.test(p)) return { why: `"${p}" is not two, three or four atom numbers joined by "-"` };
+    const ns = p.split("-").map((n) => Number(n.trim()));
+    if (ns.some((n) => n < 1)) return { why: `"${p}": atoms are numbered from 1` };
+    atoms.push(ns.map((n) => n - 1));
+  }
+  return { atoms };
 }
