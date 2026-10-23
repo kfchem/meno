@@ -54,6 +54,9 @@ export function measurementName(atoms: readonly number[]): string {
   return `${["distance", "angle", "dihedral"][atoms.length - 2]} ${atoms.map((a) => a + 1).join("-")}`;
 }
 
+/** Whether a property's name is a measurement's, as `measurementName` names one. */
+export const isMeasurementName = (name: string): boolean => /^(distance \d+-\d+|angle \d+-\d+-\d+|dihedral \d+-\d+-\d+-\d+)$/.test(name);
+
 function valueAt(xyz: readonly number[], atoms: readonly number[]): number {
   const p = atoms.map((n) => at(xyz, n));
   return atoms.length === 2 ? distance(p[0], p[1]) : atoms.length === 3 ? angle(p[0], p[1], p[2]) : dihedral(p[0], p[1], p[2], p[3]);

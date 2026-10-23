@@ -50,8 +50,11 @@ The entries that come in, as one entry holding them all: a complex
   is the chemist's to set (*Species*). Where a part is a skeleton, without
   its hydrogens, the complex has no species either, and this is said.
 - **Properties.** No part's properties are carried: each was worked out on
-  its part alone, not on the complex. Where any part had properties, this
-  is said. The parts' ids stay as the complex's lineage.
+  its part alone, not on the complex, and what refers to a part's atoms (its
+  restraints, its measures) would name the wrong atoms in the complex's
+  numbering. What each part held is said, part by part and by kind: "part
+  2: restraints, 2 measures, energy". The parts' ids stay as the complex's
+  lineage.
 
 ## Measure
 
@@ -102,8 +105,16 @@ start of a restrained minimisation towards the product.
   - The geometry is the geometry entry's, as it is: one 3D structure.
     Frames are taken one at a time first (*Take frames*).
 - **Properties.** Both entries' properties are kept, the geometry entry's
-  where both have one of the same name, and each still says the geometry
-  it was worked out at.
+  where both have one of the same name, each as what it says it is of
+  (`Property`, `src/lib/entry.ts`):
+  - a value of a geometry (`at`) still says the geometry it was worked out
+    at;
+  - a label (a Tag's ID, restraints) rides as it is;
+  - a value of a structure (`of`, a descriptor's molar mass) whose structure
+    is not the new entry's is kept, marked not applicable ("worked out on the
+    structure before Re-bond"), and said - never shown as current
+    (`src/lib/steps/restructure.ts`). A structure is known by its atoms and
+    bonds, however numbered (`structureKey`).
 - **Group and lineage.** The group is *a → b*: the geometry entry's group,
   then the bonding entry's (each entry's own id where it has none). Both
   entries are its lineage.

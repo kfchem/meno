@@ -18,6 +18,22 @@
  */
 import type { Entry, EntryBond, Geometry } from "../entry";
 import { speciesOf } from "../io/writers";
+import { isMeasurementName } from "./measure";
+
+/** What a part held of its own, as Combine says it is not carried: its restraints, its measures counted (./measure), and each other property by name. */
+function carriedOf(p: Entry): string[] {
+  const names = Object.keys(p.properties);
+  const isRestraints = (n: string) => {
+    const v = p.properties[n].value;
+    return typeof v === "object" && v !== null && "restraints" in v;
+  };
+  const measures = names.filter(isMeasurementName).length;
+  return [
+    ...(names.some(isRestraints) ? ["restraints"] : []),
+    ...(measures ? [`${measures} ${measures === 1 ? "measure" : "measures"}`] : []),
+    ...names.filter((n) => !isMeasurementName(n) && !isRestraints(n)),
+  ];
+}
 
 export type Combined = { entry: Entry; said: string[] } | { failed: string };
 
@@ -54,6 +70,11 @@ export function combined(parts: readonly Entry[], id: string): Combined {
   const said: string[] = [];
   if (!known) said.push("A part has no hydrogens, so the complex's charge and spin are not known either.");
   if (open > 1) said.push(`${open} parts are open-shell: taken as high spin, multiplicity ${unpaired + 1}. Set another with Species.`);
-  if (parts.some((p) => Object.keys(p.properties).length)) said.push("The parts' properties are not carried over: they were worked out on each part alone.");
+  // (each part's, by what it is: none carried - each was worked out on its part alone, its atoms numbered as that part's)
+  const notCarried = parts.flatMap((p, i) => {
+    const what = carriedOf(p);
+    return what.length ? [`part ${i + 1}: ${what.join(", ")}`] : [];
+  });
+  if (notCarried.length) said.push(`Not carried over, as each was worked out on its part alone - ${notCarried.join("; ")}.`);
   return { entry: { id, from: parts.map((p) => p.id), structure: { atoms, bonds }, geometry, species, properties: {}, status: "done" }, said };
 }

@@ -111,11 +111,27 @@ describe("Combine", () => {
     expect(r.said).toEqual(["A part has no hydrogens, so the complex's charge and spin are not known either."]);
   });
 
+  it("carries none of what refers to a part's atoms - its restraints, its measures - and names each, part by part and by kind", () => {
+    const held = (e: Entry, measures: number[][], atoms: number[]): Entry => {
+      const m = measured(e, measures);
+      return { ...m, properties: { ...m.properties, restraints: { value: { restraints: [{ kind: "distance", atoms, value: 1, strength: 1 }] }, unit: "none", status: "computed" } } };
+    };
+    const a = held(water("a"), [[0, 1], [1, 0, 2]], [0, 1]);
+    const b = held(hydroxyl("b"), [[0, 1]], [0, 1]);
+    expect(Object.keys(a.properties).sort()).toEqual(["angle 2-1-3", "distance 1-2", "restraints"]);
+    expect(Object.keys(b.properties).sort()).toEqual(["distance 1-2", "restraints"]);
+    const r = combined([a, b], "c");
+    if ("failed" in r) throw new Error(r.failed);
+    // (none of them: in the complex part 2's atom 1 is its atom 4, so none would still mean what it says)
+    expect(r.entry.properties).toEqual({});
+    expect(r.said).toEqual(["Not carried over, as each was worked out on its part alone - part 1: restraints, 2 measures; part 2: restraints, 1 measure."]);
+  });
+
   it("carries no part's properties, and says so; refuses frames and mixed places, with the reason", () => {
     const e = { ...water(), properties: { energy: { value: -76.4, unit: "Eh" as const, status: "computed" as const } } };
     const r = combined([e, hydroxyl()], "c");
     expect("failed" in r ? r : r.entry.properties).toEqual({});
-    expect("failed" in r ? [] : r.said).toEqual([expect.stringMatching(/not carried over/)]);
+    expect("failed" in r ? [] : r.said).toEqual(["Not carried over, as each was worked out on its part alone - part 1: energy."]);
     const path = { ...water(), geometry: { kind: "frames" as const, frames: [[0, 0, 0, 1, 0, 0, 0, 1, 0]] } };
     expect(combined([path, water()], "x")).toEqual({ failed: expect.stringMatching(/frames/) });
     expect(combined([entry("g", ["C"], null), water()], "x")).toEqual({ failed: expect.stringMatching(/different kinds/) });
