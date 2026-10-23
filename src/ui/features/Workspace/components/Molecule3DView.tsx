@@ -1987,6 +1987,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}
               {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
+              {...(m.marksUnread ? { marksUnread: true } : {})}
               {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
               {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
             />

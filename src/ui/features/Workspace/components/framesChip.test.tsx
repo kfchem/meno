@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { FramesChip } from "./Frames3D";
+import { barsAbove, FramesChip } from "./Frames3D";
 
 // Vitest runs in Node: the chip is drawn by the server's renderer, and
 // whether it is open is read off its slider's row.
@@ -83,5 +83,20 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     // (another frame, which did not fail: its warnings alone)
     expect(at(0)).not.toContain("not converged");
     expect(at(0)).toContain("1 warning");
+  });
+
+  it("stands each bar above the lowest of the frames that finished - one that failed is no zero, and has no bar, said on it", () => {
+    // (1 Eh = 627.5094740631 kcal/mol, CODATA 2018: 0.0015936014 Eh is 1.000000 kcal/mol; the third, not converged, the lowest)
+    const energies = [-76, -76.0015936014, -77];
+    const failed = [null, null, { kind: "not-converged" as const, why: "stopped at 200 cycles" }];
+    const { above, noBaseline } = barsAbove(energies, failed);
+    expect([above[0], above[1], above[2], noBaseline]).toEqual([expect.closeTo(1, 6), 0, null, false]);
+    expect(barsAbove(energies, undefined, true)).toEqual({ above: [null, null, null], noBaseline: true });
+    // (opened: the failed one's bar outlined, why on it; told, it says it did not finish)
+    const html = renderToString(<FramesChip count={3} frame={2} open={false} onFrame={none} energies={energies} failed={failed} conformers />);
+    expect(html).toContain("data-unfinished");
+    expect(html).toContain("<title>not converged</title>");
+    expect(html).toContain("not finished");
+    expect(renderToString(<FramesChip count={3} frame={0} open={false} onFrame={none} energies={energies} marksUnread conformers />)).toContain("none finished: no lowest to stand above");
   });
 });

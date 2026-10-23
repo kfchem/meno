@@ -66,6 +66,20 @@ export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
   );
 }
 
+/**
+ * Each frame's energy above the lowest of those that finished, in kcal/mol:
+ * none of one that did not - it failed, or its marks did not read
+ * (`marksUnread`) - which is no frame's zero either. All of them none,
+ * where none finished (`noBaseline`).
+ */
+export function barsAbove(energies: readonly number[], failed?: readonly (Failure | null)[], marksUnread?: boolean): { above: (number | null)[]; noBaseline: boolean } {
+  const finished = (i: number) => !marksUnread && !(failed?.length === energies.length && failed[i]) && Number.isFinite(energies[i]);
+  const done = energies.filter((_, i) => finished(i));
+  if (!done.length) return { above: energies.map(() => null), noBaseline: true };
+  const lowest = least(done);
+  return { above: energies.map((e, i) => (finished(i) ? (e - lowest) * factor("Eh", "kcal/mol") : null)), noBaseline: false };
+}
+
 /** Words begun with a capital, as a label is. */
 const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -89,6 +103,7 @@ export function FramesChip({
   area,
   title,
   failed,
+  marksUnread,
   warnings,
   imaginary,
 }: {
@@ -130,6 +145,8 @@ export function FramesChip({
   title?: string;
   /** Why each frame failed in the step that made it, where one did (workflow/failures): the one told said on it. */
   failed?: readonly (Failure | null)[];
+  /** Its file's marks of which frames failed did not read: none of its frames' bars stands above another's. */
+  marksUnread?: boolean;
   /** What its calculation warned of: counted on it, each said in full with the rest, opened. A warning moves nothing. */
   warnings?: readonly Warning[];
   /** The imaginary frequencies each frame's calculation judged it has, in cm-1 (null, none): the one told's said on it - a mark that it is no minimum. */
@@ -166,9 +183,11 @@ export function FramesChip({
   }, [opened]);
   // (what the calculation found is in the chip once it is opened by a click: pointing at it alone says nothing more)
   const reading = opened;
-  const lowest = energies ? least(energies) : 0;
-  const above = energies?.map((e) => (e - lowest) * factor("Eh", "kcal/mol"));
-  const highest = above ? Math.max(greatest(above), 1e-9) : 1;
+  // (each above the lowest of those that finished alone: one that failed is no bar's zero, and has none of its own)
+  const bars = energies ? barsAbove(energies, failed, marksUnread) : null;
+  const above = bars?.above;
+  const finishedAbove = above?.filter((v): v is number => v != null) ?? [];
+  const highest = finishedAbove.length ? Math.max(greatest(finishedAbove), 1e-9) : 1;
   const told = pointed ?? frame;
   // (a long run of frames is given more room)
   const width = count > MANY ? WIDE : WIDTH;
@@ -314,6 +333,7 @@ export function FramesChip({
                   <Energies
                     above={above}
                     highest={highest}
+                    why={(i) => (marksUnread ? "its marks could not be read" : failed?.[i] ? FAILURE_WORDS[failed[i]!.kind] : null)}
                     frame={frame}
                     pointed={pointed}
                     width={width}
@@ -370,7 +390,7 @@ export function FramesChip({
                   {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
                   {told + 1} / {count}
                   {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
-                  {above && <span className="text-gh-black"> · {relative(above[told])}</span>}
+                  {above && <span className="text-gh-black"> · {above[told] != null ? relative(above[told]!) : bars?.noBaseline ? "none finished: no lowest to stand above" : "not finished"}</span>}
                   {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
                   {marks && <span className="text-accel-accent"> · {marks}</span>}
                 </>
@@ -407,14 +427,18 @@ export function FramesChip({
 function Energies({
   above,
   highest,
+  why,
   frame,
   pointed,
   width,
   onPoint,
   onFrame,
 }: {
-  above: number[];
+  /** Each frame's energy above the lowest of those that finished; none, of one that did not (`barsAbove`). */
+  above: (number | null)[];
   highest: number;
+  /** Why a frame did not finish, in words: said on its bar. */
+  why: (i: number) => string | null;
   frame: number;
   pointed: number | null;
   width: number;
@@ -433,7 +457,7 @@ function Energies({
   const profile = bars
     ? ""
     : `M0,${BARS} ` +
-      above.map((e, i) => `L${x(i).toFixed(2)},${(BARS - heightOf(e)).toFixed(2)}`).join(" ") +
+      above.map((e, i) => `L${x(i).toFixed(2)},${(BARS - (e == null ? 0 : heightOf(e))).toFixed(2)}`).join(" ") +
       ` L${width},${BARS} Z`;
   return (
     <svg
@@ -465,18 +489,36 @@ function Energies({
       onPointerLeave={() => onPoint(null)}
     >
       {bars ? (
-        above.map((e, i) => (
-          <rect
-            key={i}
-            x={i * step + Math.min(1, step * 0.2)}
-            y={BARS - heightOf(e)}
-            width={Math.max(1, step - Math.min(2, step * 0.4))}
-            height={heightOf(e)}
-            rx={Math.min(1.5, step / 4)}
-            className="transition-[fill] duration-150"
-            fill={i === frame ? "rgb(49, 118, 137)" : i === pointed ? "rgb(140, 172, 184)" : "rgb(207, 222, 229)"}
-          />
-        ))
+        above.map((e, i) =>
+          e == null ? (
+            // (one that did not finish: no height, an outline at the foot - why, on it)
+            <rect
+              key={i}
+              data-unfinished=""
+              x={i * step + Math.min(1, step * 0.2)}
+              y={BARS - 4}
+              width={Math.max(1, step - Math.min(2, step * 0.4))}
+              height={4}
+              rx={Math.min(1.5, step / 4)}
+              fill="none"
+              stroke={i === frame ? "rgb(49, 118, 137)" : "rgb(207, 222, 229)"}
+              strokeDasharray="2 1"
+            >
+              <title>{why(i) ?? "not finished"}</title>
+            </rect>
+          ) : (
+            <rect
+              key={i}
+              x={i * step + Math.min(1, step * 0.2)}
+              y={BARS - heightOf(e)}
+              width={Math.max(1, step - Math.min(2, step * 0.4))}
+              height={heightOf(e)}
+              rx={Math.min(1.5, step / 4)}
+              className="transition-[fill] duration-150"
+              fill={i === frame ? "rgb(49, 118, 137)" : i === pointed ? "rgb(140, 172, 184)" : "rgb(207, 222, 229)"}
+            />
+          ),
+        )
       ) : (
         <>
           <path d={profile} fill="rgb(207, 222, 229)" />
@@ -484,7 +526,7 @@ function Energies({
             <line x1={x(pointed)} x2={x(pointed)} y1={0} y2={BARS} stroke="rgb(140, 172, 184)" strokeWidth={1} />
           )}
           <line x1={x(frame)} x2={x(frame)} y1={0} y2={BARS} stroke="rgb(49, 118, 137)" strokeWidth={1.5} />
-          <circle cx={x(frame)} cy={BARS - heightOf(above[frame])} r={3} fill="rgb(49, 118, 137)" />
+          {above[frame] != null && <circle cx={x(frame)} cy={BARS - heightOf(above[frame]!)} r={3} fill="rgb(49, 118, 137)" />}
         </>
       )}
     </svg>
