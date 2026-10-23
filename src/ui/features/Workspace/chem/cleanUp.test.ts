@@ -182,7 +182,11 @@ describe("fragmentOf and partOf", () => {
       expect([...held[1]]).toEqual([8, 9, 13, 14, 12, 11, 10]);
     }
     expect(slower(small, large, find)).toBeLessThan(24);
-  });
+    // (nine turns of at least 50 ms of processor time for each size: about
+    // 1.2 s of it in all, alone or not. On a busy machine the ratio held -
+    // 9.7 to 11.3 with eight copies running at a load average of 50 - and
+    // the time did not, which Vitest's 5 s cut short)
+  }, measured(1_200));
 });
 
 describe("cleanUp", () => {
