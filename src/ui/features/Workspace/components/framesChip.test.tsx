@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { barsAbove, FAILURES_ASTRAY, FramesChip } from "./Frames3D";
+import { FramesChip } from "./Frames3D";
+import { barsAbove, FAILURES_ASTRAY } from "../utils/barsAbove";
 
 // Vitest runs in Node: the chip is drawn by the server's renderer, and
 // whether it is open is read off its slider's row.
