@@ -115,7 +115,13 @@ export default function JobSettings() {
       )}
       {kept != null && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
-          <span className="min-w-0 flex-1 text-sm text-gh-black">Finished jobs' files</span>
+          <span className="min-w-0 flex-1 text-sm text-gh-black">
+            Finished jobs' files
+            {/* (what Clear takes: every workspace's, and in a folder chosen, whoever else runs jobs there) */}
+            {folder && !folder.own && (
+              <span className="block text-xs text-gh-gray">Clear takes every finished job in the folder above, whichever workspace or computer ran it, and those in Meno's own</span>
+            )}
+          </span>
           <span className="text-xs text-gh-gray tabular-nums">
             {keptText(kept, bytes)}
           </span>

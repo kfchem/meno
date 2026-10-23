@@ -2219,7 +2219,14 @@ pub fn under_way_now(app: &AppHandle) -> u32 {
 /// Every job in Meno's data folder, those asked for first first.
 #[tauri::command]
 pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
-    let mut jobs: Vec<JobListed> = all_roots(&app)?
+    Ok(listed_in(&all_roots(&app)?))
+}
+
+/// Every job in the jobs' folders `roots`, those asked for first first - each id once, from the first folder that
+/// holds it, as `job_in` finds it: never another's state in its place.
+fn listed_in(roots: &[PathBuf]) -> Vec<JobListed> {
+    let mut seen = std::collections::HashSet::new();
+    let mut jobs: Vec<JobListed> = roots
         .iter()
         .filter_map(|root| fs::read_dir(root).ok())
         .flat_map(|dir| dir.flatten())
@@ -2231,9 +2238,10 @@ pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
             }
             listed(&id, &e.path())
         })
+        .filter(|j| seen.insert(j.id.clone()))
         .collect();
     jobs.sort_by_key(|j| j.record.created);
-    Ok(jobs)
+    jobs
 }
 
 #[derive(Serialize, Debug)]
@@ -2997,6 +3005,27 @@ mod tests {
         choose_folder(&data, None).unwrap();
         assert_eq!(new_jobs_root(&data), Ok(jobs_in(&data)));
         for d in [data, scratch, elsewhere] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    // (the same job in both jobs' folders - copied by hand, say: listed once, from the chosen one, as job_in finds it)
+    #[test]
+    fn lists_a_job_in_both_jobs_folders_once_from_the_first() {
+        let chosen = temp();
+        let own = temp();
+        let dir = sized(&own, ECHO, 1, 0);
+        write_record(&dir, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Failed, now_ms()) }).unwrap();
+        let id = dir.file_name().unwrap().to_str().unwrap().to_string();
+        let copy = chosen.join(&id);
+        fs::create_dir_all(&copy).unwrap();
+        fs::copy(dir.join(SPEC), copy.join(SPEC)).unwrap();
+        write_record(&copy, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
+        let roots = [chosen.clone(), own.clone()];
+        let listed = listed_in(&roots);
+        assert_eq!(listed.iter().map(|j| (j.id.as_str(), j.record.state)).collect::<Vec<_>>(), [(id.as_str(), JobState::Done)]);
+        assert_eq!(job_in(&roots, &id), Some(copy));
+        for d in [chosen, own] {
             let _ = fs::remove_dir_all(d);
         }
     }
