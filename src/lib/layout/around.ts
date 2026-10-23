@@ -131,7 +131,7 @@ function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[]
   const own = subAtoms.map((_, k) => ({ x: laid.x[k], y: laid.y[k] }));
   const drawings = [own, own.map((q) => ({ x: -q.x, y: q.y }))];
   const kept = keptStereo(input, stereo, part, attachments);
-  const candidates: { layout: Layout2D; moved: number[][]; mismatch: number; score: number }[] = [];
+  const candidates: { layout: Layout2D; moved: number[][]; mismatch: number; score: number; seen: string }[] = [];
   for (const p of drawings) {
     for (const placed of setDown(mol, p, attachments, attachments.map(({ a }) => sub2.get(a)!), inPart.length, rest, part)) {
       if (placed.mismatch > MISMATCH_LIMIT + 1e-9) continue;
@@ -157,14 +157,16 @@ function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[]
       }
       const layout = drawingOf(input, mol, pos, kept, motions);
       const score = measureLaidOut(input, layout).score;
-      candidates.push({ layout, moved, mismatch: placed.mismatch, score });
+      // (and as a reader sees it, whatever its atoms are numbered: each element where it is)
+      const seen = input.atoms.map((atom, i) => `${atom.el}@${layout.x[i].toFixed(6)},${layout.y[i].toFixed(6)}`).sort().join(" ");
+      candidates.push({ layout, moved, mismatch: placed.mismatch, score, seen });
     }
   }
   if (!candidates.length) {
     return { refused: `The new part's bonds to the rest end more than ${MISMATCH_LIMIT} bond${MISMATCH_LIMIT === 1 ? "" : "s"} from where the rest's atoms are, so the structure is drawn whole.` };
   }
-  // (nearest the rest's atoms first, then the drawing that reads best; of two alike, the first made - the part as drawn before its mirror image, the rest's openings by their angles: never by the order the atoms came in)
-  candidates.sort((p, q) => (Math.abs(p.mismatch - q.mismatch) > 1e-6 ? p.mismatch - q.mismatch : Math.abs(p.score - q.score) > 1e-9 ? p.score - q.score : 0));
+  // (nearest the rest's atoms first, then the drawing that reads best, then by each element where it is: never by the order the atoms came in)
+  candidates.sort((p, q) => (Math.abs(p.mismatch - q.mismatch) > 1e-6 ? p.mismatch - q.mismatch : Math.abs(p.score - q.score) > 1e-6 ? p.score - q.score : p.seen < q.seen ? -1 : p.seen > q.seen ? 1 : 0));
   let why = "";
   for (const c of candidates) {
     const wrong = readBack(c.layout);
@@ -256,7 +258,8 @@ function setDown(
     const stub = p[stubs];
     const along = angleOf(sub(p[ak[0]], stub));
     const ways = openings(mol, f, a, rest, part);
-    if (!ways.length) return [{ move: motion(0, stub, rest[f]!), mismatch: 0 }];
+    // (an atom bonded to nothing else of the rest leaves room all round: the bond along each of the lattice's twelve directions, which reads best taken - not the way the part happened to be drawn, which goes by which of its atoms alike is the stub)
+    if (!ways.length) return Array.from({ length: 12 }, (_, k) => ({ move: motion((k * Math.PI) / 6 - along, stub, rest[f]!), mismatch: 0 }));
     return ways.map((w) => ({ move: motion(w - along, stub, rest[f]!), mismatch: 0 }));
   }
   const from = attachments.map((_, k) => p[stubs + k]);

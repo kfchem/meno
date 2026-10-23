@@ -3,7 +3,7 @@ import { layoutAround, MISMATCH_LIMIT, type FixedDrawing } from "./around";
 import { reordered } from "./canonical";
 import { layout2D, type Layout2D } from "./engine";
 import { dist, type Point } from "./geometry";
-import type { LayoutInput } from "./perceive";
+import { perceive, type LayoutInput } from "./perceive";
 import { notAsGiven } from "./readBack";
 import { fromSmiles } from "./testdata/fromSmiles";
 import { measured } from "../../testing/timeouts";
@@ -197,6 +197,31 @@ describe("a part drawn afresh between fixed neighbours", () => {
       const atOther = new Array<Point | null>(n).fill(null);
       fixed.at.forEach((p, i) => (atOther[to[i]] = p ?? null));
       expect(seen(layoutAround(other, ring.map((a) => to[a]), { at: atOther }), other), `order ${k}`).toBe(first);
+    }
+  });
+
+  it("comes out the same whatever order a symmetric molecule's atoms are given in: its parts by their symmetric anchors, and a part on one atom alone", () => {
+    // (p-xylene, cis- and trans-1,4-dimethylcyclohexane, 1,1-dimethylcyclohexane, 4,4'-dimethylbiphenyl - each part a ring system, or all but a methyl)
+    for (const smiles of ["Cc1ccc(C)cc1", "C[C@H]1CC[C@@H](C)CC1", "C[C@H]1CC[C@H](C)CC1", "CC1(C)CCCCC1", "Cc1ccc(-c2ccc(C)cc2)cc1"]) {
+      const g = fromSmiles(smiles);
+      const n = g.atoms.length;
+      const drawn = layout2D(g);
+      const [c, s] = [Math.cos(0.7) * 1.7, Math.sin(0.7) * 1.7];
+      const placed = drawn.x.map((x, i) => ({ x: c * x - s * drawn.y[i], y: s * x + c * drawn.y[i] }));
+      const parts = [...perceive(g).systems.map((sys) => [...sys.atoms].sort((p, q) => p - q)), g.atoms.map((_, i) => i).filter((i) => i !== 0)];
+      const orders = [g.atoms.map((_, i) => n - 1 - i), g.atoms.map((_, i) => (i + 3) % n), g.atoms.map((_, i) => (i * 5) % n), g.atoms.map((_, i) => (i * 7 + 2) % n)].filter((to) => new Set(to).size === n);
+      expect(orders.length).toBeGreaterThan(1);
+      for (const part of parts) {
+        const seen = (input: LayoutInput, to: readonly number[]) => {
+          const at = new Array<Point | null>(n).fill(null);
+          placed.forEach((p, i) => (at[to[i]] = part.includes(i) ? null : p));
+          const r = layoutAround(input, part.map((a) => to[a]), { at });
+          if ("refused" in r) return r.refused;
+          return input.atoms.map((a, i) => `${a.el}@${r.layout.x[i].toFixed(4)},${r.layout.y[i].toFixed(4)}`).sort().join(" ");
+        };
+        const first = seen(g, g.atoms.map((_, i) => i));
+        for (const [k, to] of orders.entries()) expect(seen(reordered(g, to), to), `${smiles}, part ${part.join(",")}, order ${k + 1}`).toBe(first);
+      }
     }
   });
 });
