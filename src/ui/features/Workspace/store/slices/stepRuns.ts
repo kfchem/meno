@@ -588,6 +588,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * `drawingOf`), each with the record of the one it was made of; or set
    * aside, its record saying why. Nothing taken in part.
    */
+  /**
+   * How long a step on structures drawn may take at once (ms), by how many came in: a request's own two minutes,
+   * or half a minute for each - its stereoisomers each tried in 3D, a camphor's take some 10 s - where that is
+   * longer. A wall-clock limit only ever fails the whole run.
+   */
+  const DRAWN_EACH_MS = 30_000;
+  const drawnMs = (n: number) => Math.max(2 * 60_000, n * DRAWN_EACH_MS);
+
   async function runDrawnAtOnce(id: number, plugin: PythonPlugin, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
@@ -604,7 +612,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const given = input.held
         ? entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
         : input.structures.map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
-      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures"), entries.length);
+      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
       for (const [i, a] of answers.entries()) {

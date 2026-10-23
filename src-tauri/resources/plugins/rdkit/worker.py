@@ -29,6 +29,7 @@ each atom's element, place, charge and radical, the bonds by index:
   heavy atoms, at their best over the molecule's symmetries, set aside.
 """
 
+import itertools
 import json
 import math
 import re
@@ -50,6 +51,7 @@ from rdkit.Chem import (
 )
 from rdkit.Chem.EnumerateStereoisomers import (
     EnumerateStereoisomers,
+    GetStereoisomerCount,
     StereoEnumerationOptions,
 )
 
@@ -2333,7 +2335,8 @@ def stereoisomers_one(blocks, aside):
     and double bond given, as a drawing - or, `aside`, set aside. An
     allene's axis left open is always set aside (no stereoisomer of it is
     given), and so is one with more than MOST_ISOMERS stereoisomers, whole:
-    never some of them."""
+    never some of them. Those are counted only as far as one past the most,
+    never all: twenty double bonds left open give a million."""
     mol = drawing_of_parts(blocks)
     if mol is None:
         return {"aside": "it could not be read", "kind": "unreadable"}
@@ -2347,11 +2350,13 @@ def stereoisomers_one(blocks, aside):
         return {"as": "drawn"}
     if open_cumulenes(mol, bonds):
         return {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"}
-    # (how many the open elements could give at most, before any is made: over the most, set aside whole)
-    if 2 ** (len(atoms) + len(bonds)) > MOST_ISOMERS:
-        counted = list(EnumerateStereoisomers(mol, options=StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)))
-        if len(counted) > MOST_ISOMERS:
-            return {"aside": f"{len(counted)} stereoisomers, more than the {MOST_ISOMERS} made of one", "kind": "too many"}
+    # (how many the open elements could give at most, before any is made: over the most, counted only to one
+    #  past it - all of them would be a million for twenty double bonds - and set aside whole, saying the most it
+    #  could be)
+    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)
+    most = GetStereoisomerCount(mol, options=options)
+    if most > MOST_ISOMERS and sum(1 for _ in itertools.islice(EnumerateStereoisomers(mol, options=options), MOST_ISOMERS + 1)) > MOST_ISOMERS:
+        return {"aside": f"more than the {MOST_ISOMERS} stereoisomers made of one (up to {most})", "kind": "too many"}
     made = embeddable(mol)
     if len(made) <= 1:
         return {"as": "drawn"}

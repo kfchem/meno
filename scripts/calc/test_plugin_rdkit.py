@@ -12,6 +12,7 @@ will do.)
 import importlib.util
 import math
 import pathlib
+import time
 import unittest
 
 try:
@@ -1386,9 +1387,18 @@ class StructureSteps(unittest.TestCase):
         got = self.run_step("stereoisomers", [self.entry("CC=C=CC"), self.entry("CC(O)C(O)C(O)C(O)C(O)C(O)C")])
         self.assertEqual(got[0], {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"})
         self.assertEqual(got[1]["kind"], "too many")
-        self.assertRegex(got[1]["aside"], r"^\d+ stereoisomers, more than the 32 made of one$")
+        self.assertEqual(got[1]["aside"], "more than the 32 stereoisomers made of one (up to 64)")
         # (set aside, as the option says, where it would make them)
         self.assertEqual(self.run_step("stereoisomers", [self.entry("CC(O)CC")], {"open": "aside"}), [{"aside": "stereo left open: 2 stereoisomers", "kind": "stereo open"}])
+
+    def test_stereoisomers_set_aside_without_making_them_all(self):
+        # (twenty stereocentres left open: a million stereoisomers, never each made to be counted - a Generate's
+        #  glycolipid, twenty left open, timed the step out counting them all for some 165 s)
+        chain = "C" + "CC(O)" * 20 + "CN"
+        started = time.monotonic()
+        got = self.run_step("stereoisomers", [self.entry(chain)])
+        self.assertLess(time.monotonic() - started, 20)
+        self.assertEqual(got, [{"aside": "more than the 32 stereoisomers made of one (up to 1048576)", "kind": "too many"}])
 
     def test_descriptors_of_each_as_drawn_with_unit_and_how(self):
         got = self.run_step("descriptors", [self.entry("CC(=O)Nc1ccc(O)cc1"), self.entry("[H+]")])
