@@ -16,6 +16,7 @@ import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { readDrawnRecord, structureMember } from "./entries";
 import { readRefused } from "./programs";
 import { leftOut, readEach } from "../utils/readNotes";
+import { isJobKey } from "../../../../lib/jobKeys";
 
 export type SavedWorkflow = { sets: WorkflowSet[]; steps: WorkflowStep[]; wires: Wire[] };
 
@@ -128,7 +129,8 @@ function readSet(v: unknown): WorkflowSet | null {
 }
 
 /** A job's id, as Meno makes them: a UUID. */
-const JOB = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+// (a job's id, as Meno names one - its label, path-safe, and eight hex of its own (jobs.rs `job_id_ok`) - or as it did, a UUID)
+const JOB = /^(?:[a-z0-9]+(?:-[a-z0-9]+)*-[0-9a-f]{8}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 /** A file's name in a job's folder: inside it. */
 const IN_FOLDER = /^(?!\/)(?![A-Za-z]:)(?!.*(?:^|[\\/])\.\.?(?:[\\/]|$)).{1,200}$/;
 
@@ -144,6 +146,12 @@ function readRan(v: unknown): StepRan | undefined {
   const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown; kept?: unknown; keep?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.ok !== "boolean" || typeof r.said !== "string" || typeof r.input !== "string") return undefined;
   const jobs = Array.isArray(r.jobs) ? r.jobs.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
+  // (a key for each job, or none: one missing would take a job up again by another's)
+  const given = (r as { keys?: unknown }).keys;
+  const keys = Array.isArray(given) && given.length === jobs.length && jobs.length === (r.jobs as unknown[]).length && given.every(isJobKey) ? (given as string[]) : undefined;
+  // (what each gave, as one digest, beside its key: or none - one out of place would check a job by another's)
+  const digests = (r as { gave?: unknown }).gave;
+  const gave = keys && Array.isArray(digests) && digests.length === jobs.length && digests.every((g) => g === null || isJobKey(g)) ? (digests as (string | null)[]) : undefined;
   const options = optionsIn(r.options);
   return {
     at: r.at,
@@ -153,6 +161,9 @@ function readRan(v: unknown): StepRan | undefined {
     ...(r.stopped === true ? { stopped: true as const } : {}),
     ...(isNum(r.took) && r.took >= 0 ? { took: r.took } : {}),
     ...(jobs.length ? { jobs } : {}),
+    ...(keys ? { keys } : {}),
+    ...(gave ? { gave } : {}),
+    ...readAccounting(r),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),
     // (a run the chemist keeps: never dropped while kept)
@@ -248,6 +259,22 @@ function readKept(v: unknown): StepRunKept | null {
   };
 }
 
+/** Jobs adopted, by id, with when: ids as Meno gives them, times as numbers. */
+function adoptedIn(v: unknown): Record<string, number> | undefined {
+  if (!v || typeof v !== "object" || Array.isArray(v)) return undefined;
+  const out = Object.fromEntries(Object.entries(v).filter(([id, at]) => JOB.test(id) && isNum(at)));
+  return Object.keys(out).length ? (out as Record<string, number>) : undefined;
+}
+
+/** What a run stopped on output Meno could not account for keeps, as a file has it: those jobs, the run as it stood, and the jobs adopted. */
+function readAccounting(r: object): Pick<StepRan, "unaccounted" | "held" | "adopted"> {
+  const v = r as { unaccounted?: unknown; held?: unknown; adopted?: unknown };
+  const unaccounted = Array.isArray(v.unaccounted) ? v.unaccounted.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
+  const held = unaccounted.length ? readRunning(v.held) : undefined;
+  const adopted = adoptedIn(v.adopted);
+  return { ...(held ? { unaccounted, held } : {}), ...(adopted ? { adopted } : {}) };
+}
+
 /** A step's run under way, as a file keeps it: its jobs to be picked up. */
 function readRunning(v: unknown): StepRunning | undefined {
   const r = v as { at?: unknown; input?: unknown; options?: unknown; jobs?: unknown } | undefined;
@@ -261,11 +288,15 @@ function readRunning(v: unknown): StepRunning | undefined {
             reads: Array.isArray(j.reads) ? j.reads.filter((n): n is string => typeof n === "string" && IN_FOLDER.test(n)) : [],
             // (a Render's: the size its picture takes on the page)
             ...(Array.isArray(j.size) && j.size.length === 2 && j.size.every((n) => isNum(n) && n > 0) ? { size: [j.size[0], j.size[1]] as [number, number] } : {}),
+            ...(isJobKey((j as { key?: unknown }).key) ? { key: (j as { key: string }).key } : {}),
+            ...((j as { reused?: unknown }).reused === true ? { reused: true as const } : {}),
+            ...(isJobKey((j as { gave?: unknown }).gave) ? { gave: (j as { gave: string }).gave } : {}),
           }
       : null;
   }, "job");
   const kind = (r as { kind?: unknown }).kind;
   const over = (r as { over?: unknown }).over;
+  const adopted = adoptedIn((r as { adopted?: unknown }).adopted);
   // (those its plugin refused as it prepared the others' jobs: kept to be said failed when it ends)
   const refused = readRefused({ refused: (r as { refused?: unknown }).refused }, Number.MAX_SAFE_INTEGER);
   return jobs.length
@@ -277,6 +308,7 @@ function readRunning(v: unknown): StepRunning | undefined {
         ...(KINDS.some((k) => k.kind === kind) ? { kind: kind as StepKind } : {}),
         ...(typeof over === "string" && over ? { over: over.slice(0, 300) } : {}),
         ...(refused.length ? { refused } : {}),
+        ...(adopted ? { adopted } : {}),
       }
     : undefined;
 }

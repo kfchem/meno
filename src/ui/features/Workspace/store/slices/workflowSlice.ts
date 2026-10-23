@@ -20,6 +20,7 @@ import { fitResultSets, placeAsSet, type RunWith } from "../../workflow/run";
 import type { Frame } from "../../workflow/entries";
 import type { EditorState, Molecule3D, WorkflowView } from "../types";
 import { createStepRuns } from "./stepRuns";
+import { positionIds } from "../../workflow/substituents";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -125,6 +126,15 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
       }
       // (the step's alone: the defaults are Settings', and stay as they are)
       if (patch.options) doc.edit("change options", (d) => wf.updateStep(d, id, { options: patch.options }));
+    },
+    /** An atom clicked while a step's atoms are chosen on the drawing (`choosingAtoms`): taken into that option, or out of it - an edit of the step's options, undone as one. */
+    chooseAtom: (atom: number) => {
+      const choosing = get().choosingAtoms;
+      const step = choosing && doc.getState().steps?.find((s) => s.id === choosing.step);
+      if (!choosing || !step) return;
+      const was = positionIds(String(step.options?.[choosing.option] ?? ""));
+      const now = was.includes(atom) ? was.filter((id) => id !== atom) : [...was, atom];
+      doc.edit("choose atoms", (d) => wf.updateStep(d, step.id, { options: { ...step.options, [choosing.option]: now.join(" ") } }));
     },
     removeStep: (id: number, asked = false) => {
       const step = doc.getState().steps?.find((s) => s.id === id);

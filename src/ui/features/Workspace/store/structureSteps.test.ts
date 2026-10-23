@@ -11,14 +11,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Atom, DrawnRecord, Model } from "./types";
 
 /** What the plugin was asked - the step, each structure's blocks, the options - and what it answers, by the test. */
-const asked: { step: string; entries: { molblocks: string[] }[]; options: Record<string, unknown>; holds: string }[] = [];
+const asked: { step: string; entries: { molblocks: string[] }[]; options: Record<string, unknown>; holds: string; ms?: number }[] = [];
 let answer: (entries: { molblocks: string[] }[]) => unknown = () => ({});
 
 vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => ({
-    run: async (step: string, entries: { molblocks: string[] }[], options: Record<string, unknown>, holds: string) => {
-      asked.push({ step, entries, options, holds });
+    run: async (step: string, entries: { molblocks: string[] }[], options: Record<string, unknown>, holds: string, ms?: number) => {
+      asked.push({ step, entries, options, holds, ms });
       return answer(entries);
     },
   }),
@@ -40,7 +40,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
-import { setMembers, drawnHash } from "../workflow/entries";
+import { setMembers, drawnHash, TAKEN_AT_THE_EDIT } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { drawnSaid, readDrawnAnswers } from "../workflow/programs";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
@@ -126,6 +126,9 @@ describe("a plugin's step on structures drawn", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0].entries).toHaveLength(51);
     expect(asked[0].entries.every((e) => e.molblocks.length === 1)).toBe(true);
+    // (half a minute for each, its stereoisomers each tried in 3D - more than a request's own two minutes - but
+    //  never more than ten: a structure looked at too long is set aside alone by the plugin)
+    expect(asked[0].ms).toBe(10 * 60_000);
     expect(st().steps.find((s) => s.id === check)!.ran).toMatchObject({ ok: true, said: "51 of 51 kept" });
     expect(st().sets.find((b) => b.made?.step === check && b.made.exit === "out")!.drawnCollection).toHaveLength(51);
   });
@@ -134,7 +137,7 @@ describe("a plugin's step on structures drawn", () => {
     answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"] }, { aside: "an allene's axis left open", kind: "axis" }] });
     const { step, out, rest, model } = await ran("stereoisomers");
     expect(asked).toHaveLength(1);
-    expect(asked[0]).toMatchObject({ step: "stereoisomers", holds: "structures", options: { open: "every" } });
+    expect(asked[0]).toMatchObject({ step: "stereoisomers", holds: "structures", options: { open: "every" }, ms: 120_000 });
     expect(asked[0].entries.map((e) => e.molblocks.length)).toEqual([1, 1, 1]);
     expect(asked[0].entries[1].molblocks[0]).toMatch(/V3000|V2000/);
     expect(step.ran).toMatchObject({ ok: true, said: "3 in · 3 out · 2 made from 1 · 1 set aside (1: axis)" });
@@ -145,7 +148,7 @@ describe("a plugin's step on structures drawn", () => {
     expect(rest!.records).toEqual([{ status: { aside: "an allene's axis left open" } }]);
   });
 
-  it("keeps each one's record: as drawn, its own; made anew, one of its own - what it came from, which of how many, its SMILES - never the values of the one it was made of; set aside, saying why", async () => {
+  it("keeps each one's record: as drawn, its own; made anew, one of its own - what it came from, which of how many, its SMILES, and the values of the one it was made of as that one's, never its own; set aside, saying why", async () => {
     answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"], smiles: ["C[C@H](O)CC", "C[C@@H](O)CC"] }, { aside: "a radical", kind: "radical" }] });
     const old: DrawnRecord = { ...NLL, status: { aside: "an earlier step's word" } };
     const parent: DrawnRecord = { from: ["seed-1"], properties: { ...NLL.properties, smiles: { value: "CC(O)CC", unit: "none", status: "computed" } } };
@@ -156,11 +159,23 @@ describe("a plugin's step on structures drawn", () => {
       properties: {
         made: { value: k, unit: "none", status: "computed", by },
         smiles: { value: smiles, unit: "none", status: "computed", by },
-        made_from: { value: "CC(O)CC", unit: "none", status: "computed", by },
+        // (the one it was made of: its values as they were, by what worked them out then - named as that one's)
+        "made_from.nll": NLL.properties!.nll,
+        "made_from.smiles": { value: "CC(O)CC", unit: "none", status: "computed" },
       },
     });
-    // (the NLL was the one's it was made of, its stereo left open: not the stereoisomer's own)
+    // (the NLL was the one's it was made of, its stereo left open: never the stereoisomer's own `nll`)
     expect(out!.records).toEqual([NLL, own("1 of 2", "C[C@H](O)CC"), own("2 of 2", "C[C@@H](O)CC")]);
+    // (made again of one made: what that one carried as it was, one level, its own values over them - its SMILES -
+    //  and which of how many it was left out)
+    answer = () => ({ structures: [{ made: ["iso-3"], smiles: ["C[C@H](O)CC"] }, { as: "drawn" }, { as: "drawn" }] });
+    const again = await ran("stereoisomers", [out!.records[1]!, NLL, NLL]);
+    expect(again.out!.records[0]!.properties).toEqual({
+      made: expect.objectContaining({ value: "1 of 1" }),
+      smiles: expect.objectContaining({ value: "C[C@H](O)CC" }),
+      "made_from.nll": NLL.properties!.nll,
+      "made_from.smiles": { value: "C[C@H](O)CC", unit: "none", status: "computed", by },
+    });
     // (what it came in with of its status is the earlier step's: this one's own said in its place)
     expect(rest!.records).toEqual([{ from: ["seed-1"], properties: NLL.properties, status: { aside: "a radical" } }]);
   });
@@ -205,6 +220,31 @@ describe("a plugin's step on structures drawn", () => {
     // (a value in a unit Meno does not know: none of it taken)
     answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 1, unit: "Da" } } }, { as: "drawn" }, { as: "drawn" }] });
     expect((await ran("descriptors")).step.ran).toMatchObject({ ok: false, said: "It said nothing Meno can take" });
+  });
+
+  it("keeps none of what an earlier step said of a structure it keeps: not set aside any more, and its new values of it as it is", async () => {
+    // (one Enumerate set aside, wired on; one whose record went stale with an edit; one plain)
+    const aside: DrawnRecord = { properties: { number: { value: 2, unit: "none", status: "computed" } }, status: { aside: "Same as 1" } };
+    const stale: DrawnRecord = { from: ["seed-1"], stale: "its properties were for the structure before the edit" };
+    answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 46.069, unit: "g/mol" } } }, { as: "drawn", properties: { mw: { value: 74.123, unit: "g/mol" } } }, { as: "drawn" }] });
+    const described = await ran("descriptors", [aside, stale]);
+    expect(described.out!.records.map((r) => [r?.status, r?.stale, Object.keys(r?.properties ?? {})])).toEqual([
+      [undefined, undefined, ["number", "mw"]],
+      // (the values it had before the edit still gone, and said so: not read as all it had)
+      [undefined, TAKEN_AT_THE_EDIT, ["mw"]],
+      [undefined, undefined, []],
+    ]);
+    // (no value worked out - an empty answer - is nothing new: still said stale as it was)
+    answer = () => ({ structures: [{ as: "drawn", properties: {} }, { as: "drawn", properties: {} }, { as: "drawn" }] });
+    expect((await ran("descriptors", [aside, stale])).out!.records[1]?.stale).toBe(stale.stale);
+    // (kept with nothing worked out - Check structures: not set aside any more, and still said stale)
+    answer = () => ({ structures: [{ as: "drawn" }, { as: "drawn" }, { as: "drawn" }] });
+    const checked = await ran("check-structures", [aside, stale]);
+    expect(checked.out!.records.map((r) => [r?.status, r?.stale])).toEqual([
+      [undefined, undefined],
+      [undefined, stale.stale],
+      [undefined, undefined],
+    ]);
   });
 
   it("takes in nothing where the plugin says nothing Meno can take, saying so", async () => {

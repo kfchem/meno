@@ -9,7 +9,9 @@ makes it again, and checks it against that):
   into the same groups as these SMILES do.
 - src/ui/features/Workspace/workflow/testdata/enumerate.rdkit.json: each
   product of Enumerate's known answers (testdata/enumerationCases.ts), with
-  RDKit's canonical SMILES of the compound written by hand for it.
+  RDKit's canonical SMILES of the compound written by hand for it - or, for
+  the substituents' differential, of the compound RDKit makes by putting the
+  group in place of one hydrogen of the atom, its configuration kept.
   enumerate.rdkit.test.ts checks that each product is that compound, and
   that Meno sets aside as the same exactly those RDKit's SMILES join.
 
@@ -76,6 +78,29 @@ def canonical(mol, params, what):
     return Chem.MolToSmiles(Chem.RemoveHs(mol, params), isomericSmiles=True, canonical=True)
 
 
+def substituted(t, k, group):
+    """`t` (a SMILES) with one hydrogen of its atom `k` (from 0) replaced by
+    `group` (a SMILES, attached by its first atom): that H made the group's
+    attach atom, so that the configuration around `k` is kept - written by
+    RDKit, never by Meno, for the products Enumerate makes by substituents."""
+    mol = Chem.AddHs(Chem.MolFromSmiles(t))
+    hs = [n.GetIdx() for n in mol.GetAtomWithIdx(k).GetNeighbors() if n.GetAtomicNum() == 1]
+    if not hs:
+        sys.exit(f"{t}: atom {k} has no hydrogen")
+    h = hs[0]
+    g = Chem.MolFromSmiles(group)
+    off = mol.GetNumAtoms()
+    rw = Chem.RWMol(Chem.CombineMols(mol, g))
+    rw.GetAtomWithIdx(h).SetAtomicNum(g.GetAtomWithIdx(0).GetAtomicNum())
+    rw.GetAtomWithIdx(h).SetNoImplicit(False)
+    for b in g.GetAtomWithIdx(0).GetBonds():
+        rw.AddBond(h, off + b.GetOtherAtomIdx(0), b.GetBondType())
+    rw.RemoveAtom(off)
+    made = rw.GetMol()
+    Chem.SanitizeMol(made)
+    return Chem.MolToSmiles(Chem.RemoveHs(made))
+
+
 def main():
     for f in (given, given_products):
         if not f.exists():
@@ -92,7 +117,9 @@ def main():
     products = []
     for p in json.loads(given_products.read_text()):
         smiles = canonical(Chem.MolFromMolBlock(p["molfile"], sanitize=True, removeHs=False), params, p["name"])
-        expected = canonical(Chem.MolFromSmiles(p["expected"], sanitize=True), params, f"{p['name']}'s compound")
+        # (a compound written by hand; or, for the differential, one RDKit makes by putting the group in an H's place)
+        written = p["expected"] if "expected" in p else substituted(**p["transform"])
+        expected = canonical(Chem.MolFromSmiles(written, sanitize=True), params, f"{p['name']}'s compound")
         products.append({"name": p["name"], "molfile": sha(p["molfile"]), "smiles": smiles, "expected": expected})
     out_products.write_text(json.dumps({"reader": reader, "command": COMMAND, "products": products}, indent=1) + "\n")
     print(f"{len(products)} products -> {out_products.relative_to(root)}")
