@@ -18,6 +18,8 @@ export const ENUMERATION_CASES: readonly EnumerationCase[] = [
   { name: "para R1 and R2", template: "*c1ccc(*)cc1", lists: "R1: Me\nCl\nR2: Me\nCl", products: ["Cc1ccc(C)cc1", "Cc1ccc(Cl)cc1", "Clc1ccc(C)cc1", "Clc1ccc(Cl)cc1"] },
   // (a stereocentre drawn with a wedge: kept as drawn whatever goes in; none where R1 = H leaves two H)
   { name: "a stereocentre's R1", template: "F[C@H](*)Cl", lists: "R1: Me\nEt\nBr\nH", products: ["F[C@H](C)Cl", "F[C@H](CC)Cl", "F[C@H](Br)Cl", "FCCl"] },
+  // (bulky groups beside a wedged centre: its wedge kept narrow at it, so neither lost nor moved to the group)
+  { name: "a stereocentre's R1, bulky groups", template: "F[C@H](*)Cl", lists: "R1: tBu\nCF3\nCMe2OH", products: ["F[C@H](C(C)(C)C)Cl", "F[C@H](C(F)(F)F)Cl", "F[C@H](C(C)(C)O)Cl"] },
   // (a double bond's side: kept as drawn; none where R1 = H makes its end CH2)
   { name: "a double bond's R1", template: "F/C=C/*", lists: "R1: Me\nCl\nH", products: ["F/C=C/C", "F/C=C/Cl", "FC=C"] },
   // (a deuterium is no hydrogen; a charged group as drawn)

@@ -84,6 +84,24 @@
    "expected": "FCCl"
   },
   {
+   "name": "a stereocentre's R1, bulky groups #1",
+   "molfile": "ff25082d3ef04da27f29a27e0a8f68d8e36f9f2e57fd72ccf32b9dac9818dbf7",
+   "smiles": "CC(C)(C)[C@@H](F)Cl",
+   "expected": "CC(C)(C)[C@@H](F)Cl"
+  },
+  {
+   "name": "a stereocentre's R1, bulky groups #2",
+   "molfile": "4fff1b39ceba8b558991a298a9089d63cfe5ed08569bb6c6b64678fd46d54c05",
+   "smiles": "F[C@@H](Cl)C(F)(F)F",
+   "expected": "F[C@@H](Cl)C(F)(F)F"
+  },
+  {
+   "name": "a stereocentre's R1, bulky groups #3",
+   "molfile": "a88cce5af318a89160125c34042608d5662d87c533b351b3e16f8ea97717bff4",
+   "smiles": "CC(C)(O)[C@@H](F)Cl",
+   "expected": "CC(C)(O)[C@@H](F)Cl"
+  },
+  {
    "name": "a double bond's R1 #1",
    "molfile": "8947b597bfc27200dec1711e3f6f367a351b52de31f8402f4190ece6c3353cee",
    "smiles": "C/C=C/F",
