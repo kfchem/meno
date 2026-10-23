@@ -26,7 +26,9 @@ import { styleOf, type DrawingStyle } from "../../../lib/chem/style";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
-import type { Carried3D, Drawn, EditorState } from "./store/types";
+import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
+import type { Property } from "../../../lib/entry";
+import { recordNow, recordNumber } from "./workflow/entries";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
@@ -232,11 +234,86 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     });
   });
   const { loose, stacked } = recordDrawings(drawn);
+  // (each structure a set carries a record of - a step's result, its products or what it worked out - a record of its own,
+  // with what its record says as data items; the rest of what is drawn one record, as before)
+  const inSets = setRecordsOf(drawn, loose);
+  const taken = new Set(inSets.flatMap((r) => r.ids));
+  const rest = { ...loose, atoms: loose.atoms.filter((a) => !taken.has(a.id)), bonds: loose.bonds.filter((b) => !taken.has(b.a) && !taken.has(b.b)) };
+  const ofSets = inSets.map((r, k) => {
+    const ids = new Set(r.ids);
+    const one = { ...loose, atoms: loose.atoms.filter((a) => ids.has(a.id)), bonds: loose.bonds.filter((b) => ids.has(b.a) && ids.has(b.b)) };
+    const number = recordNumber(r.record);
+    return writeMolfile(forFlatReaders(one), { title: `${title} ${number ?? k + 1}`, version }) + recordData(r.record) + "$$$$\n";
+  });
   return (
-    (loose.atoms.length ? writeSdf(forFlatReaders(loose), { title, version }) : "") +
+    (rest.atoms.length ? writeSdf(forFlatReaders(rest), { title, version }) : "") +
+    ofSets.join("") +
     stacked.map((r) => writeSdf(forFlatReaders(r.model), { title: r.title ?? title, version })).join("") +
     records.join("")
   );
+}
+
+/**
+ * The structures drawn that the sets of what is written carry records of
+ * (workflow/parts `partsOf`: a set selected carries its structures' records
+ * by their atoms' ids), each once, in its set's order - its record as its
+ * structure stands now (workflow/entries `recordNow`: edited since it was
+ * given, its properties and state taken away, said so). Only those whose
+ * atoms are all among `drawing`'s.
+ */
+function setRecordsOf(drawn: Drawn, drawing: Model): { ids: number[]; record: DrawnRecord }[] {
+  const here = new Set(drawing.atoms.map((a) => a.id));
+  const seen = new Set<number>();
+  return (drawn.flow?.sets ?? []).flatMap((set) =>
+    (set.carried ?? []).flatMap((c) => {
+      if (!c.structure.length || !c.structure.every((id) => here.has(id) && !seen.has(id))) return [];
+      c.structure.forEach((id) => seen.add(id));
+      const record = recordNow(c.record, drawing, c.structure);
+      return record ? [{ ids: c.structure, record }] : [{ ids: c.structure, record: {} }];
+    }),
+  );
+}
+
+/** A data item's name as an SD file can hold it: on one line, no angle brackets (CTfile Formats, the SDfile's data header). */
+const itemName = (name: string) => name.replace(/[<>\r\n]+/g, " ").trim() || "value";
+
+/** A data item's lines as an SD file can hold them: no blank line, which ends it, nor one that ends the record. */
+const itemLines = (text: string) =>
+  text
+    .split(/\r?\n/)
+    .filter((l) => l.trim())
+    .map((l) => (/^\${4}/.test(l) ? ` ${l}` : l))
+    .join("\n") || "-";
+
+/** A property's value as an SD data item says it: a number as it is held, every digit; a text as it is; a list or a vector its numbers in turn; anything else as Meno's own record holds it. */
+function valueData(v: Property["value"]): string {
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (typeof v === "string") return v;
+  if ("entry" in v) return v.entry;
+  if ("list" in v) return v.list.join(" ");
+  if ("vector" in v) return v.vector.join(" ");
+  return JSON.stringify(v);
+}
+
+/**
+ * A structure's record as an SD file's data items, after its molfile: its
+ * state - finished, failed or set aside, and why; that its properties were
+ * taken away as it was edited (`Stale`); what it was made from (`From`);
+ * and each of its properties under its own name, its unit beside it as the
+ * page shows it ("mw (g/mol)") - its number, how it was made, the values of
+ * what it was made from (`made_from.nll`) among them. A property not worked
+ * out says why in place of a value, so that no reader takes a value for one.
+ */
+function recordData(r: DrawnRecord): string {
+  const item = (name: string, text: string) => `> <${itemName(name)}>\n${itemLines(text)}\n\n`;
+  const s = r.status;
+  const state = s == null ? [] : s === "done" ? [item("State", "finished")] : "failed" in s ? [item("State", "failed"), item("Failed", s.failed)] : [item("State", "set aside"), item("Set aside", s.aside)];
+  const props = Object.entries(r.properties ?? {}).map(([name, p]) => {
+    const label = p.unit === "none" ? name : `${name} (${p.unit})`;
+    const st = p.status;
+    return item(label, st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
+  });
+  return [...state, ...(r.stale ? [item("Stale", r.stale)] : []), ...(r.from?.length ? [item("From", r.from.join(" "))] : []), ...props].join("");
 }
 
 /**

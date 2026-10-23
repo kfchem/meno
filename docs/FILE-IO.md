@@ -708,6 +708,18 @@ As this part of step 5 was built (#155, from main beside step 3):
     page shows them: a trajectory's bonds, found from distances, form and
     break as its frames go. A copy's MOL file, a PDB file and what a
     plugin's writer is given are the same.
+  - **An SD file of a workflow's structures drawn** - a set selected,
+    with the records it carries of them (a step's products, what was
+    worked out of them) - has a record for each, titled with its number,
+    its record after it as data items: `State` (finished, failed or set
+    aside) and `Failed` or `Set aside`, why; `Stale` where the structure
+    was edited since its values were worked out (none of them written
+    then); `From`, what it was made from; and each property under its own
+    name, its unit beside it as the page shows it (`mw (g/mol)`) - its
+    number, `made.how`, the values of what it was made from
+    (`made_from.nll`) among them - a number with every digit it is held
+    to, and one not worked out saying why in place of a value. The rest of
+    what is drawn is one record, as before.
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
     and in attributes alike, and what XML cannot hold at all (the controls
