@@ -114,7 +114,11 @@ text*).
   table's heads before it say it is one.
 - **A structure's own**: its name, the line before its atoms nearest them
   that names something - not a note, a table's heads or numbers alone; its
-  charge and multiplicity ("0 1", "0,1"); its count of atoms, said ("52
+  charge and multiplicity, on a line of their own ("0 1", "0,1") or said in
+  words, on one line or two ("Charge = 1 Multiplicity = 2", "charge: -1",
+  "spin multiplicity: 1") - never two numbers at the end of a title ("TS 2
+  1", "Conformer 12 3"), unless the text's lines' ends were made spaces and
+  they stand right before its first atom; its count of atoms, said ("52
   atoms") or set alone as an XYZ file sets it; and its notes, lines of
   energies, frequencies or its method ("E = -1234.5678 Hartree", "SCF
   Done", "Imaginary frequencies: 1") - those written after a structure's
@@ -128,6 +132,16 @@ text*).
   where together they bond as one and no atom of either stands where one
   of the other does: two structures each about the origin stand in each
   other's place.
+- **Said, never guessed** (2026-10-23). The lines among a structure's atoms
+  that are none of them - a page's number, a running head, a table's heads
+  set again on the next page, a caption - are left out and listed on the
+  card under it (*3 lines not read: S12 · Supporting Information S13 ·
+  Atom X Y Z*). A line among them that looks like an atom's but does not
+  read as one (an element and two numbers, a number with a letter in it),
+  or one that names a charge or multiplicity that does not read, keeps the
+  structure from being placed: the card names the line, and it cannot be
+  ticked. So a molecule split over two pages comes out as one, its
+  table's heads on the second page left out, and nothing is half-read.
 - **Bohr**: where the text says so ("bohr", "a.u.", "atomic units",
   "Units=Bohr"), the lengths are turned into ångströms (CODATA 2018), and
   the card says so - but not where atomic units are said of an energy only

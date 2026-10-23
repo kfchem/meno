@@ -276,3 +276,42 @@ describe("coordinates selected in a PDF, each word where it lies", () => {
     expect(s.atoms[0]).toEqual({ el: "C", x: -1.17, y: -0.4, z: 0 });
   });
 });
+
+describe("coordinates selected across pages", () => {
+  const rows = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `C ${(1.27 * (from + i)).toFixed(6)} ${((from + i) % 2 ? 0.42 : -0.42).toFixed(6)} 0.000000`);
+  const twoPages = ["Supporting Information S12", "Table S3. Cartesian coordinates of the chain.", "Atom X Y Z", ...rows(0, 40), "S12", "Supporting Information S13", "Atom X Y Z", ...rows(40, 62), "S13"].join("\n");
+
+  it("read as one molecule across the page break, its table's heads set again left out - and the lines left out among its atoms said", () => {
+    const [s, ...rest] = readCoordinates(twoPages);
+    expect(rest).toEqual([]);
+    expect(s.atoms).toHaveLength(62);
+    expect(s.skipped).toEqual(["S12", "Supporting Information S13", "Atom X Y Z"]);
+    expect(s.broken).toBeUndefined();
+  });
+
+  it("refuse a structure with a line among its atoms that looks like an atom's but does not read as one, naming it - nothing guessed", () => {
+    for (const bad of ["C 1.0 2.0", "C 1.0x 2.0 3.0"]) {
+      const [s] = readCoordinates(["TS1", ...rows(0, 5), bad, ...rows(5, 9)].join("\n"));
+      expect(s.broken).toEqual([bad]);
+      expect(s.warnings).toContain(`"${bad}" does not read as an atom, or as a charge and multiplicity, so this structure is not placed: nothing is guessed.`);
+    }
+  });
+
+  it("take a charge and multiplicity said in words, on one line or two", () => {
+    const [a] = readCoordinates(["TS1", "Charge = 1 Multiplicity = 2", ...rows(0, 4)].join("\n"));
+    expect([a.name, a.charge, a.multiplicity]).toEqual(["TS1", 1, 2]);
+    const [b] = readCoordinates(["TS1", "charge: -1", "spin multiplicity: 1", ...rows(0, 4)].join("\n"));
+    expect([b.charge, b.multiplicity]).toEqual([-1, 1]);
+  });
+
+  it("refuse a structure whose charge or multiplicity is said but does not read", () => {
+    const [s] = readCoordinates(["TS1", "Charge = one Multiplicity = 1", ...rows(0, 4)].join("\n"));
+    expect(s.broken).toEqual(["Charge = one Multiplicity = 1"]);
+  });
+
+  it("never take two numbers at a title's end as a charge and multiplicity", () => {
+    const [s] = readCoordinates(["Conformer 12 3", ...rows(0, 4)].join("\n"));
+    expect(s.charge).toBeUndefined();
+    expect(s.multiplicity).toBeUndefined();
+  });
+});

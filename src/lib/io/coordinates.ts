@@ -48,6 +48,10 @@ export type CoordinateStructure = {
   warnings: string[];
   /** Its atoms came mixed with another's - two columns read across - and could not be told apart: not to be placed. */
   mixed?: true;
+  /** Lines among its atoms that look like an atom's, or say a charge or multiplicity, but do not read as one: not to be placed - nothing is guessed. */
+  broken?: string[];
+  /** The other lines among its atoms, left out: a page's number, a running head, a table's heads set again, a caption. */
+  skipped?: string[];
 };
 
 const SYMBOL = new Map(ELEMENTS.map((e) => [e.symbol.toLowerCase(), e.symbol]));
@@ -124,6 +128,25 @@ const OF_LENGTHS = /coordinat|geometr|position|distance|length|\bxyz\b/i;
  */
 const saysBohr = (l: string) => SAYS_BOHR.test(l) && !(NOTE.test(l) && !OF_LENGTHS.test(l));
 
+/** A charge said in words, and a multiplicity ("Charge = 1 Multiplicity = 1", "charge: -1, spin multiplicity: 2"), as Gaussian's output and many papers set them. */
+const CHARGE_SAID = /\bcharge\s*[=:]\s*([+-]?\d+)(?![\d.])/i;
+const MULTIPLICITY_SAID = /\bmultiplicity\s*[=:]\s*(\d+)(?![\d.])/i;
+/** A line that says a charge or a multiplicity, by name and an "=" or ":" - read by the two above, or not read and so refused. */
+const SAYS_SPECIES = /\b(?:charge|multiplicity)\s*[=:]/i;
+/** Whether a line says a charge, or a multiplicity, that does not read: each said by name must read. */
+const speciesUnread = (l: string) => (/\bcharge\s*[=:]/i.test(l) && !CHARGE_SAID.test(l)) || (/\bmultiplicity\s*[=:]/i.test(l) && !MULTIPLICITY_SAID.test(l));
+
+/**
+ * A line that looks like an atom's, but did not read as one (`recordAt`):
+ * an element or a label first - or a number, then one - and a number with a
+ * decimal point after it ("C 1.0 2.0", "C 1.0x 2.0 3.0").
+ */
+function looksLikeAtom(l: string): boolean {
+  const ws = l.split(/[\s,;]+/).filter(Boolean);
+  const first = /^\d+$/.test(ws[0] ?? "") && ws.length > 1 ? 1 : 0;
+  return elementOfLabel(ws[first] ?? "") != null && ws.slice(first + 1).some((w) => /\d\.\d/.test(w));
+}
+
 /** A value of a crystal structure's table: a number and its uncertainty in brackets, or a displacement starred. */
 const CRYSTAL = /\d\.\d+\s*\(\d{1,3}\)|(?:^|\s)\d*\.\d+\*(?:\s|$)/;
 
@@ -131,14 +154,19 @@ const CRYSTAL = /\d\.\d+\s*\(\d{1,3}\)|(?:^|\s)\d*\.\d+\*(?:\s|$)/;
 const MINUS = /[\u2212\u2012\u2013\u2014\ufe63\uff0d](?=\s*[\d.])/g;
 const plainMinus = (t: string) => t.replace(MINUS, "-");
 
-/** The text's lines, a minus however printed made one, page marks and running heads and feet - lines set again and again, words only - left out. */
-function linesOf(text: string): string[] {
-  const lines = text
+/** The text's lines as written, a minus however printed made one. */
+function rawLinesOf(text: string): string[] {
+  return text
     .replace(/\r\n?/g, "\n")
     .replace(MINUS, "-")
     .replace(/\u00a0/g, " ")
     .split("\n")
     .map((l) => l.trim());
+}
+
+/** The text's lines, a minus however printed made one, page marks and running heads and feet - lines set again and again, words only - left out. */
+function linesOf(text: string): string[] {
+  const lines = rawLinesOf(text);
   const count = new Map<string, number>();
   for (const l of lines) count.set(l, (count.get(l) ?? 0) + 1);
   return lines.map((l) => {
@@ -172,12 +200,12 @@ function gapLines(ts: readonly Token[], from: number, to: number, lines: readonl
 }
 
 /** A run of atoms with what was written before it. */
-type Run = { recs: Rec[]; before: string[]; after: string[] };
+type Run = { recs: Rec[]; before: string[]; after: string[]; /** What was written before its first atom ends on that atom's line: the text's lines' ends made spaces. */ joined?: true };
 
 /** A line of numbers alone: a charge and a multiplicity, or a count. */
 const NUMBERS_ONLY = /^[+-]?\d+(?:[\s,]+[+-]?\d+)?$/;
 /** A line that may name a structure: no note, no table's head, no numbers alone, no count. */
-const naming = (l: string) => !NOTE.test(l) && !HEADING_ONLY.test(l) && !NUMBERS_ONLY.test(l) && /[A-Za-z0-9]/.test(nameOf(l)) && l.length <= 80;
+const naming = (l: string) => !NOTE.test(l) && !HEADING_ONLY.test(l) && !NUMBERS_ONLY.test(l) && !SAYS_SPECIES.test(l) && /[A-Za-z0-9]/.test(nameOf(l)) && l.length <= 80;
 /** A line as a name: its count of atoms, where it says one ("TS1 (52 atoms)"), and the units its lengths are in ("coordinates in bohr"), left out. */
 const nameOf = (l: string) =>
   l
@@ -194,6 +222,7 @@ const nameOf = (l: string) =>
  * where the text gives them, and what looks wrong.
  */
 export function readCoordinates(text: string): CoordinateStructure[] {
+  const raw = rawLinesOf(text);
   const lines = linesOf(text);
   const ts = wordsOf(lines);
   const bohrAll = lines.some(saysBohr) && !SAYS_ANGSTROM.test(text);
@@ -232,7 +261,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     // (numbered atoms: the count begun again - a new structure)
     const renumbered = r.index === 1 && prev != null && prev.recs[prev.recs.length - 1].index != null;
     if (prev && !renumbered && (gap.length === 0 || (count != null && !counts))) prev.recs.push(r);
-    else runs.push({ recs: [r], before: gapLines(ts, last, r.from, lines), after: [] });
+    else runs.push({ recs: [r], before: gapLines(ts, last, r.from, lines), after: [], ...(r.from > 0 && ts[r.from - 1].line === r.line ? { joined: true as const } : {}) });
     last = r.to;
   }
   if (runs.length) runs[runs.length - 1].after = gapLines(ts, last, ts.length, lines);
@@ -268,7 +297,14 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     while (first > 0 && NUMBERS_ONLY.test(run.before[first - 1])) first--;
     const own = first < 0 ? run.before : run.before.slice(first);
     if (out.length && first > 0) out[out.length - 1].notes.push(...run.before.slice(0, first).filter((l) => NOTE.test(l)));
-    out.push(...structureOf(run, own, bohrAll, n + 1));
+    // (the lines among its atoms that are none of them: left out and said - or, where one looks like an atom's or says a
+    // charge or multiplicity and does not read, the structure refused, the line named)
+    const atomLines = new Set(run.recs.flatMap((r) => Array.from({ length: r.end - r.line + 1 }, (_, k) => r.line + k)));
+    const [first0, last0] = [Math.min(...atomLines), Math.max(...atomLines)];
+    const among = raw.slice(first0, last0 + 1).flatMap((l, k) => (l && !atomLines.has(first0 + k) ? [l] : []));
+    const broken = [...among.filter((l) => looksLikeAtom(l) || speciesUnread(l)), ...own.filter(speciesUnread)];
+    const skipped = among.filter((l) => !broken.includes(l));
+    out.push(...structureOf(run, own, bohrAll, n + 1).map((s) => ({ ...s, ...(broken.length ? { broken } : {}), ...(skipped.length ? { skipped } : {}) })));
   });
   if (out.length) out[out.length - 1].notes.push(...kept[kept.length - 1].after.filter((l) => NOTE.test(l)));
   return out.map(checked);
@@ -295,7 +331,14 @@ function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: num
   // (a note on a line with more before it - the lines' ends made spaces, its name before it: its energies and frequencies alone)
   const notes = said.filter((l) => NOTE.test(l)).flatMap((l) => (l.search(FRAGMENT) > 0 ? [...l.matchAll(new RegExp(FRAGMENT.source, "gi"))].map((m) => m[0].trim()) : [l]));
   // (a charge and a multiplicity on a line of their own - or, the lines' ends made spaces, the last two numbers before the atoms)
-  const pair = [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l)) ?? /(?:^|\s)([+-]?\d+)[\s,]+(\d+)$/.exec(said[said.length - 1] ?? "")?.slice(1).join(" ");
+  // (or said in words, on one line or two: "Charge = 1 Multiplicity = 1")
+  const saidCharge = [...said].reverse().map((l) => CHARGE_SAID.exec(l)).find((m) => m)?.[1];
+  const saidMultiplicity = [...said].reverse().map((l) => MULTIPLICITY_SAID.exec(l)).find((m) => m)?.[1];
+  const inWords = saidCharge != null && saidMultiplicity != null ? `${saidCharge} ${saidMultiplicity}` : undefined;
+  // (only on a line of its own - never two numbers at a title's end, "TS 2 1", "Conformer 12 3", which may be its name's -
+  // or, the text's lines' ends made spaces, the last two numbers before its first atom, on that atom's line)
+  const pair =
+    inWords ?? [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l)) ?? (run.joined ? /(?:^|\s)([+-]?\d+)[\s,]+(\d+)$/.exec(said[said.length - 1] ?? "")?.slice(1).join(" ") : undefined);
   const [charge, multiplicity] = pair ? pair.split(/[\s,]+/).map(Number) : [];
   const stated = said.map((l) => STATED.exec(l)).find((m) => m) ?? null;
   const alone = said.find(counts);
@@ -385,6 +428,7 @@ const APART = 4;
 function checked(s: CoordinateStructure): CoordinateStructure {
   const warnings = [...s.warnings];
   if (s.mixed) warnings.push("Two columns came mixed together here: copy or select one column at a time.");
+  for (const l of s.broken ?? []) warnings.push(`"${l}" does not read as an atom, or as a charge and multiplicity, so this structure is not placed: nothing is guessed.`);
   if (s.stated != null && s.stated !== s.atoms.length) warnings.push(`The text gives ${s.stated} atoms; ${s.atoms.length} are here.`);
   const d = (a: CoordinateAtom, b: CoordinateAtom) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
   let near = false;
