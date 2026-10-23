@@ -757,10 +757,23 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(failed ? { failed } : {}),
     ...(imaginary ? { imaginary } : {}),
     ...(marksUnread ? { marksUnread: true as const } : {}),
+    ...(() => {
+      const mirrors = mirrorsOf(m.mirrors, keep, n);
+      return mirrors ? { mirrors } : {};
+    })(),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
     ...(calc ? { calc } : {}),
   };
+}
+
+/** A conformer set's mirror images counted in, frame by frame: each a permutation of its `atoms` atoms, or null; of the frames kept, those left out with theirs. */
+function mirrorsOf(given: unknown, keep: boolean[], atoms: number): (number[] | null)[] | undefined {
+  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
+  const isPermutation = (p: unknown): p is number[] =>
+    Array.isArray(p) && p.length === atoms && p.every((i) => Number.isInteger(i) && i >= 0 && i < atoms) && new Set(p).size === atoms;
+  const out = given.filter((_, i) => keep[i]).map((p) => (isPermutation(p) ? [...p] : null));
+  return out.some(Boolean) ? out : undefined;
 }
 
 /**
