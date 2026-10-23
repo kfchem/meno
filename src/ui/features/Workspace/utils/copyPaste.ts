@@ -609,15 +609,24 @@ function madeOf(v: unknown): Carried3D["made"] {
 const SAID_MOST = 100;
 const SAID_TEXT_MOST = 500;
 
+/** What ends a label or a text of what a text said of a molecule cut at `SAID_TEXT_MOST`. */
+export const SAID_CUT = `\u2026 [cut at ${SAID_TEXT_MOST}]`;
+
 /**
  * What the text a molecule was read from said of it, as a file carries it:
- * each row read as data, its label and text cut at `SAID_TEXT_MOST`; one
- * that does not read, or past the first `SAID_MOST`, left out, and said.
+ * each row read as data - its label or text cut at `SAID_TEXT_MOST`, which
+ * it ends by saying (`SAID_CUT`), and counted; one that does not read, or
+ * past the first `SAID_MOST`, left out, and said.
  */
 function saidOf(v: unknown): Carried3D["said"] {
+  // (one cut as an earlier file was read, saved since with its mark: as it is - never cut again, nor counted again)
+  const over = (t: string) => (t.endsWith(SAID_CUT) ? t.length - SAID_CUT.length : t.length) > SAID_TEXT_MOST;
+  const cut = (t: string) => (over(t) ? t.slice(0, SAID_TEXT_MOST) + SAID_CUT : t);
   const rows = readEach(Array.isArray(v) ? v.slice(0, SAID_MOST) : v, (r) => {
     const row = r as { label?: unknown; text?: unknown } | null;
-    return typeof row?.label === "string" && typeof row.text === "string" ? { label: row.label.slice(0, SAID_TEXT_MOST), text: row.text.slice(0, SAID_TEXT_MOST) } : null;
+    if (typeof row?.label !== "string" || typeof row.text !== "string") return null;
+    if (over(row.label) || over(row.text)) leftOut("saidCut");
+    return { label: cut(row.label), text: cut(row.text) };
   }, "said");
   if (Array.isArray(v) && v.length > SAID_MOST) leftOut("said", v.length - SAID_MOST);
   return rows.length ? rows : undefined;
