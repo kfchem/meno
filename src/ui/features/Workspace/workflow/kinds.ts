@@ -11,7 +11,7 @@ import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps
 import { renderOptions } from "../render/renderOptions";
 import { conditionsIn, conditionText } from "../../../../lib/nodes/filter";
 import { measurementName, measurementsTyped } from "../../../../lib/steps/measure";
-import { speciesTyped } from "../../../../lib/steps/species";
+import { speciesNeeds, speciesTyped } from "../../../../lib/steps/species";
 import { listsReadAs, readLists } from "./enumerate";
 import { groupsReadAs, positionIds } from "./substituents";
 
@@ -97,6 +97,8 @@ export type KindInfo = {
   others?: readonly StepExit[];
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
+  /** What it still needs of its options before it can run, where it cannot as they are: said on its card where *Ready* would be (`needsOf`), as its run would refuse. */
+  needs?: (values: Record<string, string | number | boolean>) => string | undefined;
   /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
   whole?: true;
 };
@@ -368,6 +370,7 @@ export const KINDS: readonly KindInfo[] = [
     made: "Tagged",
     options: [{ id: "name", label: "Name", type: "text", default: "" }],
     how: (v) => (String(v.name ?? "").trim() ? `Each its own ${String(v.name).trim()}` : "Name the tag"),
+    needs: (v) => (String(v.name ?? "").trim() ? undefined : "Name the tag"),
   },
   {
     // (each entry's charge and multiplicity set - one left blank as each has it - those whose electrons cannot have them out of Failed, saying why)
@@ -384,6 +387,7 @@ export const KINDS: readonly KindInfo[] = [
       { id: "multiplicity", label: "Multiplicity (blank: each entry's own)", type: "text", default: "" },
     ],
     how: (v) => speciesHow(String(v.charge ?? ""), String(v.multiplicity ?? "")),
+    needs: (v) => speciesNeeds(String(v.charge ?? ""), String(v.multiplicity ?? "")),
   },
   {
     // (the entries, in the set's order, as one entry - a complex - each part where it stands; none of a part's properties carried, each named)
@@ -407,15 +411,19 @@ export const KINDS: readonly KindInfo[] = [
     made: "Measured",
     options: [{ id: "measurements", label: "Atoms, from 1 (3-7, 1-2-3, 1-2-3-4)", type: "text", default: "" }],
     how: (v) => measureHow(String(v.measurements ?? "")),
+    needs: (v) => {
+      const typed = measurementsTyped(String(v.measurements ?? ""));
+      return "why" in typed ? typed.why : undefined;
+    },
   },
 ];
 
 /** How a Species step does its work, in a line: what it sets, and what it leaves as each entry has it. */
 export function speciesHow(charge: string, multiplicity: string): string {
+  const needs = speciesNeeds(charge, multiplicity);
   const typed = speciesTyped(charge, multiplicity);
-  if ("why" in typed) return typed.why;
+  if (needs != null || "why" in typed) return needs ?? "";
   const { charge: c, multiplicity: m } = typed.given;
-  if (c == null && m == null) return "Give a charge, a multiplicity, or both";
   // (one left blank stays as each entry has it - the one its electrons take, where it was never given: lib/steps species)
   const said = [c != null ? `charge ${c > 0 ? `+${c}` : c}` : "its own charge", m != null ? `multiplicity ${m}` : "its own multiplicity"];
   return said.join(", ").replace(/^./, (x) => x.toUpperCase());
@@ -436,6 +444,11 @@ export function filterHow(text: string, match: "all" | "any"): string {
 }
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
+/** What step `s` still needs of its options before it can run (`KindInfo.needs`), where Meno does it; nothing, where it can run as it is. */
+export const needsOf = (s: { kind: StepKind; options?: Record<string, string | number | boolean> }): string | undefined => {
+  const info = kindInfo(s.kind);
+  return info.needs?.(optionsOf(info.options ?? [], s.options));
+};
 
 /** Whether a step of `kind` takes a set that holds `holds`. */
 export const takes = (kind: StepKind, holds: ValueKind): boolean => takenBy(kindInfo(kind).takes, holds);

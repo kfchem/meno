@@ -98,7 +98,7 @@ function stateLine(
   now: number,
   missing?: string,
 ): { Icon?: typeof CheckCircleIcon; text: string; tone: string; turning?: true } {
-  // (a program installed separately that is found nowhere, or too old: said where Ready would be)
+  // (a program installed separately that is found nowhere, or too old, or what its options still need: said where Ready would be)
   if (missing && (state === "ready" || state === "changed")) return { Icon: ExclamationCircleIcon, text: missing, tone: "text-gh-gray" };
   switch (state) {
     case "no-input":
@@ -142,7 +142,7 @@ export type StepCardProps = {
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
-  /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
+  /** Why it cannot run as it is, said where *Ready* would be (doers `notReadyFor`): a program installed separately it runs, found nowhere or too old ("ORCA not found") - its *Run* opens Settings, Plugins, to locate it - or what it still needs of its options ("Give a charge, a multiplicity, or both"). */
   missing?: string;
   /** A wire just let go on it that it does not take: why, in plain words (flow `wireRefusal`), said where its state is. */
   refused?: string;
