@@ -1,5 +1,5 @@
 {
-  "about": "How Meno looks (docs/LOOK.md): what the lint rule refuses in src/ui, and the files written before it that do not keep to it yet, each with how many places it has (lookRules.test.ts keeps the counts exact, so a file can only come down; one brought in line leaves its list).",
+  "about": "How Meno looks (docs/LOOK.md): what the lint rule refuses in src/ui, and the files written before it that do not keep to it yet, each with how many places it has (lookRules.test.ts holds each count as a ceiling, so a file can only come down; one brought in line leaves its list).",
   "nativeControls": [
     {
       "selector": "JSXOpeningElement[name.name='select']",

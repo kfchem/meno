@@ -174,9 +174,10 @@ colour, one in a CSS place (after `:`, `(`, `,` or `[`), `rgb(…)`,
 
 Known departures, to be brought in line. `src/ui/theme/lookRules.json`
 names each file that has one, with how many places, and
-`lookRules.test.ts` keeps each count exact: a new place in a listed file
-fails as surely as one in a new file, and a place brought in line takes
-its count down with it (a file at none leaves the list). When the look
+`lookRules.test.ts` holds each to its count as a ceiling: a new place in
+a listed file fails as surely as one in a new file. A file with fewer
+places than its count passes, and the test says to lower the count, so
+that it comes down on purpose (a file at none leaves the list). When the look
 rules were set (2026-10-23):
 
 - **Native controls**: 16, in 9 files - the options form (the Render

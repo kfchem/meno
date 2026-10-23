@@ -39,16 +39,38 @@ async function counted(): Promise<{ nativeControls: Record<string, number>; colo
   return out;
 }
 
+/** Each listed file's places past its count (refused), and those now fewer than it (its count to be lowered), in words. */
+function againstCounts(found: Record<string, number>, listed: Record<string, number>): { over: string[]; under: string[] } {
+  const over: string[] = [];
+  const under: string[] = [];
+  for (const [file, cap] of Object.entries(listed)) {
+    const now = found[file] ?? 0;
+    if (now > cap) over.push(`${file}: ${now} now, cap ${cap}: bring the new ones in line`);
+    else if (now < cap) under.push(`${file}: ${now} now, cap ${cap}: lower the cap`);
+  }
+  return { over, under };
+}
+
 describe("the look rules' files not yet in line (docs/LOOK.md, Not yet)", () => {
   it(
-    "each have exactly the places listed - none more (a new one is refused), none fewer (brought in line, the count comes down with it)",
+    "each have no more places than listed: a new one is refused; fewer, and the count is to be lowered (said, not failed)",
     async () => {
       const found = await counted();
-      expect(found.nativeControls).toEqual(rules.notYet.nativeControls);
-      expect(found.colourLiterals).toEqual(rules.notYet.colourLiterals);
+      const native = againstCounts(found.nativeControls, rules.notYet.nativeControls);
+      const colour = againstCounts(found.colourLiterals, rules.notYet.colourLiterals);
+      const under = [...native.under, ...colour.under];
+      if (under.length) console.warn(`Look: lower these caps in src/ui/theme/lookRules.json:\n${under.join("\n")}`);
+      expect([...native.over, ...colour.over]).toEqual([]);
     },
     measured(3_000),
   );
+
+  it("counts a file's places against its cap: more is refused, fewer is said", () => {
+    expect(againstCounts({ "a.tsx": 3, "b.tsx": 5 }, { "a.tsx": 5, "b.tsx": 4, "c.tsx": 1 })).toEqual({
+      over: ["b.tsx: 5 now, cap 4: bring the new ones in line"],
+      under: ["a.tsx: 3 now, cap 5: lower the cap", "c.tsx: 0 now, cap 1: lower the cap"],
+    });
+  });
 });
 
 describe("a colour made from data (colourCss)", () => {

@@ -10,7 +10,7 @@ import tseslint from "typescript-eslint";
 // tokens (src/App.css @theme, src/ui/theme/colors.ts), never as literals or
 // Tailwind's default palette. What is refused, and the files written before
 // the rule that do not keep to it yet - each with its count, which
-// src/ui/theme/lookRules.test.ts keeps exact - are in lookRules.json.
+// src/ui/theme/lookRules.test.ts holds as a ceiling - are in lookRules.json.
 const LOOK = JSON.parse(readFileSync(new URL("./src/ui/theme/lookRules.json", import.meta.url), "utf8"));
 const NATIVE_CONTROLS = LOOK.nativeControls;
 const COLOUR_LITERALS = LOOK.colourLiterals;
