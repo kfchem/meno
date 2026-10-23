@@ -10,6 +10,7 @@ import { inputKey, resultOf } from "./flow";
 import { filterHow, howOf, kindInfo } from "./kinds";
 import { addSet, addStep, connect, updateStep } from "./model";
 import { runStep, type RunWith } from "./run";
+import { STATE_FINISHED } from "./meno";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 
@@ -49,6 +50,21 @@ const ran = (doc: WorkspaceDocument) => doc.steps!.find((s) => s.id === 2)!.ran;
 const out = (doc: WorkspaceDocument, exit = "out") => setMolecules(doc, resultOf(doc, 2, exit)!);
 
 describe("a Filter step", () => {
+  it("keeps the entries that are results to stand on (state = finished) - the rest each saying what it is: not converged, refused, marks not read", () => {
+    // (a conformer set of four: #2 not converged, #3 refused)
+    const set = water([{}, {}, {}, {}], { conformerSet: true, failed: [null, { kind: "not-converged", why: "stopped at 200 cycles" }, { kind: "refused", why: "no parameters" }, null] });
+    // (and another of two whose file's marks did not read)
+    const unread = water([{}, {}], { at: { x: 2, y: 0 }, conformerSet: true, marksUnread: true });
+    const doc = runStep(filtering([set, unread], STATE_FINISHED), 2, W);
+    expect(STATE_FINISHED).toBe("state = finished");
+    expect(ran(doc)).toMatchObject({
+      ok: true,
+      said: "2 of 6 entries kept \u00b7 rest 4 (2: not state = finished (marks not read); 1: not state = finished (not converged); 1: not state = finished (refused))",
+    });
+    expect(out(doc)[0].numbers).toEqual([1, 4]);
+  });
+
+
   it("keeps the conformers that meet its conditions, the rest out of its second exit - both counted, and why each of the rest was, one with no value for the property said", () => {
     // (a conformer set of four: NLL 12, 40, none, 25)
     const doc = runStep(filtering([water([{ nll: nll(12) }, { nll: nll(40) }, {}, { nll: nll(25) }], { conformerSet: true })], "nll < 30"), 2, W);

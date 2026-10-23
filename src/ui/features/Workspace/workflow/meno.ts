@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, entryOfSet, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, FINISHED, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -490,14 +490,18 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
  * out first. As `notAllMinima` refuses for Energy window and Populations,
  * but every one named, and every kind of failure: a level's lowest may be
  * the one that failed, and the lowest of the rest is then not its energy.
+ * A Filter on the entries' state takes them out (`STATE_FINISHED`).
  * Imaginary frequencies are not among them: which level should be a saddle
  * point is the chemist's to say. Null where none is.
  */
+/** The condition that keeps only the entries that are results to stand on, as a Filter is given it (entries `entryState`). */
+export const STATE_FINISHED = `state = ${FINISHED}`;
+
 export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
   const bad = entries.flatMap((e, k) =>
     e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind]}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
   );
-  return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first` : null;
+  return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first (a Filter on "${STATE_FINISHED}")` : null;
 }
 
 /**

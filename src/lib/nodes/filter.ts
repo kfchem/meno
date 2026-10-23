@@ -74,7 +74,8 @@ function meets(e: Entry, c: Condition): Met {
   const why = unreadable(p, c.property);
   if (why) return { why, asked: false };
   if (typeof p!.value !== typeof c.value) return { why: `its ${c.property} is not ${typeof c.value === "string" ? "a text" : "true or false"}`, asked: false };
-  return compares(p!.value as string | boolean, c.compare, c.value) || { why: `not ${conditionText(c)}`, asked: true };
+  // (said with what it is, as a number's is: "not state = finished (not converged)")
+  return compares(p!.value as string | boolean, c.compare, c.value) || { why: `not ${conditionText(c)} (${String(p!.value)})`, asked: true };
 }
 
 /** Reasons counted - most first, then in the order first met: "2: it has no nll; 1: ...". */

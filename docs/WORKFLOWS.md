@@ -2074,6 +2074,16 @@ it.
   a name that is Meno's own and one an entry carries of its own too is
   refused ("which is meant cannot be told"), never read as either; the
   entry's own goes on with it, unread.
+- **An entry's state** is Meno's own too (`state`, entries `entryState`):
+  "finished" where it is a result to stand on - converged, not failed,
+  its file's marks read - else why not, in the words a step's line
+  counts failures in ("not converged", "refused", "the program stopped
+  with an error"), or "marks not read". "state = finished" keeps the
+  finished and sets the rest aside, each saying what it is ("not state =
+  finished (not converged)"): the Filter a step's refusal names, where a
+  value is read from results (an Energy diagram's levels: meno
+  `STATE_FINISHED`). A text or true-or-false condition not met says the
+  value, as a number's does.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
