@@ -495,7 +495,7 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
  */
 export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
   const bad = entries.flatMap((e, k) =>
-    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind]}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
+    e.failed ? [`${name(k)} #${e.number} ${FAILURE_WORDS[e.failed.kind] ?? e.failed.kind}`] : e.marksUnread ? [`${name(k)} #${e.number}: ${MARKS_UNREAD}`] : [],
   );
   return bad.length ? `Not every entry is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first` : null;
 }
