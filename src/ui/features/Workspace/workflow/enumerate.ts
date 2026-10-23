@@ -103,7 +103,8 @@ export function listsReadAs(text: string): LineRead[] {
     if (!option) return { said: `R${head![1]}` };
     const read = readOption(option);
     if ("problem" in read) return { said: read.problem, problem: true };
-    return { said: read.as === "element" ? read.formula : `${read.label} \u00b7 ${read.formula}` };
+    // (the group's formula; and its label, where it reads as other than typed: otbs as OTBS)
+    return { said: read.as === "label" && read.label !== option ? `${read.label} \u00b7 ${read.formula}` : read.formula };
   });
 }
 

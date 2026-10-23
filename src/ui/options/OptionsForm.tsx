@@ -22,7 +22,7 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
           wrap="off"
           spellCheck={false}
           onChange={(e) => onChange(e.target.value)}
-          className="w-40 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
+          className="w-28 shrink-0 resize-none overflow-x-auto overflow-y-hidden rounded-md border border-gh-line bg-white px-2 py-1 font-mono text-xs leading-5 text-gh-black"
         />
         {read.length > 0 && (
           <span aria-label="Read as" className="min-w-0 flex-1 py-1 text-xs leading-5">

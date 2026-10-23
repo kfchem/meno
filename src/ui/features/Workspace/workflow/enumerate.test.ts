@@ -4,7 +4,7 @@ import { drawingOf } from "../chem/drawing";
 import { identityOfDrawn } from "../chem/identityOf";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { template } from "./testdata/enumerationCases";
-import { enumerated, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
+import { enumerated, listsReadAs, MOST_COMBINATIONS, readLists, readOption, templateRs, type Enumerated } from "./enumerate";
 import { measured } from "../../../../testing/timeouts";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import { countOf, numberedOn, numberedRecord, recordHow, recordNumber, recordWhy, setMembers } from "./entries";
@@ -35,6 +35,19 @@ const ok = (r: Enumerated) => {
 const problems = (r: Enumerated) => (r.ok ? [] : r.problems);
 
 describe("a list's lines, read", () => {
+  it("each said beside it: the group's formula - its label too, where it reads as other than typed - or why it does not read", () => {
+    expect(listsReadAs("R1: Me\notbs\nCl\n*C(=O)N(C)C\nQqx\n\nR2:").map((r) => [r.said, !!r.problem])).toEqual([
+      ["CH3", false],
+      [expect.stringMatching(/^OTBS · /), false],
+      ["Cl", false],
+      ["C3H6NO", false],
+      ['"Qqx" is not an element, a group Meno knows, or a SMILES with a "*"', true],
+      ["", false],
+      ["R2", false],
+    ]);
+    expect(listsReadAs("Me")[0]).toEqual({ said: "Start with an R number, as R1:", problem: true });
+  });
+
   it("as a label is read on the canvas - its case by smart labels - an element as that atom, a SMILES only with a *", () => {
     expect(readOption("otbs")).toMatchObject({ as: "label", label: "OTBS" });
     expect(readOption("Me")).toMatchObject({ as: "label", label: "Me", formula: "CH3" });
