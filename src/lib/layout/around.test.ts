@@ -6,6 +6,7 @@ import { dist, type Point } from "./geometry";
 import type { LayoutInput } from "./perceive";
 import { notAsGiven } from "./readBack";
 import { fromSmiles } from "./testdata/fromSmiles";
+import { measured } from "../../testing/timeouts";
 
 const at = (out: Pick<Layout2D, "x" | "y">, a: number): Point => ({ x: out.x[a], y: out.y[a] });
 
@@ -128,7 +129,8 @@ describe("a part drawn afresh between fixed neighbours", () => {
     const g = fromSmiles("CCC12C3C4C1C5C2C3C45");
     const r = layoutAround(g, [2, 3, 4, 5, 6, 7, 8, 9], { at: [{ x: 1.299, y: 0.75 }, { x: 0, y: 0 }] });
     expect(r).toEqual({ refused: "The part holds a cage, drawn in perspective, so the structure is drawn whole." });
-  });
+    // (its cube laid out in perspective: 0.25 s alone, 3.2 s seen with other lanes running)
+  }, measured(300));
 
   it("keeps the stereocentres of the part and of the rest as given, read back from the drawing", () => {
     // ((R)-1-phenylethanol's CH(OH) the part, between its phenyl and its methyl)
