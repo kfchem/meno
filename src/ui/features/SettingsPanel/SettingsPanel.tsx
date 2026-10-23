@@ -8,6 +8,7 @@ import StyleEditor from "../StyleEditor";
 import Style3DEditor from "../StyleEditor/Style3DEditor";
 import AbbreviationSettings from "./AbbreviationSettings";
 import ChemistrySettings from "./ChemistrySettings";
+import DefaultAppSettings from "./DefaultAppSettings";
 import FileSettings from "./FileSettings";
 import PointerSettings from "./PointerSettings";
 import CanvasSettings from "./CanvasSettings";
@@ -165,6 +166,11 @@ export default function SettingsPanel() {
               what they find added beside it.
             </p>
             <FileSettings />
+            <h3 className="mt-6 text-sm font-semibold text-gh-black">Opening files</h3>
+            <p className="mt-1 mb-3 text-sm text-gh-gray">
+              The app each kind of file opens with when it is double-clicked, and Meno for it where you choose.
+            </p>
+            <DefaultAppSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Copied pictures</h3>
             <p className="mt-1 mb-3 text-sm text-gh-gray">
               What a copy puts beside a structure for other programs - Word, PowerPoint - to paste.

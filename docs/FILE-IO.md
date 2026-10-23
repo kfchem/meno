@@ -1106,10 +1106,66 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     times it had been chosen before count. Microsoft's own pages say as
     much ("available as default ... apps for the file type"; ownership
     information in HKCU "used only when the application that it references
-    is registered"). So nothing is registered for them; Windows is to let
-    the user choose Meno as a default from Meno's own Settings instead,
-    registering only when asked. A file opened with Meno by the user's own
-    choice is taken as on macOS.
+    is registered"). So nothing is registered for them until the user asks
+    for a format in Meno's own Settings (*Meno as the default app*, below).
+    A file opened with Meno by the user's own choice is taken as on macOS.
+- **Meno as the default app, chosen in Settings** (2026-10-21; Settings,
+  Files, *Opening files*; `src-tauri/src/defaults.rs`, `lib/defaultApps.ts`):
+  each of those formats with the app that opens it now, read again each
+  time Meno comes to the front, so a default changed elsewhere shows as it
+  is. Nothing changes until a format's button is pressed.
+  - macOS 12 and later: *Use Meno* asks the system to make Meno the
+    default for the type the system gives that extension
+    (`NSWorkspace setDefaultApplicationAtURL:toOpenContentType:
+    completionHandler:`, macOS 12; "If a change requires user consent, the
+    system asks the user for consent", Apple's page for it). The app it
+    replaced is kept by name and path (`files.before` in the settings), and
+    offered back: *Use Some Viewer again*. Where that app is no longer
+    there (moved to the Trash since), its record goes and the page says so;
+    the format still opens with Meno. Before macOS 12 there is no such
+    call, so the page says to choose in the Finder instead (Get Info, Open
+    with, Change All); Meno's minimum stays 10.13. Only an installed Meno
+    can be made the default, not one run from a build folder.
+  - Windows: an app cannot set a default; the user chooses it in Windows'
+    own Settings. *Use Meno* offers Meno there for that format alone, then
+    opens Meno's own page in Default apps - `ms-settings:defaultapps?
+    registeredAppUser=Meno` on Windows 11 21H2 and 22H2 with the 2023-04
+    update and 23H2 or later, Default apps itself before (Microsoft Learn,
+    *Launch the Default Apps settings page*). What is written, under
+    HKEY_CURRENT_USER only (Microsoft Learn, *Registering an Application
+    for Use with Default Programs*): `Software\Meno\Capabilities` with
+    `ApplicationDescription` (required) and `ApplicationName`; under its
+    `FileAssociations`, one value for each format asked for, `.sdf` =
+    `Meno.File`; the ProgID `Software\Classes\Meno.File`, with its icon and
+    `shell\open\command`; and one value, `Meno`, in the shared
+    `Software\RegisteredApplications`. Then `SHChangeNotify`. Never
+    `OpenWithProgids`, never `Applications\Meno.exe`.
+  - What opens a format now is asked of Windows, never read from the
+    registry: the default ProgID (`IApplicationAssociationRegistration::
+    QueryCurrentDefault`) and the program and its name
+    (`AssocQueryString`). The user's choice is not always under the
+    `UserChoice` key: Windows 11 build 26300 (tried 2026-10-22) keeps it
+    under `UserChoiceLatest`, and the page read it right because it asks
+    Windows. Nothing in Meno reads `UserChoice` itself. Where the program
+    is Windows' own *choose an app* (`OpenWith.exe`), which Windows names
+    as if it were an app (*Select an app*, in the user's language), no app
+    opens the format yet, and the row says *No app opens it yet*.
+  - Tried on Windows 11 (2026-10-21) with exactly these keys: a
+    double-click did not go to Meno, and Meno's own page in Default apps
+    listed its formats with their defaults. But for each format claimed,
+    Windows asked which app to use the next time such a file was opened,
+    offering Meno beside the app that opened it. So a format is claimed
+    only when the user asks for it, and the page says what Windows does
+    next.
+  - *Stop offering Meno* takes that format's value out; with the last,
+    the rest goes too: the ProgID, the Capabilities, the value in
+    `RegisteredApplications` (never the key), and `Software\Meno` where
+    nothing is left in it. The uninstaller does the same with whatever is
+    left (`--unregister-defaults`, `windows/hooks.nsh`). On the last
+    format, where Meno is the default, the row says that stopping takes
+    Meno out of Default apps, so Windows asks which app to use the next
+    time such a file is opened: the choice it kept names the ProgID taken
+    out.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -
