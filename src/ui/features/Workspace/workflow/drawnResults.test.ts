@@ -352,12 +352,14 @@ describe("a large set of structures drawn, given by a step", () => {
     expect(heldOwn(doc, kept)).toBe("3 structures");
   });
 
-  it("are not copied with their set: put down again, it holds nothing until its step runs", () => {
+  it("are copied with their set, with its step or without - all those it holds off the page, never the shown alone (heldStructures.test)", () => {
     const doc = placeResults(page(), page().steps![0], drawn(many(DRAWN_ON_PAGE.most + 1)), W);
     const out = resultOf(doc, doc.steps![0].id, "out")!;
-    const parts = partsOf(doc, new Set([out.id]), new Set([doc.steps![0].id]));
-    expect(parts.sets[0].drawnCollection).toBeUndefined();
-    expect(parts.sets[0].unread).toBeUndefined();
+    for (const steps of [new Set([doc.steps![0].id]), new Set<number>()]) {
+      const parts = partsOf(doc, new Set([out.id]), steps);
+      expect(parts.sets[0].drawnCollection!.map((m) => recordNumber(m.record))).toEqual([DRAWN_ON_PAGE.most + 1]);
+      expect(parts.sets[0].unread).toBeUndefined();
+    }
   });
 });
 

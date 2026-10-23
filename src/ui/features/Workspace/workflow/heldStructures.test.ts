@@ -5,8 +5,7 @@ import type { Drawn, EditorState, WorkflowSet } from "../store/types";
 import { deleteFromMenu } from "../menuDelete";
 import type { MenuTarget } from "../PartMenu";
 import { centredAt } from "../utils/copyPaste";
-import { countOf, heldOwn, holdsOf, numberedRecord, recordNumber, setMembers } from "./entries";
-import { resultOf } from "./flow";
+import { countOf, countSaid, heldOwn, holdsOf, numberedRecord, recordNumber, setMembers } from "./entries";
 import { DRAWN_ON_PAGE } from "./look";
 import { addStep, removeStep } from "./model";
 import { partsOf } from "./parts";
@@ -93,11 +92,24 @@ describe("a set holding structures drawn it does not show", () => {
     }
   });
 
-  it("copied with its step, is that step's exit again - empty until it runs, as any step's is", () => {
-    const { st, id } = page120();
-    const step = st().sets.find((b) => b.id === id)!.made!.step;
-    const flow = partsOf(st(), new Set([id]), new Set([step]));
-    expect(flow.sets[0].drawnCollection).toBeUndefined();
-    expect(resultOf(st(), step, "out")!.id).toBe(id);
+  it("cut or copied with its step and pasted, holds all 120 - shown, the rest held - its count saying so: never the shown alone", () => {
+    for (const cut of [true, false]) {
+      const { st, id } = page120();
+      const step = st().sets.find((b) => b.id === id)!.made!.step;
+      const set0 = st().sets.find((b) => b.id === id)!;
+      const atoms = new Set(setMembers(st(), set0).structures.flat());
+      const flow = partsOf(st(), new Set([id]), new Set([step]));
+      const read = readWorkflow(JSON.parse(JSON.stringify(flow)))!;
+      const part = {
+        atoms: st().model.atoms.filter((a) => atoms.has(a.id)),
+        bonds: st().model.bonds.filter((b) => atoms.has(b.a) && atoms.has(b.b)),
+        flow: { sets: read.sets, steps: read.steps, wires: read.wires },
+      } as Drawn;
+      if (cut) st().deleteDrawn(part);
+      st().pasteModel(centredAt(part, { x: 500, y: -500 }));
+      const set = pasted(st());
+      expect([set.made?.step === step, countOf(st(), set).entries, numbers(st(), set)]).toEqual([false, 120, all]);
+      expect(countSaid(set, countOf(st(), set))).toBe(`${DRAWN_ON_PAGE.most} of 120 structures shown`);
+    }
   });
 });

@@ -36,10 +36,10 @@ const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =
  * which are the set's: put down elsewhere, it holds what then lies inside it
  * (workflow/model `membersSettled`) - its structures drawn with the records
  * they had (`WorkflowSet.carried`) - and a step's exit is empty until its
- * step runs again - its molecules never copied twice. A set put down
- * without its step carries the structures drawn it holds off the page -
- * those it did not show (`drawnCollection`) - all of them: put down, it
- * holds those it shows and those, as it did.
+ * step runs again - its molecules never copied twice. A set carries the
+ * structures drawn it holds off the page - those it did not show
+ * (`drawnCollection`) - all of them, with its step or without: put down, it
+ * holds those it shows and those, as it did, never the shown alone.
  */
 export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet<number>): FlowParts {
   return {
@@ -50,9 +50,9 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
         // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
         const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
         const withStep = !!b.made && steps.has(b.made.step);
-        const set = b.made && !withStep ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b;
-        // (and, without its step, those it holds off the page: never a copy of the shown alone)
-        const held = !withStep && drawnCollection?.length ? { drawnCollection } : {};
+        // (and those it holds off the page: never a copy of the shown alone - and, with its step, what it holds said, as it was)
+        const held = drawnCollection?.length ? { drawnCollection } : {};
+        const set = b.made && !withStep ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit, ...(drawnCollection?.length && b.made.holds ? { holds: b.made.holds } : {}) } } : b;
         return { ...set, ...held, ...(carried.length ? { carried } : {}) };
       }),
     steps: (doc.steps ?? [])
