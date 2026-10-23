@@ -27,7 +27,7 @@
 import { create } from "zustand";
 import { CUBE_MARK } from "../calc/cube";
 import { recordName, RECORD_NAMES } from "../chem/pdb";
-import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type XyzEnergyDecl } from "../plugins/manifest";
+import { folded, holdsMark, markAt, type GrammarDecl, type KindDecl, type Manifest, type Mark, type XyzEnergyDecl, type XyzStepsDecl } from "../plugins/manifest";
 import sampleSdf from "../../samples/cholesterol.sdf?raw";
 import sampleXyz from "../../samples/cholesterol.xyz?raw";
 import sampleRxn from "../../samples/diels-alder.rxn?raw";
@@ -188,18 +188,25 @@ export function headOf(text: string): string {
  * and those the catalogues of the plugins added name, each with the
  * plugins it suggests to read it.
  */
-export const useKinds = create<{ kinds: readonly Kind[]; texts: readonly TextKind[]; catalogued: readonly Kind[]; xyzEnergies: readonly XyzEnergyDecl[] }>(() => ({
+export const useKinds = create<{ kinds: readonly Kind[]; texts: readonly TextKind[]; catalogued: readonly Kind[]; xyzEnergies: readonly XyzEnergyDecl[]; xyzSteps: readonly XyzStepsDecl[] }>(() => ({
   kinds: registered([]).kinds,
   texts: [],
   catalogued: [],
   xyzEnergies: [],
+  xyzSteps: [],
 }));
 
 /** Registers the kinds `manifests` - the plugins added - bring and name, with Meno's own, in place of those registered before. */
 export function registerKinds(manifests: readonly Manifest[]): void {
   const { kinds, texts, catalogued } = registered(manifests);
-  // (and how the programs of the plugins added write an XYZ frame's energy, in the order the plugins are)
-  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []) });
+  // (and how the programs of the plugins added write an XYZ frame's energy, in the order the plugins are - and
+  // which of their XYZ files are an optimisation's steps)
+  useKinds.setState({ kinds, texts, catalogued, xyzEnergies: manifests.flatMap((m) => m.xyzEnergies ?? []), xyzSteps: manifests.flatMap((m) => m.xyzSteps ?? []) });
+}
+
+/** The XYZ files the programs of the plugins added write whose frames are an optimisation's steps: none, where none is added. */
+export function xyzSteps(): readonly XyzStepsDecl[] {
+  return useKinds.getState().xyzSteps;
 }
 
 /** How the programs of the plugins added write a frame's energy on an XYZ comment line: none, where none is added. */

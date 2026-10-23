@@ -18,6 +18,7 @@ import importlib.util
 import json
 import math
 import pathlib
+import types
 import unittest
 from unittest import mock
 
@@ -49,6 +50,25 @@ class HowTheRunWent(unittest.TestCase):
                  "ORCA finished by error termination in LEANSCF\n")
         self.assertEqual(worker.run_of(error, "orca"), ("error", "unfortunately, the SCF has not converged.", [False]))
         self.assertEqual(worker.run_of("O   R   C   A\n SCF CONVERGED AFTER   9 CYCLES\n", "orca")[0], "cut")
+
+    def test_a_job_another_follows_came_to_its_end_in_orca_s_file_alone(self):
+        # (ORCA 6.1.1, an optimisation then a single point by $new_job: "ORCA TERMINATED NORMALLY" once, at the end)
+        orca = ("O   R   C   A\n"
+                "                 $$$$$$$$$$$$$$$$  JOB NUMBER  1 $$$$$$$$$$$$$$\n SCF CONVERGED AFTER   9 CYCLES\n"
+                "                 $$$$$$$$$$$$$$$$  JOB NUMBER  2 $$$$$$$$$$$$$$\n SCF CONVERGED AFTER   7 CYCLES\n"
+                "                             ****ORCA TERMINATED NORMALLY****\n")
+        jobs = worker.job_texts(orca)
+        self.assertEqual([worker.run_of(t, "orca", k < len(jobs) - 1)[0] for k, t in enumerate(jobs)], ["normal", "normal"])
+        # (one that stopped on an error stays so, followed or not)
+        error = "O   R   C   A\nORCA finished by error termination in LEANSCF\n"
+        self.assertEqual(worker.run_of(error, "orca", True)[0], "error")
+        # (Gaussian's Link1 jobs each say their own end: a job without it stays cut, though another follows it)
+        gaussian = (" Entering Gaussian System, Link 0=g16\n Initial command:\n SCF Done:  E(RHF) =  -75.98\n"
+                    " Initial command:\n SCF Done:  E(RHF) =  -75.99\n Normal termination of Gaussian 16.\n")
+        jobs = worker.job_texts(gaussian)
+        self.assertEqual(len(jobs), 2)
+        self.assertEqual([worker.run_of(t, "gaussian", k < len(jobs) - 1)[0] for k, t in enumerate(jobs)], ["cut", "normal"])
+        self.assertEqual(worker.run_of(" Entering Gaussian System\n SCF Done:  E(RHF) =  -75.98\n", "gaussian", True)[0], "cut")
 
     def test_xtb_and_a_program_not_read_for_it(self):
         error = " -2- Geometry optimization failed\n -1- xtb_geoopt: Geometry optimization did not converge\n abnormal termination of xtb\n"
@@ -171,6 +191,113 @@ class Json(unittest.TestCase):
             said = worker.answer(json.dumps({"id": 3, "op": "read"}))
         self.assertEqual(said["result"], {"energies": [None, -1.5], "x": {"y": [None]}})
         json.loads(json.dumps(said), parse_constant=lambda c: self.fail(f"{c} in the answer"))
+
+
+class Converged(unittest.TestCase):
+    """Which of an optimisation's or a relaxed scan's geometries the run found converged, as cclib marks them
+    (`optstatus`: 1 new, 4 done) - the patterns of Gaussian 16 and ORCA 6.1.1 outputs of methanol, HF/STO-3G,
+    its H-C-O-H dihedral scanned over three points."""
+
+    @staticmethod
+    def data(status, scan=None):
+        return types.SimpleNamespace(optstatus=status, OPT_DONE=4, scanenergies=scan)
+
+    def test_gaussian_an_optimisation_and_a_relaxed_scan(self):
+        self.assertEqual(worker.converged_of(self.data([1, 0, 0, 0, 4]), "", 5), [False] * 4 + [True])
+        status = [1, 0, 0, 0, 4, 1, 0, 0, 0, 0, 4, 1, 0, 0, 0, 4, 1, 0, 0, 0, 4]
+        marked = worker.converged_of(self.data(status, scan=[-113.546, -113.549, -113.546, -113.549]), "", 21)
+        self.assertEqual([i for i, ok in enumerate(marked) if ok], [4, 10, 15, 20])
+
+    def test_orca_its_last_evaluation_at_each_point_converged_on(self):
+        # (ORCA works each converged point's energy out once more, at a geometry cclib does not mark: that one)
+        self.assertEqual(worker.converged_of(self.data([1, 0, 0, 4]), "", 5), [False] * 4 + [True])
+        status = [1, 0, 0, 0, 0, 0, 0, 4] * 3
+        marked = worker.converged_of(self.data(status, scan=[-113.549, -113.546, -113.549]), "", 27)
+        self.assertEqual([i for i, ok in enumerate(marked) if ok], [8, 17, 26])
+        # (and where the geometries over are not one a point, which is which is not known: none said)
+        self.assertIsNone(worker.converged_of(self.data([1, 0, 0, 4]), "", 7))
+
+    def test_an_optimisation_that_did_not_converge_marks_none(self):
+        self.assertEqual(worker.converged_of(self.data([1, 0]), "", 2), [False, False])
+        # (stopped at its first geometry - MaxCycles 1: Gaussian marks it 3, ORCA 1 - marked as not, as one of two is)
+        self.assertEqual(worker.converged_of(self.data([3]), "", 1), [False])
+        self.assertEqual(worker.converged_of(self.data([1]), "", 1), [False])
+
+    def test_none_where_nothing_was_optimised(self):
+        # (a single point: cclib marks nothing)
+        self.assertIsNone(worker.converged_of(self.data(None), "", 1))
+        self.assertIsNone(worker.converged_of(self.data([]), "", 1))
+        # (a rigid scan: one geometry a point)
+        self.assertIsNone(worker.converged_of(self.data([1, 1, 1], scan=[-1.0, -1.1, -1.2]), "", 3))
+        # (a reaction path: its points are the path)
+        self.assertIsNone(worker.converged_of(self.data([1, 4, 4]), " #p HF/STO-3G IRC(maxpoints=2)\n -----\n", 3))
+
+
+class Unmarked(unittest.TestCase):
+    """Why none of a run's geometries is one it found, where cclib marks none of them: never every one taken as found."""
+
+    @staticmethod
+    def data(scan=None):
+        return types.SimpleNamespace(optstatus=None, OPT_DONE=4, scanenergies=scan)
+
+    def test_a_run_that_did_not_end_as_it_should(self):
+        self.assertEqual(worker.unmarked_of(self.data(), "", 1, "error"), "error")
+        self.assertEqual(worker.unmarked_of(self.data(), "", 4, "cut"), "cut")
+
+    def test_a_path_s_points_and_other_geometries_not_marked(self):
+        self.assertEqual(worker.unmarked_of(self.data(scan=[-1.0, -1.1, -1.2]), "", 3, "normal"), "path")
+        self.assertEqual(worker.unmarked_of(self.data(), " #p HF/STO-3G IRC(maxpoints=2)\n -----\n", 5, "normal"), "path")
+        # (more than one, none marked: a dynamics run, an optimisation whose marks do not match its geometries)
+        self.assertEqual(worker.unmarked_of(self.data(), "", 4, "normal"), "unstated")
+        self.assertEqual(worker.unmarked_of(self.data(), "", 4, None), "unstated")
+
+    def test_none_for_one_geometry_of_a_run_that_ended_as_it_should(self):
+        self.assertIsNone(worker.unmarked_of(self.data(), "", 1, "normal"))
+        self.assertIsNone(worker.unmarked_of(self.data(), "", 1, None))
+        self.assertIsNone(worker.unmarked_of(self.data(), "", 0, "error"))
+
+    def test_a_job_the_program_went_on_from_came_to_its_end(self):
+        # (ORCA says it once, at the end of a file of several jobs: each job but the last is told it is followed)
+        told = []
+        with mock.patch.object(worker, "job_texts", return_value=["one", "two", "three"]), mock.patch.object(worker, "op_read", side_effect=lambda m: told.append(m["followed"]) or {"results": []}):
+            worker.op_read_jobs({"name": "mj.out", "text": "x"})
+        self.assertEqual(told, [True, True, False])
+
+
+class StateOfTheDensity(unittest.TestCase):
+    """Of a job with excited states, which state its dipole, charges and orbitals are of - as Gaussian 16 and
+    ORCA 6.1.1 say it of formaldehyde's TD/HF/STO-3G optimisation: Gaussian's population analysis the SCF
+    density's (1.6162 D), ORCA's last dipole and charges its first root's relaxed density (0.4338 D)."""
+
+    excited = types.SimpleNamespace(etenergies=[3.9])
+
+    def test_gaussian_says_the_scf_density(self):
+        text = " Population analysis using the SCF Density.\n"
+        self.assertEqual(worker.density_states(self.excited, text, "gaussian"), ("ground state", "ground state", "ground state"))
+        # (another density - a root's, asked with Density=Current - its root not said: left out)
+        self.assertEqual(worker.density_states(self.excited, " Population analysis using the CI density.\n", "gaussian")[:2], ("", ""))
+
+    def test_orca_says_each_block_s_state(self):
+        text = (
+            "DIPOLE MOMENT\n-------------\n\nMethod             : SCF\nTotal Dipole Moment    :  0 0 -0.635\n"
+            "ORCA POPULATION ANALYSIS\nMULLIKEN ATOMIC CHARGES\n"
+            "                  RELAXED CIS/TDA DENSITY POPULATION ANALYSIS\n                                   IROOT 1\n"
+            "                           ORCA POPULATION ANALYSIS\nMULLIKEN ATOMIC CHARGES\n"
+            "DIPOLE MOMENT\n-------------\n\nMethod             : TDA/CIS\nLevel              : Relaxed density\n"
+            "State              :   1\nTotal Dipole Moment    :  0 0 -0.171\n"
+        )
+        self.assertEqual(worker.density_states(self.excited, text, "orca"), ("excited state 1", "excited state 1", "ground state"))
+        ground = "DIPOLE MOMENT\n-------------\nMethod             : SCF\nTotal Dipole Moment : 0 0 1\nORCA POPULATION ANALYSIS\nMULLIKEN ATOMIC CHARGES\n"
+        self.assertEqual(worker.density_states(self.excited, ground, "orca"), ("ground state", "ground state", "ground state"))
+
+    def test_labels_said_so_or_left_out_and_a_job_without_excited_states_as_ever(self):
+        dipole = [{"id": "dipole", "label": "Dipole moment", "value": 1.6}]
+        self.assertEqual(worker.of_state(dipole, "ground state")[0]["label"], "Dipole moment, ground state")
+        self.assertEqual(worker.of_state(dipole, ""), [])
+        self.assertEqual(worker.of_state(dipole, None), dipole)
+        orbitals = [{"id": "orbitals", "label": "Molecular orbitals"}, {"id": "homo-lumo-gap", "label": "HOMO\u2013LUMO gap"}]
+        self.assertEqual([r["label"] for r in worker.of_state(orbitals, "ground state", only="homo-lumo-gap")], ["Molecular orbitals", "HOMO\u2013LUMO gap, ground state"])
+        self.assertEqual(worker.density_states(types.SimpleNamespace(etenergies=None), "", "gaussian"), (None, None, None))
 
 
 if __name__ == "__main__":

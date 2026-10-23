@@ -81,6 +81,17 @@ export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefine
 }
 
 /**
+ * What of the one doing a step its results hang on, beyond the step's
+ * options: a plugin's version, and the files it was set up with - a model's
+ * weights, by hash. What a step that takes nothing in (*Generate*) is keyed
+ * by, so that another prior is another run, never one taken up again.
+ */
+export function doerStamp(by: string): string {
+  const p = pluginById(by);
+  return p ? [p.version, ...p.downloads.map((d) => d.sha256)].join("|") : "";
+}
+
+/**
  * The options a kind of step takes, done by `by`: Meno's own, or those the
  * plugin declares for the kind - whether it is added now or not, so that a
  * step keeps saying how it was set.

@@ -10,7 +10,7 @@ import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMember
 import { drawnBox } from "../../../../utils/importers";
 import { SET_PAD, SET_TOP } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
-import { exitsOf, inputsOf, ONE_INPUT, type StepKind } from "./kinds";
+import { exitsOf, inputsOf, ONE_INPUT, takesNothing, type StepKind } from "./kinds";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
@@ -221,6 +221,7 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
 export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
   // (no input named: the first of the step's that takes what comes)
   const kind = doc.steps?.find((s) => s.id === to)?.kind;
+  if (kind && takesNothing(kind)) return doc;
   const port = into ?? (kind ? (inputsOf(kind).find((p) => canWire(doc, from, to, p.id))?.id ?? inputsOf(kind)[0].id) : ONE_INPUT);
   if (!canWire(doc, from, to, port)) return doc;
   const was = wireInto(doc, to, port);

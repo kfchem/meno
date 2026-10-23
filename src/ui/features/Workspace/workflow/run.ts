@@ -13,10 +13,10 @@ import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, marksOf, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
@@ -89,6 +89,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const before = from ? findSet(doc, from.set)?.made?.step : undefined;
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
+  // (a step that takes nothing in needs only someone to do it)
+  if (takesNothing(step.kind)) return by ? null : "Nothing added does this step";
   const input = inputOf(doc, step.id);
   if (!input) return "Nothing comes into it";
   // (a set that came to mix conformer sets with other molecules after it was wired)
@@ -695,8 +697,8 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
   return { calc: { readers: [], ...(e.charge != null ? { charge: e.charge } : {}), ...(e.multiplicity != null ? { multiplicity: e.multiplicity } : {}) } };
 }
 
-/** The imaginary frequencies an entry was judged to have: its own, or - one a program step just made - its calculation's. */
-const imaginaryOfEntry = (e: SetEntry): number[] | undefined => e.imaginary ?? (e as Worked).calc?.imaginary;
+/** The imaginary frequencies an entry was judged to have: its calculation's verdict - one a program step just made - else its own. */
+const imaginaryOfEntry = (e: SetEntry): number[] | undefined => (e as Worked).calc?.imaginary ?? e.imaginary;
 
 function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
@@ -718,9 +720,9 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy] } : {}),
         ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror]] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
-        // (why a program step could not do it, where one could not: its Failed exit's - of its last frame, a path's own
-        //  frames before it none)
-        ...(e.failed ? { failed: [...(path ?? []).map(() => null), e.failed] } : {}),
+        // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
+        //  last frame, a path's own frames before it none)
+        ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }]),
         ...e.keep,
       };
     });
@@ -754,9 +756,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
-      ...(g.some((e) => e.failed) ? { failed: g.map((e) => e.failed ?? null) } : {}),
-      // (each conformer's imaginary frequencies, as its calculation judged them)
-      ...(g.some((e) => imaginaryOfEntry(e)) ? { imaginary: g.map((e) => imaginaryOfEntry(e) ?? null) } : {}),
+      // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
+      ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
       ...(alike ? keptAlike(g) : {}),
     };
   });
