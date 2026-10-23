@@ -114,6 +114,12 @@ body {
   --color-gh-line: rgb(209, 217, 224);
   --color-gh-gray: rgb(89, 99, 110);
 
+  /* What is pointed at or picked - a structure, a word - and only that
+     (docs/LOOK.md, *Highlights*); what a search found in a text. The same
+     values in code: src/ui/theme/colors.ts. */
+  --color-highlight: rgb(30, 144, 255);
+  --color-found: rgb(212, 167, 44);
+
   /* How things move (src/ui/theme/motion.ts): the easing of every transition,
      and of something going out of view (EASE_LEAVE). */
   --ease-meno: cubic-bezier(0.2, 0.8, 0.2, 1);

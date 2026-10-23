@@ -1,0 +1,185 @@
+# How Meno looks
+
+Meno is judged by how it looks as much as by what it does: a control drawn
+by the browser, a colour picked by eye, a highlight that is not the
+canvas's own, each says the tool was not made with care (the maintainer,
+2026-10-23). This is the standard every screen is held to. Its values are
+taken from what Meno already uses; where two things differed, the one used
+most is the standard and the other is listed under *Not yet*.
+
+Every pull request that changes what is seen carries before and after
+shots, and is checked against this page (*The look check*, below).
+
+## Rules
+
+1. **Meno's own controls only.** No `<select>`, radio or checkbox drawn by
+   the browser: the shared controls in `src/ui/controls` (*Controls*,
+   below). A new kind of control is added there, not drawn in place.
+2. **Colours from the tokens only.** No colour written as a literal in
+   the interface (`#…`, `rgb(…)`, a Tailwind default such as `gray-200` or
+   `red-700`): the tokens below, in CSS by their Tailwind names, in code
+   from `src/ui/theme/colors.ts`. A drawing's own colours - elements,
+   ink, a ribbon's palette, a colour set - are the drawing's, not the
+   interface's, and live with it.
+3. **One highlight.** What is pointed at or picked of a structure,
+   wherever it is drawn - the canvas, a PDF, a card - is shaded as the
+   canvas shades it (*Highlights*).
+4. **Nothing changes at a jump** (`src/ui/theme/motion.ts`): a highlight,
+   a hover, a menu, a card, a move, each eased in the times and curves
+   below.
+5. **Room round what is shown.** Ink never touches a frame's line or its
+   neighbour's ink (*Room*).
+
+## Colours
+
+The source is `src/App.css` (`@theme`); `src/ui/theme/colors.ts` holds
+the same values for what is drawn in code (the canvas, WebGL, SVG), and a
+test keeps the two the same (`src/ui/theme/colors.test.ts`).
+
+| Token | Value | For |
+|---|---|---|
+| `gh-black` | rgb(31, 35, 40) | text |
+| `gh-gray` | rgb(89, 99, 110) | text that says less: notes, shortcuts, a disabled item |
+| `gh-line` | rgb(209, 217, 224) | every line of the interface: borders, separators |
+| `gh-base` | rgb(246, 248, 250) | a row or button under the pointer; a chosen chip; a panel's ground |
+| `gh-background`, `accel-white` | white | menus, cards, the page |
+| `accel-base` | rgb(49, 118, 137) | Meno's own colour: what is chosen (a segment, a radio's dot, a checkbox's tick, a switch on, a slider's thumb), a primary button, a focused control's border |
+| `accel-lightbase` | rgb(207, 231, 238) | a chosen card or chip's ground (a look, a format), with an `accel-base` border |
+| `accel-accent` | rgb(205, 69, 96) | what asks for attention: an error, a refusal, something left open |
+| `accel-lightaccent` | rgb(245, 218, 223) | an error's ground |
+| `highlight` | rgb(30, 144, 255) | what is pointed at or picked (*Highlights*), only there |
+| `found` | rgb(212, 167, 44) | what a search found in a text |
+
+Not the interface's: element colours (`src/lib/chem`), a drawing's ink
+(black, `MENO`'s #141414), colour sets, code colouring.
+
+## Type
+
+IBM Plex Sans throughout (Plex Sans JP for Japanese, Plex Mono for code),
+from Meno's own files. Sizes:
+
+- `text-sm` (14 px): menus, cards' and dialogs' text, Settings.
+- `text-xs` (12 px): controls, chips, a card's rows, toasts.
+- `text-[11px]`: a note under a control, a menu's note.
+- `text-[10px]`: a chip on the page at its smallest; nothing else.
+
+Bold is the semibold (`font-semibold`), for a card's or dialog's title.
+Numbers that change in place are tabular (`tabular-nums`).
+
+## Sizes, room and corners
+
+- **Controls** are `h-7` (28 px): a select, a segmented choice, a button,
+  an input. A menu's row is `h-8` (32 px).
+- **Padding**: a control `px-2` (a button `px-2.5` or `px-3`); a menu's
+  row `px-3`; a card `p-3`; a dialog `p-5`; a menu `py-1`.
+- **Corners**: `rounded-md` (6 px) for controls, menus, chips and toasts;
+  `rounded-lg` (8 px) for cards and dialogs; `rounded-full` for a dot, a
+  switch, a pill. Not the bare `rounded` (4 px).
+- **Lines**: 1 px, `border-gh-line`; a separator `my-1 border-t
+  border-gh-line`.
+- **Shadows**: `shadow-lg` for what floats over the page (menus, cards,
+  dialogs); `shadow-sm` for toasts and chips; nothing else.
+- **Over the page**: a card's ground is `bg-white/95`, so the drawing
+  shows faintly beneath.
+
+## Highlights
+
+One look for a structure pointed at or picked, wherever it is drawn
+(`src/ui/features/Workspace/components/selectionShade.ts`, the one
+source of its measures):
+
+- **Pointed at, an atom**: a filled disc of `highlight` at `ALPHA.highlight`
+  (0.6), radius 0.26 of a bond, swelling in (`AtomsHoverRings2D`); **a
+  bond**: a band 0.16 of a bond wide (`HoverOverlay2D`).
+- **Selected**: a disc under each atom (radius 0.26 of a bond) and a band
+  along each bond (1.1 times the disc's radius), in `SELECTION_SHADE`
+  (the highlight at 0.45 of its strength, opaque, so that where discs
+  and bands meet it is no darker), under the drawing.
+- **A whole structure pointed at** (a PDF's): the selection's discs and
+  bands at half its strength; picked and pointed at, 1.3 times.
+- **Text**: `highlight` at 0.3 behind the letters; found, `found` at 0.3
+  (0.6 for the one shown).
+- **3D**: an outline blended from white towards `highlight`
+  (`Molecule3DView`).
+
+Never a rectangle, a ring or a colour of its own round a structure.
+
+## Motion
+
+From `src/ui/theme/motion.ts` (`--ease-meno`, `--ease-meno-leave` in CSS):
+
+- **Times**: `DURATION.quick` 120 ms (a colour, a highlight, a hover),
+  `base` 160 ms (something coming into view or going: a menu, a card, a
+  mark), `move` 220 ms (the drawing or the view going somewhere).
+- **Curves**: `EASE` for what comes in or moves; `EASE_LEAVE` for what
+  goes out of view; `EASE_SLIDE` for a panel sliding beside the canvas.
+- In CSS: `duration-150 ease-meno` for a control's colours (the base
+  layer does this for every button), `meno-fade-in` and `meno-fade-out`
+  for what comes and goes.
+- A highlight's strength is eased, not switched: on in `quick` with
+  `EASE`, off in `quick` with `EASE_LEAVE`.
+
+## Room
+
+- **A structure shown in a frame** (a workflow's set, a card): its ink -
+  its bonds and its labels' letters, not only its atoms' centres - keeps
+  at least half a bond (24 px at 48 px a bond) from the frame's line, and
+  at least half a bond from the next structure's ink. A frame's name row
+  is 36 px.
+- **Text in a control** keeps its padding; a label never touches a
+  control's edge.
+- Agreed with the workspace's placement (#595): the values live in
+  `workflow/look.ts`, and a structure's box includes its labels.
+
+## Controls
+
+`src/ui/controls` (Meno's own, matching its menus):
+
+- **Select**: a button `h-7 rounded-md border border-gh-line bg-white
+  px-2 text-xs` with a chevron in `gh-gray`, opening a menu as the
+  canvas's menus are drawn (`rounded-md border border-gh-line bg-white
+  py-1 shadow-lg`, rows `h-8 px-3`, `hover:bg-gh-base`, the chosen one
+  ticked), by keyboard as well as pointer.
+- **Segmented choice** (few short choices, all shown): `rounded-md border
+  border-gh-line`, segments `h-7 px-2.5 text-xs` parted by `border-l
+  border-gh-line`, the chosen one `bg-accel-base text-white`, the others
+  `bg-white hover:bg-gh-base`.
+- **Choice of cards** (a look, a format, each a picture or a word with a
+  note): the chosen one `border-accel-base bg-accel-lightbase`.
+- **Radio**: a 14 px circle, `border-gh-line`, the chosen one's dot
+  `accel-base`.
+- **Checkbox**: a 14 px square, `rounded-[3px] border-gh-line`, ticked
+  on `accel-base`.
+- **Switch**: as Settings draws them, on in `accel-base`.
+
+Each is reachable by keyboard and shows focus with an `accel-base` border.
+
+## The look check
+
+Every pull request that changes what is seen carries before and after
+shots of what changed (as the GUI harness takes them: the window only).
+They are checked against this page by the look owner, who answers *LOOK
+OK* or says what to change and why, rule by rule. A lint rule
+(`eslint.config.js`, *Look*) catches what can be caught by reading the
+code: a native select, radio or checkbox outside `src/ui/controls`, and
+a colour literal outside `src/ui/theme`.
+
+## Not yet
+
+Known departures, to be brought in line; the lint rule names each file
+that has one (`NATIVE_CONTROLS_NOT_YET`, `COLOUR_LITERALS_NOT_YET` in
+`eslint.config.js`), and a file brought in line leaves its list. When
+the look rules were set (2026-10-23):
+
+- **Native controls**: 16, in 9 files - the options form (the Render
+  card's Look, Shape and Molecules pull-downs and its radios), the
+  options rows, the style editor, the protonation card, Settings (roles,
+  files), the coordinates card, hiding hydrogens, saving an abbreviation.
+- **Colours written out**: 156, in 69 files. Many are a drawing's own
+  ink (black and white on the 2D canvas), a ribbon's or code's palette, or
+  a colour set's swatches, to be moved beside the drawing's colours; the
+  rest repeat a token (gh-line, gh-base, gh-gray, accel-base written out)
+  or are Tailwind's default greys and reds (`hover:bg-gray-100`,
+  `text-red-700`) in place of `gh-base` and `accel-accent`.
+- CSS transitions at 150 ms where `DURATION.quick` is 120 ms.
+- The bare `rounded` where `rounded-md` is meant.

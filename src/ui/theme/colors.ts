@@ -1,6 +1,13 @@
+/**
+ * The interface's colours for what is drawn in code - the canvas, WebGL, SVG
+ * - the same as src/App.css's @theme, which is their source (docs/LOOK.md,
+ * *Colours*; colors.test.ts keeps the two the same).
+ */
 export const COLORS = {
-  // Accent color for hover/highlight overlays in 2D editors
+  // What is pointed at or picked, and only that (--color-highlight; docs/LOOK.md, *Highlights*)
   highlight: "#1e90ff", // DodgerBlue
+  // What a search found in a text (--color-found)
+  found: "#d4a72c",
   // What asks for attention on the drawing: stereo left open (the app's accent, --color-accel-accent)
   attention: "#cd4560",
   // Meno's own colour (--color-accel-base): what is the workspace's, not the drawing's - slides' frames
