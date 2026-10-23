@@ -64,6 +64,15 @@ describe("an entry record as a step's entry again", () => {
     expect([back.charge, back.multiplicity, back.energy, back.calc]).toEqual([1, 2, undefined, undefined]);
   });
 
+  it("holds a charge and spin only where they were given, not where its atoms alone say them", () => {
+    const plain = held({ charge: undefined, multiplicity: undefined, energy: undefined, calc: undefined, imaginary: undefined, degeneracy: undefined });
+    const back = setEntryOfEntry(entryOfSet(plain, "x"), { compound: 0, number: 1 }, plain)!;
+    expect([back.charge, back.multiplicity]).toEqual([undefined, undefined]);
+    const given = setEntryOfEntry(withSpecies(entryOfSet(plain, "x"), { charge: -1 }), { compound: 0, number: 1 }, plain)!;
+    // (the charge given; the multiplicity its electrons take - its atoms', not given)
+    expect([given.charge, given.multiplicity]).toEqual([-1, undefined]);
+  });
+
   it("gives none of an entry without one geometry in 3D", () => {
     const e = entryOfSet(held(), "x");
     expect(setEntryOfEntry({ ...e, geometry: { kind: "frames", frames: [] } }, { compound: 0, number: 1 })).toBeNull();

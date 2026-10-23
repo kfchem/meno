@@ -977,7 +977,10 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     atoms,
     bonds,
     xyz: [...xyz],
-    ...(e.species ? { charge: e.species.charge, multiplicity: e.species.multiplicity } : { skeleton: true as const }),
+    // (its charge and spin where given - by a calculation, or a Species step - not where its atoms alone say them: a step's entry holds what was given, as one read from an output does)
+    ...(e.species?.from.charge === "given" ? { charge: e.species.charge } : {}),
+    ...(e.species?.from.multiplicity === "given" ? { multiplicity: e.species.multiplicity } : {}),
+    ...(e.species ? {} : { skeleton: true as const }),
     ...(typeof name === "string" ? { name } : was?.name ? { name: was.name } : {}),
     ...(Object.keys(own).length ? { properties: own } : {}),
     ...(was?.from != null ? { from: was.from } : {}),
