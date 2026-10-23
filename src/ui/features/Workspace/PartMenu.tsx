@@ -267,6 +267,8 @@ export default function PartMenu({
     onStop?: () => void;
     onShowLog?: () => void;
     onShowFiles?: () => void;
+    /** Each job whose output Meno could not account for: *Adopt* it, by its id. */
+    adopt?: { job: string; run: () => void }[];
     /** Whether its jobs' raw outputs are kept in the workspace's file (*Don't keep raw outputs*, workflow/keptJobs): a step a plugin does. */
     keepRaw?: { kept: boolean; set: (keep: boolean) => void };
     /** What running it drops of earlier runs, said under its icons before it is pressed (workflow/earlierRuns `runNote`). */
@@ -804,6 +806,7 @@ export default function PartMenu({
           { name: "Options…", keys: "", run: onStepOptions, icon: MENU_ICONS.options },
           del("Delete step"),
           ...(step?.onShowLog ? [{ name: "Show log", keys: "", run: step.onShowLog }] : []),
+          ...(step?.adopt ?? []).map((a, i) => ({ name: `Adopt ${a.job}`, keys: "", run: a.run, ...(i === 0 ? { divider: true } : {}) })),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
           ...(step?.keepRaw

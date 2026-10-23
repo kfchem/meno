@@ -8,10 +8,11 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobDigest, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, programStamp, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
 import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
-import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
+import { lookFor, programKey, tooOld, useInstalled } from "../../../../../lib/plugins/installed";
+import { jobKey, reusable } from "../../../../../lib/jobKeys";
 import { stopWorker } from "../../../../../lib/plugins/process";
 import { chemAtHand, chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
 import type { By, Property } from "../../../../../lib/entry";
@@ -22,7 +23,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
@@ -49,7 +50,13 @@ import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
 
-/** How long Meno waits for a stopped job to end before its files are taken away with its step. */
+/** What a job's runner says of a folder holding what a job was to run but no record of how it ran (jobs.rs `NO_RECORD`). */
+const NO_RECORD = "it has no record of how it ran";
+
+/** How long before its run a job may have been asked for and be the run's own: the moments a run takes to ready its jobs. */
+const STARTED_BEFORE_MS = 60_000;
+
+/** How long Meno waits for a stopped job to end before its files are taken away - one started for a step gone since. */
 const STOP_WAIT_MS = 15_000;
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -193,14 +200,16 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (input.holds !== "structures") return void fail(id, ON_DRAWN, at, key);
     // (what came in when it was asked to run: checked and run on that, as Meno's steps in turns are)
     const entries = inputEntries(d.model, input);
-    const lists = String(optionsOf(kindInfo("enumerate").options ?? [], step.options).lists ?? "");
+    const own = optionsOf(kindInfo("enumerate").options ?? [], step.options);
+    const way = own.way === "substituents" ? "substituents" : "rgroups";
+    const lists = String((way === "substituents" ? own.groups : own.lists) ?? "");
     let checked: string;
     const by = rolePlugin("checks");
     if (entries.length === 1 && by && (await chemAtHand("checks"))) {
       let flagged: string[] | null;
       try {
         const chem = await chemWorker("checks");
-        flagged = await valenceFlagged(entries[0].drawn, lists, (molblock) => chem.request("analyse", { molblock }));
+        flagged = await valenceFlagged(entries[0].drawn, lists, (molblock) => chem.request("analyse", { molblock }), way);
       } catch {
         flagged = null;
       }
@@ -595,6 +604,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * `drawingOf`), each with the record of the one it was made of; or set
    * aside, its record saying why. Nothing taken in part.
    */
+  /**
+   * How long a step on structures drawn may take at once (ms), by how many came in: a request's own two minutes,
+   * or half a minute for each - its stereoisomers each tried in 3D, a camphor's take some 10 s - where that is
+   * longer, but never more than ten minutes. Its plugin sets aside, alone, a structure it has looked at longer than
+   * that half minute (RDKit's `EXAMINE_S`); this limit is what is left, for a worker gone quiet, and fails the
+   * whole run.
+   */
+  const DRAWN_EACH_MS = 30_000;
+  const DRAWN_MOST_MS = 10 * 60_000;
+  const drawnMs = (n: number) => Math.min(DRAWN_MOST_MS, Math.max(2 * 60_000, n * DRAWN_EACH_MS));
+
   /** How a value of the structure one was made from is named on it (`madeRecord`): `made_from.nll`, that one's NLL - never its own. */
   const MADE_FROM = "made_from.";
 
@@ -614,7 +634,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const given = input.held
         ? entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
         : input.structures.map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
-      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures"), entries.length);
+      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
       for (const [i, a] of answers.entries()) {
@@ -850,6 +870,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const sending = sendIdx.map((i) => entries[i]);
     const given = await Promise.all(sending.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
     let prepared;
+    // (what its worker says it runs: the program's version where none installed separately says its own)
+    let said = "";
     let refused: Refusal[] = [];
     try {
       const client = await pluginClient(plugin);
@@ -857,6 +879,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const raw = await client.prepare(step.kind, sent, options, cores);
       prepared = readPrepared(raw, sending.length);
       refused = readRefused(raw, sending.length);
+      said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -864,6 +887,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (what the plugin was given, by its places among all that came in; and the skeletons refused beside)
     prepared = prepared.map((p) => ({ ...p, entries: p.entries.map((k) => sendIdx[k]) }));
     refused = [...refused.map((r) => ({ ...r, entry: sendIdx[r.entry] })), ...skeletons.map((entry): Refusal => ({ entry, kind: "refused", why: skeletonWhy() }))];
+    // (each program installed separately as it is now, for its jobs' keys - one replaced gives other keys, though it
+    //  says the same version or none: one that cannot be told, and no job is taken up again)
+    let stamps: string[] | null = [];
+    for (const where of paths.values()) {
+      const stamp = await programStamp(where).catch(() => null);
+      if (stamp == null) {
+        stamps = null;
+        break;
+      }
+      stamps.push(stamp);
+    }
+    // (the jobs this workspace ran before, and how each stands now: one whose key ran to the end is not run again)
+    const states = new Map((await listJobs().catch((): Job[] => [])).map((j) => [j.id, j.state]));
     // (jobs asking for more memory than Settings lets jobs use - though no more than the computer has, or they are
     //  refused - run with nothing else that declares memory beside them: said, on the step's line)
     const over = overLimits(prepared, limitsOf(useAppSettings.getState().calculations, await computerResources().catch(() => ({ cores: computerCores(), memory: 0 }))));
@@ -881,10 +917,30 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...(p.then ? { then: p.then } : {}),
           cores,
           ...(p.memory ? { memory: p.memory } : {}),
+          // (its folder named from its first entry's name, or its compound's letter, and its step's kind)
+          label: `${entries[p.entries[0]]?.name ?? compoundLetter(entries[p.entries[0]]?.compound ?? 0)} ${kindInfo(step.kind).name}`,
           ...(path ? { path } : {}),
           reads: p.reads,
         };
-        jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
+        const jobKeyed = await jobKey({
+          plugin: plugin.id,
+          pluginVersion: plugin.version,
+          program: p.program,
+          programVersion: useInstalled.getState().chosen[programKey(plugin.id, p.program)]?.version ?? said,
+          stamps: stamps ?? [],
+          args: p.args,
+          ...(p.stdin ? { stdin: p.stdin } : {}),
+          ...(p.then ? { then: p.then } : {}),
+          files: p.files,
+        });
+        const again = stamps ? reusable([...(doc.getState().steps ?? [])], jobKeyed, (j) => states.get(j)) : null;
+        jobs.push({
+          id: again?.id ?? (await startJob({ ...ask, key: jobKeyed })),
+          entries: p.entries,
+          reads: p.reads,
+          key: jobKeyed,
+          ...(again ? { reused: true as const, gave: again.gave } : {}),
+        });
       }
     } catch (e) {
       for (const j of jobs) void stopJob(j.id).catch(() => {});
@@ -892,7 +948,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     if (gone(id)) return forgetStarted(jobs);
     doc.amend((x) => setRunning(x, id, { at, input: key, options, jobs, kind: step.kind, ...(over ? { over } : {}), ...(refused.length ? { refused } : {}) }), { unsaved: true });
-    set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: "waiting", created: at }])) } }));
+    set((prev) => ({ ...prev, jobsSeen: { ...prev.jobsSeen, ...Object.fromEntries(jobs.map((j): [string, JobSeen] => [j.id, { state: j.reused ? "done" : "waiting", created: at }])) } }));
     void lookAtJobs();
     await ended(id);
   }
@@ -905,9 +961,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    */
   const gone = (id: number) => !stepOf(doc.getState(), id);
 
-  /** Jobs started for a step that has gone since: stopped, and their folders taken away once they have ended. */
+  /**
+   * Jobs started for a step that has gone since: stopped, and their folders taken away once they have ended -
+   * those this run started alone: a job taken up again is an earlier run's, or another step's, and stays.
+   */
   const forgetStarted = (jobs: readonly StepJob[]) => {
     for (const j of jobs) {
+      if (j.reused) continue;
       forgotten.add(j.id);
       void (async () => {
         await stopJob(j.id).catch(() => {});
@@ -965,7 +1025,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const p = prepared[0];
         if (p.files.some((f) => f.name === SCENE)) throw new Error("It prepared a job Meno cannot run");
         const path = paths.get(p.program);
-        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
+        const job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}), label: `${e.name ?? compoundLetter(e.compound)} Render` });
         const { page } = rendered;
         jobs.push({ id: job, entries: [i], reads: [], size: [page.maxX - page.minX, page.maxY - page.minY] });
       }
@@ -1120,9 +1180,32 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
 
       // stopped - or every one gone without saying how it ended: nothing comes in. (Some gone - the computer restarted,
       // say - and others done: those done come in, the others said failed, as WORKFLOWS.md, When Meno closes, has it.)
-      const lost = records.map((r) => !r || r.state === "gone");
-      if (records.some((r) => r?.state === "stopped") || lost.every(Boolean)) {
+      // (a job's folder without its record - whatever is in it, nothing Meno can say ran - is no job gone: it is
+      //  output Meno cannot account for, below; adopted, it is read as one done)
+      const unrecorded = records.map((r) => r?.state === "gone" && r.why === NO_RECORD);
+      const lost = records.map((r, k) => (!r || r.state === "gone") && !unrecorded[k]);
+      if (records.some((r) => r?.state === "stopped") || (lost.every(Boolean) && !unrecorded.some(Boolean))) {
         bringIn(id, [], "molecules", { at: run.at, ok: false, stopped: true, said: `Stopped after ${clock(took)}`, input: run.input, took, jobs: ids, ...as });
+        return close();
+      }
+      // (what each job gave, as one digest - its log and every file it wrote: kept with the run, and one taken up again
+      //  checked by it)
+      const digests = await Promise.all(run.jobs.map((j, k) => (!records[k] || lost[k] ? null : jobDigest(j.id).catch(() => null))));
+      // (outputs Meno cannot account for - a job whose key is not the one it was asked for with, one taken up again
+      //  whose files changed since they were read, or one it took up that this run did not start nor took up again -
+      //  stop the step, naming them: nothing comes in)
+      const unaccounted = run.jobs.flatMap((j, k) => {
+        const r = records[k];
+        if (!r || lost[k] || run.adopted?.[j.id] != null) return [];
+        if (unrecorded[k]) return [{ id: j.id, why: "its folder has no record of how it ran" }];
+        if (j.key && r.key !== j.key) return [{ id: j.id, why: "its key is not the one it was asked for with" }];
+        if (j.reused && j.gave && digests[k] !== j.gave) return [{ id: j.id, why: "its files have changed since they were read" }];
+        if (!j.reused && r.created < run.at - STARTED_BEFORE_MS) return [{ id: j.id, why: "made before this run began" }];
+        return [];
+      });
+      if (unaccounted.length) {
+        const said = `Output Meno cannot account for: ${unaccounted.map((u) => `${u.id} (${u.why})`).join("; ")}`;
+        bringIn(id, [], "molecules", { at: run.at, ok: false, said, input: run.input, took, jobs: ids, unaccounted: unaccounted.map((u) => u.id), held: run, ...as });
         return close();
       }
       // (Render's: pictures, beside the step - no set)
@@ -1158,7 +1241,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       // (those its plugin would not prepare a job for: refused, each with why - the others run)
       for (const r of run.refused ?? []) fails([entries[r.entry]], r.kind, r.why);
       const client = plugin ? await pluginClient(plugin).catch(() => null) : null;
+      // (where each job's results begin among those worked: those of a job adopted marked so, below)
+      const begins: { from: number; adopted?: number }[] = [];
       for (const [k, j] of run.jobs.entries()) {
+        begins.push({ from: worked.length, ...(run.adopted?.[j.id] != null ? { adopted: run.adopted[j.id] } : {}) });
         const mine = j.entries.map((i) => entries[i]);
         if (lost[k]) {
           fails(mine, "stopped", "It stopped without finishing");
@@ -1200,7 +1286,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         }
         let said;
         try {
-          said = readCollected(await client.collect(kind, mine.map(pluginEntry), run.options, files, log, record.state), mine.length);
+          // (a folder with no record, adopted: read as one that ran to its end - the chemist took what it holds)
+          said = readCollected(await client.collect(kind, mine.map(pluginEntry), run.options, files, log, unrecorded[k] ? "done" : record.state), mine.length);
         } catch (e) {
           // (its plugin refused what it was given, or what came back)
           fails(mine, "refused", message(e));
@@ -1259,6 +1346,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           gave(mine[i], kind === "conformers" ? conformersWorked(mine[i], out, readers, log ? source : undefined) : workedOf(kind, mine[i], out, readers, log ? source : undefined));
         }
       }
+      // (what a job adopted gave says so in its calculation, wherever that is shown: never taken for checked)
+      begins.forEach((b, k) => {
+        if (b.adopted == null) return;
+        for (let w = b.from; w < (begins[k + 1]?.from ?? worked.length); w++) {
+          const c = worked[w].calc;
+          if (c) worked[w] = { ...worked[w], calc: { ...c, adopted: b.adopted } };
+        }
+      });
       // (done where anything was: those it could not do go out of its Failed exit, counted by why, and what follows
       //  runs on what was done - failed only where nothing was, saying why in the program's own words)
       const ok = worked.length > 0;
@@ -1268,15 +1363,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ? `${clock(took)} \u00b7 ${worked.length} conformer${worked.length === 1 ? "" : "s"}${total > 1 ? ` of ${total} compounds` : ""}`
           : doneSaid(worked, total, took);
       const warned = worked.filter((w) => w.calc?.warnings?.length).length;
+      // (jobs whose key ran to the end before: not run again, what they gave taken up again - said, counted)
+      const again = run.jobs.filter((j) => j.reused).length;
+      const took_up = run.adopted ? Object.keys(run.adopted).length : 0;
       // (one that came in and failed: its why alone; what Settings kept off said after, as it was)
       const said = `${
         !ok && failures.length && total === 1
           ? failures[0].why
           : [...(ok ? [found] : []), ...(failures.length ? [failuresSaid(failures, total)] : []), ...(!ok && failures.length ? [failures[0].why] : []), ...(warned ? [`${warned} with warnings`] : [])].join(" \u00b7 ")
-      }${run.over ? ` \u00b7 ${run.over}` : ""}`;
+      }${again ? ` \u00b7 ${again === run.jobs.length ? "Reused" : `${again} reused`}` : ""}${took_up ? ` \u00b7 ${took_up} adopted` : ""}${run.over ? ` \u00b7 ${run.over}` : ""}`;
+      const keys = run.jobs.every((j) => j.key) ? { keys: run.jobs.map((j) => j.key!), gave: digests } : {};
+      // (jobs adopted: taken as its result, with when - said, so that what came of them is never taken for checked)
+      const adopted = run.adopted && Object.keys(run.adopted).length ? { adopted: run.adopted } : {};
       const gives = givesFor(kind, holds ?? "molecules");
       // (refused, and its run closed as any other)
-      if (gives) bringIn(id, worked, gives, { at: run.at, ok, said, input: run.input, took, jobs: ids, ...as }, failedOnes);
+      if (gives) bringIn(id, worked, gives, { at: run.at, ok, said, input: run.input, took, jobs: ids, ...keys, ...adopted, ...as }, failedOnes);
       else fail(id, ON_DRAWN, run.at, run.input);
       close();
     } catch (e) {
@@ -1469,28 +1570,33 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return showFilesSaid(differs, notHad);
     },
     lookAtJobs,
-    /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */
+    /**
+     * A job whose output Meno could not account for, adopted by the
+     * chemist: taken as the step's result, recorded with when - its run
+     * taken up again as it stood, every other job checked as before.
+     */
+    adoptJob: async (id: number, job: string) => {
+      const step = stepOf(doc.getState(), id);
+      const held = step?.ran?.held;
+      if (!held || !step?.ran?.unaccounted?.includes(job)) return;
+      doc.amend((x) => setRunning(x, id, { ...held, adopted: { ...(held.adopted ?? {}), [job]: Date.now() } }), { unsaved: true });
+      await finishStep(id);
+    },
+    /** Whether a step's last run's jobs are kept still: not those taken away as the step went while they were being started. */
     jobsKept: (step: { ran?: StepRan }) => (step.ran?.jobs ?? []).some((j) => !forgotten.has(j)),
-    /** A step deleted: its jobs stopped, and their files taken away once they have ended - those of every run it keeps, not its last alone - and those waiting for its run let go, as when it is stopped. */
+    /**
+     * A step deleted: the jobs of its run stopped, and those waiting for its
+     * run let go, as when it is stopped. No job's folder is taken away with
+     * it: another step may have taken a job up again, and a copy of the
+     * workspace saved elsewhere names the same jobs - their folders go when
+     * finished jobs are cleared (Settings, *Calculations*, *Jobs*).
+     */
     forgetJobs: (step: { id: number; running?: { jobs: StepJob[] }; ran?: StepRan; runs?: readonly StepRan[] }) => {
       // (not left to the next look at the jobs: where it was the only step running, there is none)
       const waiting = waiters.get(step.id) ?? [];
       waiters.delete(step.id);
       waiting.forEach((f) => f());
-      const jobs = [...new Set([...(step.running?.jobs.map((j) => j.id) ?? []), ...(step.ran?.jobs ?? []), ...(step.runs ?? []).flatMap((r) => r.jobs ?? [])])];
-      for (const job of jobs) {
-        forgotten.add(job);
-        void (async () => {
-          await stopJob(job).catch(() => {});
-          const until = Date.now() + STOP_WAIT_MS;
-          while (Date.now() < until) {
-            const r = await jobOf(job).catch(() => null);
-            if (!r || finished(r.state)) break;
-            await new Promise((go) => setTimeout(go, 500));
-          }
-          await removeJob(job).catch(() => {});
-        })();
-      }
+      for (const j of step.running?.jobs ?? []) if (!j.reused) void stopJob(j.id).catch(() => {});
     },
   };
 }

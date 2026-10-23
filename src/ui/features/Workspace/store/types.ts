@@ -761,21 +761,24 @@ export type Member = { structure: number[]; record?: DrawnRecord } | { molecule:
  * *R groups*, "the set carries its core"): its template's atoms but its R atoms,
  * the bonds between them, and where each R group is attached - each by its
  * place in a product's atoms, the same in every product - so that what
- * comes after can line them up exactly.
+ * comes after can line them up exactly. By substituents, the template's
+ * atoms but the drawn H's chosen, and each position (P1, P2) by the atom
+ * its group is bonded to.
  */
 export type SeriesCore = { atoms: number[]; bonds: [number, number][]; attach: Record<string, number[]> };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
  * and, where it ran jobs, whether it was stopped, how long it took (ms), and
- * its jobs, by id, whose logs and files are kept until the step is deleted;
+ * its jobs, by id, whose logs and files are kept until finished jobs are cleared;
  * and the kind and options it ran with.
  */
 /**
  * What a step did when it ran: when, whether it did, what it said, what came
  * in (`inputKey`), whether it was stopped and how long it took, its jobs, and
- * its kind and options then - and whether the chemist keeps it
- * (`keep`: docs/WORKFLOWS.md, *Earlier runs*), never dropped while kept;
+ * its kind and options then, its jobs' keys and what they gave - and
+ * whether the chemist keeps it (`keep`: docs/WORKFLOWS.md, *Earlier runs*),
+ * never dropped while kept;
  * and what a workspace's file kept of its jobs (`kept`).
  */
 export type StepRan = {
@@ -786,6 +789,15 @@ export type StepRan = {
   stopped?: true;
   took?: number;
   jobs?: string[];
+  /** Its jobs' keys, one for each of `jobs` (lib/jobKeys): what a later run finds a job to take up again by. */
+  keys?: string[];
+  /** What each of `jobs` gave as it was read, as one digest (lib/jobs `jobDigest`) - none where it was not read: a job taken up again must give the same. */
+  gave?: (string | null)[];
+  /** Stopped on output Meno cannot account for: the jobs it could not, by id, and the run as it stood - for *Adopt* to take up again. */
+  unaccounted?: string[];
+  held?: StepRunning;
+  /** The jobs whose output the chemist adopted, by id, with when (ms since 1970): taken as the step's result though Meno could not account for it. */
+  adopted?: Record<string, number>;
   kind?: StepKind;
   options?: OptionValues;
   /** What a workspace's file kept of each of its jobs, as it was opened (workflow/keptJobs): written afresh each save from the jobs' folders where they are on this computer. */
@@ -827,7 +839,18 @@ export type RunKeptResults = {
  * plugin reads back once it is done.
  */
 /** A job of a step's run: its id, the entries it is for, the files it reads back - and, a Render's, the size its picture takes on the page. */
-export type StepJob = { id: string; entries: number[]; reads: string[]; size?: [number, number] };
+export type StepJob = {
+  id: string;
+  entries: number[];
+  reads: string[];
+  size?: [number, number];
+  /** Its key (lib/jobKeys): what it runs and the versions of what runs it. */
+  key?: string;
+  /** A job whose key this workspace had run to the end before: not run again, what it gave taken up again. */
+  reused?: true;
+  /** A job taken up again: what it gave when it was first read, as one digest - what it gives now must be the same. */
+  gave?: string;
+};
 /**
  * A step's run while its jobs wait or run (docs/WORKFLOWS.md, *Running*):
  * when it started, what came into it (`inputKey`), its options as they
@@ -840,6 +863,8 @@ export type StepRunning = {
   options: OptionValues;
   jobs: StepJob[];
   kind?: StepKind;
+  /** The jobs whose output the chemist adopted, by id, with when: not checked again as it is taken up. */
+  adopted?: Record<string, number>;
   /** Where some of its jobs ask for more than Settings lets jobs use, though no more than the computer has: said, in plain words: nothing else that declares memory runs beside one. */
   over?: string;
   /** The entries its plugin refused as it prepared the others' jobs: each by its place among those that came in, and why - out of its Failed exit when it ends. */
@@ -867,7 +892,7 @@ export type WireTo = { step: number; port: string };
 /** A wire, from the set that gives to the input that takes it. */
 export type Wire = { id: number; from: WireEnd; to: WireTo };
 /** What of a workflow is the view's, not the document's. */
-export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
+export type WorkflowView = "hoveredSet" | "chosenSet" | "hoveredStep" | "hoveredWire" | "openStep" | "choosingAtoms" | "wireDrag" | "wireRefused" | "workflowMenu" | "askDeleteStep" | "askDeleteSet";
 /**
  * A job of a step's, as last looked at (lib/jobs): where it is, when it
  * was asked for, started and ended; its place among those waiting, where it
@@ -1527,6 +1552,8 @@ export type EditorState = {
   hoveredStep: number | null;
   hoveredWire: number | null;
   openStep: number | null;
+  /** A step's atoms being chosen on the drawing - Enumerate's positions: a click on an atom takes it into the step's option, or out of it (`AtomsOption`). */
+  choosingAtoms: { step: number; option: string } | null;
   /** A set's tab or a step's card right-clicked: its menu asked for, there (Workspace opens it). */
   workflowMenu: { kind: "set" | "step"; id: number; clientX: number; clientY: number } | null;
   /**
@@ -1545,9 +1572,9 @@ export type EditorState = {
    * document as saved as it was - the look is Settings', not the document's.
    */
   fitResultSets: () => void;
-  /** A step's jobs forgotten, as it is deleted: stopped, and their folders taken away; its run ended. */
+  /** A step's jobs forgotten, as it is deleted: those running stopped, its run ended - no folder taken away (another step, or a copy of the workspace, may use it). */
   forgetStepJobs: (step: Pick<WorkflowStep, "id" | "running" | "ran" | "runs">) => void;
-  /** Whether a step's last run's jobs are kept still - not taken away with it, deleted, and back by an undo. */
+  /** Whether a step's last run's jobs are kept still - not those of jobs taken away as the step went before they ran. */
   jobsKept: (step: Pick<WorkflowStep, "ran">) => boolean;
   /** A set round `frame`, as one step; its id. */
   /** Molecules in 3D put on the page as a set of their own, named `name`, its middle at `at` or the free space nearest it: one step. */
@@ -1575,6 +1602,7 @@ export type EditorState = {
   moveStep: (id: number, x: number, y: number, gesture?: string) => void;
   /** A step's options changed - its own, the defaults left as they are - or its kind, to another who does it fills. */
   updateStep: (id: number, patch: { options?: OptionValues; kind?: StepKind }) => void;
+  chooseAtom: (atom: number) => void;
   /** A step deleted - its jobs stopped and their files taken away; one running, only once asked about (`askDeleteStep`), `asked`. */
   removeStep: (id: number, asked?: boolean) => void;
   /** A running step asked to be deleted: the question asked (Workspace). */
@@ -1616,6 +1644,8 @@ export type EditorState = {
   /** The folder of a step's last job shown where the system shows files. */
   /** A step's job's files shown - written back out first, where its folder is not on this computer: what is said of those not written back, if anything. */
   showStepFiles: (id: number) => Promise<string | null | void>;
+  /** A job whose output Meno could not account for, adopted: taken as the step's result, recorded with when. */
+  adoptJob: (id: number, job: string) => Promise<void>;
   /** The jobs of the steps that have any looked at: where each is, and, those that have all ended, their results brought in. */
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */

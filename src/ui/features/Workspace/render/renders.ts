@@ -241,7 +241,7 @@ export async function startRender(store: EditorStore, ids: readonly number[], as
     if (p.files.some((f) => f.name === SCENE)) return fail("It prepared a job Meno cannot run");
     if (gone()) return renders.setState((s) => ({ list: s.list.filter((r) => r.key !== key) }));
     const path = paths.get(p.program);
-    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}) });
+    job = await startJob({ plugin: plugin.id, program: p.program, args: p.args, files: [...p.files, { name: SCENE, text: rendered.gltf }], cores, ...(path ? { path } : {}), label: ask.kind === "film" ? "Film" : "Picture" });
   } catch (e) {
     return fail(message(e));
   }

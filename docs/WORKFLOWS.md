@@ -283,7 +283,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
-| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing; one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them), or - as the option says - all that leave stereo open |
+| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing; one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
 | Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
@@ -801,7 +801,8 @@ states an undo goes back to as well.
   each an undo step, as anything drawn.
 - A run is not undone. Its results coming in is one step: an undo takes
   them away (the step shows its earlier run, or none), a redo brings them
-  back. The job's files stay until the step is deleted.
+  back. The job's files stay until finished jobs are cleared (*Settings,
+  Calculations, Jobs*).
 - Deleting a step that is running asks first; it stops it. So does an
   undo, or a redo, that would take a running step away (the step made, a
   delete undone and the step run again): it asks the same; answered yes,
@@ -897,8 +898,12 @@ states an undo goes back to as well.
 - **A job's folder** is in Meno's data folder (`jobs/<id>/`; decided):
   its input, its log, its outputs, Meno's record of it. *Show files*
   opens it. Its outputs are kept in the workspace when they come in; the
-  folder goes when its step is deleted, or by *Settings, Calculations,
-  Clear finished jobs' files*.
+  folder goes by *Settings, Calculations, Clear finished jobs' files* - not
+  with its step, deleted: another step may have taken its job up again,
+  and a copy of the workspace saved elsewhere names the same jobs. Two
+  take their own folders away: a Render job, once its picture is on the
+  page, and a job started for a step deleted before its run began - none
+  of them taken up again from another run.
 - **A saved workspace keeps its jobs' files**, raw outputs included,
   unless the step says *Don't keep raw outputs*; opened elsewhere, *Show
   files* writes them back out (docs/FILE-IO.md, *A step's jobs*).
@@ -1134,10 +1139,11 @@ Decided while building it, for the maintainer to confirm:
   with nothing unsaved says nothing: there is nowhere left to say it.
 - **Deleting a running step asks first** - and so does an undo or a redo
   that would take one away (*Undo*); deleted, a step's jobs are
-  stopped and their folders taken away. Undone, the step comes back
-  without them; its results keep its logs. Deleted while its jobs are
-  still being started (a long conformer set, Run just pressed), it starts
-  no more, and those it started are stopped and taken away the same.
+  stopped, their folders left until finished jobs are cleared. Undone, the
+  step comes back stopped; its results keep its logs. Deleted while its
+  jobs are still being started (a long conformer set, Run just pressed), it
+  starts no more, and those it started - in no workspace yet - are stopped
+  and taken away.
 - **Failed entries are counted as entries**: a job for several entries
   that failed counts each of them (*2 of 3 failed*), and where its runner
   said why (*xtb could not be started*) that is the reason given.
@@ -1700,10 +1706,115 @@ run*):
   as it looks for a waiting job's turn.
 - **A plugin declares a job's memory** (`prepare`: `memory`, in MiB).
 
-Not yet, in the seam's second part: the working folder chosen in
-Settings, path-safe folder names from the workspace's, step's and
-entry's, *Open the folder*, and job folders cleaned once their files are
-in the `.meno` unless *Keep job folders* is chosen.
+Its second part:
+
+- **Where jobs run** is chosen in Settings, *Calculations*, *Jobs*: Meno's
+  own folder, or a working folder the chemist chooses, in which Meno makes
+  a `meno-jobs` of its own. It is changed only while no job waits or runs,
+  so that one queue never spans two folders; jobs made in the folder before
+  are still found and read. Meno keeps the choice in its own data folder,
+  and a runner reads it there - it takes a job only from one of those
+  folders, never from where it is told.
+- **A job's folder is named by what it is**, path-safe: its entry's name
+  and its step's, small ASCII letters, digits and hyphens only, and eight
+  characters of an id of its own (`water-optimise-3f9a2c1d`) - a name in
+  Japanese or with spaces gives what ASCII it has, or *job*. Jobs made
+  before, named by a UUID alone, are still read.
+- **A folder chosen and not there** - a drive not connected, a network
+  folder away - is still the one chosen: no job is made in Meno's own
+  instead. A step run then fails, saying so, and Settings says so beside
+  the folder, until it is there again or another is chosen.
+- **A folder on the computer's own disk** is advised, in Settings: a
+  network or synced folder may not keep a file's lock, nor move a file
+  whole, as a job's record and its queue need, and a sync may bring back
+  or take away a job's files as it runs.
+- **Clearing finished jobs takes only folders named as Meno names jobs**:
+  whatever else is in the folder chosen is left as it is.
+- **A folder others can write in** lets them put a folder there that looks
+  like one of Meno's jobs. A runner takes nothing from it that Meno did not
+  ask for (a job's program, arguments and environment are checked against
+  what Meno would give it), and output Meno cannot account for stops its
+  step (*Job keys*); still, choose a folder only you write in.
+
+Not yet: job folders cleaned once their files are in the `.meno` unless
+*Keep job folders* is chosen (that waits for raw outputs kept in the
+`.meno`, #9b); *Show files*, on a step's menu, opens a job's folder, and
+an entry's menu does not yet.
+
+### Job keys, and a job taken up again (2026-10-22)
+
+Foundation PR 9a, its first part (WORKFLOWS-FOUNDATION.md, *A job's key*;
+question N):
+
+- **A job's key** is the SHA-256 of what it runs - its input files, its
+  program and arguments, what it reads as its input, the programs run
+  after it - and of its plugin's version and its program's (`lib/jobKeys`):
+  the version a program installed separately says, else what the plugin's
+  worker says it runs. Its files in any order give the same key; any byte
+  changed, another. The cores a job is given are in its input where its
+  program is told them there (ORCA's %pal, Gaussian's %NProcShared, xTB's
+  `-P`), so a job given other cores is another job.
+- **A program installed separately is in the key as it is now**: where it
+  is, its size and when it was written (jobs.rs `stamp_of`) - one replaced,
+  though it says the same version, or says none, gives another key. Where
+  that cannot be told, the job runs, and none is taken up again. The key
+  is hashed by the browser's own SHA-256, off Meno's way: a job's input
+  may be a wavefunction of many MB.
+- **Not in the key**: the environment Meno gives a job - the same for
+  every job, but for the threads its program is told (`OMP_NUM_THREADS`
+  and the like, from *Cores for each job*), which change no result beyond
+  the last digits, the order sums are taken in. A program that takes no
+  seed, or one Meno does not give it - a conformer search, an embedding -
+  gives another result each run: taken up again, a key gives the result of
+  the run it was first run for, not one of the others it might have given.
+- **Same key, same result.** A job whose key this workspace has run to the
+  end - in any step's last run, or one it keeps - is not run again while
+  its runner still has it: what it gave is taken up again, and the step's
+  line says so (*Reused*, or *2 reused*). Only within one workspace: no
+  cache on the computer decides what runs. Its folder cleared since, it is
+  run again.
+- **A step deleted takes no job's folder away**: another step's run may
+  have taken one up again, and a copy of the workspace saved elsewhere
+  names the same jobs. Their folders go when finished jobs are cleared.
+  (A Render job takes its own away once its picture is on the page; so
+  does a job started for a step deleted before its run began - never one
+  taken up again.)
+- **What a job gave is kept as one digest**: the SHA-256 of its log and of
+  every file in its folder, each by its name, read as its run is brought
+  in (jobs.rs `digest_of`), and kept with the run beside its key. The
+  files the system writes as a folder is looked at - `.DS_Store` and `._`
+  files, `Thumbs.db`, `desktop.ini` - are left out: *Show files* never
+  makes a job one Meno cannot account for. Each check reads the outputs
+  in full, streamed through the hash - a run's wavefunctions and cube
+  files, of hundreds of MB, as it is brought in and as it is taken up
+  again: nothing less says they are the same. A job is
+  taken up again only where its digest was kept, and what it gives then
+  must be the same: its files changed since - written over, added to, or
+  taken away - stop the step (*its files have changed since they were
+  read*), as other output Meno cannot account for does.
+- Kept with the workspace: each run's jobs' keys and digests, one for each
+  job.
+
+- **Output Meno cannot account for stops the step**, naming each job and
+  why, and nothing comes in: a job whose key is not the one it was asked
+  for with (its folder holds another job's), or one the run neither
+  started nor took up again - made more than a minute before the run
+  began. Each job keeps its key with it (`job.json`).
+
+- **Adopt**, on the step's menu, one item for each such job (*Adopt
+  water-optimise-3f9a2c1d*): that job's output taken as the step's result
+  on purpose, recorded with when, the run taken up again as it stood - any
+  other such job still stops it. The step's line then says so (*2
+  adopted*), and its run keeps each job adopted with when; all of it kept
+  with the workspace.
+
+  What an adopted job gave says so in its calculation (`adopted`, with
+  when), so its line begins *adopted output* wherever it is shown.
+
+- **A job's folder found without its record** - what it was to run, but
+  nothing of how it ran - is output Meno cannot account for too, not a job
+  gone: it stops the step (*its folder has no record of how it ran*), and,
+  adopted, is read as a job that ran to its end.
 
 ### Failed entries (2026-10-22)
 
@@ -1968,6 +2079,24 @@ the build settled:
     product edited by hand afterwards can leave them out of step; nothing
     reads the core yet.
   - *Substituent swap* and *Scaffold swap* come after.
+
+### Enumerate: substituents (as built, 2026-10-23)
+
+As WORKFLOWS-FOUNDATION.md specifies (*Enumerate*, *Substituent swap*).
+*By* on the step chooses the way: R groups (the default) or Substituents, and
+the card shows only that way's options (`Option.when`).
+- **`workflow/substituents.ts`** reads the groups (`readGroups`, each line by
+  `readOption`, as an R list's) and the positions (`positionsOf`: by the
+  template's atom order, each named by its atom, with every reason that stops
+  it). `substituted` makes each combination by putting an R atom at each
+  position given a group and handing it to R groups' `joined`, so there is one
+  join, one numbering and one identity for both ways. At a heavy atom the R
+  goes where `calculateNewBondPosition` (the canvas's extend gesture) puts a
+  new bond with no pointer to follow; a drawn H is made the R in place.
+- **Positions are an `atoms` option**: the chosen atoms' ids, never
+  remembered for another step (`rememberable`), and not shown in Settings.
+- **The valence checks** ask about each group as they ask about each R
+  option (`valenceFlagged`, by way).
 
 ### Tables (2026-10-22)
 
