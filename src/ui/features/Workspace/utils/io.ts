@@ -85,7 +85,16 @@ export async function processFileContent(
   // of it left out, said in the corner
   const read = await readStructureFile(filename, content, kind);
   if (read.recordsLeftOut?.length) useNotices.getState().show({ id: `left-out ${name}`, title: "Part of the file left out", text: recordsLeftOutSaid(name, read.recordsLeftOut) });
-  return stackedRead(read);
+  if (read.itemsNotTaken?.length) useNotices.getState().show({ id: `not-taken ${name}`, title: "Part of the file not taken", text: itemsNotTakenSaid(name, read.itemsNotTaken) });
+  const { itemsNotTaken: _, ...rest } = read;
+  return stackedRead(rest);
+}
+
+/** What is said of the data items of file `name` not taken as it was read (lib/io/structures `itemsNotTaken`): each by its record, its name and why - five at most, then how many more. */
+export function itemsNotTakenSaid(name: string, left: readonly { record: number; item: string; why: string }[]): string {
+  const said = left.slice(0, 5).map((r) => `Record ${r.record}'s ${r.item}: ${r.why}, so it was not taken.`);
+  const more = left.length > 5 ? [`${left.length - 5} more ${left.length - 5 === 1 ? "was" : "were"} not taken either.`] : [];
+  return [...said, ...more, `The rest of ${name} opened.`].join(" ");
 }
 
 /** What is said of the records of file `name` left out as it was read (lib/io/structures `recordsLeftOut`): each by its number and why - five at most, then how many more. */

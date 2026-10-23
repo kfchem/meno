@@ -702,7 +702,17 @@ As this part of step 5 was built (#155, from main beside step 3):
     offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
-    (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
+    (`> <Energy (Eh)>`). Beside it: why a frame did not finish
+    (`> <Failed>`); the charge and spin multiplicity every step is told -
+    what it was given, by a calculation or the chemist, else what its atoms
+    say - (`> <Charge>`, `> <Multiplicity>`; none of a skeleton); and its
+    imaginary frequencies in cm-1 as its calculation gave them
+    (`> <Imaginary frequencies (cm-1)>`), `none` where its vibrations were
+    worked out and it has none, the item left out where they were not.
+    Opened again, an SD file's `Charge` and `Multiplicity` are what a
+    molecule in 3D was given, its atom block as it is; one that is not a
+    whole number (a multiplicity, one or more) is not taken, and named.
+    Each keeps its atoms' charges, radicals and
     isotopes, as a copy's MOL file does (docs/CTFILE.md). Each frame - the
     one shown, or every one - is written with the bonds it has, as the
     page shows them: a trajectory's bonds, found from distances, form and

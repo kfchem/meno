@@ -41,7 +41,7 @@ import { pictureSurface } from "./utils/surfaceMesh";
 import { chemistry } from "../../../lib/chem/molecule";
 import { schemePieces } from "../../../lib/chem/reactionScheme";
 import type { OptionValues } from "../../../lib/options";
-import { extensionOf, type Writer, type WriterId } from "../../../lib/io/writers";
+import { extensionOf, SD_CHARGE, SD_IMAGINARY, SD_MULTIPLICITY, speciesOf, type Writer, type WriterId } from "../../../lib/io/writers";
 import { pluginById } from "../../../lib/calc/catalog";
 import { readerClient } from "../../../lib/calc/workers";
 import { writtenAtoms, writtenOf } from "./utils/written";
@@ -216,13 +216,18 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     // (each frame's energy, where it is known: the frame shown's too)
     // (and, beside it, where the frame did not finish - it failed, or its marks did not read - why, so that no reader takes the value for a result)
     const n = 1 + (m.frames?.length ?? 0);
+    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
+    const skeleton = isSkeleton(m);
     const data = (i: number) => {
       const energy = m.energies?.[i];
       const failed = m.marksUnread ? "its marks of which frames failed could not be read" : m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
-      return (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") + (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "");
+      return (
+        (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") +
+        (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "") +
+        speciesData(m, i, skeleton) +
+        imaginaryData(m, i, n)
+      );
     };
-    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
-    const skeleton = isSkeleton(m);
     const atomsOf = (i: number | undefined) => (skeleton ? frameAtoms(m, i).map((a) => ({ ...a, noImplicitH: true })) : frameAtoms(m, i));
     if (options.frames !== "all") return [writeMolfile3d(atomsOf(m.frame), bondsAt(m, m.frame), { title: name, version }) + data(m.frame ?? 0) + "$$$$\n"];
     const frames = 1 + (m.frames ?? []).filter((f) => f.length === 3 * m.atoms.length).length;
@@ -237,6 +242,35 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
     stacked.map((r) => writeSdf(forFlatReaders(r.model), { title: r.title ?? title, version })).join("") +
     records.join("")
   );
+}
+
+/**
+ * A frame's charge and spin multiplicity as an SD file's data items: those
+ * every step is told (lib/io/writers `speciesOf`) - what it was given, by a
+ * calculation or by the chemist, else what its atoms say - so that a reader
+ * takes the species it is, which its atom block alone may not say (a
+ * radical cation read back from a calculation: its atoms carry no charge).
+ * None of a skeleton, whose atoms say neither.
+ */
+function speciesData(m: Carried3D, i: number, skeleton: boolean): string {
+  const s = speciesOf(
+    { atoms: frameAtoms(m, i).map((a, k) => ({ ...a, ...(m.atoms[k].radical ? { radical: m.atoms[k].radical } : {}) })), bonds: m.bonds, ...(skeleton ? { skeleton: true } : {}) },
+    { charge: m.calc?.charge, multiplicity: m.calc?.multiplicity },
+  );
+  return s ? `> <${SD_CHARGE}>\n${s.charge}\n\n> <${SD_MULTIPLICITY}>\n${s.multiplicity}\n\n` : "";
+}
+
+/**
+ * A frame's imaginary frequencies as an SD file's data item, in cm-1 as its
+ * calculation gave them (workflow/entries `imaginaryOf`): each, where it was
+ * judged to have any; "none", where its vibrations were worked out and it
+ * has none; left out where they were not worked out - never "none" for not known.
+ */
+function imaginaryData(m: Carried3D, i: number, n: number): string {
+  const own = m.imaginary?.length === n ? m.imaginary[i] : i === n - 1 ? m.calc?.imaginary : undefined;
+  if (own?.length) return `> <${SD_IMAGINARY}>\n${own.join(" ")}\n\n`;
+  const computed = i === n - 1 && m.imaginary?.length !== n && m.calc?.results?.some((r) => r.on === "list" && r.id === "vibrations");
+  return computed ? `> <${SD_IMAGINARY}>\nnone\n\n` : "";
 }
 
 /**
