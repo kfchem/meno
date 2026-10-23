@@ -24,14 +24,14 @@ import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, recordNumber, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { cappedSaid } from "../../workflow/sameConformer";
-import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
+import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
-import { energiesBy, inputEntries, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
+import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { runMenoDrawn, runMenoInTurns } from "../../workflow/meno";
 import { valenceFlagged } from "../../workflow/enumerateChecks";
 import { perceiveStereo } from "../../workflow/configurations";
@@ -138,27 +138,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     return prior != null ? stepOf(d, prior) : undefined;
   };
 
-  /**
-   * The steps to run to run `id`, in order: the furthest back before it
-   * that has not run, has changed, failed, stopped or is running - however many done
-   * lie between - and every step from it to `id`, which take anew what it
-   * gives.
-   */
-  const chainTo = (d: WorkspaceDocument, id: number): number[] => {
-    const back = stepsBefore(d, id).slice(0, 200);
-    let far = -1;
-    back.forEach((sid, k) => {
-      const s = stepOf(d, sid);
-      if (s && (s.running || stateOf(d, s, byOf(s)) !== "done")) far = k;
-    });
-    return [...back.slice(0, far + 1).reverse(), id];
-  };
 
   /** A step that could not run, said so - with what it was to run as. */
   const fail = (id: number, said: string, at: number, input: string) =>
     doc.edit("run", (d) => {
       const step = stepOf(d, id);
-      return step ? setRan(keepRun(d, step), id, { at, ok: false, said, input, kind: step.kind, ...(step.options ? { options: step.options } : {}) }) : d;
+      // (a run that could not start: nothing it did, so nothing dropped for it)
+      return step ? setRan(keepRun(d, step, false), id, { at, ok: false, said, input, kind: step.kind, ...(step.options ? { options: step.options } : {}) }) : d;
     });
 
   /** One step run: Meno's at once; a plugin's in its worker, or as jobs. */
@@ -398,25 +384,6 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     });
   }
 
-  /** The steps after a step: those that take what it gives, and those after them. */
-  const after = (d: WorkspaceDocument, id: number): number[] => {
-    const out: number[] = [];
-    const seen = new Set([id]);
-    const queue = [id];
-    while (queue.length) {
-      const at = queue.shift()!;
-      // (every exit's set: what any of them gives comes down to the steps wired from it)
-      const made = new Set((d.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
-      for (const wire of d.wires ?? []) {
-        if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
-          seen.add(wire.to.step);
-          out.push(wire.to.step);
-          queue.push(wire.to.step);
-        }
-      }
-    }
-    return out;
-  };
 
   /**
    * Steps run (docs/WORKFLOWS.md, *Starting and stopping*): each, and first
@@ -1391,13 +1358,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     jobsSeen: {} as Record<string, JobSeen>,
     menoWorking: {} as Record<number, { since: number; done: number; total: number }>,
     runStep: (id: number) => runSteps([id]),
-    runFrom: (id: number) => runSteps([id, ...after(doc.getState(), id)]),
-    runAll: () => {
-      const d = doc.getState();
-      // (every step that is not done - not run, changed, failed or stopped - or is running; one with nothing coming in left as it is - and every step after one, which takes anew what it gives)
-      const stale = (d.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(d, s, byOf(s)))).map((s) => s.id);
-      return runSteps([...new Set(stale.flatMap((id) => [id, ...after(d, id)]))]);
-    },
+    runFrom: (id: number) => runSteps([id, ...stepsAfter(doc.getState(), id)]),
+    runAll: () => runSteps(allToRun(doc.getState())),
     stopStep: (id: number) => {
       if (get().menoWorking[id]) menoStops.add(id);
       menoKills.get(id)?.();
@@ -1410,6 +1372,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const s of doc.getState().steps ?? []) for (const j of s.running?.jobs ?? []) void stopJob(j.id).catch(() => {});
       void lookAtJobs();
     },
+    keepRunOf: (id: number, index: number, keep: boolean) => doc.edit(keep ? "keep run" : "keep run no longer", (x) => keptRun(x, id, index, keep)),
     showRun: (id: number, index: number) => {
       const was = new Set((doc.getState().molecules3d ?? []).map((m) => m.id));
       let turns: (Turn3D | undefined)[] | undefined;

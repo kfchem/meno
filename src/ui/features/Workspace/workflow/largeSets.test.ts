@@ -194,9 +194,9 @@ describe("a large result set (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*)"
   });
 
   it("counts the molecules of an earlier run kept that do not read from a file, says so on the card's row, and in the set once it is shown again", () => {
-    // (a run of 3 on the page and one of 60 held, each kept as the step runs again)
+    // (a run of 3 on the page, kept by choice, and one of 60 held, the run before the last: both kept as the step runs again)
     let d = ran(waters(3));
-    d = setRan(d, d.steps![0].id, { at: 1, ok: true, said: "3 optimised", input: "a" });
+    d = setRan(d, d.steps![0].id, { at: 1, ok: true, said: "3 optimised", input: "a", keep: true });
     d = keepRun(d, d.steps![0]);
     d = ran(waters(60), "molecules", d);
     d = setRan(d, d.steps![0].id, { at: 2, ok: true, said: "60 optimised", input: "b" });

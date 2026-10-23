@@ -456,6 +456,15 @@ export type Molecule3D = {
   bondOrders?: "unknown" | "perceived" | "assigned" | "dictionary" | "estimated";
   /** Whole without hydrogens, as the chemist has said of a molecule Meno took for a skeleton (lib/chem/skeleton): it has none to add. */
   wholeWithoutH?: true;
+  /**
+   * The hydrogens its file left out, added - each part's (all of it; for a
+   * PDB entry, a ligand's), by its atoms then: as the chemist chose how it
+   * is protonated ("chosen"), or as the CCD defines them ("dictionary").
+   * Said over it, as they were not in its file (utils/completeness).
+   */
+  hydrogensAdded?: { by: "chosen" | "dictionary"; atoms: number[] }[];
+  /** Where a PDB entry's ligands' bond orders, and their charges, came from, by residue: a SMILES, the CCD, an estimate from distances. */
+  ligandOrders?: Record<number, "assigned" | "dictionary" | "estimated">;
   /** The atoms of a PDB entry's ligands whose bonds' orders are still unknown, where others' were found. */
   unknownOrders?: number[];
   /** A PDB entry's chains' bond orders, given residue by residue from the Chemical Component Dictionary: every residue of its chains'. */
@@ -551,6 +560,13 @@ export type Molecule3D = {
   shares?: number[];
   /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
+  /**
+   * Each frame's properties by name, as lib/entry has them - each with its
+   * unit and what worked it out (a model's NLL, a descriptor) - where a
+   * step or a plugin gave them (docs/WORKFLOWS.md, *Filter*): what a step
+   * that works on entries reads and keeps as they were.
+   */
+  properties?: Record<string, Property>[];
   /**
    * Each frame's mirror image counted in, where Duplicates counted one in
    * (workflow/meno): the atoms the mirror image swaps - atom i of this
@@ -752,6 +768,13 @@ export type SeriesCore = { atoms: number[]; bonds: [number, number][]; attach: R
  * its jobs, by id, whose logs and files are kept until the step is deleted;
  * and the kind and options it ran with.
  */
+/**
+ * What a step did when it ran: when, whether it did, what it said, what came
+ * in (`inputKey`), whether it was stopped and how long it took, its jobs, and
+ * its kind and options then - and whether the chemist keeps it
+ * (`keep`: docs/WORKFLOWS.md, *Earlier runs*), never dropped while kept;
+ * and what a workspace's file kept of its jobs (`kept`).
+ */
 export type StepRan = {
   at: number;
   ok: boolean;
@@ -764,6 +787,8 @@ export type StepRan = {
   options?: OptionValues;
   /** What a workspace's file kept of each of its jobs, as it was opened (workflow/keptJobs): written afresh each save from the jobs' folders where they are on this computer. */
   kept?: KeptJob[];
+  /** A run the chemist keeps (docs/WORKFLOWS.md, *Earlier runs*): never dropped while kept. */
+  keep?: true;
 };
 /** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
 export type KeptJobEntry = { name: string; sha256: string; size: number; role: KeptRole };
@@ -1579,6 +1604,8 @@ export type EditorState = {
   stopStep: (id: number) => void;
   /** Every step's jobs asked to stop. */
   stopAll: () => void;
+  /** A step's run kept, or no longer (docs/WORKFLOWS.md, *Earlier runs*): the one it shows at -1, an earlier one by its place among them - one step to undo. */
+  keepRunOf: (id: number, index: number, keep: boolean) => void;
   /** An earlier run of a step shown again - its results in its result set - what it showed kept among its runs instead: one step to undo. */
   showRun: (id: number, index: number) => void;
   /** A step's logs opened in the column of texts, following its jobs while they run. */

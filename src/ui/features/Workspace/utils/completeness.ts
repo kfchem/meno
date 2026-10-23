@@ -19,6 +19,9 @@ import type { Molecule3D } from "../store/types";
 /** What a molecule says of what its file leaves out, on the canvas and in a picture of it. */
 export const NO_H_MARK = "No H in file";
 export const ORDERS_MARK = "Bond orders unknown";
+/** What a molecule says whose hydrogens, left out of its file, were added: as the chemist chose how it is protonated, or as the CCD defines them (Molecule3D `hydrogensAdded`). */
+export const ADDED_MARK = "Hydrogens added";
+export const CCD_HYDROGENS_MARK = "Hydrogens from the CCD";
 /** What a skeleton says whose orders were estimated from its atoms' distances: its formal charges only those its heavy atoms set (a nitro group's, an azide's), how it is protonated not known. */
 export const ESTIMATED_MARK = "Bond orders estimated, protonation unknown";
 /** What a molecule says of the frames its file gave that were left out as it was read (lib/io/structures): "1 frame left out", "3 frames left out". */

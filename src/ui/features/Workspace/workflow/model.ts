@@ -190,9 +190,6 @@ export function setRan(doc: WorkspaceDocument, id: number, ran: NonNullable<Work
   return withStep(doc, id, (s) => ({ ...s, ran }));
 }
 
-/** How many of a step's earlier runs it keeps. */
-export const RUNS_KEPT = 10;
-
 /** A step's earlier runs, newest first - none, where it keeps none. */
 export function withStepRuns(doc: WorkspaceDocument, id: number, runs: StepRunKept[]): WorkspaceDocument {
   return withStep(doc, id, (s) => {

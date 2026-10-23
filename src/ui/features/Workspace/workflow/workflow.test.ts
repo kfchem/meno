@@ -908,22 +908,22 @@ describe("Quick Add's calculations", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "choose", "enumerate"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate"]]]);
     // a compound set's wire: what takes it, then the conversion
-    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "as-conformers"]]]);
+    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "filter", "as-conformers"]]]);
     // a conformer set's
-    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "choose"]]]);
+    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
       ["RDKit", ["conformers", "duplicates", "check-structures", "stereoisomers", "descriptors"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "choose", "enumerate"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
       ["RDKit", ["conformers", "duplicates"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["duplicates", "as-conformers"]],
+      ["Meno", ["duplicates", "filter", "as-conformers"]],
     ]);
     // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });

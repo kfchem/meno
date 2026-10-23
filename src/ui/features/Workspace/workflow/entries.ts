@@ -555,6 +555,8 @@ export type SetEntry = {
   /** Its molecule's marks of which frames failed, or are no minimum, did not read (`Molecule3D.marksUnread`): whether it is a minimum is not known. */
   marksUnread?: true;
   name?: string;
+  /** Its properties by name, as its molecule's frame has them (`Molecule3D.properties`) - a model's, a descriptor's - each with its unit and what worked it out. */
+  properties?: Record<string, Property>;
   /** Its hydrogens not there, and not said to be whole without any (lib/chem/skeleton): given no charge or spin, and no calculation run on it. */
   skeleton?: true;
   /** Its bonds' orders, where its molecule's file gave none (Molecule3D `bondOrders`); and whether the chemist said it is whole without hydrogens: kept by what a step gives back. */
@@ -729,6 +731,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    const properties = m.properties?.length === n ? m.properties : undefined;
     // (a skeleton, its hydrogens not there: each frame of it one; and what it knows of its orders, kept with it)
     const whole = {
       ...(isSkeleton(m) ? { skeleton: true as const } : {}),
@@ -757,6 +760,7 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...whole,
         ...(m.mirrors?.length === n && m.mirrors[f] ? { mirror: m.mirrors[f]! } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
@@ -864,6 +868,31 @@ function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
   };
 }
 
+/** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name. */
+function menoProperties(e: SetEntry): Record<string, Property> {
+  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
+  const by = byOf(e.calc);
+  return {
+    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
+    number: { value: e.number, unit: "none", status: "computed" },
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+    ...thermoOf(e, at.geometry),
+    ...vibrationsOf(e, at),
+    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
+    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
+    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
+    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
+  };
+}
+
+/** The properties an entry carries of its own under names Meno gives its own (`menoProperties`), which its entry record reads as Meno's: none, mostly. */
+export function shadowedIn(e: SetEntry): string[] {
+  if (!e.properties) return [];
+  const own = menoProperties(e);
+  return Object.keys(e.properties).filter((k) => k in own);
+}
+
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
  * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
@@ -880,21 +909,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
   }));
-  // (the energy where its calculation was worked out - in the solvation it said - and by what)
-  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
-  const by = byOf(e.calc);
-  const properties: Record<string, Property> = {
-    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
-    number: { value: e.number, unit: "none", status: "computed" },
-    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
-    ...thermoOf(e, at.geometry),
-    ...vibrationsOf(e, at),
-    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
-    ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
-    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
-    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
-    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
-  };
+  // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own: `shadowedIn` names those it gave under them)
+  const properties: Record<string, Property> = { ...e.properties, ...menoProperties(e) };
   const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [], ...(e.skeleton ? { skeleton: true } : {}) };
   return {
     id,

@@ -514,7 +514,10 @@ writes, plus the program's version and the plugin's.
   job, and is what decides "has this been done".
 
 **Never overwrite.** A run, an attempt, a job's files: nothing is written
-over. A new run adds; the earlier stays, as the runs kept today.
+over. A new run adds. The run before it stays in full, and so does every
+run the chemist keeps; older ones are dropped only once the step's menu
+has said so before the run (WORKFLOWS.md, *Earlier runs*: the
+maintainer's ruling, 2026-10-22).
 
 **An output Meno cannot account for stops the step.** On taking up a job
 (after Meno was closed, or from a cluster), Meno checks what it finds:

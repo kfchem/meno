@@ -5,6 +5,7 @@
  */
 import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
+import { propertiesIn } from "../../../../lib/entry";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
@@ -762,6 +763,8 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
     ...(m.wholeWithoutH === true ? { wholeWithoutH: true as const } : {}),
     ...(unknownOrders.length ? { unknownOrders } : {}),
+    ...(hydrogensAddedOf(m.hydrogensAdded, n) ? { hydrogensAdded: hydrogensAddedOf(m.hydrogensAdded, n) } : {}),
+    ...(ligandOrdersOf(m.ligandOrders, biopolymer?.residues.length ?? 0) ? { ligandOrders: ligandOrdersOf(m.ligandOrders, biopolymer?.residues.length ?? 0) } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
     // (the geometries an opened optimisation or scan converged on: each one it has, in order, once - or none, where
@@ -780,7 +783,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
       const numbers = perFrame<number>(m.numbers, (k) => Number.isInteger(k));
       const shares = perFrame<number>(m.shares, isNum);
       const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
-      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
+      // (each frame's properties, one map each - a frame with none, an empty one; a property that does not read left out, and counted)
+      const maps = perFrame<Record<string, unknown>>(m.properties, (p) => !!p && typeof p === "object" && !Array.isArray(p));
+      const read = maps?.map((p) => propertiesIn(p) ?? {});
+      if (maps && read) leftOut("property", maps.reduce((k, p, i) => k + Object.keys(p).length - Object.keys(read[i]).length, 0));
+      const properties = read?.some((p) => Object.keys(p).length) ? read : undefined;
+      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}), ...(properties ? { properties } : {}) };
     })(),
     ...(failed ? { failed } : {}),
     ...(imaginary ? { imaginary } : {}),
@@ -832,6 +840,25 @@ function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] |
   if (read.some((f) => f === undefined)) return null;
   const out = (read as (number[] | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
+}
+
+/** The hydrogens a molecule was given that its file left out (Molecule3D `hydrogensAdded`): each part's, chosen or the CCD's, by its atoms - of `atoms`. */
+function hydrogensAddedOf(given: unknown, atoms: number): Carried3D["hydrogensAdded"] | undefined {
+  if (!Array.isArray(given)) return undefined;
+  const parts = given.filter(
+    (p): p is { by: "chosen" | "dictionary"; atoms: number[] } =>
+      !!p && (p.by === "chosen" || p.by === "dictionary") && Array.isArray(p.atoms) && p.atoms.length > 0 && p.atoms.every((i: unknown) => Number.isInteger(i) && (i as number) >= 0 && (i as number) < atoms),
+  );
+  return parts.length ? parts.map((p) => ({ by: p.by, atoms: [...p.atoms] })) : undefined;
+}
+
+/** Where a PDB entry's ligands' bond orders came from, by residue (Molecule3D `ligandOrders`) - of `residues`. */
+function ligandOrdersOf(given: unknown, residues: number): Carried3D["ligandOrders"] | undefined {
+  if (!given || typeof given !== "object") return undefined;
+  const kept = Object.entries(given as Record<string, unknown>).filter(
+    ([r, by]) => Number.isInteger(Number(r)) && Number(r) >= 0 && Number(r) < residues && (by === "assigned" || by === "dictionary" || by === "estimated"),
+  );
+  return kept.length ? (Object.fromEntries(kept.map(([r, by]) => [Number(r), by])) as Carried3D["ligandOrders"]) : undefined;
 }
 
 /** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */

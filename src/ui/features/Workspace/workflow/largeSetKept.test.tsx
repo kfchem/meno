@@ -225,6 +225,7 @@ describe("a wire a step does not take", () => {
         onOptions={() => {}}
         onKind={() => {}}
         onShowRun={() => {}}
+        onKeepRun={() => {}}
         onClose={() => {}}
         onCardDown={() => {}}
         onContextMenu={() => {}}

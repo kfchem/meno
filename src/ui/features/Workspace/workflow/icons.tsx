@@ -1,4 +1,5 @@
 import {
+  AdjustmentsHorizontalIcon,
   ArrowTrendingDownIcon,
   BoltIcon,
   ChartBarIcon,
@@ -35,6 +36,7 @@ const ICONS: Record<StepIcon, Icon> = {
   bars: ChartBarIcon,
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
+  sliders: AdjustmentsHorizontalIcon,
   sparks: SparklesIcon,
 };
 

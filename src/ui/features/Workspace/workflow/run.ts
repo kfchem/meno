@@ -20,7 +20,7 @@ import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type Holds3D, ty
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
-import { addSet, heldPut, holdCollection, holdMembers, moveSet, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, heldPut, holdCollection, holdMembers, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 
 /**
@@ -53,7 +53,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   const input = inputOf(doc, id);
   const key = inputKey(doc, step, by);
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
-  const fail = (said: string) => setRan(keepRun(doc, step), id, { at: w.now, ok: false, said, input: key, ...as });
+  const fail = (said: string) => setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said, input: key, ...as });
   const why = whyNot(doc, step, by);
   if (why) return fail(why);
   if (by !== "meno" || !MENO_DOES.includes(step.kind)) return fail("Nothing added does this step");
@@ -75,7 +75,7 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
   const step = stepOf(doc, id);
   if (!step) return doc;
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
-  if (!outcome.ok) return setRan(keepRun(doc, step), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
+  if (!outcome.ok) return setRan(keepRun(doc, step, false), id, { at: w.now, ok: false, said: outcome.said, input: key, ...as });
   return setRan(withResults(keepRun(doc, step), step, outcome, w), id, { at: w.now, ok: true, said: outcome.said, input: key, ...as });
 }
 
@@ -166,15 +166,37 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
 
 /**
  * `doc` with what a step last did kept among its earlier runs, its results
- * with it - as a new run is about to take its place. One that did nothing -
- * refused before it began - is not kept.
+ * with it - as a new run is about to take its place (docs/WORKFLOWS.md,
+ * *Earlier runs*): the run before this one is kept in full, and so is every
+ * run the chemist keeps (`keep`); the others are dropped (`dropsOnRun`),
+ * as the step's menu said before it ran - but only where the new run
+ * starts (`starts`): one refused before it began drops nothing, what the
+ * step last did kept with the rest. One that did nothing is not kept
+ * itself, and then none is dropped.
  */
-export function keepRun(doc: WorkspaceDocument, step: WorkflowStep): WorkspaceDocument {
+export function keepRun(doc: WorkspaceDocument, step: WorkflowStep, starts = true): WorkspaceDocument {
   const ran = step.ran;
   if (!ran || (!ran.ok && ran.took == null)) return doc;
   const results = resultsNow(doc, step);
   const kept: StepRunKept = { ...ran, kind: ran.kind ?? step.kind, ...((ran.options ?? step.options) ? { options: ran.options ?? step.options } : {}), ...(results ? { results } : {}) };
-  return withStepRuns(doc, step.id, [kept, ...(step.runs ?? [])].slice(0, RUNS_KEPT));
+  return withStepRuns(doc, step.id, [kept, ...(step.runs ?? []).filter((r) => !starts || r.keep)]);
+}
+
+/** `doc` with a step's run kept, or no longer (`keep`): what it last did at -1, an earlier run by its place among them. */
+export function keptRun(doc: WorkspaceDocument, id: number, index: number, keep: boolean): WorkspaceDocument {
+  const step = stepOf(doc, id);
+  const set = <R extends { keep?: true }>({ keep: _k, ...r }: R) => (keep ? { ...r, keep: true as const } : r);
+  if (!step) return doc;
+  if (index < 0) return step.ran ? setRan(doc, id, set(step.ran)) : doc;
+  const runs = step.runs ?? [];
+  return index < runs.length ? withStepRuns(doc, id, runs.map((r, i) => (i === index ? (set(r) as StepRunKept) : r))) : doc;
+}
+
+/** The earlier runs a step drops as it runs again (`keepRun`): those it does not keep - none, where what it last did is not kept in their place. */
+export function dropsOnRun(step: WorkflowStep): StepRunKept[] {
+  const ran = step.ran;
+  if (!ran || (!ran.ok && ran.took == null)) return [];
+  return (step.runs ?? []).filter((r) => !r.keep);
 }
 
 /**
@@ -199,7 +221,7 @@ export function showRun(
   const current: StepRunKept[] = was
     ? [{ ...was, kind: was.kind ?? step.kind, ...((was.options ?? step.options) ? { options: was.options ?? step.options } : {}), ...(now ? { results: now } : {}) }]
     : [];
-  doc = withStepRuns(doc, id, [...current, ...others].slice(0, RUNS_KEPT));
+  doc = withStepRuns(doc, id, [...current, ...others]);
   if (results) doc = placeResults(doc, stepOf(doc, id)!, results, w, lay?.(results, ran.kind ?? step.kind));
   return setRan(doc, id, ran);
 }
@@ -724,6 +746,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        // (its properties, as its last frame's: none for a path's frames before it)
+        ...(e.properties ? { properties: [...(path ?? []).map(() => ({})), e.properties] } : {}),
         ...keptKnown(e),
         // (how many it stands for, and its mirror image's atoms where one was counted in - of its last geometry; a path's
         //  frames before it, one each, none)
@@ -746,6 +770,8 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
     const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
+    // (each conformer's properties, as it came - an empty map where it had none)
+    const properties = g.some((e) => e.properties) ? g.map((e) => e.properties ?? {}) : undefined;
     // (what the calculation was, where a program worked them out - each conformer's results its own, not the
     //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
@@ -759,6 +785,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
       ...(degeneracies ? { degeneracies } : {}),
+      ...(properties ? { properties } : {}),
       ...(g.some((e) => e.mirror) ? { mirrors: g.map((e) => (e.mirror ? [...e.mirror] : null)) } : {}),
       // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),

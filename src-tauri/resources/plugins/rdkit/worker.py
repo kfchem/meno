@@ -2070,12 +2070,27 @@ def implicit(mol):
 def op_add_hydrogens(m):
     """A molecule in 3D with its bonds' orders known, given the hydrogens its
     file leaves out: RDKit's AddHs, each placed where its atom's geometry
-    puts it (addCoords). Back with its atoms in their order and the
-    hydrogens after them."""
+    puts it (addCoords). How many each atom carries is `hydrogens`, by atom,
+    where it is given - as the chemist chose them, a bond to a metal in
+    place of a hydrogen or not - and its unpaired electrons are the file's;
+    else as many as its valence leaves room for. Back with its atoms in
+    their order and the hydrogens after them."""
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("This structure could not be read.")
-    implicit(mol)
+    counts = m.get("hydrogens")
+    if counts is None:
+        implicit(mol)
+    else:
+        if len(counts) != mol.GetNumAtoms():
+            raise ValueError("a count of hydrogens for each atom is wanted")
+        for a, h in zip(mol.GetAtoms(), counts):
+            a.SetNoImplicit(True)
+            a.SetNumExplicitHs(int(h))
+        # (each atom's valence not checked: its hydrogens are the chemist's, a dative bond to a metal among its bonds)
+        problem = Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES, catchErrors=True)
+        if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+            raise ValueError(f"cannot make sense of the structure ({problem})")
     with_h = Chem.AddHs(mol, addCoords=True)
     return {"molblock": Chem.MolToV3KMolBlock(with_h, kekulize=True)}
 
