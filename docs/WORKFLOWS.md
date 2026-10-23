@@ -1736,15 +1736,18 @@ them again*; the maintainer's rulings of 2026-10-22):
   Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
   on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
   keeps each conformer's.
-- **Populations refuses a group with one that is no minimum** - its
-  optimisation not converged, or marked with an imaginary frequency -
-  naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
-  minimum - take it out first*. *Energy window* refuses one not
-  converged the same; a saddle point's mark would refuse it where the
-  window is on free energies, which it is not yet. *Choose one*, choosing
-  the lowest, and *Duplicates*, ranking by energy which copy it keeps,
-  refuse one that is no minimum the same - not converged, a saddle point,
-  or its marks not read (2026-10-23); *Choose one* by number chooses any.
+- **Populations refuses a group with one that is no result or no
+  minimum** - one that failed, by any kind (not converged, refused, an
+  error...), or whose marks did not read, then one marked with an
+  imaginary frequency - naming every one: *Not every entry is a result to
+  stand on: a #2: ... ; a #4 refused - take them out first*, *a #2 has 1
+  imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
+  (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
+  not converged alone before). *Energy window* refuses one that failed or
+  whose marks did not read the same; a saddle point's mark would refuse it
+  where the window is on free energies, which it is not yet. *Choose one*,
+  choosing the lowest, and *Duplicates*, ranking by energy which copy it
+  keeps, refuse as Populations does; *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
   the same two marks, rather than Boltzmann shares of an energy that is
   none (utils/molecule3d `sharesWithheld`); opened, it says why, naming
@@ -2102,6 +2105,9 @@ chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
 each entry's number, then its energy).
+- **A chart of molecules plots no entry that is no result**: one that
+  failed, by any kind, or whose marks did not read refuses it, each named,
+  as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).
 - A point for each row with a number in both; **a row without is counted
   and said**, by what it lacks ("4 points · 1 row left (1 with no
   measured)"), and each such row named, pointed at - its entry and what it
