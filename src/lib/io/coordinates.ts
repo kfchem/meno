@@ -297,6 +297,7 @@ export function readCoordinates(text: string): CoordinateStructure[] {
   };
   const kept = runs.filter((r) => !counting(r) && (r.recs.length > 1 || (elementOfLabel(ts[r.recs[0].from].t) != null && geometry(r))));
   const out: CoordinateStructure[] = [];
+  const allAtomLines = new Set(recs.flatMap((r) => Array.from({ length: r.end - r.line + 1 }, (_, k) => r.line + k)));
   kept.forEach((run, n) => {
     // (the words between two structures: the notes said after the first, then - from the first line that may name one - the next's)
     let first = run.before.findIndex(naming);
@@ -309,7 +310,14 @@ export function readCoordinates(text: string): CoordinateStructure[] {
     const atomLines = new Set(run.recs.flatMap((r) => Array.from({ length: r.end - r.line + 1 }, (_, k) => r.line + k)));
     const [first0, last0] = [Math.min(...atomLines), Math.max(...atomLines)];
     const among = raw.slice(first0, last0 + 1).flatMap((l, k) => (l && !atomLines.has(first0 + k) ? [l] : []));
-    const broken = [...among.filter((l) => looksLikeAtom(l) || speciesUnread(l)), ...own.filter(speciesUnread)];
+    // (and the lines right before its first atom and right after its last - a table's first or last row that does not read -
+    // where they look like an atom's: never an atom of any structure)
+    const edge = (from: number, step: number) => {
+      for (let i = from; i >= 0 && i < raw.length; i += step) if (raw[i]) return allAtomLines.has(i) ? null : raw[i];
+      return null;
+    };
+    const edges = [edge(first0 - 1, -1), edge(last0 + 1, 1)].filter((l): l is string => !!l && (looksLikeAtom(l) || speciesUnread(l)));
+    const broken = [...new Set([...edges.slice(0, 1), ...among.filter((l) => looksLikeAtom(l) || speciesUnread(l)), ...own.filter(speciesUnread), ...edges.slice(1)])];
     const skipped = among.filter((l) => !broken.includes(l));
     // (where it runs on over a page's end: said, by the page's number there, so the chemist sees where it was joined)
     const breaks = skipped.filter((l) => PAGE_MARK.test(l));

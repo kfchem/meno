@@ -346,6 +346,19 @@ describe("coordinates: what a run of atoms holds, said", () => {
     ]);
   });
 
+  it("refuses a structure whose table's last row, or first, does not read - never dropped at its edge - naming the line", () => {
+    const methane = ["C 0.0000 0.0000 0.0000", H(0), H(1), H(2), H(3)];
+    for (const bad of ["H 0.500 O.500 0.500", "H 0.500 0.500", "Bq 0.500 0.500 0.500", "Xx 0.100 0.200 0.300", "Q 0.100 0.200 0.300"]) {
+      const [s] = readCoordinates(["Methane", ...methane, bad].join("\n"));
+      expect([bad, s.broken]).toEqual([bad, [bad]]);
+    }
+    const [first] = readCoordinates(["Methane", "Bq 0.500 0.500 0.500", ...methane].join("\n"));
+    expect(first.broken).toEqual(["Bq 0.500 0.500 0.500"]);
+    // (the next structure's first atom, right after: no row that does not read)
+    const two = readCoordinates(["1 C 0.0 0.0 0.0", "2 H 0.0 0.0 1.09", "1 O 5.0 5.0 5.0", "2 H 5.0 5.0 5.96"].join("\n"));
+    expect(two.every((x) => !x.broken)).toBe(true);
+  });
+
   it("refuses a structure with a line of an unknown symbol and three numbers among its atoms - a ghost or a dummy atom - naming it", () => {
     const [s] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", H(0), "Xx 0.100 0.200 0.300", H(1), H(2), H(3)].join("\n"));
     expect(s.broken).toEqual(["Xx 0.100 0.200 0.300"]);
