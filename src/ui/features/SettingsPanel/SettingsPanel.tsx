@@ -12,6 +12,7 @@ import FileSettings from "./FileSettings";
 import PointerSettings from "./PointerSettings";
 import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
+import WorkspaceSizeSettings from "./WorkspaceSizeSettings";
 import LogSettings from "./LogSettings";
 import LicenceSettings from "./LicenceSettings";
 import LabelSettings from "./LabelSettings";
@@ -106,6 +107,7 @@ export default function SettingsPanel() {
             <CanvasSettings />
             <LabelSettings />
             <ColourSettings />
+            <WorkspaceSizeSettings />
             <LogSettings />
             <LicenceSettings />
           </section>
