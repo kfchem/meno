@@ -7,7 +7,7 @@ import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from ".
 import type { Molecule3D } from "../store/types";
 import { countOf } from "./entries";
 import { canWire, inputKey, resultOf, stateOf } from "./flow";
-import { addSet, addStep, addTableSet, connect } from "./model";
+import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
 import { runStep, whyNot, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
 import { DiagramBody } from "./ValueBody";
@@ -87,6 +87,34 @@ describe("an Energy diagram step", () => {
     const ran = inputKey(doc, s(), "meno");
     doc = { ...doc, molecules3d: doc.molecules3d!.map((m) => (m.title === "TS" ? { ...m, title: "TS1" } : m)) };
     expect([inputKey(doc, s(), "meno") !== ran, stateOf(doc, s(), "meno")]).toEqual([true, "changed"]);
+  });
+
+  it("runs the step before each of its inputs first, wherever it is wired - and does not run where one of them failed", () => {
+    // (R and P, each of one geometry, into a Filter whose kept go into Levels - wired after Connects, so not its first wire)
+    let doc = addMolecule3d(emptyWorkspaceDocument(), water("R", 0, [-76.4]));
+    doc = addMolecule3d(doc, water("P", 4, [-76.42]));
+    const set = doc.nextWorkflowId ?? 1;
+    doc = addSet(doc, { x0: -2, y0: -2, x1: 6, y1: 2 });
+    const filter = doc.nextWorkflowId!;
+    doc = addStep(doc, "filter", 10, 0, { conditions: "energy < 0 Eh" });
+    doc = connect(doc, { set }, filter);
+    doc = runStep(doc, filter, W);
+    const step = doc.nextWorkflowId!;
+    doc = addStep(doc, "energy-diagram", 30, 0);
+    doc = addTableSet(doc, { x: 0, y: 20 }, readTable("from,to\nR,P\n"), "paths.csv");
+    doc = connect(doc, { set: doc.nextWorkflowId! - 1 }, step, "connects");
+    doc = connect(doc, { set: resultOf(doc, filter)!.id }, step, "levels");
+    // (the Filter changed since it ran: run again first, before the diagram)
+    doc = updateStep(doc, filter, { options: { conditions: "energy < -76.41 Eh" } });
+    const later: RunWith = { ...W, now: 2000 };
+    doc = runStep(doc, step, later);
+    const ran = (id: number) => doc.steps!.find((x) => x.id === id)!.ran!;
+    expect([ran(filter).at, ran(filter).said]).toEqual([2000, "1 of 2 entries kept \u00b7 rest 1 (1: not energy < -76.41 Eh (-76.4 Eh))"]);
+    expect([ran(step).ok, ran(step).said]).toEqual([false, "It takes two levels at least"]);
+    // (and where the Filter fails, the diagram says so, and does not run on what it gave before)
+    doc = updateStep(doc, filter, { options: { conditions: "energy <" } });
+    doc = runStep(doc, step, { ...W, now: 3000 });
+    expect([ran(filter).ok, ran(step).said]).toEqual([false, "The step before it failed"]);
   });
 
   it("says which level's energy was worked out otherwise - and makes nothing", () => {
