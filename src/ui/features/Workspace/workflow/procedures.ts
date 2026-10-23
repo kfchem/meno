@@ -27,7 +27,7 @@ export function procedureOf(p: SavedProcedure): Procedure | null {
     saved: p.saved,
     // (its sets as frames: a step's exits keep which step and exit made them, so its wires lead on from them; what any held is not kept)
     parts: {
-      sets: read.sets.map(({ members: _h, keep: _k, notKept: _n, ...b }) => b),
+      sets: read.sets.map(({ members: _h, collection: _l, drawnCollection: _d, unread: _u, keep: _k, notKept: _n, put: _p, core: _c, ...b }) => b),
       steps: read.steps.map(({ ran: _r, runs: _k, running: _g, ...s }) => s),
       wires: read.wires,
     },
@@ -122,9 +122,10 @@ export function procedureFileName(name: string): string {
 }
 
 /** A procedure as a workspace (.meno) holds it, to be shared: its sets and steps and the wires among them, and nothing else - its middle where a workspace opened is first seen. */
-export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
+export async function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
   const parts = centredParts(p.parts);
-  return workspaceFile({
+  // (it has no file to keep: nothing not kept to say)
+  const { bytes } = await workspaceFile({
     model: { atoms: [], bonds: [] },
     arrows: [],
     pluses: [],
@@ -139,6 +140,7 @@ export function procedureWorkspace(p: Procedure): Promise<Uint8Array> {
     steps: parts.steps,
     wires: parts.wires,
   });
+  return bytes;
 }
 
 /** Parts moved so that their middle is at the page's origin. */

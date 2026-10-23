@@ -17,6 +17,25 @@ export const HTML_DISTANCE = PX * 400;
  * step's card opened, its form growing down over the cards below it, which
  * are drawn later and so over it otherwise.
  */
+/**
+ * The ports' layer's place among what is laid over the page (drei's Html
+ * `zIndexRange`): over the molecules' chips (20-30), their pointed cards
+ * (30-40) and the marks of magnified drawings (25-35) - so that a port is
+ * pressed, lit and let go on whatever lies over it. The sets and steps
+ * themselves stay at 18, under what the molecules say.
+ */
+export const PORTS_Z = 45;
+
+/**
+ * Whether a port at `p` lies under a step's card opened over the rest
+ * (`card`, its frame on the page): its circle, `r` across from its middle,
+ * reaching inside it. Such a port is not drawn - the card is over it, and
+ * takes the press - though the ports lie over all else.
+ */
+export function underCard(p: { x: number; y: number }, card: { x0: number; x1: number; y0: number; y1: number } | null, r: number): boolean {
+  return !!card && p.x + r > card.x0 && p.x - r < card.x1 && p.y + r > card.y0 && p.y - r < card.y1;
+}
+
 export const onLayer = (x: number, y: number, above = false): { position: "absolute"; left: number; top: number; zIndex?: number } => ({
   position: "absolute",
   left: x / PX,
@@ -58,6 +77,12 @@ export const PORT = 11 * PX;
 /** How far inside a set what it holds stays from its frame; how far below its top - under its name - it begins; and how far below its top its name stands. */
 export const SET_PAD = 14 * PX;
 export const SET_TOP = 36 * PX;
+/** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
+export const TABLE_PX = { w: 400, h: 196 };
+/** How large a chart is drawn inside its set's frame, in px at the page's own size: its axes, labels and points. */
+export const CHART_PX = { w: 360, h: 260 };
+/** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
+export const SUMMARY_PX = { w: 480, h: 448 };
 export const NAME_DOWN = 18 * PX;
 /** A result set's distance from its step, and between molecules in it. */
 export const GAP = 64 * PX;

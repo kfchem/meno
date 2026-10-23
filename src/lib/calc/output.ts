@@ -6,6 +6,7 @@
  * one's energy, what the calculation was - and everything else as results,
  * in the one general form (results.ts).
  */
+import { warningsOf, type Warning } from "./warnings";
 import { readResults, type Result } from "./results";
 import { readerIdOfLine } from "./catalog";
 import type { StructureRead } from "../io/structures";
@@ -29,6 +30,15 @@ export type ReaderOutput = {
    * it does not say (docs/PLUGINS.md, *The contract*).
    */
   solvation?: string | null;
+  /** What it warns of, each with its kind (./warnings `WARNING_KINDS`; any other, `other`) and the program's own words. */
+  warnings?: { kind?: string; text: string }[];
+  /**
+   * Its imaginary frequencies at the geometry it ended on, in cm-1, each
+   * negative as programs list them - those the program itself judged
+   * imaginary (xtb's "significant" ones, Gaussian's NImag, the modes ORCA
+   * marks): none where it judged none; unsaid where it did not judge.
+   */
+  imaginary?: number[] | null;
   charge?: number | null;
   multiplicity?: number | null;
   /** Its atoms' elements, in the file's order. */
@@ -51,6 +61,10 @@ export type ReaderOutput = {
   degeneracies?: number[] | null;
   /** Whether an optimisation came to an end, where it was one. */
   optimised?: boolean | null;
+  /** Of an optimisation's or a relaxed scan's geometries, each one's being one the run found converged; none where it optimised nothing. */
+  converged?: boolean[] | null;
+  /** Why none of its geometries is one the run found, where its reader marks them all not converged for a reason of their own (`Unmarked`). */
+  unmarked?: Unmarked | null;
   /** Everything else it found, in the general form (results.ts) - read, and those that do not read as results left out. */
   results?: unknown[];
   /** What a structure's file holds - its drawing, and its molecules in 3D - where the reader read one (lib/io/structures); checked as the page takes it. */
@@ -99,7 +113,21 @@ export type CalcInfo = {
   wavefunction?: CalcSource;
   /** The readers chosen to read it as well that could not, each by id, and why (lib/calc/read). */
   unread?: { from: string; why: string }[];
+  /** What the calculation warned of, each a kind core knows with the program's own words (./warnings): none moves its entry. */
+  warnings?: Warning[];
+  /** The imaginary frequencies the program judged its last geometry has, in cm-1, negative (`ReaderOutput.imaginary`): a mark that it is no minimum. */
+  imaginary?: number[];
 };
+
+/** A program's imaginary frequencies as Meno keeps them: each a number below 0, in cm-1; none, where they are not that. */
+export function imaginaryOf(v: unknown): number[] | undefined {
+  return Array.isArray(v) && v.length && v.length <= 300 && v.every((f) => isNum(f) && f < 0) ? [...(v as number[])] : undefined;
+}
+
+/** Imaginary frequencies in plain words, as a molecule is marked with them: "1 imaginary frequency, 382.6i cm-1". */
+export function imaginaryWords(cm: readonly number[]): string {
+  return `${cm.length} imaginary frequenc${cm.length === 1 ? "y" : "ies"}, ${cm.map((f) => `${Math.abs(f).toFixed(1)}i`).join(", ")} cm-1`;
+}
 
 /**
  * An output as a molecule keeps it: its name, its kind (lib/io/kinds), its
@@ -151,6 +179,8 @@ export function calcOf(out: ReaderOutput, readers: readonly string[], source?: C
       ? { source: { name: source.name, sha256: source.sha256, ...(source.kind ? { kind: source.kind } : {}), ...(source.path ? { path: source.path } : {}) } }
       : {}),
     ...(unread?.length ? { unread: unread.map((u) => ({ from: u.from, why: u.why })) } : {}),
+    ...(warningsOf(out.warnings).length ? { warnings: warningsOf(out.warnings) } : {}),
+    ...(imaginaryOf(out.imaginary) ? { imaginary: imaginaryOf(out.imaginary) } : {}),
   };
 }
 
@@ -191,6 +221,9 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
       multiplicity: isNum(c.multiplicity) ? c.multiplicity : null,
       optimised: typeof c.optimised === "boolean" ? c.optimised : null,
       job: jobOf(c.job),
+      // (what it warned of, and the imaginary frequencies it was marked with: kept with the workspace as they came)
+      ...(Array.isArray(c.warnings) ? { warnings: c.warnings as { kind?: string; text: string }[] } : {}),
+      ...(imaginaryOf(c.imaginary) ? { imaginary: imaginaryOf(c.imaginary) } : {}),
       atoms: new Array(atoms).fill(""),
       frames: new Array(frames).fill(new Array(3 * atoms).fill(0)),
       results,
@@ -240,4 +273,36 @@ export function levelOf(c: Pick<CalcInfo, "method" | "basis" | "solvation">): st
 export function multiplicityName(m: number): string {
   const names = ["singlet", "doublet", "triplet", "quartet", "quintet", "sextet"];
   return names[m - 1] ?? `multiplicity ${m}`;
+}
+
+/**
+ * Why none of an output's geometries is one the run found, where it is not
+ * that its optimisation did not converge: "error", its run ended with an
+ * error; "cut", it did not come to its end; "path", they are the points of
+ * a rigid scan or a reaction path; "unstated", the file does not say which
+ * converged; "unread", which did could not be read.
+ */
+export type Unmarked = "error" | "cut" | "path" | "unstated" | "unread";
+export const UNMARKED: readonly Unmarked[] = ["error", "cut", "path", "unstated", "unread"];
+
+/** Whether a geometry an output gives reads: three numbers to each of its atoms. */
+export const frameReads = (f: unknown, atoms: number) => Array.isArray(f) && f.length === 3 * atoms;
+
+/**
+ * Of an output's geometries that read (`frameReads`), each one's being one
+ * the run found converged, as its reader marks them - the mark of one that
+ * does not read left out with it - and why none is, where the reader says.
+ * None where the reader marks none. Marks that are not one to each geometry
+ * the output gives, or not each true or false, say nothing of which: none
+ * is one, "unstated" - never every one.
+ */
+export function marksOf(o: Pick<ReaderOutput, "atoms" | "frames" | "converged" | "unmarked">): { converged: boolean[]; unmarked?: Unmarked } | null {
+  if (o.converged == null) return null;
+  const given = Array.isArray(o.frames) ? o.frames : [];
+  const n = o.atoms?.length ?? 0;
+  const kept = given.flatMap((f, i) => (frameReads(f, n) ? [i] : []));
+  const marks = o.converged;
+  if (!Array.isArray(marks) || marks.length !== given.length || !marks.every((c) => typeof c === "boolean")) return { converged: kept.map(() => false), unmarked: "unstated" };
+  const unmarked = UNMARKED.includes(o.unmarked as Unmarked) ? (o.unmarked as Unmarked) : undefined;
+  return { converged: kept.map((i) => !unmarked && marks[i]), ...(unmarked ? { unmarked } : {}) };
 }

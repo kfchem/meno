@@ -61,4 +61,10 @@ describe("Re-bond", () => {
     const path: Entry = { ...entryOf(reactant, "rc1"), geometry: { kind: "frames", frames: [[]] } };
     expect(rebonded(path, entryOf(product, "p1"), "e1")).toEqual({ failed: expect.stringMatching(/Take frames/) });
   });
+  it("gives no species where the bonding is a skeleton, its hydrogens not there - as the bonding has none", () => {
+    const r = rebonded(entryOf(reactant, "rc1"), { ...entryOf(product, "p1"), species: null }, "e1");
+    if ("failed" in r) throw new Error(r.failed);
+    expect(r.entry.species).toBeNull();
+    expect(r.said).toEqual(["The bonding has no hydrogens, so the entry's charge and spin are not known either."]);
+  });
 });

@@ -7,7 +7,8 @@
  *                     a workspace where there is none, as every file was before
  *   workspace.json    stored: the workspace (Workspace/utils/workspace)
  *   files.json        stored: each file kept - its name, kind, media type, size
- *   files/<sha256>    each file kept, as it was: text deflated, the rest stored
+ *   files/<sha256>    each file kept, as it was: text and a step's job files
+ *                     deflated, the rest stored
  *
  * The workspace stays plain JSON, uncompressed, so that opening one costs
  * what reading the JSON costs and it reads as it is once unzipped. The files
@@ -16,14 +17,20 @@
  * it by, and taken only if they are what it says. Nothing is ever unpacked
  * to the disk; what the file says of its sizes is held to limits before
  * anything is inflated, and nothing is inflated to more than it says, or
- * taken if it comes to less. A workspace is written only within the limits
- * it is read with.
+ * taken if it comes to less, or is not what its CRC-32 says: a part of it
+ * damaged - its workspace, what it says it holds - is said to be, and the
+ * file not opened; a file it keeps damaged is not had, and the rest are; a
+ * list of them damaged or gone is not believed, and they are had without
+ * it. A workspace is written only within the limits it is read with.
  */
 import { strFromU8, strToU8, zipSync, type Zippable } from "fflate";
 import { sha256Hex } from "../binary/sha256";
-import { entryBytes, zipEntries } from "../binary/zip";
+import { entryBytes, zipEntries, type ZipEntry } from "../binary/zip";
 
 export const MENO_MEDIA_TYPE = "application/vnd.kfchem.meno+zip";
+
+/** The media type a step's job's file is kept as (Workspace/workflow/keptJobs): any file a program wrote, read by Meno only as it was. */
+export const JOB_FILE_MEDIA = "application/octet-stream";
 
 /** A file a workspace keeps: what it is known by, called, and is. */
 export type KeptFile = {
@@ -45,6 +52,13 @@ export type KeptData = Omit<KeptFile, "size"> & { data: Uint8Array };
 export const MOST_WORKSPACE = 256 * 1024 * 1024;
 export const MOST_FILE = 1024 * 1024 * 1024;
 export const MOST_FILES = 10_000;
+/**
+ * The most a workspace's file may come to, saved - as src-tauri keptjobs.rs
+ * `MOST_WORKSPACE_FILE` says, which refuses one past it: one Meno can open
+ * again (opening reads it whole, and reads no ZIP64). Half the 2 GB seen to
+ * open on a Mac.
+ */
+export const MOST_WORKSPACE_FILE = 2 ** 30;
 
 const SHA = /^[0-9a-f]{64}$/;
 
@@ -62,11 +76,13 @@ export function isMenoFile(bytes: Uint8Array): boolean {
 }
 
 /**
- * A workspace written as its file, with the files it keeps. Throws, saying
- * why, where it would come to more than a workspace file is read with
- * (`readMenoFile`): a file that would not open again is not written.
+ * A workspace written as its file, with the files it keeps - and those it
+ * lists whose bytes are added to it after, from the disk (`listed`: a
+ * step's job files, src-tauri keptjobs.rs). Throws, saying why, where it
+ * would come to more than a workspace file is read with (`readMenoFile`):
+ * a file that would not open again is not written.
  */
-export function menoFileBytes(workspace: string, files: readonly KeptData[]): Uint8Array {
+export function menoFileBytes(workspace: string, files: readonly KeptData[], listed: readonly KeptFile[] = []): Uint8Array {
   // (a string's UTF-8 is at least as long as the string: one far too long is not turned into bytes to be told so)
   const json = workspace.length <= MOST_WORKSPACE ? strToU8(workspace) : null;
   if (!json || json.length > MOST_WORKSPACE) {
@@ -83,7 +99,13 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[]): Ui
     if (!SHA.test(f.sha256) || index[f.sha256]) continue;
     if (f.data.length > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.data.length)}.`);
     index[f.sha256] = { name: f.name, ...(f.kind ? { kind: f.kind } : {}), media: f.media, size: f.data.length };
-    kept[`files/${f.sha256}`] = [f.data, { level: f.media.startsWith("text/") ? 6 : 0 }];
+    kept[`files/${f.sha256}`] = [f.data, { level: f.media.startsWith("text/") || f.media === JOB_FILE_MEDIA ? 6 : 0 }];
+    count++;
+  }
+  for (const f of listed) {
+    if (!SHA.test(f.sha256) || index[f.sha256]) continue;
+    if (f.size > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.size)}.`);
+    index[f.sha256] = { name: f.name, media: f.media, size: f.size };
     count++;
   }
   if (count > MOST_FILES) throw new Error(`A workspace file keeps at most ${MOST_FILES.toLocaleString("en")} files; this workspace would keep ${count.toLocaleString("en")}.`);
@@ -96,8 +118,16 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[]): Ui
 export type MenoFile = {
   workspace: string;
   files: KeptFile[];
+  /**
+   * Whether its list of the files it keeps (`files.json`) was gone,
+   * damaged or did not read - and was not believed: `files` are then those
+   * it holds as the workspace names them (`readMenoFile`'s `named`).
+   */
+  listDamaged: boolean;
   /** A file kept, by its SHA-256: its bytes; none where it keeps none such, it will not read, or it is not what its SHA-256 says. */
   data(sha256: string): Uint8Array | null;
+  /** Whether it has a file by that SHA-256 in it at all - whole, or damaged (`data` none): something of it may still be had from this file. */
+  holds(sha256: string): boolean;
 };
 
 /** What a file not one Meno reads as a workspace is said to be. */
@@ -105,6 +135,25 @@ export class NotMenoFile extends Error {}
 
 /** What a Meno file of a kind this Meno does not know - made by a newer one - is said to be. */
 export class NewerMenoFile extends NotMenoFile {}
+
+/** The parts of a Meno file whose damage keeps it from opening - or none named, where it is the whole that does not read. */
+export type MenoPart = "mimetype" | "meno.json" | "workspace.json" | "style.json";
+
+/**
+ * What a Meno file cut short, or changed on the disk after it was written,
+ * is said to be - the part of it that is, named (`part`), where it is one -
+ * so that it can be told from one that is no Meno file at all.
+ */
+export class DamagedMenoFile extends NotMenoFile {
+  readonly part: MenoPart | null;
+  constructor(message: string, part: MenoPart | null = null) {
+    super(message);
+    this.part = part;
+  }
+}
+
+/** A file kept, as a workspace names it: what `readMenoFile` names those it holds by where its list of them is not to be believed. */
+export type KeptName = Omit<KeptFile, "size">;
 
 /**
  * What a Meno file holds, as its `meno.json` says (docs/FILE-IO.md, *What a
@@ -123,18 +172,22 @@ const MOST_PICTURE = 8 * 1024 * 1024;
 /**
  * What a Meno file holds: a workspace, where it does not say. Throws, as
  * `NewerMenoFile`, where it says a kind this Meno does not know; as
- * `NotMenoFile` where it is not a Meno file, or damaged.
+ * `NotMenoFile` where it is not a Meno file - `DamagedMenoFile` where it is
+ * one damaged, the part named where it is what it is or what it holds.
  */
 export function menoKindOf(bytes: Uint8Array): MenoKind {
   if (!isMenoFile(bytes)) throw new NotMenoFile("It is not a Meno file.");
   const entries = zipEntries(bytes);
-  if (!entries) throw new NotMenoFile("It is a Meno file cut short or damaged, and cannot be read.");
+  if (!entries) throw new DamagedMenoFile("It is a Meno file cut short or damaged, and cannot be read.");
+  if (!saysWhatItIs(entries)) throw new DamagedMenoFile("It is a Meno file cut short or damaged, and cannot be read.", "mimetype");
   const head = entries.find((e) => e.name === "meno.json");
   if (!head) return "workspace";
-  const json = head.size <= MOST_SMALL ? entryBytes(head) : null;
+  if (head.size > MOST_SMALL) throw new NotMenoFile("It is a Meno file that does not say what it holds.");
+  const json = entryBytes(head);
+  if (!json) throw new DamagedMenoFile("It is a Meno file damaged where it says what it holds, and cannot be read.", "meno.json");
   let kind: unknown;
   try {
-    kind = json ? (JSON.parse(strFromU8(json)) as { kind?: unknown }).kind : undefined;
+    kind = (JSON.parse(strFromU8(json)) as { kind?: unknown } | null)?.kind;
   } catch {
     kind = undefined;
   }
@@ -156,59 +209,98 @@ export function styleFileBytes(styles: string, picture?: Uint8Array | null): Uin
   return zipSync(entries);
 }
 
-/** A style file read: its styles' JSON, and its picture where it has one. Throws, saying why, where it is no style file or does not read. */
+/**
+ * A style file read: its styles' JSON, and its picture where it has one -
+ * none where that is damaged: it only shows them. Throws, saying why, where
+ * it is no style file or does not read.
+ */
 export function readStyleFile(bytes: Uint8Array): { styles: string; picture: Uint8Array | null } {
   if (menoKindOf(bytes) !== "style") throw new NotMenoFile("It is not a style file.");
   const entries = zipEntries(bytes)!;
   const named = new Map(entries.map((e) => [e.name, e]));
   const head = named.get("style.json");
-  const json = head && head.size <= MOST_SMALL ? entryBytes(head) : null;
-  if (!json) throw new NotMenoFile("It is a style file that holds no styles.");
+  if (!head || head.size > MOST_SMALL) throw new NotMenoFile("It is a style file that holds no styles.");
+  const json = entryBytes(head);
+  if (!json) throw new DamagedMenoFile("It is a style file whose styles are damaged, and cannot be read.", "style.json");
   const pic = named.get("picture.png");
   return { styles: strFromU8(json), picture: pic && pic.size <= MOST_PICTURE ? entryBytes(pic) : null };
 }
 
+/** Whether a Meno file's first part, what it is - which `isMenoFile` read from its start - is whole: what its CRC-32 says. */
+const saysWhatItIs = (entries: ZipEntry[]) => {
+  const part = entries.find((e) => e.name === "mimetype");
+  return !!part && part.size <= MENO_MEDIA_TYPE.length && entryBytes(part) != null;
+};
+
 /**
  * A workspace file read: its workspace's JSON and the list of files it
- * keeps, nothing else inflated. Throws, saying why, where it is not one, or
- * says of itself more than Meno takes in.
+ * keeps, nothing else inflated. Throws, saying why, where it is not one,
+ * says of itself more than Meno takes in, or a part it cannot open without
+ * - what it is, its workspace - is damaged (`DamagedMenoFile`, the part
+ * named). Its list of files is not one of those: gone, damaged or not one
+ * that reads, it is not believed (`listDamaged`), and each file it holds
+ * is had all the same - named as the workspace names it, by `named`, given
+ * its JSON - as is any it holds the list leaves out. Every file it holds is
+ * had by its SHA-256, listed or not, and only if it is what that says.
  */
-export function readMenoFile(bytes: Uint8Array): MenoFile {
+export function readMenoFile(bytes: Uint8Array, named?: (workspace: string) => readonly KeptName[]): MenoFile {
   if (!isMenoFile(bytes)) throw new NotMenoFile("It is not a Meno workspace.");
   // (begun as a workspace, but not read through: said so, not in the zip reader's words)
-  const damaged = () => new NotMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
   const entries = zipEntries(bytes);
-  if (!entries) throw damaged();
+  if (!entries) throw new DamagedMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.");
   if (entries.length > MOST_FILES + 3) throw new NotMenoFile("It holds more files than Meno takes in.");
-  const named = new Map(entries.map((e) => [e.name, e]));
-  const head = named.get("workspace.json");
+  if (!saysWhatItIs(entries)) throw new DamagedMenoFile("It is a Meno workspace cut short or damaged, and cannot be read.", "mimetype");
+  const byName = new Map(entries.map((e) => [e.name, e]));
+  const head = byName.get("workspace.json");
   if (!head) throw new NotMenoFile("It holds no workspace.");
   if (head.size > MOST_WORKSPACE) throw new NotMenoFile("Its workspace is larger than Meno takes in.");
   const json = entryBytes(head);
-  if (!json) throw damaged();
-  const list = named.get("files.json");
-  const listed = list && list.size <= MOST_WORKSPACE ? entryBytes(list) : null;
-  const files: KeptFile[] = [];
-  try {
-    const index = JSON.parse(strFromU8(listed ?? strToU8("{}"))) as Record<string, Partial<KeptFile>>;
-    for (const [sha256, f] of Object.entries(index ?? {})) {
-      if (!SHA.test(sha256) || typeof f?.name !== "string" || typeof f.media !== "string" || typeof f.size !== "number") continue;
-      files.push({ sha256, name: f.name.slice(0, 260), ...(typeof f.kind === "string" ? { kind: f.kind } : {}), media: f.media, size: f.size });
+  if (!json) throw new DamagedMenoFile("Its workspace is damaged, and cannot be read.", "workspace.json");
+  const workspace = strFromU8(json);
+  // each file it holds, by its SHA-256
+  const held = new Map<string, ZipEntry>();
+  for (const e of entries) if (e.name.startsWith("files/") && SHA.test(e.name.slice(6))) held.set(e.name.slice(6), e);
+  const { files, damaged: listDamaged } = listOf(byName.get("files.json"));
+  const listed = new Set(files.map((f) => f.sha256));
+  // (those it holds that the list does not name - all of them, where it is not believed - named as the workspace names them)
+  const unlisted = [...held.keys()].filter((h) => !listed.has(h));
+  if (named && unlisted.length) {
+    const left = new Set(unlisted);
+    for (const f of named(workspace)) {
+      if (!left.delete(f.sha256)) continue;
+      files.push({ sha256: f.sha256, name: f.name.slice(0, 260), ...(f.kind ? { kind: f.kind } : {}), media: f.media, size: held.get(f.sha256)!.size });
     }
-  } catch {
-    // (a list that does not read keeps nothing that can be had)
   }
-  const known = new Set(files.map((f) => f.sha256));
   return {
-    workspace: strFromU8(json),
+    workspace,
     files,
+    listDamaged,
     data: (sha256) => {
-      const entry = known.has(sha256) ? named.get(`files/${sha256}`) : undefined;
+      const entry = held.get(sha256);
       if (!entry || entry.size > MOST_FILE) return null;
       const data = entryBytes(entry);
       // every file kept - an output, a text, a PDF, a picture - is "taken only if they are what it says"
       // (docs/FILE-IO.md, *The workspace file*): bytes that are not what their SHA-256 says are no such file
       return data && sha256Hex(data) === sha256 ? data : null;
     },
+    holds: (sha256) => held.has(sha256),
   };
+}
+
+/** A workspace file's list of the files it keeps, as it reads - and whether it was gone, damaged, or not a list at all. */
+function listOf(list: ZipEntry | undefined): { files: KeptFile[]; damaged: boolean } {
+  const listed = list && list.size <= MOST_WORKSPACE ? entryBytes(list) : null;
+  let index: unknown;
+  try {
+    index = listed ? JSON.parse(strFromU8(listed)) : null;
+  } catch {
+    index = null;
+  }
+  if (!index || typeof index !== "object" || Array.isArray(index)) return { files: [], damaged: true };
+  const files: KeptFile[] = [];
+  for (const [sha256, f] of Object.entries(index as Record<string, Partial<KeptFile> | null>)) {
+    if (!SHA.test(sha256) || typeof f?.name !== "string" || typeof f.media !== "string" || typeof f.size !== "number") continue;
+    files.push({ sha256, name: f.name.slice(0, 260), ...(typeof f.kind === "string" ? { kind: f.kind } : {}), media: f.media, size: f.size });
+  }
+  return { files, damaged: false };
 }

@@ -9,9 +9,9 @@
  * space alone: nothing can be wired into it.
  */
 import type { WireEnd } from "../store/types";
-import { doersAdded, kindsOf, takesBy, takesNothingBy } from "./doers";
+import { doersAdded, kindsOf, takesBy } from "./doers";
 import { givesOf } from "./flow";
-import { kindInfo, type StepIcon, type StepKind } from "./kinds";
+import { kindInfo, takesNothing, type StepIcon, type StepKind } from "./kinds";
 
 /** A kind of step Quick Add offers: what it is called, and its icon. */
 export type QuickStep = { kind: StepKind; name: string; icon: StepIcon };
@@ -23,11 +23,11 @@ type Flow = Parameters<typeof givesOf>[0];
 export function offeredSteps(flow: Flow, wire?: WireEnd): QuickGroup[] {
   const set = wire ? givesOf(flow, wire) : null;
   const offered = (kind: StepKind, by: string) =>
-    takesNothingBy(kind, by)
+    takesNothing(kind)
       ? !wire
       : kind === "as-conformers"
         ? !!wire && set === "molecules"
-        : !wire || set == null || (set !== "pictures" && takesBy(kind, by, set));
+        : !wire || set == null || (set !== "pictures" && set !== "chart" && takesBy(kind, by, set));
   return doersAdded()
     .map((d) => ({
       by: d.id,

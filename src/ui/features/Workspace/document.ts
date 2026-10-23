@@ -9,7 +9,8 @@
 import { numbersWith, type AtomNumberKind } from "./utils/atomNumbers";
 import { createDocument, type DocumentStore } from "../../../lib/doc";
 import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
-import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
+import { placedAbbreviation, placedStructure } from "../../../lib/chem/abbreviationPlace";
+import type { GroupStructure } from "../../../lib/chem/ligands";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
@@ -21,7 +22,8 @@ import { pathLength, pointAlong, type ArrowLook } from "../../../lib/chem/reacti
 import { arrowPoints } from "../../../lib/chem/reactionScheme";
 import { mapAtoms, mapMarks, mapStanding } from "./chem/atomMap";
 import { etaHeld } from "./chem/eta";
-import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText } from "./store/types";
+import type { Arrow, ArrowAtomMap, ArrowFormPatch, Atom, Bond, Caption, CarriedList, Drawn, Look3D, MarkAt, Model, Molecule3D, PdfItem, PictureItem, PictureToAdd, Plus, PushArrow, PushEnd, RingFills, CaptionPatch, Ink, InkLook, Shape, ShapePatch, Slide, TextOf, Wire, WorkflowSet, WorkflowStep, WorkspaceText, LostText } from "./store/types";
+import { sha256Hex } from "../../../lib/binary/sha256";
 import { ringKeyOf, ringThere } from "./utils/rings";
 import { addedStacks, freshRecordsId, freshStackId, settledRecords, unmarked } from "./utils/stacks";
 import type { WordsMark } from "../../../lib/chem/captions";
@@ -94,6 +96,8 @@ export type WorkspaceDocument = {
   expanded?: number[];
   /** The texts it holds, read and edited in the column beside the canvas. */
   texts?: WorkspaceText[];
+  /** The texts its file was to hold that could not be read, shown in the column as what they are (store/types `LostText`); their ids the texts'. */
+  textsLost?: LostText[];
   nextTextId?: number;
   /** The PDFs on the page (docs/PDF.md). */
   pdfs?: PdfItem[];
@@ -124,6 +128,7 @@ export function isBlankDocument(doc: WorkspaceDocument): boolean {
     !doc.captions?.length &&
     !doc.molecules3d?.length &&
     !doc.texts?.length &&
+    !doc.textsLost?.length &&
     !doc.pdfs?.length &&
     !doc.pictures?.length &&
     !doc.slides?.length &&
@@ -508,6 +513,19 @@ export function deleteParts(
 }
 
 /**
+ * `doc` without these atoms and the bonds to them - and nothing else: an
+ * atom of another left without a bond stays, as a step's results taken away
+ * leave what the chemist drew (workflow/run `emptied`). The electron-pushing
+ * arrows on them go with them.
+ */
+export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const gone = new Set(ids);
+  const atoms = doc.model.atoms.filter((a) => !gone.has(a.id));
+  if (atoms.length === doc.model.atoms.length) return doc;
+  return withPushesOn({ ...doc, model: { atoms, bonds: doc.model.bonds.filter((b) => !gone.has(b.a) && !gone.has(b.b)) } });
+}
+
+/**
  * A new layout for some of the structure, as edits: where each atom goes
  * (and its depth, where it is drawn in perspective; none, where it is not),
  * the wedges changed, and the H atoms drawn to carry a wedge - added, or
@@ -603,16 +621,15 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
 }
 
 /**
- * An atom's chemistry set anew - its element or label, charge, radical and
- * isotope, each left off where it has none - leaving where it is alone.
- */
-/**
  * An abbreviation drawn out as the atoms it stands for - as the file gave
  * them, turned to where its bond goes now, or the dictionary's, laid out
  * on from that bond - the labelled atom become the one it is attached by,
- * its bonds out leaving from the atoms they did. One undo step.
+ * its bonds out leaving from the atoms they did. One undo step. Given a
+ * `group`, that group is drawn out in its place, laid out as the
+ * dictionary's are: what Enumerate joins each R group by
+ * (workflow/enumerate), one function for both.
  */
-export function expandAbbreviation(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: GroupStructure): WorkspaceDocument {
   const atoms = doc.model.atoms;
   const a = atoms.find((x) => x.id === id);
   if (!a) return doc;
@@ -627,7 +644,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number): Workspac
   });
   const sum = all.reduce((p, q) => ({ x: p.x + q.x, y: p.y + q.y }), { x: 0, y: 0 });
   const inward = all.length > 1 && Math.hypot(sum.x, sum.y) > 1e-6 ? sum : now;
-  const s = a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH);
+  const s = group ? placedStructure(group, inward, NOMINAL_BOND_LENGTH) : (a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH));
   if (!s || !s.atoms.length) return doc;
   // a file's: turned by as much as its bond out has turned since
   const turn = a.abbrev && s.toward && now ? Math.atan2(now.y, now.x) - Math.atan2(s.toward.y, s.toward.x) : 0;
@@ -805,6 +822,10 @@ export function groupHeldAt(doc: WorkspaceDocument, id: number, label: string): 
   return s ? { ...s, ...(toward ? { toward } : {}) } : undefined;
 }
 
+/**
+ * An atom's chemistry set anew - its element or label, charge, radical and
+ * isotope, each left off where it has none - leaving where it is alone.
+ */
 export function setAtomChemistry(
   doc: WorkspaceDocument,
   id: number,
@@ -2503,7 +2524,9 @@ const heldText = (text: string) => text.replace(/\r\n?/g, "\n");
 /**
  * Texts added, each after those it holds, and the id of the last: one it
  * holds already - the same name and text - not added again, its id given;
- * one with no name, a new one, named (utils/texts `newTextName`).
+ * one with no name, a new one, named (utils/texts `newTextName`). One that
+ * could not be read whose words these are - the same SHA-256 - is had
+ * again: it goes, the text come in its place in the column.
  */
 export function addTexts(
   doc: WorkspaceDocument,
@@ -2523,7 +2546,23 @@ export function addTexts(
     last = next++;
   }
   if (held.length === (doc.texts ?? []).length) return { doc, last };
-  return { doc: { ...doc, texts: held, nextTextId: next }, last };
+  const lost = doc.textsLost?.length ? lostNotHad(doc.textsLost, held.slice((doc.texts ?? []).length)) : doc.textsLost;
+  return { doc: { ...doc, texts: held, nextTextId: next, ...(lost !== doc.textsLost ? { textsLost: lost } : {}) }, last };
+}
+
+/** Of the texts that could not be read, those whose words none of `come` is: one it is, had again, gone. */
+function lostNotHad(lost: readonly LostText[], come: readonly WorkspaceText[]): LostText[] {
+  const utf8 = new TextEncoder();
+  // (as a file keeps a text: its words, as they are held, as UTF-8)
+  const had = new Set(come.map((t) => sha256Hex(utf8.encode(t.text))));
+  const left = lost.filter((t) => !had.has(t.sha256));
+  return left.length === lost.length ? (lost as LostText[]) : left;
+}
+
+/** A text that could not be read taken out. */
+export function removeLostText(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+  if (!(doc.textsLost ?? []).some((t) => t.id === id)) return doc;
+  return { ...doc, textsLost: doc.textsLost!.filter((t) => t.id !== id) };
 }
 
 /** A text changed to `text`. */

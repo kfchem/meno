@@ -7,13 +7,15 @@
  */
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
-import { ENTRY_SCHEMA } from "../../../../lib/entry";
+import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
+import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
-import { elementOf } from "../../../../lib/chem/elements";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
 import type { Worked } from "./run";
+import { failureKindOf, WORDS_MOST, type Failure, type FailureKind } from "./failures";
 import type { StepKind } from "./kinds";
 
 /**
@@ -69,7 +71,10 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     return mass != null ? { ...a, mass } : a;
   });
   // (a molecule read from a calculation: the state it was in there; else what its atoms say - Meno's one rule)
-  const { charge, multiplicity } = speciesOf(molecule, e);
+  const species = speciesOf({ ...molecule, ...(e.skeleton ? { skeleton: true } : {}) }, e);
+  // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
+  if (!species) throw new Error(skeletonWhy());
+  const { charge, multiplicity } = species;
   return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity };
 }
 
@@ -81,7 +86,20 @@ export function pluginEntry(e: SetEntry): PluginEntry {
  * by its name and with its arguments (ORCA's orca_2mkl: its manifest's
  * `installed[].beside`); and the files it reads back.
  */
-export type Prepared = { entries: number[]; program: string; args: string[]; files: JobFile[]; stdin?: string; then?: Then[]; reads: string[] };
+export type Prepared = {
+  entries: number[];
+  program: string;
+  args: string[];
+  files: JobFile[];
+  stdin?: string;
+  then?: Then[];
+  reads: string[];
+  /** The memory it takes, in MiB, as its plugin declares it (ORCA's, Gaussian's, from what they are given): counted against what jobs may use. */
+  memory?: number;
+};
+
+/** The most memory a job may say it takes, in MiB: 64 TiB. */
+const MEMORY_MOST = 64 * 1024 * 1024;
 
 /** A program installed beside a job's own, run after it: by its name there, with its arguments. */
 export type Then = { program: string; args: string[] };
@@ -93,16 +111,39 @@ const inside = (name: string) => !!name && name.length <= 200 && !name.startsWit
 const KIND_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const texts = (v: unknown, most: number) => (Array.isArray(v) && v.length <= most && v.every((t) => typeof t === "string") ? (v as string[]) : null);
 
+/** An entry a plugin would not prepare a job for, by its place among those sent - and why, its kind one of core's (`refused` where it names none). */
+export type Refusal = { entry: number; kind: FailureKind; why: string };
+
+/**
+ * The entries a plugin refused as it prepared the others' jobs (`refused`
+ * beside `jobs`: `{"entry": 2, "why": "..."}`), each among the `count`
+ * sent and named once; none where it named none, or named one wrongly.
+ */
+export function readRefused(raw: unknown, count: number): Refusal[] {
+  const list = (raw as { refused?: unknown } | null)?.refused;
+  if (!Array.isArray(list) || list.length > count) return [];
+  const out: Refusal[] = [];
+  for (const r of list) {
+    const g = r as { entry?: unknown; why?: unknown; kind?: unknown } | null;
+    const entry = g?.entry;
+    if (!Number.isInteger(entry) || (entry as number) < 0 || (entry as number) >= count || out.some((o) => o.entry === entry) || typeof g?.why !== "string") return [];
+    out.push({ entry: entry as number, kind: g.kind === undefined ? "refused" : failureKindOf(g.kind), why: g.why.trim().slice(0, WORDS_MOST) || "It did not say why" });
+  }
+  return out;
+}
+
 /**
  * The jobs a plugin prepared for `count` entries, checked: each its entries
- * among those, every entry in one; its program a name; its files inside its
- * folder. Why not, where they are not.
+ * among those, every entry in one - or refused (`readRefused`), and then in
+ * none; its program a name; its files inside its folder. Why not, where
+ * they are not.
  */
 export function readPrepared(raw: unknown, count: number): Prepared[] | string {
   const jobs = (raw as { jobs?: unknown } | null)?.jobs;
   if (!Array.isArray(jobs) || !jobs.length) return "It prepared no job";
   const out: Prepared[] = [];
-  const covered = new Set<number>();
+  const refused = new Set(readRefused(raw, count).map((r) => r.entry));
+  const covered = new Set<number>(refused);
   for (const j of jobs) {
     const r = j as Record<string, unknown> | null;
     const entries = Array.isArray(r?.entries) && r.entries.every((i) => Number.isInteger(i) && i >= 0 && i < count) ? (r.entries as number[]) : null;
@@ -129,6 +170,7 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
     const given = stdin === undefined || (typeof stdin === "string" && files.some((f) => f.name === stdin));
     if (!entries?.length || !program || !args || !reads || reads.some((n) => !inside(n)) || files.length !== (r?.files as unknown[]).length || !given || then.some((t) => !t))
       return "It prepared a job Meno cannot run";
+    if (entries.some((i) => refused.has(i))) return "It prepared a job for what it refused";
     entries.forEach((i) => covered.add(i));
     out.push({
       entries: [...entries],
@@ -138,6 +180,8 @@ export function readPrepared(raw: unknown, count: number): Prepared[] | string {
       ...(typeof stdin === "string" ? { stdin } : {}),
       ...(then.length ? { then: then as Then[] } : {}),
       reads: [...reads],
+      // (a whole number of MiB, within reason; any other, none said)
+      ...(Number.isInteger(r?.memory) && (r!.memory as number) > 0 && (r!.memory as number) <= MEMORY_MOST ? { memory: r!.memory as number } : {}),
     });
   }
   if (covered.size !== count) return "It prepared no job for some of what came in";
@@ -194,10 +238,14 @@ function surfacesOf(v: unknown): ToSurfaces | null {
  * Meno's own form - or, for each, an output for Meno's readers to read
  * (ORCA's, Gaussian's: a program installed separately), or surfaces in
  * files Meno reads itself (`ToSurfaces`); or why the job did not give one.
+ * An output may be why that entry alone failed (`{why, kind}`: its kind
+ * one of core's, else `failed` - its words kept), the rest of the job's
+ * taken as they are.
  */
-export function readCollected(raw: unknown, count: number): ReaderOutput[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string } {
+export function readCollected(raw: unknown, count: number): (ReaderOutput | Failure)[] | { read: ToRead[] } | { surfaces: ToSurfaces[] } | { why: string; kind?: FailureKind } {
   const r = raw as { outputs?: unknown; read?: unknown; surfaces?: unknown; why?: unknown } | null;
-  if (typeof r?.why === "string") return { why: r.why.trim().slice(0, 300) || "It did not say why" };
+  // (the job as a whole did not give what it was for: its program's words, as its plugin read them)
+  if (typeof r?.why === "string") return { why: r.why.trim().slice(0, WORDS_MOST) || "It did not say why", kind: "program-error" };
   if (r?.surfaces !== undefined) {
     if (!Array.isArray(r.surfaces) || r.surfaces.length !== count) return { why: "It read back nothing for it" };
     const surfaces = r.surfaces.map(surfacesOf);
@@ -223,64 +271,93 @@ export function readCollected(raw: unknown, count: number): ReaderOutput[] | { r
     return { read };
   }
   if (!Array.isArray(r?.outputs) || r.outputs.length !== count) return { why: "It read back nothing for it" };
-  const outs = r.outputs as ReaderOutput[];
-  for (const o of outs) {
-    if (o?.schema != null && o.schema !== OUTPUT_SCHEMA) return { why: "It read it back in a form this Meno does not read" };
-    if (!Array.isArray(o?.atoms) || !Array.isArray(o.frames) || !o.frames.some((f) => Array.isArray(f) && f.length === 3 * o.atoms.length)) return { why: "It read back no geometry" };
+  const outs: (ReaderOutput | Failure)[] = [];
+  for (const o of r.outputs as ReaderOutput[]) {
+    // (that entry alone failed, saying why)
+    const why = (o as { why?: unknown } | null)?.why;
+    if (typeof why === "string") {
+      outs.push({ kind: failureKindOf((o as { kind?: unknown }).kind), why: why.trim().slice(0, WORDS_MOST) || "It did not say why" });
+      continue;
+    }
+    // (an output Meno cannot take fails its entry alone)
+    if (o?.schema != null && o.schema !== OUTPUT_SCHEMA) outs.push({ kind: "failed", why: "It read it back in a form this Meno does not read" });
+    else if (!Array.isArray(o?.atoms) || !Array.isArray(o.frames) || !o.frames.some((f) => Array.isArray(f) && f.length === 3 * o.atoms.length)) outs.push({ kind: "no-geometry", why: "It read back no geometry" });
     // (every frame a list: one it could not read, given as null, is not taken)
-    if (!o.frames.every(Array.isArray)) return { why: "It read back a geometry Meno cannot read" };
+    else if (!o.frames.every(Array.isArray)) outs.push({ kind: "no-geometry", why: "It read back a geometry Meno cannot read" });
+    else outs.push(o);
   }
   return outs;
 }
+
+/**
+ * An entry as a program works it out anew: what went in, without the
+ * calculation it came with or what its molecule kept - how it was made,
+ * what its energies were from - none of which is so of what the program
+ * gives back (entries `SetEntry.calc`, `keep`); nor its marks - why it
+ * failed, its imaginary frequencies, that its marks did not read - which
+ * were of the geometry it came with: the new calculation's own output
+ * marks it again, or does not.
+ */
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => entry;
 
 /**
  * An entry as a job worked it out (lib/calc/output): its last geometry and
  * energy - an optimisation's path before it, kept where the step is
  * *Optimise* - and what the calculation says of it, read by `readers` from
  * the output kept as `source`. Why not, where what came back is not the
- * molecule that went.
+ * molecule that went, or no geometry came back. An optimisation the output
+ * says did not converge (`optimised: false`) is not done: its last
+ * geometry, as far as it came, is the entry of the step's Failed exit -
+ * never passed on as a minimum (until 2026-10-22 it was).
  */
-export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | string {
+export function workedOf(kind: StepKind, entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked | Failure {
   const n = entry.atoms.length;
-  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return "What came back is not the molecule that went";
+  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return "It read back no geometry";
+  if (!frames.length) return { kind: "no-geometry", why: "It read back no geometry" };
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
   const last = frames[frames.length - 1];
   const path = kind === "optimise" && frames.length > 1 ? frames.slice(0, -1) : undefined;
   const calc = calcOf(out, readers, source);
   return {
-    ...entry,
+    ...anew(entry),
     xyz: [...last],
     ...(energies ? { energy: energies[energies.length - 1] } : {}),
     ...(path ? { path, ...(energies ? { pathEnergies: energies.slice(0, -1) } : {}) } : {}),
     calc,
+    ...(out.optimised === false && (kind === "optimise" || kind === "frequencies") ? { failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : {}),
   };
 }
 
 /**
  * An entry's conformers, as a conformer search worked them out: each
  * geometry it gave a conformer of the entry's compound, numbered in order,
- * with its energy - what the calculation was kept with the first.
+ * with its energy - and what the calculation was, kept with each, what it
+ * found besides (its results) with the first alone: the conformers of one
+ * compound are of one calculation (entries `unlikeMade`). They are the
+ * compound's conformers as that search found them, whole, not a part of
+ * another's (`partOf`).
  */
-export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | string {
+export function conformersWorked(entry: SetEntry, out: ReaderOutput, readers: readonly string[], source?: CalcSource): Worked[] | Failure {
   const n = entry.atoms.length;
-  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return "What came back is not the molecule that went";
+  if (out.atoms.length !== n || out.atoms.some((el, i) => el !== entry.atoms[i].el)) return { kind: "wrong-molecule", why: "What came back is not the molecule that went" };
   const frames = out.frames.filter((f) => f.length === 3 * n && f.every(Number.isFinite));
-  if (!frames.length) return "It found no conformer";
+  if (!frames.length) return { kind: "no-geometry", why: "It found no conformer" };
   const energies = out.energies?.length === frames.length && out.energies.every(Number.isFinite) ? out.energies : undefined;
   // (the program's own populations, where it gives one for each - and each one's degeneracy, a whole number)
   const shares = out.populations?.length === frames.length && out.populations.every((p) => Number.isFinite(p) && p >= 0) ? out.populations : undefined;
   const degeneracies = out.degeneracies?.length === frames.length && out.degeneracies.every((d) => Number.isInteger(d) && d >= 1) ? out.degeneracies : undefined;
   const calc = calcOf(out, readers, source);
+  // (a search of its own: all the conformers it found, whole - whatever the entry it began from was a part of)
+  const { partOf: _part, ...from } = entry;
   return frames.map((f, k) => ({
-    ...entry,
+    ...anew(from),
     number: k + 1,
     xyz: [...f],
     ...(energies ? { energy: energies[k] } : {}),
     ...(shares ? { share: shares[k] } : {}),
     ...(degeneracies ? { degeneracy: degeneracies[k] } : {}),
-    ...(k === 0 ? { calc } : {}),
+    calc: k === 0 ? calc : { ...calc, results: undefined },
   }));
 }
 
@@ -291,6 +368,75 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
   return entries.filter((e) => !seen.has(e.compound) && !!seen.add(e.compound));
 }
 
+/**
+ * What a plugin's step on structures drawn said of one of them (`run`,
+ * docs/PLUGINS.md, *Steps on structures drawn*): kept as drawn; made anew,
+ * as drawings - a MOL block each, its stereoisomers, say, and each one's
+ * own SMILES beside, where given; or set aside, why and what kind of
+ * reason it is.
+ */
+export type DrawnAnswer = { as: "drawn"; properties?: Record<string, DrawnValue> } | { made: string[]; smiles?: string[] } | { aside: string; kind: string };
+/** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
+export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };
+
+/** The most structures a step on structures drawn makes of one. */
+export const MADE_OF_ONE = 64;
+
+/** What a plugin's step on structures drawn said of each of `count`, in their order; why not, where it said nothing Meno can take - nothing taken in part. */
+export function readDrawnAnswers(raw: unknown, count: number): DrawnAnswer[] | string {
+  const list = (raw as { structures?: unknown } | null)?.structures;
+  if (!Array.isArray(list) || list.length !== count) return "It said nothing Meno can take";
+  const out: DrawnAnswer[] = [];
+  for (const a of list as { as?: unknown; made?: unknown; aside?: unknown; kind?: unknown }[]) {
+    if (a?.as === "drawn") {
+      const given = (a as { properties?: unknown }).properties;
+      if (given == null) {
+        out.push({ as: "drawn" });
+        continue;
+      }
+      if (typeof given !== "object" || Array.isArray(given)) return "It said nothing Meno can take";
+      const properties: Record<string, DrawnValue> = {};
+      for (const [name, p] of Object.entries(given as Record<string, { value?: unknown; unit?: unknown; method?: unknown }>)) {
+        const v = p?.value;
+        const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+        const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+        if (value == null || unit == null || !name.trim()) return "It said nothing Meno can take";
+        properties[name] = { value, unit, ...(typeof p.method === "string" && p.method.trim() ? { method: p.method.trim().slice(0, 200) } : {}) };
+      }
+      out.push({ as: "drawn", properties });
+    }
+    else if (Array.isArray(a?.made) && a.made.length && a.made.length <= MADE_OF_ONE && a.made.every((b) => typeof b === "string" && b.length)) {
+      // (each one's own SMILES, where given one for each: else none)
+      const smiles = (a as { smiles?: unknown }).smiles;
+      const named = Array.isArray(smiles) && smiles.length === a.made.length && smiles.every((x) => typeof x === "string" && x.length && x.length <= 2000);
+      out.push({ made: a.made as string[], ...(named ? { smiles: smiles as string[] } : {}) });
+    }
+    else if (typeof a?.aside === "string" && a.aside.trim()) out.push({ aside: a.aside.trim().slice(0, 200), kind: typeof a.kind === "string" && a.kind.trim() ? a.kind.trim().slice(0, 40) : "other" });
+    else return "It said nothing Meno can take";
+  }
+  return out;
+}
+
+/**
+ * What a step on structures drawn says it did: how many it kept of how
+ * many, or - where it made any anew - how many came in and went out, and
+ * how many it made of how many; and how many it set aside, by kind,
+ * the most first: *40 in · 52 out · 14 made from 2 · 3 set aside (2:
+ * stereo open; 1: too many)*.
+ */
+export function drawnSaid(answers: readonly DrawnAnswer[]): string {
+  const n = answers.length;
+  const made = answers.filter((a): a is { made: string[] } => "made" in a);
+  const madeCount = made.reduce((k, a) => k + a.made.length, 0);
+  const kept = answers.filter((a) => "as" in a).length + madeCount;
+  const kinds = new Map<string, number>();
+  for (const a of answers) if ("aside" in a) kinds.set(a.kind, (kinds.get(a.kind) ?? 0) + 1);
+  const aside = n - answers.filter((a) => !("aside" in a)).length;
+  const head = made.length ? `${n} in \u00b7 ${kept} out \u00b7 ${madeCount} made from ${made.length}` : `${kept} of ${n} kept`;
+  const why = [...kinds].sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c}: ${k}`).join("; ");
+  return aside ? `${head} \u00b7 ${aside} set aside (${why})` : head;
+}
+
 /** What a plugin did at once (`run`): the entries it kept, by their place among those it was given; why not, where it said nothing it can be taken at. */
 export function readKept(raw: unknown, count: number): number[] | string {
   const kept = (raw as { kept?: unknown } | null)?.kept;
@@ -298,48 +444,99 @@ export function readKept(raw: unknown, count: number): number[] | string {
   return [...new Set(kept as number[])].sort((a, b) => a - b);
 }
 
-/** The most molecules a step that makes them (Generate) brings in from one run. */
+/** How many SMILES not read a step's line names, the rest counted. */
+export const NOT_READ_NAMED = 5;
+
+/** Why a SMILES could not be read, from what the roles' `from_smiles` said: its words after "could not be read", else none known. */
+export function unreadWhy(said: string): string {
+  const m = /could not be read: (.+?)\.?$/.exec(said.trim());
+  return m ? m[1] : "not read";
+}
+
+/**
+ * The SMILES a step could not read, as its line says them: how many, and the
+ * first few (`NOT_READ_NAMED`) each with why - long ones cut short - the rest
+ * counted: *2 not read: C1CC (a ring left open), Xx (no element Xx)*.
+ */
+export function notReadSaid(notRead: readonly { smiles: string; why: string }[]): string {
+  const cut = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}\u2026` : s);
+  const named = notRead.slice(0, NOT_READ_NAMED).map((x) => `${cut(x.smiles)} (${x.why})`);
+  const more = notRead.length - named.length;
+  return `${notRead.length} not read: ${named.join(", ")}${more ? `, and ${more} more` : ""}`;
+}
+
+/** The most a step that makes them (Generate) brings in from one run. */
 export const GENERATED_MOST = 1000;
 
 /**
- * What a plugin made from nothing (Generate, `run` with no entries): each
- * molecule as an output (lib/calc/output) - its atoms, one geometry, what
- * the run says of it (its method, its results: the SMILES it was sampled
- * as, its likelihood) - with what an output carries no form for, its bonds,
- * its atoms' charges and their isotopes where any is one, beside; and what the plugin says of the run, its
- * counts (`said`). Each a compound of its own, numbered as it came. Why not,
- * where any of it is not a molecule Meno can take: nothing is taken in part.
+ * One structure a generative model made, as its plugin hands it on
+ * (docs/PLUGINS.md, *Generate*): the SMILES it gave, exactly; its own
+ * values, named, each a number, a text or true/false with its unit from
+ * Meno's units table or "none"; and, where it was made from one of the
+ * structures that came in, that one's place among them (`seed`).
  */
-export function readGenerated(raw: unknown, readers: readonly string[]): { made: Worked[]; said: string } | string {
-  const r = raw as { outputs?: unknown; said?: unknown } | null;
+export type Generated = { smiles: string; properties: Record<string, { value: number | string | boolean; unit: Unit | "none" }>; seed?: number };
+
+/**
+ * What a plugin's Generate gave (`run`): each structure as `Generated`; what
+ * made them all (`by`: the program, its version, the model, how); and what
+ * the plugin says of the run (`said`). Why not, where any of it is not what
+ * Meno takes - nothing taken in part. A SMILES is not read here: Meno reads
+ * each itself, as one pasted, and counts those it cannot read.
+ */
+export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by: By; said: string } | string {
+  const r = raw as { outputs?: unknown; said?: unknown; by?: unknown } | null;
   if (!Array.isArray(r?.outputs)) return "It said nothing Meno can take";
   if (r.outputs.length > GENERATED_MOST) return `It made more than ${GENERATED_MOST}`;
-  const made: Worked[] = [];
-  for (const [i, x] of (r.outputs as (ReaderOutput & { bonds?: unknown; charges?: unknown; isotopes?: unknown })[]).entries()) {
-    if (x?.schema != null && x.schema !== OUTPUT_SCHEMA) return "It made them in a form this Meno does not read";
-    const atoms = Array.isArray(x?.atoms) && x.atoms.every((el) => typeof el === "string" && elementOf(el)) ? x.atoms : null;
-    const xyz = Array.isArray(x?.frames) && Array.isArray(x.frames[0]) ? x.frames[0] : null;
-    if (!atoms?.length || !xyz || xyz.length !== 3 * atoms.length || !xyz.every((v) => typeof v === "number" && Number.isFinite(v))) return `Molecule ${i + 1} has no geometry Meno can read`;
-    const n = atoms.length;
-    const charges = x.charges === undefined ? atoms.map(() => 0) : x.charges;
-    if (!Array.isArray(charges) || charges.length !== n || !charges.every((c) => Number.isInteger(c) && Math.abs(c) <= 8)) return `Molecule ${i + 1}'s charges are not its atoms'`;
-    // (each atom's mass number, where it is one isotope in particular; 0, natural abundance)
-    const isotopes = x.isotopes === undefined ? atoms.map(() => 0) : x.isotopes;
-    if (!Array.isArray(isotopes) || isotopes.length !== n || !isotopes.every((v) => Number.isInteger(v) && v >= 0 && v <= 300)) return `Molecule ${i + 1}'s isotopes are not its atoms'`;
-    const bonds = Array.isArray(x.bonds) ? (x.bonds as { a1?: unknown; a2?: unknown; order?: unknown }[]) : null;
-    const index = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) < n;
-    if (!bonds || !bonds.every((b) => index(b?.a1) && index(b?.a2) && b.a1 !== b.a2 && [1, 2, 3].includes(b.order as number)))
-      return `Molecule ${i + 1}'s bonds are not between its atoms`;
-    made.push({
-      compound: i,
-      number: 1,
-      atoms: atoms.map((el, k) => ({ el, ...(charges[k] ? { charge: charges[k] } : {}), ...(isotopes[k] ? { isotope: isotopes[k] } : {}), x: xyz[3 * k], y: xyz[3 * k + 1], z: xyz[3 * k + 2] })),
-      bonds: bonds.map((b) => ({ a1: b.a1 as number, a2: b.a2 as number, order: b.order as number })),
-      xyz: [...xyz],
-      calc: calcOf(x, readers),
-    });
+  const made: Generated[] = [];
+  for (const [i, x] of (r.outputs as { smiles?: unknown; properties?: unknown; seed?: unknown }[]).entries()) {
+    if (typeof x?.smiles !== "string" || !x.smiles.trim() || x.smiles.length > 2000) return `Structure ${i + 1} has no SMILES Meno can take`;
+    const properties: Generated["properties"] = {};
+    if (x.properties != null && (typeof x.properties !== "object" || Array.isArray(x.properties))) return `Structure ${i + 1}'s values are not named`;
+    for (const [name, p] of Object.entries((x.properties ?? {}) as Record<string, { value?: unknown; unit?: unknown }>)) {
+      // (a value the model gave none of - an NLL that was no number, written as none: the plugin counts it - is not kept)
+      if (p?.value === null) continue;
+      const v = p?.value;
+      const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+      const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+      if (value == null || unit == null || !name.trim()) return `Structure ${i + 1}'s ${name || "value"} is not one Meno can take`;
+      properties[name] = { value, unit };
+    }
+    if (x.seed != null && !(Number.isInteger(x.seed) && (x.seed as number) >= 0 && (x.seed as number) < seeds)) return `Structure ${i + 1} names a seed that did not come in`;
+    made.push({ smiles: x.smiles.trim(), properties, ...(x.seed != null ? { seed: x.seed as number } : {}) });
   }
-  return { made, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
+  const given = (r.by ?? {}) as Record<string, unknown>;
+  const by: By = Object.fromEntries(["program", "version", "model", "method"].flatMap((k) => (typeof given[k] === "string" && (given[k] as string).trim() ? [[k, (given[k] as string).trim().slice(0, 300)]] : [])));
+  return { made, by, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
+}
+
+/**
+ * The entries a plugin's *Duplicates* counted a mirror image in (`counted`
+ * beside `kept`): each by its place among those given, how many it now
+ * stands for, and the atoms its mirror image swaps - a permutation of its
+ * `atoms[k]` atoms. Each must be one it kept; any that is not as said, none.
+ */
+export function readCounted(raw: unknown, kept: readonly number[], atoms: readonly number[]): Map<number, { degeneracy: number; mirror: number[] }> {
+  const out = new Map<number, { degeneracy: number; mirror: number[] }>();
+  const list = (raw as { counted?: unknown } | null)?.counted;
+  if (!Array.isArray(list)) return out;
+  for (const c of list) {
+    const g = c as { entry?: unknown; degeneracy?: unknown; mirror?: unknown } | null;
+    const k = g?.entry;
+    if (typeof k !== "number" || !kept.includes(k) || out.has(k)) return new Map();
+    const n = atoms[k];
+    const mirror = g!.mirror;
+    const ok = Number.isInteger(g!.degeneracy) && (g!.degeneracy as number) >= 2 && Array.isArray(mirror) && mirror.length === n && mirror.every((i) => Number.isInteger(i) && i >= 0 && i < n) && new Set(mirror).size === n;
+    if (!ok) return new Map();
+    out.set(k, { degeneracy: g!.degeneracy as number, mirror: [...(mirror as number[])] });
+  }
+  return out;
+}
+
+/** How many compounds a plugin's Duplicates took atom against atom, their ways onto themselves too many to try (`capped`): 0 where it says none, or not as it should. */
+export function readCapped(raw: unknown): number {
+  const n = (raw as { capped?: unknown } | null)?.capped;
+  return Number.isInteger(n) && (n as number) > 0 ? (n as number) : 0;
 }
 
 /** What a step says of a program installed separately that is found nowhere: where to say where it is. */
@@ -362,3 +559,7 @@ export function doneSaid(worked: readonly Worked[], total: number, took: number)
   if (total === 1 && worked.length === 1 && worked[0].energy != null) return `${clock(took)} · E ${hartrees(worked[0].energy)}`;
   return `${clock(took)} · ${worked.length} of ${total}`;
 }
+
+/** Whether what a job gave for an entry is why it failed, not what it made. */
+export const isFailure = (x: unknown): x is Failure =>
+  typeof (x as Failure)?.why === "string" && typeof (x as Failure)?.kind === "string" && !("xyz" in (x as object)) && !("atoms" in (x as object));

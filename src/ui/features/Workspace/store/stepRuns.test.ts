@@ -35,6 +35,8 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   stopJob: async (id: string) => void asked.stopped.push(id),
   removeJob: async (id: string) => void asked.removed.push(id),
   jobFolder: async (id: string) => `/jobs/${id}`,
+  // (a computer of 8 cores and 32 GB: jobs may use 24 GB of it, Settings unsaid)
+  computerResources: async () => ({ cores: 8, memory: 32 * 1024 }),
 }));
 
 /** The files a job made that Meno reads itself, as the test has them: a render's pictures, by where they are. */
@@ -109,7 +111,7 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => worker,
 }));
-/** What the plugin that perceives configurations was asked, MOL blocks each time; it answers each a centre, keyed by its place. */
+/** What the plugin that perceives configurations was asked, MOL blocks each time; it answers each a centre, keyed by its molecule (by how long its block is: conformers of one molecule are one stereoisomer here). */
 const configured: string[][] = [];
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/roles/worker")>()),
@@ -117,7 +119,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
   pluginWorker: async () => ({
     request: async (_op: string, args: { molblocks: string[] }) => {
       configured.push(args.molblocks);
-      return { molecules: args.molblocks.map((_b, i) => ({ elements: [{ kind: "centre", atoms: [0], specified: true }], key: `k${i}` })) };
+      return { molecules: args.molblocks.map((b) => ({ elements: [{ kind: "centre", atoms: [0], specified: true }], key: `k${b.split("\n").length}` })) };
     },
   }),
 }));
@@ -213,9 +215,9 @@ describe("a step that runs a plugin's program", () => {
     const ran = st().runStep(step);
     await settle();
     await settle();
-    // prepared by the plugin with what came in, its job started - with how many may run at once, and the cores each may use
+    // prepared by the plugin with what came in, its job started - with the cores it takes
     expect(worker.prepare).toHaveBeenCalledWith("optimise", [expect.objectContaining({ charge: 0, multiplicity: 1 })], { method: "gfn2", solvent: "none", level: "normal" }, expect.any(Number));
-    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], slots: 1 })]);
+    expect(asked.started).toEqual([expect.objectContaining({ plugin: "xtb", program: "xtb", args: ["input.xyz", "--opt", "normal"], cores: expect.any(Number) })]);
     const running = st().steps.find((s) => s.id === step)!.running!;
     expect(running.jobs).toEqual([{ id: idOf(1), entries: [0], reads: ["xtbopt.log"] }]);
     // (to be saved - and read back, so that a workspace opened again picks it up - but nothing to undo)
@@ -392,7 +394,7 @@ describe("a step that runs a plugin's program", () => {
     expect(m.calc?.wavefunction).toMatchObject({ name: "water.molden", kind: "molden" });
     // (held, for a step after it to be given; and kept in the workspace's file)
     expect((await heldOutput(m.calc!.wavefunction!.sha256))?.text).toBe("[Molden Format]\n");
-    const file = readMenoFile(await workspaceFile(st()));
+    const file = readMenoFile((await workspaceFile(st())).bytes);
     expect(file.files.map((f) => f.sha256)).toContain(m.calc!.wavefunction!.sha256);
   });
 
@@ -672,7 +674,7 @@ describe("a step that runs a plugin's program", () => {
     expect(st().steps).toHaveLength(0);
   });
 
-  it("brings in what the jobs done gave where another went without finishing - that one said failed", async () => {
+  it("brings in what the jobs done gave where another went without finishing - that one out of its Failed exit, with why", async () => {
     const { st, step } = waters(3);
     const ran = st().runStep(step);
     await settle();
@@ -683,8 +685,13 @@ describe("a step that runs a plugin's program", () => {
     end(3);
     await st().lookAtJobs();
     await ran;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "1 of 3 failed \u00b7 It stopped without finishing" });
-    expect(st().molecules3d).toHaveLength(3 + 2);
+    // (done, on what was done - what follows runs on it - the one that failed counted by why)
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: stopped before it finished)" });
+    expect(st().molecules3d).toHaveLength(3 + 2 + 1);
+    // (it, as it came in, in the step's Failed exit's set, saying why)
+    const failedSet = resultOf(st(), step, "failed")!;
+    const failedOnes = setMembers(st(), failedSet).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "stopped", why: "It stopped without finishing" }]]);
   });
 
   it("counts a job that failed as each entry it was for - and says why in its runner's words, where the runner said", async () => {
@@ -698,8 +705,8 @@ describe("a step that runs a plugin's program", () => {
     end(2);
     await st().lookAtJobs();
     await ran;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 xtb could not be started" });
-    expect(st().molecules3d).toHaveLength(3 + 1);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: not started)" });
+    expect(st().molecules3d).toHaveLength(3 + 1 + 2);
     // (where it did not: the plugin's, for each entry of the job)
     worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0, 1], ...two }, { entries: [2], ...two }] }) as never);
     const again = st().runStep(step);
@@ -709,7 +716,121 @@ describe("a step that runs a plugin's program", () => {
     end(4);
     await st().lookAtJobs();
     await again;
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "2 of 3 failed \u00b7 Some atoms are very close" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 3 \u00b7 2 of 3 failed (2: the program stopped with an error)" });
+  });
+
+  it("runs the jobs its plugin prepared, and sends an entry it refused out of its Failed exit, with why - kept with the workspace while it runs", async () => {
+    const { st, step } = waters(3);
+    const one = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    const why = "xTB: xTB's frequencies here take no isotope's mass: 2H would be given as H of natural mass.";
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...one }, { entries: [2], ...one }], refused: [{ entry: 1, why }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started).toHaveLength(2);
+    // (saved while it runs: what was refused is kept, to be said when it ends)
+    const saved = readWorkspace(workspaceText(st()))!;
+    expect(saved.workflow?.steps.find((s) => s.id === step)?.running?.refused).toEqual([{ entry: 1, kind: "refused", why }]);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
+    const failedSet = resultOf(st(), step, "failed")!;
+    const failedOnes = setMembers(st(), failedSet).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why }]]);
+  });
+
+  it("refuses a skeleton among what came in - its hydrogens not there - out of its Failed exit, never sent; the rest run", async () => {
+    const made = waters(3);
+    const { st, step } = made;
+    // (the second water's oxygen alone: no hydrogens, not said to be whole without any)
+    made.doc.edit("skeleton", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m, i) => (i === 1 ? { ...m, atoms: [m.atoms[0]], bonds: [], bondOrders: "unknown" as const } : m)) }));
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(worker.prepare.mock.calls[0][1]).toHaveLength(2);
+    expect(asked.started).toHaveLength(2);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
+    const failedOnes = setMembers(st(), resultOf(st(), step, "failed")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => [m.atoms.length, m.failed?.[0]?.kind, m.failed?.[0]?.why])).toEqual([[1, "refused", expect.stringMatching(/^This molecule has no hydrogens/)]]);
+  });
+
+  it("sends an optimisation that did not converge out of its Failed exit - its path and the last geometry it reached, never passed on as done - kept so when saved", async () => {
+    const { st, step } = waters(2);
+    const base = worker.collect.getMockImplementation()!;
+    worker.collect.mockImplementationOnce(base).mockImplementationOnce(async (...args: Parameters<typeof base>) => {
+      const r = await base(...args);
+      return r.outputs ? { outputs: r.outputs.map((o) => ({ ...o, optimised: false })) } : r;
+    });
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 1 of 2 \u00b7 1 of 2 failed (1: not converged)" });
+    const done = setMembers(st(), resultOf(st(), step)!).molecules;
+    const failedIds = setMembers(st(), resultOf(st(), step, "failed")!).molecules;
+    expect([done.length, failedIds.length]).toEqual([1, 1]);
+    const failed = st().molecules3d.find((m) => m.id === failedIds[0])!;
+    // (its path, ending at the last geometry it reached - the failure that one's)
+    expect(failed.frames).toHaveLength(1);
+    expect(failed.failed).toEqual([null, { kind: "not-converged", why: "The optimisation did not converge" }]);
+    // (taken on from its Failed exit: one entry, the last geometry, saying why)
+    expect(setEntries([failed], "molecules").map((e) => e.failed)).toEqual([{ kind: "not-converged", why: "The optimisation did not converge" }]);
+    // (saved and opened again, as it was)
+    const saved = readWorkspace(workspaceText(st()))!;
+    const doc2 = createWorkspaceDocument();
+    const store2 = createEditorStore(doc2);
+    connectStoreToDocument(store2, doc2);
+    store2.getState().openWorkspace(saved, true);
+    expect(store2.getState().molecules3d.map((m) => m.failed ?? null)).toEqual(st().molecules3d.map((m) => m.failed ?? null));
+  });
+
+  it("says where a job asks for more memory than jobs may use - nothing else that declares memory runs beside it - kept with the workspace while it runs", async () => {
+    const { st, step } = waters(2);
+    const job = { program: "xtb", args: [], files: [], reads: ["xtbopt.log"] };
+    worker.prepare.mockImplementationOnce(async () => ({ jobs: [{ entries: [0], ...job, memory: 30 * 1024 }, { entries: [1], ...job, memory: 1000 }] }) as never);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(asked.started.map((a) => a.memory)).toEqual([30 * 1024, 1000]);
+    const over = "1 job asks for more memory (30.0 GB) than jobs may use (24.0 GB): nothing else that declares memory runs beside it";
+    expect(st().steps.find((s) => s.id === step)!.running?.over).toBe(over);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran!.said).toBe(`0:01 \u00b7 2 of 2 \u00b7 ${over}`);
+  });
+
+  it("keeps what a conformer stands for through an optimisation: its degeneracy, and its mirror image's atoms where Duplicates counted one in", async () => {
+    const { doc, st, step } = editor();
+    // (water as a conformer set of two, the first standing for its mirror image too - its hydrogens swapped)
+    doc.edit("conformers", (d) => ({
+      ...d,
+      molecules3d: d.molecules3d!.map((m) => ({ ...m, frames: [[0, 0, 0.01, 0, 0.77, 0.6, 0, -0.75, 0.58]], conformerSet: true, degeneracies: [2, 1], mirrors: [[0, 2, 1], null] })),
+    }));
+    expect(setEntries(st().molecules3d, "conformers").map((e) => [e.degeneracy, e.mirror ?? null])).toEqual([
+      [2, [0, 2, 1]],
+      [1, null],
+    ]);
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true });
+    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(out.map((m) => [m.degeneracies, m.mirrors])).toEqual([[[2, 1], [[0, 2, 1], null]]]);
   });
 
   it("deleted while it runs and then undone, comes back no longer running: its jobs were stopped", async () => {
@@ -781,15 +902,16 @@ describe("running a workflow's steps", () => {
     expect(st().steps.find((s) => s.id === b)!.ran!.said).toBe("2 of 3 kept");
   });
 
-  it("asks first which stereoisomer each entry is, for Populations - every conformer its own - and its entries carry it", async () => {
+  it("asks first which stereoisomer each entry is, for As conformers and Populations - every conformer its own - and its entries carry it", async () => {
     forgetStereo();
     configured.length = 0;
     const { st, b, c } = chain();
     await st().runFrom(c);
-    // (asked once, for the conformers the window let through - Populations' entries, each its own geometry)
+    // (asked once, by As conformers, for all three, each its own geometry; Populations' two, the window's, known by then)
     const kept = setEntries(st().molecules3d.filter((m) => setMembers(st(), st().sets.find((x) => x.made?.step === b)!).molecules.includes(m.id)), "conformers");
-    expect(configured.map((blocks) => blocks.length)).toEqual([kept.length]);
-    expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map((_e, i) => `k${i}`));
+    expect(configured.map((blocks) => blocks.length)).toEqual([3]);
+    expect(kept).toHaveLength(2);
+    expect(kept.map((e) => (e.stereo?.perceived ? e.stereo.key : null))).toEqual(kept.map(() => `k${configured[0][0].split("\n").length}`));
   });
 
   it("runs all that have not run or have changed - and leaves those done as they are", async () => {
@@ -905,108 +1027,32 @@ describe("a plugin's conformer search, and its duplicates", () => {
     const step = st().addStep("duplicates", "rdkit", 10, 20);
     st().connect({ set }, step);
     await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { rmsd: 0.125 }, "molecules");
+    expect(worker.run).toHaveBeenCalledWith("duplicates", expect.arrayContaining([expect.objectContaining({ compound: 0, charge: 0 })]), { mirrors: "apart" }, "molecules");
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept" });
     // (the one set aside, in the step's second exit's set)
     expect(countOf(st(), resultOf(st(), step, "rest")!).entries).toBe(1);
-  });
-});
-
-describe("Generate: a step that takes nothing in", () => {
-  /** What the generator made, as its plugin says it: methanol and an ammonium, each an output with its bonds and charges beside, and the run's counts. */
-  const generated = {
-    outputs: [
-      {
-        schema: 1,
-        program: "REINVENT 4",
-        version: "4.8.24",
-        method: "sampled from reinvent_pubchem.prior, seed 7, on the CPU; one geometry, ETKDG v3 + MMFF94",
-        atoms: ["C", "O"],
-        charges: [0, 0],
-        isotopes: [13, 0],
-        bonds: [{ a1: 0, a2: 1, order: 1 }],
-        frames: [[0, 0, 0, 1.43, 0, 0]],
-        results: [{ id: "nll", on: "molecule", group: "Generated", label: "NLL under reinvent_pubchem.prior", value: 21.5, digits: 2, rank: 1 }],
-      },
-      { schema: 1, program: "REINVENT 4", version: "4.8.24", method: "m", atoms: ["N"], charges: [1], bonds: [], frames: [[0, 0, 0]], results: [] },
-    ],
-    said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU: 2 made, 1 not (1: not a SMILES RDKit reads)",
-  };
-
-  function page() {
-    const doc = createWorkspaceDocument();
-    const store = createEditorStore(doc);
-    connectStoreToDocument(store, doc);
-    const st = () => store.getState();
-    return { doc, st };
-  }
-
-  beforeEach(() => {
-    worker.run.mockClear();
-    useReaders.setState({ state: { reinvent: "added" }, problem: {} });
-  });
-
-  it("is ready with nothing wired in, runs on its options alone, and brings in what it made: each molecule a compound of its own", async () => {
-    const { st } = page();
-    const step = st().addStep("generate", "reinvent", 0, 0);
-    st().updateStep(step, { options: { count: 3, seed: 7 } });
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("ready");
-    worker.run.mockImplementationOnce(async () => generated as never);
+    // (compounds it took atom against atom, too many ways onto themselves to try: said, a duplicate of one could be missed)
+    worker.run.mockImplementationOnce(async () => ({ kept: [0, 1], capped: 1 }) as never);
     await st().runStep(step);
-    // (with ten minutes to take, not a request's two: a busy computer fails no sound run)
-    expect(worker.run).toHaveBeenCalledWith("generate", [], { count: 3, seed: 7, stereo: "every" }, "molecules", 600_000);
-    const ran = st().steps.find((s) => s.id === step)!.ran!;
-    expect(ran).toMatchObject({ ok: true, said: generated.said });
-    const out = resultOf(st(), step)!;
-    expect(out.made!.holds).toBe("molecules");
-    const made = setMembers(st(), out).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
-    expect(made.map((m) => m.atoms.map((a) => `${a.isotope ?? ""}${a.el}${a.charge ?? ""}`).join(" "))).toEqual(["13C O", "N1"]);
-    expect(made[0].bonds).toEqual([{ a1: 0, a2: 1, order: 1 }]);
-    expect(made[0].calc).toMatchObject({ program: "REINVENT 4", method: generated.outputs[0].method });
-    expect(made[0].calc?.results?.find((r) => r.id === "nll")).toMatchObject({ value: 21.5, label: "NLL under reinvent_pubchem.prior" });
-    // (done, as nothing it runs on has changed; changed once its options do)
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("done");
-    st().updateStep(step, { options: { count: 4, seed: 7 } });
-    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "reinvent")).toBe("changed");
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "2 of 2 kept \u00b7 1 compound has more than 1,000 symmetric ways: duplicates of it could be missed" });
   });
 
-  it("from seeds, where its plugin takes them (CReM's): waits for a set of molecules wired in, and gives its plugin each as an entry", async () => {
-    useReaders.setState({ state: { crem: "added", xtb: "added" }, problem: {} });
-    const { st } = editor();
-    const step = st().addStep("generate", "crem", 0, 30);
-    const here = () => st().steps.find((s) => s.id === step)!;
-    expect(stateOf(st(), here(), "crem")).toBe("no-input");
-    st().connect({ set: st().sets[0].id }, step);
-    expect(st().wires.filter((w) => w.to.step === step)).toHaveLength(1);
-    expect(stateOf(st(), here(), "crem")).toBe("ready");
-    worker.run.mockImplementationOnce(async () => ({ ...generated, said: "2 made from 1 seed (fragments replaced, radius 3, seed 1)" }) as never);
-    await st().runStep(step);
-    expect(worker.run).toHaveBeenCalledWith(
-      "generate",
-      [expect.objectContaining({ atoms: [expect.objectContaining({ el: "O" }), expect.objectContaining({ el: "H" }), expect.objectContaining({ el: "H" })], charge: 0, multiplicity: 1 })],
-      expect.objectContaining({ operation: "mutate", count: 20, radius: 3 }),
-      "molecules",
-      600_000,
-    );
-    expect(here().ran).toMatchObject({ ok: true, said: "2 made from 1 seed (fragments replaced, radius 3, seed 1)" });
-    expect(setMembers(st(), resultOf(st(), step)!).molecules).toHaveLength(2);
-    // (changed once what came in has)
-    st().removeWire(st().wires.find((w) => w.to.step === step)!.id);
-    expect(stateOf(st(), here(), "crem")).toBe("changed");
-  });
-
-  it("takes no wire, and fails, saying why, on anything it made that is no molecule", async () => {
-    const { st } = page();
-    const set = st().addSet({ x0: -3, y0: -3, x1: 3, y1: 3 });
-    const step = st().addStep("generate", "reinvent", 0, 0);
+  it("keeps a mirror image a plugin's Duplicates counted in: the one kept standing for both, with the atoms it swaps", async () => {
+    const { doc, st } = editor();
+    doc.edit("water", (d) => addMolecule3d(d, { ...d.molecules3d![0], at: { x: 1, y: 1 } }));
+    const set = st().sets[0].id;
+    const step = st().addStep("duplicates", "rdkit", 10, 20);
+    st().updateStep(step, { options: { mirrors: "counted" } });
     st().connect({ set }, step);
-    expect(st().wires ?? []).toEqual([]);
-    worker.run.mockImplementationOnce(async () => ({ outputs: [{ ...generated.outputs[0], bonds: [{ a1: 0, a2: 5, order: 1 }] }] }) as never);
+    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 2, 1] }] }) as never);
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Molecule 1's bonds are not between its atoms" });
-    worker.run.mockImplementationOnce(async () => ({ outputs: [{ ...generated.outputs[0], isotopes: [13] }] }) as never);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 of 2 kept \u00b7 1 mirror image counted in (degeneracy 2)" });
+    const out = setMembers(st(), resultOf(st(), step)!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(setEntries(out, "molecules").map((e) => [e.degeneracy, e.mirror])).toEqual([[2, [0, 2, 1]]]);
+    // (one not as said - not a permutation of its atoms: none taken)
+    worker.run.mockImplementationOnce(async () => ({ kept: [0], counted: [{ entry: 0, degeneracy: 2, mirror: [0, 0, 1] }] }) as never);
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Molecule 1's isotopes are not its atoms'" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ said: "1 of 2 kept" });
   });
 });
 

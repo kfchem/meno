@@ -185,10 +185,19 @@ def keeps_wavefunction(options):
     return keep
 
 
+def memory_of(options, cores):
+    """The memory a job asks of ORCA, in MiB, as the queue counts it: %maxcore, the MB each process may use, times
+    the processes - none where %maxcore is not set (ORCA's own default then, which it does not say)."""
+    maxcore = whole(options.get("maxcore", 0), "The memory for each core", 0)
+    processes = whole(cores, "The cores", 1) if cores else 1
+    return maxcore * processes if maxcore else None
+
+
 def op_prepare(m):
     step = m.get("step")
     options = m.get("options") or {}
     keep = keeps_wavefunction(options)
+    memory = memory_of(options, m.get("cores"))
     jobs = []
     for i, entry in enumerate(m.get("entries") or []):
         jobs.append({
@@ -198,6 +207,7 @@ def op_prepare(m):
             "files": [{"name": INPUT, "text": orca_input(step, entry, options, m.get("cores"))}],
             **({"then": [TO_MOLDEN]} if keep else {}),
             "reads": [WAVEFUNCTION] if keep else [],
+            **({"memory": memory} if memory else {}),
         })
     if not jobs:
         raise Refused("nothing came in")

@@ -75,6 +75,7 @@ import { spotMoving } from "./figureTie";
 import { atomAtSpot } from "../utils/figures";
 import { inkOnPage } from "../utils/pdfInk";
 import { hoverKeeper } from "./keptHover";
+import { useNotHad } from "../../../../lib/doc/notHad";
 
 /** Eased in and out, cubic: what is lifted rises and settles. */
 export const ease = (u: number) => {
@@ -121,6 +122,8 @@ const native = (e: unknown): Pointerish => ((e as { nativeEvent?: Pointerish }).
 
 export default function Pdfs2D() {
   const pdfs = useEditor((s) => s.pdfs);
+  // (those that could not be had: each page crossed, until it is had again or taken away)
+  const notHad = useNotHad((s) => s.shas);
   const hoveredPdf = useEditor((s) => s.hoveredPdf);
   const litPdf = useEditor((s) => s.litPdf);
   // (words selected, and places found, marked on the pages)
@@ -698,6 +701,7 @@ export default function Pdfs2D() {
           px={px}
           hovered={hoveredPdf === p.id}
           selected={selPdfs.has(p.id)}
+          notHad={notHad.has(p.sha256)}
           motion={motion.current.get(p.id)}
           previewOf={(page) => pics.preview(p, page)}
           tilesOf={(page) => pics.tilesOf(p.sha256, page, view.current.level.get(p.id * 100000 + page) ?? 0)}
@@ -727,6 +731,8 @@ function PdfStack(props: {
   px: number;
   hovered: boolean;
   selected: boolean;
+  /** It could not be had (lib/doc/notHad): its pages crossed. */
+  notHad: boolean;
   motion?: Motion;
   previewOf: (page: number) => Pic | null;
   tilesOf: (page: number) => Tile[];
@@ -842,7 +848,7 @@ function PdfStack(props: {
         {(g ? g.order : spreadOrder(p)).map((i, n) => {
           const { k, s } = sheets[i];
           const lift = Math.sin(Math.PI * k);
-          return <Page key={i} s={s} pt={p.pages[i]} lift={lift} z={0.02 * n + 0.2 * lift} now={now} px={px} preview={props.previewOf(i)} tiles={props.tilesOf(i)} marks={props.marksOf(i)} ink={inkOnPage(p, i)} />;
+          return <Page key={i} s={s} pt={p.pages[i]} lift={lift} z={0.02 * n + 0.2 * lift} now={now} px={px} preview={props.previewOf(i)} tiles={props.tilesOf(i)} marks={props.marksOf(i)} ink={inkOnPage(p, i)} notHad={props.notHad} />;
         })}
         {/* (lit round each page, not round all of them: they may lie far apart) */}
         {lit > 0.001 &&
@@ -894,7 +900,7 @@ function PdfStack(props: {
           {under.map((s, i) => (
             <BlankSheet key={i} s={s} z={0.01 * i} />
           ))}
-          <Page s={top} pt={p.pages[p.page]} lift={0} z={0.06} now={now} px={inPx} preview={props.previewOf(p.page)} tiles={props.tilesOf(p.page)} marks={k === 1 ? props.marksOf(p.page) : undefined} ink={inkOnPage(p, p.page)} />
+          <Page s={top} pt={p.pages[p.page]} lift={0} z={0.06} now={now} px={inPx} preview={props.previewOf(p.page)} tiles={props.tilesOf(p.page)} marks={k === 1 ? props.marksOf(p.page) : undefined} ink={inkOnPage(p, p.page)} notHad={props.notHad} />
       {going != null && (
         <Page
           pt={p.pages[going]}

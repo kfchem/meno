@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { atOneGeometry, ENTRY_SCHEMA, FREQUENCY, frameCount, geometryKey, ridingAlong, stereoIdentity, valueFault, type Entry, type EntryStereo, type Property } from "./entry";
+import { atOneGeometry, ENTRY_SCHEMA, FREQUENCY, frameCount, geometryKey, ridingAlong, stereoIdentity, valueFault, type By, type Entry, type EntryStereo, type Property } from "./entry";
 import { speciesOf } from "./io/writers";
 
 const water = (dx = 0) => [0 + dx, 0, 0, 0.96, 0, 0, -0.24, 0.93, 0];
@@ -25,7 +25,7 @@ describe("the entry record", () => {
       from: [],
       structure: { atoms: [{ el: "O" }, { el: "H" }, { el: "H" }], bonds: [] },
       geometry: { kind: "3d", xyz: water() },
-      species: speciesOf({ atoms: [], bonds: [] }),
+      species: speciesOf({ atoms: [], bonds: [] })!,
       properties: { energy, start: tag },
       status: "done",
     };
@@ -42,7 +42,7 @@ describe("the entry record", () => {
 describe("which stereoisomer an entry is", () => {
   const by = { plugin: "rdkit", version: "0.1.7" };
   const centre = (specified = true) => ({ kind: "centre" as const, atoms: [1], specified });
-  const perceived = (key: string, elements = [centre()], at = by): EntryStereo => ({ perceived: true, elements, key, by: at });
+  const perceived = (key: string, elements = [centre()], at: By = by): EntryStereo => ({ perceived: true, elements, key, by: at });
 
   it("is one text two entries share exactly when they are one stereoisomer, as one plugin's version keys them", () => {
     // ((R)- and (S)-2-butanol, keyed by the plugin; the same key from two geometries is one stereoisomer)
@@ -54,11 +54,22 @@ describe("which stereoisomer an entry is", () => {
 
   it("is known for a molecule with no stereo - and not known where it was not perceived, or a configuration was left open", () => {
     // (methylcyclohexane: perceived, nothing stereogenic - an identity of its own)
-    expect(stereoIdentity(perceived("CC1CCCCC1", []))).toBe("rdkit@0.1.7:CC1CCCCC1");
+    expect(stereoIdentity(perceived("CC1CCCCC1", []))).toBe('["rdkit","0.1.7","CC1CCCCC1"]');
     // (not perceived is not "no stereo"; an open centre matches nothing, not even another open one)
     expect(stereoIdentity(undefined)).toBeNull();
     expect(stereoIdentity({ perceived: false, why: "Nothing added tells stereoisomers apart" })).toBeNull();
     expect(stereoIdentity(perceived("CC(C)O", [centre(false)]))).toBeNull();
+  });
+
+  it("is never one text for two different ones: no plugin or version said is not known, and no two parts run together", () => {
+    // (the desk's two cases: an empty `by` read as "?" and "?" equalled a plugin and version called "?";
+    //  and a key or version with the separator in it made (a, b, "c:d") and (a, "b:c", d) one text)
+    expect(stereoIdentity(perceived("K", [centre()], {}))).toBeNull();
+    expect(stereoIdentity(perceived("K", [centre()], { plugin: "rdkit" }))).toBeNull();
+    expect(stereoIdentity(perceived("K", [centre()], { plugin: "", version: "0.1.7" }))).toBeNull();
+    expect(stereoIdentity(perceived("K", [centre()], { plugin: "?", version: "?" }))).not.toBeNull();
+    expect(stereoIdentity(perceived("c:d", [centre()], { plugin: "a", version: "b" }))).not.toBe(stereoIdentity(perceived("d", [centre()], { plugin: "a", version: "b:c" })));
+    expect(stereoIdentity(perceived("d", [centre()], { plugin: "a@b", version: "c" }))).not.toBe(stereoIdentity(perceived("d", [centre()], { plugin: "a", version: "b@c" })));
   });
 });
 
@@ -120,6 +131,6 @@ describe("a molecule's species, by Meno's one rule", () => {
   it("is what its atoms say where it was given none, or none that makes sense", () => {
     expect(speciesOf(anion)).toEqual({ charge: -1, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } });
     expect(speciesOf(anion, { charge: 0.5, multiplicity: 0 })).toEqual({ charge: -1, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } });
-    expect(speciesOf(anion, { multiplicity: 3 }).from).toEqual({ charge: "atoms", multiplicity: "given" });
+    expect(speciesOf(anion, { multiplicity: 3 })!.from).toEqual({ charge: "atoms", multiplicity: "given" });
   });
 });

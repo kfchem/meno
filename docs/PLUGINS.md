@@ -61,7 +61,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
-| Workflows | new molecules from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set, so that the same asking gives the same molecules; a radical sampled is not made - its spin is not handed on - and each isotope is kept; a SMILES that leaves centres or double bonds unspecified is made as every stereoisomer of them, each its own compound and saying so (at most 8; never one picked by the seed), or not at all where the step says so; CReM (`run` with the seeds wired in, `seeds`; its fragment database from ChEMBL 33 downloaded besides and unpacked, `unpack: "gz"`), each seed's fragments - or its hydrogens - replaced by fragments the database holds in the same surroundings, those it makes picked with the seed set where more are found; each says its seed, the change made and how often the fragment put in occurs in the database, and is made in 3D as REINVENT 4's are |
+| Workflows | new structures from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set, so that the same asking gives the same SMILES; each handed on as sampled, with its NLL and SMILES_state - nothing made of it, nothing refused (*Generate*, below) |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D | which stereoisomer each molecule in 3D is (*Configurations*, below) | RDKit (`configurations`) |
@@ -208,10 +208,11 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `xyzEnergies` | list of `{id, pattern, unit?}` | How the program writes a frame's energy on an XYZ file's comment line, from its documentation: `pattern` a regular expression (case-insensitive) with one capture group holding the number; `unit` its number's - `hartree` (the default), `eV`, `kcal/mol` or `kJ/mol` - which Meno converts to hartrees. Meno reads a frame's energy only by the patterns of the plugins added (docs/FILE-IO.md); where two find different numbers on a line, none. |
+| `xyzSteps` | list of `{id, file?, comment?}`, one or both | The XYZ files the program writes whose frames are an optimisation's steps, which of them converged not said in the file (its output says it): `file` the file's name as the program's documentation or its own output gives it, `*` any run of characters (`xtbopt.log`, `*_trj.xyz`), matched in any case; `comment` a regular expression every frame's comment line matches, so that the file is known renamed too (xtb's `energy: ... gnorm: ...`, ORCA's `Coordinates from ORCA-job <name> E ...`) - of a file of two frames or more, and never an ensemble's (a conformer search's, a relaxed scan's points). None of such a file's frames is an entry of a set, and the molecule says why (docs/WORKFLOWS.md, *Compound sets and conformer sets*). A file no plugin names is read as before, every frame an entry. |
 | `roles` | list of `{role, programs?, options?, looks?, motions?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below). |
-| `steps` | list of `{kinds, programs?, options?, takes?, files?, seeds?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). `seeds`: `true`, of a kind that takes nothing in of its own (*Generate*), where it makes its molecules from seeds: the step then has one input, *Seeds*, taking a compound set, and is given its molecules as entries; without it, nothing is wired in. |
+| `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
-| `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?, unpackedBytes?, cite?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. One may be data compressed with gzip (`unpack: "gz"`: CReM's fragment database), never a program: Meno unpacks it itself - no program on the system needed - into `files/<its name without .gz>/`, stamped whole as an archive is, and throws the archive away; `unpackedBytes`, which such a file must give, is how large it is then, said as asking to set the plugin up says the rest. `cite`, of any, is how its makers ask work that uses it to cite them, said there too. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
+| `downloads` | list of `{file, name, licence, url, sha256, bytes, system?, arch?, unpack?, program?, provides?}` | Files it needs besides its environment - a model's trained weights - each fetched by Meno as the plugin is set up, under the same leave: asking to set it up says each one's name, licence and size, and where it comes from. `url` is HTTPS, pinned to a revision where its host has them; it is checked against `sha256` and `bytes` before it is kept, as `file` - a name, not a path - in `files` beside its environment (`uv/plugin-<id>/files`, or `pixi/plugin-<id>/files` for one pixi makes), taken away with it. A download cut short is taken up where it stopped. The worker is given that folder as its one argument. All as they must be, or the plugin is none; the backend reads them from the manifest itself (`src-tauri/src/plugfiles.rs`). Only those for this computer are fetched: its system, and processor, where a file says one (`system`, `arch`). One may be a program the plugin runs, Meno's own copy of it (`provides`: its name, as the plugin's steps and roles run it): *A program Meno fetches*, below. A plugin that comes to need a file it did not as it was set up asks again, even where its setting up was allowed: the record of its set-up keeps the files the user was told of. |
 | `guide` | list of `{title, text, at?, until?, suggest?}`, at most 12 | Its guide (*A plugin's guide*). |
 | `suggests` | list of `{plugin, for}` | Its catalogue: the plugins it suggests, by id, each with what it is for, in a line (*A plugin's catalogue*). |
 | `files` | list of `{id, name, extensions, marks, suggest}` | The kinds of file its catalogue names, each told by its own marks - checked as a kind's are - with the plugins it suggests to read it. |
@@ -451,8 +452,9 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
   with each request for the role (`options`). RDKit declares its conformer
   search's (0.1.8): how many sought - as many as the molecule needs, or a
   number given - the force field (MMFF94, MMFF94s, UFF), the steps an
-  optimisation may take, the RMSD within which two are the same shape, the
-  random seed - and its *Conformers* step takes the same, said once.
+  optimisation may take, the random seed - and its *Conformers* step takes
+  the same, said once. When two conformers are the same is no option
+  (below).
 - **How many conformers are sought is the molecule's to say**
   (2026-10-20): a fixed number is too few for a molecule with much to
   explore and more than a rigid one has shapes, so the RDKit plugin asks
@@ -479,33 +481,96 @@ What lane L7 brings fits this spec as it is; the rest comes with it:
     number for an embedding: nothing in it turns and no ring of it can
     flip, so each try gives the same shape back (benzene, caffeine,
     adamantane).
-- **The same shape with equivalent atoms swapped is the one conformer**
-  (2026-10-20): a tert-butyl's three methyls turned round, or a phenyl
-  flipped, leaves every atom of it somewhere else, so comparing atom
-  against atom counted such a shape again and again - a
-  tert-butylcyclohexane came back as 26 conformers that were 5, an
-  adamantane as 15 that were 1, an ibuprofen as 28 that were 9. Shapes are
-  now compared over the ways the molecule maps onto itself as well
-  (RDKit's `GetBestRMS`, within the same 0.5 Å over heavy atoms), as an
-  eta system's rings already were. Two things hold it back, both measured:
-  - **only where the two sit at the one energy.** A shape and the same
-    shape relabelled have the one energy exactly - over 4000 such pairs
-    here the largest gap the optimisation left was 0.000001 kcal/mol -
-    while two different shapes can fall within half an angstrom of each
-    other once relabelled: phenylcyclohexane's twist-boat lands 0.40 Å
-    from its chair that way and sits 6.1 kcal/mol above it. Without this,
-    every twist-boat of it was swallowed by a chair. Where nothing could
-    be optimised and no energies came back - no force field here having
-    parameters for it - there is nothing to show it with, so those shapes
-    are told apart atom against atom, as they were; an eta system, which
-    never has energies, keeps the comparison it was given in the first
-    place, its rings turning on their metal being the swap it is for.
-  - **only where there are few enough ways to try.** A
-    tetrakis(triphenylphosphine)palladium maps onto itself millions of
-    ways, and trying them took 2.1 s for a single pair of conformers
-    against 0.002 s for a thousand of them. Past a thousand ways its
-    shapes are told apart atom against atom, as before, and its list may
-    hold the same shape twice.
+- **The same conformer** (the maintainer, 2026-10-21): two conformers are
+  one where all their atoms, hydrogens included, lie within 0.01 Å RMSD of
+  each other, laid over at their best - turned and moved, never reflected
+  - over the ways the molecule maps onto itself. It is the maintainer's
+  standard for structures fed to quantum calculations, one definition for
+  the whole app: it keeps an OH or NH turned the other way as a conformer
+  of its own, and a conformer's mirror image too, whose atoms an average
+  over the conformers needs (a ring's two enantiotopic carbons swap
+  between them). Nothing is made one on any looser measure, nor by energy:
+  before, the RDKit plugin took shapes within 0.5 Å over their heavy atoms
+  as one, and over the molecule's symmetries only where their energies
+  agreed, and its raw embeddings, with no energies, atom against atom.
+  (`SAME_CONFORMER`, `Sameness` in its worker.)
+  - **A tert-butyl's three methyls turned round, or a phenyl flipped, is
+    the one conformer.** Such a shape leaves every atom of it somewhere
+    else, so comparing atom against atom counted it again and again - a
+    tert-butylcyclohexane came back as 26 conformers that were 5. The ways
+    the molecule maps onto itself are tried, at most a thousand of them
+    (`ALIKE_WAYS`): a tetrakis(triphenylphosphine)palladium maps onto
+    itself millions of ways, and trying them took 2.1 s for a single pair
+    of conformers.
+  - **Hydrogens are matched, not tried.** The hydrogens on one atom are
+    each matched to the nearest of those on the atom it is taken to, once
+    the rest are laid over; past a thousand ways, so are atoms at the end
+    of a chain alike on one atom (the four chlorides of
+    OsCl4(PEt3)2, whose ways are 1728, then 72). Past a thousand still,
+    conformers are compared atom against atom. Matching to the nearest, or
+    atom against atom, can only fail to find that two conformers are the
+    same, never make two different ones one: whatever matching is tried,
+    two conformers it lays within 0.01 Å of each other are the same. So the
+    worst it does is keep a conformer twice.
+  - **Most pairs are told apart before they are laid over.** Laid over at
+    their best, two conformers share their centre, so each atom's distance
+    from it moves no more than the atom does: the RMSD of each element's
+    distances from the centre, sorted, is a bound the conformers cannot be
+    under, and each way's own atoms laid over alone is another. Only pairs
+    and ways under 0.01 Å by both are laid over in full.
+- **A metal's ligands are kept apart, where that is sound.** While a
+  metal complex is embedded and optimised, two atoms bonded to its metal,
+  of different ligands, are held at least a floor's angle apart, so that
+  its ligands do not pile up: ETKDG knows no angle at a metal, and without
+  one the seven fluorides of [ZrF7]3- came out 33 degrees apart, the
+  halides of OsCl4Br4 25. The floor goes by how many atoms are bonded to
+  the metal, and its source is geometry - each sits below the narrowest
+  angle between neighbours of the ideal polyhedra it is for:
+
+  | Atoms bonded | Floor | Narrowest ideal polyhedra |
+  |---|---|---|
+  | 2 to 6 | 75° (`NARROWEST_AT_METAL`) | trigonal prism with equal edges, 2 asin(√(3/7)) = 81.8°; octahedron, square plane, trigonal bipyramid, square pyramid, 90° |
+  | 7 to 12 | 60° (`NARROWEST_CROWDED`) | pentagonal bipyramid, 72° (360°/5); icosahedron, 63.4° (arctan 2). No common polyhedron of 10 or 11 points was worked out: there the margin rests on the icosahedron alone, 3.4° |
+  | more | none | |
+
+  Only between point donors:
+  - none at a metal with a ligand bound through atoms side by side (eta),
+    whose atoms spread round where it sits: Cp2TiCl2's Cp carbon and Cl
+    come near 76 degrees, a Zeise-type alkene's carbon and its cis Cl near
+    71. Its own holds keep the other ligands off it (*η*, WORKSPACE.md);
+  - never between two atoms of one ligand, whose own bonds set its bite
+    (en on a lanthanide bites about 65 degrees);
+  - nor for a hydride, which may sit closer to another (cis H-M-H).
+
+  The metal's row on the chip says which floor held, or that none did and
+  why. A conformer that comes out with two ligands closer than its floor
+  by more than five degrees is dropped - the holds give up to two, measured
+  on complexes pressed against the 60° floor - and
+  the chip counts it, naming the metal and the floor: it sat in a well of
+  the force field the hold could not pull it out of. [OsCl6]2-, with Fe
+  standing in, gave one 87.7 kcal/mol above the octahedron with two Cl 62
+  degrees apart.
+
+  Before (RDKit plugin 0.1.4 to 0.1.7, from 2026-10-17), one floor of 75°
+  held at every metal, between every two of its atoms not joined within
+  two bonds otherwise. It held 75° where real structures go under it -
+  seven- to twelve-coordinate metals ([ZrF7]3- came out at 73°, held,
+  where a pentagonal bipyramid's neighbours are 72° apart), and a
+  chelate's ends three bonds apart on a large metal - and it held atoms it
+  had no reason to: a Zeise-type complex's alkene carbon and cis Cl, and a
+  cis dihydride's hydrides, though there the force field's own angles
+  stayed above it (77° and 88° here, as now).
+- **Where a lighter metal stands in, or eta rings are held, that model's
+  energies order the conformers.** Where UFF has no type for a metal and a
+  lighter one of its group stands in, or a ring bound through its atoms is
+  held over its metal, UFF's energies of that model are not the
+  molecule's, so none are given and no populations come of them; but they
+  are what the shapes were optimised in, and they order them, lowest
+  first, said once in the line that says how they were made ("ordered by
+  the stand-in field, Fe for Os"; "ordered by the stand-in field, Ti for
+  Zr, the η rings held"; "ordered by UFF's energies, the η rings held").
+  Before, the embedding order stood, and [OsCl6]2-'s first conformer was
+  its distorted one.
 - **What a plugin made says how it was made**, in its own words, as rows
   to show: RDKit's conformers carry their embedding, force field, how many
   were kept and RDKit's version (`how`), kept with the molecule and shown
@@ -684,14 +749,21 @@ The same for every plugin and for Meno's own parts:
     roles - and `probe {kind, name, head}` (answered `{yes}`) - whether a
     file is of a kind it registered (FILE-IO.md);
   - each role's own requests, by the role (*Roles*): `from_smiles
-    {smiles}` and `to_smiles {molblock}` (SMILES); `analyse {molblock}`
+    {smiles}`, `to_smiles {molblock}` and `rxn_to_smiles {rxnblock}` (a
+    reaction as an RXN file holds it, as a reaction SMILES) (SMILES);
+    `analyse {molblock}`
     (the checks, R/S and E/Z among them); `open_stereo {molblock, like?}`
-    (stereoisomers); `conformers {molblock, isomers?, like?, options}`
+    (stereoisomers: what is left open, how many stereoisomers of it can
+    be made in 3D, which open double bonds are cumulated, and whether none
+    holds in 3D, `free`); `conformers {molblock, isomers?, like?, options}`
     (structures in 3D and their conformers, with the role's options);
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
-    {molblock}` (its bond orders from a SMILES, its hydrogens added);
+    {molblock, hydrogens?}` (its bond orders from a SMILES, its hydrogens
+    added - as many on each atom as `hydrogens` says, by atom, where it is
+    given, its valence not checked: whether a bond to a metal is in place
+    of a hydrogen is the chemist's to say);
     `read_picture {picture}` (structures read from pictures: a PNG or a
     JPEG in base64, answered with the structure's atoms where the picture
     has them, in its pixels - each an element with its charge, or a label
@@ -720,6 +792,31 @@ The same for every plugin and for Meno's own parts:
     wrote, read back, to keep with the molecules read from it
     (`"wavefunction": {"kind", "file", "name"}`): given, as the output
     is, to a later step that takes its kind (a step's `files`);
+  - `prepare` may refuse an entry alone, preparing the others' jobs:
+    `{"jobs": [...], "refused": [{"entry": 1, "why": "...", "kind":
+    "refused"}]}` - an isotope's frequencies, which xtb would give as of
+    the natural element. The entry is in no job; it goes out of the
+    step's *Failed* exit with its why. A step whose every entry is
+    refused, or whose options cannot be done, is refused as a whole, as
+    before (an error);
+  - `collect` may answer, for one entry of a job, why that entry alone
+    failed - `{"why": "...", "kind": "no-geometry"}` in its place among
+    the outputs - the others taken as they are. A `kind` is one of
+    core's failure kinds (WORKFLOWS.md, *Failed*); any other, or none,
+    is taken as `failed`, its words kept. An output whose `optimised` is
+    false is not done: its last geometry goes out of the *Failed* exit as
+    *not converged*. An output's `warnings` - `[{"kind":
+    "hessian-not-stationary", "text": "..."}]`, the text the program's
+    own words - are kept with the molecule and said on its chip; a kind
+    core does not know is `other`. A warning never moves an entry. An
+    output's `imaginary` - its imaginary frequencies in cm-1, negative,
+    as the program itself judged them (xtb's "significant" ones,
+    Gaussian's NImag, the modes ORCA marks), `[]` where it judged none -
+    marks the molecule as no minimum;
+  - a job `prepare` gives may declare the memory it takes, in MiB
+    (`"memory": 12000`): what its program is asked for - ORCA's %maxcore
+    times its processes, Gaussian's %Mem - counted against what this
+    computer's jobs may use; none declared, it is counted by its cores;
   - `prepare` and `collect` for the role *Render* too (RENDER.md, *The
     role, and its contract*): given the scene Meno wrote, put into the
     job's folder by Meno, and answered with the picture or film the job
@@ -734,7 +831,36 @@ The same for every plugin and for Meno's own parts:
   - `run {step, entries, options, holds}` - a kind of step it does at
     once, in its worker, with no job: the entries it kept, by their
     place (RDKit's *Duplicates*). `holds` says whether they came as a
-    conformer set or a compound set.
+    conformer set or a compound set. Where it counted a mirror image in
+    one kept, it says so beside them - `"counted": [{"entry": 0,
+    "degeneracy": 2, "mirror": [...]}]`, the atoms the mirror image swaps
+    as a permutation - and an entry given carries its `degeneracy`, where
+    it has one. `"capped": 2` says how many compounds it took atom against
+    atom, their ways onto themselves too many to try: a duplicate of one
+    could be missed, and the step says so;
+  - **steps on structures drawn** (`run` with `holds` "structures":
+    RDKit's *Check structures* and *Stereoisomers*): each entry is a
+    structure as `{molblocks}`, a MOL block for each of its parts, and
+    the answer is `{"structures": [...]}`, one for each, in their order:
+    `{"as": "drawn"}`, kept as it is - with `"properties"`, where the step
+    works numbers out of it (*Descriptors*): each `{value, unit, method}`,
+    its unit from Meno's units table (g/mol and Å² among them) or "none",
+    kept on its record as `computed` by the plugin, its version, the
+    program and the method; `{"made": [block, ...], "smiles":
+    [...]}`, made anew as drawings (V3000, laid out in 2D, wedged), each
+    one's own SMILES beside it, which Meno reads and lays out as it does a
+    SMILES's (`chem/fromSmiles` `drawingOf`), at most 64 of one - one it
+    cannot draw sets the structure aside whole, *could not be drawn*; or
+    `{"aside": why, "kind": kind}`, set aside, why in a few plain words
+    and a short kind to count it by on the step's line (*3 set aside (2:
+    radical; 1: parts)*). A made one is another structure, with a record
+    of its own (WORKFLOWS.md, *A structure drawn's record*): what the one
+    it was made of came from (`from`), which of how many it is (`made`:
+    *1 of 2*), its own SMILES (`smiles`) and that of the one it was made of
+    (`made_from`), where that had one - never that one's values, which
+    were not worked out of it (an NLL of a SMILES with its stereo left
+    open). One set aside keeps its record, its status saying why. An answer that is
+    not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,
@@ -799,32 +925,59 @@ The same for every plugin and for Meno's own parts:
     *Response*). Meno's own writers run on the page: an SVG picture of
     molecules in 3D needs the page's WebGL.
 
-### A step that takes nothing in
+### Generate
 
-*Generate* makes new molecules from nothing that comes in, so it has no
+*Generate* makes new structures from nothing that comes in, so it has no
 input to wire and no entries to send. Meno asks its plugin `run` with the
-step's kind, `"entries": []`, and the step's options; the plugin answers
-each molecule it made as an output - the form a reader's is in
-(`src/lib/calc/output.ts`): `atoms` its elements, `frames` one geometry,
-`method` how it was made, `results` what it found (the SMILES sampled, its
-likelihood) - with what that form has no place for beside: its `bonds`,
-`{a1, a2, order}` with orders 1 to 3, its atoms' `charges`, and their
-`isotopes` (mass numbers; 0, natural abundance) where any is one; and
-`said`, the run in a line, counting what it gave and what it could not
-make a molecule, with why:
+step's kind, `"entries": []`, and the step's options.
+
+**A Generate plugin hands on what its model gives, as it gives it**
+(the maintainer, 2026-10-22: format conversion yes, chemistry no). Each
+structure is the SMILES the model wrote - never canonicalised, its stereo
+as written or left out - with the model's own values beside it, named.
+Nothing is made of it in 3D, no stereoisomer is enumerated, and nothing is
+refused. What a structure is - a radical, one that leaves stereo open, one
+of odd valence - is for the general steps after it, and for
+*Conformers*, which alone makes 3D:
 
 ```
-{"outputs": [{"schema": 1, "program", "version", "method", "atoms": [...], "charges": [...],
-              "bonds": [...], "frames": [[...]], "results": [...]}], "said": "..."}
+{"outputs": [{"smiles": "...", "properties": {"nll": {"value": 36.9, "unit": "none"}, ...}, "seed": 0}],
+ "by": {"program", "version", "model", "method"}, "said": "..."}
 ```
 
-Each becomes a compound of its own in the step's result set, numbered as
-it came. Meno checks each - its elements, a geometry for every atom, its
-bonds between its atoms, whole charges, whole mass numbers - and takes none of the run where
-any is not a molecule, saying which: no run is taken in part. At most a
-thousand from one run (`GENERATED_MOST`). The step is ready as it is put
-down, and changed when its options or who does it change
-(`workflow/flow` `inputKey`).
+- `properties`: each value a number, a text or true/false, with its unit
+  from Meno's units table, or "none" (REINVENT 4's `nll` and
+  `smiles_state`, as it writes them; a model's Tanimoto similarity, its
+  scaffold and R-groups, under the names it uses). A value the model gave
+  none of is `null` - REINVENT 4 writes an NLL that is no number so,
+  counting it in `said`, since JSON holds no NaN - and is not kept.
+- `seed`: where a generator makes a structure from one that came in, that
+  one's place among them. None comes into REINVENT 4's.
+- `by`: what made them all: the program and its version, the model, how.
+- `said`: the run in a line.
+
+Meno reads each SMILES itself, as one pasted is (the roles'
+`from_smiles`, laid out by Meno's engine: `chem/fromSmiles` `drawingOf`).
+Each becomes a structure drawn of its own in the step's result set, in the
+order given. Its record (WORKFLOWS.md, *A structure drawn's record*) holds
+the SMILES as given (`smiles`), the model's values, each `computed` by
+the plugin, its version and the program, model and method; and, where
+it leaves stereo open, how many centres and double bonds
+(`stereo_open`, the roles' `stereo_left_open`: where it is left open
+only, none of its stereoisomers tried in 3D, which *Stereoisomers* and
+*Conformers* do). Nothing is chosen for it. One whose stereo cannot be
+asked about is kept, and counted as *with stereo not examined*. A SMILES
+that cannot be read is counted on the step's line as *not read*, never
+dropped unsaid, the first five named with why: *20 sampled ... · 18 made
+· 3 with stereo left open · 2 not read: C1CC (a ring left open), …*.
+Where none can be read, the step fails, saying so.
+What the plugin gives that is not this form - a value with a unit Meno
+does not know, a SMILES missing, a seed that did not come in - takes none
+of the run, saying which. At most a thousand from one run
+(`GENERATED_MOST`). The step is ready as it is put down, and changed when
+its options or who does it change - its plugin's version, or the files
+it was set up with, a model's weights by their hash, included: another
+prior is another run (`workflow/flow` `inputKey`, `doers` `doerStamp`).
 
 ### The entry a plugin is given
 

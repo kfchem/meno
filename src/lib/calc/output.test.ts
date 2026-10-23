@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calcLine, calcOf, levelOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
+import { calcLine, calcOf, imaginaryWords, levelOf, marksOf, multiplicityName, readCalc, type ReaderOutput } from "./output";
 import { combine, whoReads, checked } from "./read";
 import { READER_PLUGINS, READERS, type PythonPlugin, type ReaderPlugin } from "./catalog";
 import { kindById, registered } from "../io/kinds";
@@ -51,6 +51,16 @@ describe("what a reader hands back", () => {
   it("leaves out what the output does not say", () => {
     const c = calcOf({ atoms: ["H", "H"], frames: [[0, 0, 0, 0, 0, 0.74]], program: "xTB", method: "  ", charge: null }, ["cclib 1.9rc1"]);
     expect(c).toEqual({ readers: ["cclib 1.9rc1"], program: "xTB" });
+  });
+
+  it("keeps the imaginary frequencies the program judged it has, in plain words - and what it warned of - read back from a file as they were", () => {
+    const saddle = calcOf({ ...water, imaginary: [-382.63], warnings: [{ kind: "hessian-not-stationary", text: "Hessian on incompletely optimized geometry!" }] }, ["xtb 6.7.1"]);
+    expect(saddle.imaginary).toEqual([-382.63]);
+    expect(imaginaryWords(saddle.imaginary!)).toBe("1 imaginary frequency, 382.6i cm-1");
+    expect(imaginaryWords([-382.63, -41.05])).toBe("2 imaginary frequencies, 382.6i, 41.0i cm-1");
+    expect(readCalc(JSON.parse(JSON.stringify(saddle)), 3, 2)).toEqual(saddle);
+    // (judged none, or not numbers below 0: no mark)
+    for (const imaginary of [[], [382.63], [Number.NaN], null]) expect(calcOf({ ...water, imaginary }, ["xtb 6.7.1"]).imaginary).toBeUndefined();
   });
 
   it("reads back from a file as it was kept, and not where it does not read", () => {
@@ -157,6 +167,27 @@ describe("what several readers found in one output", () => {
       { id: "wiberg", on: "pairs", group: "NBO", label: "Wiberg bond index", pairs: [[0, 1, 0.82]] },
     ],
   };
+
+  it("keeps which geometries the run converged on, as the reader that read them marked them (2026-10-22: found in the app, left out here)", () => {
+    const marks = water.frames.map((_, i) => i === water.frames.length - 1);
+    expect(combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: marks } }, { from: "nbo", version: "7", output: nbo }]).output.converged).toEqual(marks);
+    // (marks of other geometries than these say nothing of which converged: none did, not stated - never every one)
+    const odd = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: [true] } }]).output;
+    expect([odd.converged, odd.unmarked]).toEqual([water.frames.map(() => false), "unstated"]);
+    // (a reader saying why none is, kept with its marks)
+    const cut = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, converged: water.frames.map(() => false), unmarked: "cut" } }]).output;
+    expect(cut.unmarked).toBe("cut");
+  });
+
+  it("keeps each geometry's mark with it where one before it does not read - never all marks dropped with one geometry", () => {
+    // (three geometries, the middle one cut short: the last, marked converged, still is)
+    const three = [water.frames[0], water.frames[0].slice(0, 5), water.frames[0]];
+    const out = combine([{ from: "cclib", version: "1.9rc1", output: { ...water, frames: three, converged: [false, false, true] } }]).output;
+    expect(out.frames).toHaveLength(2);
+    expect(out.converged).toEqual([false, true]);
+    expect(marksOf({ atoms: water.atoms, frames: three, converged: [false, false, true] })).toEqual({ converged: [false, true] });
+    expect(marksOf({ atoms: water.atoms, frames: three })).toBeNull();
+  });
 
   it("keeps, of a file of several jobs, its jobs as its reader read them", () => {
     const sp: ReaderOutput = { ...water, job: { number: 2, of: 2, kind: "Single point" } };

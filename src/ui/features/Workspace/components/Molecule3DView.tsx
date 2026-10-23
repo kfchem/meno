@@ -11,7 +11,7 @@ import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/t
 import { menoShader } from "../utils/menoShader";
 import { pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
-import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, populations, seenShare, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
+import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, frameOf, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
 import { LONG_PRESS_MS, LONG_PRESS_SHOW_MS } from "../constants";
 import { kindOf, MEASURE_FAN_OPACITY, MEASURE_RADIUS, measureMarks, measureText, measureValue, piecesOf } from "../utils/measure3d";
@@ -256,6 +256,10 @@ export type Molecule3DViewProps = {
  * changes goes over to what it is to be rather than jumping: another frame,
  * another look, its place on an undo, its coming and going.
  */
+/** The imaginary frequencies each of a molecule's `n` frames was judged to have: a conformer set's, frame by frame; a single geometry's, its calculation's, of its last. */
+const imaginaryShown = (m: Pick<Molecule3D, "imaginary" | "calc">, n: number): (number[] | null)[] | undefined =>
+  m.imaginary?.length === n ? m.imaginary : m.calc?.imaginary ? [...new Array<null>(n - 1).fill(null), m.calc.imaginary] : undefined;
+
 export default function Molecule3DView(props: Molecule3DViewProps) {
   const { m, style, look, frame, turn, lit, selected, chosen, chosenBonds, holding, following, leaving } = props;
   const solid = solidOf(m, style);
@@ -479,15 +483,13 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const [measureTexts, setMeasureTexts] = useState<Record<number, string>>({});
   const [shownMeasures, setShownMeasures] = useState<Measure3D[]>(m.measures ?? []);
   const dirty = useRef(true);
-  // a conformer set's shares: as a Populations step found them, or by Boltzmann; and its atoms' elements
+  // a conformer set's shares, as its chip shows them; and its atoms' elements
   const shares = useMemo(
-    () =>
-      m.shares?.length === solid.frames.length
-        ? m.shares
-        : m.conformerSet && m.energies?.length === solid.frames.length
-          ? populations(m.energies, m.degeneracies)
-          : undefined,
-    [m.shares, m.conformerSet, m.energies, m.degeneracies, solid.frames.length],
+    () => {
+      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers, marksUnread: m.marksUnread });
+      return shares?.length === solid.frames.length ? shares : undefined;
+    },
+    [m.frames, m.shares, m.conformerSet, m.partOf, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, m.marksUnread, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about
@@ -1958,7 +1960,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       {(solid.frames.length > 1 || m.conformerSet || props.onRemake || m.calc || m.edited || named3d(m)) && !props.rising && (
         <group ref={pill}>
           {/* (one of a stack: its stack's chip says which, not its own - StackChip3D; one called by a name of its own says it) */}
-          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m)) && !props.stacked ? (
+          {(solid.frames.length > 1 || m.conformerSet || m.calc || named3d(m) || m.failed?.some(Boolean)) && !props.stacked ? (
             <Frames3D
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
@@ -1974,6 +1976,7 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
                 )
               }
               populations={shares}
+              {...(m.conformerSet && sharesWithheld(m) ? { noShares: sharesWithheld(m)! } : {})}
               numbers={m.numbers?.length === solid.frames.length ? m.numbers : undefined}
               about={m.calc ? calcLine(m.calc) : undefined}
               results={m.calc?.results}
@@ -1983,6 +1986,9 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
               said={m.said}
               area={gl.domElement}
               {...(named3d(m) ? { title: m.title } : {})}
+              {...(m.failed?.length === solid.frames.length ? { failed: m.failed } : {})}
+              {...(m.calc?.warnings?.length ? { warnings: m.calc.warnings } : {})}
+              {...(imaginaryShown(m, solid.frames.length) ? { imaginary: imaginaryShown(m, solid.frames.length) } : {})}
             />
           ) : (
             <PageHtml zIndexRange={[30, 20]}>

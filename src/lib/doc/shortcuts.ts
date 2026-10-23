@@ -11,6 +11,8 @@ type KeyLike = {
   metaKey?: boolean;
   shiftKey?: boolean;
   altKey?: boolean;
+  /** Whether the key is held down and coming again. */
+  repeat?: boolean;
   target?: unknown;
 };
 
@@ -172,9 +174,9 @@ export function shortcutLabel(key: string, shift = false, mac = IS_MAC): string 
   return mac ? `${shift ? "\u21e7" : ""}\u2318${key}` : `Ctrl+${shift ? "Shift+" : ""}${key}`;
 }
 
-/** Ctrl/Cmd+S saves; Ctrl/Cmd+Shift+S saves as. */
+/** Ctrl/Cmd+S saves; Ctrl/Cmd+Shift+S saves as - once as pressed, not again and again as it is held. */
 export function saveIntent(event: KeyLike): "save" | "saveAs" | null {
-  if (!(event.ctrlKey || event.metaKey)) return null;
+  if (!(event.ctrlKey || event.metaKey) || event.repeat) return null;
   if ((event.key || "").toLowerCase() !== "s") return null;
   return event.shiftKey ? "saveAs" : "save";
 }

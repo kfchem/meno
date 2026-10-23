@@ -2,9 +2,11 @@ import type { EditorModel } from "../../../../utils/importers";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { bondChem, chemistry } from "../../../../lib/chem/molecule";
 import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
+import type { Failure } from "../workflow/failures";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
-import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
+import { atomAs } from "./figures";
+import { calcOf, frameReads, marksOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import { atomsTogether, bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
@@ -136,18 +138,7 @@ export function stackedRead({ records, ...read }: StructureRead): ProcessedFileR
  * fields the drawing needs, defaults filled in.
  */
 export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
-  return {
-    atoms: mdl.atoms.map((a) => ({
-      id: a.id,
-      x: a.x,
-      y: a.y,
-      r: a.r ?? 0.9,
-      el: a.el ?? "C",
-      ...chemistry(a),
-      // (of a stack of drawings, its stack and record: utils/stacks)
-      ...(a.stack ? { stack: a.stack } : {}),
-    })),
-    bonds: mdl.bonds.map((b) => ({
+  const bonds: Model["bonds"] = mdl.bonds.map((b) => ({
       id: b.id,
       a: b.a,
       b: b.b,
@@ -158,9 +149,26 @@ export function editorModelOf(mdl: { atoms: any[]; bonds: any[] }): Model {
       ...(b.display ? { display: b.display } : {}),
       ...(b.dative ? { dative: true } : {}),
       ...bondChem(b),
-    })),
-  };
+  }));
+  const atoms: Model["atoms"] = mdl.atoms.map((a) => ({
+    id: a.id,
+    x: a.x,
+    y: a.y,
+    r: a.r ?? 0.9,
+    el: a.el ?? "C",
+    ...chemistry(a),
+    // (of a stack of drawings, its stack and record: utils/stacks)
+    ...(a.stack ? { stack: a.stack } : {}),
+  }));
+  // (an H the file did not place, put where another atom could have carried it: said over the atom while it is as read - the maintainer, 2026-10-22)
+  mdl.atoms.forEach((a, i) => {
+    if (a.hChosen) atoms[i].unsure = { said: [H_CHOSEN_SAID], as: atomAs(atoms[i], bonds) };
+  });
+  return { atoms, bonds };
 }
+
+/** What an atom says whose H the file did not place, put on it where another atom could have carried it: an imidazole's, a tetrazole's, a purine's. */
+export const H_CHOSEN_SAID = "The file does not say which atom carries this H: it is drawn on this one.";
 
 /** What a file read holds as the editor draws it: the structures, and a reaction's arrow and "+" signs. */
 export function drawnOf(result: ProcessedFileResult, style3d: Style3D = STYLE_3D): Drawn {
@@ -213,10 +221,14 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
   return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
 }
 
+/** Why an opened run's last point is an entry that failed: the run stopped before it converged (`Molecule3D.failed`). */
+export const UNFINISHED_WHY = "The run stopped before this geometry converged: it is no optimum.";
+
 /** One output's - or one job's - molecule in 3D; none, where it gives no geometry. Named after the file, and its job where it is one of several. */
 function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): Omit<Molecule3D, "id" | "at"> | null {
   const n = out.atoms?.length ?? 0;
-  const [f0, ...rest] = (out.frames ?? []).filter((f) => f.length === 3 * n);
+  const given = out.frames ?? [];
+  const [f0, ...rest] = given.filter((f) => frameReads(f, n));
   if (!n || !f0) return null;
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
@@ -226,6 +238,18 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
   const calc = calcOf(out, readers, source);
   const name = filename && calc.job ? `${filename}, job ${calc.job.number}` : filename;
+  // (of an optimisation or a relaxed scan, the geometries it converged on are its entries - the rest steps on the
+  // way - where the reader marks them: each geometry kept by its own mark, one that does not read left out with
+  // its own. Where the reader says why none is - the run did not end as it should, the points of a path, its
+  // convergence not stated - none is, and why is said: never every one)
+  const read = marksOf(out);
+  const marks = read?.converged;
+  // (a run stopped before its last point converged - an interrupted scan, an optimisation cut short or never
+  // converged - gives that point as an entry marked failed, not converged (workflow/failures): seen, carried on,
+  // and never weighed as a minimum - Energy window and Populations refuse it, saying so)
+  const unfinished = !!marks && !read?.unmarked && !marks[marks.length - 1];
+  const entryFrames = marks ? [...marks.flatMap((ok, i) => (ok ? [i] : [])), ...(unfinished ? [marks.length - 1] : [])] : undefined;
+  const failed: Failure[] | null = unfinished ? [{ kind: "not-converged", why: UNFINISHED_WHY }] : null;
   return {
     atoms: first.atoms,
     bonds: first.bonds,
@@ -235,6 +259,9 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
     ...(energies ? { energies } : {}),
     ...(name ? { name } : {}),
     ...(together ? { together } : {}),
+    ...(entryFrames && entryFrames.length < 1 + frames.length ? { entryFrames } : {}),
+    ...(unfinished ? { notConverged: true as const, failed: [...frames.map(() => null), ...failed!] } : {}),
+    ...(read?.unmarked ? { noEntryWhy: read.unmarked } : {}),
     calc,
   };
 }

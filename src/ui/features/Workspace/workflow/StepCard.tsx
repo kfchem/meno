@@ -84,16 +84,8 @@ export function shareOf(seen: readonly (Pick<JobSeen, "state" | "progress"> | un
 }
 
 /** A run as its step lists it: when, what it said, how it was set, whether it is the one shown. */
-export type RunRow = { at: number; said: string; how: string; shown: boolean };
-
-const DAY = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });
-const TIME = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" });
-
-/** When a run was, in few words: its time - and its day, where that was not today. */
-function when(at: number, now = Date.now()): string {
-  const same = new Date(at).toDateString() === new Date(now).toDateString();
-  return same ? TIME.format(at) : `${DAY.format(at)} ${TIME.format(at)}`;
-}
+/** A run as its card lists it: when, named apart from the step's other runs (workflow/earlierRuns `namesOf`); what it said; how it was set; whether it is shown, and kept. */
+export type RunRow = { at: number; name: string; said: string; how: string; shown: boolean; keep: boolean };
 
 /** A place in the queue, as it is said: 1st, 2nd, 3rd, 4th... */
 const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
@@ -146,26 +138,31 @@ export type StepCardProps = {
   /** Selected, with the rest: its border in the accent, as a set's chosen. */
   selected?: boolean;
   open: boolean;
-  /** Its inputs, in the kind's order, each lit or not as a wire is drawn: one port each down its left side, named where there is more than one. What it gives is its exits' sets, beside it - it has no port of its own for that. */
+  /** Its inputs, in the kind's order: named beside their ports down its left side, where there is more than one (the ports themselves are on the workflow's ports layer, Workflow2D). What it gives is its exits' sets, beside it - it has no port of its own for that. */
   inputs: readonly { id: string; name: string; look: PortLook }[];
   /** How its jobs are getting on, where it runs any. */
   run?: RunView;
   /** A program installed separately it runs, found nowhere or too old, said ("ORCA not found"): its *Run* opens Settings, Plugins, to locate it. */
   missing?: string;
+  /** A wire just let go on it that it does not take: why, in plain words (flow `wireRefusal`), said where its state is. */
+  refused?: string;
   /** The options it takes, as who does it declares them; and their values. */
   optionList: readonly Option[];
   options: OptionValues;
   /** The kinds of step who does it fills: another of them can be chosen in it. */
   kinds: readonly { kind: StepKind; name: string }[];
-  /** Its runs, newest first - the one shown first: when, what it said, how it was set; an earlier one can be shown again. */
+  /** Its runs, newest first - the one shown first: when, what it said, how it was set, whether it is kept; an earlier one can be shown again. */
   runs: readonly RunRow[];
+  /** What running it again drops of its earlier runs, and of those it runs first (workflow/earlierRuns `droppedBy`) - none, where it drops none. */
+  drops?: string;
   onOptions: (values: OptionValues) => void;
   onKind: (kind: StepKind) => void;
   onShowRun: (index: number) => void;
+  /** A run kept, or no longer: the one shown at -1, an earlier one by its place among them. */
+  onKeepRun: (index: number, keep: boolean) => void;
   /** Its options shut: by its Close, or Escape - it stays open while the page is worked on. */
   onClose: () => void;
   onCardDown: (e: ReactPointerEvent) => void;
-  onTakeDown: (e: ReactPointerEvent, port: string) => void;
   onContextMenu: (e: ReactMouseEvent) => void;
   onHover: (on: boolean) => void;
 };
@@ -180,7 +177,7 @@ export type StepCardProps = {
  * does it fills - and its options.
  */
 export default function StepCard(p: StepCardProps) {
-  const line = stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
+  const line = p.refused ? { Icon: ExclamationCircleIcon, text: p.refused, tone: "text-accel-accent" } : stateLine(p.state, p.step.ran?.said, p.run, Date.now(), p.missing);
   const said = p.state === "running" && p.run?.line ? p.run.line : undefined;
   // (how far a run is, as a share: of several jobs, how many have ended - and how far each running one says it is)
   const progress = p.state === "running" && p.run && (p.run.share != null || p.run.total > 1) ? (p.run.share ?? p.run.ended / p.run.total) : undefined;
@@ -275,10 +272,18 @@ export default function StepCard(p: StepCardProps) {
                     <div key={`${r.at}-${i}`} className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="text-[11px] leading-4 text-gh-black truncate" title={r.said}>
-                          {`${when(r.at)} \u00b7 ${r.said}`}
+                          {`${r.name} \u00b7 ${r.said}`}
                         </div>
                         {r.how && <div className="text-[10px] leading-4 text-gh-gray truncate">{r.how}</div>}
                       </div>
+                      <button
+                        onClick={() => p.onKeepRun(i - 1, !r.keep)}
+                        aria-pressed={r.keep}
+                        title={r.keep ? "Kept until this is pressed again" : "Keep this run: running again never drops it"}
+                        className={clsx("h-6 shrink-0 rounded-md border px-2 text-[11px]", r.keep ? "border-accel-base bg-accel-base/5 text-accel-base" : "border-gh-line bg-white text-gh-black hover:bg-gh-base")}
+                      >
+                        {r.keep ? "Kept" : "Keep"}
+                      </button>
                       {r.shown ? (
                         <span className="shrink-0 text-[11px] leading-6 text-gh-gray">Shown</span>
                       ) : (
@@ -292,6 +297,7 @@ export default function StepCard(p: StepCardProps) {
                     </div>
                   ))}
                 </div>
+                {p.drops && <div className="mt-1.5 text-[11px] leading-4 text-gh-gray">{`Running again drops ${p.drops} from this workspace`}</div>}
               </div>
             )}
             <div className="mt-3 flex justify-end">
@@ -304,16 +310,6 @@ export default function StepCard(p: StepCardProps) {
         )}
         </AnimatePresence>
       </div>
-      {p.inputs.map((input, k) => (
-        <Port
-          key={input.id}
-          look={input.look}
-          label={p.inputs.length > 1 ? `${input.name} into ${p.info.name}` : `Into ${p.info.name}`}
-          data={{ "data-take": `${p.step.id}:${input.id}` }}
-          onPointerDown={(e) => p.onTakeDown(e, input.id)}
-          style={{ left: 0, top: portDown(k) / PX }}
-        />
-      ))}
       {/* (an input's name, where there is more than one: outside the card, level with its port) */}
       {p.inputs.length > 1 &&
         p.inputs.map((input, k) => (

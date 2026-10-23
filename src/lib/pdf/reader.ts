@@ -11,15 +11,20 @@
  * longer wanted before its turn is dropped.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { markHad, markNotHad } from "../doc/notHad";
+import { sha256Hex } from "../binary/sha256";
 
 /** A PDF held: what it is known by, its size, and each page's width and height, in points. */
 export type HeldPdf = { sha256: string; size: number; pages: [number, number][] };
 
+/** A PDF held now: had, and so marked as not had no more (lib/doc/notHad). */
+const had = (h: HeldPdf) => (markHad(h.sha256), h);
+
 /** A PDF on the disk, held. */
-export const holdPdfPath = (path: string) => invoke<HeldPdf>("pdf_hold_path", { path });
+export const holdPdfPath = (path: string) => invoke<HeldPdf>("pdf_hold_path", { path }).then(had);
 
 /** A PDF's bytes held - dropped, pasted, or kept in a workspace's file. */
-export const holdPdfBytes = (bytes: Uint8Array) => invoke<HeldPdf>("pdf_hold_bytes", bytes);
+export const holdPdfBytes = (bytes: Uint8Array) => invoke<HeldPdf>("pdf_hold_bytes", bytes).then(had);
 
 /** A PDF held, as its bytes: what a workspace's file keeps. */
 export async function pdfBytes(sha256: string): Promise<Uint8Array> {
@@ -35,26 +40,56 @@ type KeptPdfs = { files: { sha256: string; media: string; name?: string }[]; dat
 /**
  * Each PDF a workspace's file keeps, held as it opens (lib/doc/menoFile) -
  * `refused` told of each that cannot be, by its name, with why: drawn, it
- * would be blank.
+ * would be blank, and it is marked as not had (lib/doc/notHad) until it is
+ * held from elsewhere.
  */
 export function holdPdfsOf(file: KeptPdfs, refused: (name: string, why: string) => void = () => {}): void {
-  if (isTauri()) holdEachKept(file, holdPdfBytes, refused, holding);
+  if (isTauri()) holdEachKept(file, holdPdfBytes, refused, holding, heldWhole);
 }
 
-/** Each PDF `file` keeps held by `hold`, and each that is not - its bytes missing or refused - told to `refused`. */
-export function holdEachKept(file: KeptPdfs, hold: (bytes: Uint8Array) => Promise<unknown>, refused: (name: string, why: string) => void, held: Map<string, Promise<unknown>>): void {
+/** Whether Meno holds the PDF known by `sha256` already, whole: what it holds, read back, is what that SHA-256 says. */
+async function heldWhole(sha256: string): Promise<boolean> {
+  const bytes = await pdfBytes(sha256).catch(() => null);
+  return !!bytes && sha256Hex(bytes) === sha256;
+}
+
+/**
+ * Each PDF `file` keeps held by `hold`, and each that is not - its bytes
+ * missing or refused - told to `refused`: unless Meno holds it whole
+ * already (`heldAlready`), from another file or opened before - then it is
+ * drawn, and saved, as it is, and not marked as damaged.
+ */
+export function holdEachKept(
+  file: KeptPdfs,
+  hold: (bytes: Uint8Array) => Promise<unknown>,
+  refused: (name: string, why: string) => void,
+  held: Map<string, Promise<unknown>>,
+  heldAlready: (sha256: string) => Promise<boolean> = async () => false,
+): void {
   for (const f of file.files) {
     if (f.media !== "application/pdf" || held.has(f.sha256)) continue;
     const name = f.name || "A PDF";
     const bytes = file.data(f.sha256);
-    if (!bytes) {
-      refused(name, "the workspace's file does not hold it whole");
-      continue;
-    }
-    held.set(
-      f.sha256,
-      hold(bytes).catch((e: unknown) => refused(name, e instanceof Error ? e.message : String(e))),
-    );
+    const sha256 = f.sha256;
+    // (one not held after all is held no more: the same PDF, whole, from another file is held then)
+    const notHeld = () => {
+      if (held.get(sha256) === holding) held.delete(sha256);
+      markNotHad(sha256);
+    };
+    const holding: Promise<unknown> = !bytes
+      ? heldAlready(sha256).then((whole) => {
+          if (whole) return markHad(sha256);
+          notHeld();
+          refused(name, "the workspace's file does not hold it whole");
+        })
+      : hold(bytes).then(
+          () => markHad(sha256),
+          (e: unknown) => {
+            notHeld();
+            refused(name, e instanceof Error ? e.message : String(e));
+          },
+        );
+    held.set(sha256, holding);
   }
 }
 

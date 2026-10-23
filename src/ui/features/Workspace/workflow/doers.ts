@@ -15,8 +15,8 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
-import type { WorkflowStep } from "../store/types";
-import { inputsOf, KINDS, kindInfo, MENO_DOES, SEEDS, takes, takesNothing, type SetKind, type StepKind, type StepPort } from "./kinds";
+import type { WorkflowSet, WorkflowStep } from "../store/types";
+import { exitOf, KINDS, kindInfo, madeName, MENO_DOES, takenBy, takes, type StepKind, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -43,23 +43,12 @@ export function kindsOf(by: string): StepKind[] {
  * it out (`takes`: CREST's conformer search starts from molecules in 3D,
  * not from structures drawn).
  */
-export function takesBy(kind: StepKind, by: string, holds: SetKind): boolean {
+export function takesBy(kind: StepKind, by: string, holds: ValueKind): boolean {
   if (!takes(kind, holds)) return false;
-  // (a kind that takes nothing in of its own: only seeds, where who does it takes them)
-  if (takesNothing(kind)) return seededBy(kind, by);
   if (!by || by === MENO.id) return true;
   const decl = pluginById(by)?.steps.find((d) => d.kind === kind);
-  return !decl?.takes || decl.takes.includes(holds);
+  return !decl?.takes || takenBy(decl.takes, holds);
 }
-
-/** Whether a step of a kind that takes nothing in of its own (Generate), done by `by`, makes its molecules from seeds wired in (its manifest's `seeds`: CReM's). */
-export const seededBy = (kind: StepKind, by: string): boolean => takesNothing(kind) && !!pluginById(by)?.steps.find((d) => d.kind === kind)?.seeds;
-
-/** The inputs a step of `kind` done by `by` has: the kind's own; or, one that takes nothing in of its own, seeds where who does it takes them - else none. */
-export const inputsFor = (kind: StepKind, by: string): readonly StepPort[] => (seededBy(kind, by) ? [SEEDS] : inputsOf(kind));
-
-/** Whether a step of `kind` done by `by` takes nothing in: nothing can be wired to it. */
-export const takesNothingBy = (kind: StepKind, by: string): boolean => inputsFor(kind, by).length === 0;
 
 /**
  * What a plugin is called where its steps are - a card, Quick Add,
@@ -92,6 +81,17 @@ export function doerOf(step: Pick<WorkflowStep, "kind" | "by">): Doer | undefine
 }
 
 /**
+ * What of the one doing a step its results hang on, beyond the step's
+ * options: a plugin's version, and the files it was set up with - a model's
+ * weights, by hash. What a step that takes nothing in (*Generate*) is keyed
+ * by, so that another prior is another run, never one taken up again.
+ */
+export function doerStamp(by: string): string {
+  const p = pluginById(by);
+  return p ? [p.version, ...p.downloads.map((d) => d.sha256)].join("|") : "";
+}
+
+/**
  * The options a kind of step takes, done by `by`: Meno's own, or those the
  * plugin declares for the kind - whether it is added now or not, so that a
  * step keeps saying how it was set.
@@ -113,6 +113,17 @@ export function optionsFor(kind: StepKind, by: string): readonly Option[] {
 
 /** The options a step takes, as who does it declares them. */
 export const stepOptions = (step: Pick<WorkflowStep, "kind" | "by">) => optionsFor(step.kind, byOf(step));
+
+/**
+ * A set's name, as its frame says it: a step's first exit's, as the kind
+ * names what it makes, as it was set; another exit's, by its own name; a
+ * chemist's, theirs, or "Input".
+ */
+export function setName(set: Pick<WorkflowSet, "made" | "name">, steps: readonly WorkflowStep[]): string {
+  const made = set.made ? steps.find((s) => s.id === set.made!.step) : undefined;
+  const exit = made && set.made ? exitOf(made.kind, set.made.exit) : undefined;
+  return made && exit ? (exit.of ? exit.name : madeName(made.kind, stepOptions(made), made.options)) : (set.name ?? "Input");
+}
 
 /** The programs a plugin runs for a kind of step; none, where it does the step in its worker - or Meno does it. */
 export function programsFor(kind: StepKind, by: string): readonly string[] {

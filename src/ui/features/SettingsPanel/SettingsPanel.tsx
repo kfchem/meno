@@ -8,11 +8,14 @@ import StyleEditor from "../StyleEditor";
 import Style3DEditor from "../StyleEditor/Style3DEditor";
 import AbbreviationSettings from "./AbbreviationSettings";
 import ChemistrySettings from "./ChemistrySettings";
+import DefaultAppSettings from "./DefaultAppSettings";
 import FileSettings from "./FileSettings";
 import PointerSettings from "./PointerSettings";
 import CanvasSettings from "./CanvasSettings";
 import ColourSettings from "./ColourSettings";
+import WorkspaceSizeSettings from "./WorkspaceSizeSettings";
 import LogSettings from "./LogSettings";
+import LicenceSettings from "./LicenceSettings";
 import LabelSettings from "./LabelSettings";
 import PictureSettings from "./PictureSettings";
 import CalculationSettings from "./CalculationSettings";
@@ -41,7 +44,8 @@ const SECTIONS: { id: SettingsSection; name: string }[] = [
  * (each keeps its own after), how molecules in 3D look and turn,
  * what is pointed out on a structure, who reads and writes each kind
  * of file and how sharp a copied picture is, the calculations of a workflow and how its jobs run, the plugins, what the labels Meno reads stand for, and what Meno
- * may do on the network.
+ * may do on the network; and the licences of the software by others it is
+ * built with.
  */
 /** Every section as wide as the others, its words at one measure within it (./widths). */
 const SECTION = `mt-6 ${SECTION_WIDTH}`;
@@ -104,7 +108,9 @@ export default function SettingsPanel() {
             <CanvasSettings />
             <LabelSettings />
             <ColourSettings />
+            <WorkspaceSizeSettings />
             <LogSettings />
+            <LicenceSettings />
           </section>
         ) : section === "style" ? (
           <section className={SECTION}>
@@ -160,6 +166,11 @@ export default function SettingsPanel() {
               what they find added beside it.
             </p>
             <FileSettings />
+            <h3 className="mt-6 text-sm font-semibold text-gh-black">Opening files</h3>
+            <p className="mt-1 mb-3 text-sm text-gh-gray">
+              The app each kind of file opens with when it is double-clicked, and Meno for it where you choose.
+            </p>
+            <DefaultAppSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Copied pictures</h3>
             <p className="mt-1 mb-3 text-sm text-gh-gray">
               What a copy puts beside a structure for other programs - Word, PowerPoint - to paste.
@@ -176,7 +187,8 @@ export default function SettingsPanel() {
             <CalculationSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Jobs</h3>
             <p className="mt-1 mb-3 text-sm text-gh-gray">
-              The programs steps run, on this computer. They go on when Meno closes, and those waiting start in turn.
+              The programs steps run, on this computer. They go on when Meno closes, and those waiting start in turn, as many at once as fit. A job counts the memory its
+              plugin declares - ORCA's %maxcore, Gaussian's %Mem; one that declares none counts by its cores alone.
             </p>
             <JobSettings />
             <h3 className="mt-6 text-sm font-semibold text-gh-black">Procedures</h3>

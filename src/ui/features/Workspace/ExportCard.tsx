@@ -6,6 +6,10 @@ import { rememberable, valuesOf, type Known, type OptionValues } from "../../../
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionsForm from "../../options/OptionsForm";
 import { useInFront } from "../../layouts/inFront";
+import { skeletonWhy } from "../../../lib/chem/skeleton";
+
+/** Meno's writers that write molecules in 3D: their atoms as they are, with no hydrogens added. */
+const WRITES_3D = new Set(["sdf", "xyz", "pdb"]);
 
 /**
  * Export, asked before the file's name (docs/FILE-IO.md, *Save and
@@ -26,6 +30,8 @@ export default function ExportCard({
   what,
   selected,
   known,
+  skeletons,
+  said,
   onExport,
   onCancel,
 }: {
@@ -39,6 +45,10 @@ export default function ExportCard({
   selected: readonly number[];
   /** What Meno knows of the molecules in 3D written, by their ids. */
   known: (ids: readonly number[]) => Partial<Record<Known, string | number>>;
+  /** How many of the molecules in 3D, by their ids, are skeletons - their hydrogens not there (lib/chem/skeleton). */
+  skeletons: (ids: readonly number[]) => number;
+  /** What a kind of file cannot hold of what is written, said in plain words over its options; none where it holds it all. */
+  said?: (writerId: string) => string | null;
   onExport: (writer: Writer, values: OptionValues, molecules: number[]) => void;
   onCancel: () => void;
 }) {
@@ -53,7 +63,10 @@ export default function ExportCard({
   const [chosen, setChosen] = useState<Partial<Record<string, OptionValues>>>({});
   const values = chosen[writer.id] ?? valuesOf(writer.options, remembered[writeRole(writer.id)], known(given));
   const shown = optionsFor(writer, { drawing: what.drawn || what.reaction, molecules3d: what.solid });
-  const ready = writer.takes !== "molecule" || given.length > 0;
+  // (skeletons among what is written: a writer given one molecule - its charge and spin - takes none; Meno's write them as they are)
+  const lacking = writer.takes === "molecule" ? skeletons(given) : what.solid && WRITES_3D.has(writer.id) ? skeletons(selected) : 0;
+  const refused = writer.takes === "molecule" && lacking > 0;
+  const ready = (writer.takes !== "molecule" || given.length > 0) && !refused;
 
   const exportRef = useRef<HTMLButtonElement>(null);
   // (the keys given to Export as it opens, once: given again each time the
@@ -113,7 +126,23 @@ export default function ExportCard({
           </button>
         ))}
       </div>
-      {shown.length > 0 && (
+      {/* (said first, above the options: in view however many there are) */}
+      {lacking > 0 && (
+        <p role="note" className={`mb-3 text-xs ${refused ? "text-red-700" : "text-gh-gray"}`}>
+          {refused
+            ? skeletonWhy(lacking)
+            : lacking === 1
+              ? `A molecule written has no hydrogens: it is written ${writer.id === "sdf" ? "as a skeleton, so that no reader adds any" : "as it is"}.`
+              : `${lacking.toLocaleString("en")} molecules written have no hydrogens: they are written ${writer.id === "sdf" ? "as skeletons, so that no reader adds any" : "as they are"}.`}
+        </p>
+      )}
+      {/* (what this kind cannot hold of it, and so leaves out: said before it is written, never silently) */}
+      {!refused && said?.(writer.id) && (
+        <p role="note" className="text-xs text-gh-gray mb-3">
+          {said(writer.id)}
+        </p>
+      )}
+      {shown.length > 0 && !refused && (
         <motion.div key={`${writer.id}:${given.join(",")}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.16 }} className="mb-3">
           <OptionsForm options={shown} values={values} onChange={(v) => setChosen((c) => ({ ...c, [writer.id]: v }))} />
         </motion.div>

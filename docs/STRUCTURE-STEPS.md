@@ -17,6 +17,10 @@ Each entry the same, its charge and multiplicity set as given (`withSpecies`).
 - **A multiplicity follows the charge in use.** Where a charge is given and a
   multiplicity is not, the multiplicity is the one the electrons take at
   that charge. Na given +1 has ten electrons, a singlet.
+- **A skeleton fails.** An entry without its hydrogens has no species
+  (`lib/chem/skeleton`): its atoms do not say how it is protonated. It
+  fails, saying so, and is given none; its hydrogens are added first, or it
+  is marked complete without hydrogens.
 - **What the electrons cannot have fails.** A molecule has its atoms' atomic
   numbers less its charge in electrons, and a multiplicity *m* leaves
   *m* - 1 of them unpaired. So the rest, paired, must be an even number,
@@ -43,7 +47,8 @@ The entries that come in, as one entry holding them all: a complex
 - **Species.** The charges add. The multiplicity is one more than all the
   parts' unpaired electrons together. With two or more parts open-shell,
   that is their high-spin coupling, and it is said, since another coupling
-  is the chemist's to set (*Species*).
+  is the chemist's to set (*Species*). Where a part is a skeleton, without
+  its hydrogens, the complex has no species either, and this is said.
 - **Properties.** No part's properties are carried: each was worked out on
   its part alone, not on the complex. Where any part had properties, this
   is said. The parts' ids stay as the complex's lineage.
@@ -92,7 +97,8 @@ start of a restrained minimisation towards the product.
   they do not, nothing is made, and the first atom that differs is said.
 - **What comes from each.**
   - The structure and species are the bonding entry's: its atoms' charges,
-    radicals and isotopes, its bonds, and its charge and multiplicity.
+    radicals and isotopes, its bonds, and its charge and multiplicity -
+    none where it is a skeleton, without its hydrogens, and this is said.
   - The geometry is the geometry entry's, as it is: one 3D structure.
     Frames are taken one at a time first (*Take frames*).
 - **Properties.** Both entries' properties are kept, the geometry entry's
@@ -115,7 +121,7 @@ references, the first it is bonded as (`matchingReference`).
 
 - **Bonds read from the geometry** as Meno reads any geometry given no bonds
   (`bondedPairs`): two atoms closer than their single-bond covalent radii
-  (Pyykkö's) together and a tenth over. Which atoms are bonded is compared,
+  (Pyykkö's) together and a fifth over. Which atoms are bonded is compared,
   not bond orders.
 - **R or S, where asked.** Because the two share one numbering, a centre has
   the reference's configuration where its neighbours stand round it the same
