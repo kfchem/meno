@@ -501,7 +501,6 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * not (lib/chem/skeleton).
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
-  if (isSkeleton(m)) throw new Error(skeletonWhy());
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
   const model = await laidOut(drawn, style).catch(() => drawn);
   // (its heavy atoms came back in their order)
@@ -514,9 +513,13 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, 
  * A molecule in 3D as the drawing `formulaOf` lays out: the frame it is
  * given, its heavy atoms in their order, wedged as it is in 3D, its bonds'
  * orders found where it has none - not yet laid out by Meno's engine - and
- * whether its orders, wanted, are still unknown.
+ * whether its orders, wanted, are still unknown. A skeleton - its hydrogens
+ * not there - is refused here, for every caller: a drawing says how each
+ * atom is protonated, and a skeleton does not (lib/chem/skeleton).
  */
-export async function drawnOf(chem: ChemClient, m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean }> {
+export type Drawable = Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom" | "biopolymer" | "bondOrders" | "unknownOrders" | "chainOrders" | "wholeWithoutH">;
+export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean }> {
+  if (isSkeleton(m)) throw new Error(skeletonWhy());
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, radical: a.radical, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
