@@ -16,7 +16,7 @@ const asked: { molblock: string; options: Record<string, unknown> }[] = [];
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
  * stereo open, by what they hold - methanol, or every one.
  */
-const worker = { taken: 0, noneOfMethanol: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { isomers?: number; cumulenes?: number[]; free?: boolean } };
+const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { isomers?: number; cumulenes?: number[]; free?: boolean } };
 /** Whether a molblock is methanol's, C and O. */
 const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
 /** What a held request is let go with: the worker stopped. */
@@ -54,6 +54,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
           throw new Error("Invariant Violation\n\texpected match not found");
         }
         if (worker.noneOfMethanol && methanol(mol)) return { isomers: [] };
+        if (worker.noneWithS && mol.atoms.some((a) => a.symbol === "S")) return { isomers: [] };
         const xyz = mol.atoms.flatMap((a) => [a.x, a.y, 0.1]);
         return {
           isomers: [
@@ -77,6 +78,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import type { Atom } from "./types";
+import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -130,7 +132,7 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
 describe("RDKit's conformer search as a step, on structures drawn", () => {
   beforeEach(() => {
     asked.length = 0;
-    Object.assign(worker, { taken: 0, noneOfMethanol: false, holds: false, stopped: [], open: "", openAs: {} });
+    Object.assign(worker, { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [], open: "", openAs: {} });
     letGo = null;
   });
 
@@ -160,6 +162,68 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).not.toMatch(/Invariant|expected match/);
   });
 
+  it("takes the structures a large result set holds off the page, each made in 3D linked to no drawing: their ids are none of the page's", async () => {
+    const doc = createWorkspaceDocument();
+    // (a template of the chemist's, an aryl ether R1-O-Ar-R2, enumerated 3 x 17 = 51 ways, none the same: more than are laid out, so held in its set)
+    const drawn = drawnFromSmiles("*Oc1ccc(*)cc1");
+    let r = 0;
+    const model = { ...drawn, atoms: drawn.atoms.map((a) => (a.el === "*" ? { ...a, el: "R#", rgroups: [++r] } : a)) };
+    const r2 = ["F", "Cl", "Br", "I", "*C", "*CC", "*CCC", "*C(C)C", "*C#N", "*N", "*C=O", "*C(F)(F)F", "*S", "*C(=O)C", "*N(C)C", "*C=C", "*C#C"];
+    const lists = `R1: *C\n*CC\n*CCC\nR2: ${r2.join("\n")}`;
+    doc.edit("draw", (d) => ({ ...d, model, nextId: 5000 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const template = st().addSet({ x0: -50, y0: -50, x1: 50, y1: 50 });
+    const enumerate = st().addStep("enumerate", "meno", 80, 0);
+    doc.edit("options", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === enumerate ? { ...s, options: { lists } } : s)) }));
+    st().connect({ set: template }, enumerate);
+    const step = st().addStep("conformers", "rdkit", 200, 0);
+    // (wired from Enumerate's exit once there is one to wire from: the chain run, Enumerate first)
+    await st().runStep(enumerate);
+    const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
+    expect(held.drawnCollection).toHaveLength(51);
+    expect(doc.getState().model.atoms).toHaveLength(model.atoms.length);
+    st().connect({ set: held.id }, step);
+    await st().runStep(step);
+    expect(asked).toHaveLength(51);
+    expect(st().steps.find((s) => s.id === step)!.ran?.said).toMatch(/ · 51 conformers of 51 compounds$/);
+    const made = st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.collection!;
+    expect(made).toHaveLength(51);
+    expect(made.every((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toBe(true);
+  });
+
+
+  it("says those it could not make of a large result set's structures by their places among all it holds", async () => {
+    // (the three with a thiol, of the 51 the set holds: none made of them)
+    worker.noneWithS = true;
+    const doc = createWorkspaceDocument();
+    // (a template of the chemist's, an aryl ether R1-O-Ar-R2, enumerated 3 x 17 = 51 ways, none the same: more than are laid out, so held in its set)
+    const drawn = drawnFromSmiles("*Oc1ccc(*)cc1");
+    let r = 0;
+    const model = { ...drawn, atoms: drawn.atoms.map((a) => (a.el === "*" ? { ...a, el: "R#", rgroups: [++r] } : a)) };
+    const r2 = ["F", "Cl", "Br", "I", "*C", "*CC", "*CCC", "*C(C)C", "*C#N", "*N", "*C=O", "*C(F)(F)F", "*S", "*C(=O)C", "*N(C)C", "*C=C", "*C#C"];
+    const lists = `R1: *C\n*CC\n*CCC\nR2: ${r2.join("\n")}`;
+    doc.edit("draw", (d) => ({ ...d, model, nextId: 5000 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const template = st().addSet({ x0: -50, y0: -50, x1: 50, y1: 50 });
+    const enumerate = st().addStep("enumerate", "meno", 80, 0);
+    doc.edit("options", (d) => ({ ...d, steps: d.steps!.map((s) => (s.id === enumerate ? { ...s, options: { lists } } : s)) }));
+    st().connect({ set: template }, enumerate);
+    const step = st().addStep("conformers", "rdkit", 200, 0);
+    // (wired from Enumerate's exit once there is one to wire from: the chain run, Enumerate first)
+    await st().runStep(enumerate);
+    const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
+    expect(held.drawnCollection).toHaveLength(51);
+    expect(doc.getState().model.atoms).toHaveLength(model.atoms.length);
+    st().connect({ set: held.id }, step);
+    await st().runStep(step);
+    expect(asked).toHaveLength(51);
+    const said = st().steps.find((s) => s.id === step)!.ran!.said;
+    expect(said).toMatch(/ · 48 conformers of 48 compounds · structures \d+, \d+ and \d+ of 51 could not be made in 3D$/);
+  });
   it("says one of which none was made as one not made", async () => {
     worker.noneOfMethanol = true;
     const { step } = await searched();

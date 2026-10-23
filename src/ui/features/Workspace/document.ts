@@ -9,7 +9,8 @@
 import { numbersWith, type AtomNumberKind } from "./utils/atomNumbers";
 import { createDocument, type DocumentStore } from "../../../lib/doc";
 import { bondChem, chemistry, type AtomChem } from "../../../lib/chem/molecule";
-import { placedAbbreviation } from "../../../lib/chem/abbreviationPlace";
+import { placedAbbreviation, placedStructure } from "../../../lib/chem/abbreviationPlace";
+import type { GroupStructure } from "../../../lib/chem/ligands";
 import { isElementSymbol } from "../../../lib/roles/molblock";
 import { NOMINAL_BOND_LENGTH } from "../../../lib/chem/acs";
 import { DEFAULT_STYLE_CHOICE, styleOf, type StyleChoice } from "../../../lib/chem/style";
@@ -620,16 +621,15 @@ export function relayout(doc: WorkspaceDocument, change: Relayout): WorkspaceDoc
 }
 
 /**
- * An atom's chemistry set anew - its element or label, charge, radical and
- * isotope, each left off where it has none - leaving where it is alone.
- */
-/**
  * An abbreviation drawn out as the atoms it stands for - as the file gave
  * them, turned to where its bond goes now, or the dictionary's, laid out
  * on from that bond - the labelled atom become the one it is attached by,
- * its bonds out leaving from the atoms they did. One undo step.
+ * its bonds out leaving from the atoms they did. One undo step. Given a
+ * `group`, that group is drawn out in its place, laid out as the
+ * dictionary's are: what Enumerate joins each R group by
+ * (workflow/enumerate), one function for both.
  */
-export function expandAbbreviation(doc: WorkspaceDocument, id: number): WorkspaceDocument {
+export function expandAbbreviation(doc: WorkspaceDocument, id: number, group?: GroupStructure): WorkspaceDocument {
   const atoms = doc.model.atoms;
   const a = atoms.find((x) => x.id === id);
   if (!a) return doc;
@@ -644,7 +644,7 @@ export function expandAbbreviation(doc: WorkspaceDocument, id: number): Workspac
   });
   const sum = all.reduce((p, q) => ({ x: p.x + q.x, y: p.y + q.y }), { x: 0, y: 0 });
   const inward = all.length > 1 && Math.hypot(sum.x, sum.y) > 1e-6 ? sum : now;
-  const s = a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH);
+  const s = group ? placedStructure(group, inward, NOMINAL_BOND_LENGTH) : (a.abbrev ?? placedAbbreviation(a.el, inward, NOMINAL_BOND_LENGTH));
   if (!s || !s.atoms.length) return doc;
   // a file's: turned by as much as its bond out has turned since
   const turn = a.abbrev && s.toward && now ? Math.atan2(now.y, now.x) - Math.atan2(s.toward.y, s.toward.x) : 0;
@@ -822,6 +822,10 @@ export function groupHeldAt(doc: WorkspaceDocument, id: number, label: string): 
   return s ? { ...s, ...(toward ? { toward } : {}) } : undefined;
 }
 
+/**
+ * An atom's chemistry set anew - its element or label, charge, radical and
+ * isotope, each left off where it has none - leaving where it is alone.
+ */
 export function setAtomChemistry(
   doc: WorkspaceDocument,
   id: number,

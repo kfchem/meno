@@ -735,7 +735,7 @@ function groupStructure(label: string): GroupStructure | null {
 }
 
 /** A group's SMILES, "*" first, as its structure. */
-function smilesGroup(smiles: string): GroupStructure {
+export function smilesGroup(smiles: string): GroupStructure {
   const read = readSmiles(smiles);
   const star = read.atoms.findIndex((x) => x.el === "*");
   const orders = kekuleOrders(read.atoms, read.bonds);
