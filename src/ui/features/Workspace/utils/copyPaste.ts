@@ -605,6 +605,15 @@ function madeOf(v: unknown): Carried3D["made"] {
   return rows.length || Object.keys(said).length ? { ...said, how: rows } : undefined;
 }
 
+/** What the text a molecule was read from said of it, as a file carries it: each row read as data, as it was; one that does not read left out, and said. */
+function saidOf(v: unknown): Carried3D["said"] {
+  const rows = readEach(v, (r) => {
+    const row = r as { label?: unknown; text?: unknown } | null;
+    return typeof row?.label === "string" && typeof row.text === "string" ? { label: row.label, text: row.text } : null;
+  }, "said");
+  return rows.length ? rows : undefined;
+}
+
 /** A molecule's open list as a file carries it; otherwise none. */
 function listOf(v: unknown): CarriedList | undefined {
   const l = v as Partial<Record<keyof CarriedList, unknown>> | null | undefined;
@@ -779,6 +788,10 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
     ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
     ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
+    ...(() => {
+      const said = saidOf(m.said);
+      return said ? { said } : {};
+    })(),
     ...(() => {
       const numbers = perFrame<number>(m.numbers, (k) => Number.isInteger(k));
       const shares = perFrame<number>(m.shares, isNum);

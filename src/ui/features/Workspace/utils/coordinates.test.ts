@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { readCoordinates } from "../../../../lib/io/coordinates";
-import { emptyWorkspaceDocument } from "../document";
+import { createWorkspaceDocument, emptyWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import { readCarried3D } from "./copyPaste";
+import { noting } from "./readNotes";
+import { readWorkspace, workspaceText } from "./workspace";
 import { entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { placeAsSet } from "../workflow/run";
 import { coordinateMolecules, energyOf } from "./coordinates";
@@ -52,6 +56,37 @@ describe("structures read from coordinates, placed", () => {
     expect((set.x0 + set.x1) / 2).toBeCloseTo(100);
     expect((set.y0 + set.y1) / 2).toBeCloseTo(50);
     expect(setMembers(doc, set).molecules.sort()).toEqual(doc.molecules3d!.map((m) => m.id).sort());
+  });
+});
+
+describe("what was said of a structure read from coordinates, saved", () => {
+  it("is kept in the workspace's file and shown again as it opens - its charge and multiplicity, its notes - as it was", () => {
+    const ms = coordinateMolecules(readCoordinates(TEXT).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+    const doc = placeAsSet(emptyWorkspaceDocument(), ms, { x: 0, y: 0 }, { extentOf: () => ({ x0: -2, x1: 2, y0: -2, y1: 2 }) });
+    const saving = createWorkspaceDocument();
+    const store = createEditorStore(saving);
+    connectStoreToDocument(store, saving);
+    saving.edit("as it was", () => doc);
+    const ws = readWorkspace(workspaceText(store.getState()))!;
+    expect(ws.leftOut).toBeUndefined();
+    const opening = createWorkspaceDocument();
+    const again = createEditorStore(opening);
+    connectStoreToDocument(again, opening);
+    again.getState().openWorkspace(ws, true);
+    expect(opening.getState().molecules3d!.map((m) => m.said)).toEqual([
+      [
+        { label: "Charge, multiplicity", text: "0 1" },
+        { label: "Note", text: "E = -76.4 Hartree" },
+      ],
+      undefined,
+    ]);
+  });
+
+  it("leaves out a row that does not read, alone, and says so", () => {
+    const [water] = coordinateMolecules(readCoordinates(TEXT).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+    const { value: m, left } = noting(() => readCarried3D({ ...water, at: { x: 0, y: 0 }, said: [{ label: "Note", text: "E = -76.4 Hartree" }, { label: "Note" }, 7] }));
+    expect(m?.said).toEqual([{ label: "Note", text: "E = -76.4 Hartree" }]);
+    expect(left).toEqual({ said: 2 });
   });
 });
 

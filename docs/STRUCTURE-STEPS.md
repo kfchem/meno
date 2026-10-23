@@ -3,8 +3,12 @@
 The workflow steps on structures that Meno does itself
 (docs/WORKFLOWS-FOUNDATION.md, *Meno's own nodes*, Structures). Each does
 one thing, works on Meno's entry record (`src/lib/entry.ts`) and lives in
-`src/lib/steps`, pure, with no page and no plugin. Their cards follow the
-ports-and-exits work. Each is tested against answers known by construction,
+`src/lib/steps`, pure, with no page and no plugin. *Tag*, *Species*,
+*Combine* and *Measure* are steps of a workflow (docs/WORKFLOWS.md, *Kinds of
+step*; `workflow/structureSteps.ts`): each runs on a set's entries read as
+entry records, and gives each back as a step's entry - all it held kept
+where it is that entry still, what was worked out at another structure,
+places or state never carried (`setEntryOfEntry`). The rest follow. Each is tested against answers known by construction,
 not only against its own code (`src/lib/steps/structures.test.ts`).
 
 ## Species
@@ -30,6 +34,14 @@ Each entry the same, its charge and multiplicity set as given (`withSpecies`).
 
   Checked: water, a singlet, not a doublet; OH, a doublet, not a singlet;
   OH⁻, a singlet; O₂, a triplet; H⁺, a singlet with no electrons.
+- **What was for another species goes, said.** As a workflow step, an
+  entry given another charge or multiplicity than the one in use loses
+  what was worked out for the old one: its energy, its calculation, its
+  imaginary frequencies. The step's line names what went ("1 entry set;
+  its energy was dropped (it was for the other species)"). An entry given
+  the charge and multiplicity it already had, given before or as its atoms
+  say them, keeps all it held. One that fails goes out of *Failed* without
+  its energy.
 
 ## Combine
 
@@ -50,8 +62,11 @@ The entries that come in, as one entry holding them all: a complex
   is the chemist's to set (*Species*). Where a part is a skeleton, without
   its hydrogens, the complex has no species either, and this is said.
 - **Properties.** No part's properties are carried: each was worked out on
-  its part alone, not on the complex. Where any part had properties, this
-  is said. The parts' ids stay as the complex's lineage.
+  its part alone, not on the complex, and what refers to a part's atoms (its
+  restraints, its measures) would name the wrong atoms in the complex's
+  numbering. What each part held is said, part by part and by kind: "part
+  2: restraints, 2 measures, energy". The parts' ids stay as the complex's
+  lineage.
 
 ## Measure
 
@@ -102,8 +117,16 @@ start of a restrained minimisation towards the product.
   - The geometry is the geometry entry's, as it is: one 3D structure.
     Frames are taken one at a time first (*Take frames*).
 - **Properties.** Both entries' properties are kept, the geometry entry's
-  where both have one of the same name, and each still says the geometry
-  it was worked out at.
+  where both have one of the same name, each as what it says it is of
+  (`Property`, `src/lib/entry.ts`):
+  - a value of a geometry (`at`) still says the geometry it was worked out
+    at;
+  - a label (a Tag's ID, restraints) rides as it is;
+  - a value of a structure (`of`, a descriptor's molar mass) whose structure
+    is not the new entry's is kept, marked not applicable ("worked out on the
+    structure before Re-bond"), and said - never shown as current
+    (`src/lib/steps/restructure.ts`). A structure is known by its atoms and
+    bonds, however numbered (`structureKey`).
 - **Group and lineage.** The group is *a → b*: the geometry entry's group,
   then the bonding entry's (each entry's own id where it has none). Both
   entries are its lineage.

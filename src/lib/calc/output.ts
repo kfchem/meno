@@ -205,11 +205,16 @@ function sourceOf(v: unknown): CalcSource | undefined {
  * made a molecule - a plugin, its force field - where no output was read
  * (stepRuns, conformers made of a drawing). Read back, it is what the
  * session held, so that a later step is told the same charge and spin.
+ * Any one-value field there that is not as Meno writes it (`WELL_FORMED`),
+ * or a reader that is not a name, refuses the whole record.
  */
 export function readCalc(given: unknown, atoms: number, frames: number): CalcInfo | undefined {
   const c = given as Record<string, unknown> | null | undefined;
-  const readers = Array.isArray(c?.readers) ? c.readers.filter((r): r is string => typeof r === "string" && !!r.trim()) : [];
   if (!c || typeof c !== "object") return undefined;
+  // (a field there that is not as Meno writes it - a charge "1" - refuses the whole record, so it is said not read: never read back without that field, as if it had not been said)
+  if (Object.entries(WELL_FORMED).some(([k, ok]) => c[k] !== undefined && !ok(c[k]))) return undefined;
+  if (c.readers !== undefined && (!Array.isArray(c.readers) || !c.readers.every((r) => text(r) != null))) return undefined;
+  const readers = Array.isArray(c.readers) ? (c.readers as string[]) : [];
   // (by no reader - its list there, and empty, as Meno writes one - kept only where it holds what was given: a charge, a multiplicity, or what made it)
   if (!readers.length && (!Array.isArray(c.readers) || (!isNum(c.charge) && !isNum(c.multiplicity) && !text(c.program) && !text(c.method)))) return undefined;
   const results = Array.isArray(c.results) ? c.results : [];
@@ -249,6 +254,19 @@ export function readCalc(given: unknown, atoms: number, frames: number): CalcInf
   const { path: _, ...kept } = wavefunction;
   return { ...calc, ...adopted, wavefunction: kept };
 }
+
+/** Each field of a kept calculation's record that is one value, as `calcOf` writes it: words said, a whole charge, a multiplicity of 1 or more, yes or no; and when it was adopted. */
+const WELL_FORMED: Readonly<Record<string, (v: unknown) => boolean>> = {
+  program: (v) => text(v) != null,
+  version: (v) => text(v) != null,
+  method: (v) => text(v) != null,
+  basis: (v) => text(v) != null,
+  solvation: (v) => text(v) != null,
+  charge: (v) => Number.isInteger(v),
+  multiplicity: (v) => Number.isInteger(v) && (v as number) > 0,
+  optimised: (v) => typeof v === "boolean",
+  adopted: isNum,
+};
 
 /**
  * What the calculation was, in a line: "ORCA 6.0.1 · B3LYP/def2-SVP ·
