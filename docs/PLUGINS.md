@@ -972,7 +972,11 @@ of odd valence - is for the general steps after it, and for
   "made"}` or `{"place", "why"}` (not read). Meno names on the step's
   line each seed that made none and each not read, with why, from this
   tally (*seeds 2 and 5 made none; seed 3 not read: ...*), never from
-  `said`, which it cuts short.
+  `said`, which it cuts short: five of each on the line, the rest
+  counted, and every one where the line is pointed at. A plugin that
+  makes from seeds must give it: without it, none of the run is taken.
+  Where no seed could be read, it gives no structures and the tally
+  says why of each.
 - `by`: what made them all: the program and its version, the model, how.
 - `said`: the run in a line.
 

@@ -739,7 +739,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return void fail(id, message(e), at, key);
     }
     if (typeof read === "string") return void fail(id, read, at, key);
-    if (!read.made.length) return void fail(id, read.said, at, key);
+    // (made from seeds: each seed told - how many it made, or why it was not read - or none of the run taken)
+    if (seeded && !read.seeds) return void fail(id, "Its seeds are not told one by one", at, key);
+    // (each seed it made none of, or could not read, named from its tally - never left to what it said, cut short -
+    //  the first few on the line, every one where the line is pointed at)
+    const seedLine = read.seeds ? seedsSaid(read.seeds) : "";
+    const named = read.seeds && seedsSaid(read.seeds, Infinity) !== seedLine ? seedsSaid(read.seeds, Infinity) : "";
+    if (!read.made.length) return void (fail(id, [read.said, ...(seedLine ? [seedLine] : [])].join(" \u00b7 "), at, key), nameAll(id, named));
     // (what made them: the plugin, its version - and the program, the model and how, as the plugin says)
     const by: By = { ...read.by, plugin: plugin.id, version: plugin.version, ...(read.by.program ? { program: [read.by.program, read.by.version].filter(Boolean).join(" ") } : {}) };
     const stereoBy: By = { plugin: rolePlugin("stereoisomers")?.id ?? "" };
@@ -787,9 +793,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
-    // (each seed it made none of, or could not read, named from its tally - never left to what it said, cut short)
-    const seedLine = read.seeds ? seedsSaid(read.seeds) : "";
-    if (!kept.length) return void fail(id, [read.said, ...(seedLine ? [seedLine] : []), "none could be read", ...(notRead.length ? [notReadSaid(notRead)] : [])].join(" \u00b7 "), at, key);
+    if (!kept.length) return void (fail(id, [read.said, ...(seedLine ? [seedLine] : []), "none could be read", ...(notRead.length ? [notReadSaid(notRead)] : [])].join(" \u00b7 "), at, key), nameAll(id, named));
     const said = [
       read.said,
       ...(seedLine ? [seedLine] : []),
@@ -799,6 +803,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       ...(notRead.length ? [notReadSaid(notRead)] : []),
     ].join(" \u00b7 ");
     doc.edit("run", (x) => ranAs(x, id, { ok: true, holds: "structures", kept, aside: [], said }, key, { ...w, byOf, now: at }));
+    nameAll(id, named);
+  }
+
+  /** Every seed a step's line counts but does not name (`StepRan.named`), kept with its run: shown where the line is pointed at. */
+  function nameAll(id: number, named: string): void {
+    if (!named) return;
+    doc.amend((x) => ({ ...x, steps: (x.steps ?? []).map((s) => (s.id === id && s.ran ? { ...s, ran: { ...s.ran, named } } : s)) }), { unsaved: true });
   }
 
   /** A step a plugin does at once on the entries that came in (`run`): those it keeps, the rest set aside. */

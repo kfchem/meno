@@ -535,12 +535,13 @@ export const SEEDS_NAMED = 5;
 /**
  * The seeds a generator made nothing of, named on its step's line by their
  * numbers, from its tally - never from what it said, which is cut short:
- * *seeds 2 and 5 made none; seed 3 not read: a part RDKit cannot read*.
+ * *seeds 2 and 5 made none; seed 3 not read: a part RDKit cannot read* -
+ * at most `most` of each, the rest counted (every one, `Infinity`).
  * Nothing, where each made some.
  */
-export function seedsSaid(tally: readonly SeedTally[]): string {
+export function seedsSaid(tally: readonly SeedTally[], most = SEEDS_NAMED): string {
   const list = (ns: number[]) => {
-    const shown = ns.slice(0, SEEDS_NAMED).map((n) => String(n + 1));
+    const shown = ns.slice(0, most).map((n) => String(n + 1));
     const more = ns.length - shown.length;
     const words = more ? [...shown, `${more} more`] : shown;
     return `seed${ns.length === 1 ? "" : "s"} ${words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}` : words[0]}`;

@@ -157,9 +157,8 @@ def op_run(m):
                 "seed": place,
             })
     taken = sum(1 for s in seeds if "made" in s)
-    if not taken:
-        raise ValueError("No seed could be read: " + "; ".join(sorted({s["why"] for s in seeds})))
-    said = f"{len(outputs)} made from {taken} seed{'' if taken == 1 else 's'} ({OPERATIONS[operation]}, radius {radius}, seed {seed})"
+    # (none read: nothing made, each seed's why in the tally - Meno names each from it)
+    said = "No seed could be read" if not taken else f"{len(outputs)} made from {taken} seed{'' if taken == 1 else 's'} ({OPERATIONS[operation]}, radius {radius}, seed {seed})"
     return {"outputs": outputs[:MOST], "seeds": seeds, "said": said, "by": {"program": "CReM", "version": VERSION, "model": DB_SAID, "method": how}}
 
 

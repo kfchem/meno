@@ -176,6 +176,10 @@ describe("Generate: a step that takes nothing in", () => {
         { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, seed_smiles: { value: "CO", unit: "none" } }, seed: 0 },
         { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, seed_smiles: { value: "CN", unit: "none" } }, seed: 1 },
       ],
+      seeds: [
+        { place: 0, made: 1 },
+        { place: 1, made: 1 },
+      ],
       said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1)",
       by: { program: "CReM", version: "0.3.2", model: "chembl33_sa2_f5", method: "fragments replaced, radius 3, seed 1" },
     });
@@ -221,6 +225,47 @@ describe("Generate: a step that takes nothing in", () => {
     expect(readGenerated({ ...out, seeds: [{ place: 1, made: 1 }] }, 1)).toBe("Its seeds are not told one by one");
     expect(readGenerated({ ...out, seeds: [{ place: 0 }] }, 1)).toBe("Seed 1 is told neither made nor why not");
     expect(readGenerated({ ...out, seeds: [{ place: 0, made: 1 }] }, 1)).toMatchObject({ seeds: [{ place: 0, made: 1 }] });
+    // (every one, where the line is pointed at)
+    expect(seedsSaid(tally([0, 0, 0, 0, 0, 0, 0, 1]), Infinity)).toBe("seeds 1, 2, 3, 4, 5, 6 and 7 made none");
+  });
+
+  it("from seeds: fails where the plugin does not tell each seed, names each where none was read, and keeps every one the line only counts", async () => {
+    useReaders.setState({ state: { crem: "added", rdkit: "added" }, problem: {} });
+    const { doc, st } = page();
+    // (seven seeds drawn, each C-O, apart)
+    doc.edit("draw", (d) => ({
+      ...d,
+      model: {
+        atoms: Array.from({ length: 7 }, (_, k) => [
+          { id: 10 * k + 1, el: "C", x: 6 * k, y: 0, r: 0.9 },
+          { id: 10 * k + 2, el: "O", x: 6 * k + 1.3, y: 0, r: 0.9 },
+        ]).flat() as never,
+        bonds: Array.from({ length: 7 }, (_, k) => ({ id: 10 * k + 3, a: 10 * k + 1, b: 10 * k + 2, order: 1 })) as never,
+      },
+      nextId: 100,
+    }));
+    const set = st().addSet({ x0: -3, y0: -3, x1: 42, y1: 3 });
+    const step = st().addStep("generate", "crem", 50, 0);
+    st().connect({ set }, step);
+    const ran = () => st().steps.find((s) => s.id === step)!.ran!;
+    // (no tally: not taken - what became of each seed would go unsaid)
+    run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: {}, seed: 0 }], said: "1 made", by: { program: "CReM" } });
+    await st().runStep(step);
+    expect(ran()).toMatchObject({ ok: false, said: "Its seeds are not told one by one" });
+    // (none read: failed, each seed named with why, from the tally)
+    const why = (place: number) => ({ place, why: place % 2 ? "it has no atoms" : "a part RDKit cannot read" });
+    run.mockResolvedValueOnce({ outputs: [], seeds: Array.from({ length: 7 }, (_, k) => why(k)), said: "No seed could be read", by: { program: "CReM" } });
+    await st().runStep(step);
+    expect(ran()).toMatchObject({ ok: false, said: "No seed could be read · seeds 1, 3, 5 and 7 not read: a part RDKit cannot read; seeds 2, 4 and 6 not read: it has no atoms" });
+    // (six made none: five named on the line, the sixth counted - and every one kept, shown where the line is pointed at)
+    run.mockResolvedValueOnce({
+      outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
+      seeds: Array.from({ length: 7 }, (_, k) => ({ place: k, made: k === 0 ? 1 : 0 })),
+      said: "1 made from 7 seeds",
+      by: { program: "CReM" },
+    });
+    await st().runStep(step);
+    expect(ran()).toMatchObject({ ok: true, said: "1 made from 7 seeds · seeds 2, 3, 4, 5, 6 and 1 more made none · 1 made", named: "seeds 2, 3, 4, 5, 6 and 7 made none" });
   });
 });
 

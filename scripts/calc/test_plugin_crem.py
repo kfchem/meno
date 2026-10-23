@@ -122,8 +122,11 @@ class Generate(unittest.TestCase):
         self.assertEqual(sorted({o["seed"] for o in got["outputs"]}), [0, 2])
         self.assertEqual(got["seeds"], [{"place": 0, "made": 3}, {"place": 1, "why": "a part RDKit cannot read"}, {"place": 2, "made": 3}, {"place": 3, "made": 0}])
         self.assertEqual(got["said"], "6 made from 3 seeds (hydrogens replaced, radius 3, seed 7)")
-        with self.assertRaisesRegex(ValueError, "No seed could be read"):
-            self.made("grow", [{"molblocks": ["not a block"]}])
+        # (none read: nothing made, and each seed's why in the tally, for Meno to name)
+        none = self.made("grow", [{"molblocks": ["not a block"]}, {"molblocks": []}])
+        self.assertEqual(none["outputs"], [])
+        self.assertEqual(none["said"], "No seed could be read")
+        self.assertEqual(none["seeds"], [{"place": 0, "why": "a part RDKit cannot read"}, {"place": 1, "why": "it has no atoms"}])
 
     def test_refuses_an_option_outside_what_it_may_be_never_running_another(self):
         for options, said in [

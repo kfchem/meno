@@ -216,7 +216,7 @@ export default function StepCard(p: StepCardProps) {
             <span className={clsx("mt-1.5 flex h-4 items-center transition-colors duration-200 ease-meno", line.tone)}>
               {line.Icon && <line.Icon className={clsx("h-3.5 w-3.5", line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
             </span>
-            <span className={clsx("mt-1.5 line-clamp-2 text-[11px] leading-4 transition-colors duration-200 ease-meno", line.tone)} title={line.text}>
+            <span className={clsx("mt-1.5 line-clamp-2 text-[11px] leading-4 transition-colors duration-200 ease-meno", line.tone)} title={[line.text, p.step.ran?.named].filter(Boolean).join("\n")}>
               {line.text}
             </span>
             {said && (
