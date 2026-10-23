@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SetEntry } from "./entries";
 import { kindInfo } from "./kinds";
-import { runMeno } from "./meno";
+import { runMeno, STATE_FINISHED } from "./meno";
 
 /** Water as a step's entry, with an energy and a calculation on it. */
 const water = (number: number, dx = 0): SetEntry =>
@@ -51,13 +51,36 @@ describe("Species, as a step", () => {
     const o = ok(runMeno("species", [water(1)], "molecules", { charge: "+1", multiplicity: "2" }));
     // (H2O+: nine electrons, a doublet)
     expect([o.kept[0].charge, o.kept[0].multiplicity, o.kept[0].energy]).toEqual([1, 2, undefined]);
+    // (what it no longer holds, said)
+    expect(o.said).toBe("1 entry set; its energy was dropped (it was for the other species)");
     // (its singlet, given by its calculation, kept: nine electrons cannot be a singlet - never changed to fit)
     const bad = ok(runMeno("species", [water(1)], "molecules", { charge: "+1", multiplicity: "" }));
     expect(bad.kept).toEqual([]);
     expect(bad.aside[0].failed?.kind).toBe("refused");
     expect(bad.aside[0].failed?.why).toMatch(/electron/);
-    expect(bad.aside[0].energy).toBe(-76.4);
-    expect(bad.said).toBe("0 entries set, 1 failed");
+    // (out of Failed without its energy: it stands for no result)
+    expect(bad.aside[0].energy).toBeUndefined();
+    expect([bad.aside[0].charge, bad.aside[0].multiplicity]).toEqual([0, 1]);
+    expect(bad.said).toBe("0 entries set; 1 failed");
+  });
+
+  it("keeps all an entry held where the species given is the one it had - given before, or as its atoms say it - and names what those given another no longer hold", () => {
+    // (water's charge 0 and singlet: given by its calculation, and as its atoms alone say them)
+    const fromAtoms = { ...water(2), charge: undefined, multiplicity: undefined } as SetEntry;
+    const same = ok(runMeno("species", [water(1), fromAtoms], "molecules", { charge: "0" }));
+    expect(same.kept.map((e) => [e.charge, e.energy])).toEqual([
+      [0, -76.4],
+      [0, -76.4],
+    ]);
+    expect(same.said).toBe("2 entries set");
+    // (a cation given by its calculation, made neutral: its energy and calculation were for the cation)
+    const cation = { ...water(2), charge: 1, multiplicity: 2, calc: { readers: [], charge: 1, multiplicity: 2 } } as SetEntry;
+    const mixed = ok(runMeno("species", [water(1), cation], "molecules", { charge: "0", multiplicity: "1" }));
+    expect(mixed.kept.map((e) => [e.charge, e.multiplicity, e.energy, e.calc])).toEqual([
+      [0, 1, -76.4, undefined],
+      [0, 1, undefined, undefined],
+    ]);
+    expect(mixed.said).toBe("2 entries set; 1 of them had its energy and calculation dropped (they were for the other species)");
   });
 
   it("gives one that came in failed - to be tried again in another state - its species, its old failure gone with the old state", () => {
@@ -65,6 +88,13 @@ describe("Species, as a step", () => {
     const o = ok(runMeno("species", [failed], "molecules", { charge: "+1", multiplicity: "2" }));
     expect(o.aside).toEqual([]);
     expect([o.kept[0].charge, o.kept[0].multiplicity, o.kept[0].failed]).toEqual([1, 2, undefined]);
+  });
+
+  it("gives entries a Filter on their state reads as Meno's own - finished, none carrying a state of its own", () => {
+    const o = ok(runMeno("species", [water(1)], "molecules", { charge: "+1", multiplicity: "2" }));
+    expect(o.kept[0].properties?.state).toBeUndefined();
+    const f = ok(runMeno("filter", o.kept, "molecules", { conditions: STATE_FINISHED, match: "all" }));
+    expect([f.kept.length, f.aside.length]).toEqual([1, 0]);
   });
 
   it("refuses to run on what does not read as a charge or multiplicity, or on nothing given", () => {

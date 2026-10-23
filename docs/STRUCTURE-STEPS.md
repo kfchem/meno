@@ -34,6 +34,14 @@ Each entry the same, its charge and multiplicity set as given (`withSpecies`).
 
   Checked: water, a singlet, not a doublet; OH, a doublet, not a singlet;
   OH⁻, a singlet; O₂, a triplet; H⁺, a singlet with no electrons.
+- **What was for another species goes, said.** As a workflow step, an
+  entry given another charge or multiplicity than the one in use loses
+  what was worked out for the old one: its energy, its calculation, its
+  imaginary frequencies. The step's line names what went ("1 entry set;
+  its energy was dropped (it was for the other species)"). An entry given
+  the charge and multiplicity it already had, given before or as its atoms
+  say them, keeps all it held. One that fails goes out of *Failed* without
+  its energy.
 
 ## Combine
 

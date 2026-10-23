@@ -3,7 +3,7 @@ import { geometryKey, type Entry } from "../../../../lib/entry";
 import { structureKey } from "../../../../lib/steps/restructure";
 import { rebonded } from "../../../../lib/steps/rebond";
 import { withSpecies } from "../../../../lib/steps/species";
-import { entryOfSet, setEntryOfEntry, type SetEntry } from "./entries";
+import { entryOfSet, MENO_OWN, setEntryOfEntry, type SetEntry } from "./entries";
 
 /** Hydroxide-or-water-like: O and two H as a step's entry, with all a calculation leaves on it. */
 const held = (extra: Partial<SetEntry> = {}): SetEntry =>
@@ -64,6 +64,12 @@ describe("an entry record as a step's entry again", () => {
     expect([back.charge, back.multiplicity, back.energy, back.calc]).toEqual([1, 2, undefined, undefined]);
   });
 
+  it("keeps all where the charge and spin given are those it had as its atoms said them - the same species, now given", () => {
+    const plain = held({ charge: undefined, multiplicity: undefined });
+    const back = setEntryOfEntry(withSpecies(entryOfSet(plain, "x"), { charge: 0 }), { compound: 0, number: 1 }, plain)!;
+    expect(back).toEqual({ ...plain, charge: 0 });
+  });
+
   it("holds a charge and spin only where they were given, not where its atoms alone say them", () => {
     const plain = held({ charge: undefined, multiplicity: undefined, energy: undefined, calc: undefined, imaginary: undefined, degeneracy: undefined });
     const back = setEntryOfEntry(entryOfSet(plain, "x"), { compound: 0, number: 1 }, plain)!;
@@ -71,6 +77,17 @@ describe("an entry record as a step's entry again", () => {
     const given = setEntryOfEntry(withSpecies(entryOfSet(plain, "x"), { charge: -1 }), { compound: 0, number: 1 }, plain)!;
     // (the charge given; the multiplicity its electrons take - its atoms', not given)
     expect([given.charge, given.multiplicity]).toEqual([-1, undefined]);
+  });
+
+  it("carries none of the properties Meno reads of an entry as its own, every one it gives held to that list", () => {
+    // (an entry holding all Meno reads of one: energy, thermochemistry, vibrations and modes, degeneracy, mirror image, imaginary frequencies, name - and its group, number and state)
+    const reading = (id: string, value: number) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, quantity: "energy" });
+    const vibrations = { id: "vibrations", on: "list", group: "Vibrations", label: "Vibrations", columns: [{ label: "Frequency", quantity: "wavenumber" }], rows: [{ cells: [-120], move: Array(9).fill(0.1) }] };
+    const calc = { readers: ["a-plugin 1.0"], results: [...["thermo.free-energy", "thermo.enthalpy", "thermo.zpve", "thermo.g-correction"].map((id) => reading(id, -76)), vibrations] };
+    const full = held({ calc: calc as never, mirror: [0, 1, 2] });
+    const record = entryOfSet(full, "x");
+    expect(Object.keys(record.properties).sort()).toEqual([...MENO_OWN].sort());
+    expect(setEntryOfEntry(record, { compound: 0, number: 1 }, full)!.properties).toBeUndefined();
   });
 
   it("gives none of an entry without one geometry in 3D", () => {

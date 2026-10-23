@@ -836,7 +836,7 @@ function readingOf(calc: SetEntry["calc"], id: string): number | string | undefi
  * it said it ("none", the gas phase stated; unsaid, not stated). Only an
  * energy in hartrees is taken.
  */
-function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
+function thermoOf(e: SetEntry, geometry: string): Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> {
   const calc = e.calc;
   if (!calc?.results?.length) return {};
   const kelvin = readingOf(calc, "thermo.temperature");
@@ -849,7 +849,7 @@ function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
     ...(calc.solvation ? { solvent: calc.solvation } : {}),
   };
   const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
-  const out: Record<string, Property> = {};
+  const out: Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> = {};
   for (const id of THERMO_PROPERTIES) {
     const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
     if (!r || r.on !== "molecule" || typeof r.value !== "number" || !Number.isFinite(r.value) || r.quantity !== "energy") continue;
@@ -866,7 +866,7 @@ function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
  * displacements. What else the list has stays among its readings: the
  * entry's columns take only units Meno's table has.
  */
-function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
+function vibrationsOf(e: SetEntry, at: At): { vibrations?: Property; modes?: Property } {
   const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
   if (!list || list.on !== "list") return {};
   const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
@@ -889,8 +889,12 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc">): number[] |
   return e.calc?.results?.some((x) => x.on === "list" && x.id === "vibrations") ? [] : "not computed";
 }
 
-/** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name. */
-function menoProperties(e: SetEntry): Record<string, Property> {
+/** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name", "state"] as const;
+export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
+
+/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name, its state. */
+function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
   return {
@@ -960,9 +964,6 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
   };
 }
 
-/** The properties an entry record is given of a step's entry by Meno itself (`menoProperties`): each a field of the step's entry - its compound, its energy, its vibrations - not one of its own properties. */
-const MENO_OWN: ReadonlySet<string> = new Set(["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name"]);
-
 /**
  * An entry record as a step's entry again (`entryOfSet`, the other way),
  * where a step of Meno's has made it: its structure, its places, its charge
@@ -1011,12 +1012,26 @@ export function setEntryOfEntry(e: Entry, place: { compound: number; number: num
     ...(was?.last != null ? { last: was.last } : {}),
   };
   if (!was || !sameAs(was, made)) return made;
-  // (that entry still: all it held, its properties as the step left them)
+  // (that entry still: all it held, its properties as the step left them - and its charge and spin given, where the step gave the ones it had)
   const { properties: _, ...held } = was;
-  return { ...held, compound: place.compound, number: place.number, ...(Object.keys(own).length ? { properties: own } : {}), ...(made.name ? { name: made.name } : {}) };
+  return {
+    ...held,
+    compound: place.compound,
+    number: place.number,
+    ...(made.charge != null ? { charge: made.charge } : {}),
+    ...(made.multiplicity != null ? { multiplicity: made.multiplicity } : {}),
+    ...(Object.keys(own).length ? { properties: own } : {}),
+    ...(made.name ? { name: made.name } : {}),
+  };
 }
 
-/** Whether two step's entries are one: the same atoms, in order, the same bonds, places and charge and spin. */
+/** A step's entry's charge and spin as in use - given, or as its atoms say them (`speciesOf`) - or none, a skeleton's. */
+function speciesNow(e: SetEntry): string {
+  const s = entryOfSet(e, "").species;
+  return s ? `${s.charge}|${s.multiplicity}` : "none";
+}
+
+/** Whether two step's entries are one: the same atoms, in order, the same bonds, places, and charge and spin in use - one given that its atoms say already is the same. */
 function sameAs(a: SetEntry, b: SetEntry): boolean {
   const atom = (x: ParsedAtom) => `${x.el}|${x.isotope ?? ""}|${x.charge ?? 0}|${x.radical ?? ""}`;
   const bond = (x: ParsedBond) => `${Math.min(x.a1, x.a2)}-${Math.max(x.a1, x.a2)}:${x.order}`;
@@ -1025,9 +1040,7 @@ function sameAs(a: SetEntry, b: SetEntry): boolean {
     a.atoms.every((x, i) => atom(x) === atom(b.atoms[i])) &&
     a.bonds.map(bond).sort().join() === b.bonds.map(bond).sort().join() &&
     geometryKey(a.xyz) === geometryKey(b.xyz) &&
-    (a.charge ?? null) === (b.charge ?? null) &&
-    (a.multiplicity ?? null) === (b.multiplicity ?? null) &&
-    !!a.skeleton === !!b.skeleton
+    speciesNow(a) === speciesNow(b)
   );
 }
 
