@@ -29,7 +29,7 @@ import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wire
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, drawnSaid, readDrawnAnswers, type DrawnValue, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, seedsSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, keptRun, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -787,9 +787,12 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
-    if (!kept.length) return void fail(id, [read.said, "none could be read", ...(notRead.length ? [notReadSaid(notRead)] : [])].join(" \u00b7 "), at, key);
+    // (each seed it made none of, or could not read, named from its tally - never left to what it said, cut short)
+    const seedLine = read.seeds ? seedsSaid(read.seeds) : "";
+    if (!kept.length) return void fail(id, [read.said, ...(seedLine ? [seedLine] : []), "none could be read", ...(notRead.length ? [notReadSaid(notRead)] : [])].join(" \u00b7 "), at, key);
     const said = [
       read.said,
+      ...(seedLine ? [seedLine] : []),
       `${kept.length} made`,
       ...(open ? [`${open} with stereo left open`] : []),
       ...(unexamined ? [`${unexamined} with stereo not examined`] : []),

@@ -58,6 +58,8 @@ pub struct Download {
     pub program: Option<String>,
     /// The program it is, by the name the plugin's steps and roles run it by.
     pub provides: Option<String>,
+    /// How large one compressed with gzip is unpacked, in bytes, as the manifest says: never unpacked past it.
+    pub unpacked_bytes: Option<u64>,
 }
 
 /// How an archive a plugin fetches is opened.
@@ -161,6 +163,10 @@ pub fn downloads_of(manifest: &Value) -> Result<Vec<Download>, String> {
         };
         let program = given("program").transpose().map_err(|_| refused())?;
         let provides = given("provides").transpose().map_err(|_| refused())?;
+        let unpacked_bytes = d.get("unpackedBytes").map(|v| v.as_u64().filter(|&n| n > 0).ok_or(())).transpose().map_err(|_| refused())?;
+        if unpacked_bytes.is_some() != (unpack == Some(Unpack::Gz)) {
+            return Err(refused());
+        }
         if !file_ok(&file) || !url_ok(&url) || !sha_ok(&sha256) || bytes == 0 || bytes > MOST_BYTES {
             return Err(refused());
         }
@@ -178,7 +184,7 @@ pub fn downloads_of(manifest: &Value) -> Result<Vec<Download>, String> {
         if out.iter().any(|o| o.file == file) {
             return Err(format!("{file} is listed twice"));
         }
-        out.push(Download { file, url, sha256, bytes, system, arch, unpack, program, provides });
+        out.push(Download { file, url, sha256, bytes, system, arch, unpack, program, provides, unpacked_bytes });
     }
     Ok(out)
 }
@@ -255,10 +261,15 @@ pub fn copy_of(dir: &Path, d: &Download) -> Option<PathBuf> {
 }
 
 /// One file compressed with gzip unpacked, by Meno itself - no program on the system needed - into `to`.
-fn gunzip(archive: &Path, to: &Path) -> Result<(), String> {
+fn gunzip(archive: &Path, to: &Path, most: u64) -> Result<(), String> {
+    use std::io::Read as _;
     let from = std::fs::File::open(archive).map_err(|e| e.to_string())?;
     let mut out = std::fs::File::create(to).map_err(|e| e.to_string())?;
-    std::io::copy(&mut flate2::read::GzDecoder::new(std::io::BufReader::new(from)), &mut out).map_err(|e| e.to_string())?;
+    // (never past what the manifest says it unpacks to: one byte more, and it is not what was asked to be set up)
+    let wrote = std::io::copy(&mut flate2::read::GzDecoder::new(std::io::BufReader::new(from)).take(most + 1), &mut out).map_err(|e| e.to_string())?;
+    if wrote > most {
+        return Err(format!("it unpacks to more than the {most} bytes its manifest says"));
+    }
     out.sync_all().map_err(|e| e.to_string())
 }
 
@@ -342,7 +353,7 @@ pub fn unpack(archive: &Path, d: &Download, dir: &Path) -> Result<PathBuf, Strin
         Unpack::Zip => run(&tar(), &["-xf".as_ref(), archive.as_os_str(), "-C".as_ref(), folder.as_os_str()]),
         Unpack::TarXz => run(&tar(), &["-xJf".as_ref(), archive.as_os_str(), "-C".as_ref(), folder.as_os_str()]),
         Unpack::Dmg => unpack_dmg(archive, program, &folder, dir),
-        Unpack::Gz => gunzip(archive, &gunzipped(&folder, d)),
+        Unpack::Gz => gunzip(archive, &gunzipped(&folder, d), d.unpacked_bytes.unwrap_or(0)),
     };
     if let Err(e) = done {
         let _ = removed(&folder);
@@ -686,6 +697,7 @@ mod tests {
             unpack: Some(unpack),
             program: Some(program.into()),
             provides: Some("blender".into()),
+            unpacked_bytes: None,
         }
     }
 
@@ -739,7 +751,7 @@ mod tests {
         enc.write_all(&body).unwrap();
         enc.finish().unwrap();
         let bytes = std::fs::read(&gz).unwrap();
-        let manifest = json!({"downloads": [{"file": "fragments.db.gz", "url": "https://h/f", "sha256": sha(&bytes), "bytes": bytes.len(), "unpack": "gz"}]});
+        let manifest = json!({"downloads": [{"file": "fragments.db.gz", "url": "https://h/f", "sha256": sha(&bytes), "bytes": bytes.len(), "unpack": "gz", "unpackedBytes": body.len()}]});
         let d = downloads_of(&manifest).unwrap().remove(0);
         assert_eq!(d.unpack, Some(Unpack::Gz));
         assert_eq!(missing(dir.path(), std::slice::from_ref(&d)).len(), 1);
@@ -751,6 +763,14 @@ mod tests {
         // (cut short - no stamp - still missing)
         std::fs::remove_file(unpacked(dir.path(), &d).join(STAMP)).unwrap();
         assert_eq!(copy_of(dir.path(), &d), None);
+        // (unpacking to more than its manifest says: refused, nothing left of it)
+        let short = Download { unpacked_bytes: Some(body.len() as u64 - 1), ..d.clone() };
+        assert!(unpack(&gz, &short, dir.path()).unwrap_err().contains("more than the"));
+        assert!(!unpacked(dir.path(), &short).exists());
+        // (gz without its size unpacked, or a size on what is not gz: refused)
+        let mut bare = manifest["downloads"][0].clone();
+        bare.as_object_mut().unwrap().remove("unpackedBytes");
+        assert!(downloads_of(&json!({"downloads": [bare]})).is_err());
         // (not gzip: refused, nothing left of it)
         std::fs::write(&gz, b"not gzip").unwrap();
         assert!(unpack(&gz, &d, dir.path()).unwrap_err().contains("could not be unpacked"));

@@ -56,7 +56,7 @@ import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { setMembers } from "../workflow/entries";
 import { inputKey, resultOf, stateOf } from "../workflow/flow";
-import { notReadSaid, readGenerated, unreadWhy } from "../workflow/programs";
+import { notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
 import { pluginById } from "../../../../lib/calc/catalog";
 
 /** What REINVENT 4's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one RDKit cannot read - each with its NLL and SMILES_state; and what made them. */
@@ -173,8 +173,8 @@ describe("Generate: a step that takes nothing in", () => {
     expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("ready");
     run.mockResolvedValueOnce({
       outputs: [
-        { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, seed: { value: "CO", unit: "none" } }, seed: 0 },
-        { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, seed: { value: "CN", unit: "none" } }, seed: 1 },
+        { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, seed_smiles: { value: "CO", unit: "none" } }, seed: 0 },
+        { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, seed_smiles: { value: "CN", unit: "none" } }, seed: 1 },
       ],
       said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1)",
       by: { program: "CReM", version: "0.3.2", model: "chembl33_sa2_f5", method: "fragments replaced, radius 3, seed 1" },
@@ -186,16 +186,41 @@ describe("Generate: a step that takes nothing in", () => {
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1) · 2 made" });
     const held = setMembers(st(), resultOf(st(), step)!);
     // (the first seed's: what it came from, its values as that one's - never which of how many it was - beside the model's own)
-    expect(held.records[0]).toMatchObject({ from: ["molecule:7"], properties: { "made_from.nll": nll, frequency: expect.objectContaining({ value: 120 }), seed: expect.objectContaining({ value: "CO" }) } });
+    expect(held.records[0]).toMatchObject({ from: ["molecule:7"], properties: { "made_from.nll": nll, frequency: expect.objectContaining({ value: 120 }), seed_smiles: expect.objectContaining({ value: "CO" }) } });
     expect(held.records[0]!.properties!.nll).toBeUndefined();
     expect(held.records[0]!.properties!["made_from.made"]).toBeUndefined();
     // (the second seed had no record: nothing of it carried but what the plugin said of it)
     expect(held.records[1]!.from).toBeUndefined();
-    expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["frequency", "seed", "smiles"]);
+    expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["frequency", "seed_smiles", "smiles"]);
     // (another seed wired in: another run)
     const before = inputKey(st(), st().steps.find((s) => s.id === step)!, "crem");
     doc.edit("move", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 6 ? { ...b, order: 2 } : b)) } }));
     expect(inputKey(st(), st().steps.find((s) => s.id === step)!, "crem")).not.toBe(before);
+    // (a seed it could not read: named on the line, from the tally - not from what it said)
+    run.mockResolvedValueOnce({
+      outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
+      seeds: [
+        { place: 0, made: 1 },
+        { place: 1, why: "a part RDKit cannot read" },
+      ],
+      said: "1 made from 1 seed",
+      by: { program: "CReM" },
+    });
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 made from 1 seed · seed 2 not read: a part RDKit cannot read · 1 made" });
+  });
+
+  it("names the seeds a generator made none of, or could not read, by their numbers - from its tally, one for each seed", () => {
+    const tally = (made: (number | string)[]) => made.map((m, place) => (typeof m === "number" ? { place, made: m } : { place, why: m }));
+    expect(seedsSaid(tally([3, 0, "a part RDKit cannot read", 2, 0]))).toBe("seeds 2 and 5 made none; seed 3 not read: a part RDKit cannot read");
+    expect(seedsSaid(tally([0, 0, 0, 0, 0, 0, 0, 1]))).toBe("seeds 1, 2, 3, 4, 5 and 2 more made none");
+    expect(seedsSaid(tally([1, 2]))).toBe("");
+    // (a tally not one for each seed, in their order, or neither made nor why: none of the run taken)
+    const out = { outputs: [{ smiles: "C" }] };
+    expect(readGenerated({ ...out, seeds: [{ place: 0, made: 1 }] }, 2)).toBe("Its seeds are not told one by one");
+    expect(readGenerated({ ...out, seeds: [{ place: 1, made: 1 }] }, 1)).toBe("Its seeds are not told one by one");
+    expect(readGenerated({ ...out, seeds: [{ place: 0 }] }, 1)).toBe("Seed 1 is told neither made nor why not");
+    expect(readGenerated({ ...out, seeds: [{ place: 0, made: 1 }] }, 1)).toMatchObject({ seeds: [{ place: 0, made: 1 }] });
   });
 });
 

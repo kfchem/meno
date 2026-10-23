@@ -29,8 +29,11 @@ Each goes back as CReM gives it, and nothing more is made of it here
 (docs/PLUGINS.md, *Generate*): its SMILES; its values, named - the change
 made (`change`, a reaction SMARTS as CReM writes it), how many times the
 fragment put in occurs in the database (`frequency`), and the seed as CReM
-read it (`seed`, its SMILES); and which seed it was made from, by its
-place among those given (`seed` beside them). Nothing is made 3D, no
+read it (`seed_smiles`); and which seed it was made from, by its
+place among those given (`seed` beside them); and, for each seed by its
+place, how many it made or why it was not read (`seeds`), from which
+Meno names them. An option outside what it may be is refused, never
+run as another. Nothing is made 3D, no
 stereo is enumerated, nothing is refused: the general steps after it do
 that. A seed RDKit cannot read is counted, with why.
 """
@@ -83,13 +86,17 @@ def seed_of(entry):
     return mol
 
 
+#: Each number option as the step's card names it (the manifest's labels).
+LABELS = {"count": "How many from each seed", "radius": "Surroundings matched", "adds": "Heavy atoms added", "seed": "Random seed"}
+
+
 def number(options, key, default, low, high):
-    """An option as a whole number, kept to what it may be."""
-    try:
-        v = int(options.get(key, default))
-    except (TypeError, ValueError):
-        v = default
-    return min(max(v, low), high)
+    """An option as a whole number, as it was set - or its default, where it was not. Refused, naming it and what it
+    may be, where it is not a whole number from `low` to `high`: never run with another than the one set."""
+    v = options.get(key, default)
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v != int(v) or not low <= v <= high:
+        raise ValueError(f"{LABELS[key]} is {v}: it takes a whole number from {low} to {high}")
+    return int(v)
 
 
 def changed(mol, db, operation, radius, adds, count, seed):
@@ -114,7 +121,9 @@ def op_run(m):
     if not entries:
         raise ValueError("No seed came in")
     o = m.get("options") or {}
-    operation = o.get("operation", "mutate") if o.get("operation") in OPERATIONS else "mutate"
+    operation = o.get("operation", "mutate")
+    if operation not in OPERATIONS:
+        raise ValueError(f"Change is {operation!r}: it takes {' or '.join(repr(k) for k in OPERATIONS)}")
     count = number(o, "count", 20, 1, MOST_EACH)
     radius = number(o, "radius", RADIUS, 1, 5)
     adds = number(o, "adds", ADDS, 1, 10)
@@ -122,35 +131,36 @@ def op_run(m):
     if count * len(entries) > MOST:
         raise ValueError(f"At most {MOST} in one run: {len(entries)} seeds of {count} each are more - fewer seeds, or fewer from each")
     how = f"{OPERATIONS[operation]}, radius {radius}, at most {adds} heavy atoms added, seed {seed}"
-    outputs, unread = [], {}
+    # (each seed's own tally - how many it made, or why it was not read - by its place: Meno names each from it)
+    outputs, seeds = [], []
     for place, entry in enumerate(entries):
         mol = seed_of(entry)
+        if not isinstance(mol, str):
+            try:
+                Chem.SanitizeMol(mol)
+            except Exception:  # RDKit's own refusals, of every kind: a seed it cannot take is one it cannot read
+                mol = "not a structure RDKit can take"
         if isinstance(mol, str):
-            unread[mol] = unread.get(mol, 0) + 1
-            continue
-        try:
-            Chem.SanitizeMol(mol)
-        except Exception:  # RDKit's own refusals, of every kind: a seed it cannot take is one it cannot read
-            unread["not a structure RDKit can take"] = unread.get("not a structure RDKit can take", 0) + 1
+            seeds.append({"place": place, "why": mol})
             continue
         read_as = Chem.MolToSmiles(mol)
-        for smiles, change, frequency in changed(mol, db, operation, radius, adds, count, seed):
+        made = changed(mol, db, operation, radius, adds, count, seed)
+        seeds.append({"place": place, "made": len(made)})
+        for smiles, change, frequency in made:
             outputs.append({
                 "smiles": smiles,
                 "properties": {
                     "change": {"value": change, "unit": "none"},
                     "frequency": {"value": frequency, "unit": "none"},
-                    "seed": {"value": read_as, "unit": "none"},
+                    "seed_smiles": {"value": read_as, "unit": "none"},
                 },
                 "seed": place,
             })
-    taken = len(entries) - sum(unread.values())
+    taken = sum(1 for s in seeds if "made" in s)
     if not taken:
-        raise ValueError("No seed could be read: " + "; ".join(sorted(unread)))
+        raise ValueError("No seed could be read: " + "; ".join(sorted({s["why"] for s in seeds})))
     said = f"{len(outputs)} made from {taken} seed{'' if taken == 1 else 's'} ({OPERATIONS[operation]}, radius {radius}, seed {seed})"
-    if unread:
-        said += f"; {sum(unread.values())} seed{'' if sum(unread.values()) == 1 else 's'} not read (" + "; ".join(f"{n}: {w}" for w, n in sorted(unread.items())) + ")"
-    return {"outputs": outputs[:MOST], "said": said, "by": {"program": "CReM", "version": VERSION, "model": DB_SAID, "method": how}}
+    return {"outputs": outputs[:MOST], "seeds": seeds, "said": said, "by": {"program": "CReM", "version": VERSION, "model": DB_SAID, "method": how}}
 
 
 OPS = {"run": op_run}

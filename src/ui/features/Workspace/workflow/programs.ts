@@ -484,7 +484,7 @@ export type Generated = { smiles: string; properties: Record<string, { value: nu
  * Meno takes - nothing taken in part. A SMILES is not read here: Meno reads
  * each itself, as one pasted, and counts those it cannot read.
  */
-export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by: By; said: string } | string {
+export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by: By; said: string; seeds?: SeedTally[] } | string {
   const r = raw as { outputs?: unknown; said?: unknown; by?: unknown } | null;
   if (!Array.isArray(r?.outputs)) return "It said nothing Meno can take";
   if (r.outputs.length > GENERATED_MOST) return `It made more than ${GENERATED_MOST}`;
@@ -507,7 +507,51 @@ export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by:
   }
   const given = (r.by ?? {}) as Record<string, unknown>;
   const by: By = Object.fromEntries(["program", "version", "model", "method"].flatMap((k) => (typeof given[k] === "string" && (given[k] as string).trim() ? [[k, (given[k] as string).trim().slice(0, 300)]] : [])));
-  return { made, by, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
+  const tally = seedTally((r as { seeds?: unknown }).seeds, seeds);
+  if (typeof tally === "string") return tally;
+  return { made, by, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made`, ...(tally ? { seeds: tally } : {}) };
+}
+
+/** What a generator made of each seed, by its place: how many, or why it could not read it. */
+export type SeedTally = { place: number; made: number } | { place: number; why: string };
+
+/** A generator's tally of its seeds (`seeds`), one for each that came in, in their order: none where it gave none; why not, where it is not that. */
+function seedTally(v: unknown, seeds: number): SeedTally[] | undefined | string {
+  if (v == null) return undefined;
+  if (!Array.isArray(v) || v.length !== seeds) return "Its seeds are not told one by one";
+  const out: SeedTally[] = [];
+  for (const [i, s] of (v as { place?: unknown; made?: unknown; why?: unknown }[]).entries()) {
+    if (s?.place !== i) return "Its seeds are not told one by one";
+    if (Number.isInteger(s.made) && (s.made as number) >= 0) out.push({ place: i, made: s.made as number });
+    else if (typeof s.why === "string" && s.why.trim()) out.push({ place: i, why: s.why.trim().slice(0, 120) });
+    else return `Seed ${i + 1} is told neither made nor why not`;
+  }
+  return out;
+}
+
+/** The seeds Meno names on a step's line - those it made none of, and those not read, each with why - at most this many of each. */
+export const SEEDS_NAMED = 5;
+
+/**
+ * The seeds a generator made nothing of, named on its step's line by their
+ * numbers, from its tally - never from what it said, which is cut short:
+ * *seeds 2 and 5 made none; seed 3 not read: a part RDKit cannot read*.
+ * Nothing, where each made some.
+ */
+export function seedsSaid(tally: readonly SeedTally[]): string {
+  const list = (ns: number[]) => {
+    const shown = ns.slice(0, SEEDS_NAMED).map((n) => String(n + 1));
+    const more = ns.length - shown.length;
+    const words = more ? [...shown, `${more} more`] : shown;
+    return `seed${ns.length === 1 ? "" : "s"} ${words.length > 1 ? `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}` : words[0]}`;
+  };
+  const none = tally.filter((s) => "made" in s && s.made === 0).map((s) => s.place);
+  const unread = tally.filter((s): s is { place: number; why: string } => "why" in s);
+  const whys = [...new Set(unread.map((s) => s.why))];
+  return [
+    ...(none.length ? [`${list(none)} made none`] : []),
+    ...whys.map((why) => `${list(unread.filter((s) => s.why === why).map((s) => s.place))} not read: ${why}`),
+  ].join("; ");
 }
 
 /**

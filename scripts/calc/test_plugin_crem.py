@@ -108,19 +108,34 @@ class Generate(unittest.TestCase):
         self.assertEqual(set(out), {"smiles", "properties", "seed"})
         self.assertEqual(out["seed"], 0)
         self.assertEqual(out["properties"]["change"], {"value": "[H][*:1]>>C[*:1]", "unit": "none"})
-        self.assertEqual(out["properties"]["seed"], {"value": "CC(=O)Nc1ccc(O)cc1", "unit": "none"})
+        self.assertEqual(out["properties"]["seed_smiles"], {"value": "CC(=O)Nc1ccc(O)cc1", "unit": "none"})
+        self.assertEqual(got["seeds"], [{"place": 0, "made": 8}])
         self.assertIsInstance(out["properties"]["frequency"]["value"], int)
         self.assertEqual(got["by"]["program"], "CReM")
         self.assertEqual(got["by"]["version"], "0.3.2")
         self.assertTrue(got["by"]["model"].startswith("chembl33_sa2_f5 (CReM fragment databases, Zenodo 10.5281/zenodo.16909329"), got["by"]["model"])
         self.assertEqual(got["by"]["method"], "hydrogens replaced, radius 3, at most 2 heavy atoms added, seed 7")
 
-    def test_names_each_ones_seed_by_its_place_and_counts_one_not_read(self):
-        got = self.made("grow", [self.seed, {"molblocks": ["not a block"]}, entry("Oc1ccccc1")], count=3)
+    def test_tells_each_seed_by_its_place_made_some_none_or_not_read(self):
+        # (a lone chloride ion: read, but nothing in the database grows on it)
+        got = self.made("grow", [self.seed, {"molblocks": ["not a block"]}, entry("Oc1ccccc1"), entry("[Cl-]")], count=3)
         self.assertEqual(sorted({o["seed"] for o in got["outputs"]}), [0, 2])
-        self.assertEqual(got["said"], f"{len(got['outputs'])} made from 2 seeds (hydrogens replaced, radius 3, seed 7); 1 seed not read (1: a part RDKit cannot read)")
+        self.assertEqual(got["seeds"], [{"place": 0, "made": 3}, {"place": 1, "why": "a part RDKit cannot read"}, {"place": 2, "made": 3}, {"place": 3, "made": 0}])
+        self.assertEqual(got["said"], "6 made from 3 seeds (hydrogens replaced, radius 3, seed 7)")
         with self.assertRaisesRegex(ValueError, "No seed could be read"):
             self.made("grow", [{"molblocks": ["not a block"]}])
+
+    def test_refuses_an_option_outside_what_it_may_be_never_running_another(self):
+        for options, said in [
+            ({"count": 150}, "How many from each seed is 150: it takes a whole number from 1 to 100"),
+            ({"radius": 0}, "Surroundings matched is 0: it takes a whole number from 1 to 5"),
+            ({"adds": 2.5}, "Heavy atoms added is 2.5: it takes a whole number from 1 to 10"),
+            ({"seed": -1}, "Random seed is -1: it takes a whole number from 0 to 2147483647"),
+            ({"operation": "link"}, "Change is 'link': it takes 'mutate' or 'grow'"),
+        ]:
+            with self.assertRaises(ValueError) as e:
+                self.worker.op_run({"step": "generate", "entries": [self.seed], "options": options})
+            self.assertEqual(str(e.exception), said)
 
     def test_never_more_than_a_run_makes(self):
         with self.assertRaisesRegex(ValueError, "At most 1000 in one run"):
