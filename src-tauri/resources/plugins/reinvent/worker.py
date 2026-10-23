@@ -31,6 +31,7 @@ itself, as it reads one pasted.
 import csv
 import importlib.metadata
 import json
+import math
 import os
 import subprocess
 import sys
@@ -95,6 +96,16 @@ def number(options, key, default, low, high):
     return min(max(v, low), high)
 
 
+#: REINVENT 4's SMILES_state, as its sampler names each (reinvent/models/model_factory/sample_batch.py `SmilesState`).
+STATES = {0: "invalid", 1: "valid", 2: "duplicate"}
+
+
+def states_said(states):
+    """How many of each SMILES_state REINVENT 4 gave, in a few words: ": 18 valid, 2 invalid" - those it gave none of left out."""
+    counts = [(STATES.get(k, f"state {k}"), sum(1 for s in states if s == k)) for k in sorted({s for s in states if s is not None})]
+    return (": " + ", ".join(f"{n} {name}" for name, n in counts)) if counts else ""
+
+
 def op_run(m):
     """*Generate*: `count` SMILES sampled with the seed `seed`, each an
     output as REINVENT 4 gave it - the SMILES, and its NLL and SMILES_state
@@ -107,11 +118,13 @@ def op_run(m):
     count, seed = number(o, "count", 20, 1, MOST), number(o, "seed", SEED, 0, 2**31 - 1)
     with tempfile.TemporaryDirectory(prefix="meno-reinvent-") as folder:
         rows = sampled(count, seed, folder)
+    # (an NLL that is no number - NaN, infinite - written as none, which JSON can hold, and counted)
+    no_nll = sum(1 for _, _, nll in rows if not math.isfinite(nll))
     outputs = [
         {
             "smiles": smiles,
             "properties": {
-                "nll": {"value": nll, "unit": "none"},
+                "nll": {"value": nll if math.isfinite(nll) else None, "unit": "none"},
                 **({"smiles_state": {"value": state, "unit": "none"}} if state is not None else {}),
             },
         }
@@ -119,7 +132,7 @@ def op_run(m):
     ]
     return {
         "outputs": outputs,
-        "said": f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU",
+        "said": f"{len(rows)} sampled from {PRIOR}, seed {seed}, CPU" + states_said([state for _, state, _ in rows]) + (f", {no_nll} with no NLL (not a number)" if no_nll else ""),
         "by": {"program": "REINVENT 4", "version": VERSION, "model": PRIOR_SAID, "method": f"sampled, seed {seed}, on the CPU"},
     }
 

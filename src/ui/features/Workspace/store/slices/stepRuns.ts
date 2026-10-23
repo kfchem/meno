@@ -28,7 +28,7 @@ import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } fr
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -538,8 +538,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const computed = (value: number | string | boolean, of: By): Property => ({ value, unit: "none", status: "computed", by: of });
     const style = styleOf(get().docStyle);
     const kept: DrawnEntry[] = [];
-    let notRead = 0;
+    // (each not read, with why - the first few named on the step's line)
+    const notRead: { smiles: string; why: string }[] = [];
     let open = 0;
+    let unexamined = 0;
     try {
       const smiles = await chemWorker("smiles");
       const stereo = await chemWorker("stereoisomers");
@@ -547,12 +549,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         let block: string;
         try {
           block = (await smiles.request("from_smiles", { smiles: g.smiles })).molblock;
-        } catch {
-          notRead++;
+        } catch (e) {
+          notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
           continue;
         }
-        const left = await stereo.request("open_stereo", { molblock: block });
-        const unset = left.atoms.length + left.bonds.length;
+        // (only whether stereo is left open, and where: none of its stereoisomers tried in 3D, which Stereoisomers and Conformers do -
+        //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
+        let unset: number | null = null;
+        try {
+          const left = await stereo.request("stereo_left_open", { molblock: block });
+          unset = left.atoms.length + left.bonds.length;
+        } catch {
+          unexamined++;
+        }
         if (unset) open++;
         const properties: Record<string, Property> = {
           smiles: computed(g.smiles, by),
@@ -564,8 +573,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
-    if (!kept.length) return void fail(id, `${read.said} \u00b7 none could be read`, at, key);
-    const said = [read.said, `${kept.length} made`, ...(open ? [`${open} with stereo left open`] : []), ...(notRead ? [`${notRead} not read`] : [])].join(" \u00b7 ");
+    if (!kept.length) return void fail(id, [read.said, "none could be read", ...(notRead.length ? [notReadSaid(notRead)] : [])].join(" \u00b7 "), at, key);
+    const said = [
+      read.said,
+      `${kept.length} made`,
+      ...(open ? [`${open} with stereo left open`] : []),
+      ...(unexamined ? [`${unexamined} with stereo not examined`] : []),
+      ...(notRead.length ? [notReadSaid(notRead)] : []),
+    ].join(" \u00b7 ");
     doc.edit("run", (x) => ranAs(x, id, { ok: true, holds: "structures", kept, aside: [], said }, key, { ...w, byOf, now: at }));
   }
 

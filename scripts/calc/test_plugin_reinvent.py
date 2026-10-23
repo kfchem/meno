@@ -55,7 +55,7 @@ class Generate(unittest.TestCase):
         # (the known answer, measured here twice, in two environments installed apart: REINVENT 4.8.24, the prior
         #  of Zenodo record 20701824, seed 7, on the CPU - its first SMILES and NLL the same as before Meno stopped
         #  making them 3D, as sampling never depended on it)
-        self.assertEqual(self.made["said"], "20 sampled from reinvent_pubchem.prior, seed 7, CPU")
+        self.assertEqual(self.made["said"], "20 sampled from reinvent_pubchem.prior, seed 7, CPU: 1 invalid, 19 valid")
         first = self.made["outputs"][0]
         self.assertEqual(first["smiles"], "O=C(c1ccc(CN2C(=O)SC(=Cc3ccccc3)C2=O)cc1)N1CCN(CCOc2ccccc2)CC1")
         self.assertEqual(first["properties"]["nll"], {"value": 36.9, "unit": "none"})
@@ -77,6 +77,24 @@ class Generate(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             rows = self.worker.sampled(20, 7, folder)
         self.assertEqual([o["smiles"] for o in outputs], [r[0] for r in rows])
+
+    def test_says_how_many_of_each_smiles_state(self):
+        # (REINVENT 4's own states, by its names, as many as it gave of each)
+        states = [o["properties"]["smiles_state"]["value"] for o in self.made["outputs"]]
+        tally = ", ".join(f"{states.count(k)} {name}" for k, name in self.worker.STATES.items() if states.count(k))
+        self.assertEqual(self.made["said"], f"20 sampled from {self.worker.PRIOR}, seed 7, CPU: {tally}")
+
+    def test_writes_an_nll_that_is_no_number_as_none_and_counts_it(self):
+        real = self.worker.sampled
+        self.worker.sampled = lambda count, seed, folder: [("CCO", 1, 12.5), ("CCN", 1, float("nan")), ("C=C", 2, float("inf"))]
+        try:
+            made = self.worker.op_run({"step": "generate", "entries": [], "options": {"count": 3, "seed": 7}})
+        finally:
+            self.worker.sampled = real
+        # (what JSON can hold: never NaN, which would fail the whole answer)
+        json.dumps(made, allow_nan=False)
+        self.assertEqual([o["properties"]["nll"]["value"] for o in made["outputs"]], [12.5, None, None])
+        self.assertTrue(made["said"].endswith(": 2 valid, 1 duplicate, 2 with no NLL (not a number)"), made["said"])
 
     def test_says_what_made_them(self):
         self.assertEqual(

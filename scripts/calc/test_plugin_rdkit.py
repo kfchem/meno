@@ -1158,6 +1158,26 @@ class OpenStereo(unittest.TestCase):
         AllChem.Compute2DCoords(mol)
         return self.worker.op_open_stereo({"molblock": Chem.MolToMolBlock(mol)})
 
+    def test_says_only_where_stereo_is_left_open_without_trying_it_in_3d(self):
+        """`stereo_left_open`: the centres and double bonds `open_stereo` finds open, by index - none of its
+        stereoisomers tried in 3D, so that a step marking many structures (Generate) is quick."""
+        from rdkit.Chem import AllChem
+
+        for smiles in ["CC1=CCC2CC1C2(C)C", "CC=CC", "C[C@H](O)CC", "CC(O)C(O)CO", "CC=C=CC"]:
+            mol = Chem.MolFromSmiles(smiles)
+            AllChem.Compute2DCoords(mol)
+            block = Chem.MolToMolBlock(mol)
+            full = self.worker.op_open_stereo({"molblock": block})
+            calls = []
+            real = self.worker.EnumerateStereoisomers
+            self.worker.EnumerateStereoisomers = lambda *a, **k: calls.append(1) or real(*a, **k)
+            try:
+                left = self.worker.op_stereo_left_open({"molblock": block})
+            finally:
+                self.worker.EnumerateStereoisomers = real
+            self.assertEqual(left, {"atoms": full["atoms"], "bonds": full["bonds"]}, smiles)
+            self.assertEqual(calls, [], smiles)
+
     def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
         """`open_stereo` and then `conformers` of one structure, as a Conformers step asks them: the stereoisomers
         tried in 3D once, not twice - the same answer both times, and copies, so that one caller's changes are

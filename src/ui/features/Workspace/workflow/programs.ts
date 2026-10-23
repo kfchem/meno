@@ -368,6 +368,27 @@ export function readKept(raw: unknown, count: number): number[] | string {
   return [...new Set(kept as number[])].sort((a, b) => a - b);
 }
 
+/** How many SMILES not read a step's line names, the rest counted. */
+export const NOT_READ_NAMED = 5;
+
+/** Why a SMILES could not be read, from what the roles' `from_smiles` said: its words after "could not be read", else none known. */
+export function unreadWhy(said: string): string {
+  const m = /could not be read: (.+?)\.?$/.exec(said.trim());
+  return m ? m[1] : "not read";
+}
+
+/**
+ * The SMILES a step could not read, as its line says them: how many, and the
+ * first few (`NOT_READ_NAMED`) each with why - long ones cut short - the rest
+ * counted: *2 not read: C1CC (a ring left open), Xx (no element Xx)*.
+ */
+export function notReadSaid(notRead: readonly { smiles: string; why: string }[]): string {
+  const cut = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}\u2026` : s);
+  const named = notRead.slice(0, NOT_READ_NAMED).map((x) => `${cut(x.smiles)} (${x.why})`);
+  const more = notRead.length - named.length;
+  return `${notRead.length} not read: ${named.join(", ")}${more ? `, and ${more} more` : ""}`;
+}
+
 /** The most a step that makes them (Generate) brings in from one run. */
 export const GENERATED_MOST = 1000;
 
@@ -397,6 +418,8 @@ export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by:
     const properties: Generated["properties"] = {};
     if (x.properties != null && (typeof x.properties !== "object" || Array.isArray(x.properties))) return `Structure ${i + 1}'s values are not named`;
     for (const [name, p] of Object.entries((x.properties ?? {}) as Record<string, { value?: unknown; unit?: unknown }>)) {
+      // (a value the model gave none of - an NLL that was no number, written as none: the plugin counts it - is not kept)
+      if (p?.value === null) continue;
       const v = p?.value;
       const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
       const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;

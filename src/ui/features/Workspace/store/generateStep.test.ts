@@ -17,8 +17,9 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
 }));
 
 /**
- * The roles' worker: a SMILES read as its own block (one it cannot read - "X" in it - refused, as RDKit's is); and
- * what a block leaves open - a centre for each "?" in the SMILES, here.
+ * The roles' worker: a SMILES read as its own block (one it cannot read - "X" in it - refused, saying why, as RDKit's
+ * is); and what a block leaves open - a centre for each "?" in the SMILES, here - only where it is, never its
+ * stereoisomers tried ("open_stereo" is not asked); one with "!" in it cannot be asked.
  */
 const asked: { op: string; args: { smiles?: string; molblock?: string } }[] = [];
 vi.mock("../../../../lib/roles/worker", async (actual) => ({
@@ -28,12 +29,13 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
     request: async (op: string, args: { smiles?: string; molblock?: string }) => {
       asked.push({ op, args });
       if (op === "from_smiles") {
-        if (args.smiles!.includes("X")) throw new Error("This SMILES could not be read.");
+        if (args.smiles!.includes("X")) throw new Error("This SMILES could not be read: X is no element.");
         return { molblock: `block:${args.smiles}` };
       }
-      if (op === "open_stereo") {
+      if (op === "stereo_left_open") {
+        if (args.molblock!.includes("!")) throw new Error("it could not be asked");
         const open = (args.molblock!.match(/\?/g) ?? []).length;
-        return { atoms: Array.from({ length: open }, (_, i) => i), bonds: [], isomers: 2 ** open, cumulenes: [], free: false };
+        return { atoms: Array.from({ length: open }, (_, i) => i), bonds: [] };
       }
       throw new Error(`no ${op} here`);
     },
@@ -53,8 +55,9 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { setMembers } from "../workflow/entries";
-import { resultOf, stateOf } from "../workflow/flow";
-import { readGenerated } from "../workflow/programs";
+import { inputKey, resultOf, stateOf } from "../workflow/flow";
+import { notReadSaid, readGenerated, unreadWhy } from "../workflow/programs";
+import { pluginById } from "../../../../lib/calc/catalog";
 
 /** What REINVENT 4's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one RDKit cannot read - each with its NLL and SMILES_state; and what made them. */
 const generated = {
@@ -94,7 +97,9 @@ describe("Generate: a step that takes nothing in", () => {
     // (each SMILES read exactly as the model gave it)
     expect(asked.filter((a) => a.op === "from_smiles").map((a) => a.args.smiles)).toEqual(["CCO", "CC(O)CC?", "o1cXc"]);
     const ran = st().steps.find((s) => s.id === step)!.ran!;
-    expect(ran).toMatchObject({ ok: true, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read" });
+    expect(ran).toMatchObject({ ok: true, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · 2 made · 1 with stereo left open · 1 not read: o1cXc (X is no element)" });
+    // (only where stereo is left open was asked, never each stereoisomer tried in 3D)
+    expect(asked.some((a) => a.op === "open_stereo")).toBe(false);
     const out = resultOf(st(), step)!;
     expect(out.made!.holds).toBe("structures");
     const held = setMembers(st(), out);
@@ -126,10 +131,45 @@ describe("Generate: a step that takes nothing in", () => {
     expect(st().wires ?? []).toEqual([]);
     run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[2]] });
     await st().runStep(step);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · none could be read" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · none could be read · 1 not read: o1cXc (X is no element)" });
     run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: { nll: { value: 2, unit: "furlongs" } } }] });
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1's nll is not one Meno can take" });
+  });
+});
+
+describe("what a Generate could not read, and its stereo not examined", () => {
+  it("names the first few not read, each with why, and counts the rest; keeps one whose stereo could not be asked, saying so", async () => {
+    expect(unreadWhy("This SMILES could not be read: a ring left open.")).toBe("a ring left open");
+    expect(unreadWhy("something else")).toBe("not read");
+    const seven = Array.from({ length: 7 }, (_, i) => ({ smiles: `X${i}`, why: "X is no element" }));
+    expect(notReadSaid(seven)).toBe("7 not read: X0 (X is no element), X1 (X is no element), X2 (X is no element), X3 (X is no element), X4 (X is no element), and 2 more");
+    expect(notReadSaid([{ smiles: "C".repeat(50), why: "w" }])).toBe(`1 not read: ${"C".repeat(39)}\u2026 (w)`);
+    const { st } = page();
+    const step = st().addStep("generate", "reinvent", 0, 0);
+    run.mockResolvedValueOnce({ ...generated, outputs: [generated.outputs[0], { smiles: "CC!", properties: {} }] });
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "3 sampled from reinvent_pubchem.prior, seed 7, CPU · 2 made · 1 with stereo not examined" });
+  });
+
+  it("is keyed by its plugin's version and the files it was set up with: another prior is another run", () => {
+    const { st, doc } = page();
+    const step = st().addStep("generate", "reinvent", 0, 0);
+    const key = () => inputKey(doc.getState(), doc.getState().steps!.find((s) => s.id === step)!, "reinvent");
+    const plugin = pluginById("reinvent")! as unknown as { version: string; downloads: { sha256: string }[] };
+    const [version, sha] = [plugin.version, plugin.downloads[0].sha256];
+    const before = key();
+    try {
+      plugin.version = "9.9.9";
+      expect(key()).not.toBe(before);
+      plugin.version = version;
+      plugin.downloads[0].sha256 = "0".repeat(64);
+      expect(key()).not.toBe(before);
+    } finally {
+      plugin.version = version;
+      plugin.downloads[0].sha256 = sha;
+    }
+    expect(key()).toBe(before);
   });
 });
 
@@ -141,6 +181,8 @@ describe("what a Generate gives, read", () => {
       said: "1 made",
     });
     expect(readGenerated({ outputs: [{ smiles: "C", seed: 0 }] }, 0)).toBe("Structure 1 names a seed that did not come in");
+    // (a value the model gave none of - an NLL that was no number, written as none - not kept, the rest taken)
+    expect(readGenerated({ outputs: [{ smiles: "C", properties: { nll: { value: null, unit: "none" }, smiles_state: { value: 1, unit: "none" } } }] })).toMatchObject({ made: [{ smiles: "C", properties: { smiles_state: { value: 1, unit: "none" } } }] });
     expect(readGenerated({ outputs: [{ smiles: "" }] })).toBe("Structure 1 has no SMILES Meno can take");
     expect(readGenerated({ outputs: [{ smiles: "C", properties: { nll: { value: Infinity, unit: "none" } } }] })).toBe("Structure 1's nll is not one Meno can take");
     expect(readGenerated({ outputs: [{ smiles: "C", properties: [1] }] })).toBe("Structure 1's values are not named");

@@ -921,7 +921,9 @@ of odd valence - is for the general steps after it, and for
 - `properties`: each value a number, a text or true/false, with its unit
   from Meno's units table, or "none" (REINVENT 4's `nll` and
   `smiles_state`, as it writes them; a model's Tanimoto similarity, its
-  scaffold and R-groups, under the names it uses).
+  scaffold and R-groups, under the names it uses). A value the model gave
+  none of is `null` - REINVENT 4 writes an NLL that is no number so,
+  counting it in `said`, since JSON holds no NaN - and is not kept.
 - `seed`: where a generator makes a structure from one that came in, that
   one's place among them. None comes into REINVENT 4's.
 - `by`: what made them all: the program and its version, the model, how.
@@ -934,15 +936,21 @@ order given. Its record (WORKFLOWS.md, *A structure drawn's record*) holds
 the SMILES as given (`smiles`), the model's values, each `computed` by
 the plugin, its version and the program, model and method; and, where
 it leaves stereo open, how many centres and double bonds
-(`stereo_open`, the roles' `open_stereo`). Nothing is chosen for it. A
-SMILES that cannot be read is counted on the step's line as *not read*,
-never dropped unsaid: *20 sampled ... · 18 made · 3 with stereo left
-open · 2 not read*. Where none can be read, the step fails, saying so.
+(`stereo_open`, the roles' `stereo_left_open`: where it is left open
+only, none of its stereoisomers tried in 3D, which *Stereoisomers* and
+*Conformers* do). Nothing is chosen for it. One whose stereo cannot be
+asked about is kept, and counted as *with stereo not examined*. A SMILES
+that cannot be read is counted on the step's line as *not read*, never
+dropped unsaid, the first five named with why: *20 sampled ... · 18 made
+· 3 with stereo left open · 2 not read: C1CC (a ring left open), …*.
+Where none can be read, the step fails, saying so.
 What the plugin gives that is not this form - a value with a unit Meno
 does not know, a SMILES missing, a seed that did not come in - takes none
 of the run, saying which. At most a thousand from one run
 (`GENERATED_MOST`). The step is ready as it is put down, and changed when
-its options or who does it change (`workflow/flow` `inputKey`).
+its options or who does it change - its plugin's version, or the files
+it was set up with, a model's weights by their hash, included: another
+prior is another run (`workflow/flow` `inputKey`, `doers` `doerStamp`).
 
 ### The entry a plugin is given
 

@@ -7,7 +7,7 @@ import type { WorkspaceDocument } from "../document";
 import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { drawnKey, hash, holdsOf, plainAmong, recordKey, setMembers, setMolecules } from "./entries";
 import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, takesNothing, type SetHolds, type SetKind } from "./kinds";
-import { byOf, optionsFor, takesBy } from "./doers";
+import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -132,7 +132,8 @@ function keyTexts(m: Molecule3D): readonly string[] {
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   // (a step that takes nothing in runs on its options alone, and who does it)
-  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
+  // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
+  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`).toString(36);
   const input = inputOf(doc, step.id);
   if (!input) return "";
   let h = hash(`${input.holds}|${step.kind}|${by}|${JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options))}`);
