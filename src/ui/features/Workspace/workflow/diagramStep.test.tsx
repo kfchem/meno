@@ -137,7 +137,7 @@ describe("an Energy diagram step", () => {
   });
 
   it("names a failure of a kind Meno does not know by that kind, as it came", () => {
-    expect(marked("P", { failed: [{ kind: "lost-in-transit" as never, why: "x" }] })[0]).toBe("Not every entry is a result to stand on: P #1 lost-in-transit - take it out first");
+    expect(marked("P", { failed: [{ kind: "lost-in-transit" as never, why: "x" }] })[0]).toBe("Not every entry is a result to stand on: P #1 lost-in-transit - take it out first (a Filter on \"state = finished\")");
   });
 
   it("names every entry that is no result, not the first alone", () => {
