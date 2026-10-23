@@ -145,7 +145,7 @@ describe("a plugin's step on structures drawn", () => {
     expect(rest!.records).toEqual([{ status: { aside: "an allene's axis left open" } }]);
   });
 
-  it("keeps each one's record: as drawn, its own; made anew, one of its own - what it came from, which of how many, its SMILES - never the values of the one it was made of; set aside, saying why", async () => {
+  it("keeps each one's record: as drawn, its own; made anew, one of its own - what it came from, which of how many, its SMILES, and the values of the one it was made of as that one's, never its own; set aside, saying why", async () => {
     answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"], smiles: ["C[C@H](O)CC", "C[C@@H](O)CC"] }, { aside: "a radical", kind: "radical" }] });
     const old: DrawnRecord = { ...NLL, status: { aside: "an earlier step's word" } };
     const parent: DrawnRecord = { from: ["seed-1"], properties: { ...NLL.properties, smiles: { value: "CC(O)CC", unit: "none", status: "computed" } } };
@@ -156,11 +156,23 @@ describe("a plugin's step on structures drawn", () => {
       properties: {
         made: { value: k, unit: "none", status: "computed", by },
         smiles: { value: smiles, unit: "none", status: "computed", by },
-        made_from: { value: "CC(O)CC", unit: "none", status: "computed", by },
+        // (the one it was made of: its values as they were, by what worked them out then - named as that one's)
+        "made_from.nll": NLL.properties!.nll,
+        "made_from.smiles": { value: "CC(O)CC", unit: "none", status: "computed" },
       },
     });
-    // (the NLL was the one's it was made of, its stereo left open: not the stereoisomer's own)
+    // (the NLL was the one's it was made of, its stereo left open: never the stereoisomer's own `nll`)
     expect(out!.records).toEqual([NLL, own("1 of 2", "C[C@H](O)CC"), own("2 of 2", "C[C@@H](O)CC")]);
+    // (made again of one made: what that one carried as it was, one level, its own values over them - its SMILES -
+    //  and which of how many it was left out)
+    answer = () => ({ structures: [{ made: ["iso-3"], smiles: ["C[C@H](O)CC"] }, { as: "drawn" }, { as: "drawn" }] });
+    const again = await ran("stereoisomers", [out!.records[1]!, NLL, NLL]);
+    expect(again.out!.records[0]!.properties).toEqual({
+      made: expect.objectContaining({ value: "1 of 1" }),
+      smiles: expect.objectContaining({ value: "C[C@H](O)CC" }),
+      "made_from.nll": NLL.properties!.nll,
+      "made_from.smiles": { value: "C[C@H](O)CC", unit: "none", status: "computed", by },
+    });
     // (what it came in with of its status is the earlier step's: this one's own said in its place)
     expect(rest!.records).toEqual([{ from: ["seed-1"], properties: NLL.properties, status: { aside: "a radical" } }]);
   });
