@@ -201,13 +201,14 @@ describe("a part drawn afresh between fixed neighbours", () => {
   });
 
   it("comes out the same whatever order a symmetric molecule's atoms are given in: its parts by their symmetric anchors, and a part on one atom alone", () => {
-    // (p-xylene, cis- and trans-1,4-dimethylcyclohexane, 1,1-dimethylcyclohexane, 4,4'-dimethylbiphenyl - each part a ring system, or all but a methyl)
-    for (const smiles of ["Cc1ccc(C)cc1", "C[C@H]1CC[C@@H](C)CC1", "C[C@H]1CC[C@H](C)CC1", "CC1(C)CCCCC1", "Cc1ccc(-c2ccc(C)cc2)cc1"]) {
+    // (p-xylene, cis- and trans-1,4-dimethylcyclohexane, 1,1-dimethylcyclohexane, 4,4'-dimethylbiphenyl, beta-cyclocitral - its ring's gem-dimethyl two anchors alike - each part a ring system, or all but a methyl)
+    for (const smiles of ["Cc1ccc(C)cc1", "C[C@H]1CC[C@@H](C)CC1", "C[C@H]1CC[C@H](C)CC1", "CC1(C)CCCCC1", "Cc1ccc(-c2ccc(C)cc2)cc1", "CC1(C)CCCC(C)=C1C=O"]) {
       const g = fromSmiles(smiles);
       const n = g.atoms.length;
       const drawn = layout2D(g);
       const [c, s] = [Math.cos(0.7) * 1.7, Math.sin(0.7) * 1.7];
-      const placed = drawn.x.map((x, i) => ({ x: c * x - s * drawn.y[i], y: s * x + c * drawn.y[i] }));
+      // (turned, scaled, and each atom off by a hair, as a hand draws: atoms alike then not quite alike in where they are)
+      const placed = drawn.x.map((x, i) => ({ x: c * x - s * drawn.y[i] + 0.06 * Math.sin(1.7 * i + 0.3), y: s * x + c * drawn.y[i] + 0.06 * Math.cos(2.3 * i) }));
       const parts = [...perceive(g).systems.map((sys) => [...sys.atoms].sort((p, q) => p - q)), g.atoms.map((_, i) => i).filter((i) => i !== 0)];
       const orders = [g.atoms.map((_, i) => n - 1 - i), g.atoms.map((_, i) => (i + 3) % n), g.atoms.map((_, i) => (i * 5) % n), g.atoms.map((_, i) => (i * 7 + 2) % n)].filter((to) => new Set(to).size === n);
       expect(orders.length).toBeGreaterThan(1);

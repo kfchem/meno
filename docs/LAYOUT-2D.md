@@ -969,11 +969,11 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
   - **On one bond**, exactly. The stub lies on the rest's atom and the
     bond along the room the rest leaves there: the middle of the widest
     gap between its bonds, or, on an atom with one other bond, either way
-    at 120 degrees from it; on an atom bonded to nothing else of the rest,
-    along each of the lattice's twelve directions, whichever reads best.
-    The rest does not move.
+    at 120 degrees from it. The rest does not move.
   - **On two bonds or more**, by the turn and shift that put the stubs
-    nearest the rest's atoms, the part's drawing or its mirror image.
+    nearest the rest's atoms, the part's drawing or its mirror image, its
+    stubs alike (a gem-dimethyl's two methyls) paired with the rest's
+    atoms each way its symmetries allow.
     Each branch of the rest (what hangs from one bond to the part) is
     then moved as a whole onto its new bond: it keeps its own drawing and
     is turned, about its atom, only as far as the new bond needs to lie in
@@ -998,8 +998,9 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
   engine's own measure.
 - **In any order.** The molecule is worked in its own order (`canonical.ts`),
   as `layout2D` is, and every choice goes by the drawing or by that order;
-  of two placements that read alike, the one taken goes by each element
-  where it lies, not by how the atoms are numbered. The same structure and
+  placements are compared to a millionth, and of two that read alike the
+  one taken goes by each element where it lies, not by how the atoms are
+  numbered. The same structure and
   the same rest, given with their atoms in any order, come out the same -
   a symmetric one too, its atoms alike given the rest's places one way or
   another.

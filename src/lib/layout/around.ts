@@ -15,7 +15,7 @@
  * where the rest's atoms are - nothing is drawn, and why is said: the
  * caller draws the whole structure afresh instead.
  */
-import { canonicalRanks, reordered, restored, walkOrder } from "./canonical";
+import { canonicalRanks, reordered, restored, symmetryOrbits, walkOrder } from "./canonical";
 import { notAsGiven } from "./readBack";
 import { layout2D, measureLaidOut, type Layout2D } from "./engine";
 import { angleOf, cross, dist, dot, rotate, sub, wrap, type Point } from "./geometry";
@@ -40,6 +40,9 @@ export type Around = { layout: Layout2D; part: number[]; taken: number[]; moved:
 
 /** How far, in bonds, the part's stubs may be from the rest's atoms they stand for: past it the substituents would end up elsewhere than drawn. */
 export const MISMATCH_LIMIT = 1;
+
+/** How many ways of pairing the part's stubs with the rest's atoms its symmetries give are tried. */
+const PAIRINGS_TRIED = 96;
 
 export function layoutAround(input: LayoutInput, part: readonly number[], fixed: FixedDrawing): Around {
   const n = input.atoms.length;
@@ -127,9 +130,12 @@ function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[]
   const laid = layout2D(subInput);
   if (laid.depth.some((d) => d != null) || laid.solid.some(Boolean)) return { refused: "The part holds a cage, drawn in perspective, so the structure is drawn whole." };
 
-  // the part's drawing, and its mirror image: the rest's atoms may lie as either has its stubs
-  const own = subAtoms.map((_, k) => ({ x: laid.x[k], y: laid.y[k] }));
-  const drawings = [own, own.map((q) => ({ x: -q.x, y: q.y }))];
+  // the part's drawing as each of its symmetries has it - its stubs alike paired with the rest's atoms each way, not only as the order of the atoms pairs them - and each mirrored
+  const drawings: Point[][] = [];
+  for (const g of pairingsOf(subInput, inPart.length)) {
+    const p = subAtoms.map((_, k) => ({ x: laid.x[g[k]], y: laid.y[g[k]] }));
+    drawings.push(p, p.map((q) => ({ x: -q.x, y: q.y })));
+  }
   const kept = keptStereo(input, stereo, part, attachments);
   const candidates: { layout: Layout2D; moved: number[][]; mismatch: number; score: number; seen: string }[] = [];
   for (const p of drawings) {
@@ -165,8 +171,9 @@ function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[]
   if (!candidates.length) {
     return { refused: `The new part's bonds to the rest end more than ${MISMATCH_LIMIT} bond${MISMATCH_LIMIT === 1 ? "" : "s"} from where the rest's atoms are, so the structure is drawn whole.` };
   }
-  // (nearest the rest's atoms first, then the drawing that reads best, then by each element where it is: never by the order the atoms came in)
-  candidates.sort((p, q) => (Math.abs(p.mismatch - q.mismatch) > 1e-6 ? p.mismatch - q.mismatch : Math.abs(p.score - q.score) > 1e-6 ? p.score - q.score : p.seen < q.seen ? -1 : p.seen > q.seen ? 1 : 0));
+  // (nearest the rest's atoms first, then the drawing that reads best - each to a millionth, so that sums taken in another order do not part them - then by each element where it is: never by the order the atoms came in)
+  const cut = (v: number) => Math.round(v * 1e6);
+  candidates.sort((p, q) => cut(p.mismatch) - cut(q.mismatch) || cut(p.score) - cut(q.score) || (p.seen < q.seen ? -1 : p.seen > q.seen ? 1 : 0));
   let why = "";
   for (const c of candidates) {
     const wrong = readBack(c.layout);
@@ -209,6 +216,33 @@ function branchOf(mol: Molecule, f: number, a: number, part: ReadonlySet<number>
     }
   }
   return [...seen].sort((p, q) => p - q);
+}
+
+/**
+ * The part's symmetries (its drawing's atoms, its stubs after its own
+ * `stubs`), one for each place they take its stubs to, the identity
+ * first: stubs alike - a gem-dimethyl's two methyls - paired with the
+ * rest's atoms each way. One that moves only the part's own atoms gives
+ * the same drawing, element for element, so one of each is enough. As
+ * many as are tried.
+ */
+function pairingsOf(input: LayoutInput, stubs: number): number[][] {
+  const identity = input.atoms.map((_, k) => k);
+  const generators = symmetryOrbits(input).automorphisms;
+  const where = (g: readonly number[]) => g.slice(stubs).join(",");
+  const found = new Map([[where(identity), identity]]);
+  const todo = [identity];
+  while (todo.length && found.size < PAIRINGS_TRIED) {
+    const g = todo.shift()!;
+    for (const h of generators) {
+      const gh = g.map((k) => h[k]);
+      if (found.has(where(gh))) continue;
+      found.set(where(gh), gh);
+      todo.push(gh);
+      if (found.size >= PAIRINGS_TRIED) break;
+    }
+  }
+  return [...found.values()];
 }
 
 /**
@@ -258,8 +292,7 @@ function setDown(
     const stub = p[stubs];
     const along = angleOf(sub(p[ak[0]], stub));
     const ways = openings(mol, f, a, rest, part);
-    // (an atom bonded to nothing else of the rest leaves room all round: the bond along each of the lattice's twelve directions, which reads best taken - not the way the part happened to be drawn, which goes by which of its atoms alike is the stub)
-    if (!ways.length) return Array.from({ length: 12 }, (_, k) => ({ move: motion((k * Math.PI) / 6 - along, stub, rest[f]!), mismatch: 0 }));
+    if (!ways.length) return [{ move: motion(0, stub, rest[f]!), mismatch: 0 }];
     return ways.map((w) => ({ move: motion(w - along, stub, rest[f]!), mismatch: 0 }));
   }
   const from = attachments.map((_, k) => p[stubs + k]);
