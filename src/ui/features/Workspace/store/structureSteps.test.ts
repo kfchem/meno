@@ -180,6 +180,23 @@ describe("a plugin's step on structures drawn", () => {
     expect(rest!.records).toEqual([{ from: ["seed-1"], properties: NLL.properties, status: { aside: "a radical" } }]);
   });
 
+  it("keeps what it said of each it made on its record, as of each alike - a C=N whose E/Z it left alone, and why - beside what it was made from", async () => {
+    const note = { value: "E/Z of 1 C=N not enumerated: its double bond moves with a hydrogen", unit: "none", method: "C=N bonds whose E/Z moves by tautomerism" };
+    answer = () => ({
+      structures: [{ as: "drawn", properties: { stereo_not_enumerated: note } }, { made: ["iso-1", "iso-2"], properties: { stereo_not_enumerated: note } }, { as: "drawn" }],
+    });
+    const { out } = await ran("stereoisomers", [undefined, NLL]);
+    const said = { value: note.value, unit: "none", status: "computed", by: { plugin: "rdkit", version: expect.any(String), program: expect.any(String), method: note.method } };
+    expect(out!.records[0]).toEqual({ properties: { stereo_not_enumerated: said } });
+    for (const k of [1, 2]) {
+      expect(out!.records[k]!.properties).toEqual({
+        made: expect.objectContaining({ value: `${k} of 2` }),
+        stereo_not_enumerated: said,
+        "made_from.nll": NLL.properties!.nll,
+      });
+    }
+  });
+
   it("sets aside, whole, one whose stereoisomers could not be drawn - the rest as they were", async () => {
     answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "undrawable"] }, { as: "drawn" }] });
     const { out, rest, step } = await ran("stereoisomers");
@@ -267,6 +284,11 @@ describe("what a plugin's step on structures drawn says", () => {
     expect(readDrawnAnswers({ structures: [{ made: [] }] }, 1)).toBe("It said nothing Meno can take");
     expect(readDrawnAnswers({ structures: [{ made: Array(65).fill("b") }] }, 1)).toBe("It said nothing Meno can take");
     expect(readDrawnAnswers({ structures: [{ as: "kept" }] }, 1)).toBe("It said nothing Meno can take");
+    // (values given with those made: each a value, a unit Meno knows and how - one that is not, none taken)
+    const note = { value: "E/Z of 1 C=N not enumerated", unit: "none", method: "how" };
+    expect(readDrawnAnswers({ structures: [{ made: ["a", "b"], properties: { stereo_not_enumerated: note } }] }, 1)).toEqual([{ made: ["a", "b"], properties: { stereo_not_enumerated: note } }]);
+    expect(readDrawnAnswers({ structures: [{ made: ["a"], properties: { x: { value: 1, unit: "furlongs" } } }] }, 1)).toBe("It said nothing Meno can take");
+    expect(readDrawnAnswers({ structures: [{ made: ["a"], properties: ["x"] }] }, 1)).toBe("It said nothing Meno can take");
     expect(readDrawnAnswers(null, 0)).toBe("It said nothing Meno can take");
   });
 

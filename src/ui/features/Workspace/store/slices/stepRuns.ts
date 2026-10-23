@@ -676,7 +676,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     //  never as its own, which stay to be worked out. That one's own made from another: what it carried of that one
     //  carried as it is, one level - of the structure it was made from still, at a remove - its own values over
     //  them, and which of how many it was left out)
-    const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
+    const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[]; properties?: Record<string, DrawnValue> }): DrawnRecord => {
       const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
       const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
       const parents = madeFrom(e.record);
@@ -685,6 +685,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         properties: {
           made: said(`${k + 1} of ${a.made.length}`),
           ...(a.smiles ? { smiles: said(a.smiles[k]) } : {}),
+          // (what the step worked out of each it made: a C=N whose E/Z it left alone, say, and why)
+          ...Object.fromEntries(Object.entries(a.properties ?? {}).map(([name, p]) => [name, valueOf(p)])),
           ...Object.fromEntries(parents),
         },
       };
