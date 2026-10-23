@@ -7,7 +7,8 @@
  *                     a workspace where there is none, as every file was before
  *   workspace.json    stored: the workspace (Workspace/utils/workspace)
  *   files.json        stored: each file kept - its name, kind, media type, size
- *   files/<sha256>    each file kept, as it was: text deflated, the rest stored
+ *   files/<sha256>    each file kept, as it was: text and a step's job files
+ *                     deflated, the rest stored
  *
  * The workspace stays plain JSON, uncompressed, so that opening one costs
  * what reading the JSON costs and it reads as it is once unzipped. The files
@@ -27,6 +28,9 @@ import { sha256Hex } from "../binary/sha256";
 import { entryBytes, zipEntries, type ZipEntry } from "../binary/zip";
 
 export const MENO_MEDIA_TYPE = "application/vnd.kfchem.meno+zip";
+
+/** The media type a step's job's file is kept as (Workspace/workflow/keptJobs): any file a program wrote, read by Meno only as it was. */
+export const JOB_FILE_MEDIA = "application/octet-stream";
 
 /** A file a workspace keeps: what it is known by, called, and is. */
 export type KeptFile = {
@@ -48,6 +52,13 @@ export type KeptData = Omit<KeptFile, "size"> & { data: Uint8Array };
 export const MOST_WORKSPACE = 256 * 1024 * 1024;
 export const MOST_FILE = 1024 * 1024 * 1024;
 export const MOST_FILES = 10_000;
+/**
+ * The most a workspace's file may come to, saved - as src-tauri keptjobs.rs
+ * `MOST_WORKSPACE_FILE` says, which refuses one past it: one Meno can open
+ * again (opening reads it whole, and reads no ZIP64). Half the 2 GB seen to
+ * open on a Mac.
+ */
+export const MOST_WORKSPACE_FILE = 2 ** 30;
 
 const SHA = /^[0-9a-f]{64}$/;
 
@@ -65,11 +76,13 @@ export function isMenoFile(bytes: Uint8Array): boolean {
 }
 
 /**
- * A workspace written as its file, with the files it keeps. Throws, saying
- * why, where it would come to more than a workspace file is read with
- * (`readMenoFile`): a file that would not open again is not written.
+ * A workspace written as its file, with the files it keeps - and those it
+ * lists whose bytes are added to it after, from the disk (`listed`: a
+ * step's job files, src-tauri keptjobs.rs). Throws, saying why, where it
+ * would come to more than a workspace file is read with (`readMenoFile`):
+ * a file that would not open again is not written.
  */
-export function menoFileBytes(workspace: string, files: readonly KeptData[]): Uint8Array {
+export function menoFileBytes(workspace: string, files: readonly KeptData[], listed: readonly KeptFile[] = []): Uint8Array {
   // (a string's UTF-8 is at least as long as the string: one far too long is not turned into bytes to be told so)
   const json = workspace.length <= MOST_WORKSPACE ? strToU8(workspace) : null;
   if (!json || json.length > MOST_WORKSPACE) {
@@ -86,7 +99,13 @@ export function menoFileBytes(workspace: string, files: readonly KeptData[]): Ui
     if (!SHA.test(f.sha256) || index[f.sha256]) continue;
     if (f.data.length > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.data.length)}.`);
     index[f.sha256] = { name: f.name, ...(f.kind ? { kind: f.kind } : {}), media: f.media, size: f.data.length };
-    kept[`files/${f.sha256}`] = [f.data, { level: f.media.startsWith("text/") ? 6 : 0 }];
+    kept[`files/${f.sha256}`] = [f.data, { level: f.media.startsWith("text/") || f.media === JOB_FILE_MEDIA ? 6 : 0 }];
+    count++;
+  }
+  for (const f of listed) {
+    if (!SHA.test(f.sha256) || index[f.sha256]) continue;
+    if (f.size > MOST_FILE) throw new Error(`A workspace file keeps no file of more than ${sized(MOST_FILE)}; "${f.name}" comes to ${sized(f.size)}.`);
+    index[f.sha256] = { name: f.name, media: f.media, size: f.size };
     count++;
   }
   if (count > MOST_FILES) throw new Error(`A workspace file keeps at most ${MOST_FILES.toLocaleString("en")} files; this workspace would keep ${count.toLocaleString("en")}.`);

@@ -305,7 +305,15 @@ describe("a workspace with what is no entry in its lists", () => {
         kind: "optimise",
         x: 8,
         y: -7,
-        ran: { at: 1, ok: true, said: "done", input: "in", jobs: [job] },
+        ran: {
+          at: 1,
+          ok: true,
+          said: "done",
+          input: "in",
+          jobs: [job],
+          kept: [{ job, files: [{ name: "work/run.out", sha256: "d".repeat(64), size: 10, role: "read" }], left: [{ name: "work/run.tmp", size: 99, why: "raw" }] }],
+        },
+        keepRaw: false,
         runs: [{ at: 1, ok: true, said: "done", input: "in", kind: "optimise", results: { molecules: [molecule], rest: [molecule], holds: "molecules" } }],
         running: { at: 2, input: "in", jobs: [{ id: job, entries: [0], reads: ["run.out"] }] },
       },
@@ -349,6 +357,8 @@ describe("a workspace with what is no entry in its lists", () => {
     const { sets, steps, wires } = ws.workflow!;
     expect(sets[1].made).toEqual({ step: 2, exit: "out", holds: "molecules" });
     expect([sets, wires, steps[0].ran?.jobs, steps[0].runs, steps[0].runs?.[0].results?.molecules, steps[0].runs?.[0].results?.rest, steps[0].running?.jobs].map((l) => l?.length)).toEqual([2, 1, 1, 1, 1, 1, 1]);
+    expect([steps[0].ran?.kept, steps[0].ran?.kept?.[0].files, steps[0].ran?.kept?.[0].left].map((l) => l?.length)).toEqual([1, 1, 1]);
+    expect(steps[0].keepRaw).toBe(false);
     expect([ws.texts, ws.pdfs, ws.pdfs[0].placed, ws.pdfs[0].inks].map((l) => l?.length)).toEqual([1, 1, 1, 1]);
   });
 

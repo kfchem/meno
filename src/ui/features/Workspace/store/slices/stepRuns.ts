@@ -8,7 +8,8 @@ import type { CalcSource, ReaderOutput } from "../../../../../lib/calc/output";
 import { readOutput } from "../../../../../lib/calc/read";
 import { heldOutput, rememberOutput } from "../../../../../lib/calc/asks";
 import { pluginClient } from "../../../../../lib/calc/workers";
-import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, type Job } from "../../../../../lib/jobs";
+import { computerCores, computerResources, finished, jobFiles, jobFolder, jobOf, limitsOf, listJobs, overLimits, readJobFile, readJobLog, removeJob, runningOf, startJob, stopJob, writeJobBack, type Job } from "../../../../../lib/jobs";
+import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJobs";
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
@@ -19,11 +20,12 @@ import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
 import { frameXyz, framesOf, recordNumber, setEntries, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { cappedSaid } from "../../workflow/sameConformer";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCollected, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, inputEntries, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -167,7 +169,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const why = whyNot(d, step, by);
     if (why) return void fail(id, why, at, key);
     // (which stereoisomer each entry is, where the kind needs it known: asked first, every entry its own)
-    if (by === "meno" && kindInfo(step.kind).perceives === "configurations") {
+    const kind = kindInfo(step.kind);
+    if (by === "meno" && kind.perceives === "configurations" && (kind.perceivesWith?.(optionsOf(kind.options ?? [], step.options)) ?? true)) {
       const input = inputOf(d, id);
       if (input && input.holds !== "structures") await perceiveStereo(setEntries(input.molecules, input.holds), askerFor());
     }
@@ -616,21 +619,29 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
+    let counted = new Map<number, { degeneracy: number; mirror: number[] }>();
+    let capped = 0;
     try {
       const client = await pluginClient(plugin);
-      const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}) }));
-      kept = readKept(await client.run(step.kind, given, options, input.holds), entries.length);
+      const given = entries.map((e) => ({ ...pluginEntry(e), compound: e.compound, ...(e.energy != null ? { energy: e.energy } : {}), ...(e.degeneracy != null ? { degeneracy: e.degeneracy } : {}) }));
+      const raw = await client.run(step.kind, given, options, input.holds);
+      kept = readKept(raw, entries.length);
+      if (typeof kept !== "string") counted = readCounted(raw, kept, entries.map((e) => e.atoms.length));
+      capped = readCapped(raw);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
     if (typeof kept === "string") return void fail(id, kept, at, key);
     const keep = new Set(kept);
     const took = Date.now() - at;
+    // (a mirror image counted in: the one kept stands for both, and keeps the atoms it swaps - each kept says how many it stands for)
+    const counting = options.mirrors === "counted";
+    const twins = counted.size ? ` \u00b7 ${counted.size} mirror image${counted.size === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
     bringIn(
       id,
-      entries.filter((_, i) => keep.has(i)),
+      entries.flatMap((e, i) => (!keep.has(i) ? [] : counted.has(i) ? [{ ...e, ...counted.get(i)! }] : counting ? [{ ...e, degeneracy: e.degeneracy ?? 1 }] : [e])),
       gives,
-      { at, ok: true, said: `${keep.size} of ${entries.length} kept`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
+      { at, ok: true, said: `${keep.size} of ${entries.length} kept${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}`, input: key, took, kind: step.kind, ...(step.options ? { options: step.options } : {}) },
       entries.filter((_, i) => !keep.has(i)),
     );
   }
@@ -690,6 +701,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           cores,
           ...(p.memory ? { memory: p.memory } : {}),
           ...(path ? { path } : {}),
+          reads: p.reads,
         };
         jobs.push({ id: await startJob(ask), entries: p.entries, reads: p.reads });
       }
@@ -1251,8 +1263,33 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     showStepFiles: async (id: number) => {
       const step = stepOf(doc.getState(), id);
       const job = step?.running?.jobs[0]?.id ?? step?.ran?.jobs?.[0];
-      if (!job) return;
-      await revealItemInDir(await jobFolder(job));
+      if (!step || !job) return;
+      const there = await jobFolder(job).catch(() => null);
+      if (there) return void (await revealItemInDir(there));
+      // (its folder not on this computer - a workspace saved elsewhere: what the file kept of it written back out, and shown)
+      const kept = [step.ran, ...(step.runs ?? [])].flatMap((r) => r?.kept ?? []).find((k) => k.job === job);
+      let work: string | null = null;
+      // (each file not written back, and why: never one there already written over)
+      const differs: string[] = [];
+      const notHad: string[] = [...(kept?.left ?? []).map((l) => l.name)];
+      for (const f of kept?.files ?? []) {
+        const from = await heldJobSource(f.sha256);
+        const bytes = from ? null : heldJobFile(f.sha256);
+        if (!from && !bytes) {
+          notHad.push(f.name);
+          continue;
+        }
+        const back = await writeJobBack(job, f.name, f.sha256, from ? { from } : { bytes: bytes! }).catch(() => null);
+        if (!back) {
+          notHad.push(f.name);
+          continue;
+        }
+        work = back.work;
+        if (back.differs) differs.push(f.name);
+      }
+      if (!work) throw new Error("Its files are not on this computer, and the workspace's file keeps none of them.");
+      await revealItemInDir(work);
+      return showFilesSaid(differs, notHad);
     },
     lookAtJobs,
     /** Whether a step's last run's jobs are kept still: not where their folders were taken away with it, deleted - and back by an undo. */

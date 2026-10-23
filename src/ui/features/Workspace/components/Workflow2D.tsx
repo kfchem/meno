@@ -250,6 +250,7 @@ export default function Workflow2D() {
     toldOpen.current(openStep);
   }, [openStep]);
   const wireDrag = useEditor((s) => s.wireDrag);
+  const docStyle = useEditor((s) => s.docStyle);
   const wireRefused = useEditor((s) => s.wireRefused);
   const sel = useEditor((s) => s.sel);
   const sel3d = useEditor((s) => s.sel3d);
@@ -650,12 +651,14 @@ export default function Workflow2D() {
                         : count.entries === 1
                           ? "molecule"
                           : "molecules",
+                  holds: count.holds === "conformers" ? ("conformers" as const) : count.holds === "structures" ? ("structures" as const) : ("molecules" as const),
+                  style: docStyle,
                 }
               : undefined;
           return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
-    [flow, sets, steps],
+    [flow, sets, steps, docStyle],
   );
 
   // while a wire is drawn: the ports that would take it lit, the others faint
