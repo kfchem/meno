@@ -2106,7 +2106,11 @@ it.
   why where one gave it ("Same as 2; not mw < 500 g/mol (612.4 g/mol)").
   More than are laid out on the page
   come in held in their set, and go out so (`LARGE_SET`), as any step's
-  structures drawn do.
+  structures drawn do. A structure's `state` is Meno's here too: "failed:
+  <why>" where its record says it failed, else "finished" (one set aside
+  before, the same as another, is no failure). On a condition on any value
+  but its state one that failed is never kept, but set aside named
+  ("structure 2 failed: ..."); on its state alone it is judged by that.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
