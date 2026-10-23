@@ -634,11 +634,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     // (one made anew - a stereoisomer of it - is another structure: none of the values worked out of the one it was made
     //  of as its own, which were not of it, but what that came from; which of how many it is, and its own SMILES; and
     //  each value of the one it was made from, as that one's - named so, `made_from.nll`, by what worked it out then -
-    //  never as its own, which stay to be worked out)
+    //  never as its own, which stay to be worked out. That one's own made from another: what it carried of that one
+    //  carried as it is, one level - of the structure it was made from still, at a remove - its own values over
+    //  them, and which of how many it was left out)
     const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
       const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
       const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
-      const parents = Object.entries(e.record?.properties ?? {}).map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]);
+      const had = Object.entries(e.record?.properties ?? {});
+      const parents = [
+        ...had.filter(([name]) => name.startsWith(MADE_FROM)),
+        ...had.filter(([name]) => !name.startsWith(MADE_FROM) && name !== "made").map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]),
+      ];
       return {
         ...(e.record?.from?.length ? { from: e.record.from } : {}),
         properties: {

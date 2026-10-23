@@ -861,8 +861,11 @@ The same for every plugin and for Meno's own parts:
     each as it was and by what worked it out then - never as its own,
     since none was worked out of it (an NLL of a SMILES with its stereo
     left open): a Filter takes `made_from.nll < 40` by that name, and its
-    own values are none until a step works them out. One set aside keeps
-    its record, its status saying why. An answer that is
+    own values are none until a step works them out. Made of one that was
+    made itself, it carries that one's `made_from.*` as they were, one
+    level - still of the structure it was made from, at a remove - that
+    one's own values over them, and not which of how many it was. One set
+    aside keeps its record, its status saying why. An answer that is
     not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
