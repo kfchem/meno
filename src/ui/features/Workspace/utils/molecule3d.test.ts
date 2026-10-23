@@ -30,6 +30,7 @@ import {
   labelSpot,
   notesOf,
   populations,
+  sharesOf,
   widestWay,
   type Turning3D,
   spotFollowed,
@@ -577,6 +578,24 @@ describe("coveredLength", () => {
     // (past it, or beside it beyond its half width: none)
     expect(coveredLength(box, { a: { x: 11, y: -20 }, b: { x: 11, y: 20 }, r: 0.5 })).toBe(0);
     expect(coveredLength(box, { a: { x: -20, y: 9 }, b: { x: 20, y: 9 }, r: 1 })).toBe(0);
+  });
+});
+
+describe("the shares a conformer set's chip shows", () => {
+  const frame = [0, 0, 0];
+  const set = { atoms: [], frames: [frame], energies: [-0.5, -0.5], degeneracies: [1, 3], conformerSet: true };
+  it("are by Boltzmann where none were worked out - each counted as often as its search found it - or those a Populations step worked out", () => {
+    // (two of one energy, the second found three times: 1 and 3 of 4)
+    expect(sharesOf(set)).toEqual([0.25, 0.75]);
+    expect(sharesOf({ ...set, shares: [0.6, 0.4] })).toEqual([0.6, 0.4]);
+  });
+
+  it("are none of a part of a search's conformers - but those a Populations step worked out of them - nor of what is no conformer set", () => {
+    expect(sharesOf({ ...set, partOf: true })).toBeUndefined();
+    expect(sharesOf({ ...set, partOf: true, shares: [0.6, 0.4] })).toEqual([0.6, 0.4]);
+    expect(sharesOf({ ...set, conformerSet: false })).toBeUndefined();
+    // (nor where its energies are not a frame's each)
+    expect(sharesOf({ ...set, energies: [-0.5] })).toBeUndefined();
   });
 });
 

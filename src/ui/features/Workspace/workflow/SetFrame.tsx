@@ -26,6 +26,8 @@ export type SetFrameProps = {
   onRename?: (name: string) => void;
   /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame, where its molecules would lie. */
   summary?: { count: string; nouns: string };
+  /** Its summary's *Open as a table*: what it holds read in the column. */
+  onOpenTable?: () => void;
 };
 
 const cursorOf: Record<Edge, string> = { n: "ns-resize", s: "ns-resize", e: "ew-resize", w: "ew-resize", ne: "nesw-resize", sw: "nesw-resize", nw: "nwse-resize", se: "nwse-resize" };
@@ -106,6 +108,18 @@ export default function SetFrame(p: SetFrameProps) {
         >
           <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
           <span className="text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+          {/* (held in the set alone: deleting it deletes them - said before it happens) */}
+          <span className="mt-1 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
+          {p.onOpenTable && (
+            <button
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={p.onOpenTable}
+              className="mt-2 h-6 rounded-md px-2 text-xs leading-4 text-gh-black bg-white ring-1 ring-gh-line transition-colors duration-150 ease-meno hover:bg-gh-base"
+              style={{ pointerEvents: p.compact ? "none" : "auto" }}
+            >
+              Open as a table
+            </button>
+          )}
         </div>
       )}
       {p.set.made && <Port look="plain" label={`Into ${p.name}`} data={{}} onPointerDown={(e) => e.stopPropagation()} style={{ left: 0, top: h / 2, pointerEvents: "none" }} />}
