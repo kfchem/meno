@@ -598,7 +598,7 @@ on question 16. Each has one role, and they are meant to be combined.
 
 | Node | Takes | Gives |
 |---|---|---|
-| **Filter** | molecules | *kept* and *rest*, by conditions on properties picked as rows (a property, a comparison, a value with its unit; all of them, or any). An entry with no value goes to *rest*, counted |
+| **Filter** | molecules, or structures drawn by their records | *kept* and *rest*, by conditions on properties picked as rows (a property, a comparison, a value with its unit; all of them, or any). An entry with no value goes to *rest*, counted |
 | **Rank** | molecules | *kept* and *rest*: ordered by a property, the first N kept, in each group or in all; values worked out differently never ranked together, those with none to *rest*, each saying its place or why |
 | **Group** | molecules | the same, each entry's *group* set: by constitution (its identity with its species; the entry holds no configuration of its stereocentres, so stereoisomers are one group, and the option says so), by a property's value, or all together; those with nothing to group by to *rest* |
 | **Merge** | molecules, two or more | one set, in the inputs' order; or one entry for each value of a property (an ID from *Tag*), the others to *rest* naming the one kept |

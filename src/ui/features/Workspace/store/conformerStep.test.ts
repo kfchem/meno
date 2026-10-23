@@ -77,7 +77,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
-import type { Atom } from "./types";
+import type { Atom, DrawnRecord } from "./types";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
@@ -89,7 +89,7 @@ import { notMade, stereoFree, stereoOpen } from "./slices/stepRuns";
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
 /** Three structures drawn side by side - water, ethane (which RDKit, here, cannot make) and methanol - and a conformer search by RDKit on them. */
-async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>) {
+async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof createEditorStore>["getState"]>, step: number) => Promise<void>, records: (DrawnRecord | undefined)[] = []) {
   const doc = createWorkspaceDocument();
   const parts: { el: string; at: [number, number] }[][] = [
     [{ el: "O", at: [0, 0] }],
@@ -120,13 +120,18 @@ async function searched(meanwhile?: (st: () => ReturnType<ReturnType<typeof crea
   connectStoreToDocument(store, doc);
   const st = () => store.getState();
   const set = st().addSet({ x0: -500, y0: -50, x1: -10, y1: 50 });
+  if (records.length)
+    doc.edit("records", (d) => ({
+      ...d,
+      sets: d.sets!.map((b) => (b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && records[i] ? { ...m, record: records[i] } : m)) } : b)),
+    }));
   const step = st().addStep("conformers", "rdkit", 0, 0);
   st().connect({ set }, step);
   const run = st().runStep(step);
   await meanwhile?.(st, step);
   await run;
   // (the sets that hold what was put in: the one that came in, and its exit's once it has run)
-  return { step: st().steps.find((s) => s.id === step)!, sets: st().sets.filter((b) => !b.made || b.made.holds).length };
+  return { step: st().steps.find((s) => s.id === step)!, sets: st().sets.filter((b) => !b.made || b.made.holds).length, st };
 }
 
 describe("RDKit's conformer search as a step, on structures drawn", () => {
@@ -150,6 +155,17 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).toMatch(/^Stopped after /);
     // (no result set: only the set that came in)
     expect(sets).toBe(1);
+  });
+
+  it("carries what was worked out of each structure drawn - a model's value, a descriptor - onto each of its conformers, its own and no other's", async () => {
+    const nll = (v: number): DrawnRecord => ({ properties: { nll: { value: v, unit: "none", status: "computed" }, mw: { value: 18.015 + v, unit: "g/mol", status: "computed" } } });
+    const { st } = await searched(undefined, [nll(1), nll(2), nll(3)]);
+    const made = st().molecules3d.filter((m) => m.conformerSet);
+    // (water and methanol made - ethane cannot be here - each with its own structure's values on every frame)
+    expect(made.map((m) => (m.properties ?? []).map((p) => [p.nll?.value, p.mw?.unit]))).toEqual([
+      [[1, "g/mol"]],
+      [[3, "g/mol"]],
+    ]);
   });
 
   it("makes the others where one cannot be made, and says which by its place - never in the library's words", async () => {
