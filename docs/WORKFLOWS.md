@@ -1724,6 +1724,75 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
 
+### A structure drawn's record (2026-10-22)
+
+A structure a step gives keeps a record of its own, as an entry does
+(WORKFLOWS-FOUNDATION.md, *The entry*). The drawing itself is its
+structure and its geometry, in 2D, so the record holds the rest
+(`DrawnRecord`, `store/types`):
+
+- `from`: the entries it was made from, by id, where they have one. A
+  generated structure names its seed's; a template drawn on the page has
+  no id, so an Enumerate product names none.
+- `properties`: by name, each a `Property` as lib/entry has it, with its
+  value, its unit from Meno's units table or "none", its status, and what
+  worked it out. Enumerate's `number` and `made.how` are kept here, and so
+  is a generative model's value for each structure.
+- `status`: done, failed, or set aside, with why (`{ aside: "a radical" }`).
+
+All of it is optional. A structure the chemist drew has none.
+
+- **Where it is kept.** A set's member keeps it beside the structure's
+  atoms (`Member.structure` and `.record`). A step's entries carry it in
+  (`DrawnEntry.record`, from `inputOf`'s `records`), and its outcome
+  carries it out. A run kept keeps it with each structure
+  (`RunResults.drawn`, as `DrawnModel`).
+- **It stays with the structure** as the set's members settle again,
+  moved whole or turned.
+- **It is of the structure it was given for.** The record keeps which
+  (`of`: the structure's identity, as Duplicates and identity read one -
+  chem/identity - hashed). Each label that stands for atoms is read as
+  those atoms (`labelsDrawnOut`): those it holds, as Clean-up writes a
+  group by its label, else the dictionary's. So the key is the structure's
+  elements, charges, masses, unpaired electrons, bonds and each
+  configuration the drawing shows - not how it is drawn: not where it
+  lies, which bonds are wedged or which way, whether an H is drawn, nor
+  whether a group is written by its label. Clean-up, which draws the same
+  structure afresh, keeps a record as it is. Where its wedges cannot be
+  read (drawn crossed, or on an atom with a lone pair) or its identity is
+  not worked out in full, the identity does not hold its configuration, so
+  the drawing's own key is in `of` too: any change to the drawing is taken
+  for a change of structure.
+  Edited since - an atom, a charge, a mass or a bond changed, an atom
+  taken away or added, the configuration turned to its mirror image, a
+  group's label or what it holds changed, joined to a structure of the
+  chemist's - the structure is another, and its properties and status were
+  not worked out for it. They are taken away, and the record says so
+  (`stale`: "its properties were for the structure before the edit");
+  what it came from is kept. Undone, the structure is the one they were
+  for again, and the record is as it was. Two such structures joined into
+  one keep what each came from, and the properties of neither.
+  The identity is worked out once for each structure as drawn, and again
+  only when its drawing's key (`drawnKey`, with what its labels hold)
+  changes.
+- **It is in what a step after it is keyed by** (`inputKey`): all of the
+  record but `of`, which the structure's own key says. The same structure
+  with another value from the step before has not been run on, and the
+  step's card says it has changed.
+- **A copy of its set carries it.** A set copied goes without its members,
+  and put down holds what then lies inside it. Each structure that had a
+  record, pasted whole, takes it up again (`WorkflowSet.carried`, by its
+  atoms' ids as pasted), of the structure as pasted.
+- **In the file** it is written with the member, and read back as data
+  (`readDrawnRecord`). Each property is read as lib/entry reads one
+  (`propertyIn`): one whose value is not a number, a text or true/false,
+  whose unit is not in the units table, whose status is not one of
+  lib/entry's, or whose `by` or `at` does not read, is left out. So is an
+  entry it came from that is no text. Each one left out is counted and
+  said as the file opens (FILE-IO.md, *What does not read*). A record left
+  with nothing is none.
+
+
 Not yet: a large set of structures drawn. *A large result set* holds more
 than 50 molecules in 3D in the set itself, off the page; structures drawn
 are all put on the page however many there are. Enumerate, which can make
