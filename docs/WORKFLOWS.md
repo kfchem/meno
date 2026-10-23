@@ -554,10 +554,44 @@ deleting the set deletes them"), and so does its menu, in words, last
 (2026-10-22). Deleted by the Delete key it is asked about first, as a
 step running is - and so it is in a selection deleted: the rest goes, and
 it is asked about. A cut leaves it in place, since a copy does not carry
-its molecules, and says so. They are summed up in the frame with a sample
-of their structures and histograms in the steps that follow (6c).
+its molecules, and says so.
 
-*Open as a table*, on the set's menu or under its summary, reads them in
+**Its frame sums it up** (2026-10-22, docs/WORKFLOWS-FOUNDATION.md, *What
+a set shows*): what it holds - that it is on no page, and *Open as a
+table* beside it - a grid of a sample of its structures, and a chart of
+its energies, each saying what it is of.
+- **The sample**: in a conformer set, each compound once - its first
+  conformer, since a drawing shows what its conformers share - the first
+  twelve compounds in the step's order; in a set of molecules, the first
+  twelve, each as it ends. A line under the grid says which ("The first
+  12 of 40 compounds, in the step's order, each drawn once").
+- **Drawn by Meno's engine**, as a molecule in 3D is drawn as a formula:
+  the plugin that draws molecules wedges its heavy atoms as it is in 3D,
+  and Meno lays them all out at once (docs/LAYOUT-2D.md, *Many at
+  once*), lined up on what they share, each read back against the
+  molecule it was given. One that does not show it as given is marked
+  *Not as given*, saying how on hover; one that could not be drawn says
+  *Not drawn*, and why on hover - never left out. All are drawn at one
+  scale, so their bonds are alike.
+- **The chart**: in a conformer set, each conformer's energy above its
+  compound's lowest, in kcal/mol, of the energies one method worked out
+  - a program, its version and a level; not a job, nor a charge - the
+  method most of them were (the first of those as many) - each
+  conformer counted once. Those by a method not stated are not charted,
+  since two such may be two methods; nor is an energy that is no finite
+  number. Its line says
+  the quantity, the unit, the method and how many; those worked out
+  another way, by a method not stated, or with no usable energy, are
+  counted and said, not charted - and so are those of a compound only a
+  part of whose conformers is here (*A part of a search*, below), whose
+  lowest may not be among them. Its bars are binned by Sturges's rule (⌈log₂ n⌉ + 1 bins,
+  Sturges 1926), and each says its range and count on hover. A set of
+  molecules has no chart: the energies of different compounds are not
+  set against one another.
+- The summary is drawn at its own size in a new frame, and smaller in a
+  frame made smaller, by hand or before it was this large.
+
+*Open as a table*, on the set's menu or at the top of its summary, reads them in
 the column beside the texts and PDFs, a tab of their own named as the
 set is (2026-10-21):
 - A row for each entry, in the step's order: its place; in a conformer

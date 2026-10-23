@@ -18,7 +18,7 @@ import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
-import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
+import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, heldPut, holdCollection, holdMembers, moveSet, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -201,8 +201,8 @@ export function rowMost(rooms: readonly (Frame & { chip: number })[]): number {
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
 /** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
-export const SUMMARY_W = 320 * PX;
-export const SUMMARY_H = SET_TOP + 120 * PX;
+export const SUMMARY_W = SUMMARY_PX.w * PX + 2 * SET_PAD;
+export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
 
 /**
  * What a step gave as an entry, where a program worked it out: besides its
