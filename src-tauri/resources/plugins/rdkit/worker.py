@@ -591,6 +591,14 @@ def op_open_stereo(m):
     return {"atoms": atoms, "bonds": bonds, "isomers": max(len(made), 1), "cumulenes": open_cumulenes(mol, bonds), "free": not made}
 
 
+def op_stereo_left_open(m):
+    """Only which stereocentres and double bonds a structure leaves open, by
+    index: none of `open_stereo`'s trying each stereoisomer in 3D - quick,
+    as a step that marks what is left open asks it of many (*Generate*)."""
+    atoms, bonds = open_stereo(read(m["molblock"]))
+    return {"atoms": atoms, "bonds": bonds}
+
+
 # What FindPotentialStereo calls each kind of element, as Meno's configurations name them.
 STEREO_KINDS = {
     "Atom_Tetrahedral": "centre",
@@ -2392,6 +2400,7 @@ OPS = {
     "from_smiles": op_from_smiles,
     "analyse": op_analyse,
     "open_stereo": op_open_stereo,
+    "stereo_left_open": op_stereo_left_open,
     "configurations": op_configurations,
     "conformers": op_conformers,
     "drawing_of": op_drawing_of,

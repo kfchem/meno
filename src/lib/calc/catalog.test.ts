@@ -30,7 +30,7 @@ describe("the readers Meno knows of", () => {
     const [cclib, pyscf] = READER_PLUGINS;
     expect(cclib).toMatchObject({
       name: "cclib",
-      version: "0.1.0",
+      version: "0.1.1",
       uses: [{ name: "cclib", version: "1.9rc1" }],
       profile: "plugin-cclib",
       lock: "resources/plugins/cclib/requirements.lock",
@@ -51,7 +51,7 @@ describe("the readers Meno knows of", () => {
   });
 
   it("are every plugin - those that read files, those that fill roles, as RDKit does, and those that fill kinds of step - each in an environment named for it", () => {
-    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "wfx", "xtb"]);
+    expect(PLUGINS.map((p) => p.id)).toEqual(["blender", "cclib", "crest", "gaussian", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
     const rdkit = PLUGINS.find((p) => p.id === "rdkit")!;
     expect(rdkit).toMatchObject({ reads: [], profile: "plugin-rdkit", lock: "resources/plugins/rdkit/requirements.lock", worker: "resources/plugins/rdkit/worker.py" });
     expect(rdkit.roles).toEqual(["smiles", "checks", "stereoisomers", "configurations", "conformers", "drawing"]);
@@ -144,6 +144,7 @@ describe("the readers Meno knows of", () => {
       downloads: [],
       writes: [],
       xyzEnergies: [],
+      xyzSteps: [],
       guide: [],
       suggests: [],
       files: [],

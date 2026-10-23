@@ -7,6 +7,7 @@
  */
 
 export const STEP_KINDS = [
+  "generate",
   "conformers",
   "optimise",
   "energy",
