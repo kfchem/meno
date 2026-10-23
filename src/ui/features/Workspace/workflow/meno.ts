@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity, type Entry } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, entryOfSet, entryState, FINISHED, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, entryState, FINISHED, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
 import { positionIds, substituted } from "./substituents";
@@ -578,8 +578,8 @@ export function notAllMinima(entries: readonly SetEntry[]): string | null {
  * Imaginary frequencies are not among them: which level should be a saddle
  * point is the chemist's to say. Null where none is.
  */
-/** The condition that keeps only the entries that are results to stand on, as a Filter is given it (entries `entryState`). */
-export const STATE_FINISHED = `state = ${FINISHED}`;
+/** The condition that keeps only the entries that are results to stand on, as a Filter is given it (entries `entryState`, `STATE_FINISHED`). */
+export { STATE_FINISHED };
 
 export function notResults(entries: readonly SetEntry[], name: (k: number) => string): string | null {
   const bad = entries.flatMap((e, k) =>
