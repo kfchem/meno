@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { readCoordinates } from "../../../../lib/io/coordinates";
 import { emptyWorkspaceDocument } from "../document";
-import { setMembers } from "../workflow/entries";
+import { entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { placeAsSet } from "../workflow/run";
 import { coordinateMolecules, energyOf } from "./coordinates";
 
@@ -52,5 +52,26 @@ describe("structures read from coordinates, placed", () => {
     expect((set.x0 + set.x1) / 2).toBeCloseTo(100);
     expect((set.y0 + set.y1) / 2).toBeCloseTo(50);
     expect(setMembers(doc, set).molecules.sort()).toEqual(doc.molecules3d!.map((m) => m.id).sort());
+  });
+});
+
+describe("the charge and multiplicity a text gives a structure read from its coordinates", () => {
+  // (made up for the test: the methyl cation, its charge and multiplicity on the line before its atoms)
+  const CATION = ["Methyl cation", "1 1", "C 0.000000 0.000000 0.000000", "H 1.087000 0.000000 0.000000", "H -0.543500 0.941370 0.000000", "H -0.543500 -0.941370 0.000000"].join("\n");
+  const species = (text: string) => {
+    const ms = coordinateMolecules(readCoordinates(text).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+    const doc = placeAsSet(emptyWorkspaceDocument(), ms, { x: 0, y: 0 }, { extentOf: () => ({ x0: -2, x1: 2, y0: -2, y1: 2 }) });
+    return setEntries(setMolecules(doc, doc.sets![0]), "molecules").map((e) => entryOfSet(e, "x").species);
+  };
+
+  it("are what each step is told: a cation stays a cation and a singlet - never what its atoms alone say, a neutral radical", () => {
+    expect(species(CATION)).toEqual([{ charge: 1, multiplicity: 1, from: { charge: "given", multiplicity: "given" } }]);
+  });
+
+  it("are given only where the text gives them: a structure with none stated is as its atoms say", () => {
+    expect(species(TEXT).map((s) => s?.from)).toEqual([
+      { charge: "given", multiplicity: "given" },
+      { charge: "atoms", multiplicity: "atoms" },
+    ]);
   });
 });

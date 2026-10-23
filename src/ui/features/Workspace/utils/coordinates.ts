@@ -7,7 +7,8 @@ import type { Molecule3D } from "../store/types";
  * and named, as molecules in 3D: bonded by distance, their orders unknown
  * until they are found, as an XYZ file's are; each called by its name, where
  * it came from kept (`source`: the PDF's or the file's name), and what was
- * said of it - its charge and multiplicity, its notes - shown with it; its
+ * said of it - its charge and multiplicity, its notes - shown with it; the
+ * charge and multiplicity it gives, as what the molecule was given; its
  * energy, where a note gives one in hartrees, as its energy.
  */
 export function coordinateMolecules(chosen: readonly { structure: CoordinateStructure; name: string }[], source: string): Omit<Molecule3D, "id" | "at">[] {
@@ -25,6 +26,10 @@ export function coordinateMolecules(chosen: readonly { structure: CoordinateStru
       name: source,
       ...(energyOf(s.notes) != null ? { energies: [energyOf(s.notes)!] } : {}),
       ...(said.length ? { said } : {}),
+      // (the charge and multiplicity the text gives it, as what it was given - each step told them, not what its atoms say: workflow/run speciesKept)
+      ...(Number.isInteger(s.charge) || (Number.isInteger(s.multiplicity) && s.multiplicity! > 0)
+        ? { calc: { readers: [], ...(Number.isInteger(s.charge) ? { charge: s.charge! } : {}), ...(Number.isInteger(s.multiplicity) && s.multiplicity! > 0 ? { multiplicity: s.multiplicity! } : {}) } }
+        : {}),
     };
   });
 }
