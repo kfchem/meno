@@ -422,6 +422,10 @@ describe("a calculation's output, as a reader read it", () => {
         expect([back.entryFrames, back.noEntryWhy, entriesIn(back)], JSON.stringify(bad)).toEqual([[], "unread", 0]);
       }
       expect(notes(readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [9], at: { x: 0, y: 0 } })))!)).toContain("No frame is an entry (which are could not be read)");
+      // (a frame that does not read, left out: each entry kept by its place among those kept, the one left out with it)
+      const o = calcResult(output(21, SCAN.map((_, k) => [4, 10, 15, 20].includes(k))), ["cclib"], "scan.log").molecules3d![0];
+      const holed = { ...o, frames: o.frames!.map((f, k) => (k === 9 ? [0] : k === 2 ? "x" : f)), at: { x: 0, y: 0 } };
+      expect(readCarried3D(JSON.parse(JSON.stringify(holed)))!.entryFrames).toEqual([3, 13, 18]);
       // (a why that does not read is not said; none is still none)
       const back = readCarried3D(JSON.parse(JSON.stringify({ ...m, entryFrames: [], noEntryWhy: "lost", at: { x: 0, y: 0 } })))!;
       expect([back.entryFrames, back.noEntryWhy]).toEqual([[], undefined]);

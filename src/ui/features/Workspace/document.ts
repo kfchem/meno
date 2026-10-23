@@ -512,6 +512,19 @@ export function deleteParts(
 }
 
 /**
+ * `doc` without these atoms and the bonds to them - and nothing else: an
+ * atom of another left without a bond stays, as a step's results taken away
+ * leave what the chemist drew (workflow/run `emptied`). The electron-pushing
+ * arrows on them go with them.
+ */
+export function withoutAtoms(doc: WorkspaceDocument, ids: Iterable<number>): WorkspaceDocument {
+  const gone = new Set(ids);
+  const atoms = doc.model.atoms.filter((a) => !gone.has(a.id));
+  if (atoms.length === doc.model.atoms.length) return doc;
+  return withPushesOn({ ...doc, model: { atoms, bonds: doc.model.bonds.filter((b) => !gone.has(b.a) && !gone.has(b.b)) } });
+}
+
+/**
  * A new layout for some of the structure, as edits: where each atom goes
  * (and its depth, where it is drawn in perspective; none, where it is not),
  * the wedges changed, and the H atoms drawn to carry a wedge - added, or

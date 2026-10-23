@@ -38,9 +38,9 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       // (from its page on top; read before, from where it was left)
       if (!pdf.reading) doc.amend((d) => ops.updatePdf(d, id, { reading: { at: pdf.page, zoom: 1 } }));
       const open = get().textsOpen && get().pdfShown === id;
-      set({ pdfShown: id, textsOpen: true, ...(open ? {} : { pdfFlight: { id, page: pdf.page, to: "column", start: performance.now() } }) });
+      set({ pdfShown: id, textsOpen: true, setTableShown: null, ...(open ? {} : { pdfFlight: { id, page: pdf.page, to: "column", start: performance.now() } }) });
     },
-    showPdf: (id: number) => set({ pdfShown: id, textsOpen: true }),
+    showPdf: (id: number) => set({ pdfShown: id, textsOpen: true, setTableShown: null }),
     stopReadingPdf: (id: number) => {
       const st = get();
       const pdf = st.pdfs.find((p) => p.id === id);

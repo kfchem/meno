@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { By } from "../entry";
 import { convert } from "../units";
-import { PROPERTY } from "./base";
+import { PROPERTY, reasonOf } from "./base";
 import { populations } from "./populations";
 import { entry, perceived, quantity } from "./testEntries";
 
@@ -139,6 +139,21 @@ describe("Populations", () => {
     expect(why(perceived("k", [{ kind: "double", atoms: [1, 2], specified: false }]))).toBe("a configuration of it (R/S, E/Z) is left unspecified");
     // (one perceived with no stereogenic element - methylcyclohexane - weighs as any other)
     expect(why(perceived())).toBeUndefined();
+  });
+
+  it("weights no group with one that is no minimum - its calculation judged it has an imaginary frequency - saying which", () => {
+    const saddle = entry("b", { [PROPERTY.freeEnergy]: g(1), [PROPERTY.imaginary]: quantity(1, "none") }, "a");
+    const out = populations([entry("a", { [PROPERTY.freeEnergy]: g(0) }, "a"), saddle], { kelvin: 298.15 });
+    if (!out.ok) throw new Error(out.said);
+    expect(out.exits.done).toEqual([]);
+    expect(out.exits.failed.map((e) => reasonOf(e))).toEqual([
+      "another in its group could not be weighted (b: it has 1 imaginary frequency: it is no minimum - take it out first)",
+      "it has 1 imaginary frequency: it is no minimum - take it out first",
+    ]);
+    // (none judged imaginary: weighted)
+    const fine = populations([entry("a", { [PROPERTY.freeEnergy]: g(0) }, "a"), entry("b", { [PROPERTY.freeEnergy]: g(1), [PROPERTY.imaginary]: quantity(0, "none") }, "a")], { kelvin: 298.15 });
+    if (!fine.ok) throw new Error(fine.said);
+    expect(fine.exits.done).toHaveLength(2);
   });
 
   it("refuses a temperature of 0 K or below, and nothing to weigh", () => {
