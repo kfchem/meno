@@ -6,11 +6,11 @@
  * what worked it out, and its energy above its compound's lowest - sorted
  * by any of them; and an entry as a molecule of its own, to put on the page.
  */
-import { calcLine, type CalcInfo } from "../../../../lib/calc/output";
+import { levelOf, type CalcInfo } from "../../../../lib/calc/output";
 import type { Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
-import { compoundLetter, frameXyz, framesOf } from "./entries";
+import { compoundLetter, frameMarks, frameXyz, framesOf, marksOf } from "./entries";
 
 /** One entry of a set, as its table shows it. */
 export type TableRow = {
@@ -32,10 +32,18 @@ export type TableRow = {
   frame: number;
 };
 
-/** What worked a molecule's energies out, in the words of what did: its calculation's line, or the plugin's that made it; none where nothing says. */
-export function energiesFrom(m: Pick<Molecule3D, "calc" | "made">): string {
-  if (m.calc) return calcLine(m.calc);
-  return m.made?.energies ?? "";
+/**
+ * What worked a molecule's energies out, in the words of what did: its
+ * calculation's program, with its version, and level - not its job or its
+ * state, which are not how - or the plugin's that made it; "" where nothing
+ * says. One rule for the set's table (*From*) and its summary's chart,
+ * which sets energies against one another only where this is the same:
+ * two versions of a program are two, as provenance.
+ */
+export function energiesFrom(m: Pick<Molecule3D, "calc" | "energies" | "made">): string {
+  const c = m.energies?.length && (m.calc?.program || m.calc?.method) ? m.calc : undefined;
+  if (!c) return m.made?.energies ?? "";
+  return [[c.program, c.version].filter(Boolean).join(" "), levelOf(c)].filter(Boolean).join(" \u00b7 ");
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
@@ -163,6 +171,8 @@ export function framesMolecule(m: Molecule3D, frames: readonly number[]): Omit<M
     ...(m.drawnAs ? { drawnAs: m.drawnAs } : {}),
     ...(m.stereo ? { stereo: m.stereo } : {}),
     ...(m.centres?.length ? { centres: m.centres } : {}),
+    // (each frame's marks: why it failed, its imaginary frequencies, and whether its marks did not read)
+    ...marksOf(frames.map((f) => frameMarks(m, f, n))),
   };
 }
 

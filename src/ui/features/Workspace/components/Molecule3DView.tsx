@@ -486,10 +486,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   // a conformer set's shares, as its chip shows them; and its atoms' elements
   const shares = useMemo(
     () => {
-      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers });
+      const shares = sharesOf({ frames: m.frames, shares: m.shares, conformerSet: m.conformerSet, partOf: m.partOf, energies: m.energies, degeneracies: m.degeneracies, failed: m.failed, imaginary: m.imaginary, numbers: m.numbers, marksUnread: m.marksUnread });
       return shares?.length === solid.frames.length ? shares : undefined;
     },
-    [m.frames, m.shares, m.conformerSet, m.partOf, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, solid.frames.length],
+    [m.frames, m.shares, m.conformerSet, m.partOf, m.energies, m.degeneracies, m.failed, m.imaginary, m.numbers, m.marksUnread, solid.frames.length],
   );
   const els = useMemo(() => m.atoms.map((a) => a.el), [m.atoms]);
   // where the frame shown is centred, in ångströms: what a surface on it is placed about

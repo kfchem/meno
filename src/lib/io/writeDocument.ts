@@ -8,16 +8,30 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 
+/** A job's file to be added to a workspace's file from the disk as it is written (src-tauri keptjobs.rs `Appended`): from its job's folder, or from the workspace's file it was opened from (`from`). */
+export type Appended = { sha256: string; job: string; name: string; from?: string };
+
 /**
  * `content` - bytes, or text written as UTF-8 - written to `path`, where
  * the chemist chose: whole, or not at all. With `keepOld`, the file there
  * is first kept beside it as it is - `<name>.bak`, or numbered where that
  * is taken - and where it is kept is given back; none where nothing was.
+ * A workspace's file is given its steps' job files (`appended`), each added
+ * from its job's folder before it takes the old one's place: sent after its
+ * bytes, as JSON, their length said.
  */
-export async function writeDocument(path: string, content: Uint8Array | string, keepOld = false): Promise<string | null> {
-  const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
+export async function writeDocument(path: string, content: Uint8Array | string, keepOld = false, appended: readonly Appended[] = []): Promise<string | null> {
+  let bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
   const headers: Record<string, string> = { path: encodeURIComponent(path) };
   if (keepOld) headers["keep-old"] = "1";
+  if (appended.length) {
+    const list = new TextEncoder().encode(JSON.stringify(appended));
+    const both = new Uint8Array(bytes.length + list.length);
+    both.set(bytes);
+    both.set(list, bytes.length);
+    headers.appended = String(bytes.length);
+    bytes = both;
+  }
   return (await invoke<string | null>("write_document", bytes, { headers })) ?? null;
 }
 

@@ -9,7 +9,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
+import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -255,7 +255,7 @@ export function populations(energies: readonly number[], degeneracies?: readonly
  * of these alone would not be the compound's, nor where its energies are
  * not each frame's, nor where a frame is no minimum (`sharesWithheld`).
  */
-export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "failed" | "imaginary" | "numbers">): number[] | undefined {
+export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "failed" | "imaginary" | "numbers" | "marksUnread">): number[] | undefined {
   const n = 1 + (m.frames?.length ?? 0);
   if (sharesWithheld(m)) return undefined;
   if (m.shares?.length === n) return m.shares;
@@ -267,9 +267,12 @@ export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet
  * optimisation did not converge, or its calculation judged it has an
  * imaginary frequency - whose energy weighed as a minimum's would share
  * out nothing real, named by its number, as *Populations* names one it
- * refuses (workflow/meno `notAllMinima`). None where each frame is one.
+ * refuses (workflow/meno `notAllMinima`); or that its file's marks of that
+ * did not read (`marksUnread`). None where each frame is one.
  */
-export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers">): string | null {
+export function sharesWithheld(m: Pick<Molecule3D, "frames" | "failed" | "imaginary" | "numbers" | "marksUnread">): string | null {
+  // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
+  if (m.marksUnread) return "its frames' marks could not be read, so whether each is a minimum is not known: no shares are given";
   const n = 1 + (m.frames?.length ?? 0);
   const name = (i: number) => `#${m.numbers?.length === n ? m.numbers[i] : i + 1}`;
   const unconverged = m.failed?.length === n ? m.failed.findIndex((f) => f?.kind === "not-converged") : -1;
@@ -1179,7 +1182,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
  * leaves out what the molecule has misleads): its hydrogens on carbon
  * hidden; its file's hydrogens missing; its bond orders not known - its
  * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
- * its file's it leaves out, their element not read.
+ * its file's it leaves out, their element not read; an optimisation it
+ * was opened from that never converged.
  */
 export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
@@ -1192,6 +1196,8 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
+    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy)] : []),
+    ...(m.notConverged ? [notConvergedMark(m.entryFrames?.length ?? 1)] : []),
     ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];
 }

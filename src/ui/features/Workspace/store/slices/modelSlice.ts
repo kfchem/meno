@@ -28,7 +28,7 @@ import type { SavedText, Workspace } from "../../utils/workspace";
 import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
-import { appendParts, NO_PARTS, removeParts } from "../../workflow/parts";
+import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../workflow/parts";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { editAtTrueSize } from "../../utils/trueSize";
 import { style3dOf } from "../../style3d";
@@ -608,7 +608,8 @@ export const createModelSlice = (
       const { doc: drawn, ids: sheetsAdded } = ops.addSheets(withSlides, sheets.map(({ id: _, ...t }) => t));
       sheetIds = sheetsAdded;
       if (!flow.sets.length && !flow.steps.length) return drawn;
-      const added = appendParts(drawn, flow);
+      // (the records a set's structures carried, by their atoms' ids as pasted)
+      const added = appendParts(drawn, carriedRenumbered(flow, (id) => idOf.get(id)));
       pastedFlow = added;
       return added.doc;
     });

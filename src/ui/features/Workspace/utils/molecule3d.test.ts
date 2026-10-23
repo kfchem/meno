@@ -611,6 +611,9 @@ describe("the shares a conformer set's chip shows", () => {
     // (another failure is no judgement of a minimum: shares as before)
     expect(sharesOf({ ...set, failed: [null, { kind: "stopped" as const, why: "stopped" }] })).toEqual([0.25, 0.75]);
     expect(sharesWithheld(set)).toBeNull();
+    // (its file's marks of that did not read: not known, so none - and said)
+    expect(sharesOf({ ...set, marksUnread: true })).toBeUndefined();
+    expect(sharesWithheld({ ...set, marksUnread: true })).toBe("its frames' marks could not be read, so whether each is a minimum is not known: no shares are given");
   });
 });
 

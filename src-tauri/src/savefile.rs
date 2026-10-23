@@ -33,7 +33,12 @@ const MOST_KEPT: usize = 1000;
 /// A document's bytes, sent as they are, written to the file named by the
 /// `path` header (its percent-encoded UTF-8) - whole, or not at all. With
 /// the `keep-old` header, the file there is first kept beside it
-/// (`kept_beside`), and where that copy is is given back.
+/// (`kept_beside`), and where that copy is is given back. A workspace's file
+/// with its steps' job files to add (`appended`, its length in the bytes
+/// sent): the rest of the bytes are the list of them, as JSON, each added
+/// from its job's folder to the hidden file before it reaches the disk and
+/// takes the old one's place (keptjobs.rs `append_job_files`) - so that a
+/// job file changed or gone fails the save, and the file there is as it was.
 #[tauri::command]
 pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<Option<String>, String> {
     let path = request
@@ -44,7 +49,22 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         .map(PathBuf::from)
         .ok_or("no file was named to write to")?;
     let keep_old = request.headers().get("keep-old").is_some_and(|v| v == "1");
-    let bytes = bytes_of(request.body()).ok_or("a document is sent as its bytes")?;
+    let mut bytes = bytes_of(request.body()).ok_or("a document is sent as its bytes")?;
+    let appended = match request.headers().get("appended") {
+        None => Vec::new(),
+        Some(n) => {
+            let n = n.to_str().ok().and_then(|n| n.parse::<usize>().ok()).filter(|&n| n <= bytes.len()).ok_or("the job files to add are not said")?;
+            let list: Vec<crate::keptjobs::Appended> = serde_json::from_slice(&bytes[n..]).map_err(|e| format!("the job files to add: {e}"))?;
+            bytes.truncate(n);
+            list
+        }
+    };
+    let jobs_root = if appended.is_empty() { None } else { Some(crate::jobs::jobs_root(&app)?) };
+    // (a job file carried from the workspace's file it was opened from: one the page could have read)
+    if let Some(from) = appended.iter().filter_map(|a| a.from.as_deref()).find(|f| !may_read(&app, f)) {
+        return Err(format!("Meno may not read {}", from.display()));
+    }
+    let most = most_for(&path, !appended.is_empty());
     // (as the plugin takes a path: whole, and going up nowhere)
     if !path.is_absolute() || path.components().any(|c| c == Component::ParentDir) {
         return Err(format!("{} is not a whole path", path.display()));
@@ -54,12 +74,36 @@ pub async fn write_document(app: AppHandle, request: tauri::ipc::Request<'_>) ->
         return Err(format!("Meno may not write to {}", path.display()));
     }
     tauri::async_runtime::spawn_blocking(move || {
-        replace_keeping(&target, keep_old, |file| file.write_all(&bytes))
-            .map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
+        replace_keeping(&target, keep_old, |file| document_written(file, &bytes, jobs_root.as_deref().map(|r| (r, &appended[..])), most))
+        .map(|kept| kept.map(|k| k.to_string_lossy().into_owned()))
             .map_err(|e| format!("{}: {e}", path.display()))
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+/// The most the document at `path` may come to, where it is held to one: a
+/// workspace's file - whatever it holds - and anything written with job
+/// files added (`with_jobs`), whatever it is called, never more than Meno
+/// can open again (keptjobs.rs); anything else, none.
+fn most_for(path: &Path, with_jobs: bool) -> Option<u64> {
+    let workspace = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("meno"));
+    (workspace || with_jobs).then_some(crate::keptjobs::MOST_WORKSPACE_FILE)
+}
+
+/// A document's bytes written to the hidden file `file` a save puts in place
+/// (`replace_keeping`): with the job files to add (`jobs`: the jobs' folder,
+/// and the files), each added from the disk; and, a workspace's file, no
+/// more than `most` - else failing, before it takes the old one's place.
+pub(crate) fn document_written(file: &mut File, bytes: &[u8], jobs: Option<(&Path, &[crate::keptjobs::Appended])>, most: Option<u64>) -> io::Result<()> {
+    file.write_all(bytes)?;
+    if let Some((root, appended)) = jobs {
+        crate::keptjobs::append_job_files(&mut *file, root, appended).map_err(io::Error::other)?;
+    }
+    match most {
+        Some(most) => crate::keptjobs::within_most(file, most),
+        None => Ok(()),
+    }
 }
 
 /// One of Meno's own files - its settings, its environments' notes - sent
@@ -116,6 +160,13 @@ fn app_file_at(base: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(path)
 }
 
+/// Whether the page may have the file at `path` read as Meno reads it for
+/// the page: where the file system plugin's scope lets it - a file Open or
+/// Save gave, or one opened from outside Meno.
+pub(crate) fn may_read(app: &AppHandle, path: &Path) -> bool {
+    path.is_absolute() && !path.components().any(|c| c == Component::ParentDir) && app.try_fs_scope().is_some_and(|scope| scope.is_allowed(path))
+}
+
 /// Whether the page may have `path` written - `target`, the file at the end
 /// of its links - where `allowed` is the file system plugin's scope: where
 /// the plugin would let the page write itself. The file named; or, where it
@@ -166,12 +217,14 @@ pub(crate) fn replace_keeping(path: &Path, keep_old: bool, write: impl FnOnce(&m
     };
     if before.is_some() {
         // (opened as writing it in place would have opened it, and closed again: nothing changed)
-        OpenOptions::new().write(true).open(&target)?;
+        may_be_written(&target)?;
     }
     let short: String = name.to_string_lossy().chars().take(NAME_MOST).collect();
+    sweep_parts(dir, &short, STALE_PART);
     let part = dir.join(format!(".{short}.{}.part", uuid::Uuid::new_v4()));
     let written = (|| {
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&part)?;
+        // (read as well: a workspace's job files are added to the zip it holds, which is read for where they go - keptjobs.rs)
+        let mut file = OpenOptions::new().read(true).write(true).create_new(true).open(&part)?;
         write(&mut file)?;
         if let Some(m) = &before {
             keep_besides(&target, m, &file)?;
@@ -208,6 +261,33 @@ pub(crate) fn replace_keeping(path: &Path, keep_old: bool, write: impl FnOnce(&m
         crate::logfile::logged!("a saved file's folder could not be synced: {e}");
     }
     Ok(kept)
+}
+
+/// How old a hidden copy of a file left beside it must be to be taken away
+/// as the file is saved again: one a save stopped part way left (Meno
+/// stopped, the computer too) - never one a save still under way writes.
+const STALE_PART: std::time::Duration = std::time::Duration::from_secs(6 * 60 * 60);
+
+/// The hidden copies of the file `short` names left in `dir` by saves that
+/// never ended - each `.<short>.<uuid>.part`, as `replace_keeping` names
+/// them, older than `stale` - taken away: one can be as large as the file.
+/// What cannot be is left, and logged.
+fn sweep_parts(dir: &Path, short: &str, stale: std::time::Duration) {
+    let Ok(entries) = fs::read_dir(dir) else { return };
+    let prefix = format!(".{short}.");
+    for e in entries.flatten() {
+        let name = e.file_name().to_string_lossy().into_owned();
+        let Some(id) = name.strip_prefix(&prefix).and_then(|r| r.strip_suffix(".part")) else { continue };
+        if uuid::Uuid::parse_str(id).is_err() {
+            continue;
+        }
+        let old = e.metadata().ok().filter(|m| m.file_type().is_file()).and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).is_some_and(|age| age >= stale);
+        if old {
+            if let Err(err) = fs::remove_file(e.path()) {
+                crate::logfile::logged!("a saved file's old hidden copy could not be taken away: {err}");
+            }
+        }
+    }
 }
 
 /// What the file at `target` had besides its bytes - `before` - given to
@@ -402,12 +482,18 @@ const WAITS_MS: [u64; 4] = [100, 200, 300, 400];
 /// `step` done; done again after each of `WAITS_MS` while it fails only as a
 /// file held a moment by another does - what it came to in the end.
 #[cfg(any(windows, test))]
-fn tried_again<S>(state: &mut S, mut step: impl FnMut(&mut S) -> Step, mut wait: impl FnMut(&mut S, std::time::Duration)) -> Step {
+fn tried_again<S>(state: &mut S, step: impl FnMut(&mut S) -> Step, wait: impl FnMut(&mut S, std::time::Duration)) -> Step {
     use win_error::*;
+    tried_while(state, step, wait, |code| matches!(code, ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION))
+}
+
+/// `step` done; done again after each of `WAITS_MS` while it fails as `held` says a file held a moment does.
+#[cfg(any(windows, test))]
+fn tried_while<S>(state: &mut S, mut step: impl FnMut(&mut S) -> Step, mut wait: impl FnMut(&mut S, std::time::Duration), held: impl Fn(u32) -> bool) -> Step {
     let mut done = step(state);
     for ms in WAITS_MS {
         match done {
-            Err(ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION) => {
+            Err(code) if held(code) => {
                 wait(state, std::time::Duration::from_millis(ms));
                 done = step(state);
             }
@@ -415,6 +501,47 @@ fn tried_again<S>(state: &mut S, mut step: impl FnMut(&mut S) -> Step, mut wait:
         }
     }
     done
+}
+
+/// Opening the file there to write it, to see it may be (`may_be_written`),
+/// tried again while it is held a moment by another that lets no one else
+/// open it - a spreadsheet program saving it, say, which lets it go within a
+/// second: ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION. Not where it may
+/// not be written (ERROR_ACCESS_DENIED: kept read-only), which no wait
+/// changes.
+#[cfg(any(windows, test))]
+fn opened_while_held<S>(state: &mut S, step: impl FnMut(&mut S) -> Step, wait: impl FnMut(&mut S, std::time::Duration)) -> Step {
+    use win_error::*;
+    tried_while(state, step, wait, |code| matches!(code, SHARING_VIOLATION | LOCK_VIOLATION))
+}
+
+/// Whether the file at `target` may be written: opened as writing it in
+/// place would open it, and closed again - nothing changed. A file kept
+/// read-only, or a folder, may not.
+#[cfg(not(windows))]
+fn may_be_written(target: &Path) -> io::Result<()> {
+    OpenOptions::new().write(true).open(target).map(|_| ())
+}
+
+/// Whether the file at `target` may be written (Windows): as elsewhere, and
+/// tried again while it is held a moment by another (`opened_while_held`) -
+/// as putting the new file in place is (`placed_over`). Still held, the
+/// save fails, and the file is as it was.
+#[cfg(windows)]
+fn may_be_written(target: &Path) -> io::Result<()> {
+    let mut last: Option<io::Error> = None;
+    let done = opened_while_held(
+        &mut last,
+        |last| {
+            OpenOptions::new().write(true).open(target).map(|_| ()).map_err(|e| {
+                let code = e.raw_os_error().map_or(u32::MAX, |c| c as u32);
+                *last = Some(e);
+                code
+            })
+        },
+        |_, wait| std::thread::sleep(wait),
+    );
+    done.map_err(|_| last.take().unwrap_or_else(|| io::Error::other("the file could not be opened")))
 }
 
 /// The steps of putting a new file in place over an old one on Windows,
@@ -566,7 +693,7 @@ fn in_its_folder(path: &Path) -> io::Result<PathBuf> {
 }
 
 /// A percent-encoded UTF-8 text (as `encodeURIComponent` gives it), as it was; none where it is not one.
-fn percent_decoded(text: &str) -> Option<String> {
+pub(crate) fn percent_decoded(text: &str) -> Option<String> {
     let mut bytes = Vec::with_capacity(text.len());
     let mut rest = text.bytes();
     while let Some(b) = rest.next() {
@@ -785,6 +912,64 @@ mod tests {
     fn a_folder_syncs_here() {
         let dir = scratch();
         sync_dir(&dir).unwrap();
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_workspace_file_past_what_meno_opens_is_refused_and_the_one_there_left_as_it_was() {
+        // (no job files at all: a workspace's attachments alone can come to it)
+        let dir = scratch();
+        let path = dir.join("work.meno");
+        let old = b"PK\x03\x04 the workspace saved before".repeat(10);
+        fs::write(&path, &old).unwrap();
+        let new = vec![5u8; 4096];
+        let err = replace_keeping(&path, false, |f| document_written(f, &new, None, Some(4095))).unwrap_err();
+        assert!(err.to_string().contains("a workspace file Meno can open again holds at most"), "{err}");
+        assert_eq!(fs::read(&path).unwrap(), old);
+        assert_eq!(names(&dir), ["work.meno"]);
+        // (at the most, or not a workspace's file: written)
+        replace_keeping(&path, false, |f| document_written(f, &new, None, Some(4096))).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), new);
+        replace_keeping(&dir.join("big.pdf"), false, |f| document_written(f, &new, None, None)).unwrap();
+        fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn a_workspace_file_and_anything_written_with_job_files_is_held_to_the_cap_whatever_it_is_called() {
+        let most = Some(crate::keptjobs::MOST_WORKSPACE_FILE);
+        assert_eq!(most_for(Path::new("/w/work.meno"), false), most);
+        assert_eq!(most_for(Path::new("/w/WORK.MENO"), false), most);
+        assert_eq!(most_for(Path::new("/w/work.zip"), true), most);
+        assert_eq!(most_for(Path::new("/w/work"), true), most);
+        assert_eq!(most_for(Path::new("/w/paper.pdf"), false), None);
+    }
+
+    #[test]
+    fn the_cap_is_half_what_was_seen_to_open_and_under_what_the_reader_reads() {
+        // (2 GB opened on the Mac; the reader reads no ZIP64, so never 4 GB)
+        assert_eq!(crate::keptjobs::MOST_WORKSPACE_FILE, 1 << 30);
+        assert!(crate::keptjobs::MOST_WORKSPACE_FILE < u32::MAX as u64);
+    }
+
+    #[test]
+    fn hidden_copies_a_stopped_save_left_are_taken_away_on_the_next_and_nothing_else() {
+        let dir = scratch();
+        let path = dir.join("work.meno");
+        fs::write(&path, b"old").unwrap();
+        let stale = format!(".work.meno.{}.part", uuid::Uuid::new_v4());
+        let fresh = format!(".work.meno.{}.part", uuid::Uuid::new_v4());
+        let other = format!(".other.meno.{}.part", uuid::Uuid::new_v4());
+        for n in [&stale, &fresh, &other, &".work.meno.notauuid.part".to_string()] {
+            fs::write(dir.join(n), b"left").unwrap();
+        }
+        let long_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 60 * 60);
+        for n in [&stale, &other] {
+            File::options().write(true).open(dir.join(n)).unwrap().set_modified(long_ago).unwrap();
+        }
+        write_whole(&path, b"new").unwrap();
+        let mut want = vec![fresh.clone(), other.clone(), ".work.meno.notauuid.part".to_string(), "work.meno".to_string()];
+        want.sort();
+        assert_eq!(names(&dir), want);
         fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -1087,6 +1272,52 @@ mod tests {
         assert_eq!(w.waited.iter().sum::<u64>(), 1000);
         assert_eq!(w.replies.len(), 1);
         assert_eq!((w.target, w.part, w.backup), (Some("old"), None, None));
+    }
+
+    #[test]
+    fn on_windows_a_file_held_a_moment_by_one_that_lets_no_one_open_it_is_tried_again_before_the_save() {
+        use win_error::*;
+        // (answers to opening it, in turn; the waits taken between)
+        let open = |answers: &[Step]| {
+            let mut left: std::collections::VecDeque<Step> = answers.iter().copied().collect();
+            let mut waited = Vec::new();
+            let done = opened_while_held(&mut waited, |_| left.pop_front().unwrap_or(Ok(())), |w, wait| w.push(wait.as_millis() as u64));
+            (done, waited)
+        };
+        // (held, then let go within the second: opened)
+        assert_eq!(open(&[Err(SHARING_VIOLATION), Err(LOCK_VIOLATION), Ok(())]), (Ok(()), vec![100, 200]));
+        // (held all the while: five tries over a second, then failed)
+        assert_eq!(open(&[Err(SHARING_VIOLATION); 6]), (Err(SHARING_VIOLATION), WAITS_MS.to_vec()));
+        // (one that may not be written - kept read-only - or another failure: at once, no wait)
+        for code in [ACCESS_DENIED, 2] {
+            assert_eq!(open(&[Err(code), Ok(())]), (Err(code), vec![]), "{code}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_save_over_a_file_held_a_moment_with_no_sharing_waits_for_it() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = scratch();
+        let path = dir.join("held.meno");
+        fs::write(&path, b"old").unwrap();
+        // (opened by another with no sharing - as a spreadsheet program holds what it saves - let go after 0.4 s)
+        let held = OpenOptions::new().read(true).write(true).share_mode(0).open(&path).unwrap();
+        let letting_go = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            drop(held);
+        });
+        write_whole(&path, b"new").unwrap();
+        letting_go.join().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert_eq!(names(&dir), ["held.meno"]);
+        // (held for longer than the tries: the save fails, the file as it was and nothing beside it)
+        let held = OpenOptions::new().read(true).write(true).share_mode(0).open(&path).unwrap();
+        assert!(write_whole(&path, b"newer").is_err());
+        drop(held);
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert_eq!(names(&dir), ["held.meno"]);
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

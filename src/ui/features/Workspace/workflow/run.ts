@@ -6,19 +6,19 @@
  * takes the run's results away.
  */
 import { addMolecules3d, appendModel, moveMolecules3d, removeMolecules3d, withoutAtoms, type WorkspaceDocument } from "../document";
-import type { Member, Model, Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, DrawnRecord, Member, Model, Molecule3D, StepRunKept, Turn3D, WorkflowSet, WorkflowStep } from "../store/types";
 import { boxOf } from "../chem/make3d";
 import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, unlikeMade, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, marksOf, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
-import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX } from "./look";
+import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, heldPut, holdCollection, holdMembers, moveSet, resizeSet, markMade, RUNS_KEPT, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
@@ -60,7 +60,7 @@ export function runStep(doc: WorkspaceDocument, id: number, w: RunWith, depth = 
   if (!input) return fail("Nothing comes into it");
   const outcome =
     input.holds === "structures"
-      ? runMenoDrawn(step.kind, drawnEntries(doc.model, input.structures))
+      ? runMenoDrawn(step.kind, drawnEntries(doc.model, input.structures, input.records))
       : runMeno(step.kind, setEntries(input.molecules, input.holds), input.holds, step.options, energiesBy(input.molecules));
   return ranAs(doc, id, outcome, key, w);
 }
@@ -89,6 +89,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const before = from ? findSet(doc, from.set)?.made?.step : undefined;
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
+  // (a step that takes nothing in needs only someone to do it)
+  if (takesNothing(step.kind)) return by ? null : "Nothing added does this step";
   const input = inputOf(doc, step.id);
   if (!input) return "Nothing comes into it";
   // (a set that came to mix conformer sets with other molecules after it was wired)
@@ -113,10 +115,13 @@ export function energiesBy(molecules: readonly Pick<Molecule3D, "calc" | "energi
 /** What a run gave, exit by exit: the molecules its first exit holds, those its second holds - what it set aside - and what kind of set they make; with how many of each did not read from a file. */
 export type RunResults = NonNullable<StepRunKept["results"]>;
 
-/** The structures drawn that come into a step, as its entries: each as it is drawn, in the set's order. */
-export function drawnEntries(model: Model, structures: readonly (readonly number[])[]): DrawnEntry[] {
-  return structures.map((ids, place) => ({ place, drawn: partOf(model, new Set(ids)) }));
+/** The structures drawn that come into a step, as its entries: each as it is drawn, with its record where it has one, in the set's order. */
+export function drawnEntries(model: Model, structures: readonly (readonly number[])[], records: readonly (DrawnRecord | undefined)[] = []): DrawnEntry[] {
+  return structures.map((ids, place) => ({ place, drawn: partOf(model, new Set(ids)), ...(records[place] ? { record: records[place] } : {}) }));
 }
+
+/** A structure drawn as a run gives it and keeps it: the drawing, with its record where it has one. */
+const drawnModel = (e: DrawnEntry): DrawnModel => ({ ...e.drawn, ...(e.record ? { record: e.record } : {}) });
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */
 export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResults | undefined {
@@ -125,7 +130,10 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
   const second = exitsOf(step.kind)[1];
   if (set.made.holds === "structures") {
     // (each structure as it is drawn now: moved, or an atom changed by hand since, as it is)
-    const drawn = (b: WorkflowSet | undefined) => (b ? drawnEntries(doc.model, setMembers(doc, b).structures).map((e) => e.drawn) : []);
+    const drawn = (b: WorkflowSet | undefined) => {
+      const held = b ? setMembers(doc, b) : null;
+      return held ? drawnEntries(doc.model, held.structures, held.records).map(drawnModel) : [];
+    };
     return { molecules: [], rest: [], holds: "structures", drawn: { made: drawn(set), rest: second ? drawn(resultOf(doc, step.id, second.id)) : [] } };
   }
   // (each exit's set: its collection, where it holds one, else its molecules on the page)
@@ -201,8 +209,8 @@ export function rowMost(rooms: readonly (Frame & { chip: number })[]): number {
 /** The least a result set's inside is wide: its name and count read whole. */
 export const LEAST_W = 120 * PX;
 /** A large result set's frame (`LARGE_SET`), as wide and as tall as its summary takes. */
-export const SUMMARY_W = 320 * PX;
-export const SUMMARY_H = SET_TOP + 120 * PX;
+export const SUMMARY_W = SUMMARY_PX.w * PX + 2 * SET_PAD;
+export const SUMMARY_H = SET_TOP + SUMMARY_PX.h * PX + SET_PAD;
 
 /**
  * What a step gave as an entry, where a program worked it out: besides its
@@ -228,7 +236,7 @@ export { keptOf };
  */
 export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKind): RunResults {
   // (structures drawn, each as the step gave it: what it set aside too, in its second exit's set)
-  if (outcome.holds === "structures") return { molecules: [], rest: [], holds: "structures", drawn: { made: outcome.kept.map((e) => e.drawn), rest: outcome.aside.map((e) => e.drawn) } };
+  if (outcome.holds === "structures") return { molecules: [], rest: [], holds: "structures", drawn: { made: outcome.kept.map(drawnModel), rest: outcome.aside.map(drawnModel) } };
   // (what it set aside is molecules as what it kept is: its second exit's set holds them, in plain view)
   // (of molecules in 3D, molecules in 3D: no kind's second exit gives structures drawn of them)
   const asideHolds = (restHolds(kind, outcome.holds) ?? outcome.holds) as Holds3D;
@@ -364,7 +372,7 @@ function fillExit(
  * numbered afresh, as a paste is; and the set keeps which atoms they are
  * (`WorkflowSet.put`), for the next run to take away those alone.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly Model[]): WorkspaceDocument {
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnModel[]): WorkspaceDocument {
   // (each about the middle of its box)
   const boxes = made.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
@@ -377,7 +385,15 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
     // (each structure's atoms, as many as it brought)
     const added = d.model.atoms.filter((a) => !there.has(a.id)).map((a) => a.id);
     let from = 0;
-    return { doc: d, members: made.map((m) => ({ structure: added.slice(from, (from += m.atoms.length)) })), put: added };
+    // (each with its record, where the step gave it one: of that structure, as it is drawn now)
+    return {
+      doc: d,
+      members: made.map((m) => {
+        const ids = added.slice(from, (from += m.atoms.length));
+        return structureMember(ids, m.record && recordOn(m.record, d.model, ids));
+      }),
+      put: added,
+    };
   });
 }
 
@@ -659,8 +675,8 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
   return { calc: { readers: [], ...(e.charge != null ? { charge: e.charge } : {}), ...(e.multiplicity != null ? { multiplicity: e.multiplicity } : {}) } };
 }
 
-/** The imaginary frequencies an entry was judged to have: its own, or - one a program step just made - its calculation's. */
-const imaginaryOfEntry = (e: SetEntry): number[] | undefined => e.imaginary ?? (e as Worked).calc?.imaginary;
+/** The imaginary frequencies an entry was judged to have: its calculation's verdict - one a program step just made - else its own. */
+const imaginaryOfEntry = (e: SetEntry): number[] | undefined => (e as Worked).calc?.imaginary ?? e.imaginary;
 
 function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
@@ -677,10 +693,14 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        // (how many it stands for, and its mirror image's atoms where one was counted in - of its last geometry; a path's
+        //  frames before it, one each, none)
+        ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy] } : {}),
+        ...(e.mirror ? { mirrors: [...(path ?? []).map(() => null), [...e.mirror]] } : {}),
         ...(e.partOf ? { partOf: true as const } : {}),
-        // (why a program step could not do it, where one could not: its Failed exit's - of its last frame, a path's own
-        //  frames before it none)
-        ...(e.failed ? { failed: [...(path ?? []).map(() => null), e.failed] } : {}),
+        // (why a program step could not do it, where one could not: its Failed exit's - and its other marks - of its
+        //  last frame, a path's own frames before it none)
+        ...marksOf([...(path ?? []).map(() => ({})), { failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }]),
         ...e.keep,
       };
     });
@@ -707,15 +727,15 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       numbers: g.map((e) => e.number),
       ...(shares ? { shares } : {}),
       ...(degeneracies ? { degeneracies } : {}),
+      ...(g.some((e) => e.mirror) ? { mirrors: g.map((e) => (e.mirror ? [...e.mirror] : null)) } : {}),
       // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
       ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
-      ...(g.some((e) => e.failed) ? { failed: g.map((e) => e.failed ?? null) } : {}),
-      // (each conformer's imaginary frequencies, as its calculation judged them)
-      ...(g.some((e) => imaginaryOfEntry(e)) ? { imaginary: g.map((e) => imaginaryOfEntry(e) ?? null) } : {}),
+      // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
+      ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
       ...(alike ? keptAlike(g) : {}),
     };
   });

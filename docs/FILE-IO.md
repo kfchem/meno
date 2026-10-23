@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`) |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); a file a plugin knows as an optimisation's steps (`xyzSteps`: by its name - xtb's `xtbopt.log`, ORCA's `*_trj.xyz` - or, renamed, by its frames' comment lines) gives no entry, "No frame is an entry (convergence not stated in this file)" (docs/WORKFLOWS.md); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -375,7 +375,16 @@ PLUGINS.md's contract, with three requests for files:
     the line of what the calculation was ("job 1 of 2, optimisation").
     The answer's own fields are its last job's. A route run in steps -
     Gaussian's Opt Freq - is one job (the maintainer, 2026-10-13;
-    PLUGINS.md, *The contract*).
+    PLUGINS.md, *The contract*). An ORCA job the program went on from to
+    the next came to its end: ORCA says it once, at the end of the file,
+    and each job before the last was said, until 2026-10-22, not to have
+    come to its end. Gaussian's Link1 jobs each say their own end, and are
+    held to it: one without it did not come to its end;
+  - **`converged`**, of an optimisation's or a relaxed scan's geometries,
+    each one's being one the run found converged; and **`unmarked`**,
+    where all are false for a reason of their own: `error`, `cut`,
+    `path`, `unstated` (docs/WORKFLOWS.md, *Compound sets and conformer
+    sets*).
 - **`ask {kind, key, name, text}`** gives a promise's value.
 - **`write {kind, name, molecules, options}`** gives the file's content
   (`{text}`); Meno writes it where the chemist chose.
@@ -560,7 +569,20 @@ How these behave:
   part way - the disk full, the drive taken away - leaves the file that was
   there byte for byte as it was, and nothing of its own beside it; the
   failure is said. Meno stopped as it writes leaves the file as it was too,
-  its hidden copy perhaps beside it.
+  its hidden copy perhaps beside it; the next save of that file takes away
+  such a copy left more than six hours before (`sweep_parts`): one can be as
+  large as the file.
+- **A workspace's file is never larger than Meno can open again** (#555).
+  Opening reads the whole file into the page, and the reader takes no ZIP64
+  (`lib/binary/zip.ts`), so a file of 4 GB or more would never open. On a
+  Mac (32 GB, macOS 26) workspace files of 0.5, 1, 1.5 and 2 GB all opened
+  (2026-10-22); a save of a `.meno` is held to half of that, 1 GB
+  (`MOST_WORKSPACE_FILE`, `src-tauri/src/keptjobs.rs`, and
+  `lib/doc/menoFile.ts`). Past it the save is refused before the new file
+  takes the old one's place, which is left as it was, and the failure says
+  how large it would have been. This holds whatever the workspace keeps:
+  before #555 nothing held its total, and several files of up to 1 GB each
+  could add up past it.
   - The file keeps what it had besides its bytes - it is the chemist's too
     - as far as the system lets it be kept: a new file takes the old one's
     place, and would else have the folder's defaults. Its permissions; on
@@ -587,7 +609,12 @@ How these behave:
     again: five tries over a second (`ERROR_SHARING_VIOLATION`,
     `ERROR_LOCK_VIOLATION`, and `ERROR_ACCESS_DENIED`, as Windows says of a
     file open elsewhere without leave to delete it; whether the file may be
-    written at all was looked at before). ReplaceFileW is always given a
+    written at all was looked at before). That look - the file opened to
+    write it, and closed again - is tried again the same way while the file
+    is held by one that lets no one else open it, as a spreadsheet program
+    holds a file it saves (`ERROR_SHARING_VIOLATION`,
+    `ERROR_LOCK_VIOLATION`); a file that may not be written
+    (`ERROR_ACCESS_DENIED`, kept read-only) fails at once. ReplaceFileW is always given a
     hidden name to keep the old file under until the new one is in place,
     so the file is never gone: where the system leaves it under that name
     (`ERROR_UNABLE_TO_MOVE_REPLACEMENT_2`), it is named as it was again,
@@ -720,7 +747,8 @@ work.meno (zip)
   mimetype          first, stored: application/vnd.kfchem.meno+zip
   workspace.json    stored: the workspace, the JSON `.meno` was before
   files.json        stored: each file kept - name, kind, media type, size
-  files/<sha256>    each file kept, as it was: text deflated, the rest stored
+  files/<sha256>    each file kept, as it was: text and a step's jobs' files
+                    deflated, the rest stored
 ```
 
 - **The workspace stays JSON, uncompressed.** Measured in Node before the
@@ -795,9 +823,11 @@ work.meno (zip)
 - **Written off the page.** The files kept are compressed in a worker of
   their own as the workspace is saved (`lib/doc/menoFileWorker.ts`), so a
   long output never holds the canvas up.
-- **Nothing is unpacked to the disk.** What the file says of its sizes is
-  held to limits before anything is inflated (`lib/doc/menoFile.ts`): its
-  workspace at most 256 MB, any one file kept 1 GB, and 10,000 files.
+- **Nothing is unpacked to the disk** - but a step's jobs' files, written
+  back out when *Show files* asks for them (*A step's jobs*, below). What
+  the file says of its sizes is held to limits before anything is inflated
+  (`lib/doc/menoFile.ts`): its workspace at most 256 MB, any one file kept
+  1 GB, and 10,000 files.
 - **Nothing is taken for more, or other, than the file says.** What it
   says of a part's size is not trusted to set room aside by - a few bytes
   may say a gigabyte: each part is inflated a little at a time, stopped as
@@ -896,7 +926,23 @@ work.meno (zip)
     a step's earlier runs and jobs under way. Ties whose other end is not
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
-    results and its notes of what could not be read.
+    results and its notes of what could not be read. Within a structure a
+    step gave a set: each property of its record, and each entry it was
+    made from.
+  - **Marks of which frames failed, or are no minimum, fail closed.** A
+    molecule's marks of failure or of imaginary frequencies that do not
+    read - not one for each frame, or one that is neither a mark nor
+    none - are left out, and said ("marks of a molecule's failed
+    frames"). The molecule is kept whole - its geometry, frames, energies
+    and the rest - and marked so (`marksUnread`), which is saved with it.
+    Its frames are never taken for minima: *Populations* and *Energy
+    window* refuse it, saying "its frames' marks could not be read, so
+    whether it is a minimum is not known", its chip gives no shares, and
+    each of its entries says it as its status. The mark, like each frame's
+    failure and imaginary frequencies, goes with its frames wherever a
+    molecule is made of some of them - a step's results (*Duplicates*,
+    *Choose one*'s two exits, *Energy window*'s rest, *As conformers*) and
+    rows of a set's table taken out (workflow/entries `marksOf`).
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of
@@ -930,6 +976,76 @@ work.meno (zip)
   nothing was added for it, and it is saved as a zip.
 - **The clipboard and Office keep the record**, JSON as before: a copy
   carries no file.
+
+### A step's jobs
+
+Decided by the maintainer (docs/WORKFLOWS-FOUNDATION.md, *Keeping*): the
+`.meno` is the whole record, raw outputs included, with a way not to keep
+them. A step's runs, the current one and those it keeps, keep their jobs'
+files in the `.meno`: the files the job was given, what its program wrote,
+and its logs. A set's *Don't keep in the file* leaves out what the set held
+(only how many, and their hash, are kept), never its step's job files. A
+step's *Don't keep raw outputs* leaves out what its program wrote, except
+the files Meno read back and the logs; each job's record names what was
+left out, with its size.
+
+- **What a job's files are.** Each job runs in a folder of its own in
+  Meno's local data folder (`jobs/<id>/`, `src-tauri/src/jobs.rs`). Kept
+  are its work folder (`work/...`: its input, as Meno wrote it, and all its
+  program wrote) and its logs (`log.txt`, what its program said;
+  `after.txt`, what the programs run after it said). Never kept: its
+  `job.json`, which holds its program's path and environment on this
+  computer, and `state.json`, Meno's own record of it. As a job is made,
+  Meno writes beside it which files it was given and which its plugin
+  reads back (`kept.json`, `src-tauri/src/keptjobs.rs`); a job made by an
+  earlier Meno has none, and all its work folder counts as raw output.
+- **Kept as they are, by their SHA-256**, each once however many jobs
+  hold it, deflated, as `files/<sha256>` with the rest. A run's record in
+  `workspace.json` lists, for each of its jobs (`steps[].ran.kept`, and
+  `steps[].runs[].kept`), every file kept - its name in the job's folder,
+  its SHA-256, size and what it is to the job (`input`, `read`, `log` or
+  `raw`) - and every file left out, with its name, its size and why (`raw`,
+  under *Don't keep raw outputs*; `not had`, where a job's folder is not on
+  this computer and the file it was opened from did not hold it).
+- **Written from the disk, not through the page.** A study's outputs come
+  to hundreds of megabytes. The page writes the workspace and lists the
+  jobs' files in `files.json`; Meno then adds their bytes from the jobs'
+  folders, each checked against its SHA-256 as it is read, to the file
+  being written, before it takes the place of the one saved before. A file
+  changed since it was listed fails the save, and the file saved before
+  stays as it was. Only a plain file inside its job's folder is read: never
+  through a link, whatever the page's list says.
+- **Kept again from the file it was opened from.** A workspace opened on
+  another computer has its jobs' files in the `.meno` it was opened from.
+  Saved again, Meno reads them from that file as the new one is written -
+  each checked against its SHA-256 - while that file is still as it was
+  opened (its size and when it was written). Where it has changed, or the
+  workspace was opened with no path, they are kept from what was held of
+  it as it was opened, through the page.
+- **Raw outputs can name this computer.** A program's output and its logs
+  often hold the user's name, the folders it ran in and the computer's
+  name: Gaussian and ORCA print the host they ran on, for one. Meno never
+  alters what a program wrote. *Don't keep raw outputs* leaves the raw
+  outputs out; the files a job was given, what Meno read back and the logs
+  are still kept.
+- **A size warning, not a choice made for you.** When a save would take a
+  workspace past a size (Settings, General: 500 MB unless changed, at most
+  1 GB) - it was not past it before, it is new, or it has grown by half of
+  that size or more since - Meno says about how large it will be, names its largest steps by what their jobs add, says that raw
+  outputs can name this computer, and offers *Don't keep their raw
+  outputs* for those steps, *Save it all*, or *Cancel*, which saves
+  nothing. Meno never leaves anything out on its own. Past what a
+  workspace's file may hold at all (1 GB, above), the card says it cannot
+  be saved as it is, and offers only *Don't keep their raw outputs*, or
+  *Cancel*.
+- **Opened on another computer**, a workspace holds its jobs' files for
+  the session, each read from it only when wanted. *Show files* on a step
+  whose job's folder is not there writes the files kept of it back out, in
+  Meno's local data folder (`jobs-kept/<id>/`), and shows them. A file
+  there already is never written over: one changed since is left as it is,
+  and named, as is each file the workspace's file does not hold. Saved
+  again there, the workspace keeps them again from the file it was opened
+  from.
 
 ### What a .meno holds
 
@@ -1020,10 +1136,66 @@ so a workspace file double-clicked opens in Meno, with an icon of its own.
     times it had been chosen before count. Microsoft's own pages say as
     much ("available as default ... apps for the file type"; ownership
     information in HKCU "used only when the application that it references
-    is registered"). So nothing is registered for them; Windows is to let
-    the user choose Meno as a default from Meno's own Settings instead,
-    registering only when asked. A file opened with Meno by the user's own
-    choice is taken as on macOS.
+    is registered"). So nothing is registered for them until the user asks
+    for a format in Meno's own Settings (*Meno as the default app*, below).
+    A file opened with Meno by the user's own choice is taken as on macOS.
+- **Meno as the default app, chosen in Settings** (2026-10-21; Settings,
+  Files, *Opening files*; `src-tauri/src/defaults.rs`, `lib/defaultApps.ts`):
+  each of those formats with the app that opens it now, read again each
+  time Meno comes to the front, so a default changed elsewhere shows as it
+  is. Nothing changes until a format's button is pressed.
+  - macOS 12 and later: *Use Meno* asks the system to make Meno the
+    default for the type the system gives that extension
+    (`NSWorkspace setDefaultApplicationAtURL:toOpenContentType:
+    completionHandler:`, macOS 12; "If a change requires user consent, the
+    system asks the user for consent", Apple's page for it). The app it
+    replaced is kept by name and path (`files.before` in the settings), and
+    offered back: *Use Some Viewer again*. Where that app is no longer
+    there (moved to the Trash since), its record goes and the page says so;
+    the format still opens with Meno. Before macOS 12 there is no such
+    call, so the page says to choose in the Finder instead (Get Info, Open
+    with, Change All); Meno's minimum stays 10.13. Only an installed Meno
+    can be made the default, not one run from a build folder.
+  - Windows: an app cannot set a default; the user chooses it in Windows'
+    own Settings. *Use Meno* offers Meno there for that format alone, then
+    opens Meno's own page in Default apps - `ms-settings:defaultapps?
+    registeredAppUser=Meno` on Windows 11 21H2 and 22H2 with the 2023-04
+    update and 23H2 or later, Default apps itself before (Microsoft Learn,
+    *Launch the Default Apps settings page*). What is written, under
+    HKEY_CURRENT_USER only (Microsoft Learn, *Registering an Application
+    for Use with Default Programs*): `Software\Meno\Capabilities` with
+    `ApplicationDescription` (required) and `ApplicationName`; under its
+    `FileAssociations`, one value for each format asked for, `.sdf` =
+    `Meno.File`; the ProgID `Software\Classes\Meno.File`, with its icon and
+    `shell\open\command`; and one value, `Meno`, in the shared
+    `Software\RegisteredApplications`. Then `SHChangeNotify`. Never
+    `OpenWithProgids`, never `Applications\Meno.exe`.
+  - What opens a format now is asked of Windows, never read from the
+    registry: the default ProgID (`IApplicationAssociationRegistration::
+    QueryCurrentDefault`) and the program and its name
+    (`AssocQueryString`). The user's choice is not always under the
+    `UserChoice` key: Windows 11 build 26300 (tried 2026-10-22) keeps it
+    under `UserChoiceLatest`, and the page read it right because it asks
+    Windows. Nothing in Meno reads `UserChoice` itself. Where the program
+    is Windows' own *choose an app* (`OpenWith.exe`), which Windows names
+    as if it were an app (*Select an app*, in the user's language), no app
+    opens the format yet, and the row says *No app opens it yet*.
+  - Tried on Windows 11 (2026-10-21) with exactly these keys: a
+    double-click did not go to Meno, and Meno's own page in Default apps
+    listed its formats with their defaults. But for each format claimed,
+    Windows asked which app to use the next time such a file was opened,
+    offering Meno beside the app that opened it. So a format is claimed
+    only when the user asks for it, and the page says what Windows does
+    next.
+  - *Stop offering Meno* takes that format's value out; with the last,
+    the rest goes too: the ProgID, the Capabilities, the value in
+    `RegisteredApplications` (never the key), and `Software\Meno` where
+    nothing is left in it. The uninstaller does the same with whatever is
+    left (`--unregister-defaults`, `windows/hooks.nsh`). On the last
+    format, where Meno is the default, the row says that stopping takes
+    Meno out of Default apps, so Windows asks which app to use the next
+    time such a file is opened: the choice it kept names the ProgID taken
+    out.
 - **Opened as Open opens a file** (`src-tauri/src/opened.rs`,
   `lib/openedFiles.ts`): each file is kept by the app until the page
   takes it, so that one opened as Meno starts - before the page is there -

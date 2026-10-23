@@ -5,12 +5,13 @@
  * a wire let go on empty space, those that take what it carries, as who
  * does them takes it; and *As
  * conformers*, the conversion taken on purpose, only there, from a
- * compound set.
+ * compound set. A kind that takes nothing in (Generate) is offered on empty
+ * space alone: nothing can be wired into it.
  */
 import type { WireEnd } from "../store/types";
 import { doersAdded, kindsOf, takesBy } from "./doers";
 import { givesOf } from "./flow";
-import { kindInfo, type StepIcon, type StepKind } from "./kinds";
+import { kindInfo, takesNothing, type StepIcon, type StepKind } from "./kinds";
 
 /** A kind of step Quick Add offers: what it is called, and its icon. */
 export type QuickStep = { kind: StepKind; name: string; icon: StepIcon };
@@ -22,7 +23,11 @@ type Flow = Parameters<typeof givesOf>[0];
 export function offeredSteps(flow: Flow, wire?: WireEnd): QuickGroup[] {
   const set = wire ? givesOf(flow, wire) : null;
   const offered = (kind: StepKind, by: string) =>
-    kind === "as-conformers" ? !!wire && set === "molecules" : !wire || set == null || (set !== "pictures" && takesBy(kind, by, set));
+    takesNothing(kind)
+      ? !wire
+      : kind === "as-conformers"
+        ? !!wire && set === "molecules"
+        : !wire || set == null || (set !== "pictures" && takesBy(kind, by, set));
   return doersAdded()
     .map((d) => ({
       by: d.id,

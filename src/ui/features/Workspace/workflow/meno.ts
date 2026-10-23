@@ -8,9 +8,10 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, MARKS_UNREAD, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
+import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
 import { least } from "../../../../lib/chem/lists";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
@@ -41,7 +42,7 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
     case "energy-window":
       return energyWindow(entries, Number(options.window));
     case "duplicates":
-      return drain(duplicates(entries, holds, Number(options.rmsd), never));
+      return drain(duplicates(entries, holds, mirrorsOf(options), never));
     case "populations":
       return populations(entries, Number(options.temperature));
     case "choose":
@@ -88,7 +89,7 @@ export async function runMenoInTurns(kind: StepKind, entries: readonly SetEntry[
   let slice = least;
   let began = now();
   let told = began;
-  const turns = duplicates(entries, holds, Number(options.rmsd), () => now() - began >= slice);
+  const turns = duplicates(entries, holds, mirrorsOf(options), () => now() - began >= slice);
   for (;;) {
     const turn = turns.next();
     if (turn.done) return turn.value;
@@ -236,7 +237,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   if (!entries.every(hasEnergy)) return NO_ENERGY;
   // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
   //  frequencies are another matter: they would refuse it where the window is on free energies, which it is not)
-  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged"));
+  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged" || e.marksUnread));
   if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
@@ -250,45 +251,87 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
 }
 
+/** How Duplicates takes a conformer's mirror image, in an achiral molecule: kept apart (the default), or counted in its twin. */
+type Mirrors = "apart" | "counted";
+const mirrorsOf = (options: OptionValues): Mirrors => (options.mirrors === "counted" ? "counted" : "apart");
+
 /**
- * Each entry unlike the others kept: an entry as near as `most` (RMSD, in
- * ångströms, after the best fit) to one kept before it is set aside. Taken
- * lowest energy first where all have one, else in order. In a conformer
- * set they are compared within each compound; in a compound set, each
- * with those of the same atoms in the same order - a structure there
- * twice is the same structure, not two compounds. Never two of different
- * charge or spin: they are different species, however alike in shape.
+ * Each entry unlike the others kept: an entry that is the same conformer as
+ * one kept before it (workflow/sameConformer: all atoms within 0.01 Å, over
+ * the ways the molecule maps onto itself, never reflected) is set aside.
+ * Taken lowest energy first where all have one, else in order. In a
+ * conformer set they are compared within each compound; in a compound set,
+ * each with those of the same atoms, bonded alike, in the same order - a
+ * structure there twice is the same structure, not two compounds. Never
+ * two of different charge or spin: they are different species, however
+ * alike in shape.
+ *
+ * A conformer's mirror image (the maintainer, 2026-10-22) is kept apart -
+ * an atom's average over both needs both: enantiotopic atoms swap values
+ * between them - unless `mirrors` is `counted`: then it is counted in the
+ * one kept, whose degeneracy it adds to (2, as a rule), the atoms the
+ * mirror image swaps kept with it (`SetEntry.mirror`) so that an average by
+ * atom can still be made. Only of one stereoisomer - a chiral molecule's
+ * mirror image is its enantiomer, never counted in - so each entry's must
+ * be known, or nothing is done.
+ *
  * In a conformer set, those set aside are a part of their compound's
  * conformers (`partOf`); those kept, the compound as it came, its copies
  * merged. In a compound set they are copies of a structure, of no search.
  */
-function* duplicates(entries: readonly SetEntry[], holds: Holds3D, most: number, due: () => boolean): Generator<number, Outcome3D> {
-  const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : atomsOf(e)}|${speciesOf(e)}`;
+function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirrors, due: () => boolean): Generator<number, Outcome3D> {
+  if (mirrors === "counted") {
+    const unknown = entries.findIndex((e) => stereoIdentity(e.stereo) == null);
+    if (unknown >= 0) return { ok: false, said: `Which stereoisomer entry ${unknown + 1} is is not known: a mirror image is counted in only where it is the same stereoisomer` };
+  }
+  const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
   const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every(hasEnergy);
-  const keptSet = new Set<SetEntry>();
-  let before = 0;
+  const kept = new Map<SetEntry, { degeneracy: number; mirror?: number[] }>();
+  let done = 0;
+  let counted = 0;
+  // (compounds with too many ways onto themselves to try, taken atom against atom: a duplicate of one could be missed - said)
+  let capped = 0;
   for (const g of groups) {
-    const turns = keptApartInTurns(energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g, most, rmsd, due);
-    for (;;) {
-      const turn = turns.next();
-      if (turn.done) {
-        for (const e of turn.value) keptSet.add(e);
-        break;
+    const same = new Sameness(g[0].atoms, g[0].bonds, g[0].xyz);
+    if (same.capped && g.length > 1) capped++;
+    const here: { e: SetEntry; sig: Float64Array }[] = [];
+    for (const e of energies ? [...g].sort((p, q) => p.energy! - q.energy!) : g) {
+      if (done > 0 && due()) yield done;
+      done++;
+      const sig = same.signature(e.xyz);
+      // (only those it could be within reach of: a mirror image's atoms lie as far from its centre)
+      const near = here.filter((k) => same.bound(k.sig, sig) <= SAME_CONFORMER + 1e-9);
+      if (near.some((k) => same.same(k.e.xyz, e.xyz))) continue;
+      if (mirrors === "counted") {
+        const twin = near.find((k) => !kept.get(k.e)!.mirror && stereoIdentity(k.e.stereo) === stereoIdentity(e.stereo) && same.mirrorOf(k.e.xyz, e.xyz));
+        if (twin) {
+          const k = kept.get(twin.e)!;
+          k.mirror = same.mirrorOf(twin.e.xyz, e.xyz)!.to;
+          k.degeneracy += e.degeneracy ?? 1;
+          counted++;
+          continue;
+        }
       }
-      yield before + turn.value;
+      here.push({ e, sig });
+      kept.set(e, { degeneracy: e.degeneracy ?? 1 });
     }
-    before += g.length;
   }
-  // (in the order they came: those kept, the compound as it was, its copies merged into them; those alike, the copies taken out - in a
-  // conformer set, a part of its compound's conformers; in a compound set, copies of a structure, of no search, as they came)
-  const kept = entries.filter((e) => keptSet.has(e));
-  const alike = entries.filter((e) => !keptSet.has(e));
+  // (in the order they came; counted in, each kept says how many it stands for - every one, so that Populations counts them)
+  const keptOnes = entries.filter((e) => kept.has(e)).map((e) => {
+    const k = kept.get(e)!;
+    return mirrors === "counted" ? { ...e, degeneracy: k.degeneracy, ...(k.mirror ? { mirror: k.mirror } : {}) } : e;
+  });
+  // (those alike, the copies taken out - in a conformer set, a part of its compound's conformers; in a compound set, copies of a
+  // structure, of no search, as they came)
+  const alike = entries.filter((e) => !kept.has(e));
   const aside = holds === "conformers" ? asPart(alike) : alike;
-  return { ok: true, holds, kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
+  const twins = counted ? ` · ${counted} mirror image${counted === 1 ? "" : "s"} counted in (degeneracy 2)` : "";
+  return { ok: true, holds, kept: keptOnes, aside, said: `${keptOnes.length} of ${entries.length} kept${onesSaid(entries)}${twins}${capped ? ` \u00b7 ${cappedSaid(capped)}` : ""}` };
 }
 
 const atomsOf = (e: SetEntry) => e.atoms.map((a) => a.el).join(" ");
+const bondsOf = (e: SetEntry) => e.bonds.map((b) => `${Math.min(b.a1, b.a2)}-${Math.max(b.a1, b.a2)}:${b.order}`).sort().join(" ");
 
 /**
  * Of `order` - entries of the same atoms in the same order - those kept,
@@ -376,10 +419,14 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
  * where one is no minimum: the first whose optimisation did not converge,
  * or that its calculation judged has an imaginary frequency, named with
  * it, for the chemist to take it out (the maintainer, 2026-10-22: each
- * program's own judgement of which are imaginary). Null where none is.
+ * program's own judgement of which are imaginary) - or whose file's marks
+ * of that did not read (`SetEntry.marksUnread`). Null where none is.
  */
 export function notAllMinima(entries: readonly SetEntry[]): string | null {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+  // (its file's marks of which frames failed did not read: whether it is a minimum is not known)
+  const unread = entries.find((x) => x.marksUnread);
+  if (unread) return `${name(unread)}: ${MARKS_UNREAD} - take it out first`;
   const unconverged = entries.find((x) => x.failed?.kind === "not-converged");
   if (unconverged) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum - take it out first`;
   const e = entries.find((x) => x.imaginary?.length);

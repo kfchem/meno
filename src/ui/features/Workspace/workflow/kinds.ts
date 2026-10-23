@@ -5,7 +5,7 @@
  * own.
  */
 import { numberText } from "../../../../lib/calc/results";
-import type { Option } from "../../../../lib/options";
+import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 
@@ -18,8 +18,8 @@ export type Holds3D = Exclude<SetKind, "structures">;
 /** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
 export type SetHolds = SetKind | "pictures";
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -57,6 +57,8 @@ export type KindInfo = {
   options?: readonly Option[];
   /** What must be known of its entries before it runs, where something must: which stereoisomer each is (`configurations`, workflow/configurations) - asked of the plugin that perceives it, every entry its own. */
   perceives?: "configurations";
+  /** Where it needs them known only with some options: whether these do (Duplicates' mirror images counted in). Unsaid, always. */
+  perceivesWith?: (v: OptionValues) => boolean;
   /** Meno's own choices for a kind a plugin does, whoever does it, before the plugin's (Render's: a picture's size and shape, and what its molecules and surfaces are made of). */
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
@@ -79,6 +81,8 @@ export type KindInfo = {
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
 export const KINDS: readonly KindInfo[] = [
+  // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
+  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
   { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", second: { ...FAILED, gives: "molecules" } },
   { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", second: FAILED },
   { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", second: FAILED },
@@ -107,7 +111,23 @@ export const KINDS: readonly KindInfo[] = [
     runs: "entries",
     made: "Unlike",
     second: { id: "rest", name: "Alike", gives: "same", of: "rest" },
-    options: [{ id: "rmsd", label: "Alike within (RMSD)", type: "number", default: 0.125, min: 0, step: 0.025, unit: "Å" }],
+    // (alike: the one definition of the same conformer, workflow/sameConformer - no threshold of its own; the
+    //  maintainer, 2026-10-21. A conformer's mirror image, in an achiral molecule: kept apart by default - an atom's
+    //  average over both needs both - or counted in, its degeneracy 2 and the atoms it swaps kept: 2026-10-22)
+    options: [
+      {
+        id: "mirrors",
+        label: "Mirror images",
+        type: "choice",
+        choices: [
+          { value: "apart", label: "Kept apart" },
+          { value: "counted", label: "Counted in (degeneracy 2)" },
+        ],
+        default: "apart",
+      },
+    ],
+    perceives: "configurations",
+    perceivesWith: (v) => v.mirrors === "counted",
   },
   {
     kind: "populations",
@@ -218,6 +238,9 @@ export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
 }
 
 /** The input of `kind` named `port`, or its first where `port` is not one of its own. */
+/** Whether a kind takes nothing in: no input, nothing wired to it (Generate's). */
+export const takesNothing = (kind: StepKind): boolean => inputsOf(kind).length === 0;
+
 export function portOf(kind: StepKind, port: string): StepPort {
   const inputs = inputsOf(kind);
   return inputs.find((p) => p.id === port) ?? inputs[0];

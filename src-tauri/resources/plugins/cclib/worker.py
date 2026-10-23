@@ -507,10 +507,12 @@ def gaussian_ghosts(text):
     return ghosts
 
 
-def run_of(text, program):
+def run_of(text, program, followed=False):
     """How the run went, as the program says in its output: "normal" where it came to its end, "error" where it
     stopped on one - and why, in its words - or "cut" where it says neither, cut short or still running; and
-    whether each SCF it ran converged, in order. All unknown for a program not read here."""
+    whether each SCF it ran converged, in order. All unknown for a program not read here. `followed`: a job of a
+    file of several that another follows - ORCA's ($new_job), which says it came to its end once, at the end of
+    the file, so that a job it went on from did; Gaussian's own Link1 jobs each say it, and are held to it."""
     if program == "gaussian":
         lines = [line.strip() for line in text.split("\n") if line.strip()]
         why = None
@@ -532,7 +534,7 @@ def run_of(text, program):
         m = re.search(r"Error \([^)]*\):\s*(.+)", text)
         if "ORCA finished by error termination" in text:
             why = m.group(1).strip() if m else re.search(r"ORCA finished by error termination[^\n]*", text).group(0).strip()
-        ended = "error" if why else "normal" if "ORCA TERMINATED NORMALLY" in text else "cut"
+        ended = "error" if why else "normal" if "ORCA TERMINATED NORMALLY" in text or followed else "cut"
         scf = [not m.group(1) for m in re.finditer(r"SCF (NOT )?CONVERGED AFTER", text)]
         return ended, why, scf
     if program == "xtb":
@@ -611,7 +613,7 @@ def op_read(m):
                 frames.append([float(v) for xyz in step for v in xyz])
     # how the run went: the energies of SCFs that did not converge not given - and, where it stopped before its
     # end, the geometries after the last it worked out an energy for left out
-    ended, why, scf = run_of(text, program)
+    ended, why, scf = run_of(text, program, bool(m.get("followed")))
     found = len(getattr(data, "scfenergies", None) if has(data, "scfenergies") else [])
     good = found
     if scf is not None and False in scf:
@@ -636,15 +638,27 @@ def op_read(m):
         # (a scan's or a reaction path's last geometry is no optimum)
         "optimised": bool(data.optdone) if has(data, "optdone") and not path_kind(data, text) else None,
     }
+    # (of an optimisation's or a relaxed scan's geometries, which it found converged: the rest are steps on the way)
+    converged = converged_of(data, text, len(frames))
+    if converged is not None:
+        result["converged"] = converged
+    # (where none is marked, and its geometries are not to be taken as found - its run did not end as it should,
+    # or they are no optimisation's points marked converged - none is an entry, and why)
+    unmarked = unmarked_of(data, text, len(frames), ended) if converged is None else None
+    if unmarked:
+        result["converged"] = [False] * len(frames)
+        result["unmarked"] = unmarked
+    # (of a job with excited states, which state its dipole, its charges and its orbitals are of)
+    states = density_states(data, text, program)
     result["results"] = (
         run_results(ended, why, scf, whole)
         + path_said(data, text, len(frames))
         + molecule_wide(data)
-        + dipole(data, text, program, frames[-1] if frames else None)
+        + of_state(dipole(data, text, program, frames[-1] if frames else None), states[0])
         + per_frame(data, len(frames))
-        + per_atom(data, len(atoms))
+        + of_state(per_atom(data, len(atoms)), states[1])
         + vibrations(data, len(atoms))
-        + orbitals(data)
+        + of_state(orbitals(data), states[2], only="homo-lumo-gap")
     )
     # (the imaginary frequencies, as the program itself judged them: a mark that it is no minimum)
     imaginary = imaginary_of(data, text, program)
@@ -679,6 +693,92 @@ def path_kind(data, text):
     if any(re.search(r"\bIRC\b", " ".join(route.split()), re.I) for route in GAUSSIAN_ROUTE.findall(text or "")):
         return "irc"
     return None
+
+
+def converged_of(data, text, frames):
+    """Of an optimisation's or a relaxed scan's geometries, each one's being one the run found converged - as
+    cclib marks it (`optstatus`, OPT_DONE): an optimisation's last, a relaxed scan's each point - one stopped at its
+    first geometry too, marked not; None where the run optimised nothing (a single point, a rigid scan, a reaction
+    path) or cclib marks none."""
+    status = getattr(data, "optstatus", None) if has(data, "optstatus") else None
+    if status is None or not len(status) or frames < 1 or path_kind(data, text) == "irc":
+        return None
+    if path_kind(data, text) == "scan" and frames <= len(data.scanenergies):
+        return None
+    done = getattr(data, "OPT_DONE", 4)
+    status = [bool(int(s) & done) for s in list(status)]
+    if len(status) == frames:
+        return status
+    # (ORCA works the energy out once more at each point it converged on - "FINAL ENERGY EVALUATION AT THE
+    # STATIONARY POINT" - a geometry after the one cclib marks, which it does not mark: that one is the converged
+    # one. Only where there is one such geometry for each point marked; otherwise which is which is not known)
+    if frames - len(status) != sum(status):
+        return None
+    out = []
+    for ok in status:
+        out += [False, True] if ok else [False]
+    return out
+
+
+def unmarked_of(data, text, frames, ended):
+    """Why none of a run's geometries is one it found, where `converged_of` marks none: "error" or "cut" where the
+    run ended with an error or did not come to its end; "path" for a rigid scan's or a reaction path's points;
+    "unstated" for other geometries, more than one, none of them marked converged (an optimisation whose marks
+    cannot be matched to its geometries, a dynamics run). None for one geometry of a run that ended as it should."""
+    if frames < 1:
+        return None
+    if ended in ("error", "cut"):
+        return ended
+    if frames < 2:
+        return None
+    return "path" if path_kind(data, text) in ("scan", "irc") else "unstated"
+
+
+# the density Gaussian's population analysis - its charges, its dipole - is of: "Population analysis using the SCF Density."
+GAUSSIAN_DENSITY = re.compile(r"Population analysis using the (\S+) density", re.I)
+# ORCA's dipole moment block, and the state it is of where it is an excited state's: "State              :   1"
+ORCA_DIPOLE = re.compile(r"^DIPOLE MOMENT\s*\n-+\s*\n(.*?)Total Dipole Moment", re.M | re.S)
+ORCA_STATE = re.compile(r"^State\s*:\s*(\d+)", re.M)
+# ORCA's population analysis of an excited state's relaxed density: "RELAXED CIS/TDA DENSITY POPULATION ANALYSIS" over "IROOT 1"
+ORCA_ROOT_POPULATION = re.compile(r"DENSITY POPULATION ANALYSIS\s*\n\s*IROOT\s+(\d+)")
+
+
+def density_states(data, text, program):
+    """Of a job with excited states (`etenergies`), which state its dipole, its charges and its orbitals are of, as
+    the output says: "ground state", "excited state 1" - or "" where it does not say, so that they are left out. For
+    a job with none: None each, said as ever. The orbitals are always the ground state's (its SCF's)."""
+    if not has(data, "etenergies"):
+        return (None, None, None)
+    text = text or ""
+    if program == "gaussian":
+        found = GAUSSIAN_DENSITY.findall(text)
+        state = "ground state" if found and found[-1].upper() == "SCF" else ""
+        return (state, state, "ground state")
+    if program == "orca":
+        blocks = ORCA_DIPOLE.findall(text)
+        root = ORCA_STATE.search(blocks[-1]) if blocks else None
+        dipole = "" if not blocks else f"excited state {root.group(1)}" if root else "ground state" if re.search(r"^Method\s*:\s*SCF\b", blocks[-1], re.M) else ""
+        # (the charges cclib reads are the last population analysis's: an excited state's where a relaxed density's
+        # heading - its root - stands just over it)
+        head = text[:text.rfind("MULLIKEN ATOMIC CHARGES")].rfind("ORCA POPULATION ANALYSIS")
+        root = ORCA_ROOT_POPULATION.search(text[max(0, head - 400):head]) if head >= 0 else None
+        charges = "" if head < 0 else f"excited state {root.group(1)}" if root else "ground state"
+        return (dipole, charges, "ground state")
+    return ("", "", "ground state")
+
+
+def of_state(results, state, only=None):
+    """Results said to be of the state they are (`density_states`): their labels so, or left out where the output
+    does not say which; as they are where the job has no excited states. `only`, the one result this is of."""
+    if state is None:
+        return results
+    out = []
+    for r in results:
+        if only and r.get("id") != only:
+            out.append(r)
+        elif state:
+            out.append({**r, "label": f"{r['label']}, {state}"})
+    return out
 
 
 def excited_path(data, frames):
@@ -811,7 +911,7 @@ def op_read_jobs(m):
     jobs = []
     for k, t in enumerate(texts):
         try:
-            out = op_read({**m, "text": t})
+            out = op_read({**m, "text": t, "followed": k < len(texts) - 1})
         except Exception:  # noqa: BLE001 - a job left out, the others read
             continue
         out["job"] = {"number": k + 1, "of": len(texts), "kind": job_kind(out)}
