@@ -1,6 +1,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useState } from "react";
-import { clearFinishedJobs, computerCores, computerResources, finished, finishedJobsBytes, keptText, limitsOf, listJobs, runningOf } from "../../../lib/jobs";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { chooseJobsFolder, clearFinishedJobs, computerCores, computerResources, finished, finishedJobsBytes, jobsFolder, keptText, limitsOf, listJobs, runningOf, type JobsFolder } from "../../../lib/jobs";
 import type { Option, OptionValues } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import OptionRows from "../../options/OptionRows";
@@ -50,6 +51,21 @@ export default function JobSettings() {
     });
   };
 
+  // where jobs are made: a working folder chosen, or Meno's own (changed only while none waits or runs) - one chosen
+  // and not there said so, never another taken in its place
+  const [folder, setFolder] = useState<JobsFolder | null>(null);
+  const [folderWhy, setFolderWhy] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isTauri()) return;
+    jobsFolder().then(setFolder, () => {});
+  }, []);
+  const choose = async (own: boolean) => {
+    setFolderWhy(null);
+    const path = own ? null : await openDialog({ directory: true, multiple: false, title: "Where jobs run" }).catch(() => null);
+    if (!own && typeof path !== "string") return;
+    chooseJobsFolder(path).then(setFolder, (e) => setFolderWhy(String(e)));
+  };
+
   // the finished jobs whose files are kept, and the bytes they hold
   const [kept, setKept] = useState<number | null>(null);
   const [bytes, setBytes] = useState<number | null>(null);
@@ -76,9 +92,36 @@ export default function JobSettings() {
   return (
     <div className="rounded-lg border border-gh-line bg-white divide-y divide-gh-line/60">
       <OptionRows options={options} values={values} onChange={change} />
+      {folder && (
+        <div className="py-2 pl-3 pr-3 flex items-center gap-3">
+          <span className="min-w-0 flex-1 text-sm text-gh-black">
+            Where jobs run
+            <span className="block text-xs text-gh-gray truncate" title={folder.path}>
+              {folder.own ? "Meno's own folder" : folder.path}
+            </span>
+            {folder.missing && <span className="block text-xs text-accel-accent">Not there now: no job runs until it is, or another is chosen</span>}
+            {folderWhy && <span className="block text-xs text-accel-accent">{folderWhy}</span>}
+            <span className="block text-xs text-gh-gray">Best on this computer's own disk: a network or synced folder may lose a job's files as it runs</span>
+          </span>
+          <button onClick={() => void choose(false)} className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base">
+            Choose…
+          </button>
+          {!folder.own && (
+            <button onClick={() => void choose(true)} className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base">
+              Meno's own
+            </button>
+          )}
+        </div>
+      )}
       {kept != null && (
         <div className="py-2 pl-3 pr-3 flex items-center gap-3">
-          <span className="min-w-0 flex-1 text-sm text-gh-black">Finished jobs' files</span>
+          <span className="min-w-0 flex-1 text-sm text-gh-black">
+            Finished jobs' files
+            {/* (what Clear takes: every workspace's, and in a folder chosen, whoever else runs jobs there) */}
+            {folder && !folder.own && (
+              <span className="block text-xs text-gh-gray">Clear takes every finished job in the folder above, whichever workspace or computer ran it, and those in Meno's own</span>
+            )}
+          </span>
           <span className="text-xs text-gh-gray tabular-nums">
             {keptText(kept, bytes)}
           </span>

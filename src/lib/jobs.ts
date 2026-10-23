@@ -28,6 +28,8 @@ export type Job = {
   code?: number;
   /** Why it failed, where it failed before its program could say. */
   why?: string;
+  /** Its key, as Meno asked for it with one (lib/jobKeys). */
+  key?: string;
 };
 
 /** A file written into a job's folder before it starts, by its path there. */
@@ -49,6 +51,10 @@ export type JobAsk = {
   path?: string;
   /** Programs installed beside its own to run after it, by their names in its manifest (`installed[].beside`), with their arguments. */
   then?: { program: string; args: string[] }[];
+  /** Its key (lib/jobKeys), kept with it: what Meno checks it by when it takes it up. */
+  key?: string;
+  /** What it is called, in words - its entry's name and its step's (`water Optimise`): its folder is named from it, path-safe (`water-optimise-3f9a2c1d`). */
+  label?: string;
   /** The files of its folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (lib/doc/keptJobs). */
   reads?: string[];
 };
@@ -66,6 +72,10 @@ export const readJobLog = (id: string, from: number) => runnerOf(id).log(id, fro
 /** The files in a job's folder, by their paths there. */
 export const jobFiles = (id: string) => runnerOf(id).files(id);
 export const readJobFile = (id: string, name: string) => runnerOf(id).read(id, name);
+/** What a job gave, as one digest - compared when it is taken up again. */
+export const jobDigest = (id: string) => runnerOf(id).digest(id);
+/** A program installed separately as it is now, for a job's key: where it is, its size, and when it was written. */
+export const programStamp = (path: string) => invoke<string>("program_stamp", { path });
 /** Where a job's files are, for *Show files*. */
 export const jobFolder = (id: string) => runnerOf(id).folder(id);
 
@@ -104,6 +114,19 @@ export function keptText(kept: number, bytes: number | null): string {
   if (kept === 0) return "None";
   return `${kept === 1 ? "1 job" : `${kept} jobs`}${bytes == null ? "" : bytes >= 1e9 ? `, ${(bytes / 1e9).toFixed(1)} GB` : `, ${Math.max(1, Math.round(bytes / 1e6))} MB`}`;
 }
+
+/** Where this computer's jobs are made (Settings, *Calculations*, *Jobs*). */
+export type JobsFolder = {
+  /** The working folder chosen (Meno makes its `meno-jobs` in it), or Meno's own. */
+  path: string;
+  own: boolean;
+  /** The folder chosen is not there - a drive not connected, say: no job is made until it is, or another is chosen. */
+  missing: boolean;
+};
+/** The working folder this computer's jobs are made in, whether it is Meno's own, and whether it is there. */
+export const jobsFolder = () => invoke<JobsFolder>("jobs_folder");
+/** Jobs made in a working folder chosen - or in Meno's own again (null): refused, saying why, while any job waits or runs. */
+export const chooseJobsFolder = (path: string | null) => invoke<JobsFolder>("jobs_folder_choose", { path });
 
 /** This computer's cores, and its memory in MiB (nought where it could not be told), as its system says. */
 export const computerResources = () => invoke<{ cores: number; memory: number }>("computer_resources");

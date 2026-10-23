@@ -242,6 +242,11 @@ function measureDrawing(input: LayoutInput, mol: Molecule, out: Layout2D): Layou
   });
 }
 
+/** How a whole drawing measures, as it will be drawn (`measureDrawing`): for a drawing made by other means than `layout2D` (around.ts). */
+export function measureLaidOut(input: LayoutInput, out: Layout2D): LayoutMetrics {
+  return measureDrawing(input, perceive(input), out);
+}
+
 /** How well a whole drawing reads (`measureDrawing`). */
 function drawingScore(input: LayoutInput, mol: Molecule, out: Layout2D): number {
   return measureDrawing(input, mol, out).score;

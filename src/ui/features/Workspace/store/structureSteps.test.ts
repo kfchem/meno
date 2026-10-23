@@ -11,14 +11,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Atom, DrawnRecord, Model } from "./types";
 
 /** What the plugin was asked - the step, each structure's blocks, the options - and what it answers, by the test. */
-const asked: { step: string; entries: { molblocks: string[] }[]; options: Record<string, unknown>; holds: string }[] = [];
+const asked: { step: string; entries: { molblocks: string[] }[]; options: Record<string, unknown>; holds: string; ms?: number }[] = [];
 let answer: (entries: { molblocks: string[] }[]) => unknown = () => ({});
 
 vi.mock("../../../../lib/calc/workers", async (actual) => ({
   ...(await actual<typeof import("../../../../lib/calc/workers")>()),
   pluginClient: async () => ({
-    run: async (step: string, entries: { molblocks: string[] }[], options: Record<string, unknown>, holds: string) => {
-      asked.push({ step, entries, options, holds });
+    run: async (step: string, entries: { molblocks: string[] }[], options: Record<string, unknown>, holds: string, ms?: number) => {
+      asked.push({ step, entries, options, holds, ms });
       return answer(entries);
     },
   }),
@@ -126,6 +126,9 @@ describe("a plugin's step on structures drawn", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0].entries).toHaveLength(51);
     expect(asked[0].entries.every((e) => e.molblocks.length === 1)).toBe(true);
+    // (half a minute for each, its stereoisomers each tried in 3D - more than a request's own two minutes - but
+    //  never more than ten: a structure looked at too long is set aside alone by the plugin)
+    expect(asked[0].ms).toBe(10 * 60_000);
     expect(st().steps.find((s) => s.id === check)!.ran).toMatchObject({ ok: true, said: "51 of 51 kept" });
     expect(st().sets.find((b) => b.made?.step === check && b.made.exit === "out")!.drawnCollection).toHaveLength(51);
   });
@@ -134,7 +137,7 @@ describe("a plugin's step on structures drawn", () => {
     answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"] }, { aside: "an allene's axis left open", kind: "axis" }] });
     const { step, out, rest, model } = await ran("stereoisomers");
     expect(asked).toHaveLength(1);
-    expect(asked[0]).toMatchObject({ step: "stereoisomers", holds: "structures", options: { open: "every" } });
+    expect(asked[0]).toMatchObject({ step: "stereoisomers", holds: "structures", options: { open: "every" }, ms: 120_000 });
     expect(asked[0].entries.map((e) => e.molblocks.length)).toEqual([1, 1, 1]);
     expect(asked[0].entries[1].molblocks[0]).toMatch(/V3000|V2000/);
     expect(step.ran).toMatchObject({ ok: true, said: "3 in · 3 out · 2 made from 1 · 1 set aside (1: axis)" });
