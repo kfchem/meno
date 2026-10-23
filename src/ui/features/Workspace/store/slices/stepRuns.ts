@@ -30,12 +30,12 @@ import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { drawnEntries, energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
 import { drawingOf } from "../../chem/fromSmiles";
-import type { Property } from "../../../../../lib/entry";
+import type { By, Property } from "../../../../../lib/entry";
 import { styleOf } from "../../../../../lib/chem/style";
 import { runMenoInTurns } from "../../workflow/meno";
 import { perceiveStereo } from "../../workflow/configurations";
 import { askerFor } from "../../workflow/configurationsAsker";
-import type { EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
+import type { DrawnRecord, EditorState, JobSeen, StepJob, StepRan, StepRunning, Turn3D, WorkflowStep } from "../types";
 import { askOf, finishEntry } from "../../render/renderOptions";
 import { progressOf, SCENE } from "../../render/renders";
 import { renderScene } from "../../render/renderScene";
@@ -529,7 +529,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures"), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
-      for (const a of answers) made.push("made" in a ? await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: await drawingOf(block, style) }))) : []);
+      for (const [i, a] of answers.entries()) {
+        if (!("made" in a)) {
+          made.push([]);
+          continue;
+        }
+        // (each made one drawn as Meno draws a SMILES's - one that cannot be, its structure set aside whole, saying so)
+        try {
+          made.push(await Promise.all(a.made.map(async (block) => ({ place: 0, drawn: await drawingOf(block, style) }))));
+        } catch {
+          made.push([]);
+          answers[i] = { aside: "what it was made into could not be drawn", kind: "drawing" };
+        }
+      }
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -537,6 +549,22 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const carried = (e: DrawnEntry) => {
       const { status: _status, ...rest } = e.record ?? {};
       return Object.keys(rest).length ? rest : undefined;
+    };
+    // (one made anew - a stereoisomer of it - is another structure: none of the values worked out of the one it was made
+    //  of, which were not of it, but what that came from; which of how many it is, and its own SMILES; and that one's
+    //  SMILES, where it had one, as what it was made from)
+    const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
+      const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
+      const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
+      const parent = e.record?.properties?.smiles?.value;
+      return {
+        ...(e.record?.from?.length ? { from: e.record.from } : {}),
+        properties: {
+          made: said(`${k + 1} of ${a.made.length}`),
+          ...(a.smiles ? { smiles: said(a.smiles[k]) } : {}),
+          ...(typeof parent === "string" ? { made_from: said(parent) } : {}),
+        },
+      };
     };
     // (each value as an entry's property: worked out by the plugin, its version and the program it runs, and how)
     const program = plugin.uses?.[0] ? `${plugin.uses[0].name} ${plugin.uses[0].version}` : undefined;
@@ -557,7 +585,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             ? { ...e, record: { ...e.record, properties: { ...e.record?.properties, ...Object.fromEntries(Object.entries(a.properties).map(([name, p]) => [name, valueOf(p)])) } } }
             : e,
         );
-      else if ("made" in a) for (const m of made[i]) kept.push({ place: kept.length, drawn: m.drawn, ...(carried(e) ? { record: carried(e) } : {}) });
+      else if ("made" in a) made[i].forEach((m, k) => kept.push({ place: kept.length, drawn: m.drawn, record: madeRecord(e, k, a) }));
       else aside.push({ ...e, record: { ...carried(e), status: { aside: a.aside } } });
     });
     doc.edit("run", (x) => ranAs(x, id, { ok: true, holds: "structures", kept, aside, said: drawnSaid(answers) }, key, { ...w, byOf, now: at }));

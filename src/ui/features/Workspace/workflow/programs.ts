@@ -364,10 +364,11 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
 /**
  * What a plugin's step on structures drawn said of one of them (`run`,
  * docs/PLUGINS.md, *Steps on structures drawn*): kept as drawn; made anew,
- * as drawings - a MOL block each, its stereoisomers, say; or set aside,
- * why and what kind of reason it is.
+ * as drawings - a MOL block each, its stereoisomers, say, and each one's
+ * own SMILES beside, where given; or set aside, why and what kind of
+ * reason it is.
  */
-export type DrawnAnswer = { as: "drawn"; properties?: Record<string, DrawnValue> } | { made: string[] } | { aside: string; kind: string };
+export type DrawnAnswer = { as: "drawn"; properties?: Record<string, DrawnValue> } | { made: string[]; smiles?: string[] } | { aside: string; kind: string };
 /** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
 export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };
 
@@ -397,7 +398,12 @@ export function readDrawnAnswers(raw: unknown, count: number): DrawnAnswer[] | s
       }
       out.push({ as: "drawn", properties });
     }
-    else if (Array.isArray(a?.made) && a.made.length && a.made.length <= MADE_OF_ONE && a.made.every((b) => typeof b === "string" && b.length)) out.push({ made: a.made as string[] });
+    else if (Array.isArray(a?.made) && a.made.length && a.made.length <= MADE_OF_ONE && a.made.every((b) => typeof b === "string" && b.length)) {
+      // (each one's own SMILES, where given one for each: else none)
+      const smiles = (a as { smiles?: unknown }).smiles;
+      const named = Array.isArray(smiles) && smiles.length === a.made.length && smiles.every((x) => typeof x === "string" && x.length && x.length <= 2000);
+      out.push({ made: a.made as string[], ...(named ? { smiles: smiles as string[] } : {}) });
+    }
     else if (typeof a?.aside === "string" && a.aside.trim()) out.push({ aside: a.aside.trim().slice(0, 200), kind: typeof a.kind === "string" && a.kind.trim() ? a.kind.trim().slice(0, 40) : "other" });
     else return "It said nothing Meno can take";
   }

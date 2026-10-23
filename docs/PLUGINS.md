@@ -840,14 +840,20 @@ The same for every plugin and for Meno's own parts:
     works numbers out of it (*Descriptors*): each `{value, unit, method}`,
     its unit from Meno's units table (g/mol and Å² among them) or "none",
     kept on its record as `computed` by the plugin, its version, the
-    program and the method; `{"made": [block, ...]}`, made anew
-    as drawings (V3000, laid out in 2D, wedged), which Meno reads and
-    lays out as it does a SMILES's (`chem/fromSmiles` `drawingOf`), at most
-    64 of one; or `{"aside": why, "kind": kind}`, set aside, why in a few
-    plain words and a short kind to count it by on the step's line
-    (*3 set aside (2: radical; 1: parts)*). A made one keeps the record
-    of the one it was made of (WORKFLOWS.md, *A structure drawn's
-    record*); one set aside, its status saying why. An answer that is
+    program and the method; `{"made": [block, ...], "smiles":
+    [...]}`, made anew as drawings (V3000, laid out in 2D, wedged), each
+    one's own SMILES beside it, which Meno reads and lays out as it does a
+    SMILES's (`chem/fromSmiles` `drawingOf`), at most 64 of one - one it
+    cannot draw sets the structure aside whole, *could not be drawn*; or
+    `{"aside": why, "kind": kind}`, set aside, why in a few plain words
+    and a short kind to count it by on the step's line (*3 set aside (2:
+    radical; 1: parts)*). A made one is another structure, with a record
+    of its own (WORKFLOWS.md, *A structure drawn's record*): what the one
+    it was made of came from (`from`), which of how many it is (`made`:
+    *1 of 2*), its own SMILES (`smiles`) and that of the one it was made of
+    (`made_from`), where that had one - never that one's values, which
+    were not worked out of it (an NLL of a SMILES with its stereo left
+    open). One set aside keeps its record, its status saying why. An answer that is
     not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given

@@ -2265,6 +2265,8 @@ def check_one(blocks, keep):
     RDKit cannot make sense of otherwise), a part with no electrons (H+), or
     a radical - else None. Nothing in it is changed."""
     mol = drawing_of_parts(blocks)
+    # (Meno gives V3000 blocks, in which a lone H+ reads and is found below as having no electrons; given as V2000, RDKit
+    #  reads no lone H+, and it is set aside here, as not read - set aside all the same)
     if mol is None:
         return ("it could not be read", "unreadable")
     if "parts" not in keep and len(blocks) > 1:
@@ -2332,9 +2334,9 @@ def stereoisomers_one(blocks, aside):
         return {"as": "drawn"}
     if aside:
         return {"aside": f"stereo left open: {len(made)} stereoisomers", "kind": "stereo open"}
-    # (in a fixed order: by each one's SMILES)
+    # (in a fixed order: by each one's SMILES - and each one's own SMILES given beside it)
     made.sort(key=Chem.MolToSmiles)
-    return {"made": [drawing_block(Chem.Mol(x)) for x in made]}
+    return {"made": [drawing_block(Chem.Mol(x)) for x in made], "smiles": [Chem.MolToSmiles(x) for x in made]}
 
 
 def step_stereoisomers(entries, options):

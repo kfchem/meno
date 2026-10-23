@@ -24,13 +24,16 @@ vi.mock("../../../../lib/calc/workers", async (actual) => ({
   }),
 }));
 
-/** A drawing made of a block, as Meno's engine lays one out: here, the block's name as its one carbon's label, two atoms apart. */
+/** A drawing made of a block, as Meno's engine lays one out: here, the block's name as its one carbon's label, two atoms apart - one called "undrawable", none. */
 vi.mock("../chem/fromSmiles", async (actual) => ({
   ...(await actual<typeof import("../chem/fromSmiles")>()),
-  drawingOf: async (block: string): Promise<Model> => ({
+  drawingOf: async (block: string): Promise<Model> => {
+    if (block === "undrawable") throw new Error("it could not be laid out");
+    return {
     atoms: [{ id: 1, el: "C", x: 0, y: 0, label: block } as never, { id: 2, el: "O", x: 1.5, y: 0 } as never],
     bonds: [{ id: 3, a: 1, b: 2, order: 1 } as never],
-  }),
+    };
+  },
 }));
 
 import { connectStoreToDocument, createEditorStore } from ".";
@@ -112,13 +115,32 @@ describe("a plugin's step on structures drawn", () => {
     expect(rest!.records).toEqual([{ status: { aside: "an allene's axis left open" } }]);
   });
 
-  it("keeps each one's record: as drawn, its own; made anew, the one's it was made of; set aside, saying why", async () => {
-    answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"] }, { aside: "a radical", kind: "radical" }] });
+  it("keeps each one's record: as drawn, its own; made anew, one of its own - what it came from, which of how many, its SMILES - never the values of the one it was made of; set aside, saying why", async () => {
+    answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "iso-2"], smiles: ["C[C@H](O)CC", "C[C@@H](O)CC"] }, { aside: "a radical", kind: "radical" }] });
     const old: DrawnRecord = { ...NLL, status: { aside: "an earlier step's word" } };
-    const { out, rest } = await ran("check-structures", [NLL, NLL, old]);
-    expect(out!.records).toEqual([NLL, NLL, NLL]);
+    const parent: DrawnRecord = { from: ["seed-1"], properties: { ...NLL.properties, smiles: { value: "CC(O)CC", unit: "none", status: "computed" } } };
+    const { out, rest } = await ran("stereoisomers", [NLL, parent, old]);
+    const by = { plugin: "rdkit", version: expect.any(String), program: expect.any(String), method: "Stereoisomers: 2 made of one" };
+    const own = (k: string, smiles: string) => ({
+      from: ["seed-1"],
+      properties: {
+        made: { value: k, unit: "none", status: "computed", by },
+        smiles: { value: smiles, unit: "none", status: "computed", by },
+        made_from: { value: "CC(O)CC", unit: "none", status: "computed", by },
+      },
+    });
+    // (the NLL was the one's it was made of, its stereo left open: not the stereoisomer's own)
+    expect(out!.records).toEqual([NLL, own("1 of 2", "C[C@H](O)CC"), own("2 of 2", "C[C@@H](O)CC")]);
     // (what it came in with of its status is the earlier step's: this one's own said in its place)
     expect(rest!.records).toEqual([{ from: ["seed-1"], properties: NLL.properties, status: { aside: "a radical" } }]);
+  });
+
+  it("sets aside, whole, one whose stereoisomers could not be drawn - the rest as they were", async () => {
+    answer = () => ({ structures: [{ as: "drawn" }, { made: ["iso-1", "undrawable"] }, { as: "drawn" }] });
+    const { out, rest, step } = await ran("stereoisomers");
+    expect(out!.structures).toHaveLength(2);
+    expect(rest!.records).toEqual([{ status: { aside: "what it was made into could not be drawn" } }]);
+    expect(step.ran?.said).toContain("1 set aside (1: drawing)");
   });
 
   it("is given the options the plugin declares for Check structures, every finding set aside unless kept", async () => {

@@ -1309,6 +1309,8 @@ class StructureSteps(unittest.TestCase):
         made = [Chem.MolToSmiles(Chem.MolFromMolBlock(b)) for b in got[1]["made"]]
         self.assertEqual(made, sorted(made))
         self.assertEqual(sorted(made), ["CC[C@@H](C)O", "CC[C@H](C)O"])
+        # (each one's own SMILES beside it, in the same order: the stereoisomer's, not the one it was made of)
+        self.assertEqual(got[1]["smiles"], [Chem.MolToSmiles(Chem.MolFromMolBlock(b)) for b in got[1]["made"]])
         # (given, or a bridgehead its rings fix: nothing to make)
         self.assertEqual(got[2:], [{"as": "drawn"}, {"as": "drawn"}])
         # (the same every time)
