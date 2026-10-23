@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { atomsLeftOutMark, ESTIMATED_MARK, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
+import { atomsLeftOutMark, ESTIMATED_MARK, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -251,10 +251,13 @@ export function populations(energies: readonly number[], degeneracies?: readonly
  * step found them, or else by Boltzmann at room temperature (`populations`)
  * - none of only a part of a search's conformers (`partOf`), whose shares
  * of these alone would not be the compound's, nor where its energies are
- * not each frame's.
+ * not each frame's, nor where its marks of failed frames did not read
+ * (`marksUnread`).
  */
-export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies">): number[] | undefined {
+export function sharesOf(m: Pick<Molecule3D, "frames" | "shares" | "conformerSet" | "partOf" | "energies" | "degeneracies" | "marksUnread">): number[] | undefined {
   const n = 1 + (m.frames?.length ?? 0);
+  // (its file's marks of which frames failed did not read: whether each is a minimum is not known)
+  if (m.marksUnread) return undefined;
   if (m.shares?.length === n) return m.shares;
   return m.conformerSet && !m.partOf && m.energies?.length === n ? populations(m.energies, m.degeneracies) : undefined;
 }
@@ -1159,7 +1162,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
  * leaves out what the molecule has misleads): its hydrogens on carbon
  * hidden; its file's hydrogens missing; its bond orders not known - its
  * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
- * its file's it leaves out, their element not read.
+ * its file's it leaves out, their element not read; an optimisation it
+ * was opened from that never converged.
  */
 export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
@@ -1172,6 +1176,8 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
+    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy)] : []),
+    ...(m.notConverged ? [notConvergedMark(m.entryFrames?.length ?? 1)] : []),
     ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];
 }

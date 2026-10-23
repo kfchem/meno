@@ -13,19 +13,22 @@ import { heldJobFile, heldJobSource, showFilesSaid } from "../../workflow/keptJo
 import type { OptionValues } from "../../../../../lib/options";
 import { lookFor, tooOld } from "../../../../../lib/plugins/installed";
 import { stopWorker } from "../../../../../lib/plugins/process";
-import { pluginWorker } from "../../../../../lib/roles/worker";
+import { chemWorker, pluginWorker, rolePlugin } from "../../../../../lib/roles/worker";
+import type { By, Property } from "../../../../../lib/entry";
+import { drawingOf } from "../../chem/fromSmiles";
+import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, setEntries, skeletonsRefused, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
-import { kindInfo, optionsOf, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
+import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
-import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
+import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
 import { cubeGrid } from "../../../../../lib/calc/cube";
 import { resultKey, resultsOn } from "../../../../../lib/calc/results";
 import { energiesBy, keepRun, keptOf, laidOver, LAID_OVER, ranAs, resultsOf, runStep as runMenoStep, showRun, whyNot, withResults, type RunResults, type RunWith, type Worked } from "../../workflow/run";
@@ -169,6 +172,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (by === "meno") return void doc.edit("run", (x) => runMenoStep(x, id, { ...w, byOf, now: at }));
     const plugin = pluginById(by);
     if (!plugin) return void fail(id, "Nothing added does this step", at, key);
+    if (takesNothing(step.kind)) return runGenerate(id, plugin, at);
     if (step.kind === "conformers" && inputOf(d, id)?.holds === "structures") return searchDrawn(id, plugin, at);
     if (step.kind === "render") return renderEach(id, plugin, at);
     if (programsFor(step.kind, by).length) return runJobs(id, plugin, at);
@@ -497,6 +501,87 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       kind: step.kind,
       ...(step.options ? { options: step.options } : {}),
     });
+  }
+
+  /**
+   * How long a step that makes structures from nothing may take at once (ms): a model sampling, on a computer busy
+   * with other work. A wall-clock limit only ever fails the whole run: what one asking makes is the same however
+   * long it took.
+   */
+  const GENERATE_MS = 10 * 60_000;
+
+  /**
+   * A step that takes nothing in, a plugin's at once (`run`, with no entries: Generate's - docs/PLUGINS.md,
+   * *Generate*): what the model made, each SMILES read as one pasted is (the roles' `from_smiles`, then Meno's
+   * engine: chem/fromSmiles `drawingOf`) - its stereo as written, what it leaves open counted and kept on its
+   * record (`stereo_open`), never chosen - each a structure drawn of its own, its record holding the SMILES as
+   * given and the model's own values, named, and what made them. A SMILES that cannot be read is counted as not
+   * read, never dropped unsaid.
+   */
+  async function runGenerate(id: number, plugin: PythonPlugin, at: number): Promise<void> {
+    const d = doc.getState();
+    const step = stepOf(d, id)!;
+    const key = inputKey(d, step, plugin.id);
+    const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    let read;
+    try {
+      const client = await pluginClient(plugin);
+      read = readGenerated(await client.run(step.kind, [], options, "structures", GENERATE_MS));
+    } catch (e) {
+      return void fail(id, message(e), at, key);
+    }
+    if (typeof read === "string") return void fail(id, read, at, key);
+    if (!read.made.length) return void fail(id, read.said, at, key);
+    // (what made them: the plugin, its version - and the program, the model and how, as the plugin says)
+    const by: By = { ...read.by, plugin: plugin.id, version: plugin.version, ...(read.by.program ? { program: [read.by.program, read.by.version].filter(Boolean).join(" ") } : {}) };
+    const stereoBy: By = { plugin: rolePlugin("stereoisomers")?.id ?? "" };
+    const computed = (value: number | string | boolean, of: By): Property => ({ value, unit: "none", status: "computed", by: of });
+    const style = styleOf(get().docStyle);
+    const kept: DrawnEntry[] = [];
+    // (each not read, with why - the first few named on the step's line)
+    const notRead: { smiles: string; why: string }[] = [];
+    let open = 0;
+    let unexamined = 0;
+    try {
+      const smiles = await chemWorker("smiles");
+      const stereo = await chemWorker("stereoisomers");
+      for (const g of read.made) {
+        let block: string;
+        try {
+          block = (await smiles.request("from_smiles", { smiles: g.smiles })).molblock;
+        } catch (e) {
+          notRead.push({ smiles: g.smiles, why: unreadWhy(message(e)) });
+          continue;
+        }
+        // (only whether stereo is left open, and where: none of its stereoisomers tried in 3D, which Stereoisomers and Conformers do -
+        //  a structure it cannot be asked of is kept, its stereo said not examined, and the run goes on)
+        let unset: number | null = null;
+        try {
+          const left = await stereo.request("stereo_left_open", { molblock: block });
+          unset = left.atoms.length + left.bonds.length;
+        } catch {
+          unexamined++;
+        }
+        if (unset) open++;
+        const properties: Record<string, Property> = {
+          smiles: computed(g.smiles, by),
+          ...Object.fromEntries(Object.entries(g.properties).map(([name, p]) => [name, { value: p.value, unit: p.unit, status: "computed" as const, by }])),
+          ...(unset ? { stereo_open: computed(unset, stereoBy) } : {}),
+        };
+        kept.push({ place: kept.length, drawn: await drawingOf(block, style), record: { properties } });
+      }
+    } catch (e) {
+      return void fail(id, message(e), at, key);
+    }
+    if (!kept.length) return void fail(id, [read.said, "none could be read", ...(notRead.length ? [notReadSaid(notRead)] : [])].join(" \u00b7 "), at, key);
+    const said = [
+      read.said,
+      `${kept.length} made`,
+      ...(open ? [`${open} with stereo left open`] : []),
+      ...(unexamined ? [`${unexamined} with stereo not examined`] : []),
+      ...(notRead.length ? [notReadSaid(notRead)] : []),
+    ].join(" \u00b7 ");
+    doc.edit("run", (x) => ranAs(x, id, { ok: true, holds: "structures", kept, aside: [], said }, key, { ...w, byOf, now: at }));
   }
 
   /** A step a plugin does at once on the entries that came in (`run`): those it keeps, the rest set aside. */

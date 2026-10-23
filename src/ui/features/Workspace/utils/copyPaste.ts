@@ -25,7 +25,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { imaginaryOf, readCalc } from "../../../../lib/calc/output";
+import { imaginaryOf, readCalc, UNMARKED, type Unmarked } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -619,6 +619,27 @@ function stackOf(given: unknown): Carried3D["stack"] | undefined {
 }
 
 /**
+ * A molecule's entries as its record gives them (`Molecule3D.entryFrames`,
+ * `noEntryWhy`), of `frames` frames after its first: none said, every frame
+ * one. Given, each one it has, in order, once - or none, with why where it
+ * was said - each by its place among the geometries kept (`keep`). Given
+ * but not readable so, none is one, "which are could not be read": what
+ * counts as an entry is never widened.
+ */
+function entriesRead(entryFrames: unknown, why: unknown, keep: readonly boolean[]): Pick<Molecule3D, "entryFrames" | "noEntryWhy"> {
+  if (entryFrames === undefined) return {};
+  const reads = Array.isArray(entryFrames) && entryFrames.every((f, k, all) => Number.isInteger(f) && f >= 0 && f < keep.length && (k === 0 || f > all[k - 1]));
+  if (!reads) return { entryFrames: [], noEntryWhy: "unread" };
+  // (each by its place among the geometries kept - one left out, the entry with it: none, where none is left, is said)
+  const at = new Map<number, number>();
+  keep.forEach((k, i) => k && at.set(i, at.size));
+  const kept = (entryFrames as number[]).flatMap((f) => (at.has(f) ? [at.get(f)!] : []));
+  if (entryFrames.length && !kept.length) return { entryFrames: [], noEntryWhy: "unread" };
+  const said = !kept.length && UNMARKED.includes(why as Unmarked) ? { noEntryWhy: why as Unmarked } : {};
+  return { entryFrames: kept, ...said };
+}
+
+/**
  * A molecule's calculation as a file carries it, its results of frames
  * made those of the frames kept (`keep`, by geometry - the first, then each
  * frame): a value of each frame left out taken out with it, and a row of a
@@ -706,6 +727,14 @@ export function readCarried3D(given: unknown): Carried3D | null {
   // (a ligand's atoms whose orders are unknown: each that is one of its own kept, any other said - never all dropped for one)
   const unknownOrders = Array.isArray(m.unknownOrders) ? m.unknownOrders.filter(index) : [];
   if (m.unknownOrders !== undefined && (!Array.isArray(m.unknownOrders) || unknownOrders.length < m.unknownOrders.length)) leftOut("bondOrders");
+  // (which frames failed, and which are no minimum: marks that do not read are left out - said - and the molecule kept,
+  // marked so, never its frames shown as fine, which a step after it would weigh as minima)
+  const failedRead = failedOf(m.failed, keep);
+  const imaginaryRead = imaginaryFrames(m.imaginary, keep);
+  const marksUnread = failedRead === null || imaginaryRead === null || m.marksUnread === true;
+  if (failedRead === null || imaginaryRead === null) leftOut("frameMarks");
+  const failed = marksUnread ? undefined : failedRead;
+  const imaginary = marksUnread ? undefined : imaginaryRead;
   return {
     atoms: atoms as Carried3D["atoms"],
     bonds: bonds as Carried3D["bonds"],
@@ -735,6 +764,10 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(unknownOrders.length ? { unknownOrders } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
+    // (the geometries an opened optimisation or scan converged on: each one it has, in order, once - or none, where
+    // none did. Where that does not read, none is an entry, and that is said: never every one)
+    ...entriesRead(m.entryFrames, m.noEntryWhy, keep),
+    ...(m.notConverged === true ? { notConverged: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
     ...(() => {
       const left = (Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? (m.framesLeftOut as number) : 0) + framesDropped;
@@ -749,11 +782,12 @@ export function readCarried3D(given: unknown): Carried3D | null {
       const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
       return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
     })(),
+    ...(failed ? { failed } : {}),
+    ...(imaginary ? { imaginary } : {}),
+    ...(marksUnread ? { marksUnread: true as const } : {}),
     ...(() => {
-      const failed = failedOf(m.failed, keep);
-      const imaginary = imaginaryFrames(m.imaginary, keep);
       const mirrors = mirrorsOf(m.mirrors, keep, n);
-      return { ...(failed ? { failed } : {}), ...(imaginary ? { imaginary } : {}), ...(mirrors ? { mirrors } : {}) };
+      return mirrors ? { mirrors } : {};
     })(),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
@@ -770,20 +804,33 @@ function mirrorsOf(given: unknown, keep: boolean[], atoms: number): (number[] | 
   return out.some(Boolean) ? out : undefined;
 }
 
-/** Why each of a molecule's frames failed in the step that made it, where one did - one for each, null where it did not - of core's kinds (workflow/failures); of the frames kept, those left out with theirs. */
-function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | undefined {
-  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
-  const out = given.filter((_, i) => keep[i]).map((f): Failure | null => {
-    const g = f as { kind?: unknown; why?: unknown } | null;
-    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
+/**
+ * Why each of a molecule's frames failed in the step that made it, where one
+ * did - one for each, null where it did not - of core's kinds
+ * (workflow/failures); of the frames kept, those left out with theirs. None
+ * where none is marked; null where the marks do not read - not one for each
+ * frame, or one that is neither a failure nor null.
+ */
+function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((f): Failure | null | undefined => {
+    if (f === null) return null;
+    const g = f as { kind?: unknown; why?: unknown };
+    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : undefined;
   });
+  if (read.some((f) => f === undefined)) return null;
+  const out = (read as (Failure | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
 }
 
-/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them. */
-function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | undefined {
-  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
-  const out = given.filter((_, i) => keep[i]).map((f) => imaginaryOf(f) ?? null);
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them: none where none is marked; null where the marks do not read (`failedOf`). */
+function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((f) => (f === null || (Array.isArray(f) && !f.length) ? null : (imaginaryOf(f) ?? undefined)));
+  if (read.some((f) => f === undefined)) return null;
+  const out = (read as (number[] | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
 }
 

@@ -20,7 +20,7 @@ import type { Role3D } from "../../../../lib/chem/style3d";
 import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
-import type { CalcInfo } from "../../../../lib/calc/output";
+import type { CalcInfo, Unmarked } from "../../../../lib/calc/output";
 import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
@@ -424,6 +424,13 @@ export type Molecule3D = {
    * by frame - null, none. A single geometry's are its calculation's own.
    */
   imaginary?: (number[] | null)[];
+  /**
+   * Its file's marks of which frames failed, or are no minimum (`failed`,
+   * `imaginary`), did not read: kept as such - its frames' state not known,
+   * so that no step weighs one as a minimum (utils/copyPaste
+   * `readCarried3D`, workflow/meno `notAllMinima`).
+   */
+  marksUnread?: true;
   /** Each frame's energy, where its file gives one, in hartrees: the first frame's first. */
   energies?: number[];
   /** Switched to the 3D style's secondary look; unset, drawn in its primary. */
@@ -556,6 +563,25 @@ export type Molecule3D = {
    * that one entry, not as many compounds.
    */
   path?: true;
+  /**
+   * Of an opened optimisation's or relaxed scan's geometries - its own
+   * first, then its frames, from 0 - those the run found converged, which a
+   * set takes as its entries: an optimisation's last, a scan's each point.
+   * The rest are steps on the way, shown, never entries; empty, where none
+   * converged. None where every geometry is one (docs/WORKFLOWS.md,
+   * *Compound sets and conformer sets*).
+   */
+  entryFrames?: number[];
+  /** An opened optimisation or scan whose last point never converged - stopped, or cut short: that point no entry, and said so over it (completeness `notConvergedMark`). */
+  notConverged?: true;
+  /**
+   * Why none of its geometries is an entry, where it is not that none
+   * converged (lib/calc/output `Unmarked`): the run did not end as it
+   * should, they are the points of a scan or a reaction path, the file does
+   * not say which converged, or which did could not be read. Said over it
+   * (completeness `entriesMark`).
+   */
+  noEntryWhy?: Unmarked;
 };
 /**
  * A text the workspace holds - a file opened as text, an output shown -
