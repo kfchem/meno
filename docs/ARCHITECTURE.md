@@ -870,7 +870,10 @@ started's), to say which plugin would read it (`lib/calc/probe.ts`
   calculation was, the readers that read it and its results are kept on
   the molecule (`calc`, saved in `.meno` and read back by `readCalc` as a
   plugin's are), so that they show as they were where no reader is
-  added.
+  added. A record with any one-value field not as Meno writes it (a charge
+  that is not a whole number, a program that is no words) is refused whole
+  and counted among those that could not be read, never read back without
+  that field.
 - Where results show (3c), as the look stays as it is: the molecule's -
   and the frame's shown - above the frames chip, as its text is pointed at,
   its line saying the ranked ones (`Frames3D`); an atom's, or a bond's, on a

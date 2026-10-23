@@ -852,7 +852,11 @@ The same for every plugin and for Meno's own parts:
     kept on its record as `computed` by the plugin, its version, the
     program and the method; `{"made": [block, ...], "smiles":
     [...]}`, made anew as drawings (V3000, laid out in 2D, wedged), each
-    one's own SMILES beside it, which Meno reads and lays out as it does a
+    one's own SMILES beside it - with `"properties"` too, as above, where
+    the step said something of each it made alike (RDKit's *Stereoisomers*:
+    `stereo_not_enumerated`, a C=N whose E/Z it left alone, and why:
+    WORKFLOWS.md, *C=N double bonds whose E/Z is none of their own*) -
+    which Meno reads and lays out as it does a
     SMILES's (`chem/fromSmiles` `drawingOf`), at most 64 of one - one it
     cannot draw sets the structure aside whole, *could not be drawn*; or
     `{"aside": why, "kind": kind}`, set aside, why in a few plain words

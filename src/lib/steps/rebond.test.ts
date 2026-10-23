@@ -5,6 +5,7 @@ import { dielsAlder } from "../chem/reactionMap.fixtures";
 import type { Entry } from "../entry";
 import { speciesOf } from "../io/writers";
 import { rebonded } from "./rebond";
+import { structureKey } from "./restructure";
 
 /** An entry of a molecule, in its own numbering. */
 const entryOf = (m: Molecule, id: string, group?: string): Entry => ({
@@ -50,6 +51,44 @@ describe("Re-bond", () => {
     expect(r.entry.properties.energy.at?.geometry).toBe("aaaa0001");
     expect(r.entry.properties.product.value).toBe("p-1");
     expect(r.entry.properties.group.value).toBe("rc1 → p1");
+  });
+
+  it("lets a value of a geometry and a label ride, and marks a value of the structure either was - now another - not applicable, saying so", () => {
+    const g = entryOf(reactant, "rc1");
+    const b = entryOf(product, "p1");
+    // (a value of a geometry; labels - a Tag's ID, restraints; values of each structure, as a descriptor writes them)
+    g.properties.energy = { value: -234.1, unit: "Eh", at: { geometry: "aaaa0001" }, status: "computed" };
+    g.properties.start = { value: "start-1", unit: "none", status: "computed" };
+    b.properties.restraints = { value: { restraints: [{ kind: "distance", atoms: [0, 10], value: 1.6, strength: 1 }] }, unit: "none", status: "computed" };
+    g.properties.mw = { value: 136.24, unit: "g/mol", of: structureKey(g), status: "computed" };
+    b.properties.tpsa = { value: 0, unit: "none", of: structureKey(b), status: "computed" };
+    g.properties.logp = { value: 3.1, unit: "none", of: structureKey(g), status: { failed: "not worked out" } };
+    const r = rebonded(g, b, "e1");
+    if ("failed" in r) throw new Error(r.failed);
+    // (rides, naming its own geometry)
+    expect(r.entry.properties.energy).toEqual(g.properties.energy);
+    // (labels ride as they are)
+    expect(r.entry.properties.start).toEqual(g.properties.start);
+    expect(r.entry.properties.restraints).toEqual(b.properties.restraints);
+    // (the reactant's structure is not the entry's: its value kept, marked, and said)
+    expect(r.entry.properties.mw).toEqual({ ...g.properties.mw, status: { notApplicable: "worked out on the structure before Re-bond" } });
+    // (the bonding's structure is the entry's: as it was)
+    expect(r.entry.properties.tpsa).toEqual(b.properties.tpsa);
+    expect(structureKey(r.entry)).toBe(structureKey(b));
+    // (one that never was worked out keeps its own reason)
+    expect(r.entry.properties.logp.status).toEqual({ failed: "not worked out" });
+    expect(r.said).toEqual(["mw, logp were worked out on another structure, so they are marked not applicable."]);
+  });
+
+  it("knows a structure by its atoms and bonds, however numbered, and not by where its atoms are", () => {
+    const a = entryOf(reactant, "x");
+    const turned: Entry = { ...a, geometry: { kind: "3d", xyz: a.geometry.kind === "3d" ? a.geometry.xyz.map((v) => v + 1) : [] } };
+    expect(structureKey(turned)).toBe(structureKey(a));
+    // (the same atoms numbered the other way round)
+    const n = a.structure.atoms.length;
+    const back: Entry = { ...a, structure: { atoms: [...a.structure.atoms].reverse(), bonds: a.structure.bonds.map((b) => ({ ...b, a1: n - 1 - b.a1, a2: n - 1 - b.a2 })) } };
+    expect(structureKey(back)).toBe(structureKey(a));
+    expect(structureKey(entryOf(product, "y"))).not.toBe(structureKey(a));
   });
 
   it("makes nothing of two entries not in one numbering, and says the first atom that differs", () => {

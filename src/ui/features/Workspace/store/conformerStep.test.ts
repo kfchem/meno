@@ -84,6 +84,7 @@ import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
 import { kindInfo } from "../workflow/kinds";
+import { setMembers } from "../workflow/entries";
 import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
@@ -178,7 +179,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).not.toMatch(/Invariant|expected match/);
   });
 
-  it("takes the structures a large result set holds off the page, each made in 3D linked to no drawing: their ids are none of the page's", async () => {
+  it("takes all the structures a large result set holds - on the page, then held off it - each held one made in 3D linked to no drawing: their ids are none of the page's", async () => {
     const doc = createWorkspaceDocument();
     // (a template of the chemist's, an aryl ether R1-O-Ar-R2, enumerated 3 x 17 = 51 ways, none the same: more than are laid out, so held in its set)
     const drawn = drawnFromSmiles("*Oc1ccc(*)cc1");
@@ -198,15 +199,17 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     // (wired from Enumerate's exit once there is one to wire from: the chain run, Enumerate first)
     await st().runStep(enumerate);
     const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
-    expect(held.drawnCollection).toHaveLength(51);
-    expect(doc.getState().model.atoms).toHaveLength(model.atoms.length);
+    // (as many as the page shows on it, the rest held in the set after them: all 51 the set's)
+    const shown = setMembers(doc.getState(), held).structures.length;
+    expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
     st().connect({ set: held.id }, step);
     await st().runStep(step);
     expect(asked).toHaveLength(51);
     expect(st().steps.find((s) => s.id === step)!.ran?.said).toMatch(/ · 51 conformers of 51 compounds$/);
     const made = st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.collection!;
     expect(made).toHaveLength(51);
-    expect(made.every((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toBe(true);
+    // (those held made in 3D linked to no drawing: they are on no page)
+    expect(made.filter((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toHaveLength(51 - shown);
   });
 
 
@@ -232,8 +235,9 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     // (wired from Enumerate's exit once there is one to wire from: the chain run, Enumerate first)
     await st().runStep(enumerate);
     const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
-    expect(held.drawnCollection).toHaveLength(51);
-    expect(doc.getState().model.atoms).toHaveLength(model.atoms.length);
+    // (as many as the page shows on it, the rest held in the set after them: all 51 the set's)
+    const shown = setMembers(doc.getState(), held).structures.length;
+    expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
     st().connect({ set: held.id }, step);
     await st().runStep(step);
     expect(asked).toHaveLength(51);

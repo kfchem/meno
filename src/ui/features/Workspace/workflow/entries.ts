@@ -17,6 +17,7 @@ import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
 import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
+import { numberText } from "../../../../lib/calc/results";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
 import { kindInfo, type SetHolds, type StepKind } from "./kinds";
 import { skeletonWhy } from "../../../../lib/chem/skeleton";
@@ -486,6 +487,36 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
 
+/** A set's count line, as its frame says it: how many of what it holds - and, of structures drawn more than the page shows (look `DRAWN_ON_PAGE`), how many it shows of how many - or that it is empty, not run yet, or not kept. */
+export function countSaid(b: Pick<WorkflowSet, "notKept" | "made" | "number" | "chart" | "drawnCollection">, count: ReturnType<typeof countOf>): string {
+  // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
+  // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
+  return b.notKept && !count.entries
+    ? `Not kept · ${b.notKept.count}`
+    : b.made && !b.made.holds
+    ? "Not run yet"
+    : !count.entries
+    ? "Empty"
+    : count.holds === "table"
+      ? plural(count.entries, "row")
+    : count.holds === "number" && b.number
+      ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
+    : count.holds === "chart"
+      ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
+    : count.holds === "pictures"
+      ? plural(count.entries, "picture")
+      : count.holds === "structures"
+        ? // (more than the page shows - look DRAWN_ON_PAGE - how many it shows of how many it holds)
+          b.drawnCollection?.length && count.entries > b.drawnCollection.length
+          ? `${(count.entries - b.drawnCollection.length).toLocaleString("en-US")} of ${plural(count.entries, "structure")} shown`
+          : plural(count.entries, "structure")
+        : count.holds === "molecules"
+          ? plural(count.compounds, "compound")
+          : `${plural(count.compounds, "compound")} · ${count.entries}`;
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
 
@@ -836,7 +867,7 @@ function readingOf(calc: SetEntry["calc"], id: string): number | string | undefi
  * it said it ("none", the gas phase stated; unsaid, not stated). Only an
  * energy in hartrees is taken.
  */
-function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
+function thermoOf(e: SetEntry, geometry: string): Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> {
   const calc = e.calc;
   if (!calc?.results?.length) return {};
   const kelvin = readingOf(calc, "thermo.temperature");
@@ -849,7 +880,7 @@ function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
     ...(calc.solvation ? { solvent: calc.solvation } : {}),
   };
   const by = byOf(calc, typeof treatment === "string" ? treatment : undefined);
-  const out: Record<string, Property> = {};
+  const out: Partial<Record<(typeof THERMO_PROPERTIES)[number], Property>> = {};
   for (const id of THERMO_PROPERTIES) {
     const r = calc.results.find((x) => x.on === "molecule" && x.id === id);
     if (!r || r.on !== "molecule" || typeof r.value !== "number" || !Number.isFinite(r.value) || r.quantity !== "energy") continue;
@@ -866,7 +897,7 @@ function thermoOf(e: SetEntry, geometry: string): Record<string, Property> {
  * displacements. What else the list has stays among its readings: the
  * entry's columns take only units Meno's table has.
  */
-function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
+function vibrationsOf(e: SetEntry, at: At): { vibrations?: Property; modes?: Property } {
   const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
   if (!list || list.on !== "list") return {};
   const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
@@ -889,8 +920,12 @@ export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc">): number[] |
   return e.calc?.results?.some((x) => x.on === "list" && x.id === "vibrations") ? [] : "not computed";
 }
 
-/** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name. */
-function menoProperties(e: SetEntry): Record<string, Property> {
+/** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */
+const MENO_NAMES = ["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name", "state"] as const;
+export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
+
+/** What Meno has found of an entry, as properties by its own names (`MENO_NAMES`, which its type holds it to): its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name, its state. */
+function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
   return {
@@ -961,6 +996,86 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
 }
 
 /**
+ * An entry record as a step's entry again (`entryOfSet`, the other way),
+ * where a step of Meno's has made it: its structure, its places, its charge
+ * and spin, and its own properties - each as the step left it (lib/steps
+ * restructure: a value of a geometry naming it, a label, a value of a
+ * structure marked where it is another's). Where it was made from a step's
+ * entry (`was`) and is that entry still - the same atoms and bonds, places
+ * and charge and spin, only its properties changed (a Tag's) - all that
+ * entry held is kept. Where any of them changed, what was worked out at the
+ * old ones goes - its calculation, its energy, its marks of failed or not
+ * a minimum, its degeneracy, mirror image and stereo - never carried onto
+ * another structure or geometry; the molecule it is a frame of (`from`,
+ * `frame`) stays. None where it has no single 3D geometry: a step's entry
+ * is one frame in 3D.
+ */
+export function setEntryOfEntry(e: Entry, place: { compound: number; number: number }, was?: SetEntry): SetEntry | null {
+  if (e.geometry.kind !== "3d") return null;
+  const xyz = e.geometry.xyz;
+  if (xyz.length !== 3 * e.structure.atoms.length) return null;
+  const atoms: ParsedAtom[] = e.structure.atoms.map((a, i) => ({
+    el: a.el,
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
+    x: xyz[3 * i],
+    y: xyz[3 * i + 1],
+    z: xyz[3 * i + 2],
+  }));
+  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order }));
+  const own = Object.fromEntries(Object.entries(e.properties).filter(([k]) => !MENO_OWN.has(k)));
+  const name = e.properties.name?.value;
+  const made: SetEntry = {
+    compound: place.compound,
+    number: place.number,
+    atoms,
+    bonds,
+    xyz: [...xyz],
+    // (its charge and spin where given - by a calculation, or a Species step - not where its atoms alone say them: a step's entry holds what was given, as one read from an output does)
+    ...(e.species?.from.charge === "given" ? { charge: e.species.charge } : {}),
+    ...(e.species?.from.multiplicity === "given" ? { multiplicity: e.species.multiplicity } : {}),
+    ...(e.species ? {} : { skeleton: true as const }),
+    ...(typeof name === "string" ? { name } : was?.name ? { name: was.name } : {}),
+    ...(Object.keys(own).length ? { properties: own } : {}),
+    ...(was?.from != null ? { from: was.from } : {}),
+    ...(was?.frame != null ? { frame: was.frame } : {}),
+    ...(was?.last != null ? { last: was.last } : {}),
+  };
+  if (!was || !sameAs(was, made)) return made;
+  // (that entry still: all it held, its properties as the step left them - and its charge and spin given, where the step gave the ones it had)
+  const { properties: _, ...held } = was;
+  return {
+    ...held,
+    compound: place.compound,
+    number: place.number,
+    ...(made.charge != null ? { charge: made.charge } : {}),
+    ...(made.multiplicity != null ? { multiplicity: made.multiplicity } : {}),
+    ...(Object.keys(own).length ? { properties: own } : {}),
+    ...(made.name ? { name: made.name } : {}),
+  };
+}
+
+/** A step's entry's charge and spin as in use - given, or as its atoms say them (`speciesOf`) - or none, a skeleton's. */
+function speciesNow(e: SetEntry): string {
+  const s = entryOfSet(e, "").species;
+  return s ? `${s.charge}|${s.multiplicity}` : "none";
+}
+
+/** Whether two step's entries are one: the same atoms, in order, the same bonds, places, and charge and spin in use - one given that its atoms say already is the same. */
+function sameAs(a: SetEntry, b: SetEntry): boolean {
+  const atom = (x: ParsedAtom) => `${x.el}|${x.isotope ?? ""}|${x.charge ?? 0}|${x.radical ?? ""}`;
+  const bond = (x: ParsedBond) => `${Math.min(x.a1, x.a2)}-${Math.max(x.a1, x.a2)}:${x.order}`;
+  return (
+    a.atoms.length === b.atoms.length &&
+    a.atoms.every((x, i) => atom(x) === atom(b.atoms[i])) &&
+    a.bonds.map(bond).sort().join() === b.bonds.map(bond).sort().join() &&
+    geometryKey(a.xyz) === geometryKey(b.xyz) &&
+    speciesNow(a) === speciesNow(b)
+  );
+}
+
+/**
  * A set's collection's hash (docs/WORKFLOWS-FOUNDATION.md, *Sets and
  * collections*): of its members, in order - each structure's atoms and
  * bonds, each molecule's atoms and every frame's places (lib/entry
@@ -1001,7 +1116,12 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
 }
 
 /** What a set holds itself, on no page (`collection`), said - "118 molecules", "400 conformers" - for what goes with it when it is deleted; none where it holds none. */
+/** Whether a set holds what is on no page - a large set's molecules in 3D (`collection`), structures drawn it does not show (`drawnCollection`) - which go with it: deleting it asks first. */
+export const holdsOwn = (set: Pick<WorkflowSet, "collection" | "drawnCollection"> | undefined): boolean => !!(set?.collection?.length || set?.drawnCollection?.length);
+
 export function heldOwn(page: Page, set: WorkflowSet): string | undefined {
+  // (structures drawn it holds off the page - those it does not show: they go with it; those it shows are the page's)
+  if (set.drawnCollection?.length) return `${set.drawnCollection.length.toLocaleString("en-US")} ${set.drawnCollection.length === 1 ? "structure" : "structures"}`;
   if (!set.collection?.length) return undefined;
   const { holds, entries } = countOf(page, set);
   const noun = holds === "conformers" ? "conformer" : "molecule";

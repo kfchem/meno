@@ -25,3 +25,24 @@ export function withSpecies(e: Entry, given: SpeciesGiven): Entry {
   const problem = speciesProblem(written, species.charge, species.multiplicity);
   return { ...e, species, status: problem ? { failed: problem } : e.status };
 }
+
+/**
+ * A charge or multiplicity as typed on a Species step's card: a whole
+ * number - a multiplicity at least 1 - or blank, kept as each entry has it;
+ * or why it is neither.
+ */
+export function speciesTyped(charge: string, multiplicity: string): { given: SpeciesGiven } | { why: string } {
+  const whole = (t: string) => (/^[+-]?\d+$/.test(t.trim()) ? Number(t.trim()) : null);
+  const given: SpeciesGiven = {};
+  if (charge.trim()) {
+    const c = whole(charge);
+    if (c == null) return { why: `The charge "${charge.trim()}" is not a whole number` };
+    given.charge = c;
+  }
+  if (multiplicity.trim()) {
+    const m = whole(multiplicity);
+    if (m == null || m < 1) return { why: `The multiplicity "${multiplicity.trim()}" is not a whole number of 1 or more` };
+    given.multiplicity = m;
+  }
+  return { given };
+}

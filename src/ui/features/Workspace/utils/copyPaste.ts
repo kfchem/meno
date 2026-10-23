@@ -605,6 +605,33 @@ function madeOf(v: unknown): Carried3D["made"] {
   return rows.length || Object.keys(said).length ? { ...said, how: rows } : undefined;
 }
 
+/** How many rows of what a text said of a molecule a file is read for, and how long each may be: as a calculation's notes of what was not read (lib/calc/output `readCalc`). */
+const SAID_MOST = 100;
+const SAID_TEXT_MOST = 500;
+
+/** What ends a label or a text of what a text said of a molecule cut at `SAID_TEXT_MOST`. */
+export const SAID_CUT = `\u2026 [cut at ${SAID_TEXT_MOST}]`;
+
+/**
+ * What the text a molecule was read from said of it, as a file carries it:
+ * each row read as data - its label or text cut at `SAID_TEXT_MOST`, which
+ * it ends by saying (`SAID_CUT`), and counted; one that does not read, or
+ * past the first `SAID_MOST`, left out, and said.
+ */
+function saidOf(v: unknown): Carried3D["said"] {
+  // (one cut as an earlier file was read, saved since with its mark: as it is - never cut again, nor counted again)
+  const over = (t: string) => (t.endsWith(SAID_CUT) ? t.length - SAID_CUT.length : t.length) > SAID_TEXT_MOST;
+  const cut = (t: string) => (over(t) ? t.slice(0, SAID_TEXT_MOST) + SAID_CUT : t);
+  const rows = readEach(Array.isArray(v) ? v.slice(0, SAID_MOST) : v, (r) => {
+    const row = r as { label?: unknown; text?: unknown } | null;
+    if (typeof row?.label !== "string" || typeof row.text !== "string") return null;
+    if (over(row.label) || over(row.text)) leftOut("saidCut");
+    return { label: cut(row.label), text: cut(row.text) };
+  }, "said");
+  if (Array.isArray(v) && v.length > SAID_MOST) leftOut("said", v.length - SAID_MOST);
+  return rows.length ? rows : undefined;
+}
+
 /** A molecule's open list as a file carries it; otherwise none. */
 function listOf(v: unknown): CarriedList | undefined {
   const l = v as Partial<Record<keyof CarriedList, unknown>> | null | undefined;
@@ -779,6 +806,10 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(Number.isInteger(m.together) && (m.together as number) > 0 ? { together: m.together as number } : {}),
     ...(Number.isInteger(m.atomsLeftOut) && (m.atomsLeftOut as number) > 0 ? { atomsLeftOut: m.atomsLeftOut as number } : {}),
     ...(madeOf(m.made) ? { made: madeOf(m.made) } : {}),
+    ...(() => {
+      const said = saidOf(m.said);
+      return said ? { said } : {};
+    })(),
     ...(() => {
       const numbers = perFrame<number>(m.numbers, (k) => Number.isInteger(k));
       const shares = perFrame<number>(m.shares, isNum);

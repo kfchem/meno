@@ -1475,6 +1475,50 @@ Not yet:
 - **A scheme in a picture** - a figure that is a picture - is read by the
   plugin as one structure, not as a scheme.
 
+### Structures picked from a PDF (decided 2026-10-23)
+
+In a PDF whose structures are drawn with lines, a structure is picked as
+words are: by itself, not by a box drawn round it.
+- **Pointed at, it is lit whole**, as a word under the pointer is: its
+  bonds and its own labels. Never another structure, an arrow, a "+", or
+  words beside it.
+- **Dragged out, it comes off the page as Meno's own drawing of it**,
+  following the pointer, and let go on the canvas it is put down there:
+  read from the lines, with its labels, wedges and charges, a bond as long
+  as Meno draws one. Let go anywhere else, it goes back.
+- **Clicked, it is selected**, and Shift adds another. Its right-click menu
+  has *Put on the page* and *Copy*.
+- **Its own labels are its**: a press on a label's letters takes the
+  structure, not the text. Words outside a structure, a compound's number
+  under it among them, stay text.
+- **A structure in a scheme is taken alone.** The whole scheme, its arrows
+  and words with it, is still taken by a box and *Read as structure*.
+- **A picture**, not lines, is still taken by a box, as before.
+- **Never read in part.** A structure with letters or words inside it that
+  no atom took is refused, with why, and nothing of it is put down. An atom
+  the reader is unsure of comes marked as such, as *Read as structure* marks
+  one.
+- In the column first. The PDF on the page, whose presses move the view,
+  comes later.
+
+**In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
+- a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept;
+- the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
+- a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
+- dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;
+- clicked, it is picked; Shift-click adds or takes away; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
+- one not read whole is never carried: a press says why, where the chemistry's notices are said.
+
+**A structure, and where it lies** (`utils/pageStructures`):
+- each figure of the page is read as *Read as structure* reads one (the
+  one reading, `schemeDrawn`), and split into its structures: an atom and
+  every atom bonded to it, on and on. A lone labelled atom - an ion -
+  within 1.6 bonds of a structure is that structure's (sodium acetate is
+  one structure);
+- where each lies is its bonds and its labels' boxes, on the page;
+- the pointer takes the nearest within a third of a bond of one of its
+  bonds or labels, and none where an arrow, a "+" or words lie nearer.
+
 ### A picture read (part B, built 2026-10-11)
 
 *Read as structure* reads, by the plugin chosen for the role *Structures
