@@ -8,6 +8,7 @@ import {
   CursorArrowRaysIcon,
   FunnelIcon,
   PhotoIcon,
+  PresentationChartLineIcon,
   QueueListIcon,
   RectangleGroupIcon,
   SignalIcon,
@@ -36,6 +37,7 @@ const ICONS: Record<StepIcon, Icon> = {
   bars: ChartBarIcon,
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
+  chart: PresentationChartLineIcon,
   sliders: AdjustmentsHorizontalIcon,
   sparks: SparklesIcon,
 };

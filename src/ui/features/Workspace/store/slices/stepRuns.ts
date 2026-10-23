@@ -23,7 +23,8 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { compoundLetter, frameXyz, framesOf, recordNumber, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, recordNumber, setEntries, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
@@ -808,9 +809,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = jobEntries(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
-    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
-    const skeletons = skeletonsRefused(step.kind, entries);
-    if (skeletons) return void fail(id, skeletons, at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent - each to the Failed exit, the rest run:
+    //  lib/chem/skeleton. All of them skeletons, the step itself refused)
+    const skeletons = skeletonEntries(step.kind, entries);
+    if (skeletons.length === entries.length) return void fail(id, skeletonWhy(entries.length), at, key);
+    const sendIdx = entries.flatMap((_, i) => (skeletons.includes(i) ? [] : [i]));
     taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { cores } = runningOf(useAppSettings.getState().calculations);
@@ -827,22 +830,26 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const calc = input.molecules.find((m) => m.id === id)?.calc;
       return [calc?.source, calc?.wavefunction];
     };
-    const given = await Promise.all(entries.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
+    const sending = sendIdx.map((i) => entries[i]);
+    const given = await Promise.all(sending.map((e) => entryFiles(e, sourcesOf(e.from), kinds, heldOutput)));
     let prepared;
     // (what its worker says it runs: the program's version where none installed separately says its own)
     let said = "";
     let refused: Refusal[] = [];
     try {
       const client = await pluginClient(plugin);
-      const sent = entries.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
+      const sent = sending.map((e, i) => ({ ...pluginEntry(e), ...(given[i].length ? { files: given[i] } : {}) }));
       const raw = await client.prepare(step.kind, sent, options, cores);
-      prepared = readPrepared(raw, entries.length);
-      refused = readRefused(raw, entries.length);
+      prepared = readPrepared(raw, sending.length);
+      refused = readRefused(raw, sending.length);
       said = client.version ?? "";
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
     if (typeof prepared === "string") return void fail(id, prepared, at, key);
+    // (what the plugin was given, by its places among all that came in; and the skeletons refused beside)
+    prepared = prepared.map((p) => ({ ...p, entries: p.entries.map((k) => sendIdx[k]) }));
+    refused = [...refused.map((r) => ({ ...r, entry: sendIdx[r.entry] })), ...skeletons.map((entry): Refusal => ({ entry, kind: "refused", why: skeletonWhy() }))];
     // (each program installed separately as it is now, for its jobs' keys - one replaced gives other keys, though it
     //  says the same version or none: one that cannot be told, and no job is taken up again)
     let stamps: string[] | null = [];
