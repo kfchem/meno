@@ -123,6 +123,34 @@ describe("a Filter step on structures drawn", () => {
     expect(rest.map((r) => r?.status)).toEqual([{ aside: "Same as 2; not mw < 500 g/mol (612.4 g/mol)" }]);
   });
 
+  it("never keeps a structure that failed on a condition on a value - set aside, named - and judges it by its state on that alone; a kept one's status cleared, an earlier why kept", () => {
+    const as = (p: Record<string, Property>, status: NonNullable<DrawnModel["record"]>["status"]): DrawnModel => ({ ...chloroethane(p), record: { properties: p, status } });
+    const made = [
+      chloroethane({ mw: mw(64.51) }),
+      as({ mw: mw(70) }, { failed: "no conformer could be made" }),
+      as({ mw: mw(80) }, { aside: "Same as 1" }),
+      as({ mw: mw(612.4) }, { aside: "Same as 2" }),
+    ];
+    const status = (doc: WorkspaceDocument, exit: string) => setMembers(doc, resultOf(doc, FILTER(doc), exit)!).records.map((r) => [r?.properties?.mw?.value, r?.status]);
+    // (on a value: the one that failed set aside though its mw would pass, named; the one set aside before kept, its status cleared)
+    const v0 = filtering(made, "mw < 500 g/mol");
+    const v = runStep(v0, FILTER(v0), W);
+    expect(ran(v)?.said).toBe("2 of 4 entries kept · rest 2 (1: structure 2 failed: no conformer could be made; 1: not mw < 500 g/mol (612.4 g/mol))");
+    expect(status(v, "out")).toEqual([
+      [64.51, undefined],
+      [80, undefined],
+    ]);
+    expect(status(v, "rest")).toEqual([
+      [70, { aside: "structure 2 failed: no conformer could be made" }],
+      [612.4, { aside: "Same as 2; not mw < 500 g/mol (612.4 g/mol)" }],
+    ]);
+    // (on its state alone: judged by that - set aside before is no failure)
+    const s0 = filtering(made, "state = finished");
+    const s = runStep(s0, FILTER(s0), W);
+    expect(ran(s)?.said).toBe("3 of 4 entries kept · rest 1 (1: not state = finished (failed: no conformer could be made))");
+    expect(status(s, "rest")).toEqual([[70, { aside: "not state = finished (failed: no conformer could be made)" }]]);
+  });
+
   it("takes a set held whole (more than are laid out on the page), and holds its own so where it keeps as many", () => {
     const many = Array.from({ length: LARGE_SET + 10 }, (_, k) => chloroethane({ mw: mw(100 + k), nll: nll(k % 7) }));
     const doc0 = filtering(many, "nll < 6");

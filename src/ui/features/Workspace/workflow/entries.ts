@@ -5,7 +5,7 @@
  * set that is; and its entries, each a structure with what has been found of
  * it.
  */
-import type { Failure } from "./failures";
+import { FAILURE_WORDS, type Failure } from "./failures";
 import type { ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { CalcInfo } from "../../../../lib/calc/output";
 import { FREQUENCY, geometryKey, propertyIn, type At, type By, type Entry, type EntryAtom, type EntryStatus, type EntryStereo, type Property } from "../../../../lib/entry";
@@ -904,7 +904,16 @@ function menoProperties(e: SetEntry): Record<string, Property> {
     // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
     ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
+    // (whether it is a result to stand on: finished - converged, not failed, its marks read - or why not, in a step's line's words)
+    state: { value: entryState(e), unit: "none", status: "computed" },
   };
+}
+
+/** What a step's entry is, as Filter's `state` reads it (docs/WORKFLOWS.md, *Filter*): "finished"; else why not - its failure in a step's line's words ("not converged", "refused"), or "marks not read". */
+export const FINISHED = "finished";
+export function entryState(e: Pick<SetEntry, "failed" | "marksUnread">): string {
+  if (e.failed) return FAILURE_WORDS[e.failed.kind] ?? e.failed.kind;
+  return e.marksUnread ? "marks not read" : FINISHED;
 }
 
 /** The properties an entry carries of its own under names Meno gives its own (`menoProperties`), which its entry record reads as Meno's: none, mostly. */
