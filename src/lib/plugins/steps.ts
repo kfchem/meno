@@ -6,7 +6,7 @@
  * it is shown, is the workspace's (ui/features/Workspace/workflow/kinds).
  */
 
-export const STEP_KINDS = ["conformers", "optimise", "energy", "frequencies", "nci", "render", "energy-window", "duplicates", "populations", "as-conformers", "choose", "enumerate"] as const;
+export const STEP_KINDS = ["generate", "conformers", "optimise", "energy", "frequencies", "nci", "render", "energy-window", "duplicates", "populations", "as-conformers", "choose", "enumerate"] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
 /**

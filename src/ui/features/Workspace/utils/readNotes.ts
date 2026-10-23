@@ -18,6 +18,7 @@ const NOUNS = {
   molecule3d: ["molecule in 3D", "molecules in 3D"],
   measure: ["measurement in 3D", "measurements in 3D"],
   frame: ["conformer or frame", "conformers or frames"],
+  frameMarks: ["mark of a molecule's failed frames", "marks of molecules' failed frames"],
   frameValues: ["list of energies, numbers, shares or degeneracies", "lists of energies, numbers, shares or degeneracies"],
   stereo: ["R/S or E/Z label", "R/S or E/Z labels"],
   biopolymer: ["record of residues and chains", "records of residues and chains"],

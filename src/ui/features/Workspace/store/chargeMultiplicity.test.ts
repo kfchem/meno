@@ -71,7 +71,7 @@ import { knownOf } from "../../../../lib/io/writers";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { setEntries, setMembers, type SetEntry } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
-import { KINDS, MENO_DOES, kindInfo, type SetKind, type StepKind } from "../workflow/kinds";
+import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind } from "../workflow/kinds";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
 import { measured } from "../../../../testing/timeouts";
@@ -416,11 +416,15 @@ const chem = {
 
 // --- the property ------------------------------------------------------------------
 
-/** Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno. Render gives pictures, which have no charge; Enumerate takes structures drawn alone. */
+/**
+ * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
+ * Render gives pictures, which have no charge; a kind that takes nothing in (Generate) is given no entry to keep one of -
+ * the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn alone.
+ */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind, by]) => kindInfo(kind).gives !== "pictures" && (["molecules", "conformers"] as const).some((h) => takesBy(kind, by, h)));
+].filter(([kind, by]) => kindInfo(kind).gives !== "pictures" && !takesNothing(kind) && (["molecules", "conformers"] as const).some((h) => takesBy(kind, by, h)));
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -499,9 +503,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - Render left out here: it gives pictures; and Enumerate: it takes structures drawn, which have no charge from a calculation)
+    // (each kind Meno defines filled by something - left out here Render, which gives pictures; Generate, given nothing; and Enumerate, which takes structures drawn, with no charge from a calculation)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["render", "enumerate"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "enumerate"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 
