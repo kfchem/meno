@@ -977,8 +977,12 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
     Each branch of the rest (what hangs from one bond to the part) is
     then moved as a whole onto its new bond: it keeps its own drawing and
     is turned, about its atom, only as far as the new bond needs to lie in
-    the room the branch left for the old (`moved`). The rest is never
-    otherwise moved.
+    the room the branch left for the old (`moved`). Where a branch so
+    placed lands on the rest - an atom on an atom or on a bond, bonds
+    crossing - it is flipped over its new bond, each in turn, where that
+    clears more: its bond, and so its direction, as before, and its kept
+    wedges turned to hashes and back, which keeps their centres as they
+    were. The rest is never otherwise moved.
 - **Refused, and why said**, so that the caller draws the whole structure
   afresh instead: a part's stubs ending more than one bond from the
   rest's atoms (`MISMATCH_LIMIT`: a 1,2-substituted ring swapped for a
@@ -994,7 +998,7 @@ one part of a drawing (the maintainer's rulings, 2026-10-23).
   afresh, as `layout2D` places them. The whole drawing is then read back
   (`readBack.ts` `notAsGiven`), and one that does not read as the
   structure given is not handed over.
-- **Crowding** is said, not mended by moving the rest: atoms of the part
+- **Crowding** left is said, not mended by moving the rest: atoms of the part
   or of a moved branch within half a bond of another, and bonds crossing
   (`crowded`, in words). Of the ways the part can be set down, the one
   nearest the rest's atoms is taken, then the one that reads best by the
