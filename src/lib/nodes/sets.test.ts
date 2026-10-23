@@ -34,6 +34,12 @@ describe("Group", () => {
     expect(out.ok && out.exits.done.map(groupOf)).toEqual(["a", "b", "c"]);
   });
 
+  it("by constitution: a skeleton - its hydrogens not there, no species - is grouped with its like, apart from the whole", () => {
+    const skeleton = (id: string) => ({ ...molecule(id, ["C", "C", "O"], [[0, 1], [1, 2]]), species: null });
+    const out = group([skeleton("s"), ethanol("a"), skeleton("t")], { by: "constitution" });
+    expect(out.ok && out.exits.done.map(groupOf)).toEqual(["a", "b", "a"]);
+  });
+
   it("by a property's value - a number with its unit, or a text - those with none set aside, and a group replaced counted", () => {
     const es = [entry("p", { charge: quantity(0, "none") }, "z"), entry("q", { charge: quantity(1, "none") }), entry("r", { charge: quantity(0, "none") }), entry("s", {})];
     const out = group(es, { by: { property: "charge" } });

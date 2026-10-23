@@ -69,6 +69,8 @@ export type KindInfo = {
   second?: StepExit;
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
+  /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
+  whole?: true;
 };
 
 /**
@@ -83,12 +85,12 @@ const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "fai
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", second: { ...FAILED, gives: "molecules" } },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", second: FAILED },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", second: FAILED },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", second: FAILED },
+  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, second: { ...FAILED, gives: "molecules" } },
+  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, second: FAILED },
+  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, second: FAILED },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, second: FAILED },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", second: FAILED },
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, second: FAILED },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
@@ -105,6 +107,8 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "duplicates",
     name: "Duplicates",
+    // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
+    whole: true,
     icon: "twins",
     takes: ["molecules", "conformers"],
     gives: "same",

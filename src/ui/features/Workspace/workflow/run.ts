@@ -13,7 +13,7 @@ import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, marksOf, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, marksOf, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
 import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind } from "./kinds";
@@ -693,6 +693,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
         ...(energies ? { energies } : {}),
         ...(e.calc ? { calc: e.calc } : speciesKept(e)),
         ...(e.name ? { name: e.name } : {}),
+        ...keptKnown(e),
         // (how many it stands for, and its mirror image's atoms where one was counted in - of its last geometry; a path's
         //  frames before it, one each, none)
         ...(e.degeneracy != null && e.degeneracy !== 1 ? { degeneracies: [...(path ?? []).map(() => 1), e.degeneracy] } : {}),
@@ -734,6 +735,7 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),
       ...(first.name ? { name: first.name } : {}),
+      ...keptKnown(first),
       // (each conformer's marks: why it failed, its imaginary frequencies as its calculation judged them, and whether its marks did not read)
       ...marksOf(g.map((e) => ({ failed: e.failed, imaginary: imaginaryOfEntry(e), marksUnread: e.marksUnread }))),
       ...(alike ? keptAlike(g) : {}),

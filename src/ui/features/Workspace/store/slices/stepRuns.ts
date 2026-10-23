@@ -22,7 +22,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, setEntries, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
 import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
@@ -595,6 +595,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     if (!gives) return void fail(id, ON_DRAWN, at, key);
     const entries = setEntries(input.molecules, input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
+    const refused = skeletonsRefused(step.kind, entries);
+    if (refused) return void fail(id, refused, at, key);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     let kept;
     let counted = new Map<number, { degeneracy: number; mirror: number[] }>();
@@ -632,6 +635,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const input = inputOf(d, id)!;
     const entries = jobEntries(step.kind, setEntries(input.molecules, input.holds as "molecules" | "conformers"), input.holds);
     if (!entries.length) return void fail(id, "Nothing came in", at, key);
+    // (skeletons, their hydrogens not there, refused before anything is sent: lib/chem/skeleton)
+    const skeletons = skeletonsRefused(step.kind, entries);
+    if (skeletons) return void fail(id, skeletons, at, key);
     taken.set(id, { at, entries, holds: input.holds });
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
     const { cores } = runningOf(useAppSettings.getState().calculations);

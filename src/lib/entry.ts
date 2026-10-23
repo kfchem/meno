@@ -171,7 +171,8 @@ export type Entry = {
   from: string[];
   structure: { atoms: EntryAtom[]; bonds: EntryBond[] };
   geometry: Geometry;
-  species: Species;
+  /** Its charge and spin multiplicity (lib/io/writers `speciesOf`); none for a skeleton, its hydrogens not there (lib/chem/skeleton). */
+  species: Species | null;
   properties: Record<string, Property>;
   /** Which stereoisomer it is; absent until perceived. */
   stereo?: EntryStereo;

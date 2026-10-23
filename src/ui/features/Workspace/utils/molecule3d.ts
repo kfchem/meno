@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
+import { atomsLeftOutMark, ESTIMATED_MARK, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -1172,7 +1172,7 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const chainsDrawn = !!bp && m.atoms.some((_, i) => !hidden[i] && bp.residues[bp.residueOf[i]]?.standard);
   return [
     ...(solid.hidesH[look] ? [HIDDEN_MARK] : []),
-    ...(noHydrogensInFile(m, chainsDrawn) ? [NO_H_MARK] : []),
+    ...(noHydrogensInFile(m, chainsDrawn) ? [NO_H_MARK, ...(m.bondOrders === "estimated" ? [ESTIMATED_MARK] : [])] : []),
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),

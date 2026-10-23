@@ -50,7 +50,7 @@ import { pdbLeavesOut } from "../../../lib/chem/pdb";
 import { xyzLeavesOut } from "../../../lib/chem/xyzWriter";
 import OrdersCard from "./OrdersCard";
 import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, useBondOrders } from "./chem/bondOrders";
-import { partOf } from "./utils/completeness";
+import { isSkeleton, partOf } from "./utils/completeness";
 import { labelTextOf } from "./utils/labelTyping";
 import { findOutput, outputOf } from "../../../lib/calc/asks";
 import type { CalcSource } from "../../../lib/calc/output";
@@ -1112,6 +1112,10 @@ function WorkspaceContent({
             }
           : {}),
         ...(canAddHydrogens(menuMolecule, menuPart) ? { onAddHydrogens: () => void completeHydrogens(menuMolecule.id, menu?.atom ?? null) } : {}),
+        // (a skeleton that has no hydrogens to add - carbon dioxide's atoms, say, where Meno could not tell: whole, as the chemist says; never a PDB entry's chains)
+        ...(!menuMolecule.biopolymer && isSkeleton(menuMolecule)
+          ? { onWholeWithoutH: () => store.getState().changeMolecule3d("complete without hydrogens", menuMolecule.id, (m) => ({ ...m, wholeWithoutH: true })) }
+          : {}),
         ...(resultsOn(menuMolecule.calc?.results, "list").length
           ? {
               lists: resultsOn(menuMolecule.calc?.results, "list").map((l, _, all) => ({
@@ -1749,6 +1753,10 @@ function WorkspaceContent({
               const state = store.getState();
               const chosen = carriedOf(state).filter((_, i) => ids.includes(state.molecules3d[i].id));
               return chosen.length ? knownOfMolecules(chosen, style3dOf(store.getState())) : {};
+            }}
+            skeletons={(ids) => {
+              const state = store.getState();
+              return carriedOf(state).filter((m, i) => ids.includes(state.molecules3d[i].id) && isSkeleton(m)).length;
             }}
             said={(id) => (id === "pdb" ? pdbLeavesOut((exporting.part.part.molecules3d ?? []).flatMap((m) => m.atoms)) : id === "xyz" ? xyzLeavesOut(exporting.part.part.molecules3d ?? []) : null)}
             onCancel={() => setExporting(null)}
