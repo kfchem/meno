@@ -69,6 +69,17 @@ describe("what a reader hands back", () => {
     expect(readCalc(JSON.parse(JSON.stringify(adopted)), 3, 2)).toEqual(adopted);
   });
 
+  it("reads back one read by no reader as it was kept - the charge and spin a step was given, what made a molecule - and refuses one that says nothing", () => {
+    // (as workflow/run speciesKept writes one: the charge and spin a Meno step's result came in with)
+    const given = { readers: [], charge: 1, multiplicity: 2 };
+    expect(readCalc(JSON.parse(JSON.stringify(given)), 3, 1)).toEqual(given);
+    // (as a conformer search on a drawing writes one: the plugin, and its force field)
+    const made = { readers: [], program: "RDKit", method: "MMFF94" };
+    expect(readCalc(JSON.parse(JSON.stringify(made)), 3, 1)).toEqual(made);
+    expect(readCalc({ readers: [] }, 3, 1)).toBeUndefined();
+    expect(readCalc({ readers: [], charge: "1" }, 3, 1)).toBeUndefined();
+  });
+
   it("reads back from a file as it was kept, and not where it does not read", () => {
     const kept = calcOf(water, ["cclib 1.9rc1"]);
     expect(readCalc(JSON.parse(JSON.stringify(kept)), 3, 2)).toEqual(kept);
