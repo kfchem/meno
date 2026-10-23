@@ -27,7 +27,8 @@ import { groupShape } from "../utils/groupShape";
 import { bondsAt, lookOf, solidOf } from "../utils/molecule3d";
 import { fragmentsHolding, laidOut, partOf } from "./cleanUp";
 import { undrawnHydrogens } from "./drawing";
-import { boundsOf, greatest, least } from "../../../../lib/chem/lists";
+import { greatest, least } from "../../../../lib/chem/lists";
+import { drawnBox } from "../../../../utils/importers";
 import { etaBound } from "./etaBound";
 
 export { linkOf, signatureOf } from "../utils/drawnLink";
@@ -297,11 +298,16 @@ export function turnedOver(m: Omit<Molecule3D, "id" | "at">, model: Model, style
   return { turn, start, reach, flat, height: solid.reach[lookOf(m)] };
 }
 
-/** Where a drawn structure is on the page: its atoms' box, a little round them. */
+/**
+ * Where a drawn structure is on the page: its ink's box - its bonds and its
+ * labels' letters (OH hangs right of its O), not only its atoms' centres
+ * (utils/importers `drawnBox`) - with no room round it: what keeps clear of
+ * it adds its own (docs/LOOK.md, *Room*).
+ */
 export function boxOf(part: Model): Box {
-  const pad = 0.4 * NOMINAL_BOND_LENGTH;
-  const b = boundsOf(part.atoms) ?? { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
-  return { x0: b.x0 - pad, x1: b.x1 + pad, y0: b.y0 - pad, y1: b.y1 + pad };
+  if (!part.atoms.length) return { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+  const b = drawnBox(part);
+  return { x0: b.minX, x1: b.maxX, y0: b.minY, y1: b.maxY };
 }
 
 const inside = (b: Box, view: Box) => b.x0 >= view.x0 && b.x1 <= view.x1 && b.y0 >= view.y0 && b.y1 <= view.y1;
@@ -420,9 +426,11 @@ export function takenOnPage(
 ): Box[] {
   const skip = new Set(except);
   const around = new Map<number, number[]>();
+  const bondsOn = new Map<number, Model["bonds"]>();
   for (const b of page.model.bonds) {
     around.set(b.a, [...(around.get(b.a) ?? []), b.b]);
     around.set(b.b, [...(around.get(b.b) ?? []), b.a]);
+    for (const id of [b.a, b.b]) bondsOn.set(id, [...(bondsOn.get(id) ?? []), b]);
   }
   const byId = new Map(page.model.atoms.map((a) => [a.id, a]));
   const seen = new Set<number>();
@@ -442,7 +450,8 @@ export function takenOnPage(
         todo.push(n);
       }
     }
-    boxes.push(boxOf({ atoms: part, bonds: [] }));
+    // (with its bonds, which decide where its labels' letters go)
+    boxes.push(boxOf({ atoms: part, bonds: [...new Set(part.flatMap((x) => bondsOn.get(x.id) ?? []))] }));
   }
   const pad = 0.4 * NOMINAL_BOND_LENGTH;
   for (const r of page.arrows) {

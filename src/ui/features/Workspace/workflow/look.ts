@@ -75,8 +75,12 @@ export const portDown = (k: number) => PORT_DOWN + k * PORT_STEP;
 /** A port's diameter. */
 export const PORT = 11 * PX;
 
-/** How far inside a set what it holds stays from its frame; how far below its top - under its name - it begins; and how far below its top its name stands. */
-export const SET_PAD = 14 * PX;
+/**
+ * How far inside a set what it holds stays from its frame - its ink, half a
+ * bond (docs/LOOK.md, *Room*: 24 px at 48 px a bond); how far below its top -
+ * under its name - it begins; and how far below its top its name stands.
+ */
+export const SET_PAD = NOMINAL_BOND_LENGTH / 2;
 export const SET_TOP = 36 * PX;
 /** A set holding a table, inside its frame, in px (TableBody): its first rows, and what it is. */
 export const TABLE_PX = { w: 400, h: 196 };
@@ -85,7 +89,7 @@ export const CHART_PX = { w: 360, h: 260 };
 /** A large result set's summary inside its frame, in px (SummaryBody): what it holds - that it is on no page, and *Open as a table* - a grid of four by three structures, and a chart. */
 export const SUMMARY_PX = { w: 480, h: 448 };
 export const NAME_DOWN = 18 * PX;
-/** A result set's distance from its step, and between molecules in it. */
+/** A result set's distance from its step, and between molecules in it: between their ink, half a bond (docs/LOOK.md, *Room*). */
 export const GAP = 64 * PX;
 export const BETWEEN = 24 * PX;
 /** The room a molecule's frames chip takes below it, where it has one: the chip and the gap above it (Frames3D). */

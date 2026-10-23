@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { layoutOptionsFor, MENO } from "../../../../lib/chem/style";
 import type { ChemClient, Conformers } from "../../../../lib/roles/client";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import type { Model } from "../store/types";
@@ -273,9 +274,13 @@ describe("takenOnPage", () => {
     const boxes = takenOnPage({ model: model as never, arrows: [{ id: 1, x: 5, y: 5, angle: 0, length: 4 } as never], pluses: [{ id: 1, x: 5, y: -5 } as never] }, [1, 2], [solid]);
     // (the drawing it was made from left out; the other two structures, the arrow, the "+" and the molecule)
     expect(boxes).toHaveLength(5);
+    // (each structure as far as its ink: the C-C its bond, from atom to atom, half its line's width round it - no room added; the lone carbon its letters, CH4, written to the right of it)
+    const half = layoutOptionsFor(MENO, NOMINAL_BOND_LENGTH, { units: "world" }).lineWidthPx / 2;
+    for (const [got, want] of [[boxes[0].x0, 10 - half], [boxes[0].x1, 11.5 + half], [boxes[0].y0, -half], [boxes[0].y1, half]]) expect(got).toBeCloseTo(want, 9);
+    expect(boxes[1].x0).toBeLessThan(20);
+    expect(boxes[1].x1 - 20).toBeGreaterThan(NOMINAL_BOND_LENGTH / 2);
+    // (an arrow and a "+" kept as they were)
     const pad = 0.4 * NOMINAL_BOND_LENGTH;
-    expect(boxes[0]).toEqual({ x0: 10 - pad, x1: 11.5 + pad, y0: -pad, y1: pad });
-    expect(boxes[1]).toEqual({ x0: 20 - pad, x1: 20 + pad, y0: -pad, y1: pad });
     expect(boxes[2].x0).toBeCloseTo(3 - pad);
     expect(boxes[2].x1).toBeCloseTo(7 + pad);
     expect(boxes[4]).toBe(solid);
