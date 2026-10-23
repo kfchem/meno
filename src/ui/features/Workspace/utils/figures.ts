@@ -179,6 +179,20 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
 }
 
 /**
+ * A figure as drawn, read as a scheme (lib/figure/scheme) - upright, where
+ * it is set sideways, `back` taking a point of what was read back to where
+ * it lies on the page - the one reading `figureFrom` and the structures a
+ * page is picked by (./pageStructures) share.
+ */
+export function schemeDrawn(given: FigureDrawn, known?: readonly GlyphShape[]): { drawn: FigureDrawn; back: (p: { x: number; y: number }) => { x: number; y: number }; read: SchemeRead } {
+  const glyphs = known ?? (lettersAsShapes(given) ? systemGlyphs() : []);
+  // (a figure set sideways - its words reading down the page, or up it - read turned upright, each atom tied back to where it lies on the page;
+  // one whose words are all outlines, no letter written to tell, turned the way most of them read as letters)
+  const { drawn, back } = uprightOf(given, given.letters.length || !glyphs.length ? undefined : quarterOfOutlines(given, glyphs));
+  return { drawn, back, read: readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel) };
+}
+
+/**
  * What a figure as drawn reads as, tied to its PDF's page (`readBox`): its
  * structures, and - a scheme - its arrows, "+" signs and words (lib/figure/
  * scheme), all in Meno's units, a bond as long as Meno draws one, the
@@ -187,11 +201,7 @@ export async function readPicture(picture: Pick<PictureItem, "sha256" | "media">
  * layout).
  */
 export function figureFrom(given: FigureDrawn, sha256: string, page: number, known?: readonly GlyphShape[]): FigureResult | Unread {
-  const glyphs = known ?? (lettersAsShapes(given) ? systemGlyphs() : []);
-  // (a figure set sideways - its words reading down the page, or up it - read turned upright, each atom tied back to where it lies on the page;
-  // one whose words are all outlines, no letter written to tell, turned the way most of them read as letters)
-  const { drawn, back } = uprightOf(given, given.letters.length || !glyphs.length ? undefined : quarterOfOutlines(given, glyphs));
-  const read = readScheme(drawn, (l) => readDrawnLabel(l, figureLabels).read, glyphs, wholeLabel);
+  const { drawn, back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { none: "This looks like a chart or a spectrum: too much is drawn there to read it as a structure." };
   const structure = read.figure.atoms.length > 0 && read.figure.bonds.length > 0;
   if (!structure && !read.arrows.length) {
@@ -240,7 +250,7 @@ export function schemeOf(read: SchemeRead, about: { x: number; y: number }): Imp
 }
 
 /** A figure read made a structure in Meno's units, each atom tied to its place in the figure (`spot`) - its middle at naught, or `about`. */
-function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): Model {
+export function modelOf(read: FigureRead, spot: (x: number, y: number) => FigureSpot, about?: { x: number; y: number }): Model {
   const s = structureOf(read, figureLabels, about);
   const degree = new Map<number, number>();
   for (const b of s.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
