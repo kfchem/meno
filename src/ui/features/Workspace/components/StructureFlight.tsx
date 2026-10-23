@@ -49,6 +49,8 @@ export default function StructureFlight() {
       aria-hidden
       src={`data:image/svg+xml;utf8,${encodeURIComponent(f.svg)}`}
       draggable={false}
+      // (lifted, its shadow the theme's for what floats over the page - docs/LOOK: shadow-lg - following its ink, not its box)
+      className={lifted && !back && !landed ? "drop-shadow-lg" : ""}
       style={{
         position: "fixed",
         left,
@@ -59,7 +61,6 @@ export default function StructureFlight() {
         zIndex: 60,
         opacity: back || landed ? 0 : 1,
         transform: lifted && !back && !landed ? "scale(1.04)" : "scale(1)",
-        filter: lifted && !back && !landed ? "drop-shadow(0 6px 10px rgba(0,0,0,0.18))" : "none",
         // (Meno's easing, and its leaving one for what goes - theme/motion, App.css)
         transition: [
           `left ${back ? BACK_MS : 0}ms var(--ease-meno)`,
