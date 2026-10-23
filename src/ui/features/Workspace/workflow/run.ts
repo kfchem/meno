@@ -13,7 +13,7 @@ import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { compoundLetter, setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
@@ -130,6 +130,11 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
   const table = tableInto(doc, step.id);
   if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
+  // (molecules come in: a point stands on its entry's values as results - one that failed, by any kind, or whose marks did
+  //  not read refuses the chart, each named, as an Energy diagram's levels do: never plotted as if it were one)
+  const seen = moleculesSeen(doc, step.id);
+  const bad = seen && notResults(seen.entries, (k) => compoundLetter(seen.entries[k].compound));
+  if (bad) return setRan(keepRun(doc, step), step.id, said(false, bad));
   const o = step.options ?? {};
   const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
   if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));

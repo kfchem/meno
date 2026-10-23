@@ -911,6 +911,11 @@ function menoProperties(e: SetEntry): Record<string, Property> {
 
 /** What a step's entry is, as Filter's `state` reads it (docs/WORKFLOWS.md, *Filter*): "finished"; else why not - its failure in a step's line's words ("not converged", "refused"), or "marks not read". */
 export const FINISHED = "finished";
+/**
+ * The condition that keeps only the entries that are results to stand on, as a Filter is given it (`entryState`):
+ * here, beside `FINISHED`, so that it is made once that is - never, across an import cycle, before it ("state = undefined").
+ */
+export const STATE_FINISHED = `state = ${FINISHED}`;
 export function entryState(e: Pick<SetEntry, "failed" | "marksUnread">): string {
   if (e.failed) return FAILURE_WORDS[e.failed.kind] ?? e.failed.kind;
   return e.marksUnread ? "marks not read" : FINISHED;

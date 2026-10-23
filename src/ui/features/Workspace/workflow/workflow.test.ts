@@ -12,9 +12,9 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { addMolecule3d, createWorkspaceDocument, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import type { EntryStereo } from "../../../../lib/entry";
-import { setMembers, countOf, setEntries, holdsOf } from "./entries";
+import { setMembers, countOf, setEntries, holdsOf, MARKS_UNREAD } from "./entries";
 import { canWire, givesOf, inputKey, inputOf, resultOf, stateOf, stepsBefore } from "./flow";
-import { keptApart, notAllMinima, pushTo, runMeno, runMenoInTurns } from "./meno";
+import { keptApart, notAllMinima, pushTo, runMeno, runMenoInTurns, STATE_FINISHED } from "./meno";
 import { boltzmann } from "../../../../lib/boltzmann";
 import { factor } from "../../../../lib/units";
 
@@ -388,12 +388,20 @@ describe("Meno's own steps", () => {
     const set = entries(bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), "conformers").map((e, i) =>
       i === 2 ? { ...e, failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : e,
     );
-    const said = "a #3 is not converged: it is no minimum - take it out first";
+    const said = `Not every entry is a result to stand on: a #3 not converged - take it out first (a Filter on "${STATE_FINISHED}")`;
     expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said });
     expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said });
-    // (another kind of failure is not said so)
-    const refused = set.map((e) => (e.failed ? { ...e, failed: { kind: "refused" as const, why: "x" } } : e));
-    expect(runMeno("energy-window", refused, "conformers", { window: 3 }).ok).toBe(true);
+  });
+
+  it("weigh, window, choose and rank none where one failed by any kind - refused, say, its energy no result - naming every one", () => {
+    const set = entries(bent({ x: 0, y: 0 }, 4, [kcal(3), kcal(2), kcal(1), 0]), "conformers").map((e, i) =>
+      i === 3 ? { ...e, failed: { kind: "refused" as const, why: "x" } } : i === 1 ? { ...e, marksUnread: true as const } : e,
+    );
+    const said = `Not every entry is a result to stand on: a #2: ${MARKS_UNREAD}; a #4 refused - take them out first (a Filter on "${STATE_FINISHED}")`;
+    expect(runMeno("populations", set, "conformers", { temperature: 298.15 })).toEqual({ ok: false, said });
+    expect(runMeno("energy-window", set, "conformers", { window: 3 })).toEqual({ ok: false, said });
+    expect(runMeno("choose", set, "conformers")).toEqual({ ok: false, said });
+    expect(runMeno("duplicates", set, "conformers")).toEqual({ ok: false, said });
   });
 
   it("choose no lowest, and rank no duplicates by energy, where one is no minimum - not converged, or a saddle point - naming it; by number, any may be chosen", () => {
@@ -402,7 +410,7 @@ describe("Meno's own steps", () => {
     const stopped = base.map((e, i) => (i === 2 ? { ...e, failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : e));
     const saddle = base.map((e, i) => (i === 2 ? { ...e, imaginary: [-382.63] } : e));
     for (const [set, said] of [
-      [stopped, "a #3 is not converged: it is no minimum - take it out first"],
+      [stopped, `Not every entry is a result to stand on: a #3 not converged - take it out first (a Filter on "${STATE_FINISHED}")`],
       [saddle, "a #3 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first"],
     ] as const) {
       expect(runMeno("choose", set, "conformers")).toEqual({ ok: false, said });
