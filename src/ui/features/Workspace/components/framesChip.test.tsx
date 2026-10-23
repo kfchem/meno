@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
-import { barsAbove, FramesChip } from "./Frames3D";
+import { barsAbove, FAILURES_ASTRAY, FramesChip } from "./Frames3D";
 
 // Vitest runs in Node: the chip is drawn by the server's renderer, and
 // whether it is open is read off its slider's row.
@@ -98,5 +98,23 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(html).toContain("<title>not converged</title>");
     expect(html).toContain("not finished");
     expect(renderToString(<FramesChip count={3} frame={0} open={false} onFrame={none} energies={energies} marksUnread conformers />)).toContain("none finished: no lowest to stand above");
+  });
+
+  it("takes no frame as finished where its failures are not one to each frame - none stands above another, and it says so", () => {
+    const energies = [-76, -76.0015936014, -77];
+    const short = [null, { kind: "not-converged" as const, why: "x" }];
+    expect(barsAbove(energies, short)).toEqual({ above: [null, null, null], noBaseline: true, why: FAILURES_ASTRAY });
+    expect(renderToString(<FramesChip count={3} frame={0} open={false} onFrame={none} energies={energies} failed={short} conformers />)).toContain(FAILURES_ASTRAY.replace("'", "&#x27;"));
+  });
+
+  it("breaks the profile of many frames at one that did not finish - never drawn at the foot, as if the lowest", () => {
+    // (200 frames, too many for a bar each: the 101st, not converged, far the lowest)
+    const energies = Array.from({ length: 200 }, (_, i) => (i === 100 ? -77 : -76 + i * 1e-5));
+    const failed = energies.map((_, i) => (i === 100 ? { kind: "not-converged" as const, why: "x" } : null));
+    const html = renderToString(<FramesChip count={200} frame={0} open={false} onFrame={none} energies={energies} failed={failed} conformers />);
+    // (two pieces, either side of it, and it marked at the foot, why on it)
+    expect(html.match(/<path d="M/g)).toHaveLength(2);
+    expect(html.match(/data-unfinished/g)).toHaveLength(1);
+    expect(html).toContain("<title>not converged</title>");
   });
 });

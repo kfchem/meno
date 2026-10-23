@@ -66,14 +66,23 @@ export default function Frames3D(props: ComponentProps<typeof FramesChip>) {
   );
 }
 
+/** What a molecule's frames chip says where its failures are not one to each frame. */
+export const FAILURES_ASTRAY = "its frames' failures do not line up";
+
 /**
  * Each frame's energy above the lowest of those that finished, in kcal/mol:
  * none of one that did not - it failed, or its marks did not read
  * (`marksUnread`) - which is no frame's zero either. All of them none,
  * where none finished (`noBaseline`).
  */
-export function barsAbove(energies: readonly number[], failed?: readonly (Failure | null)[], marksUnread?: boolean): { above: (number | null)[]; noBaseline: boolean } {
-  const finished = (i: number) => !marksUnread && !(failed?.length === energies.length && failed[i]) && Number.isFinite(energies[i]);
+export function barsAbove(
+  energies: readonly number[],
+  failed?: readonly (Failure | null)[],
+  marksUnread?: boolean,
+): { above: (number | null)[]; noBaseline: boolean; why?: string } {
+  // (failures not one to each frame say nothing of which finished: none is taken to have - never every one)
+  if (failed && failed.length !== energies.length) return { above: energies.map(() => null), noBaseline: true, why: FAILURES_ASTRAY };
+  const finished = (i: number) => !marksUnread && !failed?.[i] && Number.isFinite(energies[i]);
   const done = energies.filter((_, i) => finished(i));
   if (!done.length) return { above: energies.map(() => null), noBaseline: true };
   const lowest = least(done);
@@ -390,7 +399,7 @@ export function FramesChip({
                   {numbers?.[told] != null && numbers.some((k, i) => k !== i + 1) && <span className="text-gh-black">#{numbers[told]} · </span>}
                   {told + 1} / {count}
                   {title && <span className="text-gh-black ml-2 inline-block max-w-[14rem] truncate align-bottom">{title}</span>}
-                  {above && <span className="text-gh-black"> · {above[told] != null ? relative(above[told]!) : bars?.noBaseline ? "none finished: no lowest to stand above" : "not finished"}</span>}
+                  {above && <span className="text-gh-black"> · {above[told] != null ? relative(above[told]!) : bars?.why ? bars.why : bars?.noBaseline ? "none finished: no lowest to stand above" : "not finished"}</span>}
                   {populations?.[told] != null && <span className="text-gh-black"> · {share(populations[told])}</span>}
                   {marks && <span className="text-accel-accent"> · {marks}</span>}
                 </>
@@ -454,11 +463,22 @@ function Energies({
   };
   const bars = step >= LEAST_BAR;
   const x = (i: number) => (i + 0.5) * step;
-  const profile = bars
-    ? ""
-    : `M0,${BARS} ` +
-      above.map((e, i) => `L${x(i).toFixed(2)},${(BARS - (e == null ? 0 : heightOf(e))).toFixed(2)}`).join(" ") +
-      ` L${width},${BARS} Z`;
+  // (the profile in pieces: one through each run of frames that finished, broken at each that did not - never drawn
+  //  as if at the foot, which would read as the lowest)
+  const runs: number[][] = [];
+  above.forEach((e, i) => {
+    if (e == null) return;
+    const last = runs[runs.length - 1];
+    if (last && last[last.length - 1] === i - 1) last.push(i);
+    else runs.push([i]);
+  });
+  const profiles = bars
+    ? []
+    : runs.map((run) => {
+        const from = run[0] * step;
+        const to = (run[run.length - 1] + 1) * step;
+        return `M${from.toFixed(2)},${BARS} ` + run.map((i) => `L${x(i).toFixed(2)},${(BARS - heightOf(above[i]!)).toFixed(2)}`).join(" ") + ` L${to.toFixed(2)},${BARS} Z`;
+      });
   return (
     <svg
       width={width}
@@ -521,7 +541,16 @@ function Energies({
         )
       ) : (
         <>
-          <path d={profile} fill="rgb(207, 222, 229)" />
+          {profiles.map((d, k) => (
+            <path key={k} d={d} fill="rgb(207, 222, 229)" />
+          ))}
+          {above.map((e, i) =>
+            e == null ? (
+              <line key={`u${i}`} data-unfinished="" x1={i * step} x2={(i + 1) * step} y1={BARS - 0.5} y2={BARS - 0.5} stroke="rgb(140, 172, 184)" strokeWidth={1} strokeDasharray="2 1">
+                <title>{why(i) ?? "not finished"}</title>
+              </line>
+            ) : null,
+          )}
           {pointed != null && pointed !== frame && (
             <line x1={x(pointed)} x2={x(pointed)} y1={0} y2={BARS} stroke="rgb(140, 172, 184)" strokeWidth={1} />
           )}
