@@ -6,7 +6,7 @@ import type { Cell, TableColumn } from "../../../../lib/table";
 import { useEditor, useEditorStore } from "../store";
 import type { WorkflowSet } from "../store/types";
 import { setName } from "./doers";
-import { SMILES_COLUMN } from "./structuresTable";
+import { SMILES_DRAWING_COLUMN, SMILES_RECORD_COLUMN } from "./structuresTable";
 import { setStructuresTable } from "./run";
 import { ROW_PX } from "./SetTableBody";
 
@@ -18,7 +18,7 @@ const headOf = (c: TableColumn) => (c.kind === "number" && c.unit !== "none" ? `
 /** A cell as the table shows it: a number as Meno writes numbers, true or false, text as it is, none blank. */
 const cellText = (v: Cell) => (v == null ? "" : typeof v === "number" ? numberText(v) : typeof v === "boolean" ? (v ? "true" : "false") : v);
 /** How wide a column is - the same in every row, each a grid of its own: a number's narrow, SMILES's widest. */
-const widthOf = (c: TableColumn) => (c.name === SMILES_COLUMN ? "minmax(14rem, 2fr)" : c.kind === "number" ? "7rem" : "minmax(8rem, 1fr)");
+const widthOf = (c: TableColumn) => (c.name === SMILES_RECORD_COLUMN || c.name === SMILES_DRAWING_COLUMN ? "minmax(14rem, 2fr)" : c.kind === "number" ? "7rem" : "minmax(8rem, 1fr)");
 
 /** Two cells in order, for a sort: none last, numbers as numbers, text as a reader sorts it. */
 function compare(a: Cell, b: Cell): number {
@@ -106,7 +106,7 @@ export default function StructuresTableBody({ set }: { set: WorkflowSet }) {
                 </div>
                 {shown.map(({ c, i }) => (
                   <div key={c.name} role="gridcell" className={clsx("min-w-0 px-2 flex items-center", c.kind === "number" && "justify-end")}>
-                    <span className="truncate" title={c.kind === "text" ? cellText(r[i]) : undefined}>
+                    <span className="truncate" title={typeof r[i] === "string" ? cellText(r[i]) : undefined}>
                       {cellText(r[i])}
                     </span>
                   </div>

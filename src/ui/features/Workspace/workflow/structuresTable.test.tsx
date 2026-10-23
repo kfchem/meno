@@ -5,7 +5,7 @@ import { createWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Atom, DrawnModel, DrawnRecord, Model, WorkflowSet } from "../store/types";
 import type { Property } from "../../../../lib/entry";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
-import { readAsTable } from "./entries";
+import { BEFORE_THE_EDIT, readAsTable } from "./entries";
 import { resultOf } from "./flow";
 import { drawnSmiles, structuresAsTable } from "./structuresTable";
 import { setStructures, setStructuresTable } from "./run";
@@ -77,7 +77,9 @@ describe("a set of structures drawn as a table", () => {
     expect(column(t, "what")).toEqual(Array.from({ length: 120 }, (_, k) => `structure ${k + 1} of 120`));
     // (each with its own record, in order: the page's first, then those held)
     expect(column(t, "k")).toEqual(Array.from({ length: 120 }, (_, k) => k));
-    expect(column(t, "SMILES").slice(48, 52)).toEqual(["CCO", "CCO", "CCCO", "CCCO"]);
+    expect(column(t, "SMILES (drawing, no stereo)").slice(48, 52)).toEqual(["CCO", "CCO", "CCCO", "CCCO"]);
+    // (no step gave any its SMILES: no column of them)
+    expect(t.columns.map((c) => c.name)).not.toContain("SMILES (record)");
     expect(column(t, "id")[0]).toBe("structure:5#0");
     expect(setStructures(store.getState(), set).map((e) => e.place)).toEqual(Array.from({ length: 120 }, (_, k) => k));
   });
@@ -95,9 +97,10 @@ describe("a set of structures drawn as a table", () => {
     const { store, set } = holding(2, 0, record);
     const t = setStructuresTable(store.getState(), set);
     const head = t.columns.map((c) => (c.kind === "number" && c.unit !== "none" ? `${c.name} (${c.unit})` : c.name));
-    expect(head).toEqual(["id", "what", "SMILES", "state", "made", "made_from.nll", "mw (g/mol)", "tpsa (Å2)"]);
-    // (its SMILES as the step that made it gave it - its stereo with it - and not again among its values)
-    expect(column(t, "SMILES")).toEqual(["CC[C@@H](C)O", "CC[C@H](C)O"]);
+    expect(head).toEqual(["id", "what", "SMILES (record)", "SMILES (drawing, no stereo)", "state", "made", "made_from.nll", "mw (g/mol)", "tpsa (Å2)"]);
+    // (its SMILES as the step that made it gave it - its stereo with it - and not again among its values; the drawing's beside it, never in its place)
+    expect(column(t, "SMILES (record)")).toEqual(["CC[C@@H](C)O", "CC[C@H](C)O"]);
+    expect(column(t, "SMILES (drawing, no stereo)")).toEqual(["CCO", "CCO"]);
     expect(column(t, "mw")).toEqual([74.123, 74.123]);
     expect(column(t, "made_from.nll")).toEqual([23.5, 23.5]);
     expect(column(t, "state")).toEqual(["finished", "finished"]);
@@ -114,6 +117,40 @@ describe("a set of structures drawn as a table", () => {
     expect(column(t, "set aside")).toEqual([null, null, "not mw < 500 g/mol (612.4 g/mol)"]);
     // (no column of why where none was set aside)
     expect(setStructuresTable(store.getState(), { ...set, members: set.members!.slice(0, 2) }).columns.map((c) => c.name)).not.toContain("set aside");
+  });
+
+  it("never mixes a SMILES a step gave with one written from the drawing: rows of both, each in its own column", () => {
+    // (two enantiomers a step gave, and one drawn by the chemist with none given: the record's column blank for it)
+    const record = (k: number): DrawnRecord => (k < 2 ? { properties: { smiles: value(k ? "F[C@@](Cl)Br" : "F[C@](Cl)Br") } } : {});
+    const { store, set } = holding(3, 0, record);
+    const t = setStructuresTable(store.getState(), set);
+    expect(column(t, "SMILES (record)")).toEqual(["F[C@](Cl)Br", "F[C@@](Cl)Br", null]);
+    expect(column(t, "SMILES (drawing, no stereo)")).toEqual(["CCO", "CCO", "CCO"]);
+  });
+
+  it("says a structure edited since its record was given is that - never finished", () => {
+    const { store, set } = holding(2, 0, (k) => (k === 1 ? { stale: BEFORE_THE_EDIT } : { properties: { nll: value(20) } }));
+    const entries = setStructures(store.getState(), set);
+    // (as setMembers gives one whose drawing changed since: its record saying so, its properties gone)
+    const t = structuresAsTable(entries.map((e, k) => (k === 1 ? { ...e, record: { stale: BEFORE_THE_EDIT } } : e)));
+    expect(column(t, "state")).toEqual(["finished", "edited since: its properties were for the structure before the edit"]);
+  });
+
+  it("shows a failed structure's values worked out as they are, and a value not worked out as that - never blank, never a number", () => {
+    const failedEnergy = (why: string): Property => ({ value: 0, unit: "kcal/mol", status: { failed: why }, by });
+    const record = (k: number): DrawnRecord =>
+      k === 0
+        ? { properties: { mw: value(46.07, "g/mol"), energy: value(-1.5, "kcal/mol") } }
+        : { properties: { mw: value(46.07, "g/mol"), energy: failedEnergy("ran out of memory"), gap: failedEnergy("ran out of memory") }, status: { failed: "ran out of memory" } };
+    const { store, set } = holding(2, 0, record);
+    const t = setStructuresTable(store.getState(), set);
+    expect(column(t, "state")).toEqual(["finished", "failed: ran out of memory"]);
+    // (its weight, worked out on the structure, as it is; the energy the failed step was to give, said)
+    expect(column(t, "mw")).toEqual([46.07, 46.07]);
+    expect(column(t, "energy")).toEqual([-1.5, "not worked out: ran out of memory"]);
+    // (one no row has worked out: a column of its own, saying so)
+    expect(column(t, "gap")).toEqual([null, "not worked out: ran out of memory"]);
+    expect(t.left.map((l) => l.column)).not.toContain("energy");
   });
 
   it("reads an Enumerate's products, held off the page, with their numbers and how each was made", async () => {
@@ -137,7 +174,7 @@ describe("a set of structures drawn as a table", () => {
     expect(column(t, "number")).toEqual(Array.from({ length: 51 }, (_, k) => k + 1));
     expect(column(t, "made.how")[0]).toMatch(/R1/);
     // (written from the drawing, where no step gave its SMILES)
-    expect(column(t, "SMILES").every((s) => typeof s === "string" && s.length > 0)).toBe(true);
+    expect(column(t, "SMILES (drawing, no stereo)").every((s) => typeof s === "string" && s.length > 0)).toBe(true);
     expect(readAsTable(st(), st().sets.find((b) => b.id === out.id)!)).toBe(true);
   });
 
@@ -156,7 +193,7 @@ describe("a set of structures drawn as a table", () => {
       </EditorProvider>,
     );
     const names = [...html.matchAll(/role="columnheader"[^>]*><button[^>]*><span[^>]*>([^<]*)</g)].map((m) => m[1]);
-    expect(names).toEqual(["#", "SMILES", "state", "mw (g/mol)"]);
+    expect(names).toEqual(["#", "SMILES (drawing, no stereo)", "state", "mw (g/mol)"]);
     expect(html).toContain("120 structures");
     expect(html).toContain(`aria-rowcount="121"`);
     const drawn = html.match(/role="row" aria-rowindex/g) ?? [];

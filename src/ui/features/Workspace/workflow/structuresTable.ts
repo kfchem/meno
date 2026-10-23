@@ -12,14 +12,19 @@ import { writeSmiles, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
-import { drawnAsEntry, recordWhy, type DrawnEntry } from "./entries";
+import { BEFORE_THE_EDIT, drawnAsEntry, recordWhy, type DrawnEntry } from "./entries";
+import type { Property } from "../../../../lib/entry";
 
-/** The column of each structure's SMILES. */
-export const SMILES_COLUMN = "SMILES";
+/** The column of each structure's SMILES as the step that made it gave it, its stereo with it - none where none did. */
+export const SMILES_RECORD_COLUMN = "SMILES (record)";
+/** The column of each structure's SMILES as Meno writes it from the drawing (`drawnSmiles`): no stereo, which Meno's own code does not read from wedges. */
+export const SMILES_DRAWING_COLUMN = "SMILES (drawing, no stereo)";
 /** The column of why a structure was set aside, where any was. */
 export const ASIDE_COLUMN = "set aside";
-/** Meno's own column of each structure's state (entries `drawnAsEntry`): "finished", or "failed: <why>". */
+/** Meno's own column of each structure's state: "finished", "failed: <why>", or edited since its properties were given. */
 export const STATE_COLUMN = "state";
+/** What a structure edited since its record's properties were given is, in its state: they were not of it as it is. */
+export const EDITED_SINCE = `edited since: ${BEFORE_THE_EDIT}`;
 /** The property a step gives a structure's SMILES under, as it gave it (*Generate*, *Stereoisomers*). */
 const SMILES_PROPERTY = "smiles";
 
@@ -45,23 +50,36 @@ export function drawnSmiles(drawn: Model): string {
   return atoms.length ? writeSmiles(atoms, bonds, 0) : "";
 }
 
+/** A value a step was to give and did not, as its cell says it: "not worked out: <why>" - never blank, never a number. */
+function notGiven(p: Property | undefined): string | null {
+  const st = p?.status;
+  if (!st || st === "computed") return null;
+  return "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`;
+}
+
 /**
  * Structures drawn as a table - Chart's too, where it takes them: a row
  * for each, in their order. Its columns: the row's id (`idOf`); what it is
- * ("structure 3 of 120"); its SMILES - as the step that made it gave it,
- * else written from the drawing (`drawnSmiles`); its state, "finished" or
- * "failed: <why>"; why it was set aside, where any was; then each property
- * its record holds, under its own name, a number's with its unit - the
- * values of the one it was made from as named (`made_from.nll`). A
- * property no column can hold, or one with no value, is said in `left`,
- * as for molecules (lib/table `moleculesAsTable`).
+ * ("structure 3 of 120"); its SMILES as the step that made it gave it,
+ * where any did (`SMILES (record)`), and as Meno writes it from the
+ * drawing, no stereo (`drawnSmiles`) - the two never mixed in one column;
+ * its state - "finished", "failed: <why>", or edited since its properties
+ * were given (`EDITED_SINCE`), never finished then; why it was set aside,
+ * where any was; then each property its record holds, under its own name,
+ * a number's with its unit - the values of the one it was made from as
+ * named (`made_from.nll`). A value worked out on the structure is shown as
+ * it is, whatever its state; one a step was to give and did not says so in
+ * its cell ("not worked out: <why>"), a column of its own where no row has
+ * it worked out - never blank, never a number (a chart takes a failed row
+ * as no result). A property no column can hold, or one with no value, is
+ * said in `left`, as for molecules (lib/table `moleculesAsTable`).
  */
 export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: number) => string = (k) => `structure:${k + 1}`): Table {
   const n = entries.length;
+  const read = entries.map((e, k) => drawnAsEntry(e, idOf(k)));
   const seen = moleculesAsTable(
-    entries.map((e, k) => {
-      const entry = drawnAsEntry(e, idOf(k));
-      // (its SMILES its own column: not again among the record's)
+    read.map((entry) => {
+      // (its SMILES and state columns of their own: not again among the record's)
       const { [SMILES_PROPERTY]: _smiles, [STATE_COLUMN]: _state, ...properties } = entry.properties;
       return { ...entry, properties };
     }),
@@ -69,27 +87,53 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
   // (moleculesAsTable's own first three - id, constitution, configuration - are of a molecule's atoms, which an entry read
   //  by its record has none of: its id kept, its SMILES and state in their place)
   const own = seen.columns.slice(3);
+  const ownRows = seen.rows.map((r) => r.slice(3));
+  // (a value not worked out, in its cell: in its column, the first of its ways where it has several, or one of its own)
+  const notWorked = new Map<string, (string | null)[]>();
+  read.forEach((entry, k) => {
+    for (const [name, p] of Object.entries(entry.properties)) {
+      const said = name === SMILES_PROPERTY || name === STATE_COLUMN ? null : notGiven(p);
+      if (said == null) continue;
+      const cells = notWorked.get(name) ?? Array<string | null>(n).fill(null);
+      cells[k] = said;
+      notWorked.set(name, cells);
+    }
+  });
+  const extra: TableColumn[] = [];
+  for (const [name, cells] of notWorked) {
+    const at = own.findIndex((c) => c.name === name || c.name.startsWith(`${name} \u00b7 `));
+    if (at >= 0) cells.forEach((c, k) => c != null && (ownRows[k][at] = c));
+    else {
+      extra.push({ name, kind: "text" });
+      ownRows.forEach((r, k) => r.push(cells[k]));
+    }
+  }
+  const left = seen.left.filter((l) => !notWorked.has(l.column) || !/not worked out/.test(l.why));
+  const recorded = entries.map((e) => {
+    const v = e.record?.properties?.[SMILES_PROPERTY]?.value;
+    return typeof v === "string" && v ? v : null;
+  });
   const aside = entries.map((e) => recordWhy(e.record));
+  const anyRecorded = recorded.some((s) => s != null);
   const anyAside = aside.some((w) => w != null);
   const columns: TableColumn[] = [
     seen.columns[0],
     { name: WHAT_COLUMN, kind: "text" },
-    { name: SMILES_COLUMN, kind: "text" },
+    ...(anyRecorded ? [{ name: SMILES_RECORD_COLUMN, kind: "text" } as const] : []),
+    { name: SMILES_DRAWING_COLUMN, kind: "text" },
     { name: STATE_COLUMN, kind: "text" },
     ...(anyAside ? [{ name: ASIDE_COLUMN, kind: "text" } as const] : []),
     ...own,
+    ...extra,
   ];
-  const rows = entries.map((e, k): Cell[] => {
-    const given = e.record?.properties?.[SMILES_PROPERTY]?.value;
-    const entry = drawnAsEntry(e, idOf(k));
-    return [
-      seen.rows[k][0],
-      `structure ${k + 1} of ${n}`,
-      typeof given === "string" && given ? given : drawnSmiles(e.drawn),
-      String(entry.properties[STATE_COLUMN]?.value ?? ""),
-      ...(anyAside ? [aside[k] ?? null] : []),
-      ...seen.rows[k].slice(3),
-    ];
-  });
-  return { ...seen, columns, rows };
+  const rows = entries.map((e, k): Cell[] => [
+    seen.rows[k][0],
+    `structure ${k + 1} of ${n}`,
+    ...(anyRecorded ? [recorded[k]] : []),
+    drawnSmiles(e.drawn),
+    e.record?.stale === BEFORE_THE_EDIT ? EDITED_SINCE : String(read[k].properties[STATE_COLUMN]?.value ?? ""),
+    ...(anyAside ? [aside[k] ?? null] : []),
+    ...ownRows[k],
+  ]);
+  return { ...seen, columns, rows, left };
 }

@@ -2142,16 +2142,27 @@ molecules in 3D does: *Open as a table* on its menu (workflow
   holds off it (`drawnCollection`), all of them, in the step's order - the
   page's first, as a step after it takes them (`setStructures`). A set
   that shows 50 of 120 has 120 rows.
-- **Its columns**: its place (#); its SMILES - as the step that made it
-  gave it (`smiles` on its record), else written by Meno from the drawing:
-  its constitution, Kekulé, no stereo, a label of no element as `*`; its
-  state, "finished" or "failed: <why>", as a Filter reads it
-  (`drawnAsEntry`); why it was set aside, where any was; then each value
-  its record holds, under its own name, a number's with its unit - those
-  of the structure it was made from as named (`made_from.nll`), an
-  *Enumerate*'s `number` and `made.how` among them. A value no column can
-  hold, or one missing, is counted in its head, as for molecules
-  (lib/table `moleculesAsTable`).
+- **Its columns**: its place (#); its SMILES as the step that made it
+  gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
+  where any did; its SMILES as Meno writes it from the drawing (`SMILES
+  (drawing, no stereo)`: its constitution, Kekulé, a label of no element
+  as `*` - Meno's own code reads no stereo from wedges, and the head says
+  so). The two are never mixed in one column: two enantiomers would read
+  the same. Then its state - "finished", "failed: <why>", or "edited
+  since: its properties were for the structure before the edit", never
+  finished then (`drawnAsEntry`, the record's `stale`); why it was set
+  aside, where any was; then each value its record holds, under its own
+  name, a number's with its unit - those of the structure it was made
+  from as named (`made_from.nll`), an *Enumerate*'s `number` and
+  `made.how` among them. A value no column can hold, or one with no
+  value, is counted in its head, as for molecules (lib/table
+  `moleculesAsTable`).
+- **A failed structure's values**: one worked out correctly on the
+  structure is still true, and is shown as it is, its state carrying the
+  failure. One the failed step was to give says so in its cell - "not
+  worked out: <why>" (or "not applicable: <why>") - never blank, never a
+  number; a column of its own where no row has it worked out. A chart
+  takes a failed row as no result.
 - **Sorted by any column**, its name pressed, once up and again down; #
   back to the step's order. As many rows as there are drawn only where
   they are seen.
