@@ -422,8 +422,8 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
 
-/** How many entries a molecule in 3D is: a frame each - but one, its last, where its frames are a path to it. */
-export const entriesIn = (m: Pick<Molecule3D, "frames" | "path">) => (m.path ? 1 : framesOf(m));
+/** How many entries a molecule in 3D is: a frame each - but one, its last, where its frames are a path to it; and those it converged on, of an opened optimisation or scan. */
+export const entriesIn = (m: Pick<Molecule3D, "frames" | "path" | "entryFrames">) => (m.path ? 1 : (m.entryFrames?.length ?? framesOf(m)));
 
 /**
  * The most entries a result set lays out on the page (docs/WORKFLOWS-FOUNDATION.md,
@@ -649,8 +649,9 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
-    // (a path: its last frame alone)
-    for (let f = m.path ? n - 1 : 0; f < n; f++) {
+    // (a path: its last frame alone; an opened optimisation or scan, the frames it converged on)
+    const taken = m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
+    for (const f of taken) {
       const xyz = frameXyz(m, f);
       const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });
       out.push({

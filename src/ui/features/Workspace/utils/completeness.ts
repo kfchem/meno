@@ -8,6 +8,7 @@
  * SMILES, hydrogens where the atoms' geometry puts them). Pure: over the
  * molecule, and the MOL blocks the worker answers with.
  */
+import type { Unmarked } from "../../../../lib/calc/output";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
 import { readMolfile } from "../../../../lib/chem/ctfile";
@@ -22,6 +23,30 @@ export const ORDERS_MARK = "Bond orders unknown";
 export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? "" : "s"} left out`;
 /** What a molecule says where atoms of it stood in one place as it was read: a damaged file, or none of a molecule's. */
 export const TOGETHER_MARK = "Atoms in one place";
+/** What an opened optimisation says that never converged: its last geometry is no optimum (the words a step's failure uses for it). */
+export const NOT_CONVERGED_MARK = "Not converged";
+/** What an opened optimisation or scan says whose last point never converged - no entry: "Not converged" where none of its points did, "Last point not converged" where others did. */
+export const notConvergedMark = (entries: number) => (entries > 0 ? "Last point not converged" : NOT_CONVERGED_MARK);
+/** Why none of an opened output's geometries is an entry, where it is not that none converged (lib/calc/output `Unmarked`), in a few words. */
+export const NO_ENTRY_WHY: Record<Unmarked, string> = {
+  error: "the run ended with an error",
+  cut: "the run did not come to its end",
+  path: "points of a scan or a reaction path",
+  unstated: "convergence not stated in this file",
+  unread: "which are could not be read",
+};
+/**
+ * What an opened optimisation or scan says of its frames that are steps on
+ * the way, not entries: "4 of 21 frames are entries (converged points)"; of
+ * one, "1 of 5 frames is an entry (the converged one)"; of none - none
+ * converged - "No frame is an entry (none converged)", or why none is
+ * (`NO_ENTRY_WHY`): "No frame is an entry (convergence not stated in this
+ * file)" - of an output of one geometry too, as one of more.
+ */
+export function entriesMark(entries: number, frames: number, why?: Unmarked): string {
+  if (!entries) return `No frame is an entry (${why ? NO_ENTRY_WHY[why] : "none converged"})`;
+  return `${entries} of ${frames} frames ${entries === 1 ? "is an entry (the converged one)" : "are entries (converged points)"}`;
+}
 /** What a molecule says of the atoms its file has and it leaves out, their element not read: "1 atom left out", "3 atoms left out". */
 export const atomsLeftOutMark = (n: number) => `${n.toLocaleString("en")} ${n === 1 ? "atom" : "atoms"} left out`;
 

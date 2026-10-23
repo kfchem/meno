@@ -7,7 +7,7 @@ import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { atomColour, atomRadius, bondRadiusOf, countedAtoms, hiddenAtoms, hidesCarbonHydrogens, HIDDEN_MARK, HIDDEN_MARK_COLOUR, ribbonsOf, type BondEnds, type MoleculeLook, type Role3D, type Style3D } from "../../../../lib/chem/style3d";
 import { chainRuns } from "../../../../lib/chem/biopolymer";
 import { ribbonPoints } from "./ribbon";
-import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, TOGETHER_MARK } from "./completeness";
+import { atomsLeftOutMark, leftOutMark, NO_H_MARK, noHydrogensInFile, ORDERS_MARK, ordersUnknown, entriesMark, notConvergedMark, TOGETHER_MARK } from "./completeness";
 import type { MeasureMark, SolidMark } from "../../../../lib/chem/layout2d";
 import { seenAt, type Eye } from "./page";
 import type { Carried3D, Molecule3D, Turn3D } from "../store/types";
@@ -1162,7 +1162,8 @@ export function pictureMarks(m: Carried3D, style: Style3D, eye?: Eye): SolidMark
  * leaves out what the molecule has misleads): its hydrogens on carbon
  * hidden; its file's hydrogens missing; its bond orders not known - its
  * own, or a biopolymer's chains' where they are drawn as atoms; atoms of
- * its file's it leaves out, their element not read.
+ * its file's it leaves out, their element not read; an optimisation it
+ * was opened from that never converged.
  */
 export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
   const bp = m.biopolymer;
@@ -1175,6 +1176,8 @@ export function notesOf(m: Molecule3D, solid: Solid, look: Look): string[] {
     ...(ordersUnknown(m, chainsDrawn) ? [ORDERS_MARK] : []),
     ...(m.framesLeftOut ? [leftOutMark(m.framesLeftOut)] : []),
     ...(m.together ? [TOGETHER_MARK] : []),
+    ...(m.entryFrames ? [entriesMark(m.entryFrames.length, 1 + (m.frames?.length ?? 0), m.noEntryWhy)] : []),
+    ...(m.notConverged ? [notConvergedMark(m.entryFrames?.length ?? 1)] : []),
     ...(m.atomsLeftOut ? [atomsLeftOutMark(m.atomsLeftOut)] : []),
   ];
 }

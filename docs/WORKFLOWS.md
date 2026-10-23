@@ -424,6 +424,53 @@ Conformers go through a workflow as any set does (decided):
     it is, as it says it is; a set the chemist draws round one is a
     conformer set, each molecule in it a compound, its frames its
     conformers. A file's many geometries are still many compounds.
+  - **but an optimisation's or a relaxed scan's steps are no entries**
+    (2026-10-22). Of a calculation's output that optimised, only the
+    geometries the run converged on are entries: an optimisation's last,
+    a relaxed scan's each point - as the program marks them, read by its
+    plugin (cclib's `optstatus`). The steps on the way stay frames, to be
+    looked at, never entries: before, a scan of 3 points opened as 21
+    compounds, each with an energy, and a conformer set weighted geometries
+    that were no minimum of anything. A point the run never converged on
+    is no entry either: an optimisation that never converged - one stopped
+    at its first geometry too - gives none, and says *Not converged* over
+    it; a run stopped before its last point converged - an interrupted scan
+    - gives the points it did, and says *Last point not converged*. The
+    point stays a frame, to be looked at; nothing that is no minimum is
+    weighed (the command centre, 2026-10-22, until an entry can carry its
+    own failure). Over each it says how many of its frames are entries: "4
+    of 21 frames are entries (converged points)".
+    (A step's own optimisation was already one entry, its path: *Results*.)
+  - **What is not known to be found is no entry either: never every
+    geometry for want of a mark** (the review desk, 2026-10-22). Which
+    are entries fails closed. No entry, and why, said over it as "No frame
+    is an entry (...)":
+    - a run that **ended with an error**, or **did not come to its end**
+      (cut short, still running), where the program marks none - a single
+      point too ("the run ended with an error", "the run did not come to
+      its end"). A run that marks the points it converged on before it
+      stopped keeps those, as above;
+    - the points of a **rigid scan** or a **reaction path** ("points of a
+      scan or a reaction path");
+    - other geometries, more than one, none marked - an optimisation whose
+      marks cannot be matched to its geometries, a dynamics run - and
+      marks that are not one to each geometry ("convergence not stated in
+      this file");
+    - an XYZ file a program writes of an **optimisation's steps**, as its
+      plugin knows it (`xyzSteps`) - by its name (xtb's `xtbopt.log`,
+      ORCA's `*_trj.xyz`) or, renamed, by what each frame's comment line
+      says: which converged is said in the program's output, not there
+      ("convergence not stated in this file");
+    - a workspace whose record of which are entries does not read ("which
+      are could not be read").
+
+    A geometry that does not read is left out with its own mark; each
+    other keeps its own. A frame of one of these made a molecule of its
+    own (a value set on it) keeps its being no entry, and why: it is that
+    geometry. Left as before, every frame an entry: XYZ files that are
+    ensembles by nature - a conformer search's (`crest_conformers.xyz`), a
+    relaxed scan's converged points (ORCA's `.allxyz`) - and any file no
+    plugin names as an optimisation's steps.
 - **Steps work entry by entry**, or compound by compound where the kind
   says so: *Optimise* each entry; *Energy window* and *Populations*
   within each compound of a conformer set.

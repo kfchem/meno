@@ -5,7 +5,7 @@ import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { atomAs } from "./figures";
-import { calcOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
+import { calcOf, frameReads, marksOf, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import { atomsTogether, bondsByDistance } from "../../../../utils/structureParsers";
 import { rememberOutput } from "../../../../lib/calc/asks";
 import { readOutput, readStructureFile } from "../../../../lib/calc/read";
@@ -223,7 +223,8 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
 /** One output's - or one job's - molecule in 3D; none, where it gives no geometry. Named after the file, and its job where it is one of several. */
 function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): Omit<Molecule3D, "id" | "at"> | null {
   const n = out.atoms?.length ?? 0;
-  const [f0, ...rest] = (out.frames ?? []).filter((f) => f.length === 3 * n);
+  const given = out.frames ?? [];
+  const [f0, ...rest] = given.filter((f) => frameReads(f, n));
   if (!n || !f0) return null;
   const atoms = out.atoms.map((el, i) => ({ el, x: f0[3 * i], y: f0[3 * i + 1], z: f0[3 * i + 2] }));
   const first = { atoms, bonds: bondsByDistance(atoms) };
@@ -233,6 +234,17 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
   const energies = out.energies?.length === 1 + frames.length ? out.energies : undefined;
   const calc = calcOf(out, readers, source);
   const name = filename && calc.job ? `${filename}, job ${calc.job.number}` : filename;
+  // (of an optimisation or a relaxed scan, the geometries it converged on are its entries - the rest steps on the
+  // way - where the reader marks them: each geometry kept by its own mark, one that does not read left out with
+  // its own. Where the reader says why none is - the run did not end as it should, the points of a path, its
+  // convergence not stated - none is, and why is said: never every one)
+  const read = marksOf(out);
+  const marks = read?.converged;
+  // (a run stopped before its last point converged - an interrupted scan, an optimisation cut short or never
+  // converged - gives no entry of that point: no geometry that is no minimum is weighed. It stays a frame, and
+  // the molecule says so - the command centre, 2026-10-22, until an entry can carry its own failure)
+  const unfinished = !!marks && !read?.unmarked && !marks[marks.length - 1];
+  const entryFrames = marks ? marks.flatMap((ok, i) => (ok ? [i] : [])) : undefined;
   return {
     atoms: first.atoms,
     bonds: first.bonds,
@@ -242,6 +254,9 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
     ...(energies ? { energies } : {}),
     ...(name ? { name } : {}),
     ...(together ? { together } : {}),
+    ...(entryFrames && entryFrames.length < 1 + frames.length ? { entryFrames } : {}),
+    ...(unfinished ? { notConverged: true as const } : {}),
+    ...(read?.unmarked ? { noEntryWhy: read.unmarked } : {}),
     calc,
   };
 }
