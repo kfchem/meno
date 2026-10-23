@@ -9,6 +9,7 @@
  * atom of it.
  */
 import type { Box, FigureDrawn, FigureLetter } from "../../../../lib/figure/drawn";
+import type { PageObject } from "../../../../lib/pdf/figures";
 import type { FigureRead } from "../../../../lib/figure/read";
 import type { GlyphShape } from "../../../../lib/figure/glyphs";
 import type { Model } from "../store/types";
@@ -130,8 +131,32 @@ function lettersWithin(left: readonly Pick<FigureLetter, "c" | "box">[], bonds: 
  * lying within a bond of it). A figure that reads as too much for a
  * structure (a chart, a spectrum) has none.
  */
-export function structuresOf(given: FigureDrawn, figure: number, sha256: string, page: number, known?: readonly GlyphShape[], beside: readonly Beside[] = []): PageStructure[] {
-  return figureOn(given, figure, sha256, page, known, beside).structures;
+export function structuresOf(given: FigureDrawn, figure: number, sha256: string, page: number, beside: readonly Beside[], known?: readonly GlyphShape[]): PageStructure[] {
+  return figureOn(given, figure, sha256, page, beside, known).structures;
+}
+
+/** What a page is made of, as `pageStructuresOf` is given it: each thing's kind and box (lib/pdf/figures `PageObject`), and the words a box of it holds, where words are known. */
+export type PageMade = { objects: readonly PageObject[]; wordsIn?: (box: Box) => string };
+
+/**
+ * Every structure on a page: each figure of it (`figures`, as lib/pdf/figures
+ * finds them) drawn as `drawnOf` gives it, read with all on the page that
+ * lies outside that figure beside it - so a structure the figures cut in two
+ * is refused, never read in half - and what else each figure has drawn.
+ */
+export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnOf: (k: number) => FigureDrawn | null, sha256: string, page: number, known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks[] } {
+  const structures: PageStructure[] = [];
+  const marks: PageMarks[] = [];
+  figures.forEach((box, k) => {
+    const drawn = drawnOf(k);
+    if (!drawn) return;
+    // (all of the page not within this figure: its words named, where they are known)
+    const beside = made.objects.filter((o) => !(o.box[0] >= box[0] - 0.5 && o.box[1] >= box[1] - 0.5 && o.box[2] <= box[2] + 0.5 && o.box[3] <= box[3] + 0.5)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    const read = figureOn(drawn, k, sha256, page, beside, known);
+    structures.push(...read.structures);
+    marks.push(read.marks);
+  });
+  return { structures, marks };
 }
 
 /** A box turned back to where it lies on the page. */
@@ -141,7 +166,7 @@ const boxBack = (b: Box, back: (p: Point) => Point): Box => {
 };
 
 /** One figure of a page: its structures (`structuresOf`), and what else it has drawn - its arrows, "+" signs and words - where the pointer takes none. */
-export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, known?: readonly GlyphShape[], beside: readonly Beside[] = []): { structures: PageStructure[]; marks: PageMarks } {
+export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, beside: readonly Beside[], known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks } {
   const { back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { structures: [], marks: { segments: [], points: [], boxes: [] } };
   const marks: PageMarks = {
@@ -154,7 +179,7 @@ export function figureOn(given: FigureDrawn, figure: number, sha256: string, pag
   };
   // (what was drawn as words, by the letters of each: words lying within a structure are part of it not read)
   const words = read.words.map((w) => ({ c: w.text, box: w.box }));
-  return { structures: structuresHere(read.figure, back, figure, sha256, page, words).map((st) => besideChecked(st, beside, read.figure.bond)), marks };
+  return { structures: structuresHere(read.figure, back, figure, sha256, page, words).map((st) => besideChecked(atEndChecked(st, read.figure, read.words, back), beside, read.figure.bond)), marks };
 }
 
 /** The structures of a figure read - each refused where letters of the figure no atom took, or words it read, lie within it. */
@@ -185,6 +210,27 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
       read: model ? { model } : { none: `Part of this structure could not be read ("${within}"), so none of it is taken.` },
     };
   });
+}
+
+/** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */
+const COMPOUND_NUMBER = /^\(?\d{1,3}[a-z]{0,2}['\u2032]*\)?$/;
+/** How near a bond's open end words of its figure may come before they are taken for a label not read: a third of a bond. */
+const AT_END = 0.3;
+
+/**
+ * A structure refused where words of its own figure - not a compound's
+ * number - lie right at the open end of one of its bonds (an atom of one
+ * bond, with no label): a label too wide or too tall to be read as one, the
+ * rest of the structure perhaps past it, in another figure.
+ */
+function atEndChecked(st: PageStructure, f: FigureRead, words: readonly { text: string; box: Box }[], back: (p: Point) => Point): PageStructure {
+  if ("none" in st.read) return st;
+  const degree = new Map<number, number>();
+  for (const b of f.bonds) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
+  const ends = f.atoms.flatMap((a, i) => (degree.get(i) === 1 && !a.label ? [a] : []));
+  const mine = new Set(st.atoms.map((p) => `${p.x},${p.y}`));
+  const word = words.find((w) => !COMPOUND_NUMBER.test(w.text.trim()) && ends.some((a) => mine.has(`${back(a).x},${back(a).y}`) && toBox(a, w.box) <= AT_END * f.bond));
+  return word ? { ...st, read: { none: `Part of this structure could not be read ("${word.text.trim()}" lies beside it), so none of it is taken.` } } : st;
 }
 
 /**
