@@ -912,7 +912,9 @@ work.meno (zip)
     a step's earlier runs and jobs under way. Ties whose other end is not
     there: a set's member, a result set's step, a text's molecule and words
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
-    results and its notes of what could not be read.
+    results and its notes of what could not be read. Within a structure a
+    step gave a set: each property of its record, and each entry it was
+    made from.
   - **Marks of which frames failed, or are no minimum, fail closed.** A
     molecule's marks of failure or of imaginary frequencies that do not
     read - not one for each frame, or one that is neither a mark nor

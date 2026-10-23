@@ -38,6 +38,8 @@ const NOUNS = {
   pdfInk: ["piece of handwriting on a PDF", "pieces of handwriting on PDFs"],
   set: ["set", "sets"],
   member: ["set member", "set members"],
+  property: ["property of a structure in a set", "properties of structures in sets"],
+  madeFrom: ["tie of a structure in a set to what it was made from", "ties of structures in sets to what they were made from"],
   made: ["tie of a result set to its step", "ties of result sets to their steps"],
   step: ["step", "steps"],
   wire: ["wire", "wires"],
