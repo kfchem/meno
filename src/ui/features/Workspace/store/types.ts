@@ -709,6 +709,8 @@ export type WorkflowSet = {
    * atoms.
    */
   put?: number[];
+  /** A result set of a series made from one template: the core its structures share, by their atoms' places (`SeriesCore`). */
+  core?: SeriesCore;
   /**
    * A result set of more entries than are laid out on the page
    * (docs/WORKFLOWS-FOUNDATION.md, *What a set shows*: more than
@@ -717,7 +719,15 @@ export type WorkflowSet = {
    * Its frame shows them summed up; the steps after it take them from here.
    */
   collection?: Omit<Molecule3D, "id" | "at">[];
-  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules did not read, and were left out - said with its count until the step runs again. */
+  /**
+   * A result set of more structures drawn than are laid out on the page
+   * (`LARGE_SET`, as `collection` is for molecules in 3D): what the step
+   * drew, held in the set itself, in the step's order - each drawn on its
+   * own, its atoms numbered within it, with what its step said of it - but
+   * on no page. The steps after it take them from here.
+   */
+  drawnCollection?: DrawnModel[];
+  /** A result set opened from a file, or an earlier run's shown again: how many of its molecules or structures did not read, and were left out - said with its count until the step runs again. */
   unread?: number;
   /** A table it holds (lib/table, docs/WORKFLOWS.md *Tables*): read from a file and put on the page, or a step's; no members then. */
   table?: Table;
@@ -746,6 +756,14 @@ export type DrawnRecord = { from?: string[]; properties?: Record<string, Propert
 export type DrawnModel = Model & { record?: DrawnRecord };
 /** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
 export type Member = { structure: number[]; record?: DrawnRecord } | { molecule: number } | { picture: number };
+/**
+ * The core a series of structures drawn shares (Enumerate's: docs/WORKFLOWS-FOUNDATION.md,
+ * *R groups*, "the set carries its core"): its template's atoms but its R atoms,
+ * the bonds between them, and where each R group is attached - each by its
+ * place in a product's atoms, the same in every product - so that what
+ * comes after can line them up exactly.
+ */
+export type SeriesCore = { atoms: number[]; bonds: [number, number][]; attach: Record<string, number[]> };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -801,7 +819,7 @@ export type RunKeptResults = {
   holds: SetKind;
   unread?: number;
   restUnread?: number;
-  drawn?: { made: DrawnModel[]; rest: DrawnModel[] };
+  drawn?: { made: DrawnModel[]; rest: DrawnModel[]; core?: SeriesCore };
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by

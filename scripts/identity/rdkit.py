@@ -1,14 +1,21 @@
-"""Writes src/ui/features/Workspace/chem/testdata/identity.rdkit.json: for
-each structure of the identity's known answers (testdata/identityCases.ts),
-the SHA-256 of the molfile Meno writes of it - the molfile itself is made
-again by the test, and checked against it - and RDKit's canonical isomeric
-SMILES of that molfile - its configurations read from the drawing itself, its 2D
-coordinates and wedges. identityOf.test.ts checks that Meno's identity
-splits the structures into the same groups as these SMILES do.
+"""Writes two fixtures of RDKit's canonical isomeric SMILES of molfiles Meno
+writes - each molfile's configurations read from the drawing itself, its
+2D coordinates and wedges - each molfile kept by its SHA-256 (the test
+makes it again, and checks it against that):
+
+- src/ui/features/Workspace/chem/testdata/identity.rdkit.json: each
+  structure of the identity's known answers (testdata/identityCases.ts).
+  identityOf.test.ts checks that Meno's identity splits the structures
+  into the same groups as these SMILES do.
+- src/ui/features/Workspace/workflow/testdata/enumerate.rdkit.json: each
+  product of Enumerate's known answers (testdata/enumerationCases.ts), with
+  RDKit's canonical SMILES of the compound written by hand for it.
+  enumerate.rdkit.test.ts checks that each product is that compound, and
+  that Meno sets aside as the same exactly those RDKit's SMILES join.
 
 Two steps, the first writing the molfiles Meno writes to .identity/:
 
-    MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts
+    MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts src/ui/features/Workspace/workflow/enumerate.rdkit.test.ts
     <chem python> scripts/identity/rdkit.py
 
 `<chem python>` is the Python of the RDKit plugin's lock (scripts/layout/README.md).
@@ -31,9 +38,11 @@ RDLogger.DisableLog("rdApp.*")
 root = pathlib.Path(__file__).resolve().parents[2]
 given = root / ".identity" / "molfiles.json"
 out = root / "src/ui/features/Workspace/chem/testdata/identity.rdkit.json"
+given_products = root / ".identity" / "products.json"
+out_products = root / "src/ui/features/Workspace/workflow/testdata/enumerate.rdkit.json"
 
 COMMAND = [
-    "MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts",
+    "MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts src/ui/features/Workspace/workflow/enumerate.rdkit.test.ts",
     "<chem python> scripts/identity/rdkit.py",
 ]
 
@@ -60,21 +69,33 @@ def removing():
     return p
 
 
+def canonical(mol, params, what):
+    """RDKit's canonical isomeric SMILES of `mol`, its hydrogens taken off as Meno's identity folds them."""
+    if mol is None:
+        sys.exit(f"RDKit could not read {what}")
+    return Chem.MolToSmiles(Chem.RemoveHs(mol, params), isomericSmiles=True, canonical=True)
+
+
 def main():
-    if not given.exists():
-        sys.exit(f"{given.relative_to(root)} is not there: run the first step (see this script's header)")
-    cases = json.loads(given.read_text())
+    for f in (given, given_products):
+        if not f.exists():
+            sys.exit(f"{f.relative_to(root)} is not there: run the first step (see this script's header)")
     params = removing()
+    reader = f"RDKit {rdkit.__version__}"
+    sha = lambda text: hashlib.sha256(text.encode("utf-8")).hexdigest()
     rows = []
-    for c in cases:
-        mol = Chem.MolFromMolBlock(c["molfile"], sanitize=True, removeHs=False)
-        if mol is None:
-            sys.exit(f"RDKit could not read {c['name']}")
-        mol = Chem.RemoveHs(mol, params)
-        sha = hashlib.sha256(c["molfile"].encode("utf-8")).hexdigest()
-        rows.append({"name": c["name"], "molfile": sha, "smiles": Chem.MolToSmiles(mol, isomericSmiles=True, canonical=True)})
-    out.write_text(json.dumps({"reader": f"RDKit {rdkit.__version__}", "command": COMMAND, "cases": rows}, indent=1) + "\n")
+    for c in json.loads(given.read_text()):
+        smiles = canonical(Chem.MolFromMolBlock(c["molfile"], sanitize=True, removeHs=False), params, c["name"])
+        rows.append({"name": c["name"], "molfile": sha(c["molfile"]), "smiles": smiles})
+    out.write_text(json.dumps({"reader": reader, "command": COMMAND, "cases": rows}, indent=1) + "\n")
     print(f"{len(rows)} structures -> {out.relative_to(root)}")
+    products = []
+    for p in json.loads(given_products.read_text()):
+        smiles = canonical(Chem.MolFromMolBlock(p["molfile"], sanitize=True, removeHs=False), params, p["name"])
+        expected = canonical(Chem.MolFromSmiles(p["expected"], sanitize=True), params, f"{p['name']}'s compound")
+        products.append({"name": p["name"], "molfile": sha(p["molfile"]), "smiles": smiles, "expected": expected})
+    out_products.write_text(json.dumps({"reader": reader, "command": COMMAND, "products": products}, indent=1) + "\n")
+    print(f"{len(products)} products -> {out_products.relative_to(root)}")
 
 
 main()

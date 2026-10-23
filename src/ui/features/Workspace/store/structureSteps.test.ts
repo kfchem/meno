@@ -43,6 +43,7 @@ import { PLUGINS } from "../../../../lib/calc/catalog";
 import { setMembers, drawnHash } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { drawnSaid, readDrawnAnswers } from "../workflow/programs";
+import { drawnFromSmiles } from "../chem/testdata/identityCases";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -98,6 +99,35 @@ describe("a plugin's step on structures drawn", () => {
   beforeEach(() => {
     asked.length = 0;
     answer = () => ({});
+  });
+
+  it("takes the structures a large result set holds off the page, each given as its blocks - and holds what it keeps off the page too", async () => {
+    // (Enumerate's 51 products, an aryl ether R1-O-Ar-R2 made 3 x 17 ways, none the same: held in its set)
+    const doc = createWorkspaceDocument();
+    const drawnT = drawnFromSmiles("*Oc1ccc(*)cc1");
+    let r = 0;
+    const model = { ...drawnT, atoms: drawnT.atoms.map((a) => (a.el === "*" ? { ...a, el: "R#", rgroups: [++r] } : a)) };
+    const r2 = ["F", "Cl", "Br", "I", "*C", "*CC", "*CCC", "*C(C)C", "*C#N", "*N", "*C=O", "*C(F)(F)F", "*S", "*C(=O)C", "*N(C)C", "*C=C", "*C#C"];
+    doc.edit("draw", (d) => ({ ...d, model, nextId: 5000 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const template = st().addSet({ x0: -50, y0: -50, x1: 50, y1: 50 });
+    const enumerate = st().addStep("enumerate", "meno", 80, 0);
+    st().updateStep(enumerate, { options: { lists: `R1: *C\n*CC\n*CCC\nR2: ${r2.join("\n")}` } });
+    st().connect({ set: template }, enumerate);
+    await st().runStep(enumerate);
+    const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
+    expect(held.drawnCollection).toHaveLength(51);
+    answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
+    const check = st().addStep("check-structures", "rdkit", 200, 0);
+    st().connect({ set: held.id }, check);
+    await st().runStep(check);
+    expect(asked).toHaveLength(1);
+    expect(asked[0].entries).toHaveLength(51);
+    expect(asked[0].entries.every((e) => e.molblocks.length === 1)).toBe(true);
+    expect(st().steps.find((s) => s.id === check)!.ran).toMatchObject({ ok: true, said: "51 of 51 kept" });
+    expect(st().sets.find((b) => b.made?.step === check && b.made.exit === "out")!.drawnCollection).toHaveLength(51);
   });
 
   it("gives each structure as its blocks, with the step's options - and takes in what it says of each, in their order", async () => {

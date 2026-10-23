@@ -417,9 +417,10 @@ const chem = {
 // --- the property ------------------------------------------------------------------
 
 /**
- * Each kind of step and who fills it: every plugin the catalogue says fills it, and Meno. Render gives pictures, and Chart a chart,
- * which have no charge; a kind that takes nothing in (Generate) is given no entry to keep one of - the charges it gives are its
- * own (stepRuns.test, *Generate*).
+ * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
+ * Render gives pictures, and Chart a chart, which have no charge; a kind that takes nothing in (Generate) is given no
+ * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
+ * alone.
  */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
@@ -507,7 +508,7 @@ describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
     // (each kind Meno defines filled by something - left out here Render and Chart, which give pictures and a chart, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "chart"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

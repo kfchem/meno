@@ -4,7 +4,7 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
@@ -100,8 +100,18 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   return `It takes ${wants}, not ${SET_WORDS[holds]}`;
 }
 
-/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn - each with its record, where it has one - in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
-export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[] } | null {
+/**
+ * What comes into a step: the kind of set, and its molecules in 3D and
+ * structures drawn - each with its record, where it has one - in order:
+ * those on the page by their atoms' ids, or, from a large result set, as
+ * it holds them off the page (`held`). Null where nothing does - or what
+ * would has not been made yet, or is pictures, which no step takes.
+ */
+export function inputOf(
+  doc: Flow,
+  step: number,
+  port?: string,
+): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[]; held?: readonly DrawnModel[] } | null {
   const from = wireInto(doc, step, port)?.from;
   if (!from) return null;
   const set = findSet(doc, from.set);
@@ -109,6 +119,7 @@ export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKin
   const holds = holdsOf(doc, set);
   // (a table, a number, a chart - no entries to give a step that works on them)
   if (!isSetKind(holds)) return null;
+  if (set.drawnCollection) return { holds, molecules: [], structures: [], records: [], held: set.drawnCollection };
   const { structures, records } = setMembers(doc, set);
   return { holds, molecules: setMolecules(doc, set), structures, records };
 }
@@ -212,6 +223,11 @@ export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
     const record = input.records[i];
     if (record) h = hash(recordKey(record), h);
   });
+  // (and each a large result set holds, with its record)
+  for (const m of input.held ?? []) {
+    h = hash(drawnKey(m, m.atoms.map((a) => a.id)), h);
+    if (m.record) h = hash(recordKey(m.record), h);
+  }
   return h.toString(36);
 }
 
