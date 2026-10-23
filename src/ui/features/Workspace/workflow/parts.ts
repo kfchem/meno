@@ -43,7 +43,7 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, unread: _u, carried: _r, ...b }) => {
+      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, drawnCollection: _d, unread: _u, carried: _r, core: _co, ...b }) => {
         // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
         const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
         const set = b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b;

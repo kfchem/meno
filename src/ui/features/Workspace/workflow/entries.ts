@@ -157,6 +157,25 @@ export function setMembers(
   return out;
 }
 
+/**
+ * Where each structure a step numbered lies on the page, with what the step
+ * said of it (Enumerate's: its record, `numberedRecord`): the middle of its atoms across, and
+ * its lowest atom - where its number is shown under it - for each structure
+ * member of the page's sets that has one.
+ */
+export function numberedOn(page: Page, sets: readonly WorkflowSet[]): { key: string; x: number; y: number; record: DrawnRecord }[] {
+  const at = new Map(page.model.atoms.map((a) => [a.id, a]));
+  return sets.flatMap((set) =>
+    (set.members ?? []).flatMap((m) => {
+      if (!("structure" in m) || recordNumber(m.record) == null) return [];
+      const atoms = m.structure.flatMap((id) => (at.has(id) ? [at.get(id)!] : []));
+      if (!atoms.length) return [];
+      const xs = atoms.map((a) => a.x);
+      return [{ key: `${set.id}:${m.structure[0]}`, x: (Math.min(...xs) + Math.max(...xs)) / 2, y: Math.min(...atoms.map((a) => a.y)), record: m.record! }];
+    }),
+  );
+}
+
 /** What `setMembers` found, as members: in its order, structures first - each with its record, where it has one - then molecules, then pictures. */
 export function membersOf(found: {
   structures: readonly (readonly number[])[];
@@ -233,6 +252,38 @@ export const recordKey = ({ of: _of, ...r }: DrawnRecord): string => stableJson(
 /** A structure as a set's member: its atoms' ids, and its record where it has one. */
 export function structureMember(ids: readonly number[], record?: DrawnRecord): Member {
   return { structure: [...ids], ...(record ? { record } : {}) };
+}
+
+/**
+ * Enumerate's record of a structure it made (docs/WORKFLOWS-FOUNDATION.md,
+ * *R groups*): its number - its combination's place in the step's order,
+ * from 1, kept whether it was made or set aside - and how it was made, in
+ * words ("R1 = Me, R2 = OMe"), as its properties; and, where it was set
+ * aside, why ("Same as 2"), as its status.
+ */
+export function numberedRecord(number: number, how: string, why?: string): DrawnRecord {
+  return {
+    properties: { number: { value: number, unit: "none", status: "computed" }, "made.how": { value: how, unit: "none", status: "computed" } },
+    status: why ? { aside: why } : "done",
+  };
+}
+
+/** A record's number (`numberedRecord`), where it has one. */
+export function recordNumber(r: DrawnRecord | undefined): number | undefined {
+  const v = r?.properties?.number?.value;
+  return typeof v === "number" ? v : undefined;
+}
+
+/** How a record says its structure was made (`numberedRecord`), where it says. */
+export function recordHow(r: DrawnRecord | undefined): string | undefined {
+  const v = r?.properties?.["made.how"]?.value;
+  return typeof v === "string" ? v : undefined;
+}
+
+/** Why a record's structure was set aside, where it was. */
+export function recordWhy(r: DrawnRecord | undefined): string | undefined {
+  const s = r?.status;
+  return s && typeof s === "object" && "aside" in s ? s.aside : undefined;
 }
 
 /** FNV-1a over a string: a short key - for what came into a step, and for the structure a record is of. */
@@ -424,7 +475,8 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   if (holds === "chart") return { holds, entries: 0, compounds: 0 };
   const molecules = setMolecules(page, set);
   const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
-  const entries = structures.length + frames;
+  // (a large result set's structures drawn, held off the page, as many as it holds)
+  const entries = structures.length + (set.drawnCollection?.length ?? 0) + frames;
   return { holds, entries, compounds: holds === "conformers" ? molecules.length : entries };
 }
 
@@ -890,7 +942,7 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
  * apart by it, and the same again by the same. FNV-1a, twice over, 64 bits
  * as hex.
  */
-export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & Pick<WorkflowSet, "members" | "collection">): string {
+export function collectionHash(page: Page & { pictures?: readonly Pick<PictureItem, "id" | "x" | "y" | "sha256">[] }, set: Frame & Pick<WorkflowSet, "members" | "collection" | "drawnCollection">): string {
   const { structures, pictures } = setMembers(page, set);
   const atoms = new Map(page.model.atoms.map((a) => [a.id, a]));
   const shown = new Map((page.pictures ?? []).map((p) => [p.id, p as Partial<Pick<PictureItem, "sha256">>]));
@@ -900,6 +952,11 @@ export function collectionHash(page: Page & { pictures?: readonly Pick<PictureIt
     const els = ids.map((id) => `${atoms.get(id)!.el}${atoms.get(id)!.charge ?? ""}`).join(",");
     const bonds = page.model.bonds.filter((b) => inIt.has(b.a) && inIt.has(b.b)).map((b) => `${ids.indexOf(b.a)}-${ids.indexOf(b.b)}:${b.order}`).join(",");
     parts.push(`s|${els}|${bonds}`);
+  }
+  // (a large result set's, held off the page: each by its own atoms' order, as those on it are by theirs)
+  for (const m of set.drawnCollection ?? []) {
+    const at = new Map(m.atoms.map((a, i) => [a.id, i]));
+    parts.push(`s|${m.atoms.map((a) => `${a.el}${a.charge ?? ""}`).join(",")}|${m.bonds.map((b) => `${at.get(b.a)}-${at.get(b.b)}:${b.order}`).join(",")}`);
   }
   for (const m of setMolecules(page, set)) {
     const frames = Array.from({ length: framesOf(m) }, (_, f) => geometryKey(frameXyz(m, f))).join(",");

@@ -4,7 +4,7 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, SeriesCore, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import { numberIn, tableIn } from "../../../../lib/table";
 import type { OptionValues } from "../../../../lib/options";
@@ -30,6 +30,16 @@ const isName = (v: unknown): v is string => typeof v === "string" && /^[a-z][a-z
  * puts them back as the ids they are given when it opens). What does not
  * read is left out.
  */
+/** The core a series shares, as a file keeps it: atoms' places, bonds between them, and each R's attach places. None where it does not read. */
+function coreIn(v: unknown): SeriesCore | undefined {
+  const c = v as { atoms?: unknown; bonds?: unknown; attach?: unknown } | null;
+  const place = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 0;
+  if (!c || !Array.isArray(c.atoms) || !c.atoms.every(place) || !Array.isArray(c.bonds) || !c.attach || typeof c.attach !== "object") return undefined;
+  const bonds = c.bonds.filter((b): b is [number, number] => Array.isArray(b) && b.length === 2 && place(b[0]) && place(b[1]));
+  const attach = Object.fromEntries(Object.entries(c.attach as Record<string, unknown>).filter(([k, v]) => /^R\d+$/.test(k) && Array.isArray(v) && v.length > 0 && v.every(place))) as Record<string, number[]>;
+  return bonds.length === c.bonds.length && Object.keys(attach).length ? { atoms: c.atoms as number[], bonds, attach } : undefined;
+}
+
 function membersIn(v: unknown): Member[] | undefined {
   if (!Array.isArray(v)) return undefined;
   return readEach(v, (x): Member | null => {
@@ -66,6 +76,11 @@ function readSet(v: unknown): WorkflowSet | null {
       const members = membersIn(b.members);
       return members ? { members } : {};
     })(),
+    // (the core its series shares, by its atoms' places: a result set's alone)
+    ...(() => {
+      const core = made ? coreIn(b.core) : undefined;
+      return core ? { core } : {};
+    })(),
     // (a set copied: the records its structures drawn carry, to be taken up as it is put down)
     ...(() => {
       const carried = readEach(b.carried, (x) => {
@@ -84,6 +99,13 @@ function readSet(v: unknown): WorkflowSet | null {
       const collection = b.collection.flatMap((m) => carriedMolecule(m));
       const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
+    })(),
+    // (or its structures drawn, each read as the page's drawing is, with what its step said of it - those that do not read counted, as molecules are)
+    ...(() => {
+      if (!Array.isArray(b.drawnCollection) || !made || Array.isArray(b.collection)) return {};
+      const drawnCollection = b.drawnCollection.flatMap(drawnModelIn);
+      const unread = b.drawnCollection.length - drawnCollection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
+      return drawnCollection.length || unread ? { drawnCollection, ...(unread ? { unread } : {}) } : {};
     })(),
     // (a table or a number it holds, read as the file kept it - what does not read left out, and counted)
     ...(() => {
@@ -169,6 +191,13 @@ function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
   return [molecule];
 }
 
+/** A structure drawn a run gave, as a file keeps it - read as the page's drawing is, with its record; none where it does not read. */
+function drawnModelIn(m: unknown): DrawnModel[] {
+  const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
+  const record = readDrawnRecord((m as DrawnModel | null)?.record);
+  return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds, ...(record ? { record } : {}) }] : [];
+}
+
 /** An earlier run a step keeps, as a file keeps it: what it did, its kind and options then, and what it gave - each molecule read as the page's are, each structure drawn as the page's drawing is. */
 function readKept(v: unknown): StepRunKept | null {
   const ran = readRan(v);
@@ -189,21 +218,18 @@ function readKept(v: unknown): StepRunKept | null {
     // (each structure read as the page's drawing is - those that do not read counted, as molecules are)
     const drawn = (list: unknown, was: unknown) => {
       const given: unknown[] = Array.isArray(list) ? list : [];
-      const models = given.flatMap((m): DrawnModel[] => {
-        const got = readDrawn({ atoms: (m as Model | null)?.atoms, bonds: (m as Model | null)?.bonds });
-        const record = readDrawnRecord((m as DrawnModel | null)?.record);
-        return got?.atoms.length ? [{ atoms: got.atoms, bonds: got.bonds, ...(record ? { record } : {}) }] : [];
-      });
+      const models = given.flatMap(drawnModelIn);
       return { models, unread: given.length - models.length + (Number.isInteger(was) && (was as number) > 0 ? (was as number) : 0) };
     };
     const made = drawn(res?.drawn?.made, res?.unread);
+    const core = coreIn((res?.drawn as { core?: unknown } | undefined)?.core);
     const aside = drawn(res?.drawn?.rest, res?.restUnread);
     return {
       ...ran,
       kind: r!.kind as StepKind,
       ...(Object.keys(options).length ? { options } : {}),
       ...(made.models.length || made.unread || aside.models.length || aside.unread
-        ? { results: { molecules: [], rest: [], holds, drawn: { made: made.models, rest: aside.models }, ...(made.unread ? { unread: made.unread } : {}), ...(aside.unread ? { restUnread: aside.unread } : {}) } }
+        ? { results: { molecules: [], rest: [], holds, drawn: { made: made.models, rest: aside.models, ...(core ? { core } : {}) }, ...(made.unread ? { unread: made.unread } : {}), ...(aside.unread ? { restUnread: aside.unread } : {}) } }
         : {}),
     };
   }

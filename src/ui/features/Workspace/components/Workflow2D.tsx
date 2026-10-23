@@ -12,7 +12,8 @@ import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen } from "../workflow/cardOpen";
-import { countOf, type Frame } from "../workflow/entries";
+import { countOf, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -276,6 +277,8 @@ export default function Workflow2D() {
   // (what has just joined a set or left it, marked a moment)
   const memberMarks = useMemberMarks(sets, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
+  // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
+  const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
   // (who does a kind of step changes as plugins are added and taken away)
   useReaders((r) => r.state);
   // (where the programs installed separately that steps run are: looked for as such steps are put down, opened, changed)
@@ -643,14 +646,24 @@ export default function Workflow2D() {
                   ? plural(count.compounds, "compound")
                   : `${plural(count.compounds, "compound")} · ${count.entries}`;
           // (a large result set: what it holds, said large in its frame)
-          const summary = b.collection
-            ? {
-                count: count.entries.toLocaleString("en-US"),
-                nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
-                holds: count.holds === "conformers" ? ("conformers" as const) : ("molecules" as const),
-                style: docStyle,
-              }
-            : undefined;
+          const summary =
+            b.collection || b.drawnCollection
+              ? {
+                  count: count.entries.toLocaleString("en-US"),
+                  nouns:
+                    count.holds === "conformers"
+                      ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}`
+                      : count.holds === "structures"
+                        ? count.entries === 1
+                          ? "structure"
+                          : "structures"
+                        : count.entries === 1
+                          ? "molecule"
+                          : "molecules",
+                  holds: count.holds === "conformers" ? ("conformers" as const) : count.holds === "structures" ? ("structures" as const) : ("molecules" as const),
+                  style: docStyle,
+                }
+              : undefined;
           return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
@@ -818,6 +831,17 @@ export default function Workflow2D() {
                 className={k.joined ? "rounded-lg border border-accel-base bg-accel-base/5" : "rounded-lg border border-dashed border-gh-gray"}
                 style={{ width: (k.frame.x1 - k.frame.x0) / PX, height: (k.frame.y1 - k.frame.y0) / PX, pointerEvents: "none" }}
               />
+            </div>
+          ))}
+          {numbered.map((n) => (
+            <div key={`n${n.key}`} style={{ ...onLayer(n.x, n.y - NOMINAL_BOND_LENGTH / 2), transform: "translateX(-50%)" }}>
+              <span
+                className="block whitespace-nowrap rounded px-1 text-[10px] leading-4 tabular-nums text-gh-gray"
+                style={{ pointerEvents: "auto" }}
+                title={[recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ")}
+              >
+                #{recordNumber(n.record)}
+              </span>
             </div>
           ))}
           {shownParts.map(({ key, item, leaving }) =>

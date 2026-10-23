@@ -1820,6 +1820,21 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
 
+**A large set of structures drawn** is held as a large set of molecules
+is (*A large result set*): an exit that gives more than 50 puts none of
+them on the page. Its set holds each structure as the step drew it, in
+the step's order, with its record, and its frame says how
+many ("120 structures"). The steps after it take them from there, and a
+run kept keeps them. The workspace's file keeps them too, or, with *Don't
+keep in the file*, only their count and hash. Opened from a file, a
+structure of theirs that does not read is left out and counted. A
+molecule in 3D made from one of them is linked to no drawing, since its
+atoms are on no page. Run again with 50 or fewer, the step puts them on
+the page as before. Copied with its step, the set holds nothing until the
+step runs again, as a large set of molecules does. Held off the page,
+they are kept as the step drew them: a change of the workspace's style
+reaches them only once they are on the page.
+
 ### A structure drawn's record (2026-10-22)
 
 A structure a step gives keeps a record of its own, as an entry does
@@ -1842,7 +1857,8 @@ All of it is optional. A structure the chemist drew has none.
   atoms (`Member.structure` and `.record`). A step's entries carry it in
   (`DrawnEntry.record`, from `inputOf`'s `records`), and its outcome
   carries it out. A run kept keeps it with each structure
-  (`RunResults.drawn`, as `DrawnModel`).
+  (`RunResults.drawn`, as `DrawnModel`), and so does a large result set
+  held off the page (`WorkflowSet.drawnCollection`).
 - **It stays with the structure** as the set's members settle again,
   moved whole or turned.
 - **It is of the structure it was given for.** The record keeps which
@@ -1889,10 +1905,63 @@ All of it is optional. A structure the chemist drew has none.
   with nothing is none.
 
 
-Not yet: a large set of structures drawn. *A large result set* holds more
-than 50 molecules in 3D in the set itself, off the page; structures drawn
-are all put on the page however many there are. Enumerate, which can make
-up to 10,000, holds them in its set the same way (P3b).
+### Enumerate: R groups (as built, 2026-10-22)
+
+As WORKFLOWS-FOUNDATION.md specifies (*Enumerate*, *R groups*), with what
+the build settled:
+
+- **The step.** *Enumerate* is Meno's own, and plugins can't take its kind
+  (`MENO_ONLY`, lib/plugins/steps). It takes one set of structures drawn,
+  *Template*, and gives *Made* and *Aside*. Its one option, *R groups, one
+  to a line*, is a box of lines (`LinesOption`, lib/options). Beside each
+  line, as it is typed, the box shows what the line was read as: the
+  group's label and formula, the element, or why it does not read.
+  Settings shows no box of lines, since a list belongs to one step.
+- **The join is `expandAbbreviation`** (Workspace/document). The canvas's
+  *Expand abbreviation* calls it, and Enumerate calls it with the group in
+  hand. There is one function for both.
+- **What stops it before it runs.** Each reason in the specification is
+  said in full, naming the line or the atom. A template whose wedges do
+  not say a configuration stops it too, since identity could not judge
+  its products.
+- **Valence.** Where a plugin does the checks and is at hand, the
+  template and each option are checked first, and anything flagged stops
+  the step in the checks' words. Otherwise the set says *Valence not
+  checked*.
+- **Configurations left open.** Where a plugin finds stereoisomers and is
+  at hand, the products made are each asked, and the set counts and names
+  by number those with a configuration left open. Otherwise it says they
+  were not looked for.
+- **The products.** Each is drawn as the join draws it and is not laid
+  out again. Each keeps its record (*A structure drawn's record*): its
+  number, how it was made, and, if it was set aside, why (*Same as 2*).
+  On the page, each one's number is shown under it (*#2*), with how it was
+  made on hover. Its result sets carry the series' core
+  (`WorkflowSet.core`). More than 50 are held in the set itself, off the
+  page (*A large set of structures drawn*).
+- **Duplicates** are judged by `identity()` (lib/chem/identity), which
+  also says when the canonical search ran out of steps. The set then says
+  how many products a duplicate may have been missed among.
+- **Known answers against RDKit.** The fixture
+  (`workflow/testdata/enumerate.rdkit.json`, made by
+  `scripts/identity/rdkit.py`) holds each product of the cases in
+  `workflow/testdata/enumerationCases.ts` by the SHA-256 of the molfile
+  Meno writes of it. It also holds RDKit's canonical SMILES of that
+  molfile, and of the compound written by hand for that combination. The
+  test checks that each product is that compound, configurations
+  included, and that the products set aside as *Same as n* are exactly
+  those whose SMILES are product n's. No case differs by design so far.
+- **Not yet.**
+  - A set of structures drawn held off the page can't yet be opened as a
+    table or shown with a sample of its structures, as a large set of
+    molecules in 3D is (6b, 6c). Its frame says how many it holds, and that
+    they are on no page.
+  - Copied without its step, such a set pastes as an empty frame of the
+    chemist's: what it holds is on no page to copy along.
+  - The series' core is by its atoms' places in each product as made. A
+    product edited by hand afterwards can leave them out of step; nothing
+    reads the core yet.
+  - *Substituent swap* and *Scaffold swap* come after.
 
 ### Tables (2026-10-22)
 

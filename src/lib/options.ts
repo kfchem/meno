@@ -34,7 +34,16 @@ export type ChoiceOption = OptionBase & {
 export type NumberOption = OptionBase & { type: "number"; default: number; min?: number; max?: number; step?: number; unit?: string; from?: Known };
 export type TextOption = OptionBase & { type: "text"; default: string; from?: Known };
 export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
-export type Option = ChoiceOption | NumberOption | TextOption | SwitchOption;
+/**
+ * Lines of text, one item to a line - Meno's own kinds' alone: a plugin's
+ * manifest declares none (`acceptOptions` reads no such type) - and, where
+ * the kind says, what each line was read as, shown beside it (`readAs`: one
+ * for each line of the text, in order, blank for a blank one).
+ */
+export type LinesOption = OptionBase & { type: "lines"; default: string; rows?: number; readAs?: (text: string) => readonly LineRead[] };
+/** What a line of a `LinesOption` was read as, in words - or why it could not be. */
+export type LineRead = { said: string; problem?: true };
+export type Option = ChoiceOption | NumberOption | TextOption | SwitchOption | LinesOption;
 
 /** The options of `options` that apply, given the values chosen of them and of `context` (other options shown with them, in another form). */
 export function shownOptions<O extends Option>(options: readonly O[], values: OptionValues, context: OptionValues = {}): O[] {
@@ -56,6 +65,7 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
     case "number":
       return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) ? v : undefined;
     case "text":
+    case "lines":
       return typeof v === "string" ? v : undefined;
     case "switch":
       return typeof v === "boolean" ? v : undefined;
