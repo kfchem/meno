@@ -217,7 +217,7 @@ pub(crate) fn replace_keeping(path: &Path, keep_old: bool, write: impl FnOnce(&m
     };
     if before.is_some() {
         // (opened as writing it in place would have opened it, and closed again: nothing changed)
-        OpenOptions::new().write(true).open(&target)?;
+        may_be_written(&target)?;
     }
     let short: String = name.to_string_lossy().chars().take(NAME_MOST).collect();
     sweep_parts(dir, &short, STALE_PART);
@@ -482,12 +482,18 @@ const WAITS_MS: [u64; 4] = [100, 200, 300, 400];
 /// `step` done; done again after each of `WAITS_MS` while it fails only as a
 /// file held a moment by another does - what it came to in the end.
 #[cfg(any(windows, test))]
-fn tried_again<S>(state: &mut S, mut step: impl FnMut(&mut S) -> Step, mut wait: impl FnMut(&mut S, std::time::Duration)) -> Step {
+fn tried_again<S>(state: &mut S, step: impl FnMut(&mut S) -> Step, wait: impl FnMut(&mut S, std::time::Duration)) -> Step {
     use win_error::*;
+    tried_while(state, step, wait, |code| matches!(code, ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION))
+}
+
+/// `step` done; done again after each of `WAITS_MS` while it fails as `held` says a file held a moment does.
+#[cfg(any(windows, test))]
+fn tried_while<S>(state: &mut S, mut step: impl FnMut(&mut S) -> Step, mut wait: impl FnMut(&mut S, std::time::Duration), held: impl Fn(u32) -> bool) -> Step {
     let mut done = step(state);
     for ms in WAITS_MS {
         match done {
-            Err(ACCESS_DENIED | SHARING_VIOLATION | LOCK_VIOLATION) => {
+            Err(code) if held(code) => {
                 wait(state, std::time::Duration::from_millis(ms));
                 done = step(state);
             }
@@ -495,6 +501,47 @@ fn tried_again<S>(state: &mut S, mut step: impl FnMut(&mut S) -> Step, mut wait:
         }
     }
     done
+}
+
+/// Opening the file there to write it, to see it may be (`may_be_written`),
+/// tried again while it is held a moment by another that lets no one else
+/// open it - a spreadsheet program saving it, say, which lets it go within a
+/// second: ERROR_SHARING_VIOLATION, ERROR_LOCK_VIOLATION. Not where it may
+/// not be written (ERROR_ACCESS_DENIED: kept read-only), which no wait
+/// changes.
+#[cfg(any(windows, test))]
+fn opened_while_held<S>(state: &mut S, step: impl FnMut(&mut S) -> Step, wait: impl FnMut(&mut S, std::time::Duration)) -> Step {
+    use win_error::*;
+    tried_while(state, step, wait, |code| matches!(code, SHARING_VIOLATION | LOCK_VIOLATION))
+}
+
+/// Whether the file at `target` may be written: opened as writing it in
+/// place would open it, and closed again - nothing changed. A file kept
+/// read-only, or a folder, may not.
+#[cfg(not(windows))]
+fn may_be_written(target: &Path) -> io::Result<()> {
+    OpenOptions::new().write(true).open(target).map(|_| ())
+}
+
+/// Whether the file at `target` may be written (Windows): as elsewhere, and
+/// tried again while it is held a moment by another (`opened_while_held`) -
+/// as putting the new file in place is (`placed_over`). Still held, the
+/// save fails, and the file is as it was.
+#[cfg(windows)]
+fn may_be_written(target: &Path) -> io::Result<()> {
+    let mut last: Option<io::Error> = None;
+    let done = opened_while_held(
+        &mut last,
+        |last| {
+            OpenOptions::new().write(true).open(target).map(|_| ()).map_err(|e| {
+                let code = e.raw_os_error().map_or(u32::MAX, |c| c as u32);
+                *last = Some(e);
+                code
+            })
+        },
+        |_, wait| std::thread::sleep(wait),
+    );
+    done.map_err(|_| last.take().unwrap_or_else(|| io::Error::other("the file could not be opened")))
 }
 
 /// The steps of putting a new file in place over an old one on Windows,
@@ -1225,6 +1272,52 @@ mod tests {
         assert_eq!(w.waited.iter().sum::<u64>(), 1000);
         assert_eq!(w.replies.len(), 1);
         assert_eq!((w.target, w.part, w.backup), (Some("old"), None, None));
+    }
+
+    #[test]
+    fn on_windows_a_file_held_a_moment_by_one_that_lets_no_one_open_it_is_tried_again_before_the_save() {
+        use win_error::*;
+        // (answers to opening it, in turn; the waits taken between)
+        let open = |answers: &[Step]| {
+            let mut left: std::collections::VecDeque<Step> = answers.iter().copied().collect();
+            let mut waited = Vec::new();
+            let done = opened_while_held(&mut waited, |_| left.pop_front().unwrap_or(Ok(())), |w, wait| w.push(wait.as_millis() as u64));
+            (done, waited)
+        };
+        // (held, then let go within the second: opened)
+        assert_eq!(open(&[Err(SHARING_VIOLATION), Err(LOCK_VIOLATION), Ok(())]), (Ok(()), vec![100, 200]));
+        // (held all the while: five tries over a second, then failed)
+        assert_eq!(open(&[Err(SHARING_VIOLATION); 6]), (Err(SHARING_VIOLATION), WAITS_MS.to_vec()));
+        // (one that may not be written - kept read-only - or another failure: at once, no wait)
+        for code in [ACCESS_DENIED, 2] {
+            assert_eq!(open(&[Err(code), Ok(())]), (Err(code), vec![]), "{code}");
+        }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn on_windows_a_save_over_a_file_held_a_moment_with_no_sharing_waits_for_it() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let dir = scratch();
+        let path = dir.join("held.meno");
+        fs::write(&path, b"old").unwrap();
+        // (opened by another with no sharing - as a spreadsheet program holds what it saves - let go after 0.4 s)
+        let held = OpenOptions::new().read(true).write(true).share_mode(0).open(&path).unwrap();
+        let letting_go = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(400));
+            drop(held);
+        });
+        write_whole(&path, b"new").unwrap();
+        letting_go.join().unwrap();
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert_eq!(names(&dir), ["held.meno"]);
+        // (held for longer than the tries: the save fails, the file as it was and nothing beside it)
+        let held = OpenOptions::new().read(true).write(true).share_mode(0).open(&path).unwrap();
+        assert!(write_whole(&path, b"newer").is_err());
+        drop(held);
+        assert_eq!(fs::read(&path).unwrap(), b"new");
+        assert_eq!(names(&dir), ["held.meno"]);
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

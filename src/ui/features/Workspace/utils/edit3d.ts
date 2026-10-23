@@ -251,8 +251,12 @@ export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[],
     mirrors: _mirrors,
     failed: _failed,
     imaginary: _imaginary,
+    marksUnread: _marksUnread,
     numbers: _numbers,
     path: _path,
+    entryFrames: _entryFrames,
+    notConverged: _notConverged,
+    noEntryWhy: _noEntryWhy,
     made: _made,
     bondsFrom: _bondsFrom,
     framesLeftOut: _left,
@@ -268,5 +272,18 @@ export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[],
     at,
     ...(stereo ? { stereo } : {}),
     edited: { from: editedFrom(m, frame) },
+    ...entryKept(m, frame),
   };
+}
+
+/**
+ * What a frame made into a molecule of its own keeps of its being no entry
+ * (`Molecule3D.entryFrames`): a frame of an opened run that was none - a
+ * step on the way, a point never converged, one of a run that did not end as
+ * it should - is none still, said as it was: it is that geometry. One that
+ * was, or of a molecule whose every frame is, keeps nothing of it.
+ */
+function entryKept(m: Molecule3D, frame: number): Pick<Molecule3D, "entryFrames" | "notConverged" | "noEntryWhy"> {
+  if (!m.entryFrames || m.entryFrames.includes(frame)) return {};
+  return { entryFrames: [], ...(m.noEntryWhy ? { noEntryWhy: m.noEntryWhy } : { notConverged: true as const }) };
 }

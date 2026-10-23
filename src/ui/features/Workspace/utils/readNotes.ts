@@ -24,6 +24,7 @@ const NOUNS = {
   tableCell: ["cell of a table", "cells of tables"],
   number: ["number held in a set", "numbers held in sets"],
   valueField: ["note of how a value was worked out", "notes of how values were worked out"],
+  frameMarks: ["mark of a molecule's failed frames", "marks of molecules' failed frames"],
   frameValues: ["list of energies, numbers, shares or degeneracies", "lists of energies, numbers, shares or degeneracies"],
   stereo: ["R/S or E/Z label", "R/S or E/Z labels"],
   biopolymer: ["record of residues and chains", "records of residues and chains"],

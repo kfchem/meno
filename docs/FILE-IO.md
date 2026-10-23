@@ -57,7 +57,7 @@ built* below.
 | MOL (V2000/V3000) | `readSDfile` (`lib/chem/ctfile.ts`) via `parseSDF`, main thread | Save, Copy (`molWriter.ts`) | 3D when it says so or spreads in depth; written with no coordinates - every atom at one point - laid out as the file is read (`laidOutWhereUnplaced`) |
 | SDF | the same | Save (drawing as one record, each molecule in 3D as one) each record with no coordinates laid out, the same |
 | RXN (V2000/V3000) | `readRxnfile` via `buildEditorModelFromRXN` | Save, Copy a molecule with no coordinates laid out, the same, before the scheme is |
-| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
+| XYZ, many frames | `xyzFrames` (`utils/structureParsers.ts`) via `readStructures`; bonds from covalent radii (their single-bond radii together and a fifth over - a tenth before 2026-10-22, which left out every peroxide's O-O - or 0.15 Å over where that is more, as for H2; none between atoms within 0.1 Å), the first frame's (frame by frame where drawn) | Export: molecules in 3D only (`writeXyz`, `lib/chem/xyzWriter.ts`; *XYZ written*, below); it holds elements and positions only, so the Export card says, with counts, the charges, radicals, isotopes and bonds not written (`xyzLeavesOut`, 2026-10-22) | each frame's energy from its comment line (`lib/calc/readers.ts`); an element in any case or as its atomic number; a frame cut short or with a place that does not read as a number (not Fortran's D, "nan", "Infinity" or hexadecimal) left out, with its energy, and the molecule says how many (`wholeXyzFrames`); blank lines between frames, and a line that is ">" alone (as in ORCA's .allxyz), passed over; a line after the frames that is no count of atoms (a separator, text at the end) ends the reading, and what follows is said as a frame left out (2026-10-14); a file a plugin knows as an optimisation's steps (`xyzSteps`: by its name - xtb's `xtbopt.log`, ORCA's `*_trj.xyz` - or, renamed, by its frames' comment lines) gives no entry, "No frame is an entry (convergence not stated in this file)" (docs/WORKFLOWS.md); none whole, the file refused, saying why of its first frame ("w.xyz could not be read: its first frame ends before its atoms do (it says 3, and gives 2).", "w.xyz could not be read: line 4 gives C a place that is not a number: …"); atoms in one place said too |
 | SMILES | the plugin that fills the role (RDKit's, `plugin-rdkit`); abbreviations' SMILES by Meno's own `lib/chem/smiles.ts` | Copy as SMILES (the same plugin) | |
 | `.meno` | `readWorkspace` (`workspace.ts`) | Save | version 2: each set's members - a structure by its atoms' ids, a molecule in 3D or a picture by its place in its list - and a result set kept out of the file by its count and collection hash (`notKept`). Version 1, whose sets kept no members, is read once: each set holds what lies inside its frame as it opens. A file of version 2 does not open in a Meno before it |
 | Meno record | `readRecord` (`utils/copyPaste.ts`) | Copy, Office | in the clipboard's own flavour, an EMF comment, a PNG text chunk, OLE streams |
@@ -375,7 +375,16 @@ PLUGINS.md's contract, with three requests for files:
     the line of what the calculation was ("job 1 of 2, optimisation").
     The answer's own fields are its last job's. A route run in steps -
     Gaussian's Opt Freq - is one job (the maintainer, 2026-10-13;
-    PLUGINS.md, *The contract*).
+    PLUGINS.md, *The contract*). An ORCA job the program went on from to
+    the next came to its end: ORCA says it once, at the end of the file,
+    and each job before the last was said, until 2026-10-22, not to have
+    come to its end. Gaussian's Link1 jobs each say their own end, and are
+    held to it: one without it did not come to its end;
+  - **`converged`**, of an optimisation's or a relaxed scan's geometries,
+    each one's being one the run found converged; and **`unmarked`**,
+    where all are false for a reason of their own: `error`, `cut`,
+    `path`, `unstated` (docs/WORKFLOWS.md, *Compound sets and conformer
+    sets*).
 - **`ask {kind, key, name, text}`** gives a promise's value.
 - **`write {kind, name, molecules, options}`** gives the file's content
   (`{text}`); Meno writes it where the chemist chose.
@@ -600,7 +609,12 @@ How these behave:
     again: five tries over a second (`ERROR_SHARING_VIOLATION`,
     `ERROR_LOCK_VIOLATION`, and `ERROR_ACCESS_DENIED`, as Windows says of a
     file open elsewhere without leave to delete it; whether the file may be
-    written at all was looked at before). ReplaceFileW is always given a
+    written at all was looked at before). That look - the file opened to
+    write it, and closed again - is tried again the same way while the file
+    is held by one that lets no one else open it, as a spreadsheet program
+    holds a file it saves (`ERROR_SHARING_VIOLATION`,
+    `ERROR_LOCK_VIOLATION`); a file that may not be written
+    (`ERROR_ACCESS_DENIED`, kept read-only) fails at once. ReplaceFileW is always given a
     hidden name to keep the old file under until the new one is in place,
     so the file is never gone: where the system leaves it under that name
     (`ERROR_UNABLE_TO_MOVE_REPLACEMENT_2`), it is named as it was again,
@@ -921,6 +935,20 @@ work.meno (zip)
     reads, whole. A number a set holds that is no finite number in a unit
     Meno knows; a field of what worked a value out, or where, that does
     not read.
+  - **Marks of which frames failed, or are no minimum, fail closed.** A
+    molecule's marks of failure or of imaginary frequencies that do not
+    read - not one for each frame, or one that is neither a mark nor
+    none - are left out, and said ("marks of a molecule's failed
+    frames"). The molecule is kept whole - its geometry, frames, energies
+    and the rest - and marked so (`marksUnread`), which is saved with it.
+    Its frames are never taken for minima: *Populations* and *Energy
+    window* refuse it, saying "its frames' marks could not be read, so
+    whether it is a minimum is not known", its chip gives no shares, and
+    each of its entries says it as its status. The mark, like each frame's
+    failure and imaginary frequencies, goes with its frames wherever a
+    molecule is made of some of them - a step's results (*Duplicates*,
+    *Choose one*'s two exits, *Energy window*'s rest, *As conformers*) and
+    rows of a set's table taken out (workflow/entries `marksOf`).
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of
