@@ -72,6 +72,61 @@ describe("a molecule in 3D's species, written to an SD file and read back", () =
   });
 });
 
+describe("a molecule in 3D's species read from an SD file, taken only where nothing speaks against it", () => {
+  /** Ammonium as its atom block has it: the nitrogen's +1 carried there. */
+  const ammonium = (): Omit<Molecule3D, "id"> => ({
+    at: { x: 0, y: 0 },
+    atoms: [
+      { el: "N", x: 0, y: 0, z: 0, charge: 1 },
+      { el: "H", x: 0.6, y: 0.6, z: 0.6 },
+      { el: "H", x: -0.6, y: -0.6, z: 0.6 },
+      { el: "H", x: -0.6, y: 0.6, z: -0.6 },
+      { el: "H", x: 0.6, y: -0.6, z: -0.6 },
+    ],
+    bonds: [1, 2, 3, 4].map((h) => ({ a1: 0, a2: h, order: 1 })),
+  });
+
+  it("takes no charge other than the one its atoms carry, naming it - the atoms' stands", () => {
+    const text = sdf(ammonium());
+    expect(text).toContain(item("Charge", "1") + item("Multiplicity", "1"));
+    const { species, read } = speciesRead(text.replace(item("Charge", "1"), item("Charge", "0")));
+    expect([species?.charge, species?.from.charge]).toEqual([1, "atoms"]);
+    expect(read.itemsNotTaken).toEqual([{ record: 1, item: "Charge", why: "0 differs from the +1 its atoms carry" }]);
+    // (the same charge as its atoms': taken)
+    expect(speciesRead(text).read.itemsNotTaken).toBeUndefined();
+  });
+
+  it("takes neither where the electrons cannot have the multiplicity, naming both: ammonium a doublet", () => {
+    const { species, read } = speciesRead(sdf(ammonium()).replace(item("Multiplicity", "1"), item("Multiplicity", "2")));
+    expect(species?.from).toEqual({ charge: "atoms", multiplicity: "atoms" });
+    expect(read.itemsNotTaken).toEqual([
+      { record: 1, item: "Charge", why: "10 electrons cannot have multiplicity 2: an even count takes an odd multiplicity" },
+      { record: 1, item: "Multiplicity", why: "10 electrons cannot have multiplicity 2: an even count takes an odd multiplicity" },
+    ]);
+  });
+
+  it("takes no multiplicity alone the electrons cannot have: water a doublet", () => {
+    const bare = sdf(cation({ calc: undefined })).replace(item("Charge", "0") + item("Multiplicity", "1"), item("Multiplicity", "2"));
+    const { species, read } = speciesRead(bare);
+    expect(species).toEqual({ charge: 0, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } });
+    expect(read.itemsNotTaken).toEqual([{ record: 1, item: "Multiplicity", why: "10 electrons cannot have multiplicity 2: an even count takes an odd multiplicity" }]);
+  });
+
+  it("takes neither of an item given twice, naming it", () => {
+    const { species, read } = speciesRead(sdf(cation()).replace(item("Charge", "1"), item("Charge", "1") + item("Charge", "-1")));
+    // (and the multiplicity, given once, then meets the atoms' charge: water's 10 electrons no doublet - not taken either)
+    expect(species).toEqual({ charge: 0, multiplicity: 1, from: { charge: "atoms", multiplicity: "atoms" } });
+    expect(read.itemsNotTaken).toEqual([
+      { record: 1, item: "Charge", why: "it is given 2 times" },
+      { record: 1, item: "Multiplicity", why: "10 electrons cannot have multiplicity 2: an even count takes an odd multiplicity" },
+    ]);
+    // (given twice alike, still neither)
+    expect(speciesRead(sdf(cation()).replace(item("Multiplicity", "2"), item("Multiplicity", "2") + item("Multiplicity", "2"))).read.itemsNotTaken).toEqual([
+      { record: 1, item: "Multiplicity", why: "it is given 2 times" },
+    ]);
+  });
+});
+
 describe("a molecule in 3D's imaginary frequencies, written to an SD file", () => {
   it("writes each a saddle point was judged to have, in cm-1 as given", () => {
     const text = sdf(cation({ calc: { ...cation().calc!, imaginary: [-300.2, -45.1] } }));

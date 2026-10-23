@@ -8,7 +8,7 @@
 import { buildEditorModelFromRXN, moleculesToEditorModel, readMoleculesFromText, type EditorModel } from "../../utils/importers";
 import { energiesOf, waysOf } from "../../utils/xyzEnergies";
 import { MENO_XYZ_ENERGY } from "../chem/xyzWriter";
-import { SD_CHARGE, SD_MULTIPLICITY } from "./writers";
+import { SD_CHARGE, SD_MULTIPLICITY, speciesProblem } from "./writers";
 import { xyzEnergies, xyzSteps } from "./kinds";
 import { xyzStepsFile } from "../plugins/manifest";
 import type { Unmarked } from "../calc/output";
@@ -93,17 +93,18 @@ function saysThreeD(text: string): boolean[] {
 }
 
 /**
- * Each record's data items of an SD file, by name: the lines after its
- * molfile's "M  END", each item a header line naming it in angle brackets
- * ("> <Charge>") and its data on the lines after, to a blank line (CTfile
- * Formats, the SDfile's data items). Records split as `saysThreeD` splits them.
+ * Each record's data items of an SD file, by name, each time it is given:
+ * the lines after its molfile's "M  END", each item a header line naming it
+ * in angle brackets ("> <Charge>") and its data on the lines after, to a
+ * blank line (CTfile Formats, the SDfile's data items). Records split as
+ * `saysThreeD` splits them.
  */
-function sdDataItems(text: string): Map<string, string[]>[] {
+function sdDataItems(text: string): Map<string, string[][]>[] {
   return text
     .split(/^\$\$\$\$[ \t]*\r?$/m)
     .filter((rec) => rec.trim())
     .map((rec) => {
-      const items = new Map<string, string[]>();
+      const items = new Map<string, string[][]>();
       const lines = rec.split(/\r?\n/);
       const end = lines.findIndex((l) => /^M {2}END/.test(l));
       let data: string[] | null = null;
@@ -111,7 +112,7 @@ function sdDataItems(text: string): Map<string, string[]>[] {
         const name = /^>.*<([^>]*)>/.exec(l);
         if (name) {
           data = [];
-          if (!items.has(name[1])) items.set(name[1], data);
+          items.set(name[1], [...(items.get(name[1]) ?? []), data]);
         } else if (!l.trim()) data = null;
         else data?.push(l);
       }
@@ -119,23 +120,47 @@ function sdDataItems(text: string): Map<string, string[]>[] {
     });
 }
 
+/** A charge as it is said: its sign always. */
+const signed = (q: number) => (q > 0 ? `+${q}` : `${q}`);
+
 /**
  * The charge and spin multiplicity a record's data items give a molecule in
- * 3D (`SD_CHARGE`, `SD_MULTIPLICITY`): each taken where it is one whole
- * number - a multiplicity one or more - on one line; one that is not is not
- * taken, and named with why (`notTaken`), never guessed at.
+ * 3D (`SD_CHARGE`, `SD_MULTIPLICITY`), taken only where nothing speaks
+ * against them - never guessed at, each not taken named with why
+ * (`notTaken`): an item given twice, or not one whole number (a
+ * multiplicity one or more), is not taken; nor a charge other than the one
+ * its atoms carry, where they carry one (a charge where they carry none -
+ * a radical cation from a calculation - is taken); nor either, where the
+ * electrons they leave cannot have the multiplicity (`speciesProblem`).
  */
-function speciesItems(items: Map<string, string[]> | undefined, notTaken: (item: string, why: string) => void): Pick<FileMolecule3D, "calc"> {
+function speciesItems(items: Map<string, string[][]> | undefined, atoms: readonly ParsedAtom[], notTaken: (item: string, why: string) => void): Pick<FileMolecule3D, "calc"> {
   const whole = (item: string, least: number): number | undefined => {
-    const data = items?.get(item);
-    if (!data) return undefined;
-    const text = data.map((l) => l.trim()).filter(Boolean);
+    const given = items?.get(item);
+    if (!given) return undefined;
+    if (given.length > 1) {
+      notTaken(item, `it is given ${given.length} times`);
+      return undefined;
+    }
+    const text = given[0].map((l) => l.trim()).filter(Boolean);
     if (text.length === 1 && /^[+-]?\d+$/.test(text[0]) && Number(text[0]) >= least && Number.isSafeInteger(Number(text[0]))) return Number(text[0]);
     notTaken(item, text.length ? `"${text.join(" ").slice(0, 40)}" is not ${least > 0 ? "a whole number of one or more" : "a whole number"}` : "it is empty");
     return undefined;
   };
-  const charge = whole(SD_CHARGE, -Infinity);
-  const multiplicity = whole(SD_MULTIPLICITY, 1);
+  const carried = atoms.reduce((q, a) => q + (a.charge ?? 0), 0);
+  let charge = whole(SD_CHARGE, -Infinity);
+  let multiplicity = whole(SD_MULTIPLICITY, 1);
+  // (a charge its atoms speak against: theirs stands, as the atom block is kept)
+  if (charge != null && carried !== 0 && charge !== carried) {
+    notTaken(SD_CHARGE, `${signed(charge)} differs from the ${signed(carried)} its atoms carry`);
+    charge = undefined;
+  }
+  // (a multiplicity the electrons cannot have, with the charge they would be told: neither taken)
+  const problem = multiplicity != null ? speciesProblem({ atoms: atoms.map((a) => ({ el: a.el, x: a.x, y: a.y, z: a.z })) }, charge ?? carried, multiplicity) : null;
+  if (problem) {
+    if (charge != null) notTaken(SD_CHARGE, problem.replace(/\.$/, ""));
+    notTaken(SD_MULTIPLICITY, problem.replace(/\.$/, ""));
+    charge = multiplicity = undefined;
+  }
   return charge != null || multiplicity != null ? { calc: { readers: [], ...(charge != null ? { charge } : {}), ...(multiplicity != null ? { multiplicity } : {}) } } : {};
 }
 
@@ -321,7 +346,7 @@ export function readStructures(kind: StructureKind, filename: string, content: s
     const m = molecules[i];
     // (and its record's title, its first line, where it gives one)
     const title = m.ct?.name.trim();
-    const species = speciesItems(items[i], (item, why) => itemsNotTaken.push({ record: i + 1, item, why }));
+    const species = speciesItems(items[i], m.atoms, (item, why) => itemsNotTaken.push({ record: i + 1, item, why }));
     return { atoms: m.atoms, bonds: m.bonds, ...(filename ? { name: filename } : {}), ...(title ? { title } : {}), ...species };
   });
   if (itemsNotTaken.length) Object.assign(leftOut, { itemsNotTaken });

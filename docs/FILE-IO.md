@@ -710,8 +710,13 @@ As this part of step 5 was built (#155, from main beside step 3):
     (`> <Imaginary frequencies (cm-1)>`), `none` where its vibrations were
     worked out and it has none, the item left out where they were not.
     Opened again, an SD file's `Charge` and `Multiplicity` are what a
-    molecule in 3D was given, its atom block as it is; one that is not a
-    whole number (a multiplicity, one or more) is not taken, and named.
+    molecule in 3D was given, its atom block as it is - only where nothing
+    speaks against them; each not taken is named ("Part of the file not
+    taken"), never guessed at. Not taken: an item given twice, or not one
+    whole number (a multiplicity, one or more); a charge other than the
+    one its atoms carry, where they carry one (where they carry none - a
+    radical cation from a calculation - it is taken); and both, where the
+    electrons they leave cannot have the multiplicity.
     Each keeps its atoms' charges, radicals and
     isotopes, as a copy's MOL file does (docs/CTFILE.md). Each frame - the
     one shown, or every one - is written with the bonds it has, as the
