@@ -2428,11 +2428,25 @@ is, so it takes a set that mixes a saddle point's conformer set with
 molecules of one geometry - which a step that works on entries refuses
 (*A wire let go on an input that does not take it*).
 - **A level** is the molecules of one name - a molecule's title, else its
-  file's name, else its group - and stands at its lowest; a level of
+  file's name without its extension ("R.out" is R), else its group - and
+  stands at its lowest; a level of
   several (a saddle point's conformers) says, pointed at, of how many it is
   the lowest and which ("lowest of 7: #3"); pressed, that one is shown.
-- **Relative to** the level its option names, none named the first - in
-  kcal/mol, written to a tenth, signed.
+- **In the order the chemist means** (2026-10-24): its card lists the
+  levels that come into *Levels*, one to a line, in the order they come -
+  the set's own. The lines put in another order are the order drawn; "R =
+  HCN" shows R as HCN. A level no line names comes after the rest, as it
+  came, never left out; a line naming no level that comes in, or one
+  listed already, is said beside it and counted; two levels shown by one
+  name refuse it.
+- **Relative to** the level its card's list picks - each by the name it is
+  shown by - none picked the first; in kcal/mol, written to a tenth,
+  signed. A table into *Connects* names levels by either name.
+- **Which energy** is a list on its card of those its levels carry, each by
+  its symbol and what worked it out and where ("ΔG · Gibbs free energy ·
+  ORCA · r2SCAN-3c · 298.15 K"); the thermochemistry's corrections are no
+  level's energy, and not in it. A line that says a quantity with a symbol
+  says it by it ("TS has no G").
 - **Which energy**: an option naming the quantity, as the entries carry it
   - their electronic energy ("energy") until free energies and enthalpies
   are read. The levels are seen as a table (*Molecules seen as a table*),

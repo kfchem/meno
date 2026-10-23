@@ -31,6 +31,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
+import { diagramOptions } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -724,7 +725,8 @@ export default function Workflow2D() {
     ...steps.map((s) => {
       const info = kindInfo(s.kind);
       const doer = doerOf(s);
-      const takes = stepOptions(s);
+      // (an Energy diagram's: lists of what comes into its Levels)
+      const takes = s.kind === "energy-diagram" ? diagramOptions(flow, s, stepOptions(s)) : stepOptions(s);
       const how = howOf(takes, s.options, byOf(s) === "meno" ? info.how : undefined);
       const run = runs.get(s.id);
       return (

@@ -167,7 +167,11 @@ function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key:
   if (joined && !connects) return setRan(keepRun(doc, step), step.id, said(false, "Connects holds no table"));
   const o = step.options ?? {};
   const text = (v: unknown) => (typeof v === "string" ? v : undefined);
-  const d = diagramOf(levels, { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}) }, connects ?? undefined);
+  const d = diagramOf(
+    levels,
+    { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}), ...(text(o.levels) ? { levels: text(o.levels) } : {}) },
+    connects ?? undefined,
+  );
   if ("why" in d) return setRan(keepRun(doc, step), step.id, said(false, d.why));
   // (each level with the imaginary frequencies of the entry it stands at: said, not judged)
   const withFrequencies = { ...d, levels: d.levels.map((l) => ({ ...l, lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) } })) };

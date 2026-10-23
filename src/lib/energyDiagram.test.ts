@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deltaOf, diagramOf, diagramSaid, type DiagramValue } from "./energyDiagram";
+import { deltaOf, diagramIn, diagramOf, diagramQuantities, diagramSaid, levelsTyped, withoutExtension, type DiagramValue } from "./energyDiagram";
 import { readTable, type Table } from "./table";
 import { factor } from "./units";
 
@@ -68,7 +68,8 @@ describe("an energy diagram", () => {
       ["R", 1, -76.4],
       ["P", 1, null],
     ]);
-    expect(diagramOf(missing)).toEqual({ why: '"P" has no energy' });
+    // (a quantity with a symbol said by it: E)
+    expect(diagramOf(missing)).toEqual({ why: '"P" has no E' });
     // (the same property worked out two ways: a column for each, which levels have which said)
     const two: Table = {
       columns: [{ name: "id", kind: "entry" }, { name: "title", kind: "text" }, { name: "energy \u00b7 A", kind: "number", unit: "Eh" }, { name: "energy \u00b7 B", kind: "number", unit: "Eh" }],
@@ -80,10 +81,12 @@ describe("an energy diagram", () => {
       unread: [],
       left: [],
     };
-    expect(diagramOf(two)).toEqual({ why: 'Its levels\' energy was not worked out one way: "energy \u00b7 A" for R, TS; "energy \u00b7 B" for P' });
-    expect(diagramOf(two, { quantity: "energy \u00b7 A" })).toEqual({ why: '"P" has no energy \u00b7 A - it has "energy \u00b7 B"' });
+    expect(diagramOf(two)).toEqual({ why: 'Its levels\' E was not worked out one way: "energy \u00b7 A" for R, TS; "energy \u00b7 B" for P' });
+    // (one with no symbol: by its name, in quotes)
+    expect(diagramOf(two, { quantity: "energy \u00b7 A" })).toEqual({ why: '"P" has no "energy \u00b7 A" - it has "energy \u00b7 B"' });
     expect(diagramOf(RTP, { quantity: "number" })).toEqual({ why: '"number" is no energy' });
-    expect(diagramOf(RTP, { quantity: "G" })).toEqual({ why: 'It has no column "G"' });
+    expect(diagramOf(RTP, { quantity: "thermo.free-energy" })).toEqual({ why: "It has no G" });
+    expect(diagramOf(RTP, { quantity: "G" })).toEqual({ why: 'It has no "G"' });
     expect(diagramOf(RTP, { reference: "Q" })).toEqual({ why: 'There is no level "Q"' });
     expect(diagramOf(levels([["R", 1, -76.4]]))).toEqual({ why: "It takes two levels at least" });
   });
@@ -99,10 +102,10 @@ describe("an energy diagram", () => {
       ),
     );
     // (named by its entry, as a chart names a row it leaves)
-    expect([d.levels[1].lowestOf, d.left]).toEqual([1, [{ count: 1, why: 'of "TS" with no energy', rows: ["molecule:2#0"] }]]);
+    expect([d.levels[1].lowestOf, d.left]).toEqual([1, [{ count: 1, why: 'of "TS" with no E', rows: ["molecule:2#0"] }]]);
   });
 
-  it("names a level by its title, else its name, else its group", () => {
+  it("names a level by its title, else its name - the file it came from, without its extension - else its group", () => {
     const t: Table = {
       columns: [{ name: "id", kind: "entry" }, { name: "group", kind: "text" }, { name: "name", kind: "text" }, { name: "energy", kind: "number", unit: "kcal/mol" }],
       rows: [
@@ -113,8 +116,92 @@ describe("an energy diagram", () => {
       left: [],
     };
     expect(ok(diagramOf(t)).levels.map((l) => [l.name, l.value])).toEqual([
-      ["r.xyz", 0],
+      ["r", 0],
       ["B", 5],
     ]);
+    // (an extension begins with a letter: a number after a point is part of the name)
+    expect(["R.out", "ts.log", "TS 1.2", "2.5", ".out", "a.b.xyz"].map(withoutExtension)).toEqual(["R", "ts", "TS 1.2", "2.5", ".out", "a.b"]);
+  });
+});
+
+describe("an energy diagram's levels as Levels lists them", () => {
+  // HCN, its isomerisation's saddle point and HNC as ORCA 6.1.1 gave them (r2SCAN-3c, Opt Freq), opened in the order P, R, TS:
+  // each FINAL SINGLE POINT ENERGY, in hartrees
+  const opened = levels([
+    ["P", 1, -93.375824209007],
+    ["R", 1, -93.399651434575],
+    ["TS", 1, -93.324592691836],
+  ]);
+
+  it("draws them in the order listed, relative to the one named - R, TS, P relative to R: P 15.0, TS 47.1 kcal/mol above", () => {
+    const d = ok(diagramOf(opened, { levels: "R\nTS\nP", reference: "R" }));
+    expect(d.levels.map((l) => [l.name, Number(l.value.toFixed(2))])).toEqual([
+      ["R", 0],
+      ["TS", 47.1],
+      ["P", 14.95],
+    ]);
+    // (by hand: (-93.324592691836 + 93.399651434575) x 627.509; (-93.375824209007 + 93.399651434575) x 627.509)
+    expect([((-93.324592691836 + 93.399651434575) * KCAL).toFixed(2), ((-93.375824209007 + 93.399651434575) * KCAL).toFixed(2)]).toEqual(["47.10", "14.95"]);
+    expect([d.reference, d.links]).toEqual(["R", [[0, 1], [1, 2]]]);
+    expect(diagramSaid(d)).toBe("3 levels \u00b7 relative to R");
+    // (none listed: as they came, relative to the first)
+    expect(ok(diagramOf(opened)).levels.map((l) => l.name)).toEqual(["P", "R", "TS"]);
+  });
+
+  it("shows each by the name its line gives, and takes the reference and the lines of Connects by either name", () => {
+    const d = ok(diagramOf(opened, { levels: "R = HCN\nTS\nP = HNC", reference: "HCN" }, readTable("from,to\nR,TS\nTS,HNC\n")));
+    expect(d.levels.map((l) => [l.name, l.of])).toEqual([
+      ["HCN", "R"],
+      ["TS", undefined],
+      ["HNC", "P"],
+    ]);
+    expect([d.reference, d.links, d.left]).toEqual(["HCN", [[0, 1], [1, 2]], []]);
+    expect(ok(diagramOf(opened, { levels: "R = HCN", reference: "R" })).reference).toBe("HCN");
+    // (kept with the workspace, its other name with it)
+    expect(diagramIn(JSON.parse(JSON.stringify(d)))).toEqual(d);
+  });
+
+  it("leaves none out: those not listed after the rest, as they came; a line naming no level, or one listed already, counted", () => {
+    const d = ok(diagramOf(opened, { levels: "TS\n\nQ\nTS\nR" }));
+    expect(d.levels.map((l) => l.name)).toEqual(["TS", "R", "P"]);
+    expect(d.left).toEqual([
+      { count: 1, why: "line of Levels naming no level that comes in (Q)", rows: ["Levels, line 3"] },
+      { count: 1, why: "line of Levels naming a level listed already", rows: ["Levels, line 4"] },
+    ]);
+    expect(diagramOf(opened, { levels: "R = X\nP = X" })).toEqual({ why: 'Two levels are named "X"' });
+    expect(diagramOf(opened, { levels: "R = TS" })).toEqual({ why: 'Two levels are named "TS"' });
+  });
+
+  it("reads a line as a level's name, and a name to show it by after =", () => {
+    expect(levelsTyped("R\n  TS = saddle point \n\nP =\n= X")).toEqual([{ of: "R" }, { of: "TS", as: "saddle point" }, null, { of: "P" }, { of: "", as: "X" }]);
+  });
+});
+
+describe("the energies an energy diagram may be drawn by", () => {
+  it("are those its levels carry, each by its symbol, in words, and what worked it out and where - never a correction", () => {
+    const by = { program: "ORCA", method: "r2SCAN-3c" };
+    const t: Table = {
+      columns: [
+        { name: "id", kind: "entry" },
+        { name: "energy", kind: "number", unit: "Eh", by },
+        { name: "thermo.free-energy", kind: "number", unit: "Eh", by, at: { geometry: "own", kelvin: 298.15, atm: 1 } },
+        { name: "thermo.enthalpy", kind: "number", unit: "Eh", by, at: { geometry: "own", kelvin: 298.15 } },
+        { name: "thermo.zpve", kind: "number", unit: "Eh", by },
+        { name: "thermo.g-correction", kind: "number", unit: "Eh", by },
+        { name: "dipole", kind: "number", unit: "none" },
+        { name: "barrier", kind: "number", unit: "kJ/mol" },
+      ],
+      rows: [],
+      unread: [],
+      left: [],
+    };
+    expect(diagramQuantities(t)).toEqual([
+      { value: "energy", label: "\u0394E \u00b7 electronic energy \u00b7 ORCA \u00b7 r2SCAN-3c" },
+      { value: "thermo.free-energy", label: "\u0394G \u00b7 Gibbs free energy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15 K \u00b7 1 atm" },
+      { value: "thermo.enthalpy", label: "\u0394H \u00b7 enthalpy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15 K" },
+      { value: "barrier", label: "\u0394barrier" },
+    ]);
+    // (one worked out two ways: each a column, named for how)
+    expect(diagramQuantities({ columns: [{ name: "energy \u00b7 GFN2-xTB", kind: "number", unit: "Eh" }] })).toEqual([{ value: "energy \u00b7 GFN2-xTB", label: "\u0394E \u00b7 electronic energy \u00b7 GFN2-xTB" }]);
   });
 });

@@ -8,6 +8,8 @@ import type { Molecule3D } from "../store/types";
 import { countOf, MARKS_UNREAD } from "./entries";
 import { canWire, inputKey, resultOf, stateOf } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
+import { diagramOptions } from "./diagramOptions";
+import { stepOptions } from "./doers";
 import { runStep, whyNot, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
 import { DiagramBody } from "./ValueBody";
@@ -165,7 +167,7 @@ describe("an Energy diagram step", () => {
   it("says which level's energy was worked out otherwise - and makes nothing", () => {
     const { doc, step } = page("B3LYP");
     const ran = runStep(doc, step, W);
-    expect(ran.steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: 'Its levels\' energy was not worked out one way: "energy · GFN2-xTB" for R, P; "energy · B3LYP" for TS' });
+    expect(ran.steps!.find((x) => x.id === step)!.ran).toMatchObject({ ok: false, said: 'Its levels\' E was not worked out one way: "energy · GFN2-xTB" for R, P; "energy · B3LYP" for TS' });
     expect(diagramOf(ran, step)).toBeUndefined();
   });
 
@@ -213,5 +215,87 @@ describe("an energy diagram, in its set's frame", () => {
     // (and what was left named, pointed at)
     expect(html).toContain('1 of &quot;TS&quot; with no G: molecule:2#1 (conformer 2 of 3)');
     expect(html.match(/stroke-dasharray/g)?.length).toBe(2);
+  });
+});
+
+describe("an Energy diagram of outputs opened, its levels as its card lists them", () => {
+  // HCN, its isomerisation's saddle point and HNC as ORCA 6.1.1 gave them (r2SCAN-3c, Opt Freq): each FINAL SINGLE POINT ENERGY
+  // and Final Gibbs free energy (298.15 K, 1 atm), in hartrees - each molecule called by the file it came from, as one opened is
+  const reading = (id: string, value: number) => ({ id, on: "molecule", group: "Thermochemistry", label: id, value, quantity: "energy" }) as never;
+  const opened = (name: string, x: number, e: number, g: number): Omit<Molecule3D, "id"> => {
+    const { title: _, ...m } = water(name, x, [e], "r2SCAN-3c");
+    return { ...m, name, calc: { readers: ["cclib 1.9rc1"], program: "ORCA", method: "r2SCAN-3c", results: [reading("thermo.free-energy", g), reading("thermo.temperature", 298.15)] } };
+  };
+  /** The three opened in the order P, R, TS - as files named so come - in a set wired into an Energy diagram with `options`. */
+  function rtp(options?: Record<string, string>) {
+    let doc = addMolecule3d(emptyWorkspaceDocument(), opened("P.out", 0, -93.375824209007, -93.37984432));
+    doc = addMolecule3d(doc, opened("R.out", 4, -93.399651434575, -93.40279161));
+    doc = addMolecule3d(doc, opened("TS.out", 8, -93.324592691836, -93.33491231));
+    const set = doc.nextWorkflowId ?? 1;
+    doc = addSet(doc, { x0: -2, y0: -2, x1: 10, y1: 2 });
+    const step = doc.nextWorkflowId!;
+    doc = addStep(doc, "energy-diagram", 14, 0, options);
+    return { doc: connect(doc, { set }, step), step };
+  }
+  const levelsOf = (doc: WorkspaceDocument, step: number) => diagramOf(doc, step)!.levels.map((l) => [l.name, Number(l.value.toFixed(2))]);
+
+  it("names each level by its file, without its extension, and draws them as they come where none is listed", () => {
+    const { doc, step } = rtp();
+    const ran = runStep(doc, step, W);
+    expect(levelsOf(ran, step)).toEqual([
+      ["P", 0],
+      ["R", -14.95],
+      ["TS", 32.15],
+    ]);
+  });
+
+  it("draws them as listed, R, TS, P relative to R - ΔE 47.10 and 14.95 kcal/mol, ΔG 42.59 and 14.40, by hand from ORCA's own", () => {
+    const { doc, step } = rtp({ levels: "R\nTS\nP", reference: "R" });
+    const ran = runStep(doc, step, W);
+    expect(levelsOf(ran, step)).toEqual([
+      ["R", 0],
+      ["TS", 47.1],
+      ["P", 14.95],
+    ]);
+    expect(ran.steps!.find((x) => x.id === step)!.ran?.said).toBe("3 levels · relative to R");
+    // (by hand: the free energies' differences, x 627.509)
+    expect([((-93.33491231 + 93.40279161) * KCAL).toFixed(2), ((-93.37984432 + 93.40279161) * KCAL).toFixed(2)]).toEqual(["42.59", "14.40"]);
+    const g = runStep(updateStep(doc, step, { options: { levels: "R = HCN\nTS\nP = HNC", reference: "R", quantity: "thermo.free-energy" } }), step, W);
+    expect(levelsOf(g, step)).toEqual([
+      ["HCN", 0],
+      ["TS", 42.59],
+      ["HNC", 14.4],
+    ]);
+    expect([diagramOf(g, step)!.axis.name, diagramOf(g, step)!.reference]).toEqual(["ΔG", "HCN"]);
+  });
+
+  it("lists on its card the energies its levels carry, by symbol and how; its levels, one to a line; and which one the rest are relative to", () => {
+    const { doc, step } = rtp();
+    const s = doc.steps!.find((x) => x.id === step)!;
+    const options = diagramOptions(doc, s, stepOptions(s));
+    const byId = (id: string) => options.find((o) => o.id === id)!;
+    expect(byId("quantity")).toMatchObject({
+      type: "choice",
+      default: "energy",
+      choices: [
+        { value: "energy", label: "ΔE · electronic energy · ORCA · r2SCAN-3c" },
+        { value: "thermo.free-energy", label: "ΔG · Gibbs free energy · ORCA · r2SCAN-3c · 298.15 K" },
+      ],
+    });
+    expect(byId("levels")).toMatchObject({ type: "lines", default: "P\nR\nTS" });
+    expect(byId("reference")).toMatchObject({ type: "choice", default: "P", choices: ["P", "R", "TS"].map((n) => ({ value: n, label: n })) });
+    // (listed again, the reference's list follows - each by the name it is shown by; each line read as the level it puts where)
+    const listed = diagramOptions(doc, { ...s, options: { levels: "R = HCN\nTS\nQ\nTS" } }, stepOptions(s));
+    expect(listed.find((o) => o.id === "reference")).toMatchObject({ default: "R", choices: [{ value: "R", label: "HCN" }, { value: "TS", label: "TS" }, { value: "P", label: "P" }] });
+    const lines = listed.find((o) => o.id === "levels")!;
+    expect(lines.type === "lines" && lines.readAs?.("R = HCN\nTS\nQ\nTS")).toEqual([
+      { said: "Level 1, shown as HCN" },
+      { said: "Level 2" },
+      { said: 'No level "Q" comes in', problem: true },
+      { said: "Listed already", problem: true },
+    ]);
+    // (nothing in Levels: as the kind declares them)
+    const bare = addStep(emptyWorkspaceDocument(), "energy-diagram", 0, 0);
+    expect(diagramOptions(bare, bare.steps![0], stepOptions(bare.steps![0])).map((o) => o.type)).toEqual(["text", "lines", "text"]);
   });
 });

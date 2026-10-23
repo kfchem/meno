@@ -10,7 +10,7 @@
  * of several conformers stands at its lowest, and says of how many and
  * which.
  */
-import { axisIn, leftIn, rowNamer, type Axis, type ChartLeft } from "./chart";
+import { axisIn, howOf, leftIn, rowNamer, type Axis, type ChartLeft } from "./chart";
 import type { Table, TableColumn } from "./table";
 import { factor, isUnit, sameDimension } from "./units";
 import { imaginaryWords } from "./calc/output";
@@ -23,19 +23,44 @@ import { imaginaryWords } from "./calc/output";
  * computed). A level is drawn as it is either way: which should be a saddle
  * point the diagram cannot tell, so it says.
  */
-export type DiagramLevel = { name: string; value: number; lowestOf: number; lowest: { row: number; entry?: string; number?: number; imaginary?: number[] | "not computed" } };
+export type DiagramLevel = {
+  name: string;
+  /** The name it came in by, where *Levels* gave it another. */
+  of?: string;
+  value: number;
+  lowestOf: number;
+  lowest: { row: number; entry?: string; number?: number; imaginary?: number[] | "not computed" };
+};
 
 /** A level's imaginary frequencies as it says them, pointed at: "has 1 imaginary frequency, 300.0i cm-1", "no imaginary frequency", or "frequencies not computed". */
 export const frequenciesSaid = (imaginary: number[] | "not computed") =>
   imaginary === "not computed" ? "frequencies not computed" : imaginary.length ? `has ${imaginaryWords(imaginary)}` : "no imaginary frequency";
 
-/** The level a row of molecules seen as a table is of: its title, else its name, else its group (as the molecule is called); "" where it has none. */
+/** A file's name without its extension - letters first, as a kind of file's are - as a level is named by default by the file its molecule came from: "R.out" is "R"; "TS 1.2" stays. */
+export const withoutExtension = (name: string) => name.replace(/\.[A-Za-z][A-Za-z0-9]{0,7}$/, "") || name;
+
+/** The level a row of molecules seen as a table is of: its title, else its name - the file it came from, without its extension - else its group (as the molecule is called); "" where it has none. */
 export function levelNamer(table: Pick<Table, "columns">): (r: readonly unknown[]) => string {
   const nameAt = ["title", "name", "group"].map((name) => table.columns.findIndex((c) => c.name === name)).filter((k) => k >= 0);
   return (r) => {
-    for (const k of nameAt) if (typeof r[k] === "string" && r[k]) return r[k] as string;
+    for (const k of nameAt) if (typeof r[k] === "string" && r[k]) return table.columns[k].name === "name" ? withoutExtension(r[k] as string) : (r[k] as string);
     return "";
   };
+}
+
+/** A line of an energy diagram's *Levels*: the level it names, by the name it comes in by, and the one it is shown by, where it gives one - "R = HCN". */
+export type LevelLine = { of: string; as?: string };
+
+/** *Levels* as typed: a line for each level, in the order it is drawn - its name, and "= " a name to show it by - each blank line none. */
+export function levelsTyped(text: string): (LevelLine | null)[] {
+  return text.split(/\r?\n/).map((line) => {
+    const t = line.trim();
+    if (!t) return null;
+    const k = t.indexOf("=");
+    if (k < 0) return { of: t };
+    const as = t.slice(k + 1).trim();
+    return { of: t.slice(0, k).trim(), ...(as ? { as } : {}) };
+  });
 }
 
 export type DiagramValue = {
@@ -61,24 +86,51 @@ export type DiagramValue = {
 const SYMBOLS: Record<string, string> = { energy: "E", "thermo.free-energy": "G", "thermo.enthalpy": "H" };
 /** A quantity's name as an axis says it, relative to the reference: "ΔE", "ΔG". */
 export const deltaOf = (quantity: string) => `\u0394${SYMBOLS[quantity] ?? quantity}`;
+/** A quantity as a line says it: by its symbol, where it has one - "G" - else by its name, in quotes. */
+const quantitySaid = (quantity: string) => SYMBOLS[quantity] ?? `"${quantity}"`;
+/** Each quantity with a symbol, in words. */
+const WORDS: Record<string, string> = { energy: "electronic energy", "thermo.free-energy": "Gibbs free energy", "thermo.enthalpy": "enthalpy" };
+/** The thermochemistry's corrections, which are no level's energy: never offered as one (lib/calc thermo, workflow/entries `THERMO_PROPERTIES`). */
+const CORRECTIONS: ReadonlySet<string> = new Set(["thermo.zpve", "thermo.g-correction"]);
 
 /** The name a column of molecules seen as a table has before what tells its ways apart: "energy · A" is "energy". */
 const baseOf = (name: string) => name.split(" \u00b7 ")[0];
+
+/**
+ * The energies the levels of `table` carry, each a column to draw them by -
+ * its name - and how a list says it: its symbol relative to the reference,
+ * in words, and what worked it out and where ("ΔG · Gibbs free energy ·
+ * ORCA · r2SCAN-3c · 298.15 K"); in the table's order. Not the
+ * thermochemistry's corrections, which are no level's energy.
+ */
+export function diagramQuantities(table: Pick<Table, "columns">): { value: string; label: string }[] {
+  return table.columns.flatMap((c) => {
+    if (c.kind !== "number" || c.unit === "none" || !isUnit(c.unit) || !sameDimension(c.unit, "kcal/mol")) return [];
+    const base = baseOf(c.name);
+    if (CORRECTIONS.has(base)) return [];
+    // (a way of several, named for how in its column's name; one way alone, by what its column says)
+    const how = c.name === base ? howOf(c) : c.name.slice(base.length + 3);
+    return [{ value: c.name, label: [deltaOf(base), WORDS[base], how].filter(Boolean).join(" \u00b7 ") }];
+  });
+}
 
 const said = (names: readonly string[]) => names.map((n) => `"${n}"`).join(", ");
 
 /**
  * `table` - molecules seen as one - as an energy diagram: its column
- * `quantity` (an energy), each level the rows of one name (its `title`,
- * else `name`, else `group` column), standing at its lowest, relative to the
- * level `reference` (none named: the first); joined as `connects` says -
- * a table with columns *from* and *to*, naming levels - or, with none, each
- * to the next. Why not, where it cannot be: no such column, or not an
- * energy; a level without it - the other ways it has it said; no such
- * reference; fewer than two levels.
+ * `quantity` (an energy), each level the rows of one name (`levelNamer`),
+ * standing at its lowest; in the order `levels` lists them, each by the name
+ * it gives (`levelsTyped`), those it does not list after them as they come -
+ * none left out; relative to the level `reference` (by either name; none
+ * named: the first); joined as `connects` says - a table with columns
+ * *from* and *to*, naming levels - or, with none, each to the next. Why not,
+ * where it cannot be: no such column, or not an energy; a level without it -
+ * the other ways it has it said; two levels shown by one name; no such
+ * reference; fewer than two levels. Quantities with a symbol are said by it.
  */
-export function diagramOf(table: Table, options: { quantity?: string; reference?: string } = {}, connects?: Table): DiagramValue | { why: string } {
+export function diagramOf(table: Table, options: { quantity?: string; reference?: string; levels?: string } = {}, connects?: Table): DiagramValue | { why: string } {
   const quantity = options.quantity?.trim() || "energy";
+  const what = quantitySaid(quantity);
   const at = (name: string) => table.columns.findIndex((c) => c.name === name);
   const j = at(quantity);
   // (the level each row is of: its title, its name, or its group, as the molecule is called)
@@ -86,9 +138,9 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
   if (j < 0) {
     // (worked out in more than one way: each way a column of its own, and which levels have which)
     const ways = table.columns.flatMap((c, k) => (baseOf(c.name) === quantity && c.kind === "number" ? [{ c, k }] : []));
-    if (!ways.length) return { why: `It has no column "${quantity}"` };
+    if (!ways.length) return { why: `It has no ${what}` };
     const whose = ways.map(({ c, k }) => `${said([c.name])} for ${[...new Set(table.rows.filter((r) => r[k] != null).map(levelOf))].join(", ") || "none"}`);
-    return { why: `Its levels' ${quantity} was not worked out one way: ${whose.join("; ")}` };
+    return { why: `Its levels' ${what} was not worked out one way: ${whose.join("; ")}` };
   }
   const column = table.columns[j] as TableColumn;
   if (column.kind !== "number" || column.unit === "none" || !isUnit(column.unit) || !sameDimension(column.unit, "kcal/mol")) return { why: `"${quantity}" is no energy` };
@@ -108,17 +160,21 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
     else g.without.push(named(row));
     gathered.set(name, g);
   });
-  const levels = [...gathered.values()];
+  // (in the order Levels lists them, each by the name it gives; the rest after, as they came - a line naming no level, or one listed already, counted)
+  const listed = arranged([...gathered.values()], options.levels ?? "");
+  if ("why" in listed) return listed;
+  const levels = listed.levels;
+  const shown = (g: (typeof levels)[number]) => (g.shown ? `"${g.shown}"` : "A level");
   // (a level with no value at all: no diagram - which level, and the other ways it has one, said)
   const none = levels.filter((g) => !g.values.length);
   if (none.length) {
     const others = (g: Gathered) =>
       table.columns.flatMap((c, k) => (k !== j && baseOf(c.name) === baseOf(quantity) && table.rows.some((r) => levelOf(r) === g.name && r[k] != null) ? [c.name] : []));
-    return { why: none.map((g) => `${g.name ? `"${g.name}"` : "A level"} has no ${quantity}${others(g).length ? ` - it has ${said(others(g))}` : ""}`).join("; ") };
+    return { why: none.map((g) => `${shown(g)} has no ${what}${others(g).length ? ` - it has ${said(others(g))}` : ""}`).join("; ") };
   }
   if (levels.length < 2) return { why: "It takes two levels at least" };
-  const reference = options.reference?.trim() || levels[0].name;
-  const ref = levels.find((g) => g.name === reference);
+  const reference = options.reference?.trim();
+  const ref = reference ? levels.find((g) => g.shown === reference) ?? levels.find((g) => g.name === reference) : levels[0];
   if (!ref) return { why: `There is no level "${reference}"` };
   const lowest = (g: Gathered) => g.values.reduce((a, b) => (b.v < a.v ? b : a));
   const zero = lowest(ref).v;
@@ -127,22 +183,26 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
     const entry = entryAt >= 0 ? table.rows[low.row][entryAt] : null;
     const number = numberAt >= 0 ? table.rows[low.row][numberAt] : null;
     return {
-      name: g.name,
+      name: g.shown,
+      ...(g.shown !== g.name ? { of: g.name } : {}),
       value: (low.v - zero) * toKcal,
       lowestOf: g.values.length,
       lowest: { row: low.row, ...(typeof entry === "string" ? { entry } : {}), ...(typeof number === "number" ? { number } : {}) },
     };
   });
   // (a conformer of a level with no value, where others have one: counted)
-  const left: ChartLeft[] = levels.flatMap((g) => (g.without.length ? [{ count: g.without.length, why: `of ${g.name ? `"${g.name}"` : "a level"} with no ${quantity}`, rows: g.without }] : []));
+  const left: ChartLeft[] = [
+    ...listed.left,
+    ...levels.flatMap((g) => (g.without.length ? [{ count: g.without.length, why: `of ${shown(g)} with no ${what}`, rows: g.without }] : [])),
+  ];
 
-  // (the lines: as the table of what connects says, each row naming two levels; with none, each level to the next)
+  // (the lines: as the table of what connects says, each row naming two levels - by either name; with none, each level to the next)
   const links: [number, number][] = [];
   if (connects) {
     const from = connects.columns.findIndex((c) => c.name === "from");
     const to = connects.columns.findIndex((c) => c.name === "to");
     if (from < 0 || to < 0) return { why: 'Connects takes a table with columns "from" and "to"' };
-    const index = new Map(out.map((l, k) => [l.name, k]));
+    const index = new Map(levels.flatMap((g, k) => [[g.name, k] as const, [g.shown, k] as const]));
     const unnamed = new Set<string>();
     const missed: string[] = [];
     for (const [k, r] of connects.rows.entries()) {
@@ -159,7 +219,35 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
   } else for (let k = 1; k < out.length; k++) links.push([k - 1, k]);
 
   const axis: Axis = { name: deltaOf(quantity), unit: "kcal/mol", ...(column.by ? { by: column.by } : {}), ...(column.at ? { at: column.at } : {}) };
-  return { kind: "diagram", axis, reference, levels: out, links, left };
+  return { kind: "diagram", axis, reference: ref.shown, levels: out, links, left };
+}
+
+/**
+ * `levels` in the order the lines of `text` list them (`levelsTyped`), each
+ * by the name its line gives - or its own - and those no line names after
+ * them, as they came: none left out. A line naming no level that comes in,
+ * or one listed already, counted. Why not, where two levels would be shown
+ * by one name.
+ */
+function arranged<G extends { name: string }>(levels: readonly G[], text: string): { levels: (G & { shown: string })[]; left: ChartLeft[] } | { why: string } {
+  const byName = new Map(levels.map((g) => [g.name, g]));
+  const out: (G & { shown: string })[] = [];
+  const unknown: { line: string; name: string }[] = [];
+  const twice: string[] = [];
+  levelsTyped(text).forEach((l, k) => {
+    if (!l) return;
+    const g = byName.get(l.of);
+    if (!g) unknown.push({ line: `Levels, line ${k + 1}`, name: l.of });
+    else if (out.some((x) => x.name === l.of)) twice.push(`Levels, line ${k + 1}`);
+    else out.push({ ...g, shown: l.as ?? g.name });
+  });
+  for (const g of levels) if (!out.some((x) => x.name === g.name)) out.push({ ...g, shown: g.name });
+  const shownTwice = out.find((g, k) => out.findIndex((x) => x.shown === g.shown) !== k);
+  if (shownTwice) return { why: `Two levels are named "${shownTwice.shown}"` };
+  const left: ChartLeft[] = [];
+  if (unknown.length) left.push({ count: unknown.length, why: `line${unknown.length === 1 ? "" : "s"} of Levels naming no level that comes in (${[...new Set(unknown.map((u) => u.name))].join(", ")})`, rows: unknown.map((u) => u.line) });
+  if (twice.length) left.push({ count: twice.length, why: `line${twice.length === 1 ? "" : "s"} of Levels naming a level listed already`, rows: twice });
+  return { levels: out, left };
 }
 
 /** What an energy diagram's step says it made: how many levels, relative to which; and what was left, where anything was. */
@@ -179,6 +267,7 @@ export function diagramIn(v: unknown): DiagramValue | undefined {
     if (typeof l?.name !== "string" || !Number.isFinite(l.value) || !Number.isInteger(l.lowestOf) || l.lowestOf! < 1 || !low || !Number.isInteger(low.row)) return undefined;
     levels.push({
       name: l.name,
+      ...(typeof l.of === "string" && l.of ? { of: l.of } : {}),
       value: l.value!,
       lowestOf: l.lowestOf!,
       lowest: {

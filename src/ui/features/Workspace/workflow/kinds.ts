@@ -4,7 +4,7 @@
  * options where Meno does it. Plugins fill kinds; they bring none of their
  * own.
  */
-import { deltaOf } from "../../../../lib/energyDiagram";
+import { deltaOf, levelsTyped } from "../../../../lib/energyDiagram";
 import { numberText } from "../../../../lib/calc/results";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -350,11 +350,13 @@ export const KINDS: readonly KindInfo[] = [
       { id: "levels", name: "Levels", takes: ["molecules", "conformers"], asTable: true },
       { id: "connects", name: "Connects", takes: ["table"] },
     ],
+    // (on its card, each a list of what comes into Levels - its energies, its levels: workflow/diagramOptions)
     options: [
       { id: "quantity", label: "Energy", type: "text", default: "energy" },
+      { id: "levels", label: "Levels, in order (name = shown as)", type: "lines", default: "", rows: 3 },
       { id: "reference", label: "Relative to", type: "text", default: "" },
     ],
-    how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${v.reference || "the first"}`,
+    how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${shownAs(String(v.levels ?? ""), String(v.reference ?? "")) || "the first"}`,
   },
   // (Meno's steps on structures - docs/STRUCTURE-STEPS.md - each on a set's entries as Meno's entry records, workflow/structureSteps)
   {
@@ -409,6 +411,11 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) => measureHow(String(v.measurements ?? "")),
   },
 ];
+
+/** A level of an energy diagram by the name *Levels* shows it by, where it gives one (lib/energyDiagram `levelsTyped`); as it is named, else. */
+function shownAs(levels: string, name: string): string {
+  return levelsTyped(levels).find((l) => l?.of === name)?.as ?? name;
+}
 
 /** How a Species step does its work, in a line: what it sets, and what it leaves as each entry has it. */
 export function speciesHow(charge: string, multiplicity: string): string {
