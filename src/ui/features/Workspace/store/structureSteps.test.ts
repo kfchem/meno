@@ -126,8 +126,9 @@ describe("a plugin's step on structures drawn", () => {
     expect(asked).toHaveLength(1);
     expect(asked[0].entries).toHaveLength(51);
     expect(asked[0].entries.every((e) => e.molblocks.length === 1)).toBe(true);
-    // (half a minute for each, its stereoisomers each tried in 3D: more than a request's own two minutes)
-    expect(asked[0].ms).toBe(51 * 30_000);
+    // (half a minute for each, its stereoisomers each tried in 3D - more than a request's own two minutes - but
+    //  never more than ten: a structure looked at too long is set aside alone by the plugin)
+    expect(asked[0].ms).toBe(10 * 60_000);
     expect(st().steps.find((s) => s.id === check)!.ran).toMatchObject({ ok: true, said: "51 of 51 kept" });
     expect(st().sets.find((b) => b.made?.step === check && b.made.exit === "out")!.drawnCollection).toHaveLength(51);
   });

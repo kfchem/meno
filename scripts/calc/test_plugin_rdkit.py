@@ -1400,6 +1400,29 @@ class StructureSteps(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 20)
         self.assertEqual(got, [{"aside": "more than the 32 stereoisomers made of one (up to 1048576)", "kind": "too many"}])
 
+    def test_stereoisomers_set_aside_alone_one_that_takes_too_long(self):
+        # (one structure whose stereoisomers are slow to try in 3D - made so here, a fifth of a second each - past
+        #  the time given: set aside alone, saying so, and nothing kept of it; the other made as before)
+        worker = self.worker
+        enumerate_as_is, examine = worker.EnumerateStereoisomers, worker.EXAMINE_S
+
+        def slow(mol, options=None):
+            for isomer in enumerate_as_is(mol, options=options):
+                if mol.GetNumAtoms() > 4:
+                    time.sleep(0.2)
+                yield isomer
+
+        worker.EnumerateStereoisomers, worker.EXAMINE_S = slow, 0.3
+        try:
+            got = self.run_step("stereoisomers", [self.entry("CC(O)C(N)CC(F)CC"), self.entry("CC(O)CC")])
+        finally:
+            worker.EnumerateStereoisomers, worker.EXAMINE_S = enumerate_as_is, examine
+        self.assertEqual(got[0], {"aside": "took more than 0.3 s to examine", "kind": "too long"})
+        self.assertEqual(len(got[1]["made"]), 2)
+        # (not kept as worked out: given time, it is made whole)
+        again = self.run_step("stereoisomers", [self.entry("CC(O)C(N)CC(F)CC")])
+        self.assertEqual(len(again[0]["made"]), 8)
+
     def test_descriptors_of_each_as_drawn_with_unit_and_how(self):
         got = self.run_step("descriptors", [self.entry("CC(=O)Nc1ccc(O)cc1"), self.entry("[H+]")])
         props = got[0]["properties"]
