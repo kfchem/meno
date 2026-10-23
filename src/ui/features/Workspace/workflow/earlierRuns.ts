@@ -33,6 +33,11 @@ const counted = (n: number, one: string, many: string) => `${n.toLocaleString("e
 export function gaveOf(run: StepRunKept): string {
   const r = run.results;
   if (!r) return "no results";
+  // (structures drawn, as a step of Meno's own gives them: as many as both exits held)
+  if (r.holds === "structures") {
+    const n = (r.drawn?.made.length ?? 0) + (r.drawn?.rest.length ?? 0);
+    return n ? counted(n, "structure", "structures") : "no results";
+  }
   const all = [...r.molecules, ...r.rest];
   if (!all.length) return "no results";
   if (r.holds === "conformers") return counted(all.reduce((n, m) => n + entriesIn(m), 0), "conformer", "conformers");

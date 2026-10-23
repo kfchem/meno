@@ -21,6 +21,7 @@ import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo } from "../../../../lib/calc/output";
+import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
@@ -649,6 +650,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A set copied, as it is put down: the records of the structures drawn it
+   * held, each by its atoms' ids as pasted - taken up by those structures as
+   * its members are found from what lies inside it (workflow/model
+   * `membersSettled`), then gone.
+   */
+  carried?: { structure: number[]; record: DrawnRecord }[];
+  /**
    * A result set of structures drawn: the atoms, by id, its step put on the
    * page as it last ran - all it takes away when the step runs again. A
    * structure the chemist joined to one of them by a bond keeps its own
@@ -670,8 +678,22 @@ export type WorkflowSet = {
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
   notKept?: { count: number; hash: string };
 };
-/** One of a set's members: a structure drawn, by its atoms' ids; a molecule in 3D, or a picture, by id. */
-export type Member = { structure: number[] } | { molecule: number } | { picture: number };
+/**
+ * What a structure drawn that a step gave keeps of its own, as an entry
+ * (lib/entry `Entry`) keeps it - the drawing itself its structure and its
+ * geometry, in 2D: the entries it was made from (`from`, by id, where they
+ * have one), its properties by name, and whether it is done or was set
+ * aside, and why. All of it optional: a structure the chemist drew has none.
+ * `of` is the structure it was given for, as a key of its identity, not
+ * of how it is drawn (workflow/entries `drawnHash`): edited since, the
+ * structure is another, and its properties and status are taken away,
+ * `stale` saying why.
+ */
+export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
+/** A structure drawn as a step gave it: the drawing, and its record where it has one. */
+export type DrawnModel = Model & { record?: DrawnRecord };
+/** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
+export type Member = { structure: number[]; record?: DrawnRecord } | { molecule: number } | { picture: number };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -727,7 +749,7 @@ export type RunKeptResults = {
   holds: SetKind;
   unread?: number;
   restUnread?: number;
-  drawn?: { made: Model[]; rest: Model[] };
+  drawn?: { made: DrawnModel[]; rest: DrawnModel[] };
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by

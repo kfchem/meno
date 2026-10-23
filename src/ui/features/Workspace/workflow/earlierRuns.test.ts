@@ -109,6 +109,9 @@ describe("what a run drops, said before it", () => {
     expect(gaveOf(conformers)).toBe("13 conformers");
     expect(gaveOf({ ...optimised(at(14, 2), 0), results: undefined })).toBe("no results");
     expect(gaveOf(optimised(at(14, 2), 0))).toBe("no results");
+    // (structures drawn, both exits')
+    const drawn = { atoms: [], bonds: [] };
+    expect(gaveOf({ ...optimised(at(14, 2), 0), results: { molecules: [], rest: [], holds: "structures", drawn: { made: [drawn, drawn], rest: [drawn] } } })).toBe("3 structures");
   });
 
   it("names each step's runs where several steps drop some, and counts those past three", () => {

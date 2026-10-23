@@ -480,9 +480,26 @@ def isomers_of(mol):
 
 
 def embeddable(mol):
-    """The stereoisomers `isomers_of` gives, but none where no one of them embeds with its stereo held."""
-    options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS, tryEmbedding=True)
-    return list(EnumerateStereoisomers(mol, options=options))
+    """The stereoisomers `isomers_of` gives, but none where no one of them embeds with its stereo held.
+
+    Worked out once for each structure as it is asked about - its atoms, bonds and stereo as given, in their order
+    (`EMBEDDABLE`): a step asks `open_stereo` and then `conformers` of the same structure, and trying to embed each
+    stereoisomer is slow (a camphor some 10 s). The tries themselves are never cut short. Each caller is given
+    copies of its own."""
+    key = Chem.MolToMolBlock(mol, includeStereo=True, kekulize=False)
+    made = EMBEDDABLE.get(key)
+    if made is None:
+        options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS, tryEmbedding=True)
+        made = list(EnumerateStereoisomers(mol, options=options))
+        if len(EMBEDDABLE) >= EMBEDDABLE_KEPT:
+            EMBEDDABLE.pop(next(iter(EMBEDDABLE)))
+        EMBEDDABLE[key] = made
+    return [Chem.Mol(m) for m in made]
+
+
+#: What `embeddable` has worked out, by structure, the oldest first - as many as `EMBEDDABLE_KEPT`.
+EMBEDDABLE = {}
+EMBEDDABLE_KEPT = 64
 
 
 def held_by_none(mol):
