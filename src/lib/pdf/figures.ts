@@ -57,8 +57,17 @@ export async function figuresOn(sha256: string, page: number): Promise<Box[]> {
   if (h && h !== "asked") return h;
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
   const figures = figuresOf(objects);
+  objectsKept.set(key, objects);
   had.set(key, figures);
   return figures;
+}
+
+/** What each page whose figures were worked out is made of, kept with them. */
+const objectsKept = new Map<string, PageObject[]>();
+
+/** What a page is made of - each thing's kind and box - once its figures have been worked out (`figuresHad`); else none. */
+export function objectsHad(sha256: string, page: number): PageObject[] | null {
+  return objectsKept.get(`${sha256}:${page}`) ?? null;
 }
 
 /** How near pictures and paths are to be one figure's, in points; how near words to be its labels; how large a figure is at the least, one way and the other. */
@@ -95,9 +104,6 @@ const ARROW_LINE_THIN = 0.15;
 const PLUS_PT = 14;
 const CONDITIONS_PT = 24;
 const SHORT_WORD_PT = 40;
-/** The widest a label set between two parts of a structure is taken to be, and how tall at most - one line - to join them through it: wider, or taller, it is words. */
-const WIDE_LABEL_PT = 120;
-const LABEL_TALL_PT = 16;
 const NUMBER_PT = 14;
 /**
  * A charge drawn by a word - a ring with its sign, or a sign set high - is
@@ -181,14 +187,12 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   // through the word between them, before the small are left out)
   const labels = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] <= SHORT_WORD_PT).map((o) => o.box);
   const running = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] > SHORT_WORD_PT).map((o) => o.box);
-  // (and a wider label between them, one line high - an OSiPh2tBu, an N(Boc)2 - so a structure is never cut in two at it)
-  const wide = objects.filter((o) => o.kind === "text" && o.box[2] - o.box[0] > SHORT_WORD_PT && o.box[2] - o.box[0] <= WIDE_LABEL_PT && o.box[3] - o.box[1] <= LABEL_TALL_PT).map((o) => o.box);
   const pieces = throughLabels(
     joined(
       drawn.map((o) => o.box),
       JOIN_PT,
     ),
-    [...labels, ...wide],
+    labels,
   );
   // (a small structure - an acetate, an ammonium drawn small - is one too: a bond long at the least, of a few lines,
   // its own labels taking it to 18 points; a bullet, an arrow or an icon in a line of words is none)

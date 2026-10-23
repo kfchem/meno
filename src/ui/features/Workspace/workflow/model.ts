@@ -7,7 +7,7 @@ import type { ChartValue } from "../../../../lib/chart";
 import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
-import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
 import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMembers, structureMember, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
@@ -16,6 +16,7 @@ import { canWire, resultOf, wireInto } from "./flow";
 import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
 import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
+import { placeBelow } from "./place";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
 
@@ -48,6 +49,16 @@ export function addTableSet(doc: WorkspaceDocument, at: { x: number; y: number }
 /** A set's members, as given: a step's result set holding what the step made, in its order - on the page, so no collection of its own; and how many of them did not read, where some did not (`WorkflowSet.unread`). */
 export function holdMembers(doc: WorkspaceDocument, id: number, members: Member[], unread?: number): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, drawnCollection: _d, unread: _u, ...b }) => ({ ...b, members, ...(unread ? { unread } : {}) }));
+}
+
+/**
+ * `doc` with set `id` holding, besides the structures drawn on the page
+ * among its members, `rest` - those after them in the step's order that it
+ * does not show (look `DRAWN_ON_PAGE`) - off the page, in the set itself
+ * (`WorkflowSet.drawnCollection`).
+ */
+export function holdRest(doc: WorkspaceDocument, id: number, rest: readonly DrawnModel[]): WorkspaceDocument {
+  return rest.length ? withSet(doc, id, (b) => ({ ...b, drawnCollection: [...rest] })) : doc;
 }
 
 /**
@@ -156,7 +167,9 @@ export function addStep(doc: WorkspaceDocument, kind: StepKind, x: number, y: nu
  * that what a step will give can be wired on before it has run
  * (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and exits*). Each stands to
  * the right of the card, the first level with its top and a second under
- * it, half as high.
+ * it, half as high - or lower, where something is there already: clear of
+ * the page's sets, cards, structures, molecules and wires (place
+ * `placeBelow`).
  */
 export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocument {
   const step = doc.steps?.find((s) => s.id === stepId);
@@ -169,9 +182,10 @@ export function withExits(doc: WorkspaceDocument, stepId: number): WorkspaceDocu
     // (holding nothing yet: what lies under a new frame is not what its step made)
     if (!was) {
       const setId = next.nextWorkflowId ?? 1;
-      next = holdMembers(addSet(next, { x0: step.x + CARD_W + GAP, y0: top - high, x1: step.x + CARD_W + GAP + CARD_W, y1: top }, { step: step.id, exit: exit.id }), setId, []);
-    }
-    top = (was ? was.y0 : top - high) - BETWEEN;
+      const frame = placeBelow(next, step.x + CARD_W + GAP, top, CARD_W, high, { step: step.id });
+      next = holdMembers(addSet(next, frame, { step: step.id, exit: exit.id }), setId, []);
+      top = frame.y0 - BETWEEN;
+    } else top = was.y0 - BETWEEN;
   }
   return next;
 }
@@ -243,7 +257,7 @@ export function runningGone(now: WorkspaceDocument, then: WorkspaceDocument | un
 export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocument {
   const steps = (doc.steps ?? []).filter((s) => s.id !== id);
   if (steps.length === (doc.steps ?? []).length) return doc;
-  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length && !b.collection?.length && !b.unread).map((b) => b.id));
+  const empty = new Set((doc.sets ?? []).filter((b) => b.made?.step === id && !b.members?.length && !b.collection?.length && !b.drawnCollection?.length && !b.unread).map((b) => b.id));
   return {
     ...doc,
     steps,

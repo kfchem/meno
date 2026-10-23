@@ -97,8 +97,8 @@ export function stereoFree(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} made with ${places.length === 1 ? "its" : "their"} stereo free: no stereoisomer of ${places.length === 1 ? "it" : "them"} holds in 3D`;
 }
 
-/** How many structures drawn come into a step (flow `inputOf`): on the page, or held in a large result set. */
-const drawnIn = (input: { structures: readonly unknown[]; held?: readonly unknown[] }) => input.held?.length ?? input.structures.length;
+/** How many structures drawn come into a step (flow `inputOf`): on the page, and held in its result set after them. */
+const drawnIn = (input: { structures: readonly unknown[]; held?: readonly unknown[] }) => input.structures.length + (input.held?.length ?? 0);
 
 /** A molecule in 3D without its link to a drawing (`drawnFrom`, `drawnAs`): made from a structure held off the page, whose atoms' ids are no drawing's. */
 function unlinked<M extends { drawnFrom?: unknown; drawnAs?: unknown }>({ drawnFrom: _f, drawnAs: _a, ...m }: M): Omit<M, "drawnFrom" | "drawnAs"> {
@@ -502,10 +502,11 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const free: number[] = [];
     try {
       let chem = await pluginWorker(plugin);
-      // (each structure drawn: on the page, by its atoms; or held in a large result set, as it holds it)
-      const sources = input.held
-        ? input.held.map((m) => ({ model: m as Model, atoms: m.atoms.map((a) => a.id), off: true, record: m.record }))
-        : input.structures.map((atoms, i) => ({ model: d.model, atoms, off: false, record: input.records[i] }));
+      // (each structure drawn: on the page, by its atoms; then those held in its result set off the page, as it holds them)
+      const sources = [
+        ...input.structures.map((atoms, i) => ({ model: d.model, atoms, off: false, record: input.records[i] })),
+        ...(input.held ?? []).map((m) => ({ model: m as Model, atoms: m.atoms.map((a) => a.id), off: true, record: m.record })),
+      ];
       for (const [place, { model, atoms, off, record }] of sources.entries()) {
         if (menoStops.has(id)) break;
         working({ done: place });
@@ -643,9 +644,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const made: DrawnEntry[][] = [];
     try {
       const client = await pluginClient(plugin);
-      const given = input.held
-        ? entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
-        : input.structures.map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
+      // (each as its entry draws it: on the page, then held - inputEntries)
+      const given = entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
       answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
@@ -676,7 +676,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     //  never as its own, which stay to be worked out. That one's own made from another: what it carried of that one
     //  carried as it is, one level - of the structure it was made from still, at a remove - its own values over
     //  them, and which of how many it was left out)
-    const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
+    const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[]; properties?: Record<string, DrawnValue> }): DrawnRecord => {
       const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
       const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
       const parents = madeFrom(e.record);
@@ -685,6 +685,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         properties: {
           made: said(`${k + 1} of ${a.made.length}`),
           ...(a.smiles ? { smiles: said(a.smiles[k]) } : {}),
+          // (what the step worked out of each it made: a C=N whose E/Z it left alone, say, and why)
+          ...Object.fromEntries(Object.entries(a.properties ?? {}).map(([name, p]) => [name, valueOf(p)])),
           ...Object.fromEntries(parents),
         },
       };
@@ -751,9 +753,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let read;
     try {
       const client = await pluginClient(plugin);
-      const given = input?.held
-        ? seeds.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
-        : (input?.structures ?? []).map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
+      const given = seeds.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
       read = readGenerated(await client.run(step.kind, given, options, "structures", GENERATE_MS), given.length);
     } catch (e) {
       return void fail(id, message(e), at, key);

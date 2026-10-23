@@ -101,7 +101,7 @@ describe("a plugin's step on structures drawn", () => {
     answer = () => ({});
   });
 
-  it("takes the structures a large result set holds off the page, each given as its blocks - and holds what it keeps off the page too", async () => {
+  it("takes all the structures a large result set holds - those on the page, then those held off it - each given as its blocks, and keeps all it keeps so too", async () => {
     // (Enumerate's 51 products, an aryl ether R1-O-Ar-R2 made 3 x 17 ways, none the same: held in its set)
     const doc = createWorkspaceDocument();
     const drawnT = drawnFromSmiles("*Oc1ccc(*)cc1");
@@ -118,7 +118,9 @@ describe("a plugin's step on structures drawn", () => {
     st().connect({ set: template }, enumerate);
     await st().runStep(enumerate);
     const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
-    expect(held.drawnCollection).toHaveLength(51);
+    // (as many as the page shows on it - look DRAWN_ON_PAGE - the rest held in the set after them: all 51 the set's)
+    const shown = setMembers(doc.getState(), held).structures.length;
+    expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
     answer = (entries) => ({ structures: entries.map(() => ({ as: "drawn" })) });
     const check = st().addStep("check-structures", "rdkit", 200, 0);
     st().connect({ set: held.id }, check);
@@ -130,7 +132,9 @@ describe("a plugin's step on structures drawn", () => {
     //  never more than ten: a structure looked at too long is set aside alone by the plugin)
     expect(asked[0].ms).toBe(10 * 60_000);
     expect(st().steps.find((s) => s.id === check)!.ran).toMatchObject({ ok: true, said: "51 of 51 kept" });
-    expect(st().sets.find((b) => b.made?.step === check && b.made.exit === "out")!.drawnCollection).toHaveLength(51);
+    // (and its own 51 kept so: those it shows on the page, the rest held)
+    const kept = st().sets.find((b) => b.made?.step === check && b.made.exit === "out")!;
+    expect(setMembers(doc.getState(), kept).structures.length + kept.drawnCollection!.length).toBe(51);
   });
 
   it("gives each structure as its blocks, with the step's options - and takes in what it says of each, in their order", async () => {
@@ -178,6 +182,23 @@ describe("a plugin's step on structures drawn", () => {
     });
     // (what it came in with of its status is the earlier step's: this one's own said in its place)
     expect(rest!.records).toEqual([{ from: ["seed-1"], properties: NLL.properties, status: { aside: "a radical" } }]);
+  });
+
+  it("keeps what it said of each it made on its record, as of each alike - a C=N whose E/Z it left alone, and why - beside what it was made from", async () => {
+    const note = { value: "E/Z of 1 C=N not enumerated: its double bond moves with a hydrogen", unit: "none", method: "C=N bonds whose E/Z moves by tautomerism" };
+    answer = () => ({
+      structures: [{ as: "drawn", properties: { stereo_not_enumerated: note } }, { made: ["iso-1", "iso-2"], properties: { stereo_not_enumerated: note } }, { as: "drawn" }],
+    });
+    const { out } = await ran("stereoisomers", [undefined, NLL]);
+    const said = { value: note.value, unit: "none", status: "computed", by: { plugin: "rdkit", version: expect.any(String), program: expect.any(String), method: note.method } };
+    expect(out!.records[0]).toEqual({ properties: { stereo_not_enumerated: said } });
+    for (const k of [1, 2]) {
+      expect(out!.records[k]!.properties).toEqual({
+        made: expect.objectContaining({ value: `${k} of 2` }),
+        stereo_not_enumerated: said,
+        "made_from.nll": NLL.properties!.nll,
+      });
+    }
   });
 
   it("sets aside, whole, one whose stereoisomers could not be drawn - the rest as they were", async () => {
@@ -267,6 +288,11 @@ describe("what a plugin's step on structures drawn says", () => {
     expect(readDrawnAnswers({ structures: [{ made: [] }] }, 1)).toBe("It said nothing Meno can take");
     expect(readDrawnAnswers({ structures: [{ made: Array(65).fill("b") }] }, 1)).toBe("It said nothing Meno can take");
     expect(readDrawnAnswers({ structures: [{ as: "kept" }] }, 1)).toBe("It said nothing Meno can take");
+    // (values given with those made: each a value, a unit Meno knows and how - one that is not, none taken)
+    const note = { value: "E/Z of 1 C=N not enumerated", unit: "none", method: "how" };
+    expect(readDrawnAnswers({ structures: [{ made: ["a", "b"], properties: { stereo_not_enumerated: note } }] }, 1)).toEqual([{ made: ["a", "b"], properties: { stereo_not_enumerated: note } }]);
+    expect(readDrawnAnswers({ structures: [{ made: ["a"], properties: { x: { value: 1, unit: "furlongs" } } }] }, 1)).toBe("It said nothing Meno can take");
+    expect(readDrawnAnswers({ structures: [{ made: ["a"], properties: ["x"] }] }, 1)).toBe("It said nothing Meno can take");
     expect(readDrawnAnswers(null, 0)).toBe("It said nothing Meno can take");
   });
 

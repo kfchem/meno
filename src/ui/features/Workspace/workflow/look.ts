@@ -5,6 +5,7 @@
  * zoom a canvas opens at in the default style; `PX` is one of them.
  */
 import { PAGE_PX } from "../utils/pageScale";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 
 /** One of the specification's pixels: a page pixel, a bond being 48 of them as a canvas opens in ACS 1996 style (utils/pageScale). */
 export const PX = PAGE_PX;
@@ -92,3 +93,52 @@ export const CHIP = 40 * PX;
 /** A frames chip's text, about how wide a character of it is - generously - and the room either side of it (Frames3D: 11-pixel text, 10 pixels and a border each side). */
 export const CHIP_CHAR = 5.5 * PX;
 export const CHIP_SIDES = 22 * PX;
+
+/** A point on the page; a frame's sides. */
+type Pt = { x: number; y: number };
+type Side = { x0: number; x1: number; y0: number; y1: number };
+
+/** Where a set gives - its right side, half way down; where a result set takes - its left. */
+export const setGives = (b: Side): Pt => ({ x: b.x1, y: (b.y0 + b.y1) / 2 });
+export const setTakes = (b: Side): Pt => ({ x: b.x0, y: (b.y0 + b.y1) / 2 });
+/** Where a step's `k`th input takes, from 0; and where its card meets the lines to its exits' sets. */
+export const stepTakes = (s: { x: number; y: number }, k: number): Pt => ({ x: s.x, y: s.y - portDown(k) });
+export const stepGives = (s: { x: number; y: number }): Pt => ({ x: s.x + CARD_W, y: s.y - PORT_DOWN });
+
+/** A wire's curve from `p` to `q`, leaving and arriving level (a cubic Bézier, its handles half the run across, 40 px at least): `n` + 1 points along it. */
+export function wireCurve(p: Pt, q: Pt, n = 48): Pt[] {
+  const d = Math.max(Math.abs(q.x - p.x) / 2, 40 * PX);
+  const c1 = { x: p.x + d, y: p.y };
+  const c2 = { x: q.x - d, y: q.y };
+  const at = (t: number): Pt => {
+    const u = 1 - t;
+    return {
+      x: u * u * u * p.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * q.x,
+      y: u * u * u * p.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * q.y,
+    };
+  };
+  return Array.from({ length: n + 1 }, (_, i) => at(i / n));
+}
+
+/**
+ * How many structures drawn a step's result set puts on the page (the
+ * maintainer, 2026-10-23): as many, in the step's order, as take no more
+ * than `area` of it between them - each its drawing's box, with its
+ * number's room, in square bond lengths: about a dozen drug-sized
+ * structures, many more small ones - and `most` at that. The rest are held
+ * in the set, off the page (`WorkflowSet.drawnCollection`), and reached by
+ * its table; the set says how many it shows of how many.
+ */
+export const DRAWN_ON_PAGE = { area: 400 * NOMINAL_BOND_LENGTH ** 2, most: 50 };
+
+/** How many of structures drawn, each taking `rooms` of the page in turn, a result set shows on it (`DRAWN_ON_PAGE`): one at least. */
+export function drawnShown(rooms: readonly { x0: number; x1: number; y0: number; y1: number; chip: number }[]): number {
+  let area = 0;
+  let n = 0;
+  for (const r of rooms) {
+    area += (r.x1 - r.x0) * (r.y1 - r.y0 + r.chip);
+    if (n >= DRAWN_ON_PAGE.most || (n > 0 && area > DRAWN_ON_PAGE.area)) break;
+    n++;
+  }
+  return n;
+}

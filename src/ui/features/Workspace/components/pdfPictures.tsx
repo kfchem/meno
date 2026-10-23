@@ -11,6 +11,7 @@
  * soft shadow under it.
  */
 import * as THREE from "three";
+import { BAND_OF_DISC, DISC_OF_BOND } from "./selectionShade";
 import { createContext, useContext, useEffect, useMemo, type ReactNode } from "react";
 import { drawPart, type DrawnPart } from "../../../../lib/pdf/reader";
 import type { Sheet } from "../../../../lib/pdf/layout";
@@ -49,7 +50,40 @@ const KEEP_MS = 4000;
 export const UNDER_MOST = 24;
 
 /** Marks on a page: boxes, in points from its top left, in a colour - words selected, or found. */
-export type Mark = { rects: readonly (readonly [number, number, number, number])[]; color: string; opacity: number; edge?: boolean; ring?: boolean };
+export type Mark = {
+  rects: readonly (readonly [number, number, number, number])[];
+  color: string;
+  opacity: number;
+  edge?: boolean;
+  ring?: boolean;
+  /**
+   * A structure shaded as the canvas shades a selection (./selectionShade): a
+   * disc on each atom and a band along each bond, sized by its bond as drawn
+   * (points), in `color` laid over the page - each place shaded once, where
+   * discs and bands meet as elsewhere.
+   */
+  shade?: { atoms: readonly { x: number; y: number }[]; bonds: readonly (readonly [{ x: number; y: number }, { x: number; y: number }])[]; bond: number };
+};
+
+/**
+ * A shade laid over a page as the canvas lays a selection's under its
+ * drawing: the page multiplied by it - white made the shade, ink left as it
+ * is - each place once, the depth test turning away a second disc or band
+ * over the first. One material for each colour.
+ */
+const shadeMaterials = new Map<string, THREE.MeshBasicMaterial>();
+function shadeMaterial(color: string): THREE.MeshBasicMaterial {
+  let m = shadeMaterials.get(color);
+  if (!m) {
+    m = new THREE.MeshBasicMaterial({ color, toneMapped: false, transparent: true, depthWrite: true, depthTest: true, depthFunc: THREE.LessDepth });
+    m.blending = THREE.CustomBlending;
+    m.blendEquation = THREE.AddEquation;
+    m.blendSrc = THREE.DstColorFactor;
+    m.blendDst = THREE.ZeroFactor;
+    shadeMaterials.set(color, m);
+  }
+  return m;
+}
 
 /** A picture of a page or a part of one, as WebGL has it, and when it came. */
 export type Pic = { tex: THREE.Texture; born: number };
@@ -436,6 +470,27 @@ export function Page(props: {
           ),
         ),
       )}
+      {props.marks?.flatMap((m, k) => {
+        if (!m.shade) return [];
+        const r = DISC_OF_BOND * m.shade.bond * unit;
+        const mat = shadeMaterial(m.color);
+        return [
+          ...m.shade.atoms.map((a, i) => (
+            <mesh key={`sa${k}:${i}`} position={[left + a.x * unit, topY - a.y * unit, 0.0025]} material={mat} renderOrder={1}>
+              <circleGeometry args={[r, 32]} />
+            </mesh>
+          )),
+          ...m.shade.bonds.map(([a, b], i) => {
+            const [ax, ay] = [left + a.x * unit, topY - a.y * unit];
+            const [bx, by] = [left + b.x * unit, topY - b.y * unit];
+            return (
+              <mesh key={`sb${k}:${i}`} position={[(ax + bx) / 2, (ay + by) / 2, 0.0025]} rotation={[0, 0, Math.atan2(by - ay, bx - ax)]} scale={[Math.hypot(bx - ax, by - ay), r * BAND_OF_DISC, 1]} material={mat} renderOrder={1}>
+                <planeGeometry args={[1, 1]} />
+              </mesh>
+            );
+          }),
+        ];
+      })}
       {props.ink?.length ? <PageInk ink={props.ink} left={left} topY={topY} unit={unit} opacity={opacity} /> : null}
       <lineSegments geometry={edges} scale={[s.w, s.h, 1]} position={[0, 0, 0.003]}>
         <lineBasicMaterial color={LINE} transparent opacity={opacity} toneMapped={false} />
