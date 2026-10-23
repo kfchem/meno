@@ -16,7 +16,7 @@ import { sharesOf } from "../utils/molecule3d";
 import { setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, marksOf, unlikeMade, structureMember, recordOn, LARGE_SET, plainAmong, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, resultOf, stateOf, stepOf, stepsBefore, wireInto } from "./flow";
-import { exitsOf, kindInfo, MENO_DOES, restHolds, type Holds3D, type SetKind, type StepKind } from "./kinds";
+import { exitsOf, kindInfo, MENO_DOES, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind } from "./kinds";
 import { takesBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
@@ -89,6 +89,8 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   const before = from ? findSet(doc, from.set)?.made?.step : undefined;
   // (not on what a step before it gave on an earlier run: it failed this time)
   if (before != null && stepOf(doc, before)?.ran?.ok === false) return "The step before it failed";
+  // (a step that takes nothing in needs only someone to do it)
+  if (takesNothing(step.kind)) return by ? null : "Nothing added does this step";
   const input = inputOf(doc, step.id);
   if (!input) return "Nothing comes into it";
   // (a set that came to mix conformer sets with other molecules after it was wired)

@@ -61,6 +61,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
+| Workflows | new structures from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set, so that the same asking gives the same SMILES; each handed on as sampled, with its NLL and SMILES_state - nothing made of it, nothing refused (*Generate*, below) |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D | which stereoisomer each molecule in 3D is (*Configurations*, below) | RDKit (`configurations`) |
@@ -200,6 +201,7 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `id` | text | Its id: a lower-case letter or digit, then up to 39 more or hyphens; its folder's name. The same rule in the backend. |
 | `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the plugin's own version (*Versions*, below); one line on what it is; the licence of what it brings, as its version is that one's - the program's or package's, or its own code's (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
 | `uses` | list of `{name, version}` | The programs and libraries it wraps, each with the version its lock or pin fixes (*Versions*): said beside its own version in Settings › Plugins. |
+| `setUpBytes` | number | About how much room its environment takes once set up, in bytes, as measured: asking to set it up says it beside the packages it fetches ("about 1.0 GB once set up"), for a plugin whose environment is large. Unsaid, where none was measured. |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
 | `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
@@ -896,6 +898,60 @@ The same for every plugin and for Meno's own parts:
     buffers - decided once the measurements were seen (FILE-IO.md,
     *Response*). Meno's own writers run on the page: an SVG picture of
     molecules in 3D needs the page's WebGL.
+
+### Generate
+
+*Generate* makes new structures from nothing that comes in, so it has no
+input to wire and no entries to send. Meno asks its plugin `run` with the
+step's kind, `"entries": []`, and the step's options.
+
+**A Generate plugin hands on what its model gives, as it gives it**
+(the maintainer, 2026-10-22: format conversion yes, chemistry no). Each
+structure is the SMILES the model wrote - never canonicalised, its stereo
+as written or left out - with the model's own values beside it, named.
+Nothing is made of it in 3D, no stereoisomer is enumerated, and nothing is
+refused. What a structure is - a radical, one that leaves stereo open, one
+of odd valence - is for the general steps after it, and for
+*Conformers*, which alone makes 3D:
+
+```
+{"outputs": [{"smiles": "...", "properties": {"nll": {"value": 36.9, "unit": "none"}, ...}, "seed": 0}],
+ "by": {"program", "version", "model", "method"}, "said": "..."}
+```
+
+- `properties`: each value a number, a text or true/false, with its unit
+  from Meno's units table, or "none" (REINVENT 4's `nll` and
+  `smiles_state`, as it writes them; a model's Tanimoto similarity, its
+  scaffold and R-groups, under the names it uses). A value the model gave
+  none of is `null` - REINVENT 4 writes an NLL that is no number so,
+  counting it in `said`, since JSON holds no NaN - and is not kept.
+- `seed`: where a generator makes a structure from one that came in, that
+  one's place among them. None comes into REINVENT 4's.
+- `by`: what made them all: the program and its version, the model, how.
+- `said`: the run in a line.
+
+Meno reads each SMILES itself, as one pasted is (the roles'
+`from_smiles`, laid out by Meno's engine: `chem/fromSmiles` `drawingOf`).
+Each becomes a structure drawn of its own in the step's result set, in the
+order given. Its record (WORKFLOWS.md, *A structure drawn's record*) holds
+the SMILES as given (`smiles`), the model's values, each `computed` by
+the plugin, its version and the program, model and method; and, where
+it leaves stereo open, how many centres and double bonds
+(`stereo_open`, the roles' `stereo_left_open`: where it is left open
+only, none of its stereoisomers tried in 3D, which *Stereoisomers* and
+*Conformers* do). Nothing is chosen for it. One whose stereo cannot be
+asked about is kept, and counted as *with stereo not examined*. A SMILES
+that cannot be read is counted on the step's line as *not read*, never
+dropped unsaid, the first five named with why: *20 sampled ... · 18 made
+· 3 with stereo left open · 2 not read: C1CC (a ring left open), …*.
+Where none can be read, the step fails, saying so.
+What the plugin gives that is not this form - a value with a unit Meno
+does not know, a SMILES missing, a seed that did not come in - takes none
+of the run, saying which. At most a thousand from one run
+(`GENERATED_MOST`). The step is ready as it is put down, and changed when
+its options or who does it change - its plugin's version, or the files
+it was set up with, a model's weights by their hash, included: another
+prior is another run (`workflow/flow` `inputKey`, `doers` `doerStamp`).
 
 ### The entry a plugin is given
 
