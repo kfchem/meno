@@ -80,6 +80,32 @@ describe("a part drawn afresh between fixed neighbours", () => {
     expect(notAsGiven(g, r.layout)).toEqual([]);
   });
 
+  it("on two bonds: a moved branch with one way to lie flipped over its bond to clear the rest, its kept wedge turned to hashes so that its centre reads as given", () => {
+    // (a 3-hydroxybutan-2-yl, its CH bonded to two more of the rest - one way only to lie on its bond - and its CH(OH) a centre wedged as the chemist drew it)
+    const old = fromSmiles("C[C@@H](O)C(C)c1cccc(CC)c1");
+    const drawn = layout2D(old);
+    const g = fromSmiles("C[C@@H](O)C(C)c1cccc(CC)n1.[Cl-]");
+    const ring = [5, 6, 7, 8, 9, 12];
+    const wedges = drawn.wedges.filter((w) => w.from === 1);
+    const hydrogens = drawn.hydrogens.filter((h) => h.on === 1);
+    expect(wedges.length).toBe(1);
+    const rest = (ion: Point): FixedDrawing => ({
+      at: [...restOf(drawnFrom(drawn, [0, 1, 2, 3, 4, 10, 11].map((a) => [a, a]), g.atoms.length), ring).at.slice(0, 13), ion],
+      stereo: { wedges, hydrogens },
+    });
+    const clear = layoutAround(g, ring, rest({ x: 100, y: 100 }));
+    if ("refused" in clear) throw new Error(clear.refused);
+    expect(clear.layout.wedges.find((w) => w.from === 1)?.stereo).toBe(wedges[0].stereo);
+    const [c, o] = [at(clear.layout, 1), at(clear.layout, 2)];
+    const ion = { x: o.x + 0.3 * (o.x - c.x), y: o.y + 0.3 * (o.y - c.y) };
+    const r = layoutAround(g, ring, rest(ion));
+    if ("refused" in r) throw new Error(r.refused);
+    expect(r.crowded).toEqual([]);
+    expect(dist(at(r.layout, 3), at(clear.layout, 3))).toBeLessThan(1e-9);
+    expect(r.layout.wedges.find((w) => w.from === 1)?.stereo).not.toBe(wedges[0].stereo);
+    expect(notAsGiven(g, r.layout)).toEqual([]);
+  });
+
   it("on three bonds: the rest drawn as the mirror image of how the part is drawn on its own - the part mirrored to meet it", () => {
     // (1,2,4-triethylbenzene: no turn takes its three ethyls onto their mirror image)
     const g = fromSmiles("CCc1ccc(CC)c(CC)c1");

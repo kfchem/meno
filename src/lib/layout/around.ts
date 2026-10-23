@@ -44,6 +44,9 @@ export const MISMATCH_LIMIT = 1;
 /** How many ways of pairing the part's stubs with the rest's atoms its symmetries give are tried. */
 const PAIRINGS_TRIED = 96;
 
+/** How many times each moved branch is tried flipped over its bond while the drawing has faults. */
+const BRANCH_ROUNDS = 3;
+
 export function layoutAround(input: LayoutInput, part: readonly number[], fixed: FixedDrawing): Around {
   const n = input.atoms.length;
   if (!part.length || part.some((a) => !Number.isInteger(a) || a < 0 || a >= n)) return { refused: "No part of the structure was given to draw." };
@@ -144,28 +147,47 @@ function inOwnOrder(input: LayoutInput, asked: Set<number>, at: (Point | null)[]
   for (const p of drawings) {
     for (const placed of setDown(mol, p, attachments, attachments.map(({ a }) => sub2.get(a)!), inPart.length, rest, part)) {
       if (placed.mismatch > MISMATCH_LIMIT + 1e-9) continue;
-      const pos = new Map<number, Point>();
-      for (let a = 0; a < n; a++) if (!part.has(a)) pos.set(a, rest[a]!);
-      inPart.forEach((a, k) => pos.set(a, placed.move(p[k])));
-      const moved: number[][] = [];
-      const motions = new Map<number, (q: Point) => Point>();
-      if (attachments.length > 1) {
-        attachments.forEach(({ a, f }, k) => {
+      const base = new Map<number, Point>();
+      for (let a = 0; a < n; a++) if (!part.has(a)) base.set(a, rest[a]!);
+      inPart.forEach((a, k) => base.set(a, placed.move(p[k])));
+      // (each branch of the rest, on two bonds or more: turned about its atom only as far as its new bond needs, its own direction kept as near as that allows)
+      const turns = attachments.length > 1 ? attachments.map(({ a, f }, k) => branchTurn(mol, f, a, rest, placed.move(p[inPart.length + k]), base.get(a)!, part)) : [];
+      const build = (flips: readonly boolean[]) => {
+        const pos = new Map(base);
+        const motions = new Map<number, (q: Point) => Point>();
+        const flipped = new Set<number>();
+        const moved: number[][] = [];
+        turns.forEach(({ turn, axis }, k) => {
+          const f = attachments[k].f;
           const stub = placed.move(p[inPart.length + k]);
-          const turn = branchTurn(mol, f, a, rest, stub, pos.get(a)!, part);
           const motion = (q: Point) => {
-            const v = rotate(sub(q, rest[f]!), turn);
+            const v = rotate(flips[k] ? reflected(sub(q, rest[f]!), axis) : sub(q, rest[f]!), turn);
             return { x: stub.x + v.x, y: stub.y + v.y };
           };
           for (const b of branches[k]) {
             pos.set(b, motion(rest[b]!));
             motions.set(b, motion);
+            if (flips[k]) flipped.add(b);
           }
           moved.push(branches[k]);
         });
+        const layout = drawingOf(input, mol, pos, kept, motions, flipped);
+        const m = measureLaidOut(input, layout);
+        return { layout, moved, faults: m.overlaps + m.crossings + m.clashes, score: m.score };
+      };
+      // (a branch that lands on the rest - atoms on atoms, bonds crossing, an atom on a bond - flipped over its new bond, each in turn, where that clears more than it costs: its bond, and so its direction, as before)
+      let flips = attachments.map(() => false);
+      let best = build(flips);
+      for (let round = 0; round < BRANCH_ROUNDS && best.faults > 0; round++) {
+        let changed = false;
+        turns.forEach((_, k) => {
+          const trial = flips.map((x, j) => (j === k ? !x : x));
+          const tried = build(trial);
+          if (tried.faults < best.faults) [flips, best, changed] = [trial, tried, true];
+        });
+        if (!changed) break;
       }
-      const layout = drawingOf(input, mol, pos, kept, motions);
-      const score = measureLaidOut(input, layout).score;
+      const { layout, moved, score } = best;
       // (and as a reader sees it, whatever its atoms are numbered: each element where it is)
       const seen = input.atoms.map((atom, i) => `${atom.el}@${layout.x[i].toFixed(6)},${layout.y[i].toFixed(6)}`).sort().join(" ");
       candidates.push({ layout, moved, mismatch: placed.mismatch, score, seen });
@@ -317,16 +339,22 @@ function setDown(
 /**
  * How far a branch of the rest is turned about its atom `f`, set where the
  * part's stub for it is: its new bond to the part's atom (now at `atA`)
- * where it left room for the old - of two such ways, the nearer - so that
- * it keeps its direction as near as the new bond allows. None for an atom
- * bonded to nothing else of the rest.
+ * where it left room for the old (`axis`, that room's direction as drawn)
+ * - of two such ways, the nearer - so that it keeps its direction as near
+ * as the new bond allows. None for an atom bonded to nothing else of the
+ * rest.
  */
-function branchTurn(mol: Molecule, f: number, a: number, rest: readonly (Point | null)[], stub: Point, atA: Point, part: ReadonlySet<number>): number {
-  const ways = openings(mol, f, a, rest, part);
-  if (!ways.length) return 0;
+function branchTurn(mol: Molecule, f: number, a: number, rest: readonly (Point | null)[], stub: Point, atA: Point, part: ReadonlySet<number>): { turn: number; axis: number } {
   const bond = angleOf(sub(atA, stub));
-  const turns = ways.map((w) => wrap(bond - w));
-  return turns.reduce((best, t) => (Math.abs(t) < Math.abs(best) - 1e-9 ? t : best));
+  const ways = openings(mol, f, a, rest, part);
+  if (!ways.length) return { turn: 0, axis: bond };
+  return ways.map((w) => ({ turn: wrap(bond - w), axis: w })).reduce((p, q) => (Math.abs(q.turn) < Math.abs(p.turn) - 1e-9 ? q : p));
+}
+
+/** `v` reflected in the line through the origin at angle `axis`. */
+function reflected(v: Point, axis: number): Point {
+  const [c, s] = [Math.cos(2 * axis), Math.sin(2 * axis)];
+  return { x: c * v.x + s * v.y, y: s * v.x - c * v.y };
 }
 
 /**
@@ -347,11 +375,13 @@ function keptStereo(input: LayoutInput, stereo: Stereo | undefined, part: Readon
 
 /**
  * The whole drawing with every atom where `pos` puts it: the rest's kept
- * wedges and H's (each H moved with its branch, by `motions`), and every
+ * wedges and H's (each H moved with its branch, by `motions`; a wedge in a
+ * branch flipped over, `flipped`, turned to hashes and back, which keeps
+ * its centre as it was), and every
  * other centre's wedges placed afresh, as layout2D places them. Flat: the
  * rest drawn in perspective is the caller's to keep.
  */
-function drawingOf(input: LayoutInput, mol: Molecule, pos: Map<number, Point>, kept: Stereo, motions: ReadonlyMap<number, (q: Point) => Point>): Layout2D {
+function drawingOf(input: LayoutInput, mol: Molecule, pos: Map<number, Point>, kept: Stereo, motions: ReadonlyMap<number, (q: Point) => Point>, flipped: ReadonlySet<number>): Layout2D {
   const n = input.atoms.length;
   const unit = (q: Point, on: number) => (motions.get(on) ?? ((x: Point) => x))(q);
   const hydrogens = kept.hydrogens.map((h) => ({ on: h.on, at: unit(h.at, h.on) }));
@@ -362,7 +392,7 @@ function drawingOf(input: LayoutInput, mol: Molecule, pos: Map<number, Point>, k
   });
   const taken = new Set(kept.wedges.filter((w) => w.to >= 0).map((w) => key(w.from, w.to)));
   const placed = placeStereo(mol, pos, tetra, taken);
-  const wedges: Wedge[] = [...kept.wedges, ...placed.wedges];
+  const wedges: Wedge[] = [...kept.wedges.map((w) => (flipped.has(w.from) ? { ...w, stereo: w.stereo === "up" ? ("down" as const) : ("up" as const) } : w)), ...placed.wedges];
   return {
     x: Array.from({ length: n }, (_, a) => pos.get(a)!.x),
     y: Array.from({ length: n }, (_, a) => pos.get(a)!.y),
