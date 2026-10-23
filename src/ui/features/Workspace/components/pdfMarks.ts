@@ -36,7 +36,7 @@ const FOUND_NOW = 0.6;
 /** A structure's shade on its way: from one colour to another, since when, and whether it is going out of view. */
 type Fading = { s: PageStructure; from: string; to: string; start: number; leaving: boolean };
 const fading = new Map<string, Fading>();
-const WHITE = "#ffffff";
+const WHITE = COLORS.background;
 
 /** A colour `u` of the way from one to another (#rrggbb). */
 function mixed(a: string, b: string, u: number): string {
