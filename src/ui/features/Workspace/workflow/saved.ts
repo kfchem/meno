@@ -103,9 +103,9 @@ function readSet(v: unknown): WorkflowSet | null {
       const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
     })(),
-    // (or its structures drawn, each read as the page's drawing is, with what its step said of it - those that do not read counted, as molecules are)
+    // (or its structures drawn off the page - those it does not show - each read as the page's drawing is, with what its step said of it - those that do not read counted, as molecules are; a set whose step was deleted holds them still, as it does a collection)
     ...(() => {
-      if (!Array.isArray(b.drawnCollection) || !made || Array.isArray(b.collection)) return {};
+      if (!Array.isArray(b.drawnCollection) || Array.isArray(b.collection)) return {};
       const drawnCollection = b.drawnCollection.flatMap(drawnModelIn);
       const unread = b.drawnCollection.length - drawnCollection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return drawnCollection.length || unread ? { drawnCollection, ...(unread ? { unread } : {}) } : {};

@@ -469,18 +469,108 @@ def options_of(m):
 KCAL_PER_HARTREE = 627.509474
 
 
+#: What a stereocentre or double bond drawn without a configuration is to RDKit: none given, or one drawn as not
+#: known - a wavy bond, a double bond of either configuration (CFG=2, as Meno writes it) - both of which its
+#: enumeration gives each way.
+LEFT_OPEN = (Chem.StereoSpecified.Unspecified, Chem.StereoSpecified.Unknown)
+
+
 def open_stereo(mol):
     """The stereocentres and double bonds a structure leaves open: those
-    that could have a configuration, and are drawn without one."""
+    that could have a configuration, and are drawn without one, or with one
+    not known (`LEFT_OPEN`) - but a C=N whose E/Z is none of its own
+    (`moving_cn`), which is never chosen."""
     atoms, bonds = [], []
+    moving = moving_cn(mol)
     for si in Chem.FindPotentialStereo(Chem.Mol(mol), cleanIt=True):
-        if si.specified != Chem.StereoSpecified.Unspecified:
+        if si.specified not in LEFT_OPEN:
             continue
         if si.type == Chem.StereoType.Atom_Tetrahedral:
             atoms.append(si.centeredOn)
-        elif si.type == Chem.StereoType.Bond_Double:
+        elif si.type == Chem.StereoType.Bond_Double and si.centeredOn not in moving:
             bonds.append(si.centeredOn)
     return sorted(atoms), sorted(bonds)
+
+
+#: Why a C=N's E/Z is no configuration of its own, by what makes it so (`moving_cn`).
+MOVING_CN = {
+    "shift": "its double bond moves with a hydrogen on an N, O or S beside it (an amidine, a guanidine, an imidic acid)",
+    "nh": "its N carries a hydrogen",
+    "cation": "an amidinium or guanidinium bond, shared with the N beside it",
+}
+
+
+def moving_cn(mol):
+    """The C=N double bonds whose E/Z is no configuration of their own, by
+    index, each with why (`MOVING_CN`): never enumerated, never chosen,
+    nor counted as left open, wherever stereo is counted or made
+    (docs/WORKFLOWS.md, *C=N double bonds whose E/Z is none of their
+    own*). As the InChI Technical Manual (v1.04, 2011) takes them: a
+    hydrogen on an N, O or S bonded to the C=N's carbon moves to its N,
+    and the double bond with it - the 1,3-shift of its mobile H (IV.b,
+    Table 6), a bond it presumes rotatable (Appendix 5b) - an amidine's,
+    a guanidine's, an N-acyl amidine's, an imidic acid's. And a C=N whose
+    N bears only a hydrogen (RDKit's enumeration gives it one way only
+    already), and an amidinium or guanidinium C=N+, its double bond
+    shared with the amino N beside it. An imine whose N bears a carbon,
+    an oxime and a hydrazone keep theirs."""
+    moving = {}
+    for bond in mol.GetBonds():
+        if bond.GetBondType() != Chem.BondType.DOUBLE:
+            continue
+        ends = (bond.GetBeginAtom(), bond.GetEndAtom())
+        if sorted(a.GetSymbol() for a in ends) != ["C", "N"]:
+            continue
+        c, n = ends if ends[0].GetSymbol() == "C" else ends[::-1]
+        others = [x for x in c.GetNeighbors() if x.GetIdx() != n.GetIdx()]
+        if any(x.GetSymbol() in ("N", "O", "S") and x.GetTotalNumHs(includeNeighbors=True) for x in others):
+            moving[bond.GetIdx()] = "shift"
+        elif n.GetTotalNumHs(includeNeighbors=True):
+            moving[bond.GetIdx()] = "nh"
+        elif n.GetFormalCharge() > 0 and any(x.GetSymbol() == "N" and x.GetFormalCharge() == 0 and not x.GetIsAromatic() for x in others):
+            moving[bond.GetIdx()] = "cation"
+    return moving
+
+
+def moving_open(mol):
+    """Of the C=N bonds whose E/Z is none of their own (`moving_cn`), those drawn without one, by index: one drawn
+    with its E/Z keeps it."""
+    moving = moving_cn(mol)
+    found = Chem.FindPotentialStereo(Chem.Mol(mol), cleanIt=True)
+    return sorted(si.centeredOn for si in found if si.type == Chem.StereoType.Bond_Double and si.specified in LEFT_OPEN and si.centeredOn in moving)
+
+
+def moving_said(mol):
+    """What a structure's C=N bonds left open whose E/Z is none of their own are, in a line - else None."""
+    moving = moving_cn(mol)
+    left = [moving[i] for i in moving_open(mol)]
+    if not left:
+        return None
+    whys = "; ".join(MOVING_CN[w] for w in dict.fromkeys(left))
+    return f"E/Z of {len(left)} C=N not enumerated: {whys} - no configuration of its own"
+
+
+def held_one_way(mol, moving, cis):
+    """`mol` with each C=N in `moving` given a configuration - all cis, or all trans - so that an enumeration of
+    what is left open passes them by; where an end of one has nothing else bonded to it, none."""
+    out = Chem.Mol(mol)
+    for i in moving:
+        bond = out.GetBondWithIdx(i)
+        a, b = bond.GetBeginAtom(), bond.GetEndAtom()
+        na = next((x.GetIdx() for x in a.GetNeighbors() if x.GetIdx() != b.GetIdx()), None)
+        nb = next((x.GetIdx() for x in b.GetNeighbors() if x.GetIdx() != a.GetIdx()), None)
+        if na is None or nb is None:
+            continue
+        bond.SetStereoAtoms(na, nb)
+        bond.SetStereo(Chem.BondStereo.STEREOCIS if cis else Chem.BondStereo.STEREOTRANS)
+    return out
+
+
+def let_go(mol, moving):
+    """`mol` with each C=N in `moving` left without a configuration again: of either, as Meno draws it."""
+    for i in moving:
+        mol.GetBondWithIdx(i).SetStereo(Chem.BondStereo.STEREOANY)
+    return mol
 
 
 def isomers_of(mol):
@@ -510,13 +600,24 @@ def embeddable(mol, deadline=None):
     made = EMBEDDABLE.get(key)
     if made is None:
         options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=MOST_ISOMERS, tryEmbedding=True)
+        # (a C=N whose E/Z is none of its own held one way while the rest are tried in 3D - the other way where none
+        #  of them embeds so - and let go again in each made: never enumerated, never chosen)
+        moving = moving_open(mol)
         made = []
-        for isomer in EnumerateStereoisomers(mol, options=options):
-            if deadline is not None and time.monotonic() > deadline:
-                raise TooLong()
-            made.append(isomer)
+        for cis in ([False, True] if moving else [None]):
+            for isomer in EnumerateStereoisomers(held_one_way(mol, moving, cis) if moving else mol, options=options):
+                if deadline is not None and time.monotonic() > deadline:
+                    raise TooLong()
+                made.append(let_go(isomer, moving))
+            if made:
+                break
         if deadline is not None and time.monotonic() > deadline:
             raise TooLong()
+        if moving:
+            unique = {}
+            for isomer in made:
+                unique.setdefault(Chem.MolToSmiles(isomer), isomer)
+            made = list(unique.values())
         if len(EMBEDDABLE) >= EMBEDDABLE_KEPT:
             EMBEDDABLE.pop(next(iter(EMBEDDABLE)))
         EMBEDDABLE[key] = made
@@ -2364,19 +2465,24 @@ def stereoisomers_one(blocks, aside):
         return {"aside": f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "kind": "valence"}
     Chem.AssignChiralTypesFromBondDirs(mol)
     Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+    # (a C=N whose E/Z is none of its own: never enumerated, and said so on the record of each it gives)
+    said = moving_said(mol)
+    note = {"properties": {"stereo_not_enumerated": {"value": said, "unit": "none", "method": "C=N bonds whose E/Z moves by tautomerism (InChI Technical Manual v1.04)"}}} if said else {}
     atoms, bonds = open_stereo(mol)
     if not (atoms or bonds):
-        return {"as": "drawn"}
+        return {"as": "drawn", **note}
     if open_cumulenes(mol, bonds):
         return {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"}
     # (how many the open elements could give at most, before any is made: over the most, counted only to one
     #  past it - all of them would be a million for twenty double bonds - and set aside whole, saying the most it
     #  could be. Counted unique, one past the most is reached at once but where many of the bound are alike - a
-    #  symmetric structure with many open: rare, and looked at no longer than any other, below)
+    #  symmetric structure with many open: rare, and looked at no longer than any other, below. A C=N whose E/Z is
+    #  none of its own is held one way, as `embeddable` holds it: not counted)
     options = StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)
-    most = GetStereoisomerCount(mol, options=options)
+    counted_of = held_one_way(mol, moving_open(mol), False)
+    most = GetStereoisomerCount(counted_of, options=options)
     if most > MOST_ISOMERS:
-        for counted, _ in enumerate(EnumerateStereoisomers(mol, options=options), 1):
+        for counted, _ in enumerate(EnumerateStereoisomers(counted_of, options=options), 1):
             if counted > MOST_ISOMERS:
                 return {"aside": f"more than the {MOST_ISOMERS} stereoisomers made of one (up to {most})", "kind": "too many"}
             if time.monotonic() > started + EXAMINE_S:
@@ -2386,12 +2492,12 @@ def stereoisomers_one(blocks, aside):
     except TooLong:
         return too_long
     if len(made) <= 1:
-        return {"as": "drawn"}
+        return {"as": "drawn", **note}
     if aside:
         return {"aside": f"stereo left open: {len(made)} stereoisomers", "kind": "stereo open"}
     # (in a fixed order: by each one's SMILES - and each one's own SMILES given beside it)
     made.sort(key=Chem.MolToSmiles)
-    return {"made": [drawing_block(Chem.Mol(x)) for x in made], "smiles": [Chem.MolToSmiles(x) for x in made]}
+    return {"made": [drawing_block(Chem.Mol(x)) for x in made], "smiles": [Chem.MolToSmiles(x) for x in made], **note}
 
 
 def step_stereoisomers(entries, options):

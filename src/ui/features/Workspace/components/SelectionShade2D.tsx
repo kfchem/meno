@@ -2,9 +2,8 @@ import * as THREE from "three";
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
-import { ATOM_HOVER_RING_RADIUS_RATIO } from "../constants";
 import { TAU, follow } from "../../../theme/motion";
-import { clickSpread, DRAW_BACK_MS, SELECTION_SHADE, SPREAD_MS } from "./selectionShade";
+import { BAND_OF_DISC, clickSpread, DISC_OF_BOND, DRAW_BACK_MS, SELECTION_SHADE, SPREAD_MS } from "./selectionShade";
 import type { Model } from "../store/types";
 import { roomFor, selectedParts, type ShadedPart } from "./selectionParts";
 
@@ -67,7 +66,7 @@ export default function SelectionShade2D({
   const invalidate = useThree((s) => s.invalidate);
   const parts = useRef(new Map<string, Part>());
   const chosen = useRef(new Set<string>());
-  const r = ATOM_HOVER_RING_RADIUS_RATIO * NOMINAL_BOND_LENGTH;
+  const r = DISC_OF_BOND * NOMINAL_BOND_LENGTH;
   const disc = useMemo(() => new THREE.CircleGeometry(r, 32), [r]);
   const band = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
   const meshes = useRef<{ discs: THREE.InstancedMesh; bands: THREE.InstancedMesh } | null>(null);
@@ -113,7 +112,7 @@ export default function SelectionShade2D({
         const { p, q } = e.bond;
         turn.setFromAxisAngle(upright, Math.atan2(q.y - p.y, q.x - p.x));
         spot.set((p.x + q.x) / 2, (p.y + q.y) / 2, -0.045);
-        size.set(Math.hypot(q.x - p.x, q.y - p.y), r * 1.1, 1);
+        size.set(Math.hypot(q.x - p.x, q.y - p.y), r * BAND_OF_DISC, 1);
         m.bands.setMatrixAt(j, place.compose(spot, turn, size));
         m.bands.setColorAt(j++, tint);
       }

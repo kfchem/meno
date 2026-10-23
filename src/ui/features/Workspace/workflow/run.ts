@@ -13,16 +13,19 @@ import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
 import { sharesOf } from "../utils/molecule3d";
-import { compoundLetter, setMembers, setMolecules, inside, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { compoundLetter, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue } from "../../../../lib/energyDiagram";
 import { asideExit, exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
-import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
+import { BETWEEN, SET_PAD, SET_TOP, CHIP, CHIP_CHAR, CHIP_SIDES, drawnShown, PX, SUMMARY_PX } from "./look";
+import { clearOf, columnWidth, frameAt, placeAgain, placeBelow, placeFor } from "./place";
+
+export { frameAt, placeFor } from "./place";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
-import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
+import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
 import { structuresAsTable } from "./structuresTable";
 import type { Table } from "../../../../lib/table";
@@ -180,7 +183,7 @@ function placeChart(doc: WorkspaceDocument, step: WorkflowStep, chart: ChartValu
   const was = resultOf(doc, step.id, exit);
   // (what it held before - a frame of a step not run yet holds nothing - gone; the frame as large as a chart is drawn)
   if (was) doc = removeMolecules3d(doc, setMembers(doc, was).molecules);
-  const frame = was ? frameAt(was.x0, was.y1, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, CHART_SET.w, CHART_SET.h);
+  const frame = was ? placeAgain(doc, step, was, CHART_SET.w, CHART_SET.h) : placeFor(doc, step, CHART_SET.w, CHART_SET.h);
   if (was) return holdChart(markMade(resizeSet(doc, was.id, frame), was.id, madeBy), was.id, chart);
   const id = doc.nextWorkflowId ?? 1;
   return holdChart(markMade(addSet(doc, frame, madeBy), id, madeBy), id, chart);
@@ -234,10 +237,9 @@ export function resultsNow(doc: WorkspaceDocument, step: WorkflowStep): RunResul
     // (each structure as it is drawn now: moved, or an atom changed by hand since, as it is)
     const drawn = (b: WorkflowSet | undefined): DrawnModel[] => {
       if (!b) return [];
-      // (a large result set's, as it holds them)
-      if (b.drawnCollection) return [...b.drawnCollection];
-      const held = setMembers(doc, b);
-      return drawnEntries(doc.model, held.structures, held.records).map(drawnModel);
+      // (those on the page, then those it holds off the page, as it holds them)
+      const on = setMembers(doc, b);
+      return [...drawnEntries(doc.model, on.structures, on.records).map(drawnModel), ...(b.drawnCollection ?? [])];
     };
     const restSet = second ? resultOf(doc, step.id, second.id) : undefined;
     return {
@@ -324,7 +326,6 @@ export function showRun(
 }
 
 /** A frame `w` wide and `h` tall, its top left at (x, y). */
-export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
 
 /** The most a row of molecules in a result set spans before the next row begins - of a few; of many, as wide as `SET_ASPECT` makes it (`rowMost`). */
 export const ROW_MOST = 12 * NOMINAL_BOND_LENGTH;
@@ -469,7 +470,13 @@ function keepExitsUnder(doc: WorkspaceDocument, step: Pick<WorkflowStep, "id" | 
     const b = resultOf(doc, step.id, exit.id);
     if (!above || !b) break;
     const reach = above.y0 - BETWEEN;
-    if (b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN) doc = moveSet(doc, b.id, 0, reach - b.y1);
+    // (under the one above where it reached over it - and lower still, where something else is there: clear of all, as any set)
+    const under = b.y1 > reach && b.x0 < above.x1 + BETWEEN && b.x1 > above.x0 - BETWEEN;
+    const self = { set: b.id, molecules: new Set(setMembers(doc, b).molecules), step: step.id };
+    if (under || !clearOf(doc, b, self)) {
+      const to = placeBelow(doc, b.x0, Math.min(b.y1, reach), b.x1 - b.x0, b.y1 - b.y0, self);
+      doc = moveSet(doc, b.id, to.x0 - b.x0, to.y1 - b.y1);
+    }
     above = resultOf(doc, step.id, exit.id);
   }
   return doc;
@@ -510,19 +517,23 @@ function fillExit(
  * results (`laidOut`) by its atoms' box (chem/make3d `boxOf`), and put on
  * the page as it was drawn, moved whole. Each its own structure, its atoms
  * numbered afresh, as a paste is; and the set keeps which atoms they are
- * (`WorkflowSet.put`), for the next run to take away those alone. More
- * than are laid out on the page (`LARGE_SET`) are held in the set itself,
- * none of them on the page (`WorkflowSet.drawnCollection`), as molecules
- * in 3D are. With how many did not read from a file (`unread`), where any.
+ * (`WorkflowSet.put`), for the next run to take away those alone. As many
+ * as take no more of the page than `DRAWN_ON_PAGE` allows are put on it,
+ * in the step's order; the rest are held in the set itself, after them,
+ * off the page (`WorkflowSet.drawnCollection`). With how many did not read
+ * from a file (`unread`), where any.
  */
-function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, made: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
-  if (made.length > LARGE_SET) return filled(doc, step, { exit, holds: "structures", unread, drawnCollection: [...made], ...(core ? { core } : {}) }, [], () => ({ doc, members: [] }));
+function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, given: readonly DrawnModel[], core?: SeriesCore, unread?: number): WorkspaceDocument {
   // (each about the middle of its box)
-  const boxes = made.map(boxOf);
+  const boxes = given.map(boxOf);
   const middles = boxes.map((b) => ({ x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 }));
   // (a structure its step numbered given room for its number under it, as Workflow2D shows it: half a bond down, a line of 16 px)
-  const rooms = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: recordNumber(made[i].record) != null ? NUMBER_ROOM : 0 }));
-  return filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => {
+  const all = boxes.map((b, i) => ({ x0: b.x0 - middles[i].x, x1: b.x1 - middles[i].x, y0: b.y0 - middles[i].y, y1: b.y1 - middles[i].y, chip: recordNumber(given[i].record) != null ? NUMBER_ROOM : 0 }));
+  // (those the page shows, by the room they take; the rest held in the set)
+  const shown = drawnShown(all);
+  const made = given.slice(0, shown);
+  const rooms = all.slice(0, shown);
+  const filledIn = filled(doc, step, { exit, holds: "structures", unread, ...(core ? { core } : {}) }, rooms, (d, at) => {
     // (all put on the page at once, as one model - one at a time copied the page's drawing again for each - their ids made apart first: two given in one numbering, as a template's products are, would be one structure)
     const apart = numberedApart(made.map((m, i) => movedBy(m, at[i].x - middles[i].x, at[i].y - middles[i].y)));
     const there = new Set(d.model.atoms.map((a) => a.id));
@@ -540,6 +551,8 @@ function fillDrawn(doc: WorkspaceDocument, step: WorkflowStep, exit: string, mad
       put: added,
     };
   });
+  const set = resultOf(filledIn, step.id, exit);
+  return set ? holdRest(filledIn, set.id, given.slice(shown)) : filledIn;
 }
 
 /**
@@ -564,7 +577,7 @@ function filled(
   if (was) doc = emptied(doc, was);
   const madeBy = { step: step.id, exit: of.exit, holds: of.holds };
   if (of.collection || of.drawnCollection) {
-    const frame = was ? frameAt(was.x0, was.y1, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
+    const frame = was ? placeAgain(doc, step, was, SUMMARY_W, SUMMARY_H) : placeFor(doc, step, SUMMARY_W, SUMMARY_H);
     const id = was ? was.id : (doc.nextWorkflowId ?? 1);
     doc = was ? markMade(resizeSet(doc, id, frame), id, madeBy) : markMade(addSet(doc, frame, madeBy), id, madeBy);
     return withCore(holdCollection(doc, id, of.collection ? { collection: of.collection } : { drawnCollection: of.drawnCollection! }, of.unread), id, of.core);
@@ -574,8 +587,10 @@ function filled(
     const where = setForExit(doc, step, of.exit);
     return holdMembers(markMade(where.doc, where.id, madeBy), where.id, [], of.unread);
   }
-  const lay = laidOut(rooms);
-  const frame = was ? frameAt(was.x0, was.y1, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
+  // (in rows no wider than its step's column, where the next step's card is close: the set grows down, not over the steps after it)
+  const room = columnWidth(doc, step) - 2 * SET_PAD;
+  const lay = laidOut(rooms, LEAST_W, Math.max(...rooms.map((r) => r.x1 - r.x0), Math.min(rowMost(rooms), room)));
+  const frame = was ? placeAgain(doc, step, was, lay.width, lay.height) : placeFor(doc, step, lay.width, lay.height);
   const put = place(doc, lay.at.map((p) => ({ x: frame.x0 + p.x, y: frame.y1 + p.y })));
   doc = put.doc;
   const id = was ? was.id : (doc.nextWorkflowId ?? 1);
@@ -769,7 +784,7 @@ export function fitResultSets(
     // (its step's other exits' sets are no hindrance: they move down with it)
     const siblings = new Set((doc.sets ?? []).filter((b) => b.made?.step === set.made!.step).map((b) => b.id));
     let lay = laidOut(rooms, least);
-    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member, sets: siblings })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
+    if (!clearOf(doc, frameOf(lay), { set: set.id, molecules: member, sets: siblings, step: set.made.step })) lay = laidOut(rooms, least, Math.max(least, ...rooms.map((r) => r.x1 - r.x0)));
     doc = moveMolecules3d(doc, ms.map((m, i) => ({ id: m.id, at: { x: set.x0 + lay.at[i].x, y: set.y1 + lay.at[i].y } })));
     doc = resizeSet(doc, set.id, frameOf(lay));
     const step = doc.steps?.find((s) => s.id === set.made!.step);
@@ -778,36 +793,6 @@ export function fitResultSets(
   return doc;
 }
 
-/**
- * Where a step's new result set goes: to the right of the step, level with
- * it - or, where something is there already, lower, as far as it must to
- * keep clear of the page's sets, steps, structures and molecules.
- */
-export function placeFor(doc: WorkspaceDocument, step: WorkflowStep, width: number, height: number): Frame {
-  const x = step.x + CARD_W + GAP;
-  for (let k = 0; k < 40; k++) {
-    const f = frameAt(x, step.y - k * (CARD_H / 2), width, height);
-    if (clearOf(doc, f)) return f;
-  }
-  return frameAt(x, step.y, width, height);
-}
-
-/**
- * Whether a frame keeps `BETWEEN` clear of what is on the page - its sets,
- * its steps' cards, its structures and its molecules in 3D - but for the
- * set `self`, the molecules it holds and the sets `self.sets`.
- */
-function clearOf(doc: WorkspaceDocument, f: Frame, self?: { set: number; molecules: ReadonlySet<number>; sets?: ReadonlySet<number> }): boolean {
-  const taken: Frame[] = [
-    ...(doc.sets ?? []).filter((b) => b.id !== self?.set && !self?.sets?.has(b.id)),
-    ...(doc.steps ?? []).map((s) => frameAt(s.x, s.y, CARD_W, CARD_H)),
-  ];
-  const points = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules.has(m.id)).map((m) => m.at)];
-  return (
-    !taken.some((t) => t.x0 < f.x1 + BETWEEN && t.x1 > f.x0 - BETWEEN && t.y0 < f.y1 + BETWEEN && t.y1 > f.y0 - BETWEEN) &&
-    !points.some((p) => inside({ x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN }, p))
-  );
-}
 
 /**
  * What a step kept, as molecules in 3D: a conformer set's compounds, each a
