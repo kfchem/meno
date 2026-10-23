@@ -34,6 +34,26 @@ export type PageStructure = {
 /** How near the pointer must come to a structure's bond or label to take it, in bonds as drawn: a third - closer than to the next structure, or a "+" between them. */
 const REACH = 1 / 3;
 
+/** Something on the page outside a structure's own figure - words, or lines - and what its words say, where they are words. */
+export type Beside = { box: Box; text?: string };
+
+/** How far a segment lies from a box: naught where it crosses it. */
+function segmentToBox(a: Point, b: Point, box: Box): number {
+  const [x0, y0, x1, y1] = box;
+  const inside = (p: Point) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1;
+  if (inside(a) || inside(b)) return 0;
+  const corners: Point[] = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  const cross = (p: Point, q: Point, r: Point, t: Point) => {
+    const d = (u: Point, v: Point, w: Point) => (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x);
+    return d(p, q, r) * d(p, q, t) < 0 && d(r, t, p) * d(r, t, q) < 0;
+  };
+  if (corners.some((c, k) => cross(a, b, c, corners[(k + 1) % 4]))) return 0;
+  return Math.min(toBox(a, box), toBox(b, box), ...corners.map((c) => toSegment(c, a, b)));
+}
+
+/** How far a box lies from another: naught where they meet. */
+const boxToBox = (p: Box, q: Box) => Math.hypot(Math.max(q[0] - p[2], 0, p[0] - q[2]), Math.max(q[1] - p[3], 0, p[1] - q[3]));
+
 /** What else a figure has drawn that is no structure's - its arrows, "+" signs and words - where the pointer finds nothing to take. */
 export type PageMarks = { segments: [Point, Point][]; points: Point[]; boxes: Box[] };
 
@@ -106,11 +126,12 @@ function lettersWithin(left: readonly Pick<FigureLetter, "c" | "box">[], bonds: 
  * The structures of one figure of a page, drawn as `given` within it (in the
  * page's points): each where it lies on the page, and what it reads as - or
  * why not, where part of it is not read (letters lying within it that no
- * atom took). A figure that reads as too much for a structure (a chart, a
- * spectrum) has none.
+ * atom took, or words or lines of the page outside its figure, `beside`,
+ * lying within a bond of it). A figure that reads as too much for a
+ * structure (a chart, a spectrum) has none.
  */
-export function structuresOf(given: FigureDrawn, figure: number, sha256: string, page: number, known?: readonly GlyphShape[]): PageStructure[] {
-  return figureOn(given, figure, sha256, page, known).structures;
+export function structuresOf(given: FigureDrawn, figure: number, sha256: string, page: number, known?: readonly GlyphShape[], beside: readonly Beside[] = []): PageStructure[] {
+  return figureOn(given, figure, sha256, page, known, beside).structures;
 }
 
 /** A box turned back to where it lies on the page. */
@@ -120,7 +141,7 @@ const boxBack = (b: Box, back: (p: Point) => Point): Box => {
 };
 
 /** One figure of a page: its structures (`structuresOf`), and what else it has drawn - its arrows, "+" signs and words - where the pointer takes none. */
-export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, known?: readonly GlyphShape[]): { structures: PageStructure[]; marks: PageMarks } {
+export function figureOn(given: FigureDrawn, figure: number, sha256: string, page: number, known?: readonly GlyphShape[], beside: readonly Beside[] = []): { structures: PageStructure[]; marks: PageMarks } {
   const { back, read } = schemeDrawn(given, known);
   if (read.tooMany) return { structures: [], marks: { segments: [], points: [], boxes: [] } };
   const marks: PageMarks = {
@@ -133,7 +154,7 @@ export function figureOn(given: FigureDrawn, figure: number, sha256: string, pag
   };
   // (what was drawn as words, by the letters of each: words lying within a structure are part of it not read)
   const words = read.words.map((w) => ({ c: w.text, box: w.box }));
-  return { structures: structuresHere(read.figure, back, figure, sha256, page, words), marks };
+  return { structures: structuresHere(read.figure, back, figure, sha256, page, words).map((st) => besideChecked(st, beside, read.figure.bond)), marks };
 }
 
 /** The structures of a figure read - each refused where letters of the figure no atom took, or words it read, lie within it. */
@@ -164,6 +185,21 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
       read: model ? { model } : { none: `Part of this structure could not be read ("${within}"), so none of it is taken.` },
     };
   });
+}
+
+/**
+ * A structure refused where anything on the page outside its own figure -
+ * words, or lines - lies within a bond of its atoms, its bonds or its
+ * labels: the page's figures may have been cut through it there (a label
+ * wider than a figure's word between its two halves), and the rest of it
+ * be in another figure. Never half a molecule: refused, the words named.
+ */
+function besideChecked(st: PageStructure, beside: readonly Beside[], bond: number): PageStructure {
+  if ("none" in st.read) return st;
+  const near = beside.find((b) => boxToBox(b.box, st.box) <= bond && (st.atoms.some((a) => toBox(a, b.box) <= bond) || st.labels.some((l) => boxToBox(l, b.box) <= bond) || st.bonds.some(([a, c]) => segmentToBox(a, c, b.box) <= bond)));
+  if (!near) return st;
+  const what = near.text?.trim() ? `"${near.text.trim()}" lies beside it` : "lines drawn beside it lie outside its figure";
+  return { ...st, read: { none: `Part of this structure could not be read (${what}), so none of it is taken.` } };
 }
 
 /**

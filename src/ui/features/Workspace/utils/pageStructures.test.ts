@@ -89,3 +89,43 @@ describe("the structure under the pointer", () => {
     expect(structureAt([moved, a], p.x, p.y)?.key).toBe(a.key);
   });
 });
+
+describe("a structure the page's figures may have cut in two", () => {
+  // (camphor, a structure whole in its figure; what lies beside it outside its figure placed by its bond as drawn)
+  const drawn = camphor as unknown as FigureDrawn;
+  const [whole] = structuresOf(drawn, 0, "pdf", 0);
+  const bond = whole.reach * 3;
+  const right = Math.max(...whole.atoms.map((a) => a.x));
+  const atRight = whole.atoms.find((a) => a.x === right)!;
+  const label = (gap: number, width: number) => ({ box: [right + gap, atRight.y - 4, right + gap + width, atRight.y + 4] as [number, number, number, number], text: "OSiPh2tBu" });
+
+  it("is refused where a wide label outside its figure lies right by it - a 60 point label, its other half beyond - naming the words", () => {
+    const [s] = structuresOf(drawn, 0, "pdf", 0, undefined, [label(0.2 * bond, 60)]);
+    expect(s.read).toEqual({ none: 'Part of this structure could not be read ("OSiPh2tBu" lies beside it), so none of it is taken.' });
+  });
+
+  it("is refused where a label lies most of a bond off: 30 points wide, 12 off a 14 point bond", () => {
+    const [s] = structuresOf(drawn, 0, "pdf", 0, undefined, [label((12 / 14) * bond, (30 / 14) * bond)]);
+    expect("none" in s.read).toBe(true);
+  });
+
+  it("is refused where lines outside its figure lie by it", () => {
+    const [s] = structuresOf(drawn, 0, "pdf", 0, undefined, [{ box: [right + 0.5 * bond, atRight.y - 1, right + 2 * bond, atRight.y + 1] }]);
+    expect(s.read).toEqual({ none: "Part of this structure could not be read (lines drawn beside it lie outside its figure), so none of it is taken." });
+  });
+
+  it("is read whole where what lies outside its figure is more than a bond off", () => {
+    const [s] = structuresOf(drawn, 0, "pdf", 0, undefined, [label(1.5 * bond, 60)]);
+    expect("model" in s.read).toBe(true);
+  });
+
+  it("keeps a compound's number under it, in its own figure, as text: the structure whole, and the number no part of it", () => {
+    const low = Math.max(...whole.atoms.map((a) => a.y), ...whole.labels.map((l) => l[3]));
+    const mid = (whole.box[0] + whole.box[2]) / 2;
+    const number = [{ c: "1", box: [mid - 2, low + 0.8 * bond, mid + 2, low + 0.8 * bond + 7] as [number, number, number, number], at: [mid - 2, low + 0.8 * bond + 7] as [number, number], size: 9 }, { c: "a", box: [mid + 2.5, low + 0.8 * bond + 2, mid + 6.5, low + 0.8 * bond + 7] as [number, number, number, number], at: [mid + 2.5, low + 0.8 * bond + 7] as [number, number], size: 9 }];
+    const { structures, marks } = figureOn({ ...drawn, letters: [...drawn.letters, ...number] }, 0, "pdf", 0);
+    expect(structures).toHaveLength(1);
+    expect(formula(structures[0])).toBe(formula(whole));
+    expect(structureAt(structures, mid, low + 0.8 * bond + 4, marks)).toBeNull();
+  });
+});
