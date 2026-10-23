@@ -440,13 +440,14 @@ Conformers go through a workflow as any set does (decided):
     looked at, never entries: before, a scan of 3 points opened as 21
     compounds, each with an energy, and a conformer set weighted geometries
     that were no minimum of anything. A point the run never converged on
-    is no entry either: an optimisation that never converged - one stopped
-    at its first geometry too - gives none, and says *Not converged* over
-    it; a run stopped before its last point converged - an interrupted scan
-    - gives the points it did, and says *Last point not converged*. The
-    point stays a frame, to be looked at; nothing that is no minimum is
-    weighed (the command centre, 2026-10-22, until an entry can carry its
-    own failure). Over each it says how many of its frames are entries: "4
+    is an entry marked failed, not converged (*Failed*): an optimisation
+    that never converged - one stopped at its first geometry too - gives
+    its last geometry so, and says *Not converged* over it; a run stopped
+    before its last point converged - an interrupted scan - gives the
+    points it did, and that last one so, and says *Last point not
+    converged*. It is seen and carried on, and never weighed: *Energy
+    window* and *Populations* refuse it, saying why (2026-10-23; from
+    2026-10-22 until then, it was no entry). Over each it says how many of its frames are entries: "4
     of 21 frames are entries (converged points)".
     (A step's own optimisation was already one entry, its path: *Results*.)
   - **What is not known to be found is no entry either: never every

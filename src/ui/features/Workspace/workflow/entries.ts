@@ -534,6 +534,15 @@ export type SetEntry = {
  * hydrogens not there (lib/chem/skeleton): counted by molecule, and said
  * before anything is sent. None, where it may run.
  */
+/**
+ * The entries a step that needs whole molecules refuses, by their places:
+ * the skeletons among them, each to its Failed exit, kind "refused", with
+ * why - the rest run (lib/chem/skeleton `skeletonWhy`).
+ */
+export function skeletonEntries(kind: StepKind, entries: readonly SetEntry[]): number[] {
+  return kindInfo(kind).whole ? entries.flatMap((e, i) => (e.skeleton ? [i] : [])) : [];
+}
+
 export function skeletonsRefused(kind: StepKind, entries: readonly SetEntry[]): string | null {
   if (!kindInfo(kind).whole) return null;
   const skeletons = new Set(entries.flatMap((e, i) => (e.skeleton ? [e.from ?? `#${i}`] : [])));

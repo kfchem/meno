@@ -741,6 +741,25 @@ describe("a step that runs a plugin's program", () => {
     expect(failedOnes.map((m) => m.failed)).toEqual([[{ kind: "refused", why }]]);
   });
 
+  it("refuses a skeleton among what came in - its hydrogens not there - out of its Failed exit, never sent; the rest run", async () => {
+    const made = waters(3);
+    const { st, step } = made;
+    // (the second water's oxygen alone: no hydrogens, not said to be whole without any)
+    made.doc.edit("skeleton", (d) => ({ ...d, molecules3d: d.molecules3d!.map((m, i) => (i === 1 ? { ...m, atoms: [m.atoms[0]], bonds: [], bondOrders: "unknown" as const } : m)) }));
+    const ran = st().runStep(step);
+    await settle();
+    await settle();
+    expect(worker.prepare.mock.calls[0][1]).toHaveLength(2);
+    expect(asked.started).toHaveLength(2);
+    end(1);
+    end(2);
+    await st().lookAtJobs();
+    await ran;
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "0:01 \u00b7 2 of 3 \u00b7 1 of 3 failed (1: refused)" });
+    const failedOnes = setMembers(st(), resultOf(st(), step, "failed")!).molecules.map((id) => st().molecules3d.find((m) => m.id === id)!);
+    expect(failedOnes.map((m) => [m.atoms.length, m.failed?.[0]?.kind, m.failed?.[0]?.why])).toEqual([[1, "refused", expect.stringMatching(/^This molecule has no hydrogens/)]]);
+  });
+
   it("sends an optimisation that did not converge out of its Failed exit - its path and the last geometry it reached, never passed on as done - kept so when saved", async () => {
     const { st, step } = waters(2);
     const base = worker.collect.getMockImplementation()!;

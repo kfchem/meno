@@ -19,7 +19,7 @@
  */
 import type { Entry } from "../entry";
 
-export type Rebonded = { entry: Entry } | { failed: string };
+export type Rebonded = { entry: Entry; said: string[] } | { failed: string };
 
 const groupOf = (e: Entry): string => {
   const g = e.properties.group?.value;
@@ -39,6 +39,8 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
     return {
       failed: `Atom ${i + 1} is ${ga[i].el} in the geometry and ${ba[i].el} in the bonding: both must hold the same atoms in one numbering (a Reaction step writes its products in the reactants').`,
     };
+  // (the bonding a skeleton, its hydrogens not there: no charge or spin to give the entry, as Combine says of a part)
+  const said = bonding.species ? [] : ["The bonding has no hydrogens, so the entry's charge and spin are not known either."];
   return {
     entry: {
       id,
@@ -54,5 +56,6 @@ export function rebonded(geometry: Entry, bonding: Entry, id: string): Rebonded 
       },
       status: "done",
     },
+    said,
   };
 }

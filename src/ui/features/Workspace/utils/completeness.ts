@@ -30,7 +30,7 @@ export const leftOutMark = (frames: number) => `${frames} frame${frames === 1 ? 
 export const TOGETHER_MARK = "Atoms in one place";
 /** What an opened optimisation says that never converged: its last geometry is no optimum (the words a step's failure uses for it). */
 export const NOT_CONVERGED_MARK = "Not converged";
-/** What an opened optimisation or scan says whose last point never converged - no entry: "Not converged" where none of its points did, "Last point not converged" where others did. */
+/** What an opened optimisation or scan says whose last point never converged - an entry marked failed: "Not converged" where none of its points did, "Last point not converged" where others did (`converged`, how many). */
 export const notConvergedMark = (entries: number) => (entries > 0 ? "Last point not converged" : NOT_CONVERGED_MARK);
 /** Why none of an opened output's geometries is an entry, where it is not that none converged (lib/calc/output `Unmarked`), in a few words. */
 export const NO_ENTRY_WHY: Record<Unmarked, string> = {
@@ -48,7 +48,11 @@ export const NO_ENTRY_WHY: Record<Unmarked, string> = {
  * (`NO_ENTRY_WHY`): "No frame is an entry (convergence not stated in this
  * file)" - of an output of one geometry too, as one of more.
  */
-export function entriesMark(entries: number, frames: number, why?: Unmarked): string {
+export function entriesMark(entries: number, frames: number, why?: Unmarked, lastUnfinished = false): string {
+  if (lastUnfinished) {
+    const converged = entries - 1;
+    return `${entries} of ${frames} frames ${entries === 1 ? "is an entry" : "are entries"} (${converged ? `${converged === 1 ? "the converged one" : "converged points"}, and the last, not converged` : "the last, not converged"})`;
+  }
   if (!entries) return `No frame is an entry (${why ? NO_ENTRY_WHY[why] : "none converged"})`;
   return `${entries} of ${frames} frames ${entries === 1 ? "is an entry (the converged one)" : "are entries (converged points)"}`;
 }
