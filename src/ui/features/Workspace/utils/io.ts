@@ -2,6 +2,7 @@ import type { EditorModel } from "../../../../utils/importers";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { bondChem, chemistry } from "../../../../lib/chem/molecule";
 import type { Carried3D, Drawn, Model, Molecule3D } from "../store/types";
+import type { Failure } from "../workflow/failures";
 import { lookOf, rowAbout, solidOf } from "./molecule3d";
 import { extensionOf, kindOf, MENO_KINDS, type Kind } from "../../../../lib/io/kinds";
 import { atomAs } from "./figures";
@@ -220,6 +221,9 @@ export function calcResult(out: ReaderOutput, readers: readonly string[], filena
   return { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d };
 }
 
+/** Why an opened run's last point is an entry that failed: the run stopped before it converged (`Molecule3D.failed`). */
+export const UNFINISHED_WHY = "The run stopped before this geometry converged: it is no optimum.";
+
 /** One output's - or one job's - molecule in 3D; none, where it gives no geometry. Named after the file, and its job where it is one of several. */
 function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: string, source?: CalcSource): Omit<Molecule3D, "id" | "at"> | null {
   const n = out.atoms?.length ?? 0;
@@ -241,10 +245,11 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
   const read = marksOf(out);
   const marks = read?.converged;
   // (a run stopped before its last point converged - an interrupted scan, an optimisation cut short or never
-  // converged - gives no entry of that point: no geometry that is no minimum is weighed. It stays a frame, and
-  // the molecule says so - the command centre, 2026-10-22, until an entry can carry its own failure)
+  // converged - gives that point as an entry marked failed, not converged (workflow/failures): seen, carried on,
+  // and never weighed as a minimum - Energy window and Populations refuse it, saying so)
   const unfinished = !!marks && !read?.unmarked && !marks[marks.length - 1];
-  const entryFrames = marks ? marks.flatMap((ok, i) => (ok ? [i] : [])) : undefined;
+  const entryFrames = marks ? [...marks.flatMap((ok, i) => (ok ? [i] : [])), ...(unfinished ? [marks.length - 1] : [])] : undefined;
+  const failed: Failure[] | null = unfinished ? [{ kind: "not-converged", why: UNFINISHED_WHY }] : null;
   return {
     atoms: first.atoms,
     bonds: first.bonds,
@@ -255,7 +260,7 @@ function jobMolecule(out: ReaderOutput, readers: readonly string[], filename?: s
     ...(name ? { name } : {}),
     ...(together ? { together } : {}),
     ...(entryFrames && entryFrames.length < 1 + frames.length ? { entryFrames } : {}),
-    ...(unfinished ? { notConverged: true as const } : {}),
+    ...(unfinished ? { notConverged: true as const, failed: [...frames.map(() => null), ...failed!] } : {}),
     ...(read?.unmarked ? { noEntryWhy: read.unmarked } : {}),
     calc,
   };
