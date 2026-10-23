@@ -3,15 +3,15 @@
  * (./menoFileWorker), started the first time a workspace is saved; where
  * there is no worker to be had - the tests - in place.
  */
-import { menoFileBytes, type KeptData } from "./menoFile";
+import { menoFileBytes, type KeptData, type KeptFile } from "./menoFile";
 
 let worker: Worker | null = null;
 let next = 1;
 const pending = new Map<number, { resolve: (b: Uint8Array) => void; reject: (e: Error) => void }>();
 
-/** A workspace's file: its JSON, and the files it keeps. */
-export function writeMenoFile(workspace: string, files: readonly KeptData[]): Promise<Uint8Array> {
-  if (typeof Worker === "undefined") return Promise.resolve().then(() => menoFileBytes(workspace, files));
+/** A workspace's file: its JSON, the files it keeps, and those it lists whose bytes are added after (`menoFileBytes`). */
+export function writeMenoFile(workspace: string, files: readonly KeptData[], listed: readonly KeptFile[] = []): Promise<Uint8Array> {
+  if (typeof Worker === "undefined") return Promise.resolve().then(() => menoFileBytes(workspace, files, listed));
   if (!worker) {
     worker = new Worker(new URL("./menoFileWorker.ts", import.meta.url), { type: "module" });
     worker.onmessage = (e: MessageEvent<{ id: number; ok: boolean; bytes?: Uint8Array; error?: string }>) => {
@@ -32,6 +32,6 @@ export function writeMenoFile(workspace: string, files: readonly KeptData[]): Pr
   const id = next++;
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
-    worker!.postMessage({ id, workspace, files });
+    worker!.postMessage({ id, workspace, files, listed });
   });
 }

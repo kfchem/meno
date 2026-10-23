@@ -9,6 +9,7 @@ import { canWire, entryOnPage, inputKey, resultOf, stateOf, tableInto } from "./
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
 import { runStep, whyNot, type RunWith } from "./run";
 import { readWorkflow } from "./saved";
+import { noting } from "../utils/readNotes";
 import { ChartBody } from "./ValueBody";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
@@ -161,6 +162,10 @@ describe("a Chart step", () => {
     const c = chartOf(doc)!;
     expect(chartIn({ ...c, points: [{ x: "1", y: 2, row: 0 }] })).toBeUndefined();
     expect(chartIn({ ...c, x: { name: "x", unit: "furlongs" } })).toBeUndefined();
+    // (one that does not read is counted, as what else a file holds that does not read is)
+    const saved = JSON.parse(JSON.stringify({ sets: doc.sets, steps: doc.steps, wires: doc.wires }));
+    saved.sets.find((b: { made?: { step: number } }) => b.made?.step === 2).chart.points[0].x = "1";
+    expect(noting(() => readWorkflow(saved)).left).toEqual({ chart: 1 });
   });
 });
 

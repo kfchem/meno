@@ -79,6 +79,7 @@ import ColourCard, { type ColourTarget } from "./ColourCard";
 import SizeCard from "./SizeCard";
 import CornersCard from "./CornersCard";
 import SettingsStyleAsk from "./SettingsStyleAsk";
+import LargeWorkspaceAsk from "./LargeWorkspaceAsk";
 import { PdfNumbersCard, PdfPagesCard } from "./PdfMakeCards";
 import { combined, putBeside, savePdfFile } from "./pdfMake";
 import { listItem, stylesOf, wordsSet } from "../../../lib/chem/captions";
@@ -203,7 +204,7 @@ import { turnOnto } from "./utils/align3d";
 import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom } from "./store/types";
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
-import { missingFor } from "./workflow/doers";
+import { byOf, MENO, missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
 import { heldOwn } from "./workflow/entries";
@@ -1693,6 +1694,21 @@ function WorkspaceContent({
           />
         )}
       </AnimatePresence>
+      {/* (a save past the size Settings says, asked before it is written: fileActions) */}
+      <AnimatePresence>
+        {files.sizeAsked && (
+          <LargeWorkspaceAsk
+            key="large"
+            bytes={files.sizeAsked.bytes}
+            threshold={files.sizeAsked.threshold}
+            steps={files.sizeAsked.steps}
+            most={files.sizeAsked.most}
+            onKeepNoRaw={() => files.sizeAsked?.answer("no raw")}
+            onSaveAll={() => files.sizeAsked?.answer("all")}
+            onCancel={() => files.sizeAsked?.answer("cancel")}
+          />
+        )}
+      </AnimatePresence>
       {/* (a style changed in Settings while it was open, offered to it: a tab's own workspace alone) */}
       {ownTab && <SettingsStyleAsk active={active} />}
       <AnimatePresence>
@@ -1994,7 +2010,13 @@ function WorkspaceContent({
             return {
               // (its jobs under way, or Meno's own working in turns: Stop)
               ...(s.running || st.menoWorking[s.id] ? { onStop: () => st.stopStep(s.id) } : { onRunFrom: () => void st.runFrom(s.id) }),
-              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () => void st.showStepFiles(s.id).catch(() => {}) } : {}),
+              ...(jobs ? { onShowLog: () => void st.showStepLog(s.id), onShowFiles: () =>
+                    void st
+                      .showStepFiles(s.id)
+                      .then((said) => said && useNotices.getState().show({ id: `show-files:${s.id}`, title: "Some files were not written out", text: said }))
+                      .catch(() => {}) } : {}),
+              // (a step a plugin does runs jobs, whose files the workspace's file keeps: workflow/keptJobs)
+              ...(byOf(s) !== MENO.id ? { keepRaw: { kept: s.keepRaw !== false, set: (keep: boolean) => st.keepRawOutputs(s.id, keep) } } : {}),
             };
           })()}
           onStepOptions={() => {

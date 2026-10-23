@@ -34,7 +34,8 @@ const among = (w: Wire, sets: ReadonlySet<number>, steps: ReadonlySet<number>) =
  * set goes without its members, which are this page's, and without a large
  * set's own molecules (`collection`, and how many of them did not read),
  * which are the set's: put down elsewhere, it holds what then lies inside it
- * (workflow/model `membersSettled`), and a step's exit is empty until its
+ * (workflow/model `membersSettled`) - its structures drawn with the records
+ * they had (`WorkflowSet.carried`) - and a step's exit is empty until its
  * step runs again - its molecules never copied twice.
  */
 export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet<number>): FlowParts {
@@ -42,14 +43,29 @@ export function partsOf(doc: Flow, sets: ReadonlySet<number>, steps: ReadonlySet
     sets: (doc.sets ?? [])
       .filter((b) => sets.has(b.id))
       // (a step's exit without its step is a set like the chemist's; with it, empty until that step runs again)
-      .map(({ members: _m, keep: _k, notKept: _n, put: _p, collection: _c, unread: _u, ...b }) =>
-        b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b,
-      ),
+      .map(({ members, keep: _k, notKept: _n, put: _p, collection: _c, unread: _u, carried: _r, ...b }) => {
+        // (the records of its structures drawn, by their atoms' ids: taken up by them again, put down)
+        const carried = (members ?? []).flatMap((m) => ("structure" in m && m.record ? [{ structure: m.structure, record: m.record }] : []));
+        const set = b.made && !steps.has(b.made.step) ? (({ made: _m, ...rest }) => rest)(b) : b.made ? { ...b, made: { step: b.made.step, exit: b.made.exit } } : b;
+        return carried.length ? { ...set, carried } : set;
+      }),
     steps: (doc.steps ?? [])
       .filter((s) => steps.has(s.id))
       .map(({ ran: _r, runs: _k, running: _g, ...s }) => s),
     wires: (doc.wires ?? []).filter((w) => among(w, sets, steps)),
   };
+}
+
+/** Parts whose sets carry records (`WorkflowSet.carried`) as their structures are pasted: each by its atoms' new ids (`idOf`) - one not pasted whole, none. */
+export function carriedRenumbered(parts: FlowParts, idOf: (id: number) => number | undefined): FlowParts {
+  const sets = parts.sets.map(({ carried, ...b }) => {
+    const kept = (carried ?? []).flatMap((c) => {
+      const ids = c.structure.map(idOf);
+      return ids.every((id) => id != null) ? [{ ...c, structure: ids as number[] }] : [];
+    });
+    return kept.length ? { ...b, carried: kept } : b;
+  });
+  return { ...parts, sets };
 }
 
 /** The ids of what parts hold, as sets of ids. */

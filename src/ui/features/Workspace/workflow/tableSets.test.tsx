@@ -37,15 +37,50 @@ describe("a text read as a table", () => {
 });
 
 describe("a table or a number, as a file keeps it", () => {
-  it("reads back as it was, and is none where it does not read", () => {
-    const back = tableIn(JSON.parse(JSON.stringify(TABLE)));
-    expect(back).toEqual(TABLE);
-    // (a row of the wrong length, a cell of another kind, a unit Meno does not know: none)
-    expect(tableIn({ ...TABLE, rows: [["a", 1]] })).toBeUndefined();
-    expect(tableIn({ ...TABLE, rows: [["a", "1.5", true]] })).toBeUndefined();
-    expect(tableIn({ ...TABLE, columns: [{ name: "x", kind: "number", unit: "furlongs" }], rows: [] })).toBeUndefined();
-    expect(numberIn({ value: 1.5, unit: "kcal/mol", by: { program: "p" }, at: { geometry: "g", kelvin: 298.15 } })).toEqual({ value: 1.5, unit: "kcal/mol", by: { program: "p" }, at: { geometry: "g", kelvin: 298.15 } });
-    expect([numberIn({ value: NaN, unit: "none" }), numberIn({ value: 1, unit: "furlongs" })]).toEqual([undefined, undefined]);
+  it("reads back as it was; what does not read is left out alone, and counted - never the table with it", () => {
+    const counted: Record<string, number> = {};
+    const lost = (what: string, k = 1) => void (counted[what] = (counted[what] ?? 0) + k);
+    expect(tableIn(JSON.parse(JSON.stringify(TABLE)), lost)).toEqual(TABLE);
+    expect(counted).toEqual({});
+    // (a cell of another kind - the desk's probe: a number written as a text - none in its row, named among what was not read)
+    const cell = tableIn({ ...TABLE, rows: [["a", "1.5", true], ["c", 2.25, true]] }, lost)!;
+    expect([cell.rows, cell.unread[cell.unread.length - 1]]).toEqual([
+      [
+        ["a", null, true],
+        ["c", 2.25, true],
+      ],
+      { row: 0, column: "energy", text: "1.5", why: "did not read from the file" },
+    ]);
+    // (a column of a unit Meno does not know - the desk's other probe - left out with its cells; a row not of the table's width, left out)
+    const column = tableIn({ ...TABLE, columns: [...TABLE.columns.slice(0, 2), { name: "x", kind: "number", unit: "furlongs" }], rows: [["a", 1.5, 3], ["b", 2]] }, lost)!;
+    expect([column.columns.map((c) => c.name), column.rows]).toEqual([["name", "energy"], [["a", 1.5]]]);
+    // (no table at all, or no column that reads: none, counted)
+    expect([tableIn({ rows: [] }, lost), tableIn({ columns: [{ name: "x", kind: "number", unit: "furlongs" }], rows: [] }, lost)]).toEqual([undefined, undefined]);
+    expect(counted).toEqual({ tableCell: 1, tableColumn: 2, tableRow: 1, table: 2 });
+  });
+
+  it("reads a number back - or none, counted, where it is no finite number in a unit Meno knows - and counts a field of what worked it out that does not read", () => {
+    const counted: Record<string, number> = {};
+    const lost = (what: string, k = 1) => void (counted[what] = (counted[what] ?? 0) + k);
+    expect(numberIn({ value: 1.5, unit: "kcal/mol", by: { program: "p" }, at: { geometry: "g", kelvin: 298.15 } }, lost)).toEqual({ value: 1.5, unit: "kcal/mol", by: { program: "p" }, at: { geometry: "g", kelvin: 298.15 } });
+    expect([numberIn({ value: NaN, unit: "none" }, lost), numberIn({ value: 1, unit: "furlongs" }, lost)]).toEqual([undefined, undefined]);
+    expect(numberIn({ value: 2, unit: "none", by: { program: "p", version: 6 } }, lost)).toEqual({ value: 2, unit: "none", by: { program: "p" } });
+    expect(counted).toEqual({ number: 2, valueField: 1 });
+  });
+
+  it("is said of a workspace's file, as what else does not read is: a cell, a column, a number", () => {
+    const page = createWorkspaceDocument();
+    const st = createEditorStore(page);
+    connectStoreToDocument(st, page);
+    const id = st.getState().placeTable(TABLE, { x: 0, y: 0 }, "shifts.csv");
+    const saved = JSON.parse(workspaceText(st.getState()));
+    const set = saved.sets.find((b: { id: number }) => b.id === id);
+    set.table.rows[0][1] = "1.5";
+    set.table.columns[2] = { name: "ok", kind: "number", unit: "furlongs" };
+    saved.sets.push({ id: 99, x0: 0, y0: 0, x1: 1, y1: 1, number: { value: "x", unit: "none" } });
+    const read = readWorkspace(JSON.stringify(saved))!;
+    expect(read.leftOut).toEqual({ tableCell: 1, tableColumn: 1, number: 1 });
+    expect(read.workflow!.sets.find((b) => b.id === id)?.table?.rows.map((r) => r[0])).toEqual(["a", "b", "c"]);
   });
 });
 
