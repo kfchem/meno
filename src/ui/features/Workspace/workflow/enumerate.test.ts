@@ -206,7 +206,8 @@ describe("Enumerate as a step", () => {
     expect(entries(ran, step, "rest")).toEqual([{ number: 3, how: "R1 = Cl, R2 = Me", why: "Same as 2" }]);
     // (each as an entry keeps it: its number and how it was made its properties, its status done or set aside)
     const first = resultOf(ran, step, "out")!.members![0];
-    expect("structure" in first && first.record).toEqual(numberedRecord(1, "R1 = Me, R2 = Me"));
+    // (and of the structure it was made as: `of`, which the page gives each record put on it)
+    expect("structure" in first && first.record).toEqual({ ...numberedRecord(1, "R1 = Me, R2 = Me"), of: expect.any(String) });
     expect(numberedRecord(3, "R1 = Cl, R2 = Me", "Same as 2")).toEqual({
       properties: { number: { value: 3, unit: "none", status: "computed" }, "made.how": { value: "R1 = Cl, R2 = Me", unit: "none", status: "computed" } },
       status: { aside: "Same as 2" },
