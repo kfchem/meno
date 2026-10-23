@@ -1,3 +1,4 @@
+import type { Table } from "../../../../../lib/table";
 import { gestureStep } from "../../../../../lib/doc/document";
 import type { StoreApi } from "zustand";
 import type { DocumentStore } from "../../../../../lib/doc";
@@ -67,6 +68,11 @@ export function createWorkflowSlice(doc: DocumentStore<WorkspaceDocument>, set: 
     addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => {
       const id = doc.getState().nextWorkflowId ?? 1;
       doc.edit("add set", (d) => wf.addSet(d, frame));
+      return id;
+    },
+    placeTable: (table: Table, at: { x: number; y: number }, name?: string) => {
+      const id = doc.getState().nextWorkflowId ?? 1;
+      doc.edit("put table", (d) => wf.addTableSet(d, at, table, name));
       return id;
     },
     resizeSet: (id: number, frame: { x0: number; y0: number; x1: number; y1: number }, gesture?: string) =>

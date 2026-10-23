@@ -2,7 +2,8 @@ import clsx from "clsx";
 import { useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import type { WorkflowSet } from "../store/types";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import { NAME_DOWN, SET_PAD, PX, SUMMARY_PX } from "./look";
+import { NAME_DOWN, SET_PAD, PX, SUMMARY_PX, TABLE_PX } from "./look";
+import { NumberBody, TableBody } from "./ValueBody";
 import { HAIR, Port } from "./StepCard";
 import SummaryBody from "./SummaryBody";
 
@@ -130,6 +131,21 @@ export default function SetFrame(p: SetFrameProps) {
               </div>
               <span className="-mt-2 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
             </div>
+          )}
+        </div>
+      )}
+      {/* (a table or a number it holds: what it is, inside it - made smaller to fit a frame sized smaller) */}
+      {(p.set.table || p.set.number) && (
+        <div
+          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
+          style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
+        >
+          {p.set.table ? (
+            <div className="origin-top-left" style={{ width: TABLE_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / TABLE_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / TABLE_PX.h)})` }}>
+              <TableBody table={p.set.table} />
+            </div>
+          ) : (
+            p.set.number && <NumberBody number={p.set.number} />
           )}
         </div>
       )}

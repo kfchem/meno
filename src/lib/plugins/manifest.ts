@@ -28,7 +28,7 @@
 import { acceptOptions, type Option } from "../options";
 import { TONE_NAMES, type Tone } from "../text/tones";
 import { isRole, ROLES, type RoleId } from "./roles";
-import { isStepKind, MENO_ONLY, SET_KINDS, type SetKind, type StepKind } from "./steps";
+import { isStepKind, MENO_ONLY, VALUE_KINDS, type StepKind, type ValueKind } from "./steps";
 import { GUIDE_EVENTS, GUIDE_PLACES, type GuideStep, type Suggestion } from "./guide";
 
 /** Text a file's start holds, which tells a kind: anywhere, or at a line's start; runs of spaces counted as one. */
@@ -165,7 +165,7 @@ export type RoleDecl = {
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: SetKind[]; files?: string[] };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[] };
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -503,7 +503,8 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
   const s = v as Record<string, unknown> | null;
   const kinds = list(s?.kinds).filter((k): k is StepKind => typeof k === "string" && isStepKind(k) && !MENO_ONLY.includes(k));
   const programs = [...new Set(list(s?.programs).filter((p): p is string => typeof p === "string" && PROGRAM.test(p)))];
-  const takes = Array.isArray(s?.takes) ? SET_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
+  // (of what flows: a kind of set, a table, a number - nothing a manifest makes up)
+  const takes = Array.isArray(s?.takes) ? VALUE_KINDS.filter((t) => (s.takes as unknown[]).includes(t)) : [];
   const files = [...new Set(list(s?.files).filter((f): f is string => typeof f === "string" && ID.test(f)))];
   const options = acceptOptions(s?.options);
   // (none said, and it fills the role of the kind's name: the role's - the same work, asked as a step)

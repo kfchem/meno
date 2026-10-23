@@ -746,7 +746,12 @@ export function writeRxnfile(
 }
 
 /** An atom or a bond of a molecule in 3D, as a file gives it: in ångströms, its bonds by atom index. */
-export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical; isotope?: number };
+/**
+ * An atom in 3D as a molfile writes it. `noImplicitH`: an atom of a
+ * skeleton (lib/chem/skeleton) - its hydrogens not there - written with its
+ * valence set to the bonds it has, so that no reader adds any.
+ */
+export type Atom3D = { el: string; x: number; y: number; z: number; charge?: number; radical?: Radical; isotope?: number; noImplicitH?: boolean };
 export type Bond3D = { a1: number; a2: number; order: number };
 
 /** The second header line of a molfile in 3D: the program, no date, and that it is 3D. */
@@ -775,7 +780,10 @@ export function needsV3000In3d(atoms: readonly Atom3D[], bonds: readonly Bond3D[
  * and isotopes as M  CHG, M  RAD and M  ISO lines - wherever V2000 holds
  * it, and V3000 - CHG, RAD and MASS on the atoms - where it cannot
  * (`needsV3000In3d`), unless one is asked for. A radical is written as the
- * format codes it: 1 singlet, 2 doublet, 3 triplet.
+ * format codes it: 1 singlet, 2 doublet, 3 triplet. An atom that takes no
+ * hydrogens beyond its bonds (`noImplicitH`) has its valence written - the
+ * atom block's vvv, 1 to 14 or 15 for none; V3000's VAL, -1 for none
+ * ("CTfile Formats") - as the sum of its bonds' orders.
  */
 export function writeMolfile3d(
   atoms: Atom3D[],
@@ -784,6 +792,14 @@ export function writeMolfile3d(
 ): string {
   const version = options.version ?? "auto";
   const head = [titleLine(options.title), PROGRAM_LINE_3D, ""];
+  // (each atom's bonds' orders summed, for one whose valence is written: an aromatic bond one and a half, a coordination or hydrogen bond none)
+  const valence = new Float64Array(atoms.length);
+  for (const b of bonds) {
+    const order = b.order >= 1 && b.order <= 3 ? b.order : b.order === 4 ? 1.5 : 0;
+    valence[b.a1] += order;
+    valence[b.a2] += order;
+  }
+  const valenceOf = (i: number) => Math.round(valence[i]);
   if (version === "V3000" || (version === "auto" && needsV3000In3d(atoms, bonds))) {
     const lines = [
       ...head,
@@ -797,7 +813,8 @@ export function writeMolfile3d(
         `M  V30 ${i + 1} ${v30String(a.el)} ${v30Number(a.x)} ${v30Number(a.y)} ${v30Number(a.z)} 0` +
           (a.charge ? ` CHG=${a.charge}` : "") +
           (a.radical ? ` RAD=${RADICAL_CODE[a.radical]}` : "") +
-          (a.isotope ? ` MASS=${a.isotope}` : ""),
+          (a.isotope ? ` MASS=${a.isotope}` : "") +
+          (a.noImplicitH ? ` VAL=${valenceOf(i) || -1}` : ""),
       ),
     );
     lines.push("M  V30 END ATOM");
@@ -810,10 +827,14 @@ export function writeMolfile3d(
     return lines.flatMap(fitV3000).join("\n") + "\n";
   }
   const lines = [...head, `${i3(atoms.length)}${i3(bonds.length)}  0  0  0  0  0  0  0  0999 V2000`];
-  for (const a of atoms) {
+  // (aaaddcccssshhhbbbvvvHHH...: the mass difference dd and charge ccc in the old range, and the valence, vvv, the sixth field after the symbol)
+  atoms.forEach((a, i) => {
     const { dd, ccc } = oldRangeFields(a);
-    lines.push(`${f10(a.x)}${f10(a.y)}${f10(a.z)} ${a.el.padEnd(3)}${String(dd).padStart(2)}${i3(ccc)}  0  0  0  0  0  0  0  0  0  0`);
-  }
+    // (past 14 the field cannot say it: left unmarked)
+    const v = a.noImplicitH ? valenceOf(i) : -1;
+    const vvv = v === 0 ? " 15" : v >= 1 && v <= 14 ? i3(v) : "  0";
+    lines.push(`${f10(a.x)}${f10(a.y)}${f10(a.z)} ${a.el.padEnd(3)}${String(dd).padStart(2)}${i3(ccc)}  0  0  0${vvv}  0  0  0  0  0  0`);
+  });
   for (const b of bonds) lines.push(`${i3(b.a1 + 1)}${i3(b.a2 + 1)}${i3(b.order)}  0  0  0  0`);
   // (eight to a line)
   const props = (tag: string, pairs: [number, number][]) => {
