@@ -385,6 +385,27 @@ describe("an SD file of a canvas with molecules in 3D", () => {
     expect(shown).toContain("> <Energy (Eh)>\n-75.39\n");
   });
 
+  it("writes beside a frame's energy, in an SD file, that the frame did not finish - never only its value, as if a result", () => {
+    const water = {
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.96, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 0, y: 0 },
+      frames: [[0, 0, 0, 0.97, 0, 0]],
+      energies: [-75.4, -75.39],
+      failed: [null, { kind: "not-converged" as const, why: "stopped at 200 cycles" }],
+      name: "oh.xyz",
+    };
+    const text = structureFileText({ atoms: [], bonds: [], molecules3d: [water] }, "/tmp/oh.sdf", { frames: "all" });
+    const [first, second] = text.split("$$$$\n");
+    expect(first).not.toContain("<Failed>");
+    expect(second).toContain("> <Energy (Eh)>\n-75.39\n\n> <Failed>\nnot converged: stopped at 200 cycles\n");
+    const unread = structureFileText({ atoms: [], bonds: [], molecules3d: [{ ...water, failed: undefined, marksUnread: true as const }] }, "/tmp/oh.sdf", { frames: "all" });
+    expect(unread.match(/<Failed>/g)).toHaveLength(2);
+  });
+
   it("keeps a molecule in 3D's radicals, in the frame it shows and in every frame", () => {
     const hydroxyl = {
       atoms: [

@@ -48,6 +48,16 @@ describe("a large set's sample", () => {
 });
 
 describe("a large set's chart", () => {
+  it("draws only those that finished - its baseline among them - and names those left out; none finished, no chart, saying why", () => {
+    // (the third, not converged, would have been the lowest: every other drawn above it)
+    const stopped = { kind: "not-converged" as const, why: "stopped at 200 cycles" };
+    const chart = chartOf([waters([-76, -76 + KCAL, -77], { failed: [null, null, stopped] })], "conformers");
+    if ("none" in chart) throw new Error(chart.none);
+    expect([chart.counted, Math.max(...chart.bins.map((b) => b.to))]).toEqual([2, expect.closeTo(1, 6)]);
+    expect(chart.left).toEqual([{ count: 1, why: "failed or not known to have finished (a #3)" }]);
+    expect(chartOf([waters([-76, -77], { marksUnread: true })], "conformers")).toEqual({ none: "No energies charted: none finished - 2 failed or not known to have finished (a #1, a #2)" });
+  });
+
   it("bins by Sturges's rule: the bits it takes to count them, and one more", () => {
     // (Sturges 1926: ⌈log₂ n⌉ + 1)
     expect([1, 2, 8, 400, 1024].map(sturges)).toEqual([1, 2, 4, 10, 11]);

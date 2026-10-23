@@ -5,7 +5,7 @@ import { useEditor, useEditorStore } from "../store";
 import type { WorkflowSet } from "../store/types";
 import { setName } from "./doers";
 import { setMolecules } from "./entries";
-import { chooseRows, chosenMolecules, sortRows, tableRows, type SortKey, type TableRow } from "./setTable";
+import { aboveSaid, chooseRows, chosenMolecules, sortRows, tableRows, type SortKey, type TableRow } from "./setTable";
 
 /** How tall a row is, in px: the column's text, one line. */
 export const ROW_PX = 24;
@@ -41,8 +41,18 @@ function columnsOf(rows: readonly TableRow[]): Column[] {
     ...(has("name") ? [{ key: "name", name: "Name", title: "Its name", width: "minmax(6rem, 1fr)", text: (r: TableRow) => r.name ?? "" } as Column] : []),
     ...(has("energy") ? [{ key: "energy", name: "E (Eh)", title: "Its energy, in hartrees", width: "7rem", numeric: true, text: (r: TableRow) => fixed(6)(r.energy) } as Column] : []),
     ...(has("above")
-      ? [{ key: "above", name: "ΔE (kcal/mol)", title: "Its energy above its compound's lowest, in kcal/mol, among energies worked out the same way", width: "7rem", numeric: true, text: (r: TableRow) => fixed(2)(r.above) } as Column]
+      ? [
+          {
+            key: "above",
+            name: aboveSaid(rows) ? "ΔE (kcal/mol)*" : "ΔE (kcal/mol)",
+            title: `Its energy above its compound's lowest, in kcal/mol, among energies worked out the same way${aboveSaid(rows) ? ` - ${aboveSaid(rows)}` : ""}`,
+            width: "7rem",
+            numeric: true,
+            text: (r: TableRow) => fixed(2)(r.above),
+          } as Column,
+        ]
       : []),
+    ...(has("failed") ? [{ key: null, name: "Failed", title: "Where it did not finish: why, in words - its energy no result", width: "minmax(6rem, 1fr)", text: (r: TableRow) => r.failed ?? "" } as Column] : []),
     ...(has("degeneracy") ? [{ key: "degeneracy", name: "Alike", title: "How many forms of it the search found alike", width: "4rem", numeric: true, text: (r: TableRow) => (r.degeneracy != null ? String(r.degeneracy) : "") } as Column] : []),
     ...(has("energy") ? [{ key: null, name: "From", title: "What worked its energy out", width: "minmax(7rem, 2fr)", text: (r: TableRow) => (r.energy != null ? r.from || "not stated" : "") } as Column] : []),
   ];
@@ -107,6 +117,7 @@ export default function SetTableBody({ set }: { set: WorkflowSet }) {
       <div className="h-9 shrink-0 flex items-center gap-2 px-3 border-b border-gh-line">
         <span className="flex-1 min-w-0 truncate text-gh-gray" title={name}>
           {chosen.size ? `${chosen.size.toLocaleString("en-US")} of ${rows.length.toLocaleString("en-US")} chosen` : `${rows.length.toLocaleString("en-US")} ${holds === "conformers" ? "conformers" : rows.length === 1 ? "molecule" : "molecules"}`}
+          {aboveSaid(rows) ? ` · ΔE ${aboveSaid(rows)}` : ""}
         </span>
         <button
           onClick={putOnPage}

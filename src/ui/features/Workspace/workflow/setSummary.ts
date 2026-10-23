@@ -7,7 +7,7 @@
  */
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
-import { framesOf } from "./entries";
+import { compoundLetter, framesOf } from "./entries";
 import { energiesFrom } from "./setTable";
 
 /** How many of a set's structures its frame draws: a grid of four by three. */
@@ -17,7 +17,7 @@ export const SAMPLE = 12;
 export type Sampled = { molecule: number; frame: number };
 
 /** What of a molecule in 3D the summary reads. */
-type Of3D = Pick<Molecule3D, "frames" | "path" | "energies" | "calc" | "made" | "partOf">;
+type Of3D = Pick<Molecule3D, "frames" | "path" | "energies" | "calc" | "made" | "partOf" | "failed" | "marksUnread" | "numbers">;
 
 /**
  * The structures a large set's frame draws, and what they are of: in a
@@ -98,12 +98,18 @@ export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "confor
   let without = 0;
   let unstated = 0;
   let parts = 0;
-  // (each compound's usable energies - finite numbers - and what worked them out)
+  // (each compound's usable energies - finite numbers - and what worked them out: of those that finished alone - one
+  //  that failed, or whose marks did not read, left out and named, never a compound's lowest)
   const compounds: { from: string; energies: number[] }[] = [];
-  for (const m of molecules) {
+  const unfinished: string[] = [];
+  for (const [i, m] of molecules.entries()) {
     const n = framesOf(m);
-    const energies = m.energies?.length === n ? m.energies.filter(Number.isFinite) : [];
-    without += n - energies.length;
+    const finished = (f: number) => !m.marksUnread && !(m.failed?.length === n && m.failed[f]);
+    for (let f = 0; f < n; f++) if (!finished(f)) unfinished.push(`${compoundLetter(i)} #${m.numbers?.[f] ?? f + 1}`);
+    const all = m.energies?.length === n ? m.energies : [];
+    const energies = all.filter((e, f) => Number.isFinite(e) && finished(f));
+    // (of those that finished, each with no usable energy: none, or no finite number)
+    for (let f = 0; f < n; f++) if (finished(f) && !Number.isFinite(all[f])) without++;
     if (!energies.length) continue;
     // (only a part of a search's conformers: its lowest may not be among them, so nothing is above it - counted, not charted)
     if (m.partOf) {
@@ -134,11 +140,14 @@ export function chartOf(molecules: readonly Of3D[], holds: "molecules" | "confor
     for (const e of c.energies) if (e < lowest) lowest = e;
     for (const e of c.energies) values.push((e - lowest) * KCAL_PER_HARTREE);
   }
+  const failedSaid = unfinished.length ? `failed or not known to have finished (${unfinished.slice(0, 6).join(", ")}${unfinished.length > 6 ? ", ..." : ""})` : "";
+  if (!values.length && unfinished.length && !compounds.length && !unstated && !parts) return { none: `No energies charted: none finished - ${unfinished.length} ${failedSaid}` };
   if (!values.length) return { none: unstated ? "No energies charted: what worked them out is not stated" : parts ? "No energies charted: each compound is only a part of a search's conformers" : "No energies to chart" };
   const left = [
     ...(other ? [{ count: other, why: "worked out another way" }] : []),
     ...(unstated ? [{ count: unstated, why: "worked out by a method not stated" }] : []),
     ...(without ? [{ count: without, why: "with no usable energy" }] : []),
+    ...(unfinished.length ? [{ count: unfinished.length, why: failedSaid }] : []),
     ...(parts ? [{ count: parts, why: "of a compound only a part of whose conformers is here" }] : []),
   ];
   return { quantity: "ΔE above each compound's lowest", unit: "kcal/mol", by: by!, bins: binned(values), counted: values.length, left };

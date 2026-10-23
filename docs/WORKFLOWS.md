@@ -657,6 +657,14 @@ set is (2026-10-21):
   the search found alike, where it said; and *From*, what worked its
   energy out ("not stated" where nothing says). No share is shown: a
   share needs a temperature, and the set does not hold one.
+- **A row that did not finish says so** in its *Failed* column - the
+  failure in words ("not converged", "refused"), or "marks not read" -
+  and its energy above is blank: the lowest is taken among those that
+  finished alone, and the line at the top says so ("ΔE above the lowest of
+  8 that finished; 2 not counted"). A large set's summary chart draws only
+  those that finished, its baseline among them, and names those left out;
+  none finished, it draws none and says why. An SD file written of such a
+  frame carries a *Failed* field beside its energy (2026-10-23).
 - Pressing a column's name sorts by it, again the other way; rows with no
   value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
 - Rows are chosen as in a list (a click; ⌘ or Ctrl to add or take one;
