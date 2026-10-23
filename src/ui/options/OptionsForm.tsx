@@ -1,4 +1,7 @@
 import { MANY_CHOICES, shownOptions, type LinesOption, type Option, type OptionValues } from "../../lib/options";
+import Checkbox from "../controls/Checkbox";
+import RadioGroup from "../controls/Radio";
+import Select from "../controls/Select";
 
 /** The most lines a box of lines shows at once: past them, the box and what each line was read as scroll together. */
 const MOST_ROWS = 16;
@@ -76,32 +79,15 @@ export default function OptionsForm({
   const field = (o: Option) => (
         <div key={o.id}>
           {o.type === "choice" && o.choices.length > MANY_CHOICES ? (
-            <label className="block">
+            <div>
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
-              <select
-                value={String(values[o.id] ?? "")}
-                onChange={(e) => set(o.id, e.target.value)}
-                className="h-7 w-full max-w-[12rem] rounded-md border border-gh-line bg-white px-2 text-sm text-gh-black"
-              >
-                {o.choices.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+              <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} size="sm" className="w-fit min-w-[12rem] max-w-full" />
+            </div>
           ) : o.type === "choice" ? (
-            <fieldset>
-              <legend className="text-xs text-gh-gray mb-1">{o.label}</legend>
-              <div className="space-y-1">
-                {o.choices.map((c) => (
-                  <label key={c.value} className="flex items-center gap-2 text-sm text-gh-black">
-                    <input type="radio" name={o.id} checked={values[o.id] === c.value} onChange={() => set(o.id, c.value)} />
-                    {c.label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
+            <div>
+              <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
+              <RadioGroup label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} />
+            </div>
           ) : o.type === "atoms" ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-gh-gray">
               <span className="whitespace-nowrap">
@@ -121,10 +107,9 @@ export default function OptionsForm({
           ) : o.type === "lines" ? (
             <LinesField option={o} value={String(values[o.id] ?? "")} onChange={(v) => set(o.id, v)} />
           ) : o.type === "switch" ? (
-            <label className="flex items-center gap-2 text-sm text-gh-black">
-              <input type="checkbox" checked={values[o.id] === true} onChange={(e) => set(o.id, e.target.checked)} />
+            <Checkbox checked={values[o.id] === true} onChange={(v) => set(o.id, v)} className="text-sm text-gh-black">
               {o.label}
-            </label>
+            </Checkbox>
           ) : (
             <label className="block">
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>

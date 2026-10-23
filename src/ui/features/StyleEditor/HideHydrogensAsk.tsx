@@ -4,6 +4,7 @@ import { useAskedKeys } from "../../layouts/asking";
 import { FADE, RISE } from "../../theme/motion";
 import { QUESTION_ARRIVING_MS, useLeaving } from "../../theme/leaving";
 import { HIDE_H_TEXT, HIDE_H_TITLE, HIDE_H_UNDERSTOOD } from "./hideHydrogensText";
+import Checkbox from "../../controls/Checkbox";
 
 /**
  * Asked before a style hides the hydrogens on carbon: a molecule drawn so
@@ -66,15 +67,14 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
             <p key={p}>{p}</p>
           ))}
         </div>
-        <label className="mt-4 flex items-start gap-2 rounded-md border border-gh-line bg-gh-base px-3 py-2.5 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={understood}
-            onChange={(e) => setUnderstood(e.target.checked)}
-            className="mt-0.5 h-4 w-4 shrink-0 accent-accel-accent"
-          />
+        <Checkbox
+          checked={understood}
+          onChange={setUnderstood}
+          tone="attention"
+          className="mt-4 w-full items-start rounded-md border border-gh-line bg-gh-base px-3 py-2.5 select-none [&>span:first-child]:mt-0.5"
+        >
           <span>{HIDE_H_UNDERSTOOD}</span>
-        </label>
+        </Checkbox>
         <div className="mt-4 flex justify-end gap-2">
           <button
             onClick={onHide}

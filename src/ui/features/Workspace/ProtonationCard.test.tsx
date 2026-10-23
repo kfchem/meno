@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { renderToString } from "react-dom/server";
 import type { Molecule3D } from "./store/types";
-import { protonationOf } from "./chem/protonate";
+import { formName, protonationOf } from "./chem/protonate";
 import ProtonationCard from "./ProtonationCard";
 
 vi.mock("../../../lib/roles/worker", () => ({ chemWorker: async () => null, chemAtHand: async () => true }));
@@ -42,16 +42,20 @@ describe("the card that asks how a molecule is protonated", () => {
     expect(html.match(/Choose…/g)).toHaveLength(2);
     expect(html).toContain("Choose how each site is protonated.");
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Add hydrogens<\/button>/);
-    // (each form by what it is, its charge, and where its hydrogens are)
-    expect(html).toContain("Carboxylate (−) - no H");
-    expect(html).toContain("Carboxylic acid - H on O4");
-    expect(html).toContain("Ammonium (+) - 3 H on N1");
+    // (each form, to choose from its site's list, by what it is, its charge, and where its hydrogens are)
+    const named = protonationOf(glycine("estimated"), null)!.sites.flatMap((s) => s.forms.map(formName));
+    expect(named).toContain("Carboxylate (−) - no H");
+    expect(named).toContain("Carboxylic acid - H on O4");
+    expect(named).toContain("Ammonium (+) - 3 H on N1");
   });
 
   it("with its orders and charges from a SMILES: started from them, said so, and its charge and spin", () => {
     const html = card(glycine("assigned", { 0: 1, 4: -1 }));
     expect(html).toContain("As the SMILES gives it.");
     expect(html).not.toContain("Choose…");
+    // (each site showing the form chosen)
+    expect(html).toContain("Carboxylate (−) - no H");
+    expect(html).toContain("Ammonium (+) - 3 H on N1");
     expect(html).toContain("Charge 0, singlet");
     expect(html).toMatch(/<button[^>]*>Add hydrogens<\/button>/);
     expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Add hydrogens<\/button>/);
@@ -73,8 +77,7 @@ describe("the card that asks how a molecule is protonated", () => {
     };
     const html = card(aqua);
     expect(html.match(/Choose…/g)).toHaveLength(1);
-    expect(html).toContain("Covalent bond to Zn");
-    expect(html).toContain("Dative bond to Zn");
+    expect(protonationOf(aqua, null)!.sites[0].forms.map((f) => f.name)).toEqual(["Covalent bond to Zn", "Dative bond to Zn"]);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Add hydrogens<\/button>/);
   });
 
