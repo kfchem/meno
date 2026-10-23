@@ -165,7 +165,8 @@ export const KINDS: readonly KindInfo[] = [
     kind: "filter",
     name: "Filter",
     icon: "sliders",
-    takes: ["molecules", "conformers"],
+    // (molecules in 3D by their entries' properties; structures drawn by their records')
+    takes: ["molecules", "conformers", "structures"],
     gives: "same",
     runs: "entries",
     made: "Filtered",
