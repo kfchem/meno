@@ -363,6 +363,17 @@ describe("where the card starts", () => {
   it("adds no hydrogen until each site is chosen", () => {
     expect(protonated(atoms, bonds, sites, { forms: [null], charges: new Map() })).toEqual({ why: "Choose how each site is protonated." });
   });
+
+  it("from none for a bond to a metal, whatever gave its orders: a water on a zinc drawn with a single bond, beside an acetate", () => {
+    // (a molfile has no dative bond: its O-Zn single bond, read as drawn, would be a hydroxide)
+    const { atoms, bonds } = skeleton("O[Zn].CC(=O)[O-]");
+    const sites = protonationSites(atoms, bonds, label(atoms));
+    expect(sites.map((s) => s.kind)).toEqual(["metal bond", "carboxyl"]);
+    const metal = sites[0];
+    expect(metal.forms[metal.now!].name).toBe("Covalent bond to Zn");
+    for (const by of ["dictionary", "assigned", undefined, "estimated"] as const) expect(startingForms(by, sites), String(by)).toEqual([null, by === "estimated" ? null : sites[1].now]);
+    expect(protonated(atoms, bonds, sites, { forms: startingForms("assigned", sites), charges: new Map() })).toEqual({ why: "Choose how each site is protonated." });
+  });
 });
 
 describe("an atom outside the sites", () => {

@@ -61,6 +61,23 @@ describe("the card that asks how a molecule is protonated", () => {
     expect(card(glycine(undefined, { 0: 1, 4: -1 }))).toContain("As its file gives it.");
   });
 
+  it("with a water on a zinc in its own file - a molfile's single bond: its bond to the metal to choose, and no hydrogens added until it is", () => {
+    const aqua: Molecule3D = {
+      id: 3,
+      atoms: [
+        { el: "Zn", x: 0, y: 0, z: 0 },
+        { el: "O", x: 2.05, y: 0, z: 0 },
+      ],
+      bonds: [{ a1: 0, a2: 1, order: 1 }],
+      at: { x: 0, y: 0 },
+    };
+    const html = card(aqua);
+    expect(html.match(/Choose…/g)).toHaveLength(1);
+    expect(html).toContain("Covalent bond to Zn");
+    expect(html).toContain("Dative bond to Zn");
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Add hydrogens<\/button>/);
+  });
+
   it("with its file's rings aromatic: every site to choose, and said why", () => {
     const imidazole: Molecule3D = {
       id: 2,

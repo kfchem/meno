@@ -1905,7 +1905,11 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
     its file gives it*) - each site starts at the form they draw. Where
     they were estimated from distances, which say nothing of how it is
     protonated, or a file gives its rings as aromatic, every site starts
-    unchosen, and *Add hydrogens* waits until each is chosen.
+    unchosen, and *Add hydrogens* waits until each is chosen. A bond to a
+    metal (*Bond to Zn*) starts unchosen whatever the source (the
+    maintainer, 2026-10-23): a V2000 molfile has no dative bond, so a
+    ligand such as water is often drawn with a single bond to its metal,
+    which read as drawn would be a hydroxide.
   - **The hydrogens.** The forms chosen are drawn together - every site's
     bonds found again at once, the card saying so where they cannot all be
     drawn - and the hydrogens they leave room for are added by RDKit's

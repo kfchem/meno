@@ -96,14 +96,17 @@ export const definedBy = (by: OrdersBy) => by === "dictionary" || by === "assign
 
 /**
  * The form each site starts at, as the card opens - Meno's one policy, so
- * that it is changed in one place (the maintainer, 2026-10-22): where its
- * orders and charges were given by a definition (`definedBy`), the form
- * they draw; else none - an estimate from distances says nothing of how a
- * molecule is protonated, so each site waits for the chemist.
+ * that it is changed in one place (the maintainer, 2026-10-22 and
+ * 2026-10-23): where its orders and charges were given by a definition
+ * (`definedBy`), the form they draw; else none - an estimate from
+ * distances says nothing of how a molecule is protonated, so each site
+ * waits for the chemist. A bond to a metal waits whatever the source: a
+ * molfile has no dative bond, so a water on a zinc is often drawn with a
+ * single bond, which read as drawn would be a hydroxide.
  */
 export function startingForms(by: OrdersBy, sites: readonly Site[], aromatic = false): (number | null)[] {
   // (a file's aromatic bonds say no more of where a ring's hydrogens are than distances do: each site waits)
-  return sites.map((s) => (definedBy(by) && !aromatic ? s.now : null));
+  return sites.map((s) => (s.kind !== "metal bond" && definedBy(by) && !aromatic ? s.now : null));
 }
 
 /** An atom's hydrogens, its bonds' orders summed (`sum`): its valence's room, a phosphorus or sulfur taking its higher valences (5; 4 and 6) where its bonds go past the lower. */
