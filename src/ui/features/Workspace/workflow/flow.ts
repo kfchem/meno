@@ -8,8 +8,8 @@ import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep 
 import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
 import { moleculesAsTable, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
-import { byOf, optionsFor, takesBy } from "./doers";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -78,6 +78,8 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   const step = stepOf(doc, to);
   const set = findSet(doc, from.set);
   if (!step || !set) return "It is not there";
+  // (a step that takes nothing in has nothing to wire to)
+  if (takesNothing(step.kind)) return "It takes nothing in";
   if (set.made?.step === to) return "It is what this step gives";
   // (nothing it gives may come back round to it)
   const madeBy = set.made?.step;
@@ -178,6 +180,7 @@ function keyTexts(m: Molecule3D): readonly string[] {
       m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
       `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
       `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}`,
+      JSON.stringify(m.properties ?? null),
     ];
     keyed.set(m, texts);
   }
@@ -187,6 +190,9 @@ function keyTexts(m: Molecule3D): readonly string[] {
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
+  // (a step that takes nothing in runs on its options alone, and who does it)
+  // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
+  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
   // (a table: its columns and rows, as they are)
   const table = tableWired(doc, step.id);
   if (table) return hash(tableText(table), hash(`table|${step.kind}|${by}|${options}`)).toString(36);
@@ -216,11 +222,57 @@ export type StepState = "no-input" | "ready" | "waiting" | "running" | "done" | 
 export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   // (its jobs under way: the card says which, as they were last looked at)
   if (step.running) return "running";
-  const into = wireInto(doc, step.id);
+  // (a step that takes nothing in is ready as it is)
+  const into = takesNothing(step.kind) || !!wireInto(doc, step.id);
   if (!step.ran) return into ? "ready" : "no-input";
   // (what comes from a step not run yet, or run since, has changed)
   if (!into) return "changed";
   const key = inputKey(doc, step, by);
   if (key !== step.ran.input) return "changed";
   return step.ran.ok ? "done" : step.ran.stopped ? "stopped" : "failed";
+}
+
+/**
+ * The steps to run to run `id`, in order: the furthest back before it
+ * that has not run, has changed, failed, stopped or is running - however many done
+ * lie between - and every step from it to `id`, which take anew what it
+ * gives.
+ */
+export function chainTo(doc: Flow, id: number): number[] {
+  const back = stepsBefore(doc, id).slice(0, 200);
+  let far = -1;
+  back.forEach((sid, k) => {
+    const s = stepOf(doc, sid);
+    if (s && (s.running || stateOf(doc, s, byOf(s)) !== "done")) far = k;
+  });
+  return [...back.slice(0, far + 1).reverse(), id];
+}
+
+/** The steps after a step: those that take what it gives, and those after them. */
+export function stepsAfter(doc: Flow, id: number): number[] {
+  const out: number[] = [];
+  const seen = new Set([id]);
+  const queue = [id];
+  while (queue.length) {
+    const at = queue.shift()!;
+    // (every exit's set: what any of them gives comes down to the steps wired from it)
+    const made = new Set((doc.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
+    for (const wire of doc.wires ?? []) {
+      if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
+        seen.add(wire.to.step);
+        out.push(wire.to.step);
+        queue.push(wire.to.step);
+      }
+    }
+  }
+  return out;
+}
+
+/** The steps a run of `targets` runs (store `runSteps`): each, and those before it it runs first (`chainTo`). */
+export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [...new Set(targets.flatMap((t) => chainTo(doc, t)))];
+
+/** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
+export function allToRun(doc: Flow): number[] {
+  const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
+  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
 }

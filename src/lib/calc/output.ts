@@ -61,6 +61,10 @@ export type ReaderOutput = {
   degeneracies?: number[] | null;
   /** Whether an optimisation came to an end, where it was one. */
   optimised?: boolean | null;
+  /** Of an optimisation's or a relaxed scan's geometries, each one's being one the run found converged; none where it optimised nothing. */
+  converged?: boolean[] | null;
+  /** Why none of its geometries is one the run found, where its reader marks them all not converged for a reason of their own (`Unmarked`). */
+  unmarked?: Unmarked | null;
   /** Everything else it found, in the general form (results.ts) - read, and those that do not read as results left out. */
   results?: unknown[];
   /** What a structure's file holds - its drawing, and its molecules in 3D - where the reader read one (lib/io/structures); checked as the page takes it. */
@@ -269,4 +273,36 @@ export function levelOf(c: Pick<CalcInfo, "method" | "basis" | "solvation">): st
 export function multiplicityName(m: number): string {
   const names = ["singlet", "doublet", "triplet", "quartet", "quintet", "sextet"];
   return names[m - 1] ?? `multiplicity ${m}`;
+}
+
+/**
+ * Why none of an output's geometries is one the run found, where it is not
+ * that its optimisation did not converge: "error", its run ended with an
+ * error; "cut", it did not come to its end; "path", they are the points of
+ * a rigid scan or a reaction path; "unstated", the file does not say which
+ * converged; "unread", which did could not be read.
+ */
+export type Unmarked = "error" | "cut" | "path" | "unstated" | "unread";
+export const UNMARKED: readonly Unmarked[] = ["error", "cut", "path", "unstated", "unread"];
+
+/** Whether a geometry an output gives reads: three numbers to each of its atoms. */
+export const frameReads = (f: unknown, atoms: number) => Array.isArray(f) && f.length === 3 * atoms;
+
+/**
+ * Of an output's geometries that read (`frameReads`), each one's being one
+ * the run found converged, as its reader marks them - the mark of one that
+ * does not read left out with it - and why none is, where the reader says.
+ * None where the reader marks none. Marks that are not one to each geometry
+ * the output gives, or not each true or false, say nothing of which: none
+ * is one, "unstated" - never every one.
+ */
+export function marksOf(o: Pick<ReaderOutput, "atoms" | "frames" | "converged" | "unmarked">): { converged: boolean[]; unmarked?: Unmarked } | null {
+  if (o.converged == null) return null;
+  const given = Array.isArray(o.frames) ? o.frames : [];
+  const n = o.atoms?.length ?? 0;
+  const kept = given.flatMap((f, i) => (frameReads(f, n) ? [i] : []));
+  const marks = o.converged;
+  if (!Array.isArray(marks) || marks.length !== given.length || !marks.every((c) => typeof c === "boolean")) return { converged: kept.map(() => false), unmarked: "unstated" };
+  const unmarked = UNMARKED.includes(o.unmarked as Unmarked) ? (o.unmarked as Unmarked) : undefined;
+  return { converged: kept.map((i) => !unmarked && marks[i]), ...(unmarked ? { unmarked } : {}) };
 }

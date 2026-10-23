@@ -17,6 +17,8 @@ import { chemMolblock, isElementSymbol, molIndex } from "../../../../lib/roles/m
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { abbreviationOf } from "../../../../lib/chem/abbreviations";
 import { writeMolfile3d } from "../../../../lib/chem/molWriter";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
+import { isSkeleton } from "../utils/completeness";
 import { editorModelOf, processFileContent } from "../utils/io";
 import type { Arrow, Model, Molecule3D, Plus, Turn3D } from "../store/types";
 import { turnOnto } from "../utils/align3d";
@@ -494,7 +496,9 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  * gives them) - laid out in the style of the drawing it goes into, where
  * one is given. And which of the formula's atoms each of its atoms is: none
  * for a hydrogen; and whether its orders, wanted, are still unknown - not
- * found (no hydrogens, say), and so drawn single.
+ * found, and so drawn single. A skeleton - its hydrogens not there - is not
+ * drawn: a formula says how every atom is protonated, and a skeleton does
+ * not (lib/chem/skeleton).
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
@@ -509,9 +513,13 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, 
  * A molecule in 3D as the drawing `formulaOf` lays out: the frame it is
  * given, its heavy atoms in their order, wedged as it is in 3D, its bonds'
  * orders found where it has none - not yet laid out by Meno's engine - and
- * whether its orders, wanted, are still unknown.
+ * whether its orders, wanted, are still unknown. A skeleton - its hydrogens
+ * not there - is refused here, for every caller: a drawing says how each
+ * atom is protonated, and a skeleton does not (lib/chem/skeleton).
  */
-export async function drawnOf(chem: ChemClient, m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean }> {
+export type Drawable = Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom" | "biopolymer" | "bondOrders" | "unknownOrders" | "chainOrders" | "wholeWithoutH">;
+export async function drawnOf(chem: ChemClient, m: Drawable, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean }> {
+  if (isSkeleton(m)) throw new Error(skeletonWhy());
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, radical: a.radical, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));

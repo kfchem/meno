@@ -32,12 +32,14 @@ export const entries = (n: number) => `${n} ${n === 1 ? "entry" : "entries"}`;
 /** "1 group", "3 groups". */
 export const groups = (n: number) => `${n} ${n === 1 ? "group" : "groups"}`;
 
-/** A property of an entry as a number in `unit`, or why it cannot be read as one: it is not there, it was not worked out, it is no number, or its unit is of another dimension. */
+/** A property of an entry as a number in `unit`, or why it cannot be read as one: it is not there, it was not worked out, it is no number - or none finite - or its unit is of another dimension. */
 export function numberIn(e: Entry, name: string, unit: Unit | "none"): { value: number } | { why: string } {
   const p = e.properties[name];
   const why = unreadable(p, name);
   if (why) return { why };
   if (typeof p!.value !== "number") return { why: `its ${name} is not a number` };
+  // (not a number to compare or add: NaN, or an infinity, as a plugin may write one)
+  if (!Number.isFinite(p!.value)) return { why: `its ${name} is not a finite number` };
   if (p!.unit === "none" || unit === "none") {
     if (p!.unit !== unit) return { why: `its ${name} is in ${unitLabel(p!.unit)}, not ${unitLabel(unit)}` };
     return { value: p!.value };

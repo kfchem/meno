@@ -8,6 +8,7 @@ import { numberText } from "../../../../lib/calc/results";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
+import { conditionsIn, conditionText } from "../../../../lib/nodes/filter";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind, ValueKind };
@@ -32,8 +33,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "chart";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -83,6 +84,8 @@ export type KindInfo = {
   second?: StepExit;
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
+  /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
+  whole?: true;
 };
 
 /**
@@ -95,12 +98,14 @@ export type KindInfo = {
 const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "failed" };
 
 export const KINDS: readonly KindInfo[] = [
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", second: { ...FAILED, gives: "molecules" } },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", second: FAILED },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", second: FAILED },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", second: FAILED },
+  // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
+  { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
+  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, second: { ...FAILED, gives: "molecules" } },
+  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, second: FAILED },
+  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, second: FAILED },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, second: FAILED },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", second: FAILED },
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, second: FAILED },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
@@ -117,6 +122,8 @@ export const KINDS: readonly KindInfo[] = [
   {
     kind: "duplicates",
     name: "Duplicates",
+    // (a plugin's comparison, of whole molecules - Meno's own, of shapes alone, takes a skeleton)
+    whole: true,
     icon: "twins",
     takes: ["molecules", "conformers"],
     gives: "same",
@@ -152,6 +159,31 @@ export const KINDS: readonly KindInfo[] = [
     perceives: "configurations",
     options: [{ id: "temperature", label: "At", type: "number", default: 298.15, min: 1, step: 1, unit: "K" }],
   },
+  {
+    // (entries kept by conditions on their properties, each with its unit - lib/nodes/filter - the rest out of the second exit, each saying why)
+    kind: "filter",
+    name: "Filter",
+    icon: "sliders",
+    takes: ["molecules", "conformers"],
+    gives: "same",
+    runs: "entries",
+    made: "Filtered",
+    second: { id: "rest", name: "The rest", gives: "same", of: "rest" },
+    options: [
+      { id: "conditions", label: "Conditions", type: "text", default: "" },
+      {
+        id: "match",
+        label: "Kept where",
+        type: "choice",
+        choices: [
+          { value: "all", label: "All are met" },
+          { value: "any", label: "Any is met" },
+        ],
+        default: "all",
+      },
+    ],
+    how: (v) => filterHow(String(v.conditions ?? ""), v.match === "any" ? "any" : "all"),
+  },
   { kind: "as-conformers", name: "As conformers", icon: "grouped", takes: ["molecules"], gives: "conformers", runs: "entries", made: "Conformers", perceives: "configurations" },
   {
     kind: "choose",
@@ -177,6 +209,39 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.which === "number" ? `Number ${v.number}` : "Lowest in energy"),
   },
+  // (structures drawn looked over as they are, each kept as drawn or set aside saying why: never one changed - a plugin's, its options its own)
+  {
+    kind: "check-structures",
+    name: "Check structures",
+    icon: "band",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "program",
+    made: "Checked",
+    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+  },
+  // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside: a plugin's, its options its own)
+  {
+    kind: "stereoisomers",
+    name: "Stereoisomers",
+    icon: "twins",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "program",
+    made: "Stereoisomers",
+    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+  },
+  // (each structure drawn with numbers worked out of it as drawn - its molecular weight, logP and the like - on its record: a plugin's)
+  {
+    kind: "descriptors",
+    name: "Descriptors",
+    icon: "bars",
+    takes: ["structures"],
+    gives: "structures",
+    runs: "program",
+    made: "With descriptors",
+    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+  },
   {
     kind: "chart",
     name: "Chart",
@@ -193,6 +258,14 @@ export const KINDS: readonly KindInfo[] = [
     how: (v) => (v.x || v.y ? `${v.y || "the second column of numbers"} against ${v.x || "the first"}` : "The first two columns of numbers"),
   },
 ];
+
+/** How a Filter step does its work, in a line: its conditions as read, and whether all or any - or why they do not read, or that there are none. */
+export function filterHow(text: string, match: "all" | "any"): string {
+  const read = conditionsIn(text);
+  if ("why" in read) return read.why;
+  if (!read.conditions.length) return "No conditions yet";
+  return read.conditions.map(conditionText).join(match === "any" ? " or " : " and ");
+}
 
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
 
@@ -265,6 +338,9 @@ export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
 }
 
 /** The input of `kind` named `port`, or its first where `port` is not one of its own. */
+/** Whether a kind takes nothing in: no input, nothing wired to it (Generate's). */
+export const takesNothing = (kind: StepKind): boolean => inputsOf(kind).length === 0;
+
 export function portOf(kind: StepKind, port: string): StepPort {
   const inputs = inputsOf(kind);
   return inputs.find((p) => p.id === port) ?? inputs[0];

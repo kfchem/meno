@@ -54,6 +54,7 @@ describe("a step's two exits, each a conformer set", () => {
     ["energy-window", { window: 1 }],
     ["duplicates", { rmsd: 0.05 }],
     ["choose", { which: "lowest" }],
+    ["filter", { conditions: "number \u2264 2" }],
   ];
 
   it.each(KINDS)("lie apart after %s runs - the second under the first, clear of it - in a small look and a big one", (kind, options) => {

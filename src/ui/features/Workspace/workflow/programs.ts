@@ -7,8 +7,10 @@
  */
 import { valueText } from "../../../../lib/calc/results";
 import { speciesOf, type WrittenMolecule } from "../../../../lib/io/writers";
-import { ENTRY_SCHEMA } from "../../../../lib/entry";
+import { ENTRY_SCHEMA, type By } from "../../../../lib/entry";
+import { isUnit, type Unit } from "../../../../lib/units";
 import { isotopeMass } from "../../../../lib/chem/isotopes";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
 import { calcOf, OUTPUT_SCHEMA, type CalcSource, type ReaderOutput } from "../../../../lib/calc/output";
 import type { JobFile } from "../../../../lib/jobs";
 import type { SetEntry } from "./entries";
@@ -69,7 +71,10 @@ export function pluginEntry(e: SetEntry): PluginEntry {
     return mass != null ? { ...a, mass } : a;
   });
   // (a molecule read from a calculation: the state it was in there; else what its atoms say - Meno's one rule)
-  const { charge, multiplicity } = speciesOf(molecule, e);
+  const species = speciesOf({ ...molecule, ...(e.skeleton ? { skeleton: true } : {}) }, e);
+  // (a skeleton is refused before anything is sent - stepRuns, `skeletonsRefused` - so none comes here)
+  if (!species) throw new Error(skeletonWhy());
+  const { charge, multiplicity } = species;
   return { schema: ENTRY_SCHEMA, ...molecule, atoms, charge, multiplicity };
 }
 
@@ -288,9 +293,12 @@ export function readCollected(raw: unknown, count: number): (ReaderOutput | Fail
  * An entry as a program works it out anew: what went in, without the
  * calculation it came with or what its molecule kept - how it was made,
  * what its energies were from - none of which is so of what the program
- * gives back (entries `SetEntry.calc`, `keep`).
+ * gives back (entries `SetEntry.calc`, `keep`); nor its marks - why it
+ * failed, its imaginary frequencies, that its marks did not read - which
+ * were of the geometry it came with: the new calculation's own output
+ * marks it again, or does not.
  */
-const anew = ({ calc: _calc, keep: _keep, ...entry }: SetEntry): SetEntry => entry;
+const anew = ({ calc: _calc, keep: _keep, failed: _failed, imaginary: _imaginary, marksUnread: _unread, ...entry }: SetEntry): SetEntry => entry;
 
 /**
  * An entry as a job worked it out (lib/calc/output): its last geometry and
@@ -360,11 +368,146 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
   return entries.filter((e) => !seen.has(e.compound) && !!seen.add(e.compound));
 }
 
+/**
+ * What a plugin's step on structures drawn said of one of them (`run`,
+ * docs/PLUGINS.md, *Steps on structures drawn*): kept as drawn; made anew,
+ * as drawings - a MOL block each, its stereoisomers, say, and each one's
+ * own SMILES beside, where given; or set aside, why and what kind of
+ * reason it is.
+ */
+export type DrawnAnswer = { as: "drawn"; properties?: Record<string, DrawnValue> } | { made: string[]; smiles?: string[] } | { aside: string; kind: string };
+/** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
+export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };
+
+/** The most structures a step on structures drawn makes of one. */
+export const MADE_OF_ONE = 64;
+
+/** What a plugin's step on structures drawn said of each of `count`, in their order; why not, where it said nothing Meno can take - nothing taken in part. */
+export function readDrawnAnswers(raw: unknown, count: number): DrawnAnswer[] | string {
+  const list = (raw as { structures?: unknown } | null)?.structures;
+  if (!Array.isArray(list) || list.length !== count) return "It said nothing Meno can take";
+  const out: DrawnAnswer[] = [];
+  for (const a of list as { as?: unknown; made?: unknown; aside?: unknown; kind?: unknown }[]) {
+    if (a?.as === "drawn") {
+      const given = (a as { properties?: unknown }).properties;
+      if (given == null) {
+        out.push({ as: "drawn" });
+        continue;
+      }
+      if (typeof given !== "object" || Array.isArray(given)) return "It said nothing Meno can take";
+      const properties: Record<string, DrawnValue> = {};
+      for (const [name, p] of Object.entries(given as Record<string, { value?: unknown; unit?: unknown; method?: unknown }>)) {
+        const v = p?.value;
+        const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+        const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+        if (value == null || unit == null || !name.trim()) return "It said nothing Meno can take";
+        properties[name] = { value, unit, ...(typeof p.method === "string" && p.method.trim() ? { method: p.method.trim().slice(0, 200) } : {}) };
+      }
+      out.push({ as: "drawn", properties });
+    }
+    else if (Array.isArray(a?.made) && a.made.length && a.made.length <= MADE_OF_ONE && a.made.every((b) => typeof b === "string" && b.length)) {
+      // (each one's own SMILES, where given one for each: else none)
+      const smiles = (a as { smiles?: unknown }).smiles;
+      const named = Array.isArray(smiles) && smiles.length === a.made.length && smiles.every((x) => typeof x === "string" && x.length && x.length <= 2000);
+      out.push({ made: a.made as string[], ...(named ? { smiles: smiles as string[] } : {}) });
+    }
+    else if (typeof a?.aside === "string" && a.aside.trim()) out.push({ aside: a.aside.trim().slice(0, 200), kind: typeof a.kind === "string" && a.kind.trim() ? a.kind.trim().slice(0, 40) : "other" });
+    else return "It said nothing Meno can take";
+  }
+  return out;
+}
+
+/**
+ * What a step on structures drawn says it did: how many it kept of how
+ * many, or - where it made any anew - how many came in and went out, and
+ * how many it made of how many; and how many it set aside, by kind,
+ * the most first: *40 in · 52 out · 14 made from 2 · 3 set aside (2:
+ * stereo open; 1: too many)*.
+ */
+export function drawnSaid(answers: readonly DrawnAnswer[]): string {
+  const n = answers.length;
+  const made = answers.filter((a): a is { made: string[] } => "made" in a);
+  const madeCount = made.reduce((k, a) => k + a.made.length, 0);
+  const kept = answers.filter((a) => "as" in a).length + madeCount;
+  const kinds = new Map<string, number>();
+  for (const a of answers) if ("aside" in a) kinds.set(a.kind, (kinds.get(a.kind) ?? 0) + 1);
+  const aside = n - answers.filter((a) => !("aside" in a)).length;
+  const head = made.length ? `${n} in \u00b7 ${kept} out \u00b7 ${madeCount} made from ${made.length}` : `${kept} of ${n} kept`;
+  const why = [...kinds].sort((a, b) => b[1] - a[1]).map(([k, c]) => `${c}: ${k}`).join("; ");
+  return aside ? `${head} \u00b7 ${aside} set aside (${why})` : head;
+}
+
 /** What a plugin did at once (`run`): the entries it kept, by their place among those it was given; why not, where it said nothing it can be taken at. */
 export function readKept(raw: unknown, count: number): number[] | string {
   const kept = (raw as { kept?: unknown } | null)?.kept;
   if (!Array.isArray(kept) || !kept.every((i) => Number.isInteger(i) && i >= 0 && i < count)) return "It said nothing Meno can take";
   return [...new Set(kept as number[])].sort((a, b) => a - b);
+}
+
+/** How many SMILES not read a step's line names, the rest counted. */
+export const NOT_READ_NAMED = 5;
+
+/** Why a SMILES could not be read, from what the roles' `from_smiles` said: its words after "could not be read", else none known. */
+export function unreadWhy(said: string): string {
+  const m = /could not be read: (.+?)\.?$/.exec(said.trim());
+  return m ? m[1] : "not read";
+}
+
+/**
+ * The SMILES a step could not read, as its line says them: how many, and the
+ * first few (`NOT_READ_NAMED`) each with why - long ones cut short - the rest
+ * counted: *2 not read: C1CC (a ring left open), Xx (no element Xx)*.
+ */
+export function notReadSaid(notRead: readonly { smiles: string; why: string }[]): string {
+  const cut = (s: string) => (s.length > 40 ? `${s.slice(0, 39)}\u2026` : s);
+  const named = notRead.slice(0, NOT_READ_NAMED).map((x) => `${cut(x.smiles)} (${x.why})`);
+  const more = notRead.length - named.length;
+  return `${notRead.length} not read: ${named.join(", ")}${more ? `, and ${more} more` : ""}`;
+}
+
+/** The most a step that makes them (Generate) brings in from one run. */
+export const GENERATED_MOST = 1000;
+
+/**
+ * One structure a generative model made, as its plugin hands it on
+ * (docs/PLUGINS.md, *Generate*): the SMILES it gave, exactly; its own
+ * values, named, each a number, a text or true/false with its unit from
+ * Meno's units table or "none"; and, where it was made from one of the
+ * structures that came in, that one's place among them (`seed`).
+ */
+export type Generated = { smiles: string; properties: Record<string, { value: number | string | boolean; unit: Unit | "none" }>; seed?: number };
+
+/**
+ * What a plugin's Generate gave (`run`): each structure as `Generated`; what
+ * made them all (`by`: the program, its version, the model, how); and what
+ * the plugin says of the run (`said`). Why not, where any of it is not what
+ * Meno takes - nothing taken in part. A SMILES is not read here: Meno reads
+ * each itself, as one pasted, and counts those it cannot read.
+ */
+export function readGenerated(raw: unknown, seeds = 0): { made: Generated[]; by: By; said: string } | string {
+  const r = raw as { outputs?: unknown; said?: unknown; by?: unknown } | null;
+  if (!Array.isArray(r?.outputs)) return "It said nothing Meno can take";
+  if (r.outputs.length > GENERATED_MOST) return `It made more than ${GENERATED_MOST}`;
+  const made: Generated[] = [];
+  for (const [i, x] of (r.outputs as { smiles?: unknown; properties?: unknown; seed?: unknown }[]).entries()) {
+    if (typeof x?.smiles !== "string" || !x.smiles.trim() || x.smiles.length > 2000) return `Structure ${i + 1} has no SMILES Meno can take`;
+    const properties: Generated["properties"] = {};
+    if (x.properties != null && (typeof x.properties !== "object" || Array.isArray(x.properties))) return `Structure ${i + 1}'s values are not named`;
+    for (const [name, p] of Object.entries((x.properties ?? {}) as Record<string, { value?: unknown; unit?: unknown }>)) {
+      // (a value the model gave none of - an NLL that was no number, written as none: the plugin counts it - is not kept)
+      if (p?.value === null) continue;
+      const v = p?.value;
+      const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+      const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+      if (value == null || unit == null || !name.trim()) return `Structure ${i + 1}'s ${name || "value"} is not one Meno can take`;
+      properties[name] = { value, unit };
+    }
+    if (x.seed != null && !(Number.isInteger(x.seed) && (x.seed as number) >= 0 && (x.seed as number) < seeds)) return `Structure ${i + 1} names a seed that did not come in`;
+    made.push({ smiles: x.smiles.trim(), properties, ...(x.seed != null ? { seed: x.seed as number } : {}) });
+  }
+  const given = (r.by ?? {}) as Record<string, unknown>;
+  const by: By = Object.fromEntries(["program", "version", "model", "method"].flatMap((k) => (typeof given[k] === "string" && (given[k] as string).trim() ? [[k, (given[k] as string).trim().slice(0, 300)]] : [])));
+  return { made, by, said: typeof r.said === "string" && r.said.trim() ? r.said.trim().slice(0, 300) : `${made.length} made` };
 }
 
 /**

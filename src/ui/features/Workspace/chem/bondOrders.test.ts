@@ -6,7 +6,8 @@ import { addMolecule3d, createWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { stillUnknown } from "../utils/completeness";
 import type { Component } from "../../../../lib/chem/ccd";
-import { addHydrogens, canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, perceiveOrders } from "./bondOrders";
+import { addHydrogensAsChosen, protonationOf } from "./protonate";
+import { canAddHydrogens, canAskDictionary, canGiveOrders, estimateOrders, ordersFromDictionary, ordersFromSmiles, perceiveOrders } from "./bondOrders";
 
 /** The worker, as these tests have it answer: each request's answer by its name. */
 const answers: Record<string, (args: Record<string, unknown>) => unknown> = {};
@@ -119,7 +120,10 @@ describe("a molecule in 3D's bond orders, sought from its shape", () => {
       ),
     });
     expect(canAddHydrogens(molecule(), [2, 3])).toBe(true);
-    await addHydrogens(store, molecule().id, 2);
+    // (formaldehyde: no site to choose)
+    const p = protonationOf(molecule(), 2)!;
+    expect(p.sites).toEqual([]);
+    await addHydrogensAsChosen(store, p, { forms: [], charges: new Map() });
     expect(molecule().atoms.length).toBe(6);
     expect(doc.history().undoLabel).toBe("add hydrogens");
     expect(canAddHydrogens(molecule(), [2, 3, 4, 5])).toBe(false);

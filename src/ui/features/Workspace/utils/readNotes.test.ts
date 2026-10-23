@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { readWorkspace } from "./workspace";
+import { readWorkspace, workspaceText } from "./workspace";
+import { createWorkspaceDocument } from "../document";
+import { connectStoreToDocument, createEditorStore } from "../store";
+import type { Molecule3D } from "../store/types";
+import { entryOfSet, MARKS_UNREAD, setEntries } from "../workflow/entries";
+import { runMeno } from "../workflow/meno";
+import { sharesOf } from "./molecule3d";
 import { readRecord } from "./copyPaste";
 import { leftOutSaid, leftOutSavedSaid, noting, readEach } from "./readNotes";
 
@@ -100,6 +106,49 @@ describe("a conformer that does not read", () => {
   it("takes why it failed and its imaginary frequencies with it", () => {
     expect(m.failed?.map((f) => f?.why ?? null)).toEqual([null, null, "it did not converge"]);
     expect(m.imaginary).toEqual([null, [-42], null]);
+  });
+
+  it("whose marks of failure do not read is kept whole, those marks alone left out and said - none of its frames ever taken for a minimum", () => {
+    const two = (more: object) => molecule(0, { frames: [frame(0.01)], energies: [-1, -2], conformerSet: true, ...more });
+    const read = (more: object) => readWorkspace(workspace({ molecules3d: [two(more)] }))!;
+    // (one mark for two frames; a mark that is neither a failure nor none; imaginary frequencies that are no list)
+    for (const more of [{ failed: [{ kind: "not-converged", why: "it did not converge" }] }, { failed: [null, { kind: "not-converged" }] }, { imaginary: [null, "382.6i"] }, { imaginary: [[-382.6]] }]) {
+      const r = read(more);
+      const [got] = r.drawn.molecules3d!;
+      // (its geometry, frames and energies as they were: nothing of the chemist's lost)
+      expect(got, JSON.stringify(more)).toMatchObject({ atoms, frames: [frame(0.01)], energies: [-1, -2], conformerSet: true, marksUnread: true });
+      expect(got.failed, JSON.stringify(more)).toBeUndefined();
+      expect(got.imaginary, JSON.stringify(more)).toBeUndefined();
+      expect(r.leftOut, JSON.stringify(more)).toEqual({ frameMarks: 1 });
+    }
+    // (marks that read, none among them, or an empty list for a frame with none: read, nothing said)
+    for (const more of [{ failed: [null, null] }, { imaginary: [[], null] }, { imaginary: [null, [-382.6]] }]) {
+      const r = read(more);
+      expect(r.drawn.molecules3d?.[0].marksUnread, JSON.stringify(more)).toBeUndefined();
+      expect(r.leftOut ?? {}, JSON.stringify(more)).toEqual({});
+    }
+  });
+
+  it("whose marks did not read is saved so and opened again whole - its frames still not taken for minima by any step or its chip", () => {
+    const opened = readWorkspace(workspace({ molecules3d: [molecule(0, { frames: [frame(0.01)], energies: [-1, -2], conformerSet: true, failed: [null] })] }))!;
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().pasteModel({ atoms: [], bonds: [], molecules3d: opened.drawn.molecules3d! });
+    const again = readWorkspace(workspaceText(store.getState()))!;
+    const [m2] = again.drawn.molecules3d!;
+    expect(m2).toMatchObject({ atoms, frames: [frame(0.01)], energies: [-1, -2], conformerSet: true, marksUnread: true });
+    // (said once, as it was first read: saved, it reads as kept)
+    expect(again.leftOut ?? {}).toEqual({});
+    const entries = setEntries([{ ...m2, id: 1 } as Molecule3D], "conformers");
+    for (const e of entries) expect(entryOfSet(e, "e").status).toEqual({ failed: MARKS_UNREAD });
+    for (const kind of ["populations", "energy-window"] as const) {
+      const out = runMeno(kind, entries, "conformers");
+      expect(out.ok, kind).toBe(false);
+      expect(out.said, kind).toContain(MARKS_UNREAD);
+    }
+    expect(sharesOf(m2)).toBeUndefined();
+    expect(sharesOf({ ...m2, marksUnread: undefined })).toHaveLength(2);
   });
 
   it("is counted with the frames its file left out, and said", () => {

@@ -38,6 +38,8 @@ import sys
 from rdkit import Chem, RDLogger, rdBase
 from rdkit.Geometry import Point3D
 from rdkit.Chem import (
+    Crippen,
+    Descriptors,
     rdChemReactions,
     rdCIPLabeler,
     rdDepictor,
@@ -298,15 +300,22 @@ def op_from_smiles(m):
         except Exception:
             why = None
         raise ValueError(f"This SMILES could not be read: {why}." if why else "This SMILES could not be read.")
+    return {"molblock": drawing_block(mol)}
+
+
+def drawing_block(mol):
+    """A molecule as a drawing, a V3000 MOL block: laid out in 2D (for
+    Meno's engine to lay out again), its stereo wedged as the molecule has
+    it."""
     lay_out_2d(mol)
     block = Chem.MolToV3KMolBlock(mol)
     # CoordGen draws (E)-cyclooctene's double bond cis, so that the block
-    # says (Z): where what is written does not read back as the SMILES,
+    # says (Z): where what is written does not read back as the molecule,
     # RDKit's own depictor lays it out instead (it keeps that one)
     if not reads_as(block, mol):
         rdDepictor.Compute2DCoords(mol, forceRDKit=True)
         block = Chem.MolToV3KMolBlock(mol)
-    return {"molblock": block}
+    return block
 
 
 def reads_as(molblock, mol):
@@ -580,6 +589,14 @@ def op_open_stereo(m):
         return {"atoms": atoms, "bonds": bonds, "isomers": 1, "cumulenes": [], "free": False}
     made = embeddable(mol)
     return {"atoms": atoms, "bonds": bonds, "isomers": max(len(made), 1), "cumulenes": open_cumulenes(mol, bonds), "free": not made}
+
+
+def op_stereo_left_open(m):
+    """Only which stereocentres and double bonds a structure leaves open, by
+    index: none of `open_stereo`'s trying each stereoisomer in 3D - quick,
+    as a step that marks what is left open asks it of many (*Generate*)."""
+    atoms, bonds = open_stereo(read(m["molblock"]))
+    return {"atoms": atoms, "bonds": bonds}
 
 
 # What FindPotentialStereo calls each kind of element, as Meno's configurations name them.
@@ -2053,12 +2070,27 @@ def implicit(mol):
 def op_add_hydrogens(m):
     """A molecule in 3D with its bonds' orders known, given the hydrogens its
     file leaves out: RDKit's AddHs, each placed where its atom's geometry
-    puts it (addCoords). Back with its atoms in their order and the
-    hydrogens after them."""
+    puts it (addCoords). How many each atom carries is `hydrogens`, by atom,
+    where it is given - as the chemist chose them, a bond to a metal in
+    place of a hydrogen or not - and its unpaired electrons are the file's;
+    else as many as its valence leaves room for. Back with its atoms in
+    their order and the hydrogens after them."""
     mol = Chem.MolFromMolBlock(m["molblock"], sanitize=False, removeHs=False)
     if mol is None:
         raise ValueError("This structure could not be read.")
-    implicit(mol)
+    counts = m.get("hydrogens")
+    if counts is None:
+        implicit(mol)
+    else:
+        if len(counts) != mol.GetNumAtoms():
+            raise ValueError("a count of hydrogens for each atom is wanted")
+        for a, h in zip(mol.GetAtoms(), counts):
+            a.SetNoImplicit(True)
+            a.SetNumExplicitHs(int(h))
+        # (each atom's valence not checked: its hydrogens are the chemist's, a dative bond to a metal among its bonds)
+        problem = Chem.SanitizeMol(mol, Chem.SanitizeFlags.SANITIZE_ALL ^ Chem.SanitizeFlags.SANITIZE_PROPERTIES, catchErrors=True)
+        if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+            raise ValueError(f"cannot make sense of the structure ({problem})")
     with_h = Chem.AddHs(mol, addCoords=True)
     return {"molblock": Chem.MolToV3KMolBlock(with_h, kekulize=True)}
 
@@ -2167,6 +2199,8 @@ def op_run(m):
     image is its enantiomer); the one kept's degeneracy counts both, and the
     atoms the mirror image swaps are given (`counted`: its atom i is atom
     `mirror[i]` of the mirror image)."""
+    if m.get("step") in STRUCTURE_STEPS:
+        return STRUCTURE_STEPS[m["step"]](m.get("entries") or [], m.get("options") or {})
     if m.get("step") != "duplicates":
         raise ValueError(f"There is no step {m.get('step')!r} to run at once.")
     counting = (m.get("options") or {}).get("mirrors") == "counted"
@@ -2215,6 +2249,163 @@ def op_run(m):
     return {"kept": sorted(kept), **({"counted": [counted[k] for k in sorted(counted)]} if counting else {}), **({"capped": int(capped)} if capped else {})}
 
 
+# --- Steps on structures drawn ------------------------------------------------
+#
+# Each is given the structures of a set, each as its MOL blocks - one for
+# each of its parts - and answers for each, in their order: kept as drawn
+# ({"as": "drawn"}), made anew ({"made": [block, ...]}: its stereoisomers,
+# drawings for Meno's engine to lay out again), or set aside, saying why
+# and what kind of reason it is ({"aside": why, "kind": kind}). Nothing is
+# changed in a structure kept, and nothing is chosen for one: what cannot
+# be decided from the drawing is set aside.
+
+
+def drawing_of_parts(blocks):
+    """A structure drawn, its parts read as one molecule - unsanitised, as
+    drawn - or why it cannot be read at all."""
+    mols = [Chem.MolFromMolBlock(b, sanitize=False, removeHs=False) for b in blocks]
+    if not mols or any(x is None for x in mols):
+        return None
+    mol = mols[0]
+    for more in mols[1:]:
+        mol = Chem.CombineMols(mol, more)
+    return mol
+
+
+def described(atoms):
+    """Atoms said as a chemist reads them: their elements, each once, in the order met - "C, O"."""
+    seen = []
+    for a in atoms:
+        if a.GetSymbol() not in seen:
+            seen.append(a.GetSymbol())
+    return ", ".join(seen)
+
+
+def check_one(blocks, keep):
+    """*Check structures* on one structure: the first of what it finds that
+    is not to be kept, as a reason and its kind - a structure of more than
+    one part, one an atom of which has more bonds than it can have (or that
+    RDKit cannot make sense of otherwise), a part with no electrons (H+), or
+    a radical - else None. Nothing in it is changed."""
+    mol = drawing_of_parts(blocks)
+    # (Meno gives V3000 blocks, in which a lone H+ reads and is found below as having no electrons; given as V2000, RDKit
+    #  reads no lone H+, and it is set aside here, as not read - set aside all the same)
+    if mol is None:
+        return ("it could not be read", "unreadable")
+    if "parts" not in keep and len(blocks) > 1:
+        return (f"{len(blocks)} parts (a salt, or a mixture)", "parts")
+    if "valence" not in keep:
+        mol.UpdatePropertyCache(strict=False)
+        over = [a for a in mol.GetAtoms() if "most" in too_many(a) and too_many(a)["valence"] > too_many(a)["most"]]
+        if over:
+            return (f"an atom with more bonds than it can have ({described(over)})", "valence")
+        problem = Chem.SanitizeMol(Chem.Mol(mol), catchErrors=True)
+        if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+            return (f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "valence")
+    if "electrons" not in keep:
+        for part in Chem.GetMolFrags(mol, asMols=True, sanitizeFrags=False):
+            electrons = sum(a.GetAtomicNum() for a in part.GetAtoms()) - sum(a.GetFormalCharge() for a in part.GetAtoms())
+            if electrons <= 0:
+                return (f"a part with no electrons ({Chem.MolToSmiles(part)})", "no electrons")
+    if "radicals" not in keep:
+        unpaired = [a for a in mol.GetAtoms() if a.GetNumRadicalElectrons()]
+        if unpaired:
+            return (f"a radical: unpaired electrons on {described(unpaired)}", "radical")
+    return None
+
+
+def step_check(entries, options):
+    """*Check structures*: each structure kept as drawn, or set aside saying
+    why - what the options keep is not looked for."""
+    keep = {k for k in ("parts", "valence", "electrons", "radicals") if options.get(k) == "keep"}
+    out = []
+    for e in entries:
+        found = check_one(e.get("molblocks") or [], keep)
+        out.append({"as": "drawn"} if found is None else {"aside": found[0], "kind": found[1]})
+    return {"structures": out}
+
+
+def stereoisomers_one(blocks, aside):
+    """*Stereoisomers* on one structure: kept as drawn where nothing is left
+    open, or nothing it leaves open can go more than one way in 3D (a
+    bridgehead its rings fix; a strained cage none of whose forms holds);
+    else each stereoisomer that can be made in 3D, every open stereocentre
+    and double bond given, as a drawing - or, `aside`, set aside. An
+    allene's axis left open is always set aside (no stereoisomer of it is
+    given), and so is one with more than MOST_ISOMERS stereoisomers, whole:
+    never some of them."""
+    mol = drawing_of_parts(blocks)
+    if mol is None:
+        return {"aside": "it could not be read", "kind": "unreadable"}
+    problem = Chem.SanitizeMol(mol, catchErrors=True)
+    if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+        return {"aside": f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "kind": "valence"}
+    Chem.AssignChiralTypesFromBondDirs(mol)
+    Chem.AssignStereochemistry(mol, cleanIt=True, force=True)
+    atoms, bonds = open_stereo(mol)
+    if not (atoms or bonds):
+        return {"as": "drawn"}
+    if open_cumulenes(mol, bonds):
+        return {"aside": "an allene's axis left open, which a drawing in 2D cannot give", "kind": "axis"}
+    # (how many the open elements could give at most, before any is made: over the most, set aside whole)
+    if 2 ** (len(atoms) + len(bonds)) > MOST_ISOMERS:
+        counted = list(EnumerateStereoisomers(mol, options=StereoEnumerationOptions(onlyUnassigned=True, unique=True, maxIsomers=0)))
+        if len(counted) > MOST_ISOMERS:
+            return {"aside": f"{len(counted)} stereoisomers, more than the {MOST_ISOMERS} made of one", "kind": "too many"}
+    made = embeddable(mol)
+    if len(made) <= 1:
+        return {"as": "drawn"}
+    if aside:
+        return {"aside": f"stereo left open: {len(made)} stereoisomers", "kind": "stereo open"}
+    # (in a fixed order: by each one's SMILES - and each one's own SMILES given beside it)
+    made.sort(key=Chem.MolToSmiles)
+    return {"made": [drawing_block(Chem.Mol(x)) for x in made], "smiles": [Chem.MolToSmiles(x) for x in made]}
+
+
+def step_stereoisomers(entries, options):
+    """*Stereoisomers*: each structure's stereoisomers where it leaves
+    stereo open (`stereoisomers_one`), or set aside where the option says
+    so."""
+    aside = options.get("open") == "aside"
+    return {"structures": [stereoisomers_one(e.get("molblocks") or [], aside) for e in entries]}
+
+
+#: The descriptors *Descriptors* gives each structure: its name, unit (Meno's units table, or "none"), how
+#: RDKit works it out, and the function. Each of the molecule as drawn, its hydrogens counted as its atoms have
+#: them.
+DESCRIPTORS = [
+    ("mw", "g/mol", "average molecular weight (Descriptors.MolWt)", lambda m: Descriptors.MolWt(m)),
+    ("logp", "none", "Wildman-Crippen logP (Crippen.MolLogP)", lambda m: Crippen.MolLogP(m)),
+    ("tpsa", "Å2", "topological polar surface area, Ertl (rdMolDescriptors.CalcTPSA)", lambda m: rdMolDescriptors.CalcTPSA(m)),
+    ("hbd", "none", "hydrogen-bond donors (rdMolDescriptors.CalcNumHBD)", lambda m: rdMolDescriptors.CalcNumHBD(m)),
+    ("hba", "none", "hydrogen-bond acceptors (rdMolDescriptors.CalcNumHBA)", lambda m: rdMolDescriptors.CalcNumHBA(m)),
+    ("rotatable", "none", "rotatable bonds, strict (rdMolDescriptors.CalcNumRotatableBonds)", lambda m: rdMolDescriptors.CalcNumRotatableBonds(m)),
+]
+
+
+def step_descriptors(entries, options):
+    """*Descriptors*: each structure kept as drawn, with RDKit's descriptors
+    of it (`DESCRIPTORS`), each its value, unit and how it was worked out;
+    set aside, saying why, where RDKit cannot make sense of it - nothing
+    worked out of a structure it does not read as drawn."""
+    out = []
+    for e in entries:
+        mol = drawing_of_parts(e.get("molblocks") or [])
+        if mol is None:
+            out.append({"aside": "it could not be read", "kind": "unreadable"})
+            continue
+        problem = Chem.SanitizeMol(mol, catchErrors=True)
+        if problem != Chem.SanitizeFlags.SANITIZE_NONE:
+            out.append({"aside": f"RDKit cannot make sense of it ({str(problem).split('.')[-1]})", "kind": "valence"})
+            continue
+        out.append({"as": "drawn", "properties": {name: {"value": round(float(f(mol)), 4) if unit != "none" or name == "logp" else int(f(mol)), "unit": unit, "method": how} for name, unit, how, f in DESCRIPTORS}})
+    return {"structures": out}
+
+
+#: The steps on structures drawn, by kind.
+STRUCTURE_STEPS = {"check-structures": step_check, "stereoisomers": step_stereoisomers, "descriptors": step_descriptors}
+
+
 OPS = {
     "prepare": op_prepare,
     "collect": op_collect,
@@ -2224,6 +2415,7 @@ OPS = {
     "from_smiles": op_from_smiles,
     "analyse": op_analyse,
     "open_stereo": op_open_stereo,
+    "stereo_left_open": op_stereo_left_open,
     "configurations": op_configurations,
     "conformers": op_conformers,
     "drawing_of": op_drawing_of,

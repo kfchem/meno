@@ -1,4 +1,5 @@
 import {
+  AdjustmentsHorizontalIcon,
   ArrowTrendingDownIcon,
   BoltIcon,
   ChartBarIcon,
@@ -11,6 +12,7 @@ import {
   QueueListIcon,
   RectangleGroupIcon,
   SignalIcon,
+  SparklesIcon,
   Square2StackIcon,
   Square3Stack3DIcon,
 } from "@heroicons/react/24/outline";
@@ -36,6 +38,8 @@ const ICONS: Record<StepIcon, Icon> = {
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
   chart: PresentationChartLineIcon,
+  sliders: AdjustmentsHorizontalIcon,
+  sparks: SparklesIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

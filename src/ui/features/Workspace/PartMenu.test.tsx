@@ -203,14 +203,16 @@ describe("the menu of a molecule in 3D, and of a measurement on one", () => {
   it("offers what completes a file's molecule - its bond orders, its hydrogens - together, under a line", () => {
     const t = target({ kind: "molecule3d", id: 1 });
     const { listed, html } = menu(t, { molecule3d: molecule3d({ chosen: 0, onOrdersFromDictionary: none, onOrdersFromSmiles: none, onEstimateOrders: none, onAddHydrogens: none }) });
-    expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens"]);
+    expect(listed).toEqual(["Bond orders from the CCD", "Bond orders from SMILES…", "Estimate bond orders from distances", "Add hydrogens…"]);
     // (first in the list, under the icons' row and its line: no rule of its own)
     expect(html).not.toContain('role="separator"');
     // (after another item: one line, above the first of them)
     const after = menu(t, { molecule3d: molecule3d({ chosen: 0, onTurnLikeDrawing: none, onOrdersFromDictionary: none, onOrdersFromSmiles: none }) }).html;
     expect(after).toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from the CCD/);
     expect(after).not.toMatch(/role="separator"[^>]*><\/div><button[^>]*><span>Bond orders from SMILES/);
-    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Add hydrogens"]);
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onAddHydrogens: none }) }).listed).toEqual(["Add hydrogens…"]);
+    // (a skeleton that has no hydrogens to add, said whole by the chemist)
+    expect(menu(t, { molecule3d: molecule3d({ chosen: 0, onWholeWithoutH: none }) }).listed).toEqual(["Complete without hydrogens"]);
   });
   it("offers its magnification, and back to its true size where it is not at it", () => {
     const t = target({ kind: "molecule3d", id: 1 });

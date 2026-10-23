@@ -15,9 +15,11 @@ import { identityOfDrawn, labelsDrawnOut } from "../chem/identityOf";
 import { partOf } from "../chem/cleanUp";
 import { stereoKnown } from "./configurations";
 import { speciesOf } from "../../../../lib/io/writers";
+import { isSkeleton } from "../utils/completeness";
 import { groupLetter } from "../../../../lib/nodes/base";
 import type { DrawnRecord, Member, Model, Molecule3D, PictureItem, WorkflowSet } from "../store/types";
-import type { SetHolds } from "./kinds";
+import { kindInfo, type SetHolds, type StepKind } from "./kinds";
+import { skeletonWhy } from "../../../../lib/chem/skeleton";
 
 type Pt = { x: number; y: number };
 export type Frame = Pick<WorkflowSet, "x0" | "y0" | "x1" | "y1">;
@@ -430,8 +432,8 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
 /** How many frames a molecule in 3D has: its own geometry, and the rest. */
 export const framesOf = (m: Pick<Molecule3D, "frames">) => 1 + (m.frames?.length ?? 0);
 
-/** How many entries a molecule in 3D is: a frame each - but one, its last, where its frames are a path to it. */
-export const entriesIn = (m: Pick<Molecule3D, "frames" | "path">) => (m.path ? 1 : framesOf(m));
+/** How many entries a molecule in 3D is: a frame each - but one, its last, where its frames are a path to it; and those it converged on, of an opened optimisation or scan. */
+export const entriesIn = (m: Pick<Molecule3D, "frames" | "path" | "entryFrames">) => (m.path ? 1 : (m.entryFrames?.length ?? framesOf(m)));
 
 /**
  * The most entries a result set lays out on the page (docs/WORKFLOWS-FOUNDATION.md,
@@ -499,7 +501,16 @@ export type SetEntry = {
   failed?: Failure;
   /** The imaginary frequencies its calculation judged it has, in cm-1 (lib/calc/output `CalcInfo.imaginary`): a mark that it is no minimum. */
   imaginary?: number[];
+  /** Its molecule's marks of which frames failed, or are no minimum, did not read (`Molecule3D.marksUnread`): whether it is a minimum is not known. */
+  marksUnread?: true;
   name?: string;
+  /** Its properties by name, as its molecule's frame has them (`Molecule3D.properties`) - a model's, a descriptor's - each with its unit and what worked it out. */
+  properties?: Record<string, Property>;
+  /** Its hydrogens not there, and not said to be whole without any (lib/chem/skeleton): given no charge or spin, and no calculation run on it. */
+  skeleton?: true;
+  /** Its bonds' orders, where its molecule's file gave none (Molecule3D `bondOrders`); and whether the chemist said it is whole without hydrogens: kept by what a step gives back. */
+  bondOrders?: Molecule3D["bondOrders"];
+  wholeWithoutH?: true;
   /** It is one of only a part of its compound's conformers that came from a search (`Molecule3D.partOf`): what a step makes of it is a part too. */
   partOf?: true;
   /**
@@ -517,6 +528,23 @@ export type SetEntry = {
   frame?: number;
   last?: boolean;
 };
+
+/**
+ * Why a step of `kind` is not run on `entries`, where its plugin needs whole
+ * molecules (KindInfo `whole`) and some came in as skeletons - their
+ * hydrogens not there (lib/chem/skeleton): counted by molecule, and said
+ * before anything is sent. None, where it may run.
+ */
+export function skeletonsRefused(kind: StepKind, entries: readonly SetEntry[]): string | null {
+  if (!kindInfo(kind).whole) return null;
+  const skeletons = new Set(entries.flatMap((e, i) => (e.skeleton ? [e.from ?? `#${i}`] : [])));
+  return skeletons.size ? skeletonWhy(skeletons.size) : null;
+}
+
+/** What an entry's molecule knew of its bonds' orders and its hydrogens, as a molecule a step gives back keeps it: "Bond orders unknown" stays said over it. */
+export function keptKnown(e: Pick<SetEntry, "bondOrders" | "wholeWithoutH">): Pick<Molecule3D, "bondOrders" | "wholeWithoutH"> {
+  return { ...(e.bondOrders ? { bondOrders: e.bondOrders } : {}), ...(e.wholeWithoutH ? { wholeWithoutH: true as const } : {}) };
+}
 
 /** A molecule's frame `f`: its atoms' x, y and z in turn. */
 export function frameXyz(m: Pick<Molecule3D, "atoms" | "frames">, f: number): number[] {
@@ -608,6 +636,35 @@ export function keptAlike(g: readonly SetEntry[]): Kept {
   return out as Kept;
 }
 
+/** One frame's marks: why it failed, the imaginary frequencies it was judged to have, and whether its marks did not read - as an entry, or a molecule's frame, has them. */
+export type FrameMarks = { failed?: Failure | null; imaginary?: number[] | null; marksUnread?: true };
+
+/**
+ * The marks of a molecule made of these frames, in order (one each): why
+ * each failed and its imaginary frequencies, a list each where any frame
+ * has one; and that its marks did not read, where any frame's did. What
+ * every place that makes a molecule of some frames or entries - a step's
+ * results, rows of a set's table - gives it, so that no frame that is no
+ * minimum, or not known to be one, comes out looking like one.
+ */
+export function marksOf(frames: readonly FrameMarks[]): Pick<Molecule3D, "failed" | "imaginary" | "marksUnread"> {
+  return {
+    ...(frames.some((f) => f.failed) ? { failed: frames.map((f) => f.failed ?? null) } : {}),
+    ...(frames.some((f) => f.imaginary?.length) ? { imaginary: frames.map((f) => (f.imaginary?.length ? f.imaginary : null)) } : {}),
+    ...(frames.some((f) => f.marksUnread) ? { marksUnread: true as const } : {}),
+  };
+}
+
+/** A molecule's own marks of frame `f` of `n` (`FrameMarks`). */
+export const frameMarks = (m: Pick<Molecule3D, "failed" | "imaginary" | "marksUnread">, f: number, n: number): FrameMarks => ({
+  ...(m.failed?.length === n && m.failed[f] ? { failed: m.failed[f] } : {}),
+  ...(m.imaginary?.length === n && m.imaginary[f]?.length ? { imaginary: m.imaginary[f] } : {}),
+  ...(m.marksUnread ? { marksUnread: true as const } : {}),
+});
+
+/** What is said of an entry whose file's marks of failed frames did not read (`SetEntry.marksUnread`). */
+export const MARKS_UNREAD = "its frames' marks could not be read, so whether it is a minimum is not known";
+
 /** The imaginary frequencies frame `f` of `n` was judged to have: a conformer's own, else - its last - its calculation's. */
 const imaginaryAt = (m: Molecule3D, f: number, n: number): number[] | undefined =>
   (m.imaginary?.length === n ? m.imaginary[f] : f === n - 1 ? m.calc?.imaginary : undefined) ?? undefined;
@@ -623,11 +680,19 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
       ...(Number.isInteger(m.calc?.multiplicity) && m.calc!.multiplicity! > 0 ? { multiplicity: m.calc!.multiplicity! } : {}),
     };
     const degeneracies = m.degeneracies?.length === n ? m.degeneracies : undefined;
+    const properties = m.properties?.length === n ? m.properties : undefined;
+    // (a skeleton, its hydrogens not there: each frame of it one; and what it knows of its orders, kept with it)
+    const whole = {
+      ...(isSkeleton(m) ? { skeleton: true as const } : {}),
+      ...(m.bondOrders ? { bondOrders: m.bondOrders } : {}),
+      ...(m.wholeWithoutH ? { wholeWithoutH: true as const } : {}),
+    };
     const keep = keptOf(m);
     // (what its calculation read is of one geometry - its last: an earlier frame carries the calculation without it)
     const calcBefore = m.calc ? (({ results: _r, imaginary: _i, ...rest }) => rest)(m.calc) : undefined;
-    // (a path: its last frame alone)
-    for (let f = m.path ? n - 1 : 0; f < n; f++) {
+    // (a path: its last frame alone; an opened optimisation or scan, the frames it converged on)
+    const taken = m.path ? [n - 1] : (m.entryFrames ?? Array.from({ length: n }, (_, k) => k));
+    for (const f of taken) {
       const xyz = frameXyz(m, f);
       const stereo = stereoKnown({ atoms: m.atoms, bonds: m.bonds, xyz });
       out.push({
@@ -641,13 +706,16 @@ export function setEntries(molecules: readonly Molecule3D[], holds: "molecules" 
         ...(energies && Number.isFinite(energies[f]) ? { energy: energies[f] } : {}),
         ...state,
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
+        ...whole,
         ...(m.mirrors?.length === n && m.mirrors[f] ? { mirror: m.mirrors[f]! } : {}),
         ...(m.name ? { name: m.name } : {}),
+        ...(properties && Object.keys(properties[f]).length ? { properties: properties[f] } : {}),
         ...(m.partOf ? { partOf: true as const } : {}),
         ...(m.calc ? { calc: f === n - 1 ? m.calc : calcBefore } : {}),
         ...(m.failed?.[f] ? { failed: m.failed[f]! } : {}),
         // (a conformer's own, frame by frame; a single geometry's, its calculation's - of its last geometry)
         ...(imaginaryAt(m, f, n) ? { imaginary: imaginaryAt(m, f, n) } : {}),
+        ...(m.marksUnread ? { marksUnread: true as const } : {}),
         keep,
         from: m.id,
         frame: f,
@@ -749,6 +817,31 @@ function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
   };
 }
 
+/** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name. */
+function menoProperties(e: SetEntry): Record<string, Property> {
+  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
+  const by = byOf(e.calc);
+  return {
+    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
+    number: { value: e.number, unit: "none", status: "computed" },
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+    ...thermoOf(e, at.geometry),
+    ...vibrationsOf(e, at),
+    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
+    ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
+    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
+    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
+    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
+  };
+}
+
+/** The properties an entry carries of its own under names Meno gives its own (`menoProperties`), which its entry record reads as Meno's: none, mostly. */
+export function shadowedIn(e: SetEntry): string[] {
+  if (!e.properties) return [];
+  const own = menoProperties(e);
+  return Object.keys(e.properties).filter((k) => k in own);
+}
+
 /**
  * A step's entry read as Meno's entry record (lib/entry, PR 1 of
  * docs/WORKFLOWS-FOUNDATION.md), by `id`: its structure in its numbering,
@@ -765,22 +858,9 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     ...(a.charge ? { charge: a.charge } : {}),
     ...(a.radical ? { radical: a.radical } : {}),
   }));
-  // (the energy where its calculation was worked out - in the solvation it said - and by what)
-  const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
-  const by = byOf(e.calc);
-  const properties: Record<string, Property> = {
-    group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
-    number: { value: e.number, unit: "none", status: "computed" },
-    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
-    ...thermoOf(e, at.geometry),
-    ...vibrationsOf(e, at),
-    ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
-    ...(e.mirror ? { mirror: { value: { list: [...e.mirror], per: "atom" as const }, unit: "none" as const, status: "computed" as const } } : {}),
-    // (how many imaginary frequencies its calculation judged it has, where it judged any: no minimum)
-    ...(e.imaginary?.length ? { imaginary: { value: e.imaginary.length, unit: "none" as const, at, status: "computed" as const } } : {}),
-    ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
-  };
-  const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [] };
+  // (its own properties - a model's, a descriptor's - as they came; Meno's names after them, its own: `shadowedIn` names those it gave under them)
+  const properties: Record<string, Property> = { ...e.properties, ...menoProperties(e) };
+  const written = { atoms: atoms.map((a, i) => ({ ...a, x: e.xyz[3 * i], y: e.xyz[3 * i + 1], z: e.xyz[3 * i + 2] })), bonds: [], ...(e.skeleton ? { skeleton: true } : {}) };
   return {
     id,
     from: e.from != null ? [`molecule:${e.from}${e.frame != null ? `#${e.frame}` : ""}`] : [],
@@ -789,7 +869,8 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
     species: speciesOf(written, e),
     properties,
     ...(e.stereo ? { stereo: e.stereo } : {}),
-    status: e.failed ? { failed: e.failed.why } : "done",
+    // (its file's marks of which frames failed did not read: not done, as far as is known)
+    status: e.failed ? { failed: e.failed.why } : e.marksUnread ? { failed: MARKS_UNREAD } : "done",
   };
 }
 

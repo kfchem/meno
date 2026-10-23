@@ -3,6 +3,7 @@ import type { Known } from "../../../../lib/options";
 import type { Carried3D } from "../store/types";
 import { STYLE_3D, type Style3D } from "../../../../lib/chem/style3d";
 import { bondsAt, heightOf, lookOf, solidOf, WORLD_PER_ANGSTROM } from "./molecule3d";
+import { isSkeleton } from "./completeness";
 
 /** A molecule in 3D's atoms' places in one of its frames, where its file had them, in ångströms: x, y, z of each. */
 function frameXyz(m: Carried3D, frame = 0): number[] {
@@ -78,7 +79,7 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = STYL
     for (const b of bondsAt(m, m.frame)) bonds.push({ a1: first + b.a1, a2: first + b.a2, order: b.order });
   }
   const names = molecules.map((m) => (m.name ? stem(m.name) : "")).filter(Boolean);
-  return { atoms, bonds, ...(names.length ? { name: [...new Set(names)].join(" + ") } : {}) };
+  return { atoms, bonds, ...(names.length ? { name: [...new Set(names)].join(" + ") } : {}), ...(molecules.some(isSkeleton) ? { skeleton: true } : {}) };
 }
 
 /**
@@ -88,9 +89,11 @@ export function writtenOf(molecules: readonly Carried3D[], style: Style3D = STYL
  * calculation, as that calculation said them, the state it was in there
  * (an output's atoms carry no charges of their own) - and its name.
  */
-export function knownOfMolecules(molecules: readonly Carried3D[], style?: Style3D): Record<Known, string | number> {
+export function knownOfMolecules(molecules: readonly Carried3D[], style?: Style3D): Partial<Record<Known, string | number>> {
   const written = writtenOf(molecules, style);
   // (one molecule read from a calculation: the state it was in there - Meno's one rule)
-  const { charge, multiplicity } = speciesOf(written, molecules.length === 1 ? molecules[0].calc : undefined);
-  return { ...knownOf(written), charge, multiplicity };
+  const species = speciesOf(written, molecules.length === 1 ? molecules[0].calc : undefined);
+  // (a skeleton: no charge or spin to start from - lib/chem/skeleton)
+  const { charge: _charge, multiplicity: _multiplicity, ...rest } = knownOf(written);
+  return species ? { ...rest, charge: species.charge, multiplicity: species.multiplicity } : rest;
 }

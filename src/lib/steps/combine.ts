@@ -10,7 +10,8 @@
  * - **Species.** The charges add. The multiplicity is one more than all the
  *   parts' unpaired electrons together: with two or more parts open-shell
  *   that is their high-spin coupling, and it is said, as another coupling
- *   is the chemist's to set (*Species*).
+ *   is the chemist's to set (*Species*). A part without its hydrogens (a
+ *   skeleton, no species) makes the complex one too: none.
  * - **Properties.** None is carried: each was worked out on its part alone,
  *   not on the complex. Where the parts had any, it is said. The parts stay
  *   as its lineage.
@@ -39,15 +40,19 @@ export function combined(parts: readonly Entry[], id: string): Combined {
       : kind === "2d"
         ? { kind: "2d", xy: parts.flatMap((p) => (p.geometry as { xy: number[] }).xy) }
         : { kind: "none" };
-  const charge = parts.reduce((n, p) => n + p.species.charge, 0);
-  const unpaired = parts.reduce((n, p) => n + (p.species.multiplicity - 1), 0);
-  const open = parts.filter((p) => p.species.multiplicity > 1).length;
-  const given = { charge: parts.some((p) => p.species.from.charge === "given"), multiplicity: parts.some((p) => p.species.from.multiplicity === "given") };
-  const species = speciesOf(
-    { atoms: atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds: [] },
-    { charge: given.charge ? charge : undefined, multiplicity: given.multiplicity || open > 1 ? unpaired + 1 : undefined },
-  );
+  const known = parts.every((p) => p.species) ? parts.map((p) => p.species!) : null;
+  const charge = known?.reduce((n, s) => n + s.charge, 0) ?? 0;
+  const unpaired = known?.reduce((n, s) => n + (s.multiplicity - 1), 0) ?? 0;
+  const open = known?.filter((s) => s.multiplicity > 1).length ?? 0;
+  const given = { charge: !!known?.some((s) => s.from.charge === "given"), multiplicity: !!known?.some((s) => s.from.multiplicity === "given") };
+  const species = known
+    ? speciesOf(
+        { atoms: atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds: [] },
+        { charge: given.charge ? charge : undefined, multiplicity: given.multiplicity || open > 1 ? unpaired + 1 : undefined },
+      )
+    : null;
   const said: string[] = [];
+  if (!known) said.push("A part has no hydrogens, so the complex's charge and spin are not known either.");
   if (open > 1) said.push(`${open} parts are open-shell: taken as high spin, multiplicity ${unpaired + 1}. Set another with Species.`);
   if (parts.some((p) => Object.keys(p.properties).length)) said.push("The parts' properties are not carried over: they were worked out on each part alone.");
   return { entry: { id, from: parts.map((p) => p.id), structure: { atoms, bonds }, geometry, species, properties: {}, status: "done" }, said };

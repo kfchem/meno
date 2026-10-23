@@ -8,7 +8,8 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, MARKS_UNREAD, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
@@ -47,6 +48,8 @@ export function runMeno(kind: StepKind, entries: readonly SetEntry[], holds: Hol
       return populations(entries, Number(options.temperature));
     case "choose":
       return chooseOne(entries, options.which === "number" ? Number(options.number) : null, energiesBy);
+    case "filter":
+      return filtered(entries, holds, String(options.conditions ?? ""), options.match === "any" ? "any" : "all");
     default:
       return { ok: false, said: "Meno does not do this itself" };
   }
@@ -157,10 +160,11 @@ export function constitutionOf(e: Pick<SetEntry, "atoms" | "bonds" | "charge" | 
  * else what its atoms say. Entries that differ in them are different
  * species - an anion read from a calculation is no conformer of its neutral.
  */
-function speciesOf(e: Pick<SetEntry, "atoms" | "charge" | "multiplicity">): string {
+function speciesOf(e: Pick<SetEntry, "atoms" | "charge" | "multiplicity" | "skeleton">): string {
   const atoms = e.atoms.map((a) => ({ el: a.el, x: 0, y: 0, z: 0, ...(a.charge ? { charge: a.charge } : {}), ...(a.radical ? { radical: a.radical } : {}) }));
-  const { charge, multiplicity } = speciesBy({ atoms, bonds: [] }, e);
-  return `${charge} ${multiplicity}`;
+  // (a skeleton's has none: such entries go together, as they are - their shapes alone are compared)
+  const species = speciesBy({ atoms, bonds: [], ...(e.skeleton ? { skeleton: true } : {}) }, e);
+  return species ? `${species.charge} ${species.multiplicity}` : "skeleton";
 }
 
 /**
@@ -209,6 +213,31 @@ function byCompound(entries: readonly SetEntry[]): SetEntry[][] {
   return [...out.values()];
 }
 
+/**
+ * Entries kept by conditions on their properties (lib/nodes `filter`), read
+ * as each is an entry (`entryOfSet`): those that meet them, the rest set
+ * aside - said, both counted, with why each of the rest was, an entry with
+ * no value for a property named among them. A condition on a name that is
+ * both Meno's own and one an entry carries of its own is refused, never
+ * read as either.
+ */
+function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, match: "all" | "any"): Outcome3D {
+  const read = conditionsIn(text);
+  if ("why" in read) return { ok: false, said: read.why };
+  // (a condition on a name that is Meno's and an entry's own too - "energy" given by a plugin as well: which is meant cannot be told, so it is not guessed)
+  for (const c of read.conditions) {
+    const both = entries.filter((e) => shadowedIn(e).includes(c.property)).length;
+    if (both) return { ok: false, said: `"${c.property}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
+  }
+  const out = filter(
+    entries.map((e, i) => entryOfSet(e, String(i))),
+    { conditions: read.conditions, match },
+  );
+  if (!out.ok) return out;
+  const back = (es: readonly { id: string }[]) => es.map((e) => entries[Number(e.id)]);
+  return { ok: true, holds, kept: back(out.exits.kept), aside: back(out.exits.rest), said: out.said };
+}
+
 /** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
 function onesSaid(entries: readonly SetEntry[]): string {
   const groups = byCompound(entries);
@@ -237,7 +266,7 @@ function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   if (!entries.every(hasEnergy)) return NO_ENERGY;
   // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
   //  frequencies are another matter: they would refuse it where the window is on free energies, which it is not)
-  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged"));
+  const unconverged = notAllMinima(entries.filter((e) => e.failed?.kind === "not-converged" || e.marksUnread));
   if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
@@ -419,10 +448,14 @@ function apartAtLeast(p: Float64Array, q: Float64Array): number {
  * where one is no minimum: the first whose optimisation did not converge,
  * or that its calculation judged has an imaginary frequency, named with
  * it, for the chemist to take it out (the maintainer, 2026-10-22: each
- * program's own judgement of which are imaginary). Null where none is.
+ * program's own judgement of which are imaginary) - or whose file's marks
+ * of that did not read (`SetEntry.marksUnread`). Null where none is.
  */
 export function notAllMinima(entries: readonly SetEntry[]): string | null {
   const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+  // (its file's marks of which frames failed did not read: whether it is a minimum is not known)
+  const unread = entries.find((x) => x.marksUnread);
+  if (unread) return `${name(unread)}: ${MARKS_UNREAD} - take it out first`;
   const unconverged = entries.find((x) => x.failed?.kind === "not-converged");
   if (unconverged) return `${name(unconverged)} is ${FAILURE_WORDS["not-converged"]}: it is no minimum - take it out first`;
   const e = entries.find((x) => x.imaginary?.length);
