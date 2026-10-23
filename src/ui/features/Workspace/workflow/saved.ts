@@ -4,9 +4,10 @@
  * back as data, what does not read left out, and a wire whose ends are
  * not there with it.
  */
-import type { Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
+import type { KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Molecule3D, StepJob, StepRan, StepRunKept, StepRunning, Wire, WireEnd, WireTo, WorkflowSet, WorkflowStep } from "../store/types";
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import type { OptionValues } from "../../../../lib/options";
+import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
 import { readRefused } from "./programs";
@@ -95,7 +96,7 @@ function optionsIn(v: unknown): OptionValues {
 }
 
 function readRan(v: unknown): StepRan | undefined {
-  const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown; keep?: unknown } | undefined;
+  const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown; kept?: unknown; keep?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.ok !== "boolean" || typeof r.said !== "string" || typeof r.input !== "string") return undefined;
   const jobs = Array.isArray(r.jobs) ? r.jobs.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
   const options = optionsIn(r.options);
@@ -111,8 +112,36 @@ function readRan(v: unknown): StepRan | undefined {
     ...(Object.keys(options).length ? { options } : {}),
     // (a run the chemist keeps: never dropped while kept)
     ...(r.keep === true ? { keep: true as const } : {}),
+    ...(() => {
+      const kept = readKeptJobs(r.kept, new Set(jobs));
+      return kept.length ? { kept } : {};
+    })(),
   };
 }
+
+const SHA = /^[0-9a-f]{64}$/;
+const ROLES: readonly KeptRole[] = ["input", "read", "log", "raw"];
+const sizeOk = (n: unknown): n is number => Number.isInteger(n) && (n as number) >= 0;
+
+/** What a file kept of a run's jobs - each one of its own (`jobs`) - each file read as written, or left out of the list where it does not read. */
+function readKeptJobs(v: unknown, jobs: ReadonlySet<string>): KeptJob[] {
+  if (!Array.isArray(v)) return [];
+  return v.flatMap((k: { job?: unknown; files?: unknown; left?: unknown } | null): KeptJob[] => {
+    if (typeof k?.job !== "string" || !jobs.has(k.job) || !Array.isArray(k.files)) return [];
+    const files = k.files.flatMap((f: Partial<Record<keyof KeptJobEntry, unknown>> | null): KeptJobEntry[] =>
+      typeof f?.name === "string" && keptName(f.name) && typeof f.sha256 === "string" && SHA.test(f.sha256) && sizeOk(f.size) && ROLES.includes(f.role as KeptRole)
+        ? [{ name: f.name, sha256: f.sha256, size: f.size, role: f.role as KeptRole }]
+        : [],
+    );
+    const left = (Array.isArray(k.left) ? k.left : []).flatMap((f: Partial<Record<keyof LeftJobEntry, unknown>> | null): LeftJobEntry[] =>
+      typeof f?.name === "string" && keptName(f.name) && sizeOk(f.size) && (f.why === "raw" || f.why === "not had") ? [{ name: f.name, size: f.size, why: f.why }] : [],
+    );
+    return [{ job: k.job, files, ...(left.length ? { left } : {}) }];
+  });
+}
+
+/** Whether `name` is one a job's kept file may have (src-tauri keptjobs.rs `kept_name`): in its work folder, or one of its logs. */
+export const keptName = (name: string) => name === "log.txt" || name === "after.txt" || (name.startsWith("work/") && IN_FOLDER.test(name.slice(5)));
 
 /** A molecule in 3D a set or a run keeps, read as the page's are; none where it does not read. */
 function carriedMolecule(m: unknown): Omit<Molecule3D, "id" | "at">[] {
@@ -219,6 +248,7 @@ function readStep(v: unknown): WorkflowStep | null {
     ...(ran ? { ran } : {}),
     ...(runs.length ? { runs } : {}),
     ...(running ? { running } : {}),
+    ...(s.keepRaw === false ? { keepRaw: false as const } : {}),
   };
 }
 
