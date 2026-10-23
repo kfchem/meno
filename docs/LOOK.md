@@ -18,7 +18,9 @@ shots, and is checked against this page (*The look check*, below).
 2. **Colours from the tokens only.** No colour written as a literal in
    the interface (`#…`, `rgb(…)`, a Tailwind default such as `gray-200` or
    `red-700`): the tokens below, in CSS by their Tailwind names, in code
-   from `src/ui/theme/colors.ts`. A drawing's own colours - elements,
+   from `src/ui/theme/colors.ts`. A colour made from data (a swatch, a
+   gradient's stop, a value worked out) is written by `colourCss()` from
+   the same file, never by hand. A drawing's own colours - elements,
    ink, a ribbon's palette, a colour set - are the drawing's, not the
    interface's, and live with it.
 3. **One highlight.** What is pointed at or picked of a structure,
@@ -162,22 +164,26 @@ Every pull request that changes what is seen carries before and after
 shots of what changed (as the GUI harness takes them: the window only).
 They are checked against this page by the look owner, who answers *LOOK
 OK* or says what to change and why, rule by rule. A lint rule
-(`eslint.config.js`, *Look*) catches what can be caught by reading the
-code: a native select, radio or checkbox outside `src/ui/controls`, and
-a colour literal outside `src/ui/theme`.
+(`eslint.config.js`, from `src/ui/theme/lookRules.json`) catches what can
+be caught by reading the code: a native select, radio or checkbox outside
+`src/ui/controls`, and a colour written out - a literal that is only a
+colour, one in a CSS place (after `:`, `(`, `,` or `[`), `rgb(…)`,
+`hsl(…)`, or Tailwind's default palette - outside `src/ui/theme`.
 
 ## Not yet
 
-Known departures, to be brought in line; the lint rule names each file
-that has one (`NATIVE_CONTROLS_NOT_YET`, `COLOUR_LITERALS_NOT_YET` in
-`eslint.config.js`), and a file brought in line leaves its list. When
-the look rules were set (2026-10-23):
+Known departures, to be brought in line. `src/ui/theme/lookRules.json`
+names each file that has one, with how many places, and
+`lookRules.test.ts` keeps each count exact: a new place in a listed file
+fails as surely as one in a new file, and a place brought in line takes
+its count down with it (a file at none leaves the list). When the look
+rules were set (2026-10-23):
 
 - **Native controls**: 16, in 9 files - the options form (the Render
   card's Look, Shape and Molecules pull-downs and its radios), the
   options rows, the style editor, the protonation card, Settings (roles,
   files), the coordinates card, hiding hydrogens, saving an abbreviation.
-- **Colours written out**: 156, in 69 files. Many are a drawing's own
+- **Colours written out**: 155, in 69 files. Many are a drawing's own
   ink (black and white on the 2D canvas), a ribbon's or code's palette, or
   a colour set's swatches, to be moved beside the drawing's colours; the
   rest repeat a token (gh-line, gh-base, gh-gray, accel-base written out)
