@@ -8,6 +8,7 @@ import type { PythonPlugin } from "../../../../lib/calc/catalog";
 import type { Motion, RenderAsk } from "./renderScene";
 import { askOf, remembered, renderOptions, type Kind } from "./renderOptions";
 import { useInFront } from "../../../layouts/inFront";
+import { escapeLeft } from "../../../controls/keys";
 
 /**
  * Render, asked before it begins (docs/RENDER.md): a picture or a film;
@@ -53,8 +54,9 @@ export default function RenderCard({
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront) return;
+    // (not an Escape one of its lists has had, closing it)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
+      if (!escapeLeft(e)) return;
       e.preventDefault();
       onCancel();
     };

@@ -180,10 +180,8 @@ places than its count passes, and the test says to lower the count, so
 that it comes down on purpose (a file at none leaves the list). When the look
 rules were set (2026-10-23):
 
-- **Native controls**: 16, in 9 files - the options form (the Render
-  card's Look, Shape and Molecules pull-downs and its radios), the
-  options rows, the style editor, the protonation card, Settings (roles,
-  files), the coordinates card, hiding hydrogens, saving an abbreviation.
+- **Native controls**: none since the shared controls replaced the 16
+  there were; the list stays, empty, so that one cannot come back.
 - **Colours written out**: 155, in 69 files. Many are a drawing's own
   ink (black and white on the 2D canvas), a ribbon's or code's palette, or
   a colour set's swatches, to be moved beside the drawing's colours; the

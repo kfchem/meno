@@ -3,14 +3,11 @@ import clsx from "clsx";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { DURATION } from "../theme/motion";
-import { nextLit } from "./keys";
+import { listKey, opensList } from "./keys";
+import { placeList, pressedAway } from "./place";
 
 /** A choice of a Select: its value, and what it is called. */
 export type SelectOption<T extends string = string> = { value: T; label: string };
-
-/** How far below (or above) its button the list opens, and from the window's edges, in px. Its list is drawn over everything, a dialog's own pull-down included (dialogs are at z 100 and 110). */
-const GAP = 4;
-const EDGE = 8;
 
 /**
  * Meno's own pull-down (docs/LOOK.md, *Controls*): a button showing the
@@ -18,7 +15,10 @@ const EDGE = 8;
  * a line round it, a shadow, rows lit as the pointer or the keys come over
  * them, the chosen one ticked. Opened by a press, or by Enter, Space or an
  * arrow; arrows, Home, End and a letter go through it; Enter or Space
- * chooses, Escape or a press elsewhere closes it. It fades in and out.
+ * chooses, Escape, Tab or a press elsewhere closes it (./keys, listKey), as
+ * does the window's or a pane's scrolling under it. It fades in and out, and
+ * is drawn over everything, a dialog's own pull-down included (dialogs are
+ * at z 100 and 110).
  */
 export default function Select<T extends string>({
   value,
@@ -83,9 +83,7 @@ export default function Select<T extends string>({
     const b = button.current?.getBoundingClientRect();
     const l = list.current?.getBoundingClientRect();
     if (!b || !l) return;
-    const below = b.bottom + GAP;
-    const top = below + l.height > window.innerHeight - EDGE && b.top - GAP - l.height > EDGE ? b.top - GAP - l.height : below;
-    setPlace({ left: Math.max(EDGE, Math.min(b.left, window.innerWidth - l.width - EDGE)), top, minWidth: b.width });
+    setPlace(placeList(b, l, { width: window.innerWidth, height: window.innerHeight }));
     list.current?.focus();
   }, [open]);
 
@@ -97,14 +95,20 @@ export default function Select<T extends string>({
   useEffect(() => {
     if (!open) return;
     const onPress = (e: PointerEvent) => {
-      if (!list.current?.contains(e.target as Node) && !button.current?.contains(e.target as Node)) close(false);
+      if (pressedAway(e.target, [list.current, button.current])) close(false);
+    };
+    // (the list stays where it was put: anything scrolled under it but the list itself leaves it where its button no longer is)
+    const onScroll = (e: Event) => {
+      if (pressedAway(e.target, [list.current])) close(false);
     };
     const onAway = () => close(false);
     window.addEventListener("pointerdown", onPress, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onAway);
     window.addEventListener("blur", onAway);
     return () => {
       window.removeEventListener("pointerdown", onPress, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onAway);
       window.removeEventListener("blur", onAway);
     };
@@ -119,10 +123,11 @@ export default function Select<T extends string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? id : undefined}
-        aria-label={label}
+        // (what it chooses and what is chosen, as the browser's own says both)
+        aria-label={`${label}: ${current?.label ?? placeholder ?? "none chosen"}`}
         onClick={() => (open ? close() : openList())}
         onKeyDown={(e) => {
-          if (e.key === "ArrowDown" || e.key === "ArrowUp" || e.key === "Enter" || e.key === " ") {
+          if (opensList(e.key)) {
             e.preventDefault();
             openList();
           }
@@ -152,23 +157,14 @@ export default function Select<T extends string>({
               open ? "meno-fade-in" : "meno-fade-out pointer-events-none",
             )}
             style={place ?? { left: -9999, top: -9999 }}
-            onKeyDown={(e) => {
-              if (e.key === "Escape" || e.key === "Tab") {
-                if (e.key === "Escape") e.preventDefault();
-                close(e.key === "Escape");
-                return;
-              }
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                choose(lit);
-                return;
-              }
-              const next = nextLit(e.key, lit, options.map((o) => o.label));
-              if (next != null) {
-                e.preventDefault();
-                setLit(next);
-              }
-            }}
+            onKeyDown={(e) =>
+              listKey(
+                e,
+                lit,
+                options.map((o) => o.label),
+                { close, choose, light: setLit },
+              )
+            }
             onContextMenu={(e) => e.preventDefault()}
           >
             {options.map((o, i) => (

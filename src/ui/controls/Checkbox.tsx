@@ -1,12 +1,14 @@
 import clsx from "clsx";
 import type { ReactNode } from "react";
+import { checkboxKey } from "./keys";
 
 /**
  * Meno's own checkbox (docs/LOOK.md, *Controls*): a small square with
  * rounded corners, filled in Meno's colour with a white tick when it is
  * on (in the colour of attention where it accepts a warning), and what
- * it says beside it. Space or Enter turns it, as a press
- * does.
+ * it says beside it. Space turns it, as a press does; Enter does not, as
+ * it does not turn the browser's own, and goes on to what holds it (./keys,
+ * checkboxKey).
  */
 export default function Checkbox({
   checked,
@@ -36,6 +38,7 @@ export default function Checkbox({
       aria-label={children ? undefined : label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
+      onKeyDown={checkboxKey}
       className={clsx("group inline-flex items-center gap-2 text-left outline-none disabled:opacity-50", className)}
     >
       <span

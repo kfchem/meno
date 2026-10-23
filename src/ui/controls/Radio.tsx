@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import { useRef } from "react";
+import { useId, useRef } from "react";
 import { nextChoice } from "./keys";
 
 /** A choice of a radio group: its value, and what it is called. */
@@ -8,8 +8,9 @@ export type RadioOption<T extends string = string> = { value: T; label: string }
 /**
  * Meno's own radio buttons (docs/LOOK.md, *Controls*): a choice of a few,
  * one under another, each a small circle and its name - the chosen one's
- * circle drawn in Meno's colour with its dot. The group is one stop of the
- * Tab key; the arrows choose within it.
+ * circle drawn in Meno's colour with its dot, under what the group chooses
+ * (a fieldset and its legend, as the browser's own were set). The group is
+ * one stop of the Tab key; the arrows choose within it.
  */
 export default function RadioGroup<T extends string>({
   value,
@@ -21,18 +22,22 @@ export default function RadioGroup<T extends string>({
   value: T;
   options: readonly RadioOption<T>[];
   onChange: (value: T) => void;
-  /** What the group chooses. */
+  /** What the group chooses, shown over it. */
   label: string;
   className?: string;
 }) {
-  const group = useRef<HTMLDivElement>(null);
+  const group = useRef<HTMLFieldSetElement>(null);
+  const id = useId();
   const chosen = options.findIndex((o) => o.value === value);
   const go = (i: number) => {
     onChange(options[i].value);
     group.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]')[i]?.focus();
   };
   return (
-    <div ref={group} role="radiogroup" aria-label={label} className={clsx("space-y-1", className)}>
+    <fieldset ref={group} role="radiogroup" aria-labelledby={id} className={clsx("space-y-1", className)}>
+      <legend id={id} className="mb-1 text-xs text-gh-gray">
+        {label}
+      </legend>
       {options.map((o, i) => {
         const on = i === chosen;
         return (
@@ -66,6 +71,6 @@ export default function RadioGroup<T extends string>({
           </button>
         );
       })}
-    </div>
+    </fieldset>
   );
 }

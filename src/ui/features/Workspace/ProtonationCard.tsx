@@ -4,6 +4,7 @@ import { useInFront } from "../../layouts/inFront";
 import { chargeText } from "../../../lib/chem/molecule";
 import { formName, keptAsDictionary, protonatedSpecies, siteName, type Protonation } from "./chem/protonate";
 import Select from "../../controls/Select";
+import { escapeLeft } from "../../controls/keys";
 
 const SPINS = ["", "singlet", "doublet", "triplet", "quartet"];
 
@@ -38,8 +39,9 @@ export default function ProtonationCard({
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront || busy) return;
+    // (not an Escape one of its lists has had, closing it)
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (escapeLeft(e)) onCancel();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

@@ -21,17 +21,7 @@
     }
   ],
   "notYet": {
-    "nativeControls": {
-      "src/ui/features/SettingsPanel/FileSettings.tsx": 2,
-      "src/ui/features/SettingsPanel/RoleChoices.tsx": 1,
-      "src/ui/features/StyleEditor/HideHydrogensAsk.tsx": 1,
-      "src/ui/features/StyleEditor/StyleEditor.tsx": 2,
-      "src/ui/features/Workspace/CoordinatesCard.tsx": 1,
-      "src/ui/features/Workspace/ProtonationCard.tsx": 3,
-      "src/ui/features/Workspace/SaveAbbreviationPanel.tsx": 1,
-      "src/ui/options/OptionRows.tsx": 2,
-      "src/ui/options/OptionsForm.tsx": 3
-    },
+    "nativeControls": {},
     "colourLiterals": {
       "src/ui/features/SettingsPanel/ColourSettings.tsx": 1,
       "src/ui/features/SettingsPanel/DefaultAppSettings.tsx": 1,

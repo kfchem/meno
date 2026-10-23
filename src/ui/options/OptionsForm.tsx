@@ -79,15 +79,13 @@ export default function OptionsForm({
   const field = (o: Option) => (
         <div key={o.id}>
           {o.type === "choice" && o.choices.length > MANY_CHOICES ? (
-            <div>
+            // (its name, pressed, opens it as the button does; only as wide as they are, so that a press beside them does not)
+            <label className="block w-fit max-w-full">
               <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
               <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} size="sm" className="w-fit min-w-[12rem] max-w-full" />
-            </div>
+            </label>
           ) : o.type === "choice" ? (
-            <div>
-              <span className="block text-xs text-gh-gray mb-1">{o.label}</span>
-              <RadioGroup label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} />
-            </div>
+            <RadioGroup label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} />
           ) : o.type === "atoms" ? (
             <div className="flex flex-wrap items-center gap-2 text-xs text-gh-gray">
               <span className="whitespace-nowrap">

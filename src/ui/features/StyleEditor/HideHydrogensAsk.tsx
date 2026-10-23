@@ -5,6 +5,7 @@ import { FADE, RISE } from "../../theme/motion";
 import { QUESTION_ARRIVING_MS, useLeaving } from "../../theme/leaving";
 import { HIDE_H_TEXT, HIDE_H_TITLE, HIDE_H_UNDERSTOOD } from "./hideHydrogensText";
 import Checkbox from "../../controls/Checkbox";
+import { answersEnter } from "../../controls/keys";
 
 /**
  * Asked before a style hides the hydrogens on carbon: a molecule drawn so
@@ -51,9 +52,9 @@ export default function HideHydrogensAsk({ onKeep, onHide }: { onKeep: () => voi
         tabIndex={-1}
         className="w-[480px] max-w-[90%] rounded-lg border border-accel-accent/50 bg-white shadow-lg p-5 text-sm text-gh-black outline-none"
         onKeyDown={(e) => {
-          // (Enter keeps them wherever it is pressed in the box - the box just ticked among them, where it did
-          // nothing - but on a button, which answers for itself)
-          if (e.key === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+          // (Enter keeps them wherever it is pressed in the box - the box just ticked among them, which Enter
+          // never ticks - but on a button, which answers for itself)
+          if (e.key === "Enter" && !answersEnter(e.target)) {
             e.preventDefault();
             onKeep();
           }
