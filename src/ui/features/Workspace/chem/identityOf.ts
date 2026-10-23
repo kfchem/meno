@@ -11,6 +11,9 @@ import { readStereo } from "../../../../lib/layout/drawn";
 import type { Model } from "../store/types";
 import { drawingOf } from "./drawing";
 import { piSystems, unreadWedges } from "./engineLayout";
+import { placedAbbreviation } from "../../../../lib/chem/abbreviationPlace";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
+import { isElementSymbol } from "../../../../lib/roles/molblock";
 
 /**
  * `part` as identity's input, its atoms in `part`'s order - and the atoms,
@@ -48,4 +51,38 @@ export function identityInputOf(part: Model): { input: IdentityInput; unread: nu
 export function identityOfDrawn(part: Model): { text: string; complete: boolean; unread: number[] } {
   const { input, unread } = identityInputOf(part);
   return { ...identity(input), unread };
+}
+
+/**
+ * `part` with each label that stands for atoms drawn out as those atoms -
+ * those it holds (`abbrev`, as Clean-up writes a group by its label), else
+ * the dictionary's - the labelled atom become the one it is attached by,
+ * where the label is: so the structure as identity reads it whether a group
+ * is written by its label or drawn out. Not laid out among the drawing, as
+ * *Expand abbreviation* lays it out: only what each configuration says is
+ * read from where atoms are, and turned whole a group's say the same. A
+ * label Meno does not know stays as it is.
+ */
+export function labelsDrawnOut(part: Model): Model {
+  if (!part.atoms.some((a) => a.abbrev || !isElementSymbol(a.el))) return part;
+  let next = -1;
+  const atoms: Model["atoms"] = [];
+  const bonds: Model["bonds"] = [...part.bonds];
+  for (const a of part.atoms) {
+    const bond = a.abbrev ? undefined : part.bonds.find((b) => b.a === a.id || b.b === a.id);
+    const other = bond && part.atoms.find((x) => x.id === (bond.a === a.id ? bond.b : bond.a));
+    const s = a.abbrev ?? (isElementSymbol(a.el) ? null : placedAbbreviation(a.el, other ? { x: other.x - a.x, y: other.y - a.y } : null, NOMINAL_BOND_LENGTH));
+    if (!s?.atoms.length) {
+      atoms.push(a);
+      continue;
+    }
+    const head = s.attach[0] ?? 0;
+    const ids = s.atoms.map((_, k) => (k === head ? a.id : next--));
+    s.atoms.forEach(({ x, y, ...chem }, k) => atoms.push({ ...chem, id: ids[k], x: a.x + x, y: a.y + y, r: a.r }));
+    for (const b of s.bonds) {
+      const { a1, a2, endpoints, ...rest } = b;
+      bonds.push({ ...rest, id: next--, a: ids[a1], b: ids[a2], stereo: b.stereo ?? "none", ...(endpoints ? { endpoints: endpoints.map((e) => ids[e]) } : {}) } as Model["bonds"][number]);
+    }
+  }
+  return { atoms, bonds };
 }

@@ -21,8 +21,9 @@ import type { Biopolymer } from "../../../../lib/chem/biopolymer";
 import type { BondChem, ParsedAtom, ParsedBond } from "../../../../lib/chem/molecule";
 import type { Workspace } from "../utils/workspace";
 import type { CalcInfo, Unmarked } from "../../../../lib/calc/output";
+import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
-import type { JobState } from "../../../../lib/jobs";
+import type { JobState, KeptRole } from "../../../../lib/jobs";
 import type { PagePlace } from "../../../../lib/pdf/layout";
 
 /** An atom as the editor holds it: its chemistry (lib/chem/molecule), where it is, and more. */
@@ -541,6 +542,13 @@ export type Molecule3D = {
   /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
   /**
+   * Each frame's mirror image counted in, where Duplicates counted one in
+   * (workflow/meno): the atoms the mirror image swaps - atom i of this
+   * conformer plays the part of atom `mirrors[f][i]` in its mirror image -
+   * so that an average by atom can be made over both; null, none counted in.
+   */
+  mirrors?: (number[] | null)[];
+  /**
    * Its frames are the path to its last geometry - an optimisation's, made
    * by a step (docs/WORKFLOWS.md, *Results*) - so that a set takes it as
    * that one entry, not as many compounds.
@@ -661,6 +669,13 @@ export type WorkflowSet = {
    */
   members?: Member[];
   /**
+   * A set copied, as it is put down: the records of the structures drawn it
+   * held, each by its atoms' ids as pasted - taken up by those structures as
+   * its members are found from what lies inside it (workflow/model
+   * `membersSettled`), then gone.
+   */
+  carried?: { structure: number[]; record: DrawnRecord }[];
+  /**
    * A result set of structures drawn: the atoms, by id, its step put on the
    * page as it last ran - all it takes away when the step runs again. A
    * structure the chemist joined to one of them by a bond keeps its own
@@ -682,8 +697,22 @@ export type WorkflowSet = {
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
   notKept?: { count: number; hash: string };
 };
-/** One of a set's members: a structure drawn, by its atoms' ids; a molecule in 3D, or a picture, by id. */
-export type Member = { structure: number[] } | { molecule: number } | { picture: number };
+/**
+ * What a structure drawn that a step gave keeps of its own, as an entry
+ * (lib/entry `Entry`) keeps it - the drawing itself its structure and its
+ * geometry, in 2D: the entries it was made from (`from`, by id, where they
+ * have one), its properties by name, and whether it is done or was set
+ * aside, and why. All of it optional: a structure the chemist drew has none.
+ * `of` is the structure it was given for, as a key of its identity, not
+ * of how it is drawn (workflow/entries `drawnHash`): edited since, the
+ * structure is another, and its properties and status are taken away,
+ * `stale` saying why.
+ */
+export type DrawnRecord = { from?: string[]; properties?: Record<string, Property>; status?: EntryStatus; of?: string; stale?: string };
+/** A structure drawn as a step gave it: the drawing, and its record where it has one. */
+export type DrawnModel = Model & { record?: DrawnRecord };
+/** One of a set's members: a structure drawn, by its atoms' ids, with its record, where a step gave it one; a molecule in 3D, or a picture, by id. */
+export type Member = { structure: number[]; record?: DrawnRecord } | { molecule: number } | { picture: number };
 /**
  * What a step did when it last ran: when, whether it did, what it says, and
  * what came into it (`inputKey`: so that it shows when that has changed) -
@@ -691,7 +720,25 @@ export type Member = { structure: number[] } | { molecule: number } | { picture:
  * its jobs, by id, whose logs and files are kept until the step is deleted;
  * and the kind and options it ran with.
  */
-export type StepRan = { at: number; ok: boolean; said: string; input: string; stopped?: true; took?: number; jobs?: string[]; kind?: StepKind; options?: OptionValues };
+export type StepRan = {
+  at: number;
+  ok: boolean;
+  said: string;
+  input: string;
+  stopped?: true;
+  took?: number;
+  jobs?: string[];
+  kind?: StepKind;
+  options?: OptionValues;
+  /** What a workspace's file kept of each of its jobs, as it was opened (workflow/keptJobs): written afresh each save from the jobs' folders where they are on this computer. */
+  kept?: KeptJob[];
+};
+/** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
+export type KeptJobEntry = { name: string; sha256: string; size: number; role: KeptRole };
+/** A job's file a workspace's file does not keep - its step keeps no raw outputs, or it was not to be had - by its name and size. */
+export type LeftJobEntry = { name: string; size: number; why: "raw" | "not had" };
+/** What a workspace's file keeps of one of a step's jobs, and what it left out: nothing left out unsaid. */
+export type KeptJob = { job: string; files: KeptJobEntry[]; left?: LeftJobEntry[] };
 /**
  * An earlier run a step keeps (docs/WORKFLOWS.md, *Results*): what it did
  * then - its kind and options as they were - and what it gave, as its
@@ -712,7 +759,7 @@ export type RunKeptResults = {
   holds: SetKind;
   unread?: number;
   restUnread?: number;
-  drawn?: { made: Model[]; rest: Model[] };
+  drawn?: { made: DrawnModel[]; rest: DrawnModel[] };
 };
 /**
  * A job a step's run started (lib/jobs): its id; the entries it is for, by
@@ -750,6 +797,8 @@ export type WorkflowStep = {
   /** Its earlier runs, newest first. */
   runs?: StepRunKept[];
   running?: StepRunning;
+  /** *Don't keep raw outputs*: its jobs' files kept in the workspace's file are only what they were given, what was read back of them, and their logs. */
+  keepRaw?: false;
 };
 /** Where a wire starts: a set - a step's exits are sets of their own, so a step has no give port of its own. */
 export type WireEnd = { set: number };
@@ -1447,6 +1496,8 @@ export type EditorState = {
   renameSet: (id: number, name: string) => void;
   /** A step's result set kept in the workspace's file, or not: one step. */
   keepSet: (id: number, keep: boolean) => void;
+  /** A step's jobs' raw outputs kept in the workspace's file, or not (*Don't keep raw outputs*): an edit. */
+  keepRawOutputs: (id: number, keep: boolean) => void;
   addSet: (frame: { x0: number; y0: number; x1: number; y1: number }) => number;
   /** A procedure saved, put down with its middle at (x, y), as one step - selected. */
   putDownProcedure: (id: string, x: number, y: number) => void;
@@ -1499,7 +1550,8 @@ export type EditorState = {
   /** A step's logs opened in the column of texts, following its jobs while they run. */
   showStepLog: (id: number) => Promise<void>;
   /** The folder of a step's last job shown where the system shows files. */
-  showStepFiles: (id: number) => Promise<void>;
+  /** A step's job's files shown - written back out first, where its folder is not on this computer: what is said of those not written back, if anything. */
+  showStepFiles: (id: number) => Promise<string | null | void>;
   /** The jobs of the steps that have any looked at: where each is, and, those that have all ended, their results brought in. */
   lookAtJobs: () => Promise<void>;
   /** Each step's jobs, as last looked at, by job id. */

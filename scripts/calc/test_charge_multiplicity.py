@@ -318,10 +318,10 @@ class Rdkit(unittest.TestCase):
         singlet = {"name": "singlet", "atoms": atoms, "bonds": bonds, "charge": 0, "multiplicity": 1, "compound": 0}
         triplet = {"name": "triplet", "atoms": [dict(a, radical=3) if a["el"] == "C" else a for a in atoms], "bonds": bonds, "charge": 0, "multiplicity": 3, "compound": 0}
         for holds in ("molecules", "conformers"):
-            kept = ask(rdkit, "run", step="duplicates", entries=[singlet, triplet], options={"rmsd": 0.125}, holds=holds)["kept"]
+            kept = ask(rdkit, "run", step="duplicates", entries=[singlet, triplet], options={}, holds=holds)["kept"]
             self.assertEqual(kept, [0, 1], holds)
         # (and two of one species in that shape: one set aside)
-        kept = ask(rdkit, "run", step="duplicates", entries=[singlet, dict(singlet, name="again")], options={"rmsd": 0.125}, holds="molecules")["kept"]
+        kept = ask(rdkit, "run", step="duplicates", entries=[singlet, dict(singlet, name="again")], options={}, holds="molecules")["kept"]
         self.assertEqual(kept, [0])
 
     def test_what_it_reads_back_says_no_charge_or_multiplicity(self):

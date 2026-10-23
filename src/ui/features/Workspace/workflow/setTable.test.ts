@@ -38,6 +38,9 @@ describe("a set as a table", () => {
     // (each energy says what worked it out)
     expect(rows[0].from).toBe("Field X");
     expect(rows[2].from).toBe("");
+    // (a calculation's: its program, its version and its level - as the summary's chart counts them alike - not its job or its state)
+    const calc = { readers: ["prog"], program: "prog", version: "6.7", method: "GFN2-xTB", job: { number: 2, of: 3 }, charge: -1 };
+    expect(tableRows([water(3, 0, 0, [-76], { calc })], "molecules")[0].from).toBe("prog 6.7 \u00b7 GFN2-xTB");
   });
 
   it("in a set of molecules: no compound, no energy above another's - they are of different compounds", () => {

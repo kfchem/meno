@@ -6,7 +6,7 @@
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import type { OptionValues } from "../../../../lib/options";
-import { inside, lyingIn, membersOf, placesOf, readingOrder, setMembers, structuresOf, type Frame } from "./entries";
+import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMembers, structureMember, structuresOf, type Frame } from "./entries";
 import { drawnBox } from "../../../../utils/importers";
 import { SET_PAD, SET_TOP } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
@@ -42,6 +42,18 @@ export function heldPut(doc: WorkspaceDocument, id: number, atoms: readonly numb
 }
 
 /** A step's result set kept in the workspace's file, or not (*Don't keep in the file*): a chemist's set is always kept. */
+/** A step's jobs' raw outputs kept in the workspace's file, or not (*Don't keep raw outputs*, workflow/keptJobs). */
+export function keepRawOutputs(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
+  return {
+    ...doc,
+    steps: (doc.steps ?? []).map((s) => {
+      if (s.id !== id) return s;
+      const { keepRaw: _, ...rest } = s;
+      return keep ? rest : { ...rest, keepRaw: false as const };
+    }),
+  };
+}
+
 export function keepSet(doc: WorkspaceDocument, id: number, keep: boolean): WorkspaceDocument {
   const set = doc.sets?.find((b) => b.id === id);
   if (!set?.made || (set.keep !== false) === keep) return doc;
@@ -258,7 +270,7 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
   const sets = doc.sets.map((set) => {
     if (!set.members) {
       changed = true;
-      return { ...set, members: membersOf(lyingIn(doc, set)) };
+      return membersLying(doc, set);
     }
     const prior = before.sets?.find((b) => b.id === set.id);
     if (samePage && prior && prior.x0 === set.x0 && prior.x1 === set.x1 && prior.y0 === set.y0 && prior.y1 === set.y1 && prior.members === set.members) return set;
@@ -267,10 +279,11 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
     type Placed = { member: Member; at: { x: number; y: number }; wasIn: boolean };
     const nowAt = new Map(now.structures.map((s) => [s.ids[0], s]));
     const list: Placed[] = [
-      ...held.structures.map((ids) => {
+      ...held.structures.map((ids, i) => {
         const at = nowAt.get(ids[0])!.at;
         const w = wasMiddle(ids);
-        return { member: { structure: ids } as Member, at, wasIn: !!(prior && w && inside(prior, w)) };
+        // (with its record: a step's, which a structure keeps however it moves)
+        return { member: structureMember(ids, held.records[i]), at, wasIn: !!(prior && w && inside(prior, w)) };
       }),
       ...held.molecules.map((id) => {
         const w = was.molecules.get(id);
@@ -316,7 +329,22 @@ export function membersSettled(doc: WorkspaceDocument, before: WorkspaceDocument
 /** `doc` with each set that has no members yet - one read from a file saved before sets kept them - holding what lies inside its frame: read once, as the workspace opens. */
 export function membersFound(doc: WorkspaceDocument): WorkspaceDocument {
   if (!doc.sets?.some((b) => !b.members)) return doc;
-  return { ...doc, sets: doc.sets.map((b) => (b.members ? b : { ...b, members: membersOf(lyingIn(doc, b)) })) };
+  return { ...doc, sets: doc.sets.map((b) => (b.members ? b : membersLying(doc, b))) };
+}
+
+/**
+ * A set holding what lies inside its frame: each structure a copy carried a
+ * record for (`WorkflowSet.carried`) - the same atoms - with that record,
+ * of the structure as it is drawn now.
+ */
+function membersLying(doc: WorkspaceDocument, { carried, ...set }: WorkflowSet): WorkflowSet {
+  const found = lyingIn(doc, set);
+  const records = found.structures.map((ids) => {
+    const of = new Set(ids);
+    const c = carried?.find((x) => x.structure.length === ids.length && x.structure.every((id) => of.has(id)));
+    return c && (c.record.of ? recordOn(c.record, doc.model, ids) : c.record);
+  });
+  return { ...set, members: membersOf({ ...found, records }) };
 }
 
 /** Whether two lists of members are the same, in the same order. */
