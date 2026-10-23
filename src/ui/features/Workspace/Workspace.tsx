@@ -176,7 +176,7 @@ import GuideStructure from "./components/GuideStructure";
 import { guideNotice } from "../../../lib/plugins/guides";
 import { selectionFrame } from "./workflow/selectionSet";
 import { offeredSteps } from "./workflow/offered";
-import { PORT_DOWN } from "./workflow/look";
+import { GAP, PORT_DOWN } from "./workflow/look";
 import OpenStereo2D from "./components/OpenStereo2D";
 import LinkedHover2D from "./components/LinkedHover2D";
 import Ask3D from "./Ask3D";
@@ -205,6 +205,8 @@ import type { ArrowFormPatch, Caption, Drawn, Molecule3D, PictureFrom, WordsFrom
 import { resultKey, resultsOn } from "../../../lib/calc/results";
 import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
+import { tableOfText } from "../../../lib/table";
+import { TABLE_SET } from "./workflow/model";
 import { heldOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
@@ -2244,6 +2246,13 @@ function WorkspaceContent({
               onRead: () => store.getState().readText(t.id),
               onIcon: () => store.getState().setTextIcon(t.id, !t.icon),
               ...(found.length ? { onStructures: () => setCoords({ structures: found, at: pasteTarget(), source: t.name, named: t.name }) } : {}),
+              ...(() => {
+                const table = tableOfText(t.name, t.text);
+                // (beside the text, to its right, level with it - where it has a sheet on the page)
+                const room = sheetRoom(t);
+                const at = room ? { x: room.x1 + GAP + TABLE_SET.w / 2, y: (room.y0 + room.y1) / 2 } : pasteTarget();
+                return table ? { onTable: () => void store.getState().placeTable(table, at, t.name) } : {};
+              })(),
             };
           })()}
           pdf={(() => {

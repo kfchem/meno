@@ -163,8 +163,9 @@ describe("a plugin's manifest", () => {
         { kinds: ["optimise", "energy"], programs: ["xtb", "../bin/sh", "/usr/bin/xtb", "xtb"], options: [level] },
         { kinds: ["optimise"], programs: ["other"] },
         { kinds: ["Not A Kind", "frequencies"], programs: ["xtb"] },
-        { kinds: ["conformers"], takes: ["molecules", "drawings", "conformers"] },
+        { kinds: ["conformers"], takes: ["molecules", "drawings", "conformers", "chart"] },
         { kinds: ["duplicates"], takes: [] },
+        { kinds: ["energy-window"], takes: ["table", "number"] },
         { kind: "populations" },
       ],
     };
@@ -176,6 +177,8 @@ describe("a plugin's manifest", () => {
       // (what it takes, of what flows: none said, all its kind takes)
       { kind: "conformers", programs: [], options: [], takes: ["molecules", "conformers"] },
       { kind: "duplicates", programs: [], options: [] },
+      // (a table and a number flow too - a chart, Meno's alone, none says)
+      { kind: "energy-window", programs: [], options: [], takes: ["table", "number"] },
     ]);
     // (xTB's and ORCA's, as Meno carries them)
     const xtb = MANIFESTS.find((m) => m.id === "xtb")!;

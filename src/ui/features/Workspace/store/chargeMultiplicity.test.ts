@@ -71,7 +71,7 @@ import { knownOf } from "../../../../lib/io/writers";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { setEntries, setMembers, type SetEntry } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
-import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind } from "../workflow/kinds";
+import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind, isSetKind } from "../workflow/kinds";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
 import { measured } from "../../../../testing/timeouts";
@@ -429,7 +429,7 @@ const DOERS: readonly [StepKind, string][] = [
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
   const g = kindInfo(kind).gives;
-  return g === "same" || g === "pictures" ? holds : g;
+  return isSetKind(g) ? g : holds;
 };
 
 /**

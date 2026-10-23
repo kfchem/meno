@@ -6,17 +6,31 @@
  */
 import { numberText } from "../../../../lib/calc/results";
 import type { Option, OptionValues } from "../../../../lib/options";
-import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
+import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
-export type { SetKind, StepKind };
+export type { SetKind, StepKind, ValueKind };
 
 /** The kinds of set whose entries are molecules in 3D: all but structures drawn. */
 export type Holds3D = Exclude<SetKind, "structures">;
 
-/** What a set may hold: a kind of set that flows along a wire - or pictures, a Render step's, which none takes. */
-export type SetHolds = SetKind | "pictures";
+/** What a set may hold: what flows along a wire - or a chart (Meno's *Chart*, *Energy diagram*) or pictures (a Render step's), which none takes. */
+export type SetHolds = ValueKind | "chart" | "pictures";
+
+/** Whether a set holds a kind of set - structures, molecules, conformers - which the steps that work on entries take: not a table, a number, a chart or pictures. */
+export const isSetKind = (h: string): h is SetKind => h === "structures" || h === "molecules" || h === "conformers";
+
+/**
+ * Whether what a set holds goes into a port that takes `takes`: one of
+ * them - or molecules or conformer sets into a port that takes a table,
+ * seen as one (FOUNDATION: the one view that loses nothing; lib/table
+ * `moleculesAsTable`). Nothing else stands for anything else: a number is
+ * no table, and a table no molecules.
+ */
+export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean {
+  return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
+}
 
 /** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks. */
 export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks";
@@ -28,7 +42,7 @@ export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture
  * and *bonding* - and says on itself which property its entries are matched
  * on, so that nothing is matched by an implicit rule.
  */
-export type StepPort = { id: string; name: string; takes: readonly SetKind[] };
+export type StepPort = { id: string; name: string; takes: readonly ValueKind[] };
 
 /**
  * An exit a kind gives. Every exit is a result set of its own, made with the
@@ -36,7 +50,7 @@ export type StepPort = { id: string; name: string; takes: readonly SetKind[] };
  * aside or could not do - drawn under the first with its count: nothing is
  * hidden, and it can be wired on.
  */
-export type StepExit = { id: string; name: string; gives: SetKind | "same" | "pictures"; of?: "rest" | "failed" };
+export type StepExit = { id: string; name: string; gives: ValueKind | "chart" | "same" | "pictures"; of?: "rest" | "failed" };
 
 /** The one input a kind takes where it declares none of its own. */
 export const ONE_INPUT = "in";
@@ -47,10 +61,10 @@ export type KindInfo = {
   kind: StepKind;
   name: string;
   icon: StepIcon;
-  /** The sets it takes. */
-  takes: readonly SetKind[];
-  /** What it gives, for what it took: `same`, the kind of set that came in; `pictures`, a set of pictures (Render's), which no step takes. */
-  gives: SetKind | "same" | "pictures";
+  /** What it takes: kinds of set, a table, a number. */
+  takes: readonly ValueKind[];
+  /** What it gives, for what it took: `same`, the kind of set that came in; a chart (Meno's), or `pictures` (Render's), which no step takes. */
+  gives: ValueKind | "chart" | "same" | "pictures";
   /** Whether it runs a program (a plugin's) or works on entries alone. */
   runs: "program" | "entries";
   /** Its options, where Meno does it. */
@@ -174,7 +188,7 @@ export const KINDS: readonly KindInfo[] = [
 export const kindInfo = (kind: StepKind): KindInfo => KINDS.find((k) => k.kind === kind)!;
 
 /** Whether a step of `kind` takes a set that holds `holds`. */
-export const takes = (kind: StepKind, holds: SetKind): boolean => kindInfo(kind).takes.includes(holds);
+export const takes = (kind: StepKind, holds: ValueKind): boolean => takenBy(kindInfo(kind).takes, holds);
 
 /** The kinds Meno does itself (docs/WORKFLOWS.md, *Who does a step*): those on entries alone. */
 export const MENO_DOES: readonly StepKind[] = KINDS.filter((k) => k.runs === "entries").map((k) => k.kind);
@@ -238,7 +252,7 @@ export function exitsOf(kind: StepKind): readonly StepExit[] {
 export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
   const second = exitsOf(kind)[1];
   if (!second) return undefined;
-  return second.gives === "same" || second.gives === "pictures" ? first : second.gives;
+  return isSetKind(second.gives) ? second.gives : first;
 }
 
 /** The input of `kind` named `port`, or its first where `port` is not one of its own. */

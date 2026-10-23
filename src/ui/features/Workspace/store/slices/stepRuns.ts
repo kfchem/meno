@@ -25,7 +25,7 @@ import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doer
 import { frameXyz, framesOf, setEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { findSet, inputKey, inputOf, stateOf, stepOf, stepsBefore, wireInto } from "../../workflow/flow";
-import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind } from "../../workflow/kinds";
+import { kindInfo, optionsOf, takesNothing, type Holds3D, type SetKind, type StepKind, isSetKind } from "../../workflow/kinds";
 import { failuresSaid, type Failure, type FailureKind } from "../../workflow/failures";
 import { setRan, setRunning } from "../../workflow/model";
 import { clock, conformersWorked, doneSaid, isFailure, entryFiles, jobEntries, notFound, pluginEntry, readCapped, readCollected, readCounted, readGenerated, notReadSaid, unreadWhy, readKept, readPrepared, readRefused, workedOf, type Refusal, type ToRead, type ToSurfaces } from "../../workflow/programs";
@@ -238,7 +238,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    */
   const givesFor = (kind: Parameters<typeof kindInfo>[0], holds: SetKind): Holds3D | null => {
     const g = kindInfo(kind).gives;
-    const made = g === "same" || g === "pictures" ? holds : g;
+    const made = isSetKind(g) ? g : holds;
     return made === "structures" ? null : made;
   };
 

@@ -1904,8 +1904,25 @@ unspecified) - and each property a column.
 - A property that is no number, text or true or false - a list, a table,
   a vector - is no column, and that is said.
 
-Sets that hold tables, and the steps that take and give them, follow
-(PR 10, second part).
+**What flows along a wire** (PR 10, second part): a kind of set -
+structures, molecules, conformer sets - a table, or a number with its
+unit (`VALUE_KINDS`); plugins may take and give these, and bring none of
+their own. A chart is Meno's alone (*Chart*, *Energy diagram*), and goes
+into no step. Nothing stands for anything else, but one thing: molecules
+or conformer sets go into an input that takes a table, seen as one (as
+above) - FOUNDATION's one view that loses nothing.
+
+**A set holding a table** shows its first rows and columns in its frame,
+each number column with its unit, and says what it is: "12 rows · 3
+columns · 1 not read", what did not read and what was left on hover. Its
+count line says its rows. It is kept in the workspace's file, copied with
+its table, and takes in nothing dropped into its frame. **A set holding a
+number** shows it with its unit, and what worked it out.
+
+**A text that reads as a table** - a CSV or a TSV, or another text of two
+columns or more, every row - offers *Put on the page as a table* on its
+menu: a set holding it, named for the text, beside it. Prose is not
+offered.
 
 ## Questions
 

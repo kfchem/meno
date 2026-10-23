@@ -390,6 +390,9 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.confor
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
   if (set.made?.holds) return set.made.holds;
+  // (a table or a number it holds: that, whatever lies in its frame)
+  if (set.table) return "table";
+  if (set.number) return "number";
   const { structures } = setMembers(page, set);
   if (structures.length) return "structures";
   const molecules = setMolecules(page, set);
@@ -415,6 +418,10 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   const holds = holdsOf(page, set);
   const { structures, pictures } = setMembers(page, set);
   if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
+  // (a table's rows; a number, one)
+  if (holds === "table") return { holds, entries: set.table?.rows.length ?? 0, compounds: set.table?.rows.length ?? 0 };
+  if (holds === "number") return { holds, entries: set.number ? 1 : 0, compounds: set.number ? 1 : 0 };
+  if (holds === "chart") return { holds, entries: 0, compounds: 0 };
   const molecules = setMolecules(page, set);
   const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
   const entries = structures.length + frames;
