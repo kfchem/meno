@@ -56,7 +56,7 @@ import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { setMembers } from "../workflow/entries";
 import { inputKey, resultOf, stateOf } from "../workflow/flow";
-import { notReadSaid, readGenerated, unreadWhy } from "../workflow/programs";
+import { notReadSaid, readGenerated, seedsSaid, unreadWhy } from "../workflow/programs";
 import { pluginById } from "../../../../lib/calc/catalog";
 
 /** What REINVENT 4's plugin gives: three SMILES as sampled - one leaving a centre open ("?" here), one RDKit cannot read - each with its NLL and SMILES_state; and what made them. */
@@ -135,6 +135,137 @@ describe("Generate: a step that takes nothing in", () => {
     run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: { nll: { value: 2, unit: "furlongs" } } }] });
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1's nll is not one Meno can take" });
+  });
+
+  it("takes Seeds where its plugin makes from seeds - structures drawn, each given as its blocks - and each made one keeps what its seed came from and its values, as that one's", async () => {
+    useReaders.setState({ state: { crem: "added", rdkit: "added" }, problem: {} });
+    const { doc, st } = page();
+    // (two seeds drawn: C-O and C-N, apart; the first with a record of its own, as a step before gave it)
+    doc.edit("draw", (d) => ({
+      ...d,
+      model: {
+        atoms: [
+          { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+          { id: 2, el: "O", x: 1.3, y: 0, r: 0.9 },
+          { id: 3, el: "C", x: 12, y: 0, r: 0.9 },
+          { id: 4, el: "N", x: 13.3, y: 0, r: 0.9 },
+        ] as never,
+        bonds: [
+          { id: 5, a: 1, b: 2, order: 1 },
+          { id: 6, a: 3, b: 4, order: 1 },
+        ] as never,
+      },
+      nextId: 100,
+    }));
+    const set = st().addSet({ x0: -3, y0: -3, x1: 16, y1: 3 });
+    const nll = { value: 21.5, unit: "none" as const, status: "computed" as const, by: { plugin: "reinvent" } };
+    doc.edit("records", (d) => ({
+      ...d,
+      sets: d.sets!.map((b) =>
+        b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && i === 0 ? { ...m, record: { from: ["molecule:7"], properties: { nll, made: { ...nll, value: "1 of 2" } } } } : m)) } : b,
+      ),
+    }));
+    const step = st().addStep("generate", "crem", 20, 0);
+    // (nothing wired in: it waits for its seeds - a model's Generate is ready as it is)
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("no-input");
+    st().connect({ set }, step);
+    expect(st().wires).toHaveLength(1);
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("ready");
+    run.mockResolvedValueOnce({
+      outputs: [
+        { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, seed_smiles: { value: "CO", unit: "none" } }, seed: 0 },
+        { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, seed_smiles: { value: "CN", unit: "none" } }, seed: 1 },
+      ],
+      seeds: [
+        { place: 0, made: 1 },
+        { place: 1, made: 1 },
+      ],
+      said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1)",
+      by: { program: "CReM", version: "0.3.2", model: "chembl33_sa2_f5", method: "fragments replaced, radius 3, seed 1" },
+    });
+    await st().runStep(step);
+    const [, given, , holds] = run.mock.calls[0];
+    expect(holds).toBe("structures");
+    expect((given as { molblocks: string[] }[]).map((g) => g.molblocks.length)).toEqual([1, 1]);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1) · 2 made" });
+    const held = setMembers(st(), resultOf(st(), step)!);
+    // (the first seed's: what it came from, its values as that one's - never which of how many it was - beside the model's own)
+    expect(held.records[0]).toMatchObject({ from: ["molecule:7"], properties: { "made_from.nll": nll, frequency: expect.objectContaining({ value: 120 }), seed_smiles: expect.objectContaining({ value: "CO" }) } });
+    expect(held.records[0]!.properties!.nll).toBeUndefined();
+    expect(held.records[0]!.properties!["made_from.made"]).toBeUndefined();
+    // (the second seed had no record: nothing of it carried but what the plugin said of it)
+    expect(held.records[1]!.from).toBeUndefined();
+    expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["frequency", "seed_smiles", "smiles"]);
+    // (another seed wired in: another run)
+    const before = inputKey(st(), st().steps.find((s) => s.id === step)!, "crem");
+    doc.edit("move", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 6 ? { ...b, order: 2 } : b)) } }));
+    expect(inputKey(st(), st().steps.find((s) => s.id === step)!, "crem")).not.toBe(before);
+    // (a seed it could not read: named on the line, from the tally - not from what it said)
+    run.mockResolvedValueOnce({
+      outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
+      seeds: [
+        { place: 0, made: 1 },
+        { place: 1, why: "a part RDKit cannot read" },
+      ],
+      said: "1 made from 1 seed",
+      by: { program: "CReM" },
+    });
+    await st().runStep(step);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "1 made from 1 seed · seed 2 not read: a part RDKit cannot read · 1 made" });
+  });
+
+  it("names the seeds a generator made none of, or could not read, by their numbers - from its tally, one for each seed", () => {
+    const tally = (made: (number | string)[]) => made.map((m, place) => (typeof m === "number" ? { place, made: m } : { place, why: m }));
+    expect(seedsSaid(tally([3, 0, "a part RDKit cannot read", 2, 0]))).toBe("seeds 2 and 5 made none; seed 3 not read: a part RDKit cannot read");
+    expect(seedsSaid(tally([0, 0, 0, 0, 0, 0, 0, 1]))).toBe("seeds 1, 2, 3, 4, 5 and 2 more made none");
+    expect(seedsSaid(tally([1, 2]))).toBe("");
+    // (a tally not one for each seed, in their order, or neither made nor why: none of the run taken)
+    const out = { outputs: [{ smiles: "C" }] };
+    expect(readGenerated({ ...out, seeds: [{ place: 0, made: 1 }] }, 2)).toBe("Its seeds are not told one by one");
+    expect(readGenerated({ ...out, seeds: [{ place: 1, made: 1 }] }, 1)).toBe("Its seeds are not told one by one");
+    expect(readGenerated({ ...out, seeds: [{ place: 0 }] }, 1)).toBe("Seed 1 is told neither made nor why not");
+    expect(readGenerated({ ...out, seeds: [{ place: 0, made: 1 }] }, 1)).toMatchObject({ seeds: [{ place: 0, made: 1 }] });
+    // (every one, where the line is pointed at)
+    expect(seedsSaid(tally([0, 0, 0, 0, 0, 0, 0, 1]), Infinity)).toBe("seeds 1, 2, 3, 4, 5, 6 and 7 made none");
+  });
+
+  it("from seeds: fails where the plugin does not tell each seed, names each where none was read, and keeps every one the line only counts", async () => {
+    useReaders.setState({ state: { crem: "added", rdkit: "added" }, problem: {} });
+    const { doc, st } = page();
+    // (seven seeds drawn, each C-O, apart)
+    doc.edit("draw", (d) => ({
+      ...d,
+      model: {
+        atoms: Array.from({ length: 7 }, (_, k) => [
+          { id: 10 * k + 1, el: "C", x: 6 * k, y: 0, r: 0.9 },
+          { id: 10 * k + 2, el: "O", x: 6 * k + 1.3, y: 0, r: 0.9 },
+        ]).flat() as never,
+        bonds: Array.from({ length: 7 }, (_, k) => ({ id: 10 * k + 3, a: 10 * k + 1, b: 10 * k + 2, order: 1 })) as never,
+      },
+      nextId: 100,
+    }));
+    const set = st().addSet({ x0: -3, y0: -3, x1: 42, y1: 3 });
+    const step = st().addStep("generate", "crem", 50, 0);
+    st().connect({ set }, step);
+    const ran = () => st().steps.find((s) => s.id === step)!.ran!;
+    // (no tally: not taken - what became of each seed would go unsaid)
+    run.mockResolvedValueOnce({ outputs: [{ smiles: "CCO", properties: {}, seed: 0 }], said: "1 made", by: { program: "CReM" } });
+    await st().runStep(step);
+    expect(ran()).toMatchObject({ ok: false, said: "Its seeds are not told one by one" });
+    // (none read: failed, each seed named with why, from the tally)
+    const why = (place: number) => ({ place, why: place % 2 ? "it has no atoms" : "a part RDKit cannot read" });
+    run.mockResolvedValueOnce({ outputs: [], seeds: Array.from({ length: 7 }, (_, k) => why(k)), said: "No seed could be read", by: { program: "CReM" } });
+    await st().runStep(step);
+    expect(ran()).toMatchObject({ ok: false, said: "No seed could be read · seeds 1, 3, 5 and 7 not read: a part RDKit cannot read; seeds 2, 4 and 6 not read: it has no atoms" });
+    // (six made none: five named on the line, the sixth counted - and every one kept, shown where the line is pointed at)
+    run.mockResolvedValueOnce({
+      outputs: [{ smiles: "CCO", properties: {}, seed: 0 }],
+      seeds: Array.from({ length: 7 }, (_, k) => ({ place: k, made: k === 0 ? 1 : 0 })),
+      said: "1 made from 7 seeds",
+      by: { program: "CReM" },
+    });
+    await st().runStep(step);
+    expect(ran()).toMatchObject({ ok: true, said: "1 made from 7 seeds · seeds 2, 3, 4, 5, 6 and 1 more made none · 1 made", named: "seeds 2, 3, 4, 5, 6 and 7 made none" });
   });
 });
 

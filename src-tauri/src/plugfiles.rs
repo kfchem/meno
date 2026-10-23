@@ -58,6 +58,8 @@ pub struct Download {
     pub program: Option<String>,
     /// The program it is, by the name the plugin's steps and roles run it by.
     pub provides: Option<String>,
+    /// How large one compressed with gzip is unpacked, in bytes, as the manifest says: never unpacked past it.
+    pub unpacked_bytes: Option<u64>,
 }
 
 /// How an archive a plugin fetches is opened.
@@ -69,6 +71,9 @@ pub enum Unpack {
     Zip,
     /// A tar compressed with xz.
     TarXz,
+    /// One file compressed with gzip - data, never a program: a fragment database, say - unpacked by Meno itself,
+    /// as the file it was, into its folder.
+    Gz,
 }
 
 impl Unpack {
@@ -77,6 +82,7 @@ impl Unpack {
             "dmg" => Some(Unpack::Dmg),
             "zip" => Some(Unpack::Zip),
             "tar.xz" => Some(Unpack::TarXz),
+            "gz" => Some(Unpack::Gz),
             _ => None,
         }
     }
@@ -86,6 +92,7 @@ impl Unpack {
             Unpack::Dmg => ".dmg",
             Unpack::Zip => ".zip",
             Unpack::TarXz => ".tar.xz",
+            Unpack::Gz => ".gz",
         }
     }
 }
@@ -156,6 +163,10 @@ pub fn downloads_of(manifest: &Value) -> Result<Vec<Download>, String> {
         };
         let program = given("program").transpose().map_err(|_| refused())?;
         let provides = given("provides").transpose().map_err(|_| refused())?;
+        let unpacked_bytes = d.get("unpackedBytes").map(|v| v.as_u64().filter(|&n| n > 0).ok_or(())).transpose().map_err(|_| refused())?;
+        if unpacked_bytes.is_some() != (unpack == Some(Unpack::Gz)) {
+            return Err(refused());
+        }
         if !file_ok(&file) || !url_ok(&url) || !sha_ok(&sha256) || bytes == 0 || bytes > MOST_BYTES {
             return Err(refused());
         }
@@ -163,7 +174,9 @@ pub fn downloads_of(manifest: &Value) -> Result<Vec<Download>, String> {
         let system_ok = system.as_deref().is_none_or(|s| ["macos", "windows", "linux"].contains(&s));
         let arch_ok = arch.as_deref().is_none_or(|a| ["aarch64", "x86_64"].contains(&a));
         let archive_ok = unpack.is_none_or(|u| file.ends_with(u.extension()) && file.len() > u.extension().len());
-        let program_said = program.as_deref().is_none_or(|p| unpack.is_some() && program_ok(p) && (unpack != Some(Unpack::Dmg) || !p.starts_with('*')));
+        let program_said = program.as_deref().is_none_or(|p| {
+            unpack.is_some_and(|u| u != Unpack::Gz) && program_ok(p) && (unpack != Some(Unpack::Dmg) || !p.starts_with('*'))
+        });
         let copy_ok = provides.as_deref().is_none_or(|n| !n.is_empty() && n.len() <= 40 && n.bytes().all(|b| b.is_ascii_alphanumeric() || b"._+-".contains(&b)) && program.is_some() && system.is_some());
         if !system_ok || !arch_ok || !archive_ok || !program_said || !copy_ok {
             return Err(refused());
@@ -171,7 +184,7 @@ pub fn downloads_of(manifest: &Value) -> Result<Vec<Download>, String> {
         if out.iter().any(|o| o.file == file) {
             return Err(format!("{file} is listed twice"));
         }
-        out.push(Download { file, url, sha256, bytes, system, arch, unpack, program, provides });
+        out.push(Download { file, url, sha256, bytes, system, arch, unpack, program, provides, unpacked_bytes });
     }
     Ok(out)
 }
@@ -227,11 +240,37 @@ fn program_in(folder: &Path, program: &str) -> Option<PathBuf> {
     at.is_file().then_some(at)
 }
 
-/// Meno's own copy of a program, where it was fetched and unpacked whole: the program in it.
+/// The file one compressed with gzip unpacks to, in its folder: its name, without `.gz`.
+fn gunzipped(folder: &Path, d: &Download) -> PathBuf {
+    folder.join(d.file.strip_suffix(Unpack::Gz.extension()).unwrap_or(&d.file))
+}
+
+/// Meno's own copy of a program, where it was fetched and unpacked whole: the program in it - or, one file
+/// compressed with gzip, that file.
 pub fn copy_of(dir: &Path, d: &Download) -> Option<PathBuf> {
     let folder = unpacked(dir, d);
     let stamp = std::fs::read_to_string(folder.join(STAMP)).ok()?;
-    (stamp.trim() == d.sha256).then(|| program_in(&folder, d.program.as_deref()?)).flatten()
+    if stamp.trim() != d.sha256 {
+        return None;
+    }
+    if d.unpack == Some(Unpack::Gz) {
+        let file = gunzipped(&folder, d);
+        return file.is_file().then_some(file);
+    }
+    program_in(&folder, d.program.as_deref()?)
+}
+
+/// One file compressed with gzip unpacked, by Meno itself - no program on the system needed - into `to`.
+fn gunzip(archive: &Path, to: &Path, most: u64) -> Result<(), String> {
+    use std::io::Read as _;
+    let from = std::fs::File::open(archive).map_err(|e| e.to_string())?;
+    let mut out = std::fs::File::create(to).map_err(|e| e.to_string())?;
+    // (never past what the manifest says it unpacks to: one byte more, and it is not what was asked to be set up)
+    let wrote = std::io::copy(&mut flate2::read::GzDecoder::new(std::io::BufReader::new(from)).take(most + 1), &mut out).map_err(|e| e.to_string())?;
+    if wrote > most {
+        return Err(format!("it unpacks to more than the {most} bytes its manifest says"));
+    }
+    out.sync_all().map_err(|e| e.to_string())
 }
 
 /// Plugin `id`'s program `name`, where its manifest says Meno fetches it
@@ -306,7 +345,7 @@ fn removed(folder: &Path) -> std::io::Result<()> {
 /// move up.) The program in it, where it is there; why not.
 pub fn unpack(archive: &Path, d: &Download, dir: &Path) -> Result<PathBuf, String> {
     let how = d.unpack.ok_or("not an archive")?;
-    let program = d.program.as_deref().ok_or("no program said")?;
+    let program = if how == Unpack::Gz { "" } else { d.program.as_deref().ok_or("no program said")? };
     let folder = unpacked(dir, d);
     removed(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
     std::fs::create_dir_all(&folder).map_err(|e| format!("{}: {e}", folder.display()))?;
@@ -314,10 +353,15 @@ pub fn unpack(archive: &Path, d: &Download, dir: &Path) -> Result<PathBuf, Strin
         Unpack::Zip => run(&tar(), &["-xf".as_ref(), archive.as_os_str(), "-C".as_ref(), folder.as_os_str()]),
         Unpack::TarXz => run(&tar(), &["-xJf".as_ref(), archive.as_os_str(), "-C".as_ref(), folder.as_os_str()]),
         Unpack::Dmg => unpack_dmg(archive, program, &folder, dir),
+        Unpack::Gz => gunzip(archive, &gunzipped(&folder, d), d.unpacked_bytes.unwrap_or(0)),
     };
     if let Err(e) = done {
         let _ = removed(&folder);
         return Err(format!("{} could not be unpacked: {e}", d.file));
+    }
+    if how == Unpack::Gz {
+        std::fs::write(folder.join(STAMP), &d.sha256).map_err(|e| format!("{}: {e}", folder.display()))?;
+        return Ok(gunzipped(&folder, d));
     }
     let Some(found) = program_in(&folder, program) else {
         let _ = removed(&folder);
@@ -653,6 +697,7 @@ mod tests {
             unpack: Some(unpack),
             program: Some(program.into()),
             provides: Some("blender".into()),
+            unpacked_bytes: None,
         }
     }
 
@@ -694,6 +739,46 @@ mod tests {
         let bad = Download { program: Some("*/nothing.exe".into()), ..d };
         assert!(unpack(&zip, &bad, dir.path()).unwrap_err().contains("holds no */nothing.exe"));
         assert!(!unpacked(dir.path(), &bad).exists());
+    }
+
+    #[test]
+    fn unpacks_one_file_compressed_with_gzip_itself_and_stamps_it_whole() {
+        use std::io::Write as _;
+        let dir = Scratch::new();
+        let gz = dir.path().join("fragments.db.gz");
+        let body: Vec<u8> = (0..200_000u32).flat_map(|i| (i % 251).to_le_bytes()).collect();
+        let mut enc = flate2::write::GzEncoder::new(std::fs::File::create(&gz).unwrap(), flate2::Compression::fast());
+        enc.write_all(&body).unwrap();
+        enc.finish().unwrap();
+        let bytes = std::fs::read(&gz).unwrap();
+        let manifest = json!({"downloads": [{"file": "fragments.db.gz", "url": "https://h/f", "sha256": sha(&bytes), "bytes": bytes.len(), "unpack": "gz", "unpackedBytes": body.len()}]});
+        let d = downloads_of(&manifest).unwrap().remove(0);
+        assert_eq!(d.unpack, Some(Unpack::Gz));
+        assert_eq!(missing(dir.path(), std::slice::from_ref(&d)).len(), 1);
+        let file = unpack(&gz, &d, dir.path()).unwrap();
+        assert_eq!(file, dir.path().join("fragments.db").join("fragments.db"));
+        assert_eq!(std::fs::read(&file).unwrap(), body);
+        assert_eq!(copy_of(dir.path(), &d), Some(file.clone()));
+        assert!(missing(dir.path(), std::slice::from_ref(&d)).is_empty());
+        // (cut short - no stamp - still missing)
+        std::fs::remove_file(unpacked(dir.path(), &d).join(STAMP)).unwrap();
+        assert_eq!(copy_of(dir.path(), &d), None);
+        // (unpacking to more than its manifest says: refused, nothing left of it)
+        let short = Download { unpacked_bytes: Some(body.len() as u64 - 1), ..d.clone() };
+        assert!(unpack(&gz, &short, dir.path()).unwrap_err().contains("more than the"));
+        assert!(!unpacked(dir.path(), &short).exists());
+        // (gz without its size unpacked, or a size on what is not gz: refused)
+        let mut bare = manifest["downloads"][0].clone();
+        bare.as_object_mut().unwrap().remove("unpackedBytes");
+        assert!(downloads_of(&json!({"downloads": [bare]})).is_err());
+        // (not gzip: refused, nothing left of it)
+        std::fs::write(&gz, b"not gzip").unwrap();
+        assert!(unpack(&gz, &d, dir.path()).unwrap_err().contains("could not be unpacked"));
+        assert!(!unpacked(dir.path(), &d).exists());
+        // (data, never a program: one said in it is refused)
+        let mut bad = manifest["downloads"][0].clone();
+        bad["program"] = json!("fragments.db");
+        assert!(downloads_of(&json!({"downloads": [bad]})).is_err());
     }
 
     #[cfg(unix)]

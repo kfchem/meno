@@ -18,8 +18,8 @@ import { hasChip, named3d } from "./selectionSet";
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
 import { diagramOf, diagramSaid, levelNamer, type DiagramValue } from "../../../../lib/energyDiagram";
-import { asideExit, exitsOf, inputsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, takesNothing, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
-import { takesBy } from "./doers";
+import { asideExit, exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
+import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES, GAP, PX, SUMMARY_PX } from "./look";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
@@ -100,9 +100,9 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   });
   if (failed) return "The step before it failed";
   // (a step that takes nothing in needs only someone to do it)
-  if (takesNothing(step.kind)) return by ? null : "Nothing added does this step";
+  if (takesNothingBy(step.kind, by)) return by ? null : "Nothing added does this step";
   // (a kind of several inputs: its first, which it cannot run without; the others, where wired, it takes as they are)
-  const ports = inputsOf(step.kind);
+  const ports = inputsFor(step.kind, by);
   const first = ports.length > 1 ? ports[0] : undefined;
   const input = inputOf(doc, step.id, first?.id);
   // (a table wired in - a set's, or molecules seen as one: no entries of its own to give)

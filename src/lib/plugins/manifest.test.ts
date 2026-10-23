@@ -73,7 +73,7 @@ describe("a plugin's manifest", () => {
     // (what it uses: a name and a version each, once; what is not that left out)
     expect(acceptManifest({ ...good, uses: [{ name: "NBO", version: "7.0.9" }, { name: "NBO", version: "8" }, { name: "x" }, "y", { name: "", version: "1" }] })?.uses).toEqual([{ name: "NBO", version: "7.0.9" }]);
     // (each plugin Meno carries, from its folder: Meno names none of them)
-    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
+    expect(MANIFESTS.map((m) => m.id)).toEqual(["blender", "cclib", "crem", "crest", "gaussian", "getting-started", "molnextr", "molscribe", "multiwfn", "nciplot", "orca", "pyscf", "rdkit", "reinvent", "wfx", "xtb"]);
     // (each saying what it does: a description too long is none)
     expect(MANIFESTS.filter((m) => !m.description).map((m) => m.id)).toEqual([]);
   });
@@ -304,6 +304,33 @@ describe("a plugin's manifest", () => {
       ["windows", "aarch64", "zip", "blender"],
     ]);
     expect(blender.downloads.every((d) => d.url.startsWith("https://download.blender.org/release/Blender5.2/") && d.url.endsWith(d.file))).toBe(true);
+  });
+
+  it("may fetch a data file compressed with gzip, said how large it is unpacked, and how its makers ask to be cited - never a program", () => {
+    const db = {
+      file: "fragments.db.gz",
+      name: "A fragment database",
+      licence: "CC BY 4.0",
+      url: "https://zenodo.org/api/records/1/files/fragments.db.gz/content",
+      sha256: "ab".repeat(32),
+      bytes: 281_251_246,
+      unpack: "gz",
+      unpackedBytes: 2_027_749_376,
+      cite: "Polishchuk, J. Cheminform. 2020, 12, 28",
+    };
+    expect(acceptManifest({ ...good, downloads: [db] })?.downloads).toEqual([db]);
+    for (const wrong of [{ unpackedBytes: undefined }, { unpackedBytes: -1 }, { unpackedBytes: 1.5 }, { program: "fragments.db" }, { file: "fragments.db", unpack: undefined }, { cite: 7 }, { file: "fragments.gz.db" }])
+      expect(acceptManifest({ ...good, downloads: [{ ...db, ...wrong }] }), JSON.stringify(wrong)).toBeNull();
+    // (how large unpacked: said only of one unpacked by Meno)
+    const { unpack: _u, unpackedBytes: _b, ...plain } = db;
+    expect(acceptManifest({ ...good, downloads: [{ ...plain, file: "fragments.db", unpackedBytes: 5 }] })).toBeNull();
+    expect(acceptManifest({ ...good, downloads: [{ ...plain, file: "fragments.db" }] })?.downloads[0].cite).toBe(db.cite);
+    // (CReM's, as Meno carries it: its database from Zenodo, and a Generate step that takes seeds)
+    const crem = MANIFESTS.find((m) => m.id === "crem")!;
+    expect(crem.downloads.map((d) => [d.file, d.unpack, d.licence, d.bytes, d.unpackedBytes])).toEqual([["chembl33_sa2_f5.db.gz", "gz", "CC BY 4.0", 281_251_246, 2_027_749_376]]);
+    expect(crem.downloads[0].url).toBe("https://zenodo.org/api/records/16909329/files/chembl33_sa2_f5.db.gz/content");
+    expect(crem.steps).toEqual([expect.objectContaining({ kind: "generate", seeds: true })]);
+    expect(MANIFESTS.find((m) => m.id === "reinvent")!.steps[0].seeds).toBeUndefined();
   });
 
   it("may need files downloaded besides its environment: each as it must be - HTTPS, its hash and size, a name not a path - or the plugin is none", () => {
