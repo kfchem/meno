@@ -1929,7 +1929,10 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
     hydrogens, a donor's bond to a metal in place of a hydrogen or not
     (`hydrogensRooms`). Where not, nothing is changed, and the card says at
     which atoms. Nor is anything written where the molecule changed
-    while the card was open (an undo, say): it is asked for again. HEM,
+    while the card was open (an undo, say), or an atom of it moved while
+    its hydrogens were being placed, which puts them where the atoms were
+    (by more than 0.0001 Å, under any digit a file writes): it is asked
+    for again. Given other frames meanwhile, it says how many. HEM,
     as the CCD defines it, gives its O2A and O2D a
     charge and a hydrogen both: its hydrogens are not put on as they are,
     and the chemist chooses its carboxyls' forms on the card.

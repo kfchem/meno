@@ -13,9 +13,12 @@ import { addHydrogensAsChosen, addHydrogensFromDictionary, keptAsDictionary, pro
 
 /** How many hydrogens the plugin leaves off, as these tests have it answer: 0, every one it is asked for - or, asked for none, its valence leaves room for - as RDKit adds them. */
 let short = 0;
+/** What happens to the workspace while the plugin is at work, as a test has it: nothing, else this. */
+let meanwhile: (() => void) | null = null;
 const fake = {
   request: async (op: string, args: { molblock: string; hydrogens?: number[] }) => {
     if (op !== "add_hydrogens") throw new Error(op);
+    meanwhile?.();
     const ct = readMolfile(args.molblock)!;
     const atoms = ct.atoms.map((a) => ({ el: a.symbol, x: a.x, y: a.y, z: a.z, ...(a.charge ? { charge: a.charge } : {}) }));
     const bonds = ct.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.type }));
@@ -138,6 +141,42 @@ describe("a molecule whose orders were estimated from distances, protonated as c
       await expect(addHydrogensAsChosen(store, p, { forms, charges: new Map() })).rejects.toThrow("The molecule changed while this was open: nothing was added. Ask for its hydrogens again.");
       expect(molecule()).toBe(before);
     }
+  });
+
+  it("is not changed where an atom was moved, or the molecule given other frames, while its hydrogens were being placed - and says so", async () => {
+    // (the hydrogens come back placed for the atoms where they were: on an atom moved meanwhile they would be in the wrong place)
+    for (const [change, why] of [
+      [(m: Molecule3D) => ({ ...m, atoms: m.atoms.map((a, i) => (i === 1 ? { ...a, x: a.x + 0.5 } : a)) }), "The molecule changed while this was open: nothing was added. Ask for its hydrogens again."],
+      [(m: Molecule3D) => ({ ...m, frames: [m.atoms.flatMap((a) => [a.x, a.y, a.z + 0.1])] }), "It has 2 frames, and hydrogens are put on one geometry: nothing was added."],
+    ] as const) {
+      const { store, molecule } = editor(glycine);
+      const p = protonationOf(molecule(), null)!;
+      const forms = [p.sites[0].forms.findIndex((f) => f.name === "Carboxylic acid"), p.sites[1].forms.findIndex((f) => f.name === "Amine")];
+      let before: Molecule3D | null = null;
+      meanwhile = () => {
+        store.getState().changeMolecule3d("meanwhile", molecule().id, change);
+        before = molecule();
+      };
+      try {
+        await expect(addHydrogensAsChosen(store, p, { forms, charges: new Map() })).rejects.toThrow(why);
+      } finally {
+        meanwhile = null;
+      }
+      expect(molecule()).toBe(before);
+    }
+  });
+
+  it("is given its hydrogens where an atom moved by less than any file writes while they were placed", async () => {
+    const { store, molecule } = editor(glycine);
+    const p = protonationOf(molecule(), null)!;
+    const forms = [p.sites[0].forms.findIndex((f) => f.name === "Carboxylic acid"), p.sites[1].forms.findIndex((f) => f.name === "Amine")];
+    meanwhile = () => store.getState().changeMolecule3d("meanwhile", molecule().id, (m) => ({ ...m, atoms: m.atoms.map((a, i) => (i === 1 ? { ...a, x: a.x + 1e-6 } : a)) }));
+    try {
+      await addHydrogensAsChosen(store, p, { forms, charges: new Map() });
+    } finally {
+      meanwhile = null;
+    }
+    expect(molecule().atoms.filter((a) => a.el === "H")).toHaveLength(5);
   });
 });
 

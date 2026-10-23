@@ -133,12 +133,25 @@ function changedSince(m: Molecule3D, p: Protonation): boolean {
   return now.join(" ") !== was.join(" ");
 }
 
-/** The molecule as it is now, its part as the card was shown it - else it changed while the card was open: nothing is added. */
+const CHANGED = "The molecule changed while this was open: nothing was added. Ask for its hydrogens again.";
+
+/** Why a molecule of other frames is given no hydrogens: each frame would want its own. */
+const framesWhy = (m: Molecule3D) => `It has ${(m.frames?.length ?? 0) + 1} frames, and hydrogens are put on one geometry: nothing was added.`;
+
+/** The molecule as it is now, its part as the card was shown it - else it changed while the card was open, or was given other frames: nothing is added. */
 function moleculeNow(store: EditorStore, p: Protonation): Molecule3D {
   const m = store.getState().molecules3d.find((x) => x.id === p.id);
-  if (!m || changedSince(m, p) || !canAddHydrogens(m, p.atoms)) throw new Error("The molecule changed while this was open: nothing was added. Ask for its hydrogens again.");
+  if (m?.frames?.length && !changedSince(m, p)) throw new Error(framesWhy(m));
+  if (!m || changedSince(m, p) || !canAddHydrogens(m, p.atoms)) throw new Error(CHANGED);
   return m;
 }
+
+/** How far, in ångströms, an atom may have gone and still be where it was: well under any digit a file writes. */
+const STILL = 1e-4;
+
+/** Whether any of `atoms` is not where it was in `was`: moved while the plugin put hydrogens where the atoms were. */
+const movedSince = (was: Molecule3D, m: Molecule3D, atoms: readonly number[]) =>
+  atoms.some((i) => Math.abs(m.atoms[i].x - was.atoms[i].x) > STILL || Math.abs(m.atoms[i].y - was.atoms[i].y) > STILL || Math.abs(m.atoms[i].z - was.atoms[i].z) > STILL);
 
 /** How many hydrogens each of a part's atoms carries in a molecule: those bonded to it. */
 function hydrogensOn(m: Molecule3D, atoms: readonly number[]): number[] {
@@ -191,8 +204,10 @@ export async function addHydrogensAsChosen(store: EditorStore, p: Protonation, c
   // (each atom's hydrogens as chosen, in the block's order - the part's)
   const answer = await chem.request("add_hydrogens", { molblock: block.molblock, hydrogens: block.atoms.map((i) => r.hydrogens[p.atoms.indexOf(i)]) }, ADD_MS);
   const m = moleculeNow(store, p);
+  // (its hydrogens put where its atoms were as they were sent: one moved meanwhile would have them in the wrong place)
+  if (movedSince(before, m, p.atoms)) throw new Error(CHANGED);
   const next = withHydrogens(drawn(m), block.atoms, answer.molblock);
-  if (!next) throw new Error("The hydrogens could not be put on this molecule: nothing was added.");
+  if (!next) throw new Error("The hydrogens placed did not come back on this molecule's atoms: nothing was added.");
   const why = mismatch(p, hydrogensOn(next, p.atoms), r.hydrogens);
   if (why) throw new Error(why);
   store.getState().changeMolecule3d("add hydrogens", p.id, () => ({ ...next, hydrogensAdded: [...(m.hydrogensAdded ?? []), { by: "chosen", atoms: p.atoms }] }));
