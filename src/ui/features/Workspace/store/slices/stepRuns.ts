@@ -602,6 +602,17 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * `drawingOf`), each with the record of the one it was made of; or set
    * aside, its record saying why. Nothing taken in part.
    */
+  /**
+   * How long a step on structures drawn may take at once (ms), by how many came in: a request's own two minutes,
+   * or half a minute for each - its stereoisomers each tried in 3D, a camphor's take some 10 s - where that is
+   * longer, but never more than ten minutes. Its plugin sets aside, alone, a structure it has looked at longer than
+   * that half minute (RDKit's `EXAMINE_S`); this limit is what is left, for a worker gone quiet, and fails the
+   * whole run.
+   */
+  const DRAWN_EACH_MS = 30_000;
+  const DRAWN_MOST_MS = 10 * 60_000;
+  const drawnMs = (n: number) => Math.min(DRAWN_MOST_MS, Math.max(2 * 60_000, n * DRAWN_EACH_MS));
+
   /** How a value of the structure one was made from is named on it (`madeRecord`): `made_from.nll`, that one's NLL - never its own. */
   const MADE_FROM = "made_from.";
 
@@ -621,7 +632,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       const given = input.held
         ? entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
         : input.structures.map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
-      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures"), entries.length);
+      answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
       for (const [i, a] of answers.entries()) {
