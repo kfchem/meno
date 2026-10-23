@@ -588,6 +588,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * `drawingOf`), each with the record of the one it was made of; or set
    * aside, its record saying why. Nothing taken in part.
    */
+  /** How a value of the structure one was made from is named on it (`madeRecord`): `made_from.nll`, that one's NLL - never its own. */
+  const MADE_FROM = "made_from.";
+
   async function runDrawnAtOnce(id: number, plugin: PythonPlugin, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
@@ -629,18 +632,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return Object.keys(rest).length ? rest : undefined;
     };
     // (one made anew - a stereoisomer of it - is another structure: none of the values worked out of the one it was made
-    //  of, which were not of it, but what that came from; which of how many it is, and its own SMILES; and that one's
-    //  SMILES, where it had one, as what it was made from)
+    //  of as its own, which were not of it, but what that came from; which of how many it is, and its own SMILES; and
+    //  each value of the one it was made from, as that one's - named so, `made_from.nll`, by what worked it out then -
+    //  never as its own, which stay to be worked out)
     const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
       const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
       const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
-      const parent = e.record?.properties?.smiles?.value;
+      const parents = Object.entries(e.record?.properties ?? {}).map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]);
       return {
         ...(e.record?.from?.length ? { from: e.record.from } : {}),
         properties: {
           made: said(`${k + 1} of ${a.made.length}`),
           ...(a.smiles ? { smiles: said(a.smiles[k]) } : {}),
-          ...(typeof parent === "string" ? { made_from: said(parent) } : {}),
+          ...Object.fromEntries(parents),
         },
       };
     };
