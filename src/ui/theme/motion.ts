@@ -51,6 +51,24 @@ export function follow(current: number, target: number, dt: number, tau: number)
   return target + (current - target) * Math.exp(-dt / tau);
 }
 
+/** A cubic Bézier easing curve - EASE, EASE_LEAVE, as CSS's cubic-bezier() - at `u` of its time: how far along it is. */
+export function eased(curve: readonly [number, number, number, number], u: number): number {
+  if (u <= 0) return 0;
+  if (u >= 1) return 1;
+  const t = u;
+  const [x1, y1, x2, y2] = curve;
+  const at = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  // (the curve's parameter whose x is t: by halving, as CSS finds it, to well within a pixel)
+  let lo = 0;
+  let hi = 1;
+  for (let k = 0; k < 24; k++) {
+    const mid = (lo + hi) / 2;
+    if (at(x1, x2, mid) < t) lo = mid;
+    else hi = mid;
+  }
+  return at(y1, y2, (lo + hi) / 2);
+}
+
 /** The easing curve: cubic, out. */
 export function easeOut(u: number): number {
   const t = Math.min(Math.max(u, 0), 1);

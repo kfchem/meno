@@ -610,6 +610,24 @@ export type Molecule3D = {
 /** A place between a PDF's letters: on which page, before which letter (lib/pdf/text). */
 export type WordPlace = { page: number; at: number };
 /** Words selected in a PDF (docs/PDF.md, *Text*): from where the selection was begun to where it has been drawn to - either way round. */
+/** A structure of a PDF's figure (utils/pageStructures): which PDF, which page, which figure there by its box, and its key among the page's structures. */
+export type PdfStructurePick = { id: number; page: number; figure: [number, number, number, number]; key: string };
+/**
+ * A structure carried out of a PDF (docs/PDF.md, *Structures picked from a
+ * PDF*): Meno's drawing of it (SVG, its size in the drawing's units), where
+ * it lay in the window when it was pressed, where it was pressed, when it
+ * set off, where the pointer is and whether over the canvas, and how it
+ * ends - put down on the page, or gone back.
+ */
+export type StructureFlight = {
+  svg: string;
+  w: number;
+  h: number;
+  from: { left: number; top: number; width: number; height: number };
+  grab: { x: number; y: number };
+  start: number;
+  now: { x: number; y: number; over: boolean; end: { to: "page" | "back"; start: number } | null };
+};
 export type PdfSelection = { id: number; anchor: WordPlace; focus: WordPlace };
 
 /** A place a search found: in which PDF, on which page, from which letter to before which. */
@@ -1052,6 +1070,15 @@ export type EditorState = {
   /** A box drawn on a PDF's page, to be taken out as a picture - one selection in a PDF at a time, with its words'. */
   pdfBox: PdfBox | null;
   setPdfBox: (box: PdfBox | null) => void;
+  /** The structure of a PDF's figure under the pointer, lit whole (docs/PDF.md, *Structures picked from a PDF*). */
+  pdfStructureLit: PdfStructurePick | null;
+  setPdfStructureLit: (pick: PdfStructurePick | null) => void;
+  /** Structures picked in a PDF, Shift adding more - one selection in a PDF at a time, with its words' and its box's. */
+  pdfStructures: { id: number; picks: PdfStructurePick[] } | null;
+  setPdfStructures: (picked: { id: number; picks: PdfStructurePick[] } | null) => void;
+  /** A structure being carried out of a PDF as Meno's own drawing of it. */
+  pdfStructureFlight: StructureFlight | null;
+  setPdfStructureFlight: (flight: StructureFlight | null) => void;
   /** A box being carried out of a PDF as a picture. */
   pdfPicture: PictureFlight | null;
   setPdfPicture: (flight: PictureFlight | null) => void;

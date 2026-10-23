@@ -104,9 +104,10 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
 /**
  * What comes into a step: the kind of set, and its molecules in 3D and
  * structures drawn - each with its record, where it has one - in order:
- * those on the page by their atoms' ids, or, from a large result set, as
- * it holds them off the page (`held`). Null where nothing does - or what
- * would has not been made yet, or is pictures, which no step takes.
+ * those on the page by their atoms' ids, then those a result set holds
+ * off the page, after them (`held`: more than it shows, look
+ * `DRAWN_ON_PAGE`). Null where nothing does - or what would has not been
+ * made yet, or is pictures, which no step takes.
  */
 export function inputOf(
   doc: Flow,
@@ -120,9 +121,8 @@ export function inputOf(
   const holds = holdsOf(doc, set);
   // (a table, a number, a chart - no entries to give a step that works on them)
   if (!isSetKind(holds)) return null;
-  if (set.drawnCollection) return { holds, molecules: [], structures: [], records: [], held: set.drawnCollection };
   const { structures, records } = setMembers(doc, set);
-  return { holds, molecules: setMolecules(doc, set), structures, records };
+  return { holds, molecules: setMolecules(doc, set), structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) };
 }
 
 /** The table a set holds that comes into a step - read from a file, or a step's: none where what comes in holds none. */

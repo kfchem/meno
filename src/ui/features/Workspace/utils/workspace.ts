@@ -123,16 +123,16 @@ export function workspaceText(given: Saved, kept: ReadonlySet<string> = new Set(
   const savedSets = (state.sets ?? []).map(({ members, collection, drawnCollection, put, ...set }) => {
     const putWritten = put?.filter((id) => written.has(id));
     const b = putWritten?.length ? { ...set, put: putWritten } : set;
-    if (b.keep === false && b.made) return { ...b, notKept: { count: collection?.length ?? drawnCollection?.length ?? members?.length ?? 0, hash: collectionHash(page, { ...b, members, collection, drawnCollection }) } };
+    if (b.keep === false && b.made) return { ...b, notKept: { count: collection?.length ?? (members?.length ?? 0) + (drawnCollection?.length ?? 0), hash: collectionHash(page, { ...b, members, collection, drawnCollection }) } };
     // (a large result set's collection: written as its molecules are, in the step's order - or its structures drawn, each as it holds it)
     if (collection) return { ...b, members: [], collection: collection.map((m) => outputKept(m, kept)) };
-    if (drawnCollection) return { ...b, members: [], drawnCollection };
     const saved = (members ?? []).flatMap((m): Member[] => {
       if ("structure" in m) return [m];
       if ("molecule" in m) return moleculeAt.has(m.molecule) ? [{ molecule: moleculeAt.get(m.molecule)! }] : [];
       return pictureAt.has(m.picture) ? [{ picture: pictureAt.get(m.picture)! }] : [];
     });
-    return members ? { ...b, members: saved } : b;
+    // (structures drawn it holds off the page - those it does not show - each as it holds it, beside those on the page among its members)
+    return { ...(members ? { ...b, members: saved } : b), ...(drawnCollection ? { drawnCollection } : {}) };
   });
   const molecules3d = carriedOf(state).map((m) => outputKept(m, kept));
   const pdfShown = state.textsOpen && state.pdfShown != null ? (state.pdfs?.findIndex((p) => p.id === state.pdfShown) ?? -1) : -1;
