@@ -1741,7 +1741,10 @@ them again*; the maintainer's rulings of 2026-10-22):
   naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
   minimum - take it out first*. *Energy window* refuses one not
   converged the same; a saddle point's mark would refuse it where the
-  window is on free energies, which it is not yet.
+  window is on free energies, which it is not yet. *Choose one*, choosing
+  the lowest, and *Duplicates*, ranking by energy which copy it keeps,
+  refuse one that is no minimum the same - not converged, a saddle point,
+  or its marks not read (2026-10-23); *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
   the same two marks, rather than Boltzmann shares of an energy that is
   none (utils/molecule3d `sharesWithheld`); opened, it says why, naming

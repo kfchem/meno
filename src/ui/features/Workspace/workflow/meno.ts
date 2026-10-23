@@ -316,6 +316,10 @@ function* duplicates(entries: readonly SetEntry[], holds: Holds3D, mirrors: Mirr
   const keyOf = (e: SetEntry) => `${holds === "conformers" ? `#${e.compound}` : `${atomsOf(e)}|${bondsOf(e)}`}|${speciesOf(e)}`;
   const groups = [...entries.reduce((m, e) => pushTo(m, keyOf(e), e), new Map<string, SetEntry[]>()).values()];
   const energies = entries.every(hasEnergy);
+  // (ranked by energy, which copy is kept is the lowest's: one that is no minimum - not converged, a saddle point, its
+  //  marks not read - would be kept for an energy that is not a minimum's. Refused, naming it, as Populations does)
+  const notMinimum = energies ? notAllMinima(entries) : null;
+  if (notMinimum) return { ok: false, said: notMinimum };
   const kept = new Map<SetEntry, { degeneracy: number; mirror?: number[] }>();
   let done = 0;
   let counted = 0;
@@ -509,6 +513,9 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
  */
 function chooseOne(entries: readonly SetEntry[], number: number | null, by?: string): Outcome3D {
   if (number == null && !entries.every(hasEnergy)) return NO_ENERGY;
+  // (the lowest chosen is the lowest minimum: one that is no minimum is refused, naming it - chosen by number, any may be)
+  const notMinimum = number == null ? notAllMinima(entries) : null;
+  if (notMinimum) return { ok: false, said: notMinimum };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   const groups = byCompound(entries);

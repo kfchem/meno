@@ -396,6 +396,25 @@ describe("Meno's own steps", () => {
     expect(runMeno("energy-window", refused, "conformers", { window: 3 }).ok).toBe(true);
   });
 
+  it("choose no lowest, and rank no duplicates by energy, where one is no minimum - not converged, or a saddle point - naming it; by number, any may be chosen", () => {
+    // (#3 the lowest, and no minimum)
+    const base = entries(bent({ x: 0, y: 0 }, 3, [kcal(2), kcal(1), 0]), "conformers");
+    const stopped = base.map((e, i) => (i === 2 ? { ...e, failed: { kind: "not-converged" as const, why: "The optimisation did not converge" } } : e));
+    const saddle = base.map((e, i) => (i === 2 ? { ...e, imaginary: [-382.63] } : e));
+    for (const [set, said] of [
+      [stopped, "a #3 is not converged: it is no minimum - take it out first"],
+      [saddle, "a #3 has 1 imaginary frequency, 382.6i cm-1: it is no minimum - take it out first"],
+    ] as const) {
+      expect(runMeno("choose", set, "conformers")).toEqual({ ok: false, said });
+      expect(runMeno("duplicates", set, "conformers")).toEqual({ ok: false, said });
+      const chosen = runMeno("choose", set, "conformers", { which: "number", number: 3 });
+      expect(chosen.ok && chosen.kept.map((e) => e.number)).toEqual([3]);
+    }
+    // (all minima: the lowest, #3)
+    const lowest = runMeno("choose", base, "conformers");
+    expect(lowest.ok && lowest.kept.map((e) => e.number)).toEqual([3]);
+  });
+
   it("carry each conformer's imaginary frequencies, frame by frame - a single geometry's its calculation's, of its last", () => {
     const m = { ...bent({ x: 0, y: 0 }, 3, [0, kcal(1), kcal(2)]), imaginary: [null, [-382.63], null] };
     expect(entries(m, "conformers").map((e) => e.imaginary)).toEqual([undefined, [-382.63], undefined]);
