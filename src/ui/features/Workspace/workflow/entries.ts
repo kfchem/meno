@@ -937,6 +937,74 @@ export function entryOfSet(e: SetEntry, id: string): Entry {
   };
 }
 
+/** The properties an entry record is given of a step's entry by Meno itself (`menoProperties`): each a field of the step's entry - its compound, its energy, its vibrations - not one of its own properties. */
+const MENO_OWN: ReadonlySet<string> = new Set(["group", "number", "energy", ...THERMO_PROPERTIES, "vibrations", "modes", "degeneracy", "mirror", "imaginary", "name"]);
+
+/**
+ * An entry record as a step's entry again (`entryOfSet`, the other way),
+ * where a step of Meno's has made it: its structure, its places, its charge
+ * and spin, and its own properties - each as the step left it (lib/steps
+ * restructure: a value of a geometry naming it, a label, a value of a
+ * structure marked where it is another's). Where it was made from a step's
+ * entry (`was`) and is that entry still - the same atoms and bonds, places
+ * and charge and spin, only its properties changed (a Tag's) - all that
+ * entry held is kept. Where any of them changed, what was worked out at the
+ * old ones goes - its calculation, its energy, its marks of failed or not
+ * a minimum, its degeneracy, mirror image and stereo - never carried onto
+ * another structure or geometry; the molecule it is a frame of (`from`,
+ * `frame`) stays. None where it has no single 3D geometry: a step's entry
+ * is one frame in 3D.
+ */
+export function setEntryOfEntry(e: Entry, place: { compound: number; number: number }, was?: SetEntry): SetEntry | null {
+  if (e.geometry.kind !== "3d") return null;
+  const xyz = e.geometry.xyz;
+  if (xyz.length !== 3 * e.structure.atoms.length) return null;
+  const atoms: ParsedAtom[] = e.structure.atoms.map((a, i) => ({
+    el: a.el,
+    ...(a.isotope ? { isotope: a.isotope } : {}),
+    ...(a.charge ? { charge: a.charge } : {}),
+    ...(a.radical ? { radical: a.radical } : {}),
+    x: xyz[3 * i],
+    y: xyz[3 * i + 1],
+    z: xyz[3 * i + 2],
+  }));
+  const bonds: ParsedBond[] = e.structure.bonds.map((b) => ({ a1: b.a1, a2: b.a2, order: b.order }));
+  const own = Object.fromEntries(Object.entries(e.properties).filter(([k]) => !MENO_OWN.has(k)));
+  const name = e.properties.name?.value;
+  const made: SetEntry = {
+    compound: place.compound,
+    number: place.number,
+    atoms,
+    bonds,
+    xyz: [...xyz],
+    ...(e.species ? { charge: e.species.charge, multiplicity: e.species.multiplicity } : { skeleton: true as const }),
+    ...(typeof name === "string" ? { name } : was?.name ? { name: was.name } : {}),
+    ...(Object.keys(own).length ? { properties: own } : {}),
+    ...(was?.from != null ? { from: was.from } : {}),
+    ...(was?.frame != null ? { frame: was.frame } : {}),
+    ...(was?.last != null ? { last: was.last } : {}),
+  };
+  if (!was || !sameAs(was, made)) return made;
+  // (that entry still: all it held, its properties as the step left them)
+  const { properties: _, ...held } = was;
+  return { ...held, compound: place.compound, number: place.number, ...(Object.keys(own).length ? { properties: own } : {}), ...(made.name ? { name: made.name } : {}) };
+}
+
+/** Whether two step's entries are one: the same atoms, in order, the same bonds, places and charge and spin. */
+function sameAs(a: SetEntry, b: SetEntry): boolean {
+  const atom = (x: ParsedAtom) => `${x.el}|${x.isotope ?? ""}|${x.charge ?? 0}|${x.radical ?? ""}`;
+  const bond = (x: ParsedBond) => `${Math.min(x.a1, x.a2)}-${Math.max(x.a1, x.a2)}:${x.order}`;
+  return (
+    a.atoms.length === b.atoms.length &&
+    a.atoms.every((x, i) => atom(x) === atom(b.atoms[i])) &&
+    a.bonds.map(bond).sort().join() === b.bonds.map(bond).sort().join() &&
+    geometryKey(a.xyz) === geometryKey(b.xyz) &&
+    (a.charge ?? null) === (b.charge ?? null) &&
+    (a.multiplicity ?? null) === (b.multiplicity ?? null) &&
+    !!a.skeleton === !!b.skeleton
+  );
+}
+
 /**
  * A set's collection's hash (docs/WORKFLOWS-FOUNDATION.md, *Sets and
  * collections*): of its members, in order - each structure's atoms and
