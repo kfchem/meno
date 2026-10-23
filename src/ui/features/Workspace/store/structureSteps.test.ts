@@ -40,7 +40,7 @@ import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
-import { setMembers, drawnHash } from "../workflow/entries";
+import { setMembers, drawnHash, TAKEN_AT_THE_EDIT } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
 import { drawnSaid, readDrawnAnswers } from "../workflow/programs";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
@@ -217,6 +217,31 @@ describe("a plugin's step on structures drawn", () => {
     // (a value in a unit Meno does not know: none of it taken)
     answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 1, unit: "Da" } } }, { as: "drawn" }, { as: "drawn" }] });
     expect((await ran("descriptors")).step.ran).toMatchObject({ ok: false, said: "It said nothing Meno can take" });
+  });
+
+  it("keeps none of what an earlier step said of a structure it keeps: not set aside any more, and its new values of it as it is", async () => {
+    // (one Enumerate set aside, wired on; one whose record went stale with an edit; one plain)
+    const aside: DrawnRecord = { properties: { number: { value: 2, unit: "none", status: "computed" } }, status: { aside: "Same as 1" } };
+    const stale: DrawnRecord = { from: ["seed-1"], stale: "its properties were for the structure before the edit" };
+    answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 46.069, unit: "g/mol" } } }, { as: "drawn", properties: { mw: { value: 74.123, unit: "g/mol" } } }, { as: "drawn" }] });
+    const described = await ran("descriptors", [aside, stale]);
+    expect(described.out!.records.map((r) => [r?.status, r?.stale, Object.keys(r?.properties ?? {})])).toEqual([
+      [undefined, undefined, ["number", "mw"]],
+      // (the values it had before the edit still gone, and said so: not read as all it had)
+      [undefined, TAKEN_AT_THE_EDIT, ["mw"]],
+      [undefined, undefined, []],
+    ]);
+    // (no value worked out - an empty answer - is nothing new: still said stale as it was)
+    answer = () => ({ structures: [{ as: "drawn", properties: {} }, { as: "drawn", properties: {} }, { as: "drawn" }] });
+    expect((await ran("descriptors", [aside, stale])).out!.records[1]?.stale).toBe(stale.stale);
+    // (kept with nothing worked out - Check structures: not set aside any more, and still said stale)
+    answer = () => ({ structures: [{ as: "drawn" }, { as: "drawn" }, { as: "drawn" }] });
+    const checked = await ran("check-structures", [aside, stale]);
+    expect(checked.out!.records.map((r) => [r?.status, r?.stale])).toEqual([
+      [undefined, undefined],
+      [undefined, stale.stale],
+      [undefined, undefined],
+    ]);
   });
 
   it("takes in nothing where the plugin says nothing Meno can take, saying so", async () => {
