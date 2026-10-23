@@ -1,7 +1,8 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
-import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartPoint, type ChartValue } from "../../../../lib/chart";
+import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
+import { diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
 import { CHART_PX } from "./look";
 
 /** How many of a table's rows its frame shows. */
@@ -74,6 +75,10 @@ export function NumberBody({ number }: { number: NumberValue }) {
     </div>
   );
 }
+
+/** What a chart left out, a line for each why, with what it names (`ChartLeft.rows`): said when its count line is pointed at. A chart's are rows; a diagram's say what they are. */
+const leftSaid = (left: readonly ChartLeft[], rows: boolean) =>
+  left.map((l) => `${l.count}${rows ? ` ${l.count === 1 ? "row" : "rows"}` : ""} ${l.why}${l.rows.length ? `: ${l.rows.join(", ")}` : ""}`).join("\n") || undefined;
 
 /** An axis's label in full: its name and unit, and what worked its numbers out. */
 const labelOf = (a: Axis) => [axisLabel(a), howOf(a)].filter(Boolean).join(" \u00b7 ");
@@ -183,9 +188,91 @@ export function ChartBody({ chart, onPoint, onPointDrag }: { chart: ChartValue; 
       <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: PLOT.top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
         {labelOf(chart.y)}
       </span>
-      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={chart.left.map((l) => `${l.count} ${l.count === 1 ? "row" : "rows"} ${l.why}${l.rows.length ? `: ${l.rows.join(", ")}` : ""}`).join("\n") || undefined}>
+      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={leftSaid(chart.left, true)}>
         {said}
         {!pointed && rowsLeft ? ` (${chart.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}
+      </span>
+    </div>
+  );
+}
+
+/** A value relative to the reference as a level says it: to a tenth of a kcal/mol, signed. */
+const relative = (v: number) => {
+  const t = numberText(v, 1);
+  return t === "0.0" ? t : v > 0 ? `+${t}` : t;
+};
+
+/**
+ * A set holding an energy diagram, inside its frame (docs/WORKFLOWS.md,
+ * *Energy diagrams*): each level a bar at its energy relative to the
+ * reference, its name above and its value below, the lines between levels
+ * dashed; the axis its quantity, unit and what worked it out. A level
+ * pointed at says its value and, where it stands for several, of how many
+ * it is the lowest and which; pressed, its lowest is shown (`onLevel`).
+ * How many levels, relative to which, and what was left, never hidden.
+ */
+export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLevel?: (l: DiagramLevel) => void }) {
+  const [pointed, setPointed] = useState<DiagramLevel | null>(null);
+  const values = diagram.levels.map((l) => l.value);
+  const ty = ticksOf(Math.min(0, ...values), Math.max(0, ...values));
+  const left = PLOT.label + Math.ceil(DIGIT * Math.max(...ty.ticks.map((t) => numberText(t).length))) + 8;
+  // (room above the highest bar for its name, below the lowest for its value)
+  const top = PLOT.top + 14;
+  const w = CHART_PX.w - left - PLOT.right;
+  const h = CHART_PX.h - top - 34;
+  const slot = w / Math.max(1, diagram.levels.length);
+  const bar = Math.min(48, slot * 0.6);
+  const cx = (k: number) => slot * (k + 0.5);
+  const py = (v: number) => h - ((v - ty.from) / (ty.to - ty.from)) * h;
+  const rowsLeft = diagram.left.reduce((n, l) => n + l.count, 0);
+  const said = pointed
+    ? [
+        `${pointed.name} \u00b7 ${relative(pointed.value)} kcal/mol`,
+        ...(pointed.lowestOf > 1 ? [`lowest of ${pointed.lowestOf}${pointed.lowest.number != null ? `: #${pointed.lowest.number}` : ""}`] : []),
+        // (its imaginary frequencies, as the entry it stands at has them - said, whatever it should be)
+        ...(pointed.lowest.imaginary == null ? [] : [frequenciesSaid(pointed.lowest.imaginary)]),
+      ].join(" \u00b7 ")
+    : `${diagramSaid(diagram)}${rowsLeft ? ` (${diagram.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}`;
+  return (
+    <div className="relative text-[10px] leading-3 text-gh-gray tabular-nums" style={{ width: CHART_PX.w, height: CHART_PX.h }} data-set-diagram="">
+      <svg className="absolute overflow-visible" style={{ left, top, pointerEvents: "auto" }} width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+        <line x1={0} x2={0} y1={0} y2={h} className="stroke-gh-line" strokeWidth={1} />
+        {ty.ticks.map((t) => (
+          <line key={t} x1={-4} x2={0} y1={py(t)} y2={py(t)} className="stroke-gh-gray" strokeWidth={1} />
+        ))}
+        {diagram.links.map(([a, b], i) => {
+          const [p, q] = a < b ? [a, b] : [b, a];
+          return <line key={i} x1={cx(p) + bar / 2} x2={cx(q) - bar / 2} y1={py(diagram.levels[p].value)} y2={py(diagram.levels[q].value)} className="stroke-gh-gray" strokeWidth={1} strokeDasharray="3 3" />;
+        })}
+        {diagram.levels.map((l, k) => (
+          <g key={k} style={{ cursor: onLevel ? "pointer" : undefined }} onPointerEnter={() => setPointed(l)} onPointerLeave={() => setPointed((q) => (q === l ? null : q))} onPointerDown={(e) => e.stopPropagation()} onClick={() => onLevel?.(l)}>
+            {/* (a band wider than the bar, so that it is easy to point at) */}
+            <rect x={cx(k) - slot / 2} y={py(l.value) - 8} width={slot} height={16} fill="transparent" />
+            <line x1={cx(k) - bar / 2} x2={cx(k) + bar / 2} y1={py(l.value)} y2={py(l.value)} className={pointed === l ? "stroke-accel-base" : "stroke-gh-black"} strokeWidth={pointed === l ? 3 : 2} />
+          </g>
+        ))}
+      </svg>
+      {/* (names, values, the axis's numbers and label in HTML: SVG text is not drawn on the page's layer) */}
+      {diagram.levels.map((l, k) => (
+        <span key={`n${k}`} className="absolute -translate-x-1/2 truncate text-center text-gh-black" style={{ left: left + cx(k), top: top + py(l.value) - 14, maxWidth: slot }}>
+          {l.name}
+        </span>
+      ))}
+      {diagram.levels.map((l, k) => (
+        <span key={`v${k}`} className="absolute -translate-x-1/2 text-center" style={{ left: left + cx(k), top: top + py(l.value) + 3 }}>
+          {relative(l.value)}
+        </span>
+      ))}
+      {ty.ticks.map((t) => (
+        <span key={`y${t}`} className="absolute -translate-y-1/2 text-right" style={{ right: CHART_PX.w - left + 6, top: top + py(t) }}>
+          {numberText(t)}
+        </span>
+      ))}
+      <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
+        {labelOf(diagram.axis)}
+      </span>
+      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={leftSaid(diagram.left, false)}>
+        {said}
       </span>
     </div>
   );

@@ -927,22 +927,22 @@ describe("Quick Add's calculations", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate", "chart"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate", "chart", "energy-diagram"]]]);
     // a compound set's wire: what takes it - a chart of it seen as a table too - and the conversion
-    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "filter", "as-conformers", "chart"]]]);
+    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "filter", "as-conformers", "chart", "energy-diagram"]]]);
     // a conformer set's
-    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "chart"]]]);
+    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "chart", "energy-diagram"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
       ["RDKit", ["conformers", "duplicates", "check-structures", "stereoisomers", "descriptors"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate", "chart"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate", "chart", "energy-diagram"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
       ["RDKit", ["conformers", "duplicates"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["duplicates", "filter", "as-conformers", "chart"]],
+      ["Meno", ["duplicates", "filter", "as-conformers", "chart", "energy-diagram"]],
     ]);
     // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D - and Filter, on their records
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });

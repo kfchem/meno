@@ -472,10 +472,13 @@ export function countOf(page: Page, set: WorkflowSet): { holds: SetHolds; entrie
   const holds = holdsOf(page, set);
   const { structures, pictures } = setMembers(page, set);
   if (holds === "pictures") return { holds, entries: pictures.length, compounds: pictures.length };
-  // (a table's rows; a number, one; a chart's points)
+  // (a table's rows; a number, one; a chart's points, or a diagram's levels)
   if (holds === "table") return { holds, entries: set.table?.rows.length ?? 0, compounds: set.table?.rows.length ?? 0 };
   if (holds === "number") return { holds, entries: set.number ? 1 : 0, compounds: set.number ? 1 : 0 };
-  if (holds === "chart") return { holds, entries: set.chart?.points.length ?? 0, compounds: set.chart?.points.length ?? 0 };
+  if (holds === "chart") {
+    const n = !set.chart ? 0 : set.chart.kind === "diagram" ? set.chart.levels.length : set.chart.points.length;
+    return { holds, entries: n, compounds: n };
+  }
   const molecules = setMolecules(page, set);
   const frames = molecules.reduce((n, m) => n + entriesIn(m), 0);
   // (a large result set's structures drawn, held off the page, as many as it holds)
@@ -878,6 +881,12 @@ function vibrationsOf(e: SetEntry, at: At): Record<string, Property> {
     vibrations: { value: { table: { columns: [FREQUENCY], rows: freqs.map((f) => [f]) } }, unit: "none", at, ...(by ? { by } : {}), status: "computed" },
     ...(modes ? { modes: { value: { modes }, unit: "none" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
   };
+}
+
+/** An entry's imaginary frequencies, as its calculation judged them (cm-1): none where its vibrations were worked out and it has none; "not computed" where they were not. */
+export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc">): number[] | "not computed" {
+  if (e.imaginary?.length) return [...e.imaginary];
+  return e.calc?.results?.some((x) => x.on === "list" && x.id === "vibrations") ? [] : "not computed";
 }
 
 /** What Meno has found of an entry, as properties by its own names: its compound as its group, its number, its energy (in hartrees, at its geometry - in the solvation its calculation said - by what worked it out), its calculation's thermochemistry and vibrations, its degeneracy, its mirror image's atoms where one was counted in, how many imaginary frequencies it has, its name. */

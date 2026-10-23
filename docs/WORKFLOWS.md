@@ -2284,6 +2284,53 @@ each entry's number, then its energy).
   "molecule", one of a single geometry. A chart of number against energy
   draws a scan's frames beside the conformers, each saying which it is.
 
+### Energy diagrams (2026-10-22)
+
+**Energy diagram** (PR 10, fourth part: `src/lib/energyDiagram.ts`) is
+Meno's own step with two inputs: *Levels*, molecules or conformer sets,
+and *Connects*, a table, where wired. It gives a chart in a set
+of its own. *Levels* reads what comes in as a table, each molecule as it
+is, so it takes a set that mixes a saddle point's conformer set with
+molecules of one geometry - which a step that works on entries refuses
+(*A wire let go on an input that does not take it*).
+- **A level** is the molecules of one name - a molecule's title, else its
+  file's name, else its group - and stands at its lowest; a level of
+  several (a saddle point's conformers) says, pointed at, of how many it is
+  the lowest and which ("lowest of 7: #3"); pressed, that one is shown.
+- **Relative to** the level its option names, none named the first - in
+  kcal/mol, written to a tenth, signed.
+- **Which energy**: an option naming the quantity, as the entries carry it
+  - their electronic energy ("energy") until free energies and enthalpies
+  are read. The levels are seen as a table (*Molecules seen as a table*),
+  where a column never holds values worked out differently: **every
+  level's energy is that one quantity, by one method, at one set of
+  conditions, or there is no diagram**, and the step says which levels
+  have which ("Its levels' energy was not worked out one way: "energy ·
+  GFN2-xTB" for R, P; "energy · B3LYP" for TS"), or which level has none.
+- The axis names the quantity relative to the reference, its unit and
+  what worked it out: "ΔE (kcal/mol) · xtb · GFN2-xTB · gas phase",
+  "ΔG (kcal/mol) · … · 298.15 K".
+- **Only results stand as levels**: where any entry under a level failed
+  - not converged, refused, an error, of any kind - or its file's marks
+  of that did not read, the step refuses and draws nothing, naming each
+  ("Not every entry is a result to stand on: TS #2 not converged - take
+  it out first"), as Energy window and Populations refuse one. The lowest
+  of the rest is never taken: the one that failed may be the level's
+  lowest (meno `notResults`).
+- **Imaginary frequencies are said, not judged**: which level should be a
+  saddle point the step cannot tell, so each level, pointed at, says those
+  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm-1",
+  "no imaginary frequency", or "frequencies not computed" (lib/
+  energyDiagram `frequenciesSaid`, entries `imaginaryOf`).
+- **The lines**: each row of the table into *Connects* - its
+  columns *from* and *to*, naming levels - is one; with no table, each
+  level is joined to the next, in the order they come. A row naming no
+  other level is counted and said. A conformer of a level with no energy,
+  where the level has others, is counted and said too.
+- Its card says how many levels, relative to which; its set's count line
+  says its levels. It is kept in the workspace's file, and has changed when
+  either input, a level's name, or its options have.
+
 ## Questions
 
 None left open in what is built (2026-10-08): the seven steps are built

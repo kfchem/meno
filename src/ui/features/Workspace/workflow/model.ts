@@ -4,6 +4,7 @@
  * document, so that undo takes it back and Save keeps it.
  */
 import type { ChartValue } from "../../../../lib/chart";
+import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
@@ -66,7 +67,7 @@ export function holdCollection(
 export const CHART_SET = { w: CHART_PX.w * PX + 2 * SET_PAD, h: SET_TOP + CHART_PX.h * PX + SET_PAD };
 
 /** A step's result set holding a chart it made (`WorkflowSet.chart`): nothing on the page among its members, and no molecules of its own. */
-export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue): WorkspaceDocument {
+export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue | DiagramValue): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));
 }
 
