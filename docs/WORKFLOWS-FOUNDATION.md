@@ -978,6 +978,11 @@ every position's choice. **The set's core** is the template's atoms but the
 drawn H's chosen, with each position (`P1`, `P2`) given by the atom its
 group is bonded to.
 
+**Its known answers** are tested as R groups' are, and its products join
+theirs in the RDKit fixture: a ring CH, two positions alike one at a time
+and together, a wedged centre's undrawn hydrogen, a drawn H with its wedge,
+and a CH2 beside a stereocentre (the centre it makes left open).
+
 **Later:** a set as input (a set made by Enumerate carries its core, so the
 positions could be stated once for every product) comes after the scaffold
 swap, which changes what a set's core is.

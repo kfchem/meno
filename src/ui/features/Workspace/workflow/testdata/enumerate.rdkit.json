@@ -148,6 +148,108 @@
    "molfile": "b40c6e9bf3a35be1ee8b57cb2263f0107c3302517bfea0581cef3384fd4c0a23",
    "smiles": "CN(C)c1ccccc1",
    "expected": "CN(C)c1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #1",
+   "molfile": "4887247b57ccfe43669b5e6dbb300838066ef92317517a84193aba9571429a7d",
+   "smiles": "Cc1ccccc1",
+   "expected": "Cc1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #2",
+   "molfile": "20f1fdadae8c142d56ef65539a111f6f64c5f241b2cc5dd6d9cec909c5038509",
+   "smiles": "Clc1ccccc1",
+   "expected": "Clc1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #3",
+   "molfile": "f50c790e61740ceb517c0a94f5600703892c4de33a00afe887ef7fcb89f60848",
+   "smiles": "COc1ccccc1",
+   "expected": "COc1ccccc1"
+  },
+  {
+   "name": "substituents: a ring CH #4",
+   "molfile": "f50c790e61740ceb517c0a94f5600703892c4de33a00afe887ef7fcb89f60848",
+   "smiles": "COc1ccccc1",
+   "expected": "COc1ccccc1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #1",
+   "molfile": "e375e515ceb38086ea32f692556851e7251e6e41d9ed3d856ab3fae33a97f64b",
+   "smiles": "Cc1ccc(C)c(Cl)c1",
+   "expected": "Cc1ccc(C)c(Cl)c1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #2",
+   "molfile": "61ef52e8a133dfed633071d803ef6efe46d22bb7dd90efa4b3781bee8e122e0f",
+   "smiles": "Cc1ccc(C)c(F)c1",
+   "expected": "Cc1ccc(C)c(F)c1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #3",
+   "molfile": "59d4ed55b3b2bd85996cbd60eacc63434833f0dc98b1493a9d46207129767651",
+   "smiles": "Cc1ccc(C)c(Cl)c1",
+   "expected": "Cc1ccc(C)c(Cl)c1"
+  },
+  {
+   "name": "substituents: two alike, one at a time #4",
+   "molfile": "cb4b4c9688acdc58cc5ae9e1f1ba496e3c139534ccaed6634f42665b373edb90",
+   "smiles": "Cc1ccc(C)c(F)c1",
+   "expected": "Cc1ccc(C)c(F)c1"
+  },
+  {
+   "name": "substituents: two alike, together #1",
+   "molfile": "a9e30ef97ee466c77d5b099bc0aef63e91e31c924636d5d0ae26b55669d795c0",
+   "smiles": "Cc1ccc(C)cc1",
+   "expected": "Cc1ccc(C)cc1"
+  },
+  {
+   "name": "substituents: two alike, together #2",
+   "molfile": "4d2fdd21a7a8395dee222e203220713ad5ac4ba674acc57dfb1078f023b494ac",
+   "smiles": "Cc1ccc(C)c(C)c1",
+   "expected": "Cc1ccc(C)c(C)c1"
+  },
+  {
+   "name": "substituents: two alike, together #3",
+   "molfile": "e048b9ace9f1574fe1afcfab852318f2bb0c8c18307d99fd2833c9ccaa6b4b3e",
+   "smiles": "Cc1ccc(C)c(C)c1",
+   "expected": "Cc1ccc(C)c(C)c1"
+  },
+  {
+   "name": "substituents: two alike, together #4",
+   "molfile": "8f942f59934e0dbd3e76442edee0933f1e6ef67c5ff13302ea80390990897784",
+   "smiles": "Cc1cc(C)c(C)c(C)c1",
+   "expected": "Cc1cc(C)c(C)c(C)c1"
+  },
+  {
+   "name": "substituents: a wedged centre's undrawn H #1",
+   "molfile": "505e889f7f74fa1f4f7a2613fd541e9fe34a76d14470d94fe2eaf5e077ead3cf",
+   "smiles": "C[C@@](F)(Cl)Br",
+   "expected": "C[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a wedged centre's undrawn H #2",
+   "molfile": "e3a127396c7d302666f1dd42f6cb672b008a97282b44946df65e84ee05a3228a",
+   "smiles": "CC[C@@](F)(Cl)Br",
+   "expected": "CC[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a drawn H #1",
+   "molfile": "2752d4ed8952b763a23ee69a49c58aa894dcb6a8e7de55aa83051c3985818c57",
+   "smiles": "C[C@@](F)(Cl)Br",
+   "expected": "C[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a drawn H #2",
+   "molfile": "1ffe17fecfdfefdc405a4d428898cc77b252156f8ae81351c5ffd4103aa71d19",
+   "smiles": "CO[C@@](F)(Cl)Br",
+   "expected": "CO[C@@](F)(Cl)Br"
+  },
+  {
+   "name": "substituents: a CH2 beside a stereocentre #1",
+   "molfile": "4fe0a5a1b8679d0029d2637c3cd4541605b7b555b2c2fdebe629df625daaddcb",
+   "smiles": "CC(Cl)[C@H](C)F",
+   "expected": "CC(Cl)[C@H](C)F"
   }
  ]
 }

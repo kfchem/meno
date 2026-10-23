@@ -26,6 +26,24 @@ export const ENUMERATION_CASES: readonly EnumerationCase[] = [
   { name: "phenyl R1, named groups", template: "*c1ccccc1", lists: "R1: CO2Me\nAc\nCF3\nCN\nNMe2", products: ["COC(=O)c1ccccc1", "CC(=O)c1ccccc1", "FC(F)(F)c1ccccc1", "N#Cc1ccccc1", "CN(C)c1ccccc1"] },
 ];
 
+/** A substituent swap's known answer: its template, the positions chosen by atom id (the SMILES's atoms from 1), its groups and how they combine, and each combination's compound by its number. */
+export type SubstituentCase = { name: string; template: string; positions: number[]; groups: string; combine: "one" | "together"; products: string[] };
+
+export const SUBSTITUENT_CASES: readonly SubstituentCase[] = [
+  // (a ring CH: groups as labels, an element, a SMILES - a label and a SMILES of one group the same, set aside)
+  { name: "substituents: a ring CH", template: "c1ccccc1", positions: [1], groups: "Me\nCl\nOMe\n*OC", combine: "one", products: ["Cc1ccccc1", "Clc1ccccc1", "COc1ccccc1", "COc1ccccc1"] },
+  // (two CHs alike by symmetry, one at a time: each group at the second the same as at the first)
+  { name: "substituents: two alike, one at a time", template: "Cc1ccc(C)cc1", positions: [3, 8], groups: "Cl\nF", combine: "one", products: ["Cc1c(Cl)cc(C)cc1", "Cc1c(F)cc(C)cc1", "Cc1ccc(C)cc1Cl", "Cc1ccc(C)cc1F"] },
+  // (together, H leaving a position as drawn: the parent first)
+  { name: "substituents: two alike, together", template: "Cc1ccc(C)cc1", positions: [3, 8], groups: "H\nMe", combine: "together", products: ["Cc1ccc(C)cc1", "Cc1ccc(C)cc1C", "Cc1c(C)cc(C)cc1", "Cc1c(C)cc(C)cc1C"] },
+  // (a wedged centre's undrawn H: the group where the H was, the arrangement kept)
+  { name: "substituents: a wedged centre's undrawn H", template: "F[C@H](Cl)Br", positions: [2], groups: "Me\nEt", combine: "one", products: ["F[C@](C)(Cl)Br", "F[C@](CC)(Cl)Br"] },
+  // (a drawn H: replaced in place, its bond and wedge kept)
+  { name: "substituents: a drawn H", template: "F[C@]([H])(Cl)Br", positions: [3], groups: "Me\nOMe", combine: "one", products: ["F[C@](C)(Cl)Br", "F[C@](OC)(Cl)Br"] },
+  // (a CH2 beside a stereocentre: the centre it makes left open)
+  { name: "substituents: a CH2 beside a stereocentre", template: "C[C@H](F)CC", positions: [4], groups: "Cl", combine: "one", products: ["C[C@H](F)C(C)Cl"] },
+];
+
 /** A template drawn by Meno's engine from a SMILES, each "*" an R atom, numbered in order - or as `numbers` gives them. */
 export function template(smiles: string, numbers?: number[][]): Model {
   const m = drawnFromSmiles(smiles);

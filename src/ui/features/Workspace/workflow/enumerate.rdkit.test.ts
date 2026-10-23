@@ -1,5 +1,5 @@
 /**
- * Enumerate's products against RDKit (the fixture, testdata/enumerate.rdkit.json):
+ * Enumerate's products - by R groups and by substituents - against RDKit (the fixture, testdata/enumerate.rdkit.json):
  * each product Meno makes, written as Meno writes a molfile, is the compound
  * written by hand for its combination (testdata/enumerationCases.ts), as
  * RDKit reads both; and the products Meno sets aside as *Same as n* are
@@ -12,14 +12,19 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { writeMolfile } from "../../../../lib/chem/molWriter";
 import { enumerated } from "./enumerate";
-import { ENUMERATION_CASES, template } from "./testdata/enumerationCases";
+import { substituted } from "./substituents";
+import { drawnFromSmiles } from "../chem/testdata/identityCases";
+import { ENUMERATION_CASES, SUBSTITUENT_CASES, template } from "./testdata/enumerationCases";
 
 const ROOT = resolve(__dirname, "../../../../..");
 const FIXTURE = resolve(__dirname, "testdata/enumerate.rdkit.json");
 
 /** Every product of every case, made or set aside, in its number's order: named by its case and number, with why it was set aside, and the molfile Meno writes of it. */
-const products = ENUMERATION_CASES.flatMap((c) => {
-  const r = enumerated(template(c.template), c.lists);
+const products = [
+  ...ENUMERATION_CASES.map((c) => ({ c, made: () => enumerated(template(c.template), c.lists) })),
+  ...SUBSTITUENT_CASES.map((c) => ({ c, made: () => substituted(drawnFromSmiles(c.template), c.positions, c.groups, c.combine) })),
+].flatMap(({ c, made }) => {
+  const r = made();
   if (!r.ok) throw new Error(`${c.name}: ${r.problems.join("; ")}`);
   return [...r.made.map((m) => ({ ...m, why: undefined as string | undefined })), ...r.aside]
     .sort((p, q) => p.number - q.number)
@@ -38,7 +43,7 @@ describe("Enumerate's products, against RDKit (the fixture)", () => {
   const rdkit = new Map(fixture?.products.map((p) => [p.name, p]) ?? []);
 
   it("are one for each combination of each case, written by hand", () => {
-    for (const c of ENUMERATION_CASES) expect(products.filter((p) => p.case === c.name).map((p) => p.number)).toEqual(c.products.map((_, k) => k + 1));
+    for (const c of [...ENUMERATION_CASES, ...SUBSTITUENT_CASES]) expect(products.filter((p) => p.case === c.name).map((p) => p.number)).toEqual(c.products.map((_, k) => k + 1));
   });
 
   it("is of the molfiles Meno writes now (each by its SHA-256), every product in it, read by a named RDKit", () => {
