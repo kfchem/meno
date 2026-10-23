@@ -8,6 +8,7 @@ import type { DrawnModel, KeptJob, KeptJobEntry, LeftJobEntry, Member, Model, Mo
 import { readCarried3D, readDrawn } from "../utils/copyPaste";
 import { numberIn, tableIn } from "../../../../lib/table";
 import { chartIn } from "../../../../lib/chart";
+import { diagramIn } from "../../../../lib/energyDiagram";
 import type { OptionValues } from "../../../../lib/options";
 import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
@@ -113,8 +114,8 @@ function readSet(v: unknown): WorkflowSet | null {
     ...(() => {
       const table = b.table != null ? tableIn(b.table, leftOut) : undefined;
       const number = b.number != null ? numberIn(b.number, leftOut) : undefined;
-      const chart = b.chart != null ? chartIn(b.chart) : undefined;
-      // (a chart is read whole or not at all - a point unread would leave it drawn short of one: counted)
+      const chart = b.chart == null ? undefined : (b.chart as { kind?: unknown }).kind === "diagram" ? diagramIn(b.chart) : chartIn(b.chart);
+      // (a chart is read whole or not at all - a point or a level unread would leave it drawn short of one: counted)
       if (b.chart != null && !chart) leftOut("chart");
       return { ...(table ? { table } : {}), ...(number ? { number } : {}), ...(chart ? { chart } : {}) };
     })(),

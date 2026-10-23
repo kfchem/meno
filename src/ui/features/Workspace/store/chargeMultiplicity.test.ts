@@ -418,7 +418,7 @@ const chem = {
 
 /**
  * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
- * Render gives pictures, and Chart a chart, which have no charge; a kind that takes nothing in (Generate) is given no
+ * Render gives pictures, and Chart and Energy diagram charts, which have no charge; a kind that takes nothing in (Generate) is given no
  * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
  * alone.
  */
@@ -506,9 +506,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - left out here Render and Chart, which give pictures and a chart, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn)
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

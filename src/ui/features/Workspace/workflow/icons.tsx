@@ -1,6 +1,7 @@
 import {
   AdjustmentsHorizontalIcon,
   ArrowTrendingDownIcon,
+  Bars3CenterLeftIcon,
   BoltIcon,
   ChartBarIcon,
   CloudIcon,
@@ -40,6 +41,7 @@ const ICONS: Record<StepIcon, Icon> = {
   chart: PresentationChartLineIcon,
   sliders: AdjustmentsHorizontalIcon,
   sparks: SparklesIcon,
+  levels: Bars3CenterLeftIcon,
 };
 
 /** A kind of step's icon, `size` px square; `stroke`, its lines' weight, as Heroicons' 24-unit square has them. */

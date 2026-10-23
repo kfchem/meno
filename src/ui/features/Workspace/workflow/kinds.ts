@@ -4,6 +4,7 @@
  * options where Meno does it. Plugins fill kinds; they bring none of their
  * own.
  */
+import { deltaOf } from "../../../../lib/energyDiagram";
 import { numberText } from "../../../../lib/calc/results";
 import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps";
@@ -35,8 +36,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart, levels. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart" | "levels";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -45,7 +46,13 @@ export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture
  * and *bonding* - and says on itself which property its entries are matched
  * on, so that nothing is matched by an implicit rule.
  */
-export type StepPort = { id: string; name: string; takes: readonly ValueKind[] };
+export type StepPort = {
+  id: string;
+  name: string;
+  takes: readonly ValueKind[];
+  /** It reads what comes in as a table (lib/table `moleculesAsTable`) - each molecule as it is, a conformer set's frames its conformers - not as a step's entries: a set mixing conformer sets with other molecules goes in (`readsAsTable`). */
+  asTable?: true;
+};
 
 /**
  * An exit a kind gives. Every exit is a result set of its own, made with the
@@ -328,6 +335,25 @@ export const KINDS: readonly KindInfo[] = [
     ],
     how: (v) => (v.x || v.y ? `${v.y || "the second column of numbers"} against ${v.x || "the first"}` : "The first two columns of numbers"),
   },
+  {
+    // (docs/WORKFLOWS.md, *Energy diagrams*: each level a molecule's name, at its lowest, relative to one - joined as a table says, or each to the next)
+    kind: "energy-diagram",
+    name: "Energy diagram",
+    icon: "levels",
+    takes: ["molecules", "conformers", "table"],
+    gives: "chart",
+    runs: "entries",
+    made: "Energy diagram",
+    inputs: [
+      { id: "levels", name: "Levels", takes: ["molecules", "conformers"], asTable: true },
+      { id: "connects", name: "Connects", takes: ["table"] },
+    ],
+    options: [
+      { id: "quantity", label: "Energy", type: "text", default: "energy" },
+      { id: "reference", label: "Relative to", type: "text", default: "" },
+    ],
+    how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${v.reference || "the first"}`,
+  },
 ];
 
 /** How a Filter step does its work, in a line: its conditions as read, and whether all or any - or why they do not read, or that there are none. */
@@ -425,8 +451,11 @@ export function portOf(kind: StepKind, port: string): StepPort {
   return inputs.find((p) => p.id === port) ?? inputs[0];
 }
 
-/** Whether an input reads what comes in as a table (lib/table `moleculesAsTable`) - each molecule as it is, a conformer set's frames its conformers - rather than as a step's entries: one that takes a table. A set mixing conformer sets with other molecules goes into it. */
-export const readsAsTable = (kind: StepKind, port: string): boolean => portOf(kind, port).takes.includes("table");
+/** Whether an input reads what comes in as a table - one that takes a table, or says it does (`StepPort.asTable`) - rather than as a step's entries. */
+export const readsAsTable = (kind: StepKind, port: string): boolean => {
+  const p = portOf(kind, port);
+  return !!p.asTable || p.takes.includes("table");
+};
 
 /** The exit of `kind` named `exit`, or its first where `exit` is not one of its own. */
 export function exitOf(kind: StepKind, exit: string): StepExit {

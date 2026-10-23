@@ -23,6 +23,7 @@ import type { Workspace } from "../utils/workspace";
 import type { CalcInfo, Unmarked } from "../../../../lib/calc/output";
 import type { NumberValue, Table } from "../../../../lib/table";
 import type { ChartValue } from "../../../../lib/chart";
+import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
@@ -733,8 +734,8 @@ export type WorkflowSet = {
   table?: Table;
   /** A number it holds, with its unit and what worked it out: a step's. */
   number?: NumberValue;
-  /** A chart it holds (lib/chart, docs/WORKFLOWS.md *Charts*): a Chart step's, one column of a table against another. */
-  chart?: ChartValue;
+  /** A chart it holds (docs/WORKFLOWS.md *Charts*): a Chart step's, one column of a table against another (lib/chart) - or an Energy diagram's (lib/energyDiagram). */
+  chart?: ChartValue | DiagramValue;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */

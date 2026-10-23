@@ -24,7 +24,7 @@ function charted(options?: Record<string, string>): WorkspaceDocument {
   return connect(doc, { set: 1 }, 2);
 }
 
-const chartOf = (doc: WorkspaceDocument) => resultOf(doc, 2)?.chart;
+const chartOf = (doc: WorkspaceDocument) => resultOf(doc, 2)?.chart as ChartValue | undefined;
 
 describe("a Chart step", () => {
   it("charts a table's first two columns of numbers, a point a row with both - in a set of its own, the row left counted and said", () => {
@@ -222,6 +222,7 @@ describe("a Chart step", () => {
 describe("a chart, in its set's frame", () => {
   it("labels each axis with its name, unit and what worked it out, and says how many points and why rows were left", () => {
     const c: ChartValue = {
+      kind: "points",
       x: { name: "number", unit: "none" },
       y: { name: "energy", unit: "Eh", by: { program: "prog", method: "GFN2-xTB" }, at: { geometry: "own", kelvin: 298.15, atm: 1, solvent: "water" } },
       points: [
