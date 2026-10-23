@@ -24,6 +24,8 @@ import { BETWEEN, SET_PAD, SET_TOP, CARD_H, CARD_W, CHIP, CHIP_CHAR, CHIP_SIDES,
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
+import { structuresAsTable } from "./structuresTable";
+import type { Table } from "../../../../lib/table";
 
 /**
  * What a run needs of the canvas: how far a molecule in 3D reaches on the
@@ -206,9 +208,21 @@ export function drawnEntries(model: Model, structures: readonly (readonly number
 /** A structure drawn as a run gives it and keeps it: the drawing, with its record where it has one. */
 const drawnModel = (e: DrawnEntry): DrawnModel => ({ ...e.drawn, ...(e.record ? { record: e.record } : {}) });
 
-/** The structures drawn that come into a step (flow `inputOf`), as its entries: those on the page as they are drawn now, or those a large result set holds, as it holds them - each with its record. */
+/** The structures drawn that come into a step (flow `inputOf`), as its entries, in order: those on the page as they are drawn now, then those a result set holds off the page, as it holds them - each with its record. */
 export function inputEntries(model: Model, input: { structures: readonly (readonly number[])[]; records?: readonly (DrawnRecord | undefined)[]; held?: readonly DrawnModel[] }): DrawnEntry[] {
-  return input.held ? input.held.map(({ record, ...drawn }, place) => ({ place, drawn, ...(record ? { record } : {}) })) : drawnEntries(model, input.structures, input.records);
+  const shown = drawnEntries(model, input.structures, input.records);
+  return [...shown, ...(input.held ?? []).map(({ record, ...drawn }, k) => ({ place: shown.length + k, drawn, ...(record ? { record } : {}) }))];
+}
+
+/** Every structure drawn a set holds, as a step after it takes them (`inputEntries`): those on the page, then those it holds off it. */
+export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): DrawnEntry[] {
+  const { structures, records } = set.members ? setMembers(doc, set) : { structures: [], records: [] };
+  return inputEntries(doc.model, { structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) });
+}
+
+/** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): Table {
+  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
 }
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */

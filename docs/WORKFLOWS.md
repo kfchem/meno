@@ -2033,6 +2033,35 @@ All of it is optional. A structure the chemist drew has none.
   with nothing is none.
 
 
+### A structures set as a table (2026-10-23)
+
+A set of structures drawn - *Generate*'s, and *Check structures*',
+*Stereoisomers*', *Descriptors*' and *Filter*'s after it, *Enumerate*'s,
+or the chemist's own - opens as a table in the column, as a set of
+molecules in 3D does: *Open as a table* on its menu (workflow
+`structuresTable`, `StructuresTableBody`).
+
+- **Every structure it holds is a row**: those on the page and those it
+  holds off it (`drawnCollection`), all of them, in the step's order - the
+  page's first, as a step after it takes them (`setStructures`). A set
+  that shows 50 of 120 has 120 rows.
+- **Its columns**: its place (#); its SMILES - as the step that made it
+  gave it (`smiles` on its record), else written by Meno from the drawing:
+  its constitution, Kekulé, no stereo, a label of no element as `*`; its
+  state, "finished" or "failed: <why>", as a Filter reads it
+  (`drawnAsEntry`); why it was set aside, where any was; then each value
+  its record holds, under its own name, a number's with its unit - those
+  of the structure it was made from as named (`made_from.nll`), an
+  *Enumerate*'s `number` and `made.how` among them. A value no column can
+  hold, or one missing, is counted in its head, as for molecules
+  (lib/table `moleculesAsTable`).
+- **Sorted by any column**, its name pressed, once up and again down; #
+  back to the step's order. As many rows as there are drawn only where
+  they are seen.
+- **One conversion** (`structuresAsTable`, of the entries a step takes):
+  the table Chart is to take structures by too, each row's id and what it
+  is (`what`: "structure 3 of 120") kept for its points.
+
 ### Enumerate: R groups (as built, 2026-10-22)
 
 As WORKFLOWS-FOUNDATION.md specifies (*Enumerate*, *R groups*), with what

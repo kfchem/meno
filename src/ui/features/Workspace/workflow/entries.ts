@@ -440,6 +440,11 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.confor
  * 3D. A set mixing the two is molecules in 3D, and no step takes it
  * (`plainAmong`).
  */
+/** Whether a set can be read as a table in the column: molecules in 3D it holds off the page, or structures drawn (structuresTable). */
+export function readAsTable(page: Page, set: WorkflowSet): boolean {
+  return !!set.collection || holdsOf(page, set) === "structures";
+}
+
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
   if (set.made?.holds) return set.made.holds;
