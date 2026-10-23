@@ -29,6 +29,8 @@ import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
 import type { Property } from "../../../lib/entry";
 import { recordNow, recordNumber } from "./workflow/entries";
+import { partsOf } from "./workflow/parts";
+import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
 import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
@@ -283,6 +285,30 @@ export function withHeld(part: Drawn, state: Pick<EditorState, "sets">): Drawn {
     return own?.length ? [[s.id, own]] : [];
   }));
   return Object.keys(held).length ? { ...part, held } : part;
+}
+
+/**
+ * What a structure's file is written from (`structureFileText`): the part
+ * selected, or - nothing selected - the whole canvas, its molecules in 3D as
+ * they are seen and each of its sets with the records it carries of its
+ * structures (workflow/parts `partsOf`); and, of each of those sets, the
+ * structures it holds off the page (`withHeld`): holding is for the page alone.
+ */
+export function exportedDrawn(state: Parameters<typeof drawnOf>[0] & Pick<EditorState, "sets" | "steps" | "wires" | "molecules3d" | "turns3d" | "frames3d"> & Partial<Pick<EditorState, "lists3d" | "stacksShown">>, part?: Drawn): Drawn {
+  if (part) return withHeld(part, state);
+  const flow = state.sets.length ? partsOf(state, new Set(state.sets.map((b) => b.id)), new Set(state.steps.map((s) => s.id))) : undefined;
+  return withHeld({ ...drawnOf(state), molecules3d: carriedOf(state), ...(flow ? { flow } : {}) }, state);
+}
+
+/** What a file of one molfile - MOL or RXN - says it left out of what is written (`drawn`): the structures its sets hold off the page, which one molfile cannot hold as records; none where they hold none. */
+export function heldNotWritten(drawn: Drawn): string | null {
+  const held = Object.values(drawn.held ?? {});
+  const n = held.reduce((k, models) => k + models.length, 0);
+  if (!n) return null;
+  const structures = `${n.toLocaleString("en-US")} ${n === 1 ? "structure" : "structures"}`;
+  return held.length === 1
+    ? `${structures} this set holds off the page ${n === 1 ? "was" : "were"} not written; export the set as SD to write them all.`
+    : `${structures} the sets hold off the page ${n === 1 ? "was" : "were"} not written; export the sets as SD to write them all.`;
 }
 
 /** A data item's name as an SD file can hold it: on one line, no angle brackets (CTfile Formats, the SDfile's data header). */
@@ -789,13 +815,18 @@ export function useFileActions(nameTab?: (label: string) => void, tabId?: string
         }
         const kind = writer.id as WriterId;
         // (the part, or everything on the canvas - the molecules in 3D as they are seen)
-        // (and of a set selected, what it holds off the page too: every structure it holds is written)
-        const drawn = part ? withHeld(part, state) : { ...drawnOf(state), molecules3d: carriedOf(state) };
         if (kind === "svg") {
           // The style the canvas is drawn in: the document's own, or the app's.
           const style = styleOf(state.docStyle);
-          await writeDocument(path, drawingSvg(drawn, state, style, true));
-        } else await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
+          await writeDocument(path, drawingSvg(part ?? { ...drawnOf(state), molecules3d: carriedOf(state) }, state, style, true));
+          return;
+        }
+        // (and of each set - those selected, or every one on the canvas - what it holds off the page too: every structure it holds is written)
+        const drawn = exportedDrawn(state, part);
+        await writeDocument(path, structureFileText(drawn, path, options, style3dOf(state)));
+        // (a MOL or RXN file - one molfile - cannot hold a set's records: what it holds off the page, said not written)
+        const notWritten = kind === "mol" || kind === "rxn" ? heldNotWritten(drawn) : null;
+        if (notWritten) useNotices.getState().show({ id: `held-not-written ${path}`, title: "Part of the set not written", text: notWritten });
       }),
     [attempt, store],
   );

@@ -725,9 +725,13 @@ As this part of step 5 was built (#155, from main beside step 3):
     is given none of its values. A text value's lines never end its item
     nor begin another: a blank line is written as one space, and one
     beginning `>` or `$$$$` with a space before it. Every structure a set
-    selected holds is written - those it shows, then those it holds off
-    the page, in its order: holding is for the page alone. The rest of
-    what is drawn is one record, as before.
+    holds is written - those it shows, then those it holds off the page,
+    in its order: holding is for the page alone - of a set selected, and,
+    nothing selected, of every set on the canvas. The rest of what is
+    drawn is one record, as before. A MOL or RXN file, one molfile, holds
+    no records: what a set holds off the page is not written there, and
+    Export says so ("N structures this set holds off the page were not
+    written; export the set as SD to write them all").
   - **SVG** takes no options yet. Whatever a document gives it as text -
     labels, words, a typeface's name, a colour - is escaped, in elements
     and in attributes alike, and what XML cannot hold at all (the controls

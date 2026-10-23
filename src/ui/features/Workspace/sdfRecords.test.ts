@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { readStructures } from "../../../lib/io/structures";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
-import { structureFileText, withHeld } from "./fileActions";
+import { exportedDrawn, heldNotWritten, structureFileText, withHeld } from "./fileActions";
 import type { Drawn, DrawnModel, DrawnRecord } from "./store/types";
 import { BEFORE_THE_EDIT, numberedRecord, recordHow, recordNumber, recordOn, recordWhy, setMembers } from "./workflow/entries";
 import { resultOf } from "./workflow/flow";
@@ -177,8 +177,8 @@ describe("a workflow's structures drawn, written to an SD file", () => {
     ]);
   });
 
-  it("writes every structure a set holds, those it shows and those it holds off the page alike, a record each in its order", () => {
-    // (a step's 120 products, each its number: more than the page shows - the rest held in the set)
+  /** A step's 120 products, each its number: more than the page shows - the rest held in the set. */
+  function hundredTwenty(): { doc: WorkspaceDocument; step: number; out: number } {
     const product = (k: number): DrawnModel => ({
       atoms: [
         { id: 1, el: "C", x: 0, y: 0 },
@@ -194,13 +194,23 @@ describe("a workflow's structures drawn, written to an SD file", () => {
     let doc = addStep(emptyWorkspaceDocument(), "descriptors", 0, 0);
     const step = doc.steps![0];
     doc = placeResults(doc, step, { molecules: [], rest: [], holds: "structures", drawn: { made: Array.from({ length: 120 }, (_, k) => product(k)), rest: [] } }, W);
-    const out = resultOf(doc, step.id, "out")!;
+    return { doc, step: step.id, out: resultOf(doc, step.id, "out")!.id };
+  }
+  /** The canvas `doc` as the store holds it, for what Export writes of it. */
+  const canvas = (doc: WorkspaceDocument) => ({ ...doc, arrows: [], pluses: [], captions: [], sets: doc.sets ?? [], steps: doc.steps ?? [], wires: doc.wires ?? [], molecules3d: [], turns3d: {}, frames3d: {} }) as never;
+  /** The 120 numbers, in order, as titles. */
+  const all = Array.from({ length: 120 }, (_, k) => `w ${k + 1}`);
+
+  it("writes every structure a set holds, those it shows and those it holds off the page alike, a record each in its order", () => {
+    const { doc, step: stepId, out: outId } = hundredTwenty();
+    const step = { id: stepId };
+    const out = doc.sets!.find((b) => b.id === outId)!;
     const shown = setMembers(doc, out).structures.length;
     expect([shown > 0, shown < 120, shown + (out.drawnCollection?.length ?? 0)]).toEqual([true, true, 120]);
     const part = { ...doc.model, arrows: [], pluses: [], flow: partsOf(doc, new Set([out.id]), new Set([step.id])) } as unknown as Drawn;
     const read = records(structureFileText(withHeld(part, { sets: doc.sets! }), "/x/w.sdf"));
     // (none of what is drawn besides: the 120, in the set's order, each its number and how)
-    expect(read.map((r) => r.title)).toEqual(Array.from({ length: 120 }, (_, k) => `w ${k + 1}`));
+    expect(read.map((r) => r.title)).toEqual(all);
     expect(read[119].items).toEqual([
       ["State", "finished"],
       ["number", "120"],
@@ -212,6 +222,28 @@ describe("a workflow's structures drawn, written to an SD file", () => {
     expect(text.split("$$$$\n").filter((r) => r.trim()).map((r) => (/ Br /.test(r) ? "Br" : "Cl"))).toEqual(Array.from({ length: 120 }, (_, k) => (k % 2 ? "Cl" : "Br")));
     // (without what it holds - the page's alone - not all of them: what Export is given, from what is selected, holds them all)
     expect(records(structureFileText(part, "/x/w.sdf"))).toHaveLength(shown);
+  });
+
+  it("writes, nothing selected, every structure each set on the canvas holds - a record each, as a set selected is written", () => {
+    const { doc } = hundredTwenty();
+    const read = records(structureFileText(exportedDrawn(canvas(doc)), "/x/w.sdf"));
+    expect(read.map((r) => r.title)).toEqual(all);
+    expect(read[60].items).toEqual([
+      ["State", "finished"],
+      ["number", "61"],
+      ["made.how", "product 61"],
+    ]);
+  });
+
+  it("says, of a MOL or RXN file - one molfile, which holds no records - the structures a set holds off the page as not written", () => {
+    const { doc, step, out } = hundredTwenty();
+    const held = doc.sets!.find((b) => b.id === out)!.drawnCollection!.length;
+    const selected = exportedDrawn(canvas(doc), { ...doc.model, arrows: [], pluses: [], flow: partsOf(doc, new Set([out]), new Set([step])) } as unknown as Drawn);
+    expect(heldNotWritten(selected)).toBe(`${held} structures this set holds off the page were not written; export the set as SD to write them all.`);
+    expect(heldNotWritten(exportedDrawn(canvas(doc)))).toBe(`${held} structures this set holds off the page were not written; export the set as SD to write them all.`);
+    // (a set that holds none off the page: nothing to say)
+    const { doc: small } = enumerated();
+    expect(heldNotWritten(exportedDrawn(canvas(small)))).toBeNull();
   });
 
   it("writes what is drawn as one record, as before, where no set is selected with it", () => {
