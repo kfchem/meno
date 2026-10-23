@@ -2064,7 +2064,9 @@ it.
 - **What it reads** is each entry as Meno's entry record (`entryOfSet`):
   its properties as its molecule's frame carries them
   (`Molecule3D.properties`, one map for each frame - a model's NLL, a
-  descriptor - each with its unit and what worked it out), and Meno's own:
+  descriptor - each with its unit and what worked it out; a structure
+  drawn's, from its record, on each conformer *Conformers* makes of it,
+  2026-10-23), and Meno's own:
   its energy, in hartrees, its number among its compound's conformers,
   its compound as its group, its name, its thermochemistry. A condition on
   a name that is Meno's own and one an entry carries of its own too is

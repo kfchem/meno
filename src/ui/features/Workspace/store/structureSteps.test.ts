@@ -207,6 +207,27 @@ describe("a plugin's step on structures drawn", () => {
     expect((await ran("descriptors")).step.ran).toMatchObject({ ok: false, said: "It said nothing Meno can take" });
   });
 
+  it("keeps none of what an earlier step said of a structure it keeps: not set aside any more, and its new values of it as it is", async () => {
+    // (one Enumerate set aside, wired on; one whose record went stale with an edit; one plain)
+    const aside: DrawnRecord = { properties: { number: { value: 2, unit: "none", status: "computed" } }, status: { aside: "Same as 1" } };
+    const stale: DrawnRecord = { from: ["seed-1"], stale: "its properties were for the structure before the edit" };
+    answer = () => ({ structures: [{ as: "drawn", properties: { mw: { value: 46.069, unit: "g/mol" } } }, { as: "drawn", properties: { mw: { value: 74.123, unit: "g/mol" } } }, { as: "drawn" }] });
+    const described = await ran("descriptors", [aside, stale]);
+    expect(described.out!.records.map((r) => [r?.status, r?.stale, Object.keys(r?.properties ?? {})])).toEqual([
+      [undefined, undefined, ["number", "mw"]],
+      [undefined, undefined, ["mw"]],
+      [undefined, undefined, []],
+    ]);
+    // (kept with nothing worked out - Check structures: not set aside any more, and still said stale)
+    answer = () => ({ structures: [{ as: "drawn" }, { as: "drawn" }, { as: "drawn" }] });
+    const checked = await ran("check-structures", [aside, stale]);
+    expect(checked.out!.records.map((r) => [r?.status, r?.stale])).toEqual([
+      [undefined, undefined],
+      [undefined, stale.stale],
+      [undefined, undefined],
+    ]);
+  });
+
   it("takes in nothing where the plugin says nothing Meno can take, saying so", async () => {
     answer = () => ({ structures: [{ as: "drawn" }] });
     const { step, out } = await ran("stereoisomers");
