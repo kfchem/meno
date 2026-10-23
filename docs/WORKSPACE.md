@@ -2009,9 +2009,14 @@ formula). Pure logic in `utils/completeness.ts`, the requests in
   heavy atoms were C2); a step whose plugin needs the whole molecule -
   *Conformers*, *Optimise*, *Energy*, *Frequencies*, *NCI*, a plugin's
   *Duplicates* (`whole` in `workflow/kinds.ts`) - refuses it before
-  anything is sent, saying what to do (`skeletonsRefused`); Meno's own
-  steps on its shape and energies, and *Render*, take it. It is not drawn
-  as a formula, which would say how every atom is protonated. A plugin's
+  anything is sent, saying what to do: a program's jobs each skeleton
+  apart, out of the step's *Failed* exit (kind *refused*), the rest run
+  (`skeletonEntries`, 2026-10-23); a step a plugin does at once, the step
+  (`skeletonsRefused`). Meno's own steps on its shape and energies, and
+  *Render*, take it; *Group* by constitution groups skeletons by their
+  heavy atoms alone, however each would be protonated, and says how many.
+  It is not drawn as a formula or in a large set's sample (`drawnOf`
+  refuses it), which would say how every atom is protonated. A plugin's
   writer, given the molecule with its charge and spin, is not given it;
   Export says so before a file is asked for. An SD file or a copy writes
   it as a skeleton - each atom's valence its bonds' orders summed (the

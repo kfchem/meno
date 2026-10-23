@@ -148,6 +148,10 @@ describe("a molecule's frames, results and stereo labels as it is edited", () =>
     const point = editedCopy(scan, 1, placesOf(scan, 1), undefined, { x: 0, y: 0 });
     expect([point.entryFrames, point.notConverged]).toEqual([undefined, undefined]);
     expect(editedCopy(scan, 0, placesOf(scan, 0), undefined, { x: 0, y: 0 })).toMatchObject({ entryFrames: [], notConverged: true });
+    // an entry marked failed - the point a run stopped before converging - keeps its failure
+    const failed = { kind: "not-converged" as const, why: "no optimum" };
+    const stopped = { ...butane(), frames: [placesOf(butane(), 0)], entryFrames: [1], notConverged: true as const, failed: [null, failed] };
+    expect(editedCopy(stopped, 1, placesOf(stopped, 1), undefined, { x: 0, y: 0 })).toMatchObject({ failed: [failed], notConverged: true });
     // why none was, where that was said: kept
     const cut = { ...butane(), frames: [placesOf(butane(), 0)], entryFrames: [], noEntryWhy: "cut" as const };
     const copy = editedCopy(cut, 1, placesOf(cut, 1), undefined, { x: 0, y: 0 });

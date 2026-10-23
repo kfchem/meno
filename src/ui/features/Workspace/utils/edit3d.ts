@@ -282,9 +282,13 @@ export function editedCopy(m: Molecule3D, frame: number, xyz: readonly number[],
  * (`Molecule3D.entryFrames`): a frame of an opened run that was none - a
  * step on the way, a point never converged, one of a run that did not end as
  * it should - is none still, said as it was: it is that geometry. One that
- * was, or of a molecule whose every frame is, keeps nothing of it.
+ * failed keeps its failure. One that was an entry, or of a molecule whose
+ * every frame is, keeps nothing of it.
  */
-function entryKept(m: Molecule3D, frame: number): Pick<Molecule3D, "entryFrames" | "notConverged" | "noEntryWhy"> {
+function entryKept(m: Molecule3D, frame: number): Pick<Molecule3D, "entryFrames" | "notConverged" | "noEntryWhy" | "failed"> {
+  // (an entry marked failed - a point never converged - stays so: one entry, its failure kept)
+  const failed = m.failed?.length === 1 + (m.frames?.length ?? 0) ? m.failed[frame] : null;
+  if (failed) return { failed: [failed], ...(m.notConverged ? { notConverged: true as const } : {}) };
   if (!m.entryFrames || m.entryFrames.includes(frame)) return {};
   return { entryFrames: [], ...(m.noEntryWhy ? { noEntryWhy: m.noEntryWhy } : { notConverged: true as const }) };
 }

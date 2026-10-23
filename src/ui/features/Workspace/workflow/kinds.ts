@@ -34,8 +34,8 @@ export function takenBy(takes: readonly ValueKind[], holds: ValueKind): boolean 
   return takes.includes(holds) || (takes.includes("table") && (holds === "molecules" || holds === "conformers"));
 }
 
-/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set. */
-export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders";
+/** Which icon a kind has (workflow/icons: QuickAdd, a step's card): a stack, a trend downwards, a bolt, a signal, a cloud, a picture, a funnel, two squares, bars, shapes grouped, a pointer choosing, sparks, sliders set, a chart. */
+export type StepIcon = "rings" | "curve" | "level" | "wave" | "cloud" | "picture" | "band" | "twins" | "bars" | "grouped" | "pointer" | "sparks" | "sliders" | "chart";
 
 /**
  * An input a kind takes (docs/WORKFLOWS-FOUNDATION.md, *Steps, ports and
@@ -165,7 +165,8 @@ export const KINDS: readonly KindInfo[] = [
     kind: "filter",
     name: "Filter",
     icon: "sliders",
-    takes: ["molecules", "conformers"],
+    // (molecules in 3D by their entries' properties; structures drawn by their records')
+    takes: ["molecules", "conformers", "structures"],
     gives: "same",
     runs: "entries",
     made: "Filtered",
@@ -270,6 +271,21 @@ export const KINDS: readonly KindInfo[] = [
       return lists.size ? [...lists].map(([n, o]) => `R${n} \u00b7 ${o.length}`).join(", ") : "No lists yet";
     },
   },
+  {
+    kind: "chart",
+    name: "Chart",
+    icon: "chart",
+    // (a table - or molecules, seen as one: lib/table moleculesAsTable)
+    takes: ["table"],
+    gives: "chart",
+    runs: "entries",
+    made: "Chart",
+    options: [
+      { id: "x", label: "Across", type: "text", default: "" },
+      { id: "y", label: "Up", type: "text", default: "" },
+    ],
+    how: (v) => (v.x || v.y ? `${v.y || "the second column of numbers"} against ${v.x || "the first"}` : "The first two columns of numbers"),
+  },
 ];
 
 /** How a Filter step does its work, in a line: its conditions as read, and whether all or any - or why they do not read, or that there are none. */
@@ -358,6 +374,9 @@ export function portOf(kind: StepKind, port: string): StepPort {
   const inputs = inputsOf(kind);
   return inputs.find((p) => p.id === port) ?? inputs[0];
 }
+
+/** Whether an input reads what comes in as a table (lib/table `moleculesAsTable`) - each molecule as it is, a conformer set's frames its conformers - rather than as a step's entries: one that takes a table. A set mixing conformer sets with other molecules goes into it. */
+export const readsAsTable = (kind: StepKind, port: string): boolean => portOf(kind, port).takes.includes("table");
 
 /** The exit of `kind` named `exit`, or its first where `exit` is not one of its own. */
 export function exitOf(kind: StepKind, exit: string): StepExit {

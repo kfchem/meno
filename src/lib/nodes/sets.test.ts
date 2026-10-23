@@ -38,6 +38,8 @@ describe("Group", () => {
     const skeleton = (id: string) => ({ ...molecule(id, ["C", "C", "O"], [[0, 1], [1, 2]]), species: null });
     const out = group([skeleton("s"), ethanol("a"), skeleton("t")], { by: "constitution" });
     expect(out.ok && out.exits.done.map(groupOf)).toEqual(["a", "b", "a"]);
+    // (and said: two skeletons of the same heavy atoms are one group, however each is protonated)
+    expect(out.said).toBe("2 groups by constitution · 3 of 3 entries · 2 without hydrogens, grouped by heavy atoms alone");
   });
 
   it("by a property's value - a number with its unit, or a text - those with none set aside, and a group replaced counted", () => {
