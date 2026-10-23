@@ -69,14 +69,11 @@ describe("a PDF page's figures", () => {
     expect(figures[0][2]).toBeGreaterThanOrEqual(208);
   });
 
-  it("are one across a wide label between a structure's two parts - an OSiPh2tBu, 60 or 90 points - never cut in two at it", () => {
-    for (const w of [60, 90]) {
-      const left = structureAt(100, 300);
-      const label = text([174, 304, 174 + w, 314]);
-      const right = structureAt(176 + w, 300);
-      const figures = figuresOf([...left, label, ...right]);
-      expect([w, figures.length]).toEqual([w, 1]);
-    }
+  it("are not joined through a label wider than a word: two figures, the structure across them refused, not read in half (utils/pageStructures)", () => {
+    const left = structureAt(100, 300);
+    const label = text([174, 304, 234, 314]);
+    const right = structureAt(236, 300);
+    expect(figuresOf([...left, label, ...right])).toHaveLength(2);
   });
 
   it("are not joined through a line of words, taller than one line, between two figures", () => {

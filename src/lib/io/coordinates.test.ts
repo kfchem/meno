@@ -154,12 +154,24 @@ describe("coordinates in a text", () => {
     expect(s.warnings[0]).toMatch(/columns came mixed/);
   });
 
-  it("reads a text whose lines' ends were made spaces, as some copies make them: each structure - but no charge nor multiplicity, two numbers before its atoms on a line that may be a name's", () => {
+  it("reads a text whose lines' ends were made spaces, as some copies make them: each structure and its notes - but no charge and multiplicity, which no line of their own says", () => {
     const ss = read(lines("Water", "E = -76.4 Hartree", "0 1", WATER, "Methane", "1 2", METHANE).replace(/\n/g, " "));
-    expect(ss.map((s) => [formulaOf(s.atoms), s.charge, s.multiplicity])).toEqual([
-      ["H2O", undefined, undefined],
-      ["CH4", undefined, undefined],
+    expect(ss.map((s) => [s.name, formulaOf(s.atoms), s.charge, s.multiplicity, s.notes])).toEqual([
+      ["Water", "H2O", undefined, undefined, ["E = -76.4 Hartree"]],
+      // (its two numbers run onto its title: kept with it, as the text has them - not taken for its species, nor taken off)
+      ["Methane 1 2", "CH4", undefined, undefined, []],
     ]);
+  });
+
+  it("takes a charge and multiplicity on a line of their own alone - never two numbers a title ends in", () => {
+    const [own] = read(lines("Water", "0 1", WATER));
+    expect([own.name, own.charge, own.multiplicity]).toEqual(["Water", 0, 1]);
+    // (a conformer's number and another, a TS's: the title's own words, kept as it is - no species read from them)
+    for (const title of ["Conformer 12 3", "TS 2 1", "water, 2024 1"]) {
+      const [s] = read(lines(title, WATER));
+      expect([s.charge, s.multiplicity], title).toEqual([undefined, undefined]);
+      expect(s.name, title).toBe(title);
+    }
   });
 
   it("reads lengths in ångströms where only the energies are given in atomic units", () => {

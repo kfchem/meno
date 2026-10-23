@@ -12,7 +12,8 @@ import { resultOf } from "./flow";
 import { ONE_EXIT } from "./kinds";
 import { BETWEEN, SET_PAD, SET_TOP } from "./look";
 import { addSet, holdMembers, markMade, resizeSet } from "./model";
-import { frameAt, LEAST_W, placeFor, ROW_MOST } from "./run";
+import { LEAST_W, ROW_MOST } from "./run";
+import { placeAgain, placeFor } from "./place";
 
 /**
  * An entry as a render takes it: its atoms and bonds at its own geometry -
@@ -67,7 +68,7 @@ export function placePictures(doc: WorkspaceDocument, step: WorkflowStep, made: 
 
   const was = resultOf(doc, step.id);
   if (was) doc = removePictures(doc, setMembers(doc, was).pictures);
-  const frame = was ? frameAt(was.x0, was.y1, width, height) : placeFor(doc, step, width, height);
+  const frame = was ? placeAgain(doc, step, was, width, height) : placeFor(doc, step, width, height);
   const there = new Set((doc.pictures ?? []).map((p) => p.id));
   made.forEach(({ picture, size }, i) => {
     doc = addPicture(doc, { ...picture, x: frame.x0 + SET_PAD + middle + places[i].x, y: frame.y1 - SET_TOP + places[i].y, w: size[0], h: size[1] });

@@ -1,7 +1,7 @@
 {
   "id": "pyscf",
   "name": "PySCF",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "uses": [{"name": "PySCF", "version": "2.14.0"}],
   "description": "Works out orbitals and densities on a grid, from a calculation's output (read with cclib) or a Molden file.",
   "licence": "Apache-2.0",

@@ -214,8 +214,6 @@ const naming = (l: string) => !NOTE.test(l) && !HEADING_ONLY.test(l) && !NUMBERS
 const nameOf = (l: string) =>
   l
     .replace(STATED, "")
-    // (and a charge and multiplicity after it, the lines' ends made spaces)
-    .replace(/\s+[+-]?\d+[\s,]+\d+$/, "")
     .replace(/[,;:]?\s*\(?\s*(?:(?:cartesian\s+)?coordinates\s+)?in\s+(?:bohrs?|a\.\s*u\.|atomic units|\u00e5|\u00e5ngstr\u00f6ms?|angstroms?)\s*\)?/i, "")
     .replace(/[\s,;:]*\(\s*\)|[\s,;:]+$/g, "")
     .trim();
@@ -345,7 +343,7 @@ function crowds(a: readonly CoordinateAtom[], b: readonly CoordinateAtom[]): boo
 function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: number): CoordinateStructure[] {
   // (named by the line nearest its atoms that may name it - or, its lines' ends made spaces, by what comes before its first note
   // on the line before its atoms, where that may name it: "TS-1 E = -76.4 Hartree 0 1")
-  const last = (said[said.length - 1] ?? "").replace(/(?:^|\s)[+-]?\d+[\s,]+\d+$/, "");
+  const last = said[said.length - 1] ?? "";
   const before = FRAGMENT.exec(last) ? last.slice(0, last.search(FRAGMENT)).trim() : "";
   // (a number alone on its line is the count of its atoms, as an XYZ file sets it, where it is as many; else, nearer its atoms
   // than any other name, its name - a compound's number, set alone over its coordinates)
@@ -354,13 +352,12 @@ function structureOf(run: Run, said: readonly string[], bohrAll: boolean, n: num
   const named = nearest ?? (before && naming(before) ? before : undefined);
   // (a note on a line with more before it - the lines' ends made spaces, its name before it: its energies and frequencies alone)
   const notes = said.filter((l) => NOTE.test(l)).flatMap((l) => (l.search(FRAGMENT) > 0 ? [...l.matchAll(new RegExp(FRAGMENT.source, "gi"))].map((m) => m[0].trim()) : [l]));
-  // (a charge and a multiplicity on a line of their own - or, the lines' ends made spaces, the last two numbers before the atoms)
+  // (a charge and a multiplicity on a line of their own, alone: two numbers at the end of a longer line - a title's, "Conformer 12 3",
+  // "TS 2 1" - are no charge and multiplicity, but the line's own words, kept with it - never taken for the species)
   // (or said in words, on one line or two: "Charge = 1 Multiplicity = 1")
   const saidCharge = [...said].reverse().map((l) => CHARGE_SAID.exec(l)).find((m) => m)?.[1];
   const saidMultiplicity = [...said].reverse().map((l) => MULTIPLICITY_SAID.exec(l)).find((m) => m)?.[1];
   const inWords = saidCharge != null && saidMultiplicity != null ? `${saidCharge} ${saidMultiplicity}` : undefined;
-  // (only on a line of its own, or said in words - never two numbers at a title's end, "TS 2 1", "Conformer 12 3", which may be
-  // its name's, nor the last two before its first atom where the text's lines' ends were made spaces: those may be a name's too)
   const pair = inWords ?? [...said].reverse().find((l) => /^[+-]?\d+[\s,]+[+-]?\d+$/.test(l));
   const [charge, multiplicity] = pair ? pair.split(/[\s,]+/).map(Number) : [];
   const stated = said.map((l) => STATED.exec(l)).find((m) => m) ?? null;

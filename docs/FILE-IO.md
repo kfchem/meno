@@ -1520,6 +1520,37 @@ As step 3 was built:
     gives each one's molecule. The tests skip a file that is not there.
   - Psi3 is left out: cclib has no output of it to test with.
   - `probe` is in place, and tested with made-up plugins.
+- **An ORCA output's energy is ORCA's final one** (2026-10-24). cclib's
+  SCF energies for ORCA hold the SCF's energy and the dispersion's, and
+  not the other terms a composite method adds (gCP; B97-3c's short-range
+  basis term), which ORCA adds only in its *FINAL SINGLE POINT ENERGY*.
+  Measured on HCN, ORCA 6.1.1: 0.6 kcal/mol at r2SCAN-3c and 6.1 at
+  B97-3c. So the cclib plugin's worker gives each geometry of an ORCA
+  output the *FINAL SINGLE POINT ENERGY* written after it, one to each
+  geometry and in order (`orca_energies`). Where they are not one to each
+  geometry, it gives no electronic energy and says why ("Energies not
+  read: ..."), keeping the geometries and the free energies; it never
+  mixes them with the SCF's. That covers a single point written at no
+  geometry of its own (a displaced geometry's, for numerical frequencies),
+  a geometry with none, too few or too many, a compound job, and a nudged
+  elastic band. Each read says what its energy is: "ORCA final
+  single-point energy (includes dispersion and gCP where the method has
+  them)".
+  - The method and basis set are those the input names (the `!` line as
+    the output echoes it) that ORCA says it took as such: the functional
+    or composite method it says it recognised, else the method cclib read
+    where the input names it (HF, MP2); the orbital basis it says it used.
+    Otherwise neither is given: never cclib's "DFT", never an auxiliary
+    basis ("def2-mTZVPP/J"), and no basis after a composite method, whose
+    own it is.
+  - The PySCF plugin, which reads ORCA outputs for their orbitals, gives
+    none of an ORCA output's energies, method or basis. Meno takes each
+    from the first reader that gives one (lib/calc/read `combine`), so
+    cclib's SCF energies and "DFT" would otherwise stand in for the cclib
+    plugin's where it gives none.
+  - Gaussian and xTB have no such gap. Gaussian folds an empirical
+    dispersion into the nuclear repulsion, so *SCF Done* holds it. xtb's
+    *TOTAL ENERGY* holds its dispersion.
 - **The one exception is closed** (the maintainer, 2026-10-15): the
   energies on an XYZ file's comment lines are read by the patterns of the
   plugins added, not by Meno. Each plugin whose program writes XYZ files

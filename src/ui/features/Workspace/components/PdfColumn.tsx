@@ -31,6 +31,7 @@ import { pagesInView } from "../../../../lib/pdf/column";
 import { textHad } from "../../../../lib/pdf/text";
 import { figuresHad } from "../../../../lib/pdf/figures";
 import { BASE, levelFor, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures } from "./pdfPictures";
+import { pickedStructure } from "../utils/pdfStructures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
 import { HEADER_PX, readerOf } from "./pdfColumnReader";
 import { ease, SETTLE_MS } from "./Pdfs2D";
@@ -207,6 +208,9 @@ function ColumnPass({
   const pdfFind = useEditor((s) => s.pdfFind);
   const pdfFlash = useEditor((s) => s.pdfFlash);
   const pdfBox = useEditor((s) => s.pdfBox);
+  // (structures picked, and the one under the pointer: docs/PDF.md, *Structures picked from a PDF*)
+  const structureLit = useEditor((s) => s.pdfStructureLit);
+  const structuresPicked = useEditor((s) => s.pdfStructures);
   const [, setTick] = useState(0);
   const redraw = useCallback(() => {
     setTick((t) => t + 1);
@@ -445,6 +449,12 @@ function ColumnPass({
     if (asked) redraw();
   };
 
+  /** The structures picked on a page of this PDF, and the one under the pointer there, as they were read. */
+  const structuresOnPage = (p: { id: number; sha256: string }, page: number) => {
+    const lit = structureLit?.id === p.id && structureLit.page === page ? pickedStructure(p.sha256, structureLit) : null;
+    const picked = structuresPicked?.id === p.id ? structuresPicked.picks.filter((k) => k.page === page).flatMap((k) => pickedStructure(p.sha256, k) ?? []) : [];
+    return { lit, picked };
+  };
   const now = performance.now();
   // the column's pages in view, and those just beyond, to be ready
   const column = (() => {
@@ -467,7 +477,7 @@ function ColumnPass({
             px={1}
             preview={pics.preview(pdf, i)}
             tiles={pics.tilesOf(pdf.sha256, i, clock.current.levels.get(i) ?? 0)}
-            marks={marksOn(pdf, i, pdfSel, pdfFind?.found ?? [], pdfFind ? (pdfFind.found[pdfFind.now] ?? null) : null, redraw, pdfFlash, pdfBox)}
+            marks={marksOn(pdf, i, pdfSel, pdfFind?.found ?? [], pdfFind ? (pdfFind.found[pdfFind.now] ?? null) : null, redraw, pdfFlash, pdfBox, structuresOnPage(pdf, i))}
             ink={inkOnPage(pdf, i)}
           />
         );

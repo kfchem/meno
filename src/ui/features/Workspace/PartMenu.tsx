@@ -289,6 +289,9 @@ export default function PartMenu({
     /** A box drawn on it put on the page as a picture, or copied as one. */
     onPutBox?: () => void;
     onCopyBox?: () => void;
+    /** Structures picked in it (docs/PDF.md, *Structures picked from a PDF*) put on the page beside it, or copied. */
+    onPutStructures?: () => void;
+    onCopyStructures?: () => void;
     /** The coordinates in the words selected, or in the box drawn, shown as structures to place in 3D (lib/io/coordinates). */
     onStructures?: () => void;
     /** The pen's card opened, to write on its pages by hand (docs/PRESENTING.md, *Handwriting*). */
@@ -711,11 +714,13 @@ export default function PartMenu({
             : []),
           del("Delete PDF"),
           ...(pdf?.onCopy ? [{ name: "Copy", keys: shortcut("C"), run: pdf.onCopy }] : []),
+          ...(pdf?.onPutStructures ? [{ name: "Put on the page", keys: "", run: pdf.onPutStructures }] : []),
+          ...(pdf?.onCopyStructures ? [{ name: "Copy", keys: shortcut("C"), run: pdf.onCopyStructures }] : []),
           ...(pdf?.onPutBox ? [{ name: "Put on the page", keys: "", run: pdf.onPutBox }] : []),
           ...(pdf?.onCopyBox ? [{ name: "Copy picture", keys: "", run: pdf.onCopyBox }] : []),
           ...(pdf && onReadStructure ? [{ name: "Read as structure", keys: "", run: onReadStructure }] : []),
           ...(pdf?.onStructures ? [{ name: "3D structures", keys: "", run: pdf.onStructures }] : []),
-          ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox) }] : []),
+          ...(pdf && !pdf.icon ? [{ name: pdf.spread ? "Gather pages" : "Spread pages", keys: "", run: pdf.onSpread, divider: !!(pdf.onCopy || pdf.onPutBox || pdf.onPutStructures) }] : []),
           ...(pdf?.onRows ? [{ name: "Put pages in rows", keys: "", run: pdf.onRows }] : []),
           ...(pdf?.onWrite && !pdf.icon ? [{ name: "Write on it", keys: "", run: pdf.onWrite, divider: true }] : []),
           // (a new PDF from it, and it written to a file)

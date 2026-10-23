@@ -86,7 +86,7 @@ describe("a large set its step leaves", () => {
     expect(removeStep(doc, step).sets).toEqual([{ id: 5, x0: 0, y0: 0, x1: 2, y1: 2, members: [{ structure: [1, 2] }] }]);
   });
 
-  it("is asked about before it is deleted by a key or a selection - not by its menu, which says it in words - and a set on the page is not", () => {
+  it("is asked about before it is deleted by a key, a selection or its menu - and a set on the page is not", () => {
     const page = createWorkspaceDocument();
     const st = createEditorStore(page);
     connectStoreToDocument(st, page);
@@ -110,7 +110,8 @@ describe("a large set its step leaves", () => {
     expect(st.getState().deleteDrawn({ atoms: [], bonds: [], flow } as unknown as Parameters<ReturnType<typeof st.getState>["deleteDrawn"]>[0])).toBe(1);
     expect(st.getState().sets.some((b) => b.id === rest)).toBe(true);
     expect(leftByCut(1)).toBe("A set that holds its molecules itself was left in place: a copy does not carry them. Delete it on its own.");
-    // (asked, or by its menu: gone, its molecules with it)
+    // (by its menu: asked, as by the key - heldStructures.test)
+    // (asked: gone, its molecules with it)
     st.getState().removeSet(rest, true);
     expect([st.getState().sets.some((b) => b.id === rest), st.getState().askDeleteSet]).toEqual([false, null]);
   });
