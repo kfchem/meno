@@ -12,7 +12,8 @@ import { useStyle3D } from "../style3d";
 import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen } from "../workflow/cardOpen";
-import { countOf, type Frame } from "../workflow/entries";
+import { countOf, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
 import { useDrawnLayout } from "./drawnLayoutContext";
@@ -22,7 +23,8 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
-import { canWire, entryOnPage, givesOf, stateOf, wireRefusal } from "../workflow/flow";
+import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
+import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -212,10 +214,13 @@ function runRows(s: WorkflowStep): RunRow[] {
   const by = byOf(s);
   const how = (kind: WorkflowStep["kind"], options: WorkflowStep["options"]) =>
     [kind !== s.kind ? kindInfo(kind).name : "", howOf(optionsFor(kind, by), options, by === "meno" ? kindInfo(kind).how : undefined)].filter(Boolean).join(" \u00b7 ");
+  // (each named by when it was, to the second where two were in one minute)
+  const names = namesOf([...(s.ran ? [s.ran.at] : []), ...(s.runs ?? []).map((r) => r.at)]);
+  const first = s.ran ? 1 : 0;
   return [
-    ...(s.ran ? [{ at: s.ran.at, said: s.ran.said, how: how(s.ran.kind ?? s.kind, s.ran.options ?? s.options), shown: true }] : []),
+    ...(s.ran ? [{ at: s.ran.at, name: names[0], said: s.ran.said, how: how(s.ran.kind ?? s.kind, s.ran.options ?? s.options), shown: true, keep: !!s.ran.keep }] : []),
     // (an earlier run's molecules that did not read from its file: said with what it said)
-    ...(s.runs ?? []).map((r) => ({ at: r.at, said: notRead(r) ? `${r.said} · ${notRead(r).toLocaleString("en-US")} not read` : r.said, how: how(r.kind, r.options), shown: false })),
+    ...(s.runs ?? []).map((r, i) => ({ at: r.at, name: names[first + i], said: notRead(r) ? `${r.said} · ${notRead(r).toLocaleString("en-US")} not read` : r.said, how: how(r.kind, r.options), shown: false, keep: !!r.keep })),
   ];
 }
 
@@ -272,6 +277,8 @@ export default function Workflow2D() {
   // (what has just joined a set or left it, marked a moment)
   const memberMarks = useMemberMarks(sets, { model, molecules3d, pictures }, (m) => reachOverFrames(m, style3d, turns3d[m.id]));
   const shownOf = (b: WorkflowSet): Frame => shownSets.get(b.id) ?? b;
+  // (each structure a step numbered - Enumerate's - its number under it, how it was made on pointing at it)
+  const numbered = useMemo(() => numberedOn({ model }, sets), [model, sets]);
   // (who does a kind of step changes as plugins are added and taken away)
   useReaders((r) => r.state);
   // (where the programs installed separately that steps run are: looked for as such steps are put down, opened, changed)
@@ -641,14 +648,24 @@ export default function Workflow2D() {
                   ? plural(count.compounds, "compound")
                   : `${plural(count.compounds, "compound")} · ${count.entries}`;
           // (a large result set: what it holds, said large in its frame)
-          const summary = b.collection
-            ? {
-                count: count.entries.toLocaleString("en-US"),
-                nouns: count.holds === "conformers" ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}` : count.entries === 1 ? "molecule" : "molecules",
-                holds: count.holds === "conformers" ? ("conformers" as const) : ("molecules" as const),
-                style: docStyle,
-              }
-            : undefined;
+          const summary =
+            b.collection || b.drawnCollection
+              ? {
+                  count: count.entries.toLocaleString("en-US"),
+                  nouns:
+                    count.holds === "conformers"
+                      ? `${count.entries === 1 ? "conformer" : "conformers"} of ${plural(count.compounds, "compound")}`
+                      : count.holds === "structures"
+                        ? count.entries === 1
+                          ? "structure"
+                          : "structures"
+                        : count.entries === 1
+                          ? "molecule"
+                          : "molecules",
+                  holds: count.holds === "conformers" ? ("conformers" as const) : count.holds === "structures" ? ("structures" as const) : ("molecules" as const),
+                  style: docStyle,
+                }
+              : undefined;
           return [b.id, { name: setName(b, steps), count: `${counted}${b.unread ? ` · ${b.unread.toLocaleString("en-US")} not read` : ""}${b.keep === false && count.entries ? " · not kept" : ""}`, summary }];
         }),
       ),
@@ -757,9 +774,11 @@ export default function Workflow2D() {
             options={optionsOf(takes, s.options)}
             kinds={kindsOf(byOf(s)).map((k) => ({ kind: k, name: kindInfo(k).name }))}
             runs={runRows(s)}
+            drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: values })}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
+            onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}
             onClose={() => store.getState().setWorkflowView({ openStep: null })}
             onCardDown={(e) => dragStep(e, s)}
             onContextMenu={menuOf("step", s.id)}
@@ -824,6 +843,17 @@ export default function Workflow2D() {
                 className={k.joined ? "rounded-lg border border-accel-base bg-accel-base/5" : "rounded-lg border border-dashed border-gh-gray"}
                 style={{ width: (k.frame.x1 - k.frame.x0) / PX, height: (k.frame.y1 - k.frame.y0) / PX, pointerEvents: "none" }}
               />
+            </div>
+          ))}
+          {numbered.map((n) => (
+            <div key={`n${n.key}`} style={{ ...onLayer(n.x, n.y - NOMINAL_BOND_LENGTH / 2), transform: "translateX(-50%)" }}>
+              <span
+                className="block whitespace-nowrap rounded px-1 text-[10px] leading-4 tabular-nums text-gh-gray"
+                style={{ pointerEvents: "auto" }}
+                title={[recordHow(n.record), recordWhy(n.record)].filter(Boolean).join(" \u00b7 ")}
+              >
+                #{recordNumber(n.record)}
+              </span>
             </div>
           ))}
           {shownParts.map(({ key, item, leaving }) =>

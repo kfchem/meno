@@ -29,8 +29,12 @@ export type SetFrameProps = {
   onHover: (on: boolean) => void;
   /** A chemist's set: its name changed - two clicks on it, Enter to keep it, Escape to leave it as it was. */
   onRename?: (name: string) => void;
-  /** A large result set's (`WorkflowSet.collection`): what it holds, said in its frame where its molecules would lie, with a sample of them drawn and a chart of their energies (SummaryBody). */
-  summary?: { count: string; nouns: string; holds: "molecules" | "conformers"; style: StyleChoice };
+  /**
+   * A large result set's (`WorkflowSet.collection`, `drawnCollection`): what it holds, said in its frame
+   * where they would lie - molecules in 3D with a sample of them drawn and a chart of their energies
+   * (SummaryBody); structures drawn, how many, as yet.
+   */
+  summary?: { count: string; nouns: string; holds: "molecules" | "conformers" | "structures"; style: StyleChoice };
   /** A chart it holds: a point or a level pressed - the entry it is of shown, where that is on the page. */
   onEntry?: (entry: string | undefined) => void;
   /** Its summary's *Open as a table*: what it holds read in the column. */
@@ -119,7 +123,17 @@ export default function SetFrame(p: SetFrameProps) {
               className="origin-top-left"
               style={{ width: SUMMARY_PX.w, height: SUMMARY_PX.h, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / SUMMARY_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / SUMMARY_PX.h)})` }}
             >
-              <SummaryBody count={p.summary.count} nouns={p.summary.nouns} collection={p.set.collection} holds={p.summary.holds} style={p.summary.style} onOpenTable={p.onOpenTable} compact={p.compact} />
+              <SummaryBody count={p.summary.count} nouns={p.summary.nouns} collection={p.set.collection} holds={p.summary.holds === "conformers" ? "conformers" : "molecules"} style={p.summary.style} onOpenTable={p.onOpenTable} compact={p.compact} />
+            </div>
+          )}
+          {/* (structures drawn held in the set: how many, and that they are on no page - no sample of them drawn yet) */}
+          {p.set.drawnCollection && (
+            <div className="flex flex-col gap-2" data-set-summary="">
+              <div className="flex items-center gap-1.5">
+                <span className="text-2xl leading-8 font-medium text-gh-black tabular-nums">{p.summary.count}</span>
+                <span className="flex-1 text-xs leading-4 text-gh-gray">{p.summary.nouns}</span>
+              </div>
+              <span className="-mt-2 text-[10px] leading-4 text-gh-gray">On no page: deleting the set deletes them</span>
             </div>
           )}
         </div>

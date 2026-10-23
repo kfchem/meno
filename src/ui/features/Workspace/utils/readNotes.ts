@@ -25,6 +25,7 @@ const NOUNS = {
   number: ["number held in a set", "numbers held in sets"],
   chart: ["chart", "charts"],
   valueField: ["note of how a value was worked out", "notes of how values were worked out"],
+  frameMarks: ["mark of a molecule's failed frames", "marks of molecules' failed frames"],
   frameValues: ["list of energies, numbers, shares or degeneracies", "lists of energies, numbers, shares or degeneracies"],
   stereo: ["R/S or E/Z label", "R/S or E/Z labels"],
   biopolymer: ["record of residues and chains", "records of residues and chains"],
@@ -44,7 +45,8 @@ const NOUNS = {
   pdfInk: ["piece of handwriting on a PDF", "pieces of handwriting on PDFs"],
   set: ["set", "sets"],
   member: ["set member", "set members"],
-  property: ["property of a structure in a set", "properties of structures in sets"],
+  // (of a molecule in 3D, a frame's - Molecule3D.properties - or of a structure a step gave a set, its record's: one kind, as they are one record)
+  property: ["property of a molecule or a structure", "properties of molecules or structures"],
   madeFrom: ["tie of a structure in a set to what it was made from", "ties of structures in sets to what they were made from"],
   made: ["tie of a result set to its step", "ties of result sets to their steps"],
   step: ["step", "steps"],

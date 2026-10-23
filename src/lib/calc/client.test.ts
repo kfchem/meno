@@ -87,6 +87,20 @@ describe("a reader's worker, asked", () => {
     await expect(client.read("orca", "big.out", "text")).rejects.toThrow("cclib did not finish reading big.out in time");
   });
 
+  it("gives what is run at once the time it was given - asked again of the worker started in its place, too", async () => {
+    // (a run given longer than a request has - Generate's - keeps it where its worker had stopped unused)
+    const old = fakeWorker();
+    const fresh = fakeWorker();
+    const client = new ReaderClient("reinvent", old.transport, 10);
+    const next = new ReaderClient("reinvent", fresh.transport, 10);
+    client.handOver(async () => next);
+    client.close("stopped unused");
+    const answered = client.run("generate", [], { count: 1 }, "molecules", 5_000);
+    await new Promise((go) => setTimeout(go, 60));
+    fresh.say({ id: fresh.sent[0].id, ok: true, result: { outputs: [] } });
+    await expect(answered).resolves.toEqual({ outputs: [] });
+  });
+
   it("is asked whether a file is of a kind it tells itself, and is taken at its word only where it says yes", async () => {
     const w = fakeWorker();
     const client = new ReaderClient("nbo", w.transport);

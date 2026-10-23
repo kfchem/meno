@@ -4,12 +4,12 @@
  * what state a step is in.
  */
 import type { WorkspaceDocument } from "../document";
-import type { DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
+import type { DrawnModel, DrawnRecord, Molecule3D, Wire, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
 import { conformersOfOne, drawnKey, entryOfSet, hash, holdsOf, plainAmong, recordKey, setEntries, setMembers, setMolecules, type SetEntry } from "./entries";
-import { moleculesAsTable, type Table } from "../../../../lib/table";
+import { moleculesAsTable, WHAT_COLUMN, type Table } from "../../../../lib/table";
 import { levelOf } from "../../../../lib/calc/output";
-import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
-import { byOf, optionsFor, takesBy } from "./doers";
+import { exitOf, inputsOf, ONE_INPUT, optionsOf, portOf, readsAsTable, takenBy, takesNothing, type SetHolds, type SetKind, type ValueKind, isSetKind } from "./kinds";
+import { byOf, doerStamp, optionsFor, takesBy } from "./doers";
 
 type Flow = Pick<WorkspaceDocument, "model" | "molecules3d" | "sets" | "steps" | "wires" | "pictures">;
 
@@ -78,6 +78,8 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   const step = stepOf(doc, to);
   const set = findSet(doc, from.set);
   if (!step || !set) return "It is not there";
+  // (a step that takes nothing in has nothing to wire to)
+  if (takesNothing(step.kind)) return "It takes nothing in";
   if (set.made?.step === to) return "It is what this step gives";
   // (nothing it gives may come back round to it)
   const madeBy = set.made?.step;
@@ -98,8 +100,18 @@ export function wireRefusal(doc: Flow, from: WireEnd, to: number, port: string =
   return `It takes ${wants}, not ${SET_WORDS[holds]}`;
 }
 
-/** What comes into a step: the kind of set, and its molecules in 3D and structures drawn - each with its record, where it has one - in order. Null where nothing does - or what would has not been made yet, or is pictures, which no step takes. */
-export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[] } | null {
+/**
+ * What comes into a step: the kind of set, and its molecules in 3D and
+ * structures drawn - each with its record, where it has one - in order:
+ * those on the page by their atoms' ids, or, from a large result set, as
+ * it holds them off the page (`held`). Null where nothing does - or what
+ * would has not been made yet, or is pictures, which no step takes.
+ */
+export function inputOf(
+  doc: Flow,
+  step: number,
+  port?: string,
+): { holds: SetKind; molecules: Molecule3D[]; structures: number[][]; records: (DrawnRecord | undefined)[]; held?: readonly DrawnModel[] } | null {
   const from = wireInto(doc, step, port)?.from;
   if (!from) return null;
   const set = findSet(doc, from.set);
@@ -107,6 +119,7 @@ export function inputOf(doc: Flow, step: number, port?: string): { holds: SetKin
   const holds = holdsOf(doc, set);
   // (a table, a number, a chart - no entries to give a step that works on them)
   if (!isSetKind(holds)) return null;
+  if (set.drawnCollection) return { holds, molecules: [], structures: [], records: [], held: set.drawnCollection };
   const { structures, records } = setMembers(doc, set);
   return { holds, molecules: setMolecules(doc, set), structures, records };
 }
@@ -134,13 +147,17 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
   const titles = new Map(input.molecules.flatMap((m) => (m.title ? [[m.id, m.title] as const] : [])));
   const by = new Map(input.molecules.map((m) => [m.id, m.calc && (m.calc.program || levelOf(m.calc)) ? { ...(m.calc.program ? { program: m.calc.program } : {}), ...(levelOf(m.calc) ? { method: levelOf(m.calc) } : {}) } : undefined]));
   // (each molecule as it is - a conformer set's frames its conformers, another's each an entry of its own - in a set that mixes them too)
+  // (and each row says which: a conformer of its set, a frame of a molecule of several - a scan's, a path's - or a molecule)
   let compounds = 0;
+  const what: string[] = [];
   const entries = input.molecules.flatMap((m) => {
-    const es = setEntries([m], conformersOfOne(m) ? "conformers" : "molecules").map((e) => ({ ...e, compound: compounds + e.compound }));
+    const conformers = conformersOfOne(m);
+    const es = setEntries([m], conformers ? "conformers" : "molecules").map((e) => ({ ...e, compound: compounds + e.compound }));
     compounds += new Set(es.map((e) => e.compound)).size;
+    es.forEach((e, k) => what.push(conformers ? `conformer ${e.number} of ${es.length}` : es.length > 1 ? `frame ${(e.frame ?? k) + 1} of ${es.length}` : "molecule"));
     return es;
   });
-  return moleculesAsTable(
+  const seen = moleculesAsTable(
     entries.map((e: SetEntry) => {
       const made = entryOfSet(e, `molecule:${e.from}#${e.frame ?? 0}`);
       const title = e.from != null ? titles.get(e.from) : undefined;
@@ -150,6 +167,8 @@ export function tableInto(doc: Flow, step: number, port?: string): Table | null 
       return energy && how ? { ...entry, properties: { ...entry.properties, energy: { ...energy, by: how } } } : entry;
     }),
   );
+  // (said after the row's id)
+  return { ...seen, columns: [seen.columns[0], { name: WHAT_COLUMN, kind: "text" }, ...seen.columns.slice(1)], rows: seen.rows.map((r, i) => [r[0], what[i], ...r.slice(1)]) };
 }
 
 /** The molecule in 3D on the page, and its frame, a row of molecules seen as a table is of (`tableInto`): none where it names none, or that molecule is not on the page. */
@@ -182,6 +201,7 @@ function keyTexts(m: Molecule3D): readonly string[] {
       m.atoms.map((a) => `${a.el}${a.charge ? `(${a.charge})` : ""}${a.radical ? `[${a.radical}]` : ""}${a.isotope ? `{${a.isotope}}` : ""}${a.x.toFixed(5)},${a.y.toFixed(5)},${a.z.toFixed(5)}`).join(";"),
       `${m.bonds.map((b) => `${b.a1}-${b.a2}:${b.order}`).join(";")}|${(m.frames ?? []).map((f) => f.map((v) => v.toFixed(5)).join(",")).join(";")}`,
       `${(m.energies ?? []).join(",")}|${(m.numbers ?? []).join(",")}|${(m.shares ?? []).join(",")}|${(m.degeneracies ?? []).join(",")}${m.partOf ? "|part" : ""}`,
+      JSON.stringify(m.properties ?? null),
     ];
     keyed.set(m, texts);
   }
@@ -191,6 +211,9 @@ function keyTexts(m: Molecule3D): readonly string[] {
 /** A key for what a step would run on: what comes into it, its options, and who does it - so that its card can say it has changed since its run. */
 export function inputKey(doc: Flow, step: WorkflowStep, by: string): string {
   const options = JSON.stringify(optionsOf(optionsFor(step.kind, by), step.options));
+  // (a step that takes nothing in runs on its options alone, and who does it)
+  // (and what of its plugin the results hang on: its version, the files it was set up with - another prior is another run)
+  if (takesNothing(step.kind)) return hash(`${step.kind}|${by}|${doerStamp(by)}|${options}`).toString(36);
   const ports = inputsOf(step.kind);
   // (a kind of several inputs: each one's own, in turn - none where its first has nothing coming in; the names its molecules go by too, which an energy diagram's levels are)
   if (ports.length > 1) {
@@ -219,6 +242,11 @@ function portKey(doc: Flow, step: number, port: string | undefined, named: boole
     const record = input.records[i];
     if (record) h = hash(recordKey(record), h);
   });
+  // (and each a large result set holds, with its record)
+  for (const m of input.held ?? []) {
+    h = hash(drawnKey(m, m.atoms.map((a) => a.id)), h);
+    if (m.record) h = hash(recordKey(m.record), h);
+  }
   return h.toString(36);
 }
 
@@ -235,11 +263,57 @@ export type StepState = "no-input" | "ready" | "waiting" | "running" | "done" | 
 export function stateOf(doc: Flow, step: WorkflowStep, by: string): StepState {
   // (its jobs under way: the card says which, as they were last looked at)
   if (step.running) return "running";
-  const into = wireInto(doc, step.id);
+  // (a step that takes nothing in is ready as it is)
+  const into = takesNothing(step.kind) || !!wireInto(doc, step.id);
   if (!step.ran) return into ? "ready" : "no-input";
   // (what comes from a step not run yet, or run since, has changed)
   if (!into) return "changed";
   const key = inputKey(doc, step, by);
   if (key !== step.ran.input) return "changed";
   return step.ran.ok ? "done" : step.ran.stopped ? "stopped" : "failed";
+}
+
+/**
+ * The steps to run to run `id`, in order: the furthest back before it
+ * that has not run, has changed, failed, stopped or is running - however many done
+ * lie between - and every step from it to `id`, which take anew what it
+ * gives.
+ */
+export function chainTo(doc: Flow, id: number): number[] {
+  const back = stepsBefore(doc, id).slice(0, 200);
+  let far = -1;
+  back.forEach((sid, k) => {
+    const s = stepOf(doc, sid);
+    if (s && (s.running || stateOf(doc, s, byOf(s)) !== "done")) far = k;
+  });
+  return [...back.slice(0, far + 1).reverse(), id];
+}
+
+/** The steps after a step: those that take what it gives, and those after them. */
+export function stepsAfter(doc: Flow, id: number): number[] {
+  const out: number[] = [];
+  const seen = new Set([id]);
+  const queue = [id];
+  while (queue.length) {
+    const at = queue.shift()!;
+    // (every exit's set: what any of them gives comes down to the steps wired from it)
+    const made = new Set((doc.sets ?? []).filter((b) => b.made?.step === at).map((b) => b.id));
+    for (const wire of doc.wires ?? []) {
+      if (made.has(wire.from.set) && !seen.has(wire.to.step)) {
+        seen.add(wire.to.step);
+        out.push(wire.to.step);
+        queue.push(wire.to.step);
+      }
+    }
+  }
+  return out;
+}
+
+/** The steps a run of `targets` runs (store `runSteps`): each, and those before it it runs first (`chainTo`). */
+export const stepsRun = (doc: Flow, targets: readonly number[]): number[] => [...new Set(targets.flatMap((t) => chainTo(doc, t)))];
+
+/** What *Run all* runs: every step that is not done - not run, changed, failed or stopped - or is running, one with nothing coming in left as it is; and every step after one, which takes anew what it gives. */
+export function allToRun(doc: Flow): number[] {
+  const stale = (doc.steps ?? []).filter((s) => s.running || !["done", "no-input"].includes(stateOf(doc, s, byOf(s)))).map((s) => s.id);
+  return [...new Set(stale.flatMap((id) => [id, ...stepsAfter(doc, id)]))];
 }

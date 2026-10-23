@@ -71,7 +71,7 @@ import { knownOf } from "../../../../lib/io/writers";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 import { setEntries, setMembers, type SetEntry } from "../workflow/entries";
 import { resultOf } from "../workflow/flow";
-import { KINDS, MENO_DOES, kindInfo, type SetKind, type StepKind, isSetKind } from "../workflow/kinds";
+import { KINDS, MENO_DOES, kindInfo, takesNothing, type SetKind, type StepKind, isSetKind } from "../workflow/kinds";
 import { takesBy } from "../workflow/doers";
 import { pluginEntry, type PluginEntry } from "../workflow/programs";
 import { measured } from "../../../../testing/timeouts";
@@ -416,11 +416,16 @@ const chem = {
 
 // --- the property ------------------------------------------------------------------
 
-/** Each kind of step and who fills it: every plugin the catalogue says fills it, and Meno. Render gives pictures, and Chart and Energy diagram charts, which have no charge. */
+/**
+ * Each kind of step and who fills it that takes molecules in 3D: every plugin the catalogue says fills it, and Meno.
+ * Render gives pictures, and Chart and Energy diagram charts, which have no charge; a kind that takes nothing in (Generate) is given no
+ * entry to keep one of - the charges it gives are its own (stepRuns.test, *Generate*); Enumerate takes structures drawn
+ * alone.
+ */
 const DOERS: readonly [StepKind, string][] = [
   ...PLUGINS.flatMap((p) => p.steps.map((s): [StepKind, string] => [s.kind, p.id])),
   ...MENO_DOES.map((k): [StepKind, string] => [k, "meno"]),
-].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart");
+].filter(([kind]) => kindInfo(kind).gives !== "pictures" && kindInfo(kind).gives !== "chart" && !takesNothing(kind) && kindInfo(kind).takes.some((h) => h !== "structures"));
 
 /** The kind of set a step gives, for what it took. */
 const givesFor = (kind: StepKind, holds: SetKind): SetKind => {
@@ -487,6 +492,8 @@ async function trip(input: Input, chain: readonly [StepKind, string][], seed: nu
   const steps: number[] = [];
   chain.forEach(([kind, by], i) => {
     const id = st().addStep(kind, by, 1000 * i, 0);
+    // (a Filter keeping every entry - each has its number - so that what it passes on is all it was given)
+    if (kind === "filter") st().updateStep(id, { options: { conditions: "number \u2265 1", match: "all" } });
     st().connect(i ? { set: resultOf(st(), steps[i - 1])!.id } : { set }, id);
     steps.push(id);
   });
@@ -499,9 +506,9 @@ const SEEDS = 12;
 
 describe("a step keeps each entry's charge and multiplicity", () => {
   it("for every kind of step the catalogue has, and every plugin that fills one - and Meno's own", () => {
-    // (each kind Meno defines filled by something - Render, Chart and Energy diagram alone left out here: they give pictures and charts)
+    // (each kind Meno defines filled by something - left out here Render, Chart and Energy diagram, which give pictures and charts, Generate, given nothing, and those that take structures drawn alone, whose atoms are as drawn)
     const kinds = new Set(DOERS.map(([k]) => k));
-    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["render", "chart", "energy-diagram"]);
+    expect(KINDS.filter((k) => !kinds.has(k.kind)).map((k) => k.kind)).toEqual(["generate", "render", "check-structures", "stereoisomers", "descriptors", "enumerate", "chart", "energy-diagram"]);
     expect(DOERS.length).toBeGreaterThanOrEqual(19);
   });
 

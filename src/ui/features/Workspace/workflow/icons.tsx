@@ -1,4 +1,5 @@
 import {
+  AdjustmentsHorizontalIcon,
   ArrowTrendingDownIcon,
   Bars3CenterLeftIcon,
   BoltIcon,
@@ -12,6 +13,7 @@ import {
   QueueListIcon,
   RectangleGroupIcon,
   SignalIcon,
+  SparklesIcon,
   Square2StackIcon,
   Square3Stack3DIcon,
 } from "@heroicons/react/24/outline";
@@ -37,6 +39,8 @@ const ICONS: Record<StepIcon, Icon> = {
   "grouped": RectangleGroupIcon,
   pointer: CursorArrowRaysIcon,
   chart: PresentationChartLineIcon,
+  sliders: AdjustmentsHorizontalIcon,
+  sparks: SparklesIcon,
   levels: Bars3CenterLeftIcon,
 };
 

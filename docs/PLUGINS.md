@@ -61,6 +61,7 @@ manifest, the guide and the catalogue were tidied and added on 2026-10-10
 | Chemistry (core) | SMILES to a structure, and back | RDKit (its worker's `from_smiles`, `to_smiles`) |
 | Chemistry (core) | the checks: hydrogens, valence, aromatic rings, R/S and E/Z (one role since 2026-10-10: one request gives them all) | RDKit (`analyse`, its CIP labeller for the labels) |
 | Chemistry (core) | stereoisomers of what is left open | RDKit (`open_stereo`) |
+| Workflows | new structures from a generative model: the step *Generate* (WORKFLOWS.md) | REINVENT 4 (`run` with no entries; its prior trained on PubChem downloaded besides, `downloads`), sampling on the CPU with the seed set, so that the same asking gives the same SMILES; each handed on as sampled, with its NLL and SMILES_state - nothing made of it, nothing refused (*Generate*, below) |
 | Chemistry | structures read from pictures (PDF.md, *Stage 5*, part B) | MolScribe, MolNexTR - each standing alone, the chemist choosing which (`read_picture`; a model's trained weights downloaded besides, `downloads`) |
 | Molecules in 3D (core) | a structure in 3D, and its conformers | RDKit (`conformers`) |
 | Molecules in 3D | which stereoisomer each molecule in 3D is (*Configurations*, below) | RDKit (`configurations`) |
@@ -200,12 +201,14 @@ them by the same rules (`src-tauri/src/jobs.rs`, `lib.rs`).
 | `id` | text | Its id: a lower-case letter or digit, then up to 39 more or hyphens; its folder's name. The same rule in the backend. |
 | `name`, `version`, `description`, `licence`, `homepage` | text | What it is called; the plugin's own version (*Versions*, below); one line on what it is; the licence of what it brings, as its version is that one's - the program's or package's, or its own code's (*Licences*); its home. A result keeps the version its worker says it runs (*The contract*). |
 | `uses` | list of `{name, version}` | The programs and libraries it wraps, each with the version its lock or pin fixes (*Versions*): said beside its own version in Settings › Plugins. |
+| `setUpBytes` | number | About how much room its environment takes once set up, in bytes, as measured: asking to set it up says it beside the packages it fetches ("about 1.0 GB once set up"), for a plugin whose environment is large. Unsaid, where none was measured. |
 | `environment` | `"uv"` or `"pixi"` | What makes its environment, from its `requirements.lock` (uv, PyPI) or its `pixi.toml` and `pixi.lock` (pixi, conda-forge), into `plugin-<id>`; its worker is its `worker.py`. None, and it runs nothing: `reads`, `writes`, `roles` and `steps` are then left out. |
 | `systems` | `["macos", "windows", "linux"]`, some | The systems it can be added on; none said, every one. |
 | `kinds` | list of `{id, name, program?, extensions, marks?, lines?, probe?, grammar?}` | Every kind of file it knows. A kind it reads is told by its `marks` - text a file's start holds, at least six letters, anywhere or at a line's start (`at: "line-start"`), in any case (`anyCase`) - each tried on Meno's own sample files as the kind is registered (`lib/io/kinds.ts`), and not taken where one holds it; or, where it says `probe`, by asking it, for files of its `extensions`. A kind it only colours - a program's input, written by hand - is told by its files' names, and among those that share them by what its lines begin with (`lines`, as short as a letter: they claim no file). `program` names the program that writes it, as a molecule read from it names it. `grammar` is `{file, tones}`: a grammar in its folder, and the tone of each of its parts. |
 | `reads` | ids | The kinds it reads: its own, or Meno's; one that is neither is left out as the plugin is taken in (`lib/calc/catalog.ts`). |
 | `writes` | list of `{kind, options?}` | The kinds of its own it writes, each given one molecule - one system of molecules in 3D - and its options; its name and files' names are the kind's, the first the one Export gives. |
 | `xyzEnergies` | list of `{id, pattern, unit?}` | How the program writes a frame's energy on an XYZ file's comment line, from its documentation: `pattern` a regular expression (case-insensitive) with one capture group holding the number; `unit` its number's - `hartree` (the default), `eV`, `kcal/mol` or `kJ/mol` - which Meno converts to hartrees. Meno reads a frame's energy only by the patterns of the plugins added (docs/FILE-IO.md); where two find different numbers on a line, none. |
+| `xyzSteps` | list of `{id, file?, comment?}`, one or both | The XYZ files the program writes whose frames are an optimisation's steps, which of them converged not said in the file (its output says it): `file` the file's name as the program's documentation or its own output gives it, `*` any run of characters (`xtbopt.log`, `*_trj.xyz`), matched in any case; `comment` a regular expression every frame's comment line matches, so that the file is known renamed too (xtb's `energy: ... gnorm: ...`, ORCA's `Coordinates from ORCA-job <name> E ...`) - of a file of two frames or more, and never an ensemble's (a conformer search's, a relaxed scan's points). None of such a file's frames is an entry of a set, and the molecule says why (docs/WORKFLOWS.md, *Compound sets and conformer sets*). A file no plugin names is read as before, every frame an entry. |
 | `roles` | list of `{role, programs?, options?, looks?, motions?}` | The roles it fills (*Roles*), each one Meno defines, each once; the programs it runs for one as a job, by name, as a step's are (Render: Blender); options only for a role that takes them (*Structures in 3D, and their conformers*); and, for Render, the looks it makes (`looks`: each declared in full - *Looks*, below) and the motions it makes of a film (`motions` - *Motions*, below). |
 | `steps` | list of `{kinds, programs?, options?, takes?, files?}` | The kinds of a workflow's step it fills - each one Meno defines (`lib/plugins/steps`), each once - several said in one where they share their programs and options. `programs` are the programs it runs, by name, from its environment or installed separately; none, and it does the step in its worker. A step of a kind that is also a role it fills and says no options takes the role's, starting from those chosen for the role in Settings (2026-10-13; before, from the manifest's defaults). `takes` is what it takes, where less than the kind does. `files` are the kinds of file it takes besides, by their ids: each entry is given the output its molecule was read from where it is of one of them (NCI.md, *How the plugins and Meno meet*). |
 | `installed` | list of `{name, label, files, path?, env?, places?, version?, beside?}` | The programs installed separately its steps or roles run: its name as they name it; what it is called; its file's name on each system; the folders put first where programs are looked for, and the variables it is given - each `{folder}` (where its file is) or `{parent}` (the folder above), with a path inside it; and, on each system, the folders it is usually installed in, looked in after those the system finds programs in - each from `/`, `{home}` or `{programs}` (Windows' Program Files), a `*` in a folder's name for any text, a version's, the newest first; and how it says its version, and the least Meno takes - `{args, after, least}`: run with `args`, options alone (never a file or a path), it prints a line beginning `after`, then its version, digits and dots. Then Meno asks each copy it finds - as it looks, as one is located and before each job - and takes the newest that is new enough, saying of an older one why it will not do ("Meno needs <program> 5.0 or later; this one is 4.1"). And the programs installed with it, in its folder, that a job may run after it (`beside`: a few, each by a name - as a job's `then` names it - and its file's name on each system: ORCA's `orca_2mkl`). Never a shell or Python; never `PATH`, what loads code into a program (`LD_PRELOAD`, `LD_AUDIT`, `DYLD_INSERT_LIBRARIES`), the network's way out, or the threads Meno sets. Where its libraries are looked for (`LD_LIBRARY_PATH`, `DYLD_LIBRARY_PATH` and the like) it may be told, as any variable, only a place in its own installation - `{folder}` or `{parent}`, with a path inside it (`jobs.rs` `ENV_NEVER`, `place_ok`). Only one a step or a role runs. A macOS app picked where it is located stands for the program inside it. |
@@ -757,7 +760,10 @@ The same for every plugin and for Meno's own parts:
     `drawing_of {molblock, perceive?}` (a drawing of a molecule in 3D,
     answered with whether it found the bond orders, `perceived`),
     `orders_from_smiles {molblock, smiles}` and `add_hydrogens
-    {molblock}` (its bond orders from a SMILES, its hydrogens added);
+    {molblock, hydrogens?}` (its bond orders from a SMILES, its hydrogens
+    added - as many on each atom as `hydrogens` says, by atom, where it is
+    given, its valence not checked: whether a bond to a metal is in place
+    of a hydrogen is the chemist's to say);
     `read_picture {picture}` (structures read from pictures: a PNG or a
     JPEG in base64, answered with the structure's atoms where the picture
     has them, in its pixels - each an element with its charge, or a label
@@ -831,7 +837,30 @@ The same for every plugin and for Meno's own parts:
     as a permutation - and an entry given carries its `degeneracy`, where
     it has one. `"capped": 2` says how many compounds it took atom against
     atom, their ways onto themselves too many to try: a duplicate of one
-    could be missed, and the step says so.
+    could be missed, and the step says so;
+  - **steps on structures drawn** (`run` with `holds` "structures":
+    RDKit's *Check structures* and *Stereoisomers*): each entry is a
+    structure as `{molblocks}`, a MOL block for each of its parts, and
+    the answer is `{"structures": [...]}`, one for each, in their order:
+    `{"as": "drawn"}`, kept as it is - with `"properties"`, where the step
+    works numbers out of it (*Descriptors*): each `{value, unit, method}`,
+    its unit from Meno's units table (g/mol and Å² among them) or "none",
+    kept on its record as `computed` by the plugin, its version, the
+    program and the method; `{"made": [block, ...], "smiles":
+    [...]}`, made anew as drawings (V3000, laid out in 2D, wedged), each
+    one's own SMILES beside it, which Meno reads and lays out as it does a
+    SMILES's (`chem/fromSmiles` `drawingOf`), at most 64 of one - one it
+    cannot draw sets the structure aside whole, *could not be drawn*; or
+    `{"aside": why, "kind": kind}`, set aside, why in a few plain words
+    and a short kind to count it by on the step's line (*3 set aside (2:
+    radical; 1: parts)*). A made one is another structure, with a record
+    of its own (WORKFLOWS.md, *A structure drawn's record*): what the one
+    it was made of came from (`from`), which of how many it is (`made`:
+    *1 of 2*), its own SMILES (`smiles`) and that of the one it was made of
+    (`made_from`), where that had one - never that one's values, which
+    were not worked out of it (an NLL of a SMILES with its stereo left
+    open). One set aside keeps its record, its status saying why. An answer that is
+    not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given
   Meno's plain data - each atom's element, place in ångströms, charge,
@@ -895,6 +924,60 @@ The same for every plugin and for Meno's own parts:
     buffers - decided once the measurements were seen (FILE-IO.md,
     *Response*). Meno's own writers run on the page: an SVG picture of
     molecules in 3D needs the page's WebGL.
+
+### Generate
+
+*Generate* makes new structures from nothing that comes in, so it has no
+input to wire and no entries to send. Meno asks its plugin `run` with the
+step's kind, `"entries": []`, and the step's options.
+
+**A Generate plugin hands on what its model gives, as it gives it**
+(the maintainer, 2026-10-22: format conversion yes, chemistry no). Each
+structure is the SMILES the model wrote - never canonicalised, its stereo
+as written or left out - with the model's own values beside it, named.
+Nothing is made of it in 3D, no stereoisomer is enumerated, and nothing is
+refused. What a structure is - a radical, one that leaves stereo open, one
+of odd valence - is for the general steps after it, and for
+*Conformers*, which alone makes 3D:
+
+```
+{"outputs": [{"smiles": "...", "properties": {"nll": {"value": 36.9, "unit": "none"}, ...}, "seed": 0}],
+ "by": {"program", "version", "model", "method"}, "said": "..."}
+```
+
+- `properties`: each value a number, a text or true/false, with its unit
+  from Meno's units table, or "none" (REINVENT 4's `nll` and
+  `smiles_state`, as it writes them; a model's Tanimoto similarity, its
+  scaffold and R-groups, under the names it uses). A value the model gave
+  none of is `null` - REINVENT 4 writes an NLL that is no number so,
+  counting it in `said`, since JSON holds no NaN - and is not kept.
+- `seed`: where a generator makes a structure from one that came in, that
+  one's place among them. None comes into REINVENT 4's.
+- `by`: what made them all: the program and its version, the model, how.
+- `said`: the run in a line.
+
+Meno reads each SMILES itself, as one pasted is (the roles'
+`from_smiles`, laid out by Meno's engine: `chem/fromSmiles` `drawingOf`).
+Each becomes a structure drawn of its own in the step's result set, in the
+order given. Its record (WORKFLOWS.md, *A structure drawn's record*) holds
+the SMILES as given (`smiles`), the model's values, each `computed` by
+the plugin, its version and the program, model and method; and, where
+it leaves stereo open, how many centres and double bonds
+(`stereo_open`, the roles' `stereo_left_open`: where it is left open
+only, none of its stereoisomers tried in 3D, which *Stereoisomers* and
+*Conformers* do). Nothing is chosen for it. One whose stereo cannot be
+asked about is kept, and counted as *with stereo not examined*. A SMILES
+that cannot be read is counted on the step's line as *not read*, never
+dropped unsaid, the first five named with why: *20 sampled ... · 18 made
+· 3 with stereo left open · 2 not read: C1CC (a ring left open), …*.
+Where none can be read, the step fails, saying so.
+What the plugin gives that is not this form - a value with a unit Meno
+does not know, a SMILES missing, a seed that did not come in - takes none
+of the run, saying which. At most a thousand from one run
+(`GENERATED_MOST`). The step is ready as it is put down, and changed when
+its options or who does it change - its plugin's version, or the files
+it was set up with, a model's weights by their hash, included: another
+prior is another run (`workflow/flow` `inputKey`, `doers` `doerStamp`).
 
 ### The entry a plugin is given
 

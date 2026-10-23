@@ -16,12 +16,13 @@ describe("a table charted", () => {
       { x: 137.6, y: 137.8, row: 3 },
       { x: 21.3, y: 21.4, row: 4 },
     ]);
-    expect(c.left).toEqual([{ count: 1, why: "with no shift measured" }]);
+    // (the row left named by its row, the table naming no entry)
+    expect(c.left).toEqual([{ count: 1, why: "with no shift measured", rows: ["row 3"] }]);
   });
 
   it("charts the columns named, and says why not where it cannot", () => {
     const c = chartOfTable(SHIFTS, "shift measured", "shift calc");
-    expect("why" in c ? null : [c.x.name, c.y.name, c.left]).toEqual(["shift measured", "shift calc", [{ count: 1, why: "with no shift measured" }]]);
+    expect("why" in c ? null : [c.x.name, c.y.name, c.left]).toEqual(["shift measured", "shift calc", [{ count: 1, why: "with no shift measured", rows: ["row 3"] }]]);
     expect(chartOfTable(SHIFTS, "shift")).toEqual({ why: 'It has no column "shift"' });
     expect(chartOfTable(SHIFTS, "atom")).toEqual({ why: '"atom" is no column of numbers' });
     expect(chartOfTable(readTable("a,b (none)\nx,1\n"))).toEqual({ why: "It takes a table with two columns of numbers" });

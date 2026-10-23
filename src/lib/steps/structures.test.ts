@@ -19,7 +19,7 @@ const entry = (id: string, els: string[], xyz: number[] | null, extra: Partial<E
     from: [],
     structure: { atoms, bonds: els.slice(1).map((_, i) => ({ a1: 0, a2: i + 1, order: 1 as const })) },
     geometry: xyz ? { kind: "3d", xyz } : { kind: "none" },
-    species: speciesOf({ atoms: atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds: [] }),
+    species: speciesOf({ atoms: atoms.map((a) => ({ ...a, x: 0, y: 0, z: 0 })), bonds: [] })!,
     properties: {},
     status: "done",
     ...extra,
@@ -45,7 +45,7 @@ describe("Species", () => {
     // water: 10 electrons, an even count, cannot be a doublet
     const w = withSpecies(water(), { multiplicity: 2 });
     expect(w.status).toEqual({ failed: expect.stringMatching(/^10 electrons cannot have multiplicity 2/) });
-    expect(w.species.multiplicity).toBe(2);
+    expect(w.species!.multiplicity).toBe(2);
     // OH: 9 electrons cannot be a singlet; as the anion, 10, it can
     expect(withSpecies(hydroxyl(), { multiplicity: 1 }).status).toEqual({ failed: expect.stringMatching(/^9 electrons/) });
     expect(withSpecies(hydroxyl(), { charge: -1, multiplicity: 1 }).status).toBe("done");
@@ -55,7 +55,15 @@ describe("Species", () => {
 
   it("follows a charge given with the multiplicity its electrons then take, where none is given: Na+ a singlet", () => {
     expect(withSpecies(entry("na", ["Na"], [0, 0, 0]), { charge: 1 }).species).toMatchObject({ charge: 1, multiplicity: 1 });
-    expect(entry("na", ["Na"], [0, 0, 0]).species.multiplicity).toBe(2);
+    expect(entry("na", ["Na"], [0, 0, 0]).species!.multiplicity).toBe(2);
+  });
+
+  it("fails a skeleton - its hydrogens not there, no species - and gives it none: its charge and spin are not known", () => {
+    // benzene's carbons alone
+    const skeleton = entry("s", ["C", "C", "C", "C", "C", "C"], null, { species: null });
+    const s = withSpecies(skeleton, { charge: 0, multiplicity: 1 });
+    expect(s.status).toEqual({ failed: expect.stringMatching(/^This molecule has no hydrogens, so its charge and spin are not known/) });
+    expect(s.species).toBeNull();
   });
 
   it("keeps what it is not given as the entry had it", () => {
@@ -87,12 +95,20 @@ describe("Combine", () => {
     const cl = withSpecies(entry("cl", ["Cl"], [3, 0, 0]), { charge: -1 });
     const salt = combined([na, cl], "nacl");
     if ("failed" in salt) throw new Error(salt.failed);
-    expect([na.species.multiplicity, na.status, cl.species.multiplicity, cl.status]).toEqual([1, "done", 1, "done"]);
+    expect([na.species!.multiplicity, na.status, cl.species!.multiplicity, cl.status]).toEqual([1, "done", 1, "done"]);
     expect(salt.entry.species).toMatchObject({ charge: 0, multiplicity: 1 });
     const two = combined([hydroxyl("p"), entry("q", ["O", "H"], [3, 0, 0, 3.97, 0, 0])], "pq");
     if ("failed" in two) throw new Error(two.failed);
-    expect(two.entry.species.multiplicity).toBe(3);
+    expect(two.entry.species!.multiplicity).toBe(3);
     expect(two.said).toEqual([expect.stringMatching(/2 parts are open-shell: taken as high spin, multiplicity 3/)]);
+  });
+
+  it("with a part that is a skeleton gives a complex of no species either, and says so", () => {
+    const skeleton = entry("s", ["C", "C", "C", "C", "C", "C"], [0, 0, 0, 1.4, 0, 0, 2.1, 1.2, 0, 1.4, 2.4, 0, 0, 2.4, 0, -0.7, 1.2, 0], { species: null });
+    const r = combined([water("a"), skeleton], "c");
+    if ("failed" in r) throw new Error(r.failed);
+    expect(r.entry.species).toBeNull();
+    expect(r.said).toEqual(["A part has no hydrogens, so the complex's charge and spin are not known either."]);
   });
 
   it("carries no part's properties, and says so; refuses frames and mixed places, with the reason", () => {

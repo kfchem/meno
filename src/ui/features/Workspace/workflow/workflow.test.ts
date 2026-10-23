@@ -23,6 +23,7 @@ import { rmsd } from "./rmsd";
 import { addSet, addStep, connect, fitSets, moveSet, removeSet, removeStep, removeWire, resizeSet, updateStep } from "./model";
 import { energiesBy, laidOver, placeResults, resultsOf, runStep, type RunWith } from "./run";
 import { offeredSteps } from "./offered";
+import { inputsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
@@ -907,33 +908,46 @@ describe("Quick Add's calculations", () => {
     let doc = addStep(page(), "as-conformers", 5, 0);
     doc = connect(doc, { set: 1 }, 2);
     // (no plugin added: Meno's own steps on entries)
-    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "choose", "chart", "energy-diagram"]]]);
+    expect(offered(doc)).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate", "chart", "energy-diagram"]]]);
     // a compound set's wire: what takes it - a chart of it seen as a table too - and the conversion
-    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "as-conformers", "chart", "energy-diagram"]]]);
+    expect(offered(doc, { set: 1 })).toEqual([["Meno", ["duplicates", "filter", "as-conformers", "chart", "energy-diagram"]]]);
     // a conformer set's
-    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "choose", "chart", "energy-diagram"]]]);
+    expect(offered(doc, exitSet(doc, 2))).toEqual([["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "chart", "energy-diagram"]]]);
     // plugins added: theirs first, each under its name - and only those that take what a wire carries
     useReaders.setState({ state: { rdkit: "added", xtb: "added" }, problem: {} });
     expect(offered(doc)).toEqual([
-      ["RDKit", ["conformers", "duplicates"]],
+      ["RDKit", ["conformers", "duplicates", "check-structures", "stereoisomers", "descriptors"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["energy-window", "duplicates", "populations", "choose", "chart", "energy-diagram"]],
+      ["Meno", ["energy-window", "duplicates", "populations", "filter", "choose", "enumerate", "chart", "energy-diagram"]],
     ]);
     expect(offered(doc, { set: 1 })).toEqual([
       ["RDKit", ["conformers", "duplicates"]],
       ["xTB", ["optimise", "energy", "frequencies"]],
-      ["Meno", ["duplicates", "as-conformers", "chart", "energy-diagram"]],
+      ["Meno", ["duplicates", "filter", "as-conformers", "chart", "energy-diagram"]],
     ]);
     // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
     useReaders.setState({ state: { rdkit: "added", crest: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers"]]]);
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers", "check-structures", "stereoisomers", "descriptors"]], ["Meno", ["enumerate"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies"]]);
     expect(pluginById("orca")?.name).toBe("ORCA interface");
     expect(doerOf({ kind: "energy", by: "orca" })).toEqual({ id: "orca", name: "ORCA" });
+  });
+
+  it("offer a step that takes nothing in on empty space alone - never from a wire, which it has nowhere to take", () => {
+    const doc = addStep(page(), "as-conformers", 5, 0);
+    useReaders.setState({ state: { reinvent: "added" }, problem: {} });
+    expect(offered(doc).find(([who]) => who === "REINVENT 4")).toEqual(["REINVENT 4", ["generate"]]);
+    expect(offered(doc, { set: 1 }).find(([who]) => who === "REINVENT 4")).toBeUndefined();
+    // (and nothing can be wired into one put down)
+    const gen = addStep(doc, "generate", 9, 0, undefined, "reinvent");
+    const id = gen.steps![gen.steps!.length - 1].id;
+    expect(canWire(gen, { set: 1 }, id)).toBe(false);
+    expect(connect(gen, { set: 1 }, id)).toBe(gen);
+    expect(inputsOf("generate")).toEqual([]);
   });
 });
 

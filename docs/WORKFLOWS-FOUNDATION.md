@@ -514,7 +514,10 @@ writes, plus the program's version and the plugin's.
   job, and is what decides "has this been done".
 
 **Never overwrite.** A run, an attempt, a job's files: nothing is written
-over. A new run adds; the earlier stays, as the runs kept today.
+over. A new run adds. The run before it stays in full, and so does every
+run the chemist keeps; older ones are dropped only once the step's menu
+has said so before the run (WORKFLOWS.md, *Earlier runs*: the
+maintainer's ruling, 2026-10-22).
 
 **An output Meno cannot account for stops the step.** On taking up a job
 (after Meno was closed, or from a cluster), Meno checks what it finds:
@@ -745,8 +748,8 @@ why, naming the line or the atom:
 - more than one structure in *template*;
 - **more than 10,000 combinations**, said with the count: *5 lists of 50
   make 312,500,000 combinations; Enumerate makes at most 10,000*. Every
-  product is drawn, read back against its structure, and kept in the
-  workspace file. At the speed measured for laying out many structures at
+  product is drawn, judged against the others by identity, and kept in
+  the workspace file. At the speed measured for laying out many structures at
   once (#507: 1,000 in 9 to 15 s across eight workers), 10,000 take
   minutes and more take hours. A set past that is more than can be looked
   over, and is a sign the lists should be cut or the work done in steps.
@@ -766,8 +769,7 @@ Only the step's lists say what an R group may be.
   The number is a property of the entry (`number`, unit none).
 - **The join is the canvas's.** Each R atom is replaced as an abbreviation
   drawn out on the canvas is (*Expand abbreviation*): one function, used
-  by both. P3 moves the part that places the group out of the workspace's
-  store, so the canvas and Enumerate share it:
+  by both, `expandAbbreviation` (Workspace/document), given the group:
   - the group's attach atom takes the R atom's place and its bond;
   - the group's other atoms are laid out from it, clear of the drawing.
 - **The template's atoms keep their numbers.** Each R atom's number goes to
@@ -789,7 +791,9 @@ Only the step's lists say what an R group may be.
   its neighbour's hydrogens (below).
 
 **Each entry says how it was made.**
-- `from` is the template's entry.
+- `from` is the template's entry, where it has one. A template drawn on
+  the page has no entry id, so its products name none (WORKFLOWS.md,
+  *A structure drawn's record*).
 - `made.how` gives the choices in words: *R1 = Me, R2 = OMe*.
 - Each option is given as it was typed and as it was read.
 
@@ -857,13 +861,18 @@ options of one list that read as the same group do it too.
 
 **The rule is tested against another canonicaliser**, as the layout's
 known answers are (#507):
-- a committed fixture holds each test product as a molfile written by
-  Meno (its 2D coordinates and wedges), with RDKit's canonical isomeric
-  SMILES of it, recorded by a script under `scripts/` with RDKit's
-  version. RDKit reads the configurations from the drawing itself, so
-  Meno's reading of the wedges is checked as well;
-- the test checks that Meno's identity splits the products into the same
-  groups as RDKit's canonical SMILES do;
+- a committed fixture holds each test product by the SHA-256 of the
+  molfile Meno writes of it (its 2D coordinates and wedges). The test
+  writes the molfile again and checks it against that, so the fixture pins
+  every molfile without holding columns of coordinates. Beside it are
+  RDKit's canonical isomeric SMILES of that molfile, and of the compound
+  written by hand for that combination, recorded by a script under
+  `scripts/` with RDKit's version and the commands that make it. RDKit
+  reads the configurations from the drawing itself, so Meno's reading of
+  the wedges is checked as well;
+- the test checks that each product is the compound written for it, and
+  that Meno's identity splits the products into the same groups as RDKit's
+  canonical SMILES do;
 - where the two rules differ by design (bond-shift isomers, which RDKit's
   aromaticity does not join), the fixture lists the case, and the test
   holds Meno to its own rule there.
@@ -901,8 +910,9 @@ reader:
   as written;
 - **the symmetric template above**: four combinations, three made, one
   aside as *Same as 2*, with the count on the set;
-- **a stereocentre drawn next to an R**: the arrangement kept, and R and S
-  read from the products by the checks where they are at hand;
+- **a stereocentre drawn next to an R**: the arrangement kept, each
+  product's configurations checked against RDKit's reading of its drawing
+  (the fixture, *The rule is tested against another canonicaliser*);
 - **R1 = H** next to a wedge: the same identity as the compound drawn
   without the H, its configuration carried to the atom it is on;
 - **each kind of hydrogen kept as an atom** in the list above: one test

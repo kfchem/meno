@@ -1,7 +1,7 @@
 {
  "reader": "RDKit 2026.03.6",
  "command": [
-  "MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts",
+  "MENO_IDENTITY_MOLFILES=1 npx --no-install vitest run src/ui/features/Workspace/chem/identityOf.test.ts src/ui/features/Workspace/workflow/enumerate.rdkit.test.ts",
   "<chem python> scripts/identity/rdkit.py"
  ],
  "cases": [

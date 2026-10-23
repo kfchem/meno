@@ -6,8 +6,35 @@
  * it is shown, is the workspace's (ui/features/Workspace/workflow/kinds).
  */
 
-export const STEP_KINDS = ["conformers", "optimise", "energy", "frequencies", "nci", "render", "energy-window", "duplicates", "populations", "as-conformers", "choose", "chart", "energy-diagram"] as const;
+export const STEP_KINDS = [
+  "generate",
+  "conformers",
+  "optimise",
+  "energy",
+  "frequencies",
+  "nci",
+  "render",
+  "energy-window",
+  "duplicates",
+  "populations",
+  "as-conformers",
+  "choose",
+  "filter",
+  "check-structures",
+  "stereoisomers",
+  "descriptors",
+  "enumerate",
+  "chart",
+  "energy-diagram",
+] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
+
+/**
+ * The kinds only Meno does, by a rule of its own that runs no program
+ * (docs/WORKFLOWS-FOUNDATION.md, *Enumerate is Meno's own*): a manifest's
+ * step of one is left out, as one of a kind not here is.
+ */
+export const MENO_ONLY: readonly StepKind[] = ["enumerate"];
 
 /** What flows along a wire: structures drawn (any not yet in 3D), molecules in 3D each a compound, or conformer sets. */
 export const SET_KINDS = ["structures", "molecules", "conformers"] as const;

@@ -269,6 +269,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 
 | Kind | Icon (Heroicons' outline) | Takes | Gives |
 | --- | --- | --- | --- |
+| Generate | sparks | nothing: no input, nothing wired in | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change. Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
@@ -279,10 +280,17 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Duplicates | two squares, one over the other | molecules in 3D | each unlike the others of its compound kept - alike, all atoms within 0.01 Å over its symmetries; a mirror image apart, or counted in; the rest out of its second exit, *Alike* - the same kind of set. Entries of different charge or spin are never alike |
 | Populations | bars | a conformer set, with energies | each with its Boltzmann population within its compound - each conformer counted as many times as its search found it alike, where it said (CREST's degeneracy) |
 | As conformers | shapes grouped | a compound set of molecules in 3D | **a conformer set**: entries of the same constitution - the same atoms, bonded the same way, of the same charge and spin - and the same stereoisomer, read from each one's own geometry before it runs (an entry whose stereoisomer is not known - not asked, not perceived, or left unspecified - refuses it, saying which: constitution alone would sum diastereomers), as conformers of one compound; only where each compound's entries come from one calculation, with energies from one source and the same stereo labels, else not at all and why (one list of energies at two levels means nothing). What its entries keep - the drawing each was made from, how - goes with the compound only where all keep it alike |
+| Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
+| Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
+| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing; one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them), or - as the option says - all that leave stereo open |
+| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 
-The first six run a program; the last five work on a set's entries
-alone (*Who does a step*). A step that keeps a set keeps its kind: a
+The first six run a program; the next six work on a set's entries
+alone (*Who does a step*); the last three are a plugin's (RDKit's), done
+at once in its worker on structures drawn (PLUGINS.md, *steps on
+structures drawn*), each with its own options: they change no atom or
+bond of a structure they keep, and choose nothing for one. A step that keeps a set keeps its kind: a
 conformer set optimised is still one. A plugin's step may take less than
 its kind (PLUGINS.md, `takes`): CREST's *Conformers* starts from
 molecules in 3D only. A lone atom - the ion of a salt drawn as ions -
@@ -424,6 +432,53 @@ Conformers go through a workflow as any set does (decided):
     it is, as it says it is; a set the chemist draws round one is a
     conformer set, each molecule in it a compound, its frames its
     conformers. A file's many geometries are still many compounds.
+  - **but an optimisation's or a relaxed scan's steps are no entries**
+    (2026-10-22). Of a calculation's output that optimised, only the
+    geometries the run converged on are entries: an optimisation's last,
+    a relaxed scan's each point - as the program marks them, read by its
+    plugin (cclib's `optstatus`). The steps on the way stay frames, to be
+    looked at, never entries: before, a scan of 3 points opened as 21
+    compounds, each with an energy, and a conformer set weighted geometries
+    that were no minimum of anything. A point the run never converged on
+    is no entry either: an optimisation that never converged - one stopped
+    at its first geometry too - gives none, and says *Not converged* over
+    it; a run stopped before its last point converged - an interrupted scan
+    - gives the points it did, and says *Last point not converged*. The
+    point stays a frame, to be looked at; nothing that is no minimum is
+    weighed (the command centre, 2026-10-22, until an entry can carry its
+    own failure). Over each it says how many of its frames are entries: "4
+    of 21 frames are entries (converged points)".
+    (A step's own optimisation was already one entry, its path: *Results*.)
+  - **What is not known to be found is no entry either: never every
+    geometry for want of a mark** (the review desk, 2026-10-22). Which
+    are entries fails closed. No entry, and why, said over it as "No frame
+    is an entry (...)":
+    - a run that **ended with an error**, or **did not come to its end**
+      (cut short, still running), where the program marks none - a single
+      point too ("the run ended with an error", "the run did not come to
+      its end"). A run that marks the points it converged on before it
+      stopped keeps those, as above;
+    - the points of a **rigid scan** or a **reaction path** ("points of a
+      scan or a reaction path");
+    - other geometries, more than one, none marked - an optimisation whose
+      marks cannot be matched to its geometries, a dynamics run - and
+      marks that are not one to each geometry ("convergence not stated in
+      this file");
+    - an XYZ file a program writes of an **optimisation's steps**, as its
+      plugin knows it (`xyzSteps`) - by its name (xtb's `xtbopt.log`,
+      ORCA's `*_trj.xyz`) or, renamed, by what each frame's comment line
+      says: which converged is said in the program's output, not there
+      ("convergence not stated in this file");
+    - a workspace whose record of which are entries does not read ("which
+      are could not be read").
+
+    A geometry that does not read is left out with its own mark; each
+    other keeps its own. A frame of one of these made a molecule of its
+    own (a value set on it) keeps its being no entry, and why: it is that
+    geometry. Left as before, every frame an entry: XYZ files that are
+    ensembles by nature - a conformer search's (`crest_conformers.xyz`), a
+    relaxed scan's converged points (ORCA's `.allxyz`) - and any file no
+    plugin names as an optimisation's steps.
 - **Steps work entry by entry**, or compound by compound where the kind
   says so: *Optimise* each entry; *Energy window* and *Populations*
   within each compound of a conformer set.
@@ -761,7 +816,8 @@ states an undo goes back to as well.
 - **The workspace keeps it all** (`.meno`, FILE-IO.md, *The workspace
   file*): sets, steps, wires, options; each run - when, its kind and
   options, what it said and how it ended, how long it took, its jobs by
-  id - and the molecules each of its last ten gave; the outputs its
+  id - and the molecules each of the runs it keeps gave (*Earlier
+  runs*); the outputs its
   molecules were read from, as files kept by their SHA-256, each
   molecule's calculation saying its program and version as the output
   does; a job's log, as a text, where it was shown; results as entries
@@ -1123,9 +1179,38 @@ How it works: ARCHITECTURE.md, *Workflows*.
 
 Decided while building it, for the maintainer to confirm:
 
-- **A step keeps its last ten runs**, each with the molecules it gave, in
-  the workspace. A run refused before it began - nothing coming in, say -
-  is not kept.
+- **Earlier runs** (the maintainer's ruling, 2026-10-22, in place of a
+  step keeping its last ten). A step keeps, each with what it gave, in the
+  workspace:
+  - its last run, and the run before it, in full;
+  - every run the chemist keeps: *Keep* on its row of the card's *Runs*
+    holds it, *Kept* lets it go again. A run kept is never dropped, however
+    many there are: what bounds them is the workspace file's own size -
+    the warning before a save takes it past a size, and the most a file
+    may hold, 1 GB (FILE-IO.md, *A step's jobs*: *A size warning*).
+
+  Running the step again drops the others from the workspace, and so
+  from its file when it is next saved. Meno says which, and what they gave, before
+  the run, never after. Under the icons of the step's menu, a note reads
+  *Running drops the run from 14:02 (120 molecules) from this workspace.*
+  It names a run by its time, with its day where that was not today and
+  its seconds where two of the step's runs were in one minute, and
+  says what it gave: so many molecules, conformers, or no results. The
+  note covers every step the click runs: those before it that run first,
+  being changed or not run, and, for *Run from here*, those after it
+  (*Running from here also drops ...*). *Run all* gets the same note, and
+  so does the open card under *Runs* (*Running again drops ...*). Where
+  nothing would be dropped, there is no note.
+
+  A step running already drops nothing more for being asked again. A click
+  that is refused before its run starts, with nothing coming in say,
+  drops nothing: what the step last did is kept with the rest, and the
+  refusal itself is not kept. A step after one that fails is not run, so it
+  drops nothing, though the note named its runs. A dropped run's job
+  folders stay in Meno's data folder. A copied workspace can share job
+  ids with the one it was copied from, so they are left for the clean-up
+  of jobs to come. A set's *Don't keep in the file* is about what the set
+  holds now, not the step's earlier runs.
 - **Showing a run again** puts its results in the result set and makes
   it what the step last did - one step to undo - and keeps what was shown
   among the runs in its place. The step's options stay as they are: where
@@ -1656,6 +1741,13 @@ them again*; the maintainer's rulings of 2026-10-22):
   minimum - take it out first*. *Energy window* refuses one not
   converged the same; a saddle point's mark would refuse it where the
   window is on free energies, which it is not yet.
+- **A conformer set's chip shows no shares** where a frame is no minimum,
+  the same two marks, rather than Boltzmann shares of an energy that is
+  none (utils/molecule3d `sharesWithheld`); opened, it says why, naming
+  the frame: *#2 is not converged: it is no minimum, so no shares are
+  given*. Shares a *Populations* step gave before the mark are not shown
+  either. Another failure (stopped, refused) is no judgement of a
+  minimum, and leaves the shares as they were.
 - **The entry record says it too**: `imaginary`, how many imaginary
   frequencies its calculation judged it has, where it judged any; one
   that failed carries its reason as its status. *Populations* on free
@@ -1724,6 +1816,21 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
 
+**A large set of structures drawn** is held as a large set of molecules
+is (*A large result set*): an exit that gives more than 50 puts none of
+them on the page. Its set holds each structure as the step drew it, in
+the step's order, with its record, and its frame says how
+many ("120 structures"). The steps after it take them from there, and a
+run kept keeps them. The workspace's file keeps them too, or, with *Don't
+keep in the file*, only their count and hash. Opened from a file, a
+structure of theirs that does not read is left out and counted. A
+molecule in 3D made from one of them is linked to no drawing, since its
+atoms are on no page. Run again with 50 or fewer, the step puts them on
+the page as before. Copied with its step, the set holds nothing until the
+step runs again, as a large set of molecules does. Held off the page,
+they are kept as the step drew them: a change of the workspace's style
+reaches them only once they are on the page.
+
 ### A structure drawn's record (2026-10-22)
 
 A structure a step gives keeps a record of its own, as an entry does
@@ -1746,7 +1853,8 @@ All of it is optional. A structure the chemist drew has none.
   atoms (`Member.structure` and `.record`). A step's entries carry it in
   (`DrawnEntry.record`, from `inputOf`'s `records`), and its outcome
   carries it out. A run kept keeps it with each structure
-  (`RunResults.drawn`, as `DrawnModel`).
+  (`RunResults.drawn`, as `DrawnModel`), and so does a large result set
+  held off the page (`WorkflowSet.drawnCollection`).
 - **It stays with the structure** as the set's members settle again,
   moved whole or turned.
 - **It is of the structure it was given for.** The record keeps which
@@ -1793,10 +1901,63 @@ All of it is optional. A structure the chemist drew has none.
   with nothing is none.
 
 
-Not yet: a large set of structures drawn. *A large result set* holds more
-than 50 molecules in 3D in the set itself, off the page; structures drawn
-are all put on the page however many there are. Enumerate, which can make
-up to 10,000, holds them in its set the same way (P3b).
+### Enumerate: R groups (as built, 2026-10-22)
+
+As WORKFLOWS-FOUNDATION.md specifies (*Enumerate*, *R groups*), with what
+the build settled:
+
+- **The step.** *Enumerate* is Meno's own, and plugins can't take its kind
+  (`MENO_ONLY`, lib/plugins/steps). It takes one set of structures drawn,
+  *Template*, and gives *Made* and *Aside*. Its one option, *R groups, one
+  to a line*, is a box of lines (`LinesOption`, lib/options). Beside each
+  line, as it is typed, the box shows what the line was read as: the
+  group's label and formula, the element, or why it does not read.
+  Settings shows no box of lines, since a list belongs to one step.
+- **The join is `expandAbbreviation`** (Workspace/document). The canvas's
+  *Expand abbreviation* calls it, and Enumerate calls it with the group in
+  hand. There is one function for both.
+- **What stops it before it runs.** Each reason in the specification is
+  said in full, naming the line or the atom. A template whose wedges do
+  not say a configuration stops it too, since identity could not judge
+  its products.
+- **Valence.** Where a plugin does the checks and is at hand, the
+  template and each option are checked first, and anything flagged stops
+  the step in the checks' words. Otherwise the set says *Valence not
+  checked*.
+- **Configurations left open.** Where a plugin finds stereoisomers and is
+  at hand, the products made are each asked, and the set counts and names
+  by number those with a configuration left open. Otherwise it says they
+  were not looked for.
+- **The products.** Each is drawn as the join draws it and is not laid
+  out again. Each keeps its record (*A structure drawn's record*): its
+  number, how it was made, and, if it was set aside, why (*Same as 2*).
+  On the page, each one's number is shown under it (*#2*), with how it was
+  made on hover. Its result sets carry the series' core
+  (`WorkflowSet.core`). More than 50 are held in the set itself, off the
+  page (*A large set of structures drawn*).
+- **Duplicates** are judged by `identity()` (lib/chem/identity), which
+  also says when the canonical search ran out of steps. The set then says
+  how many products a duplicate may have been missed among.
+- **Known answers against RDKit.** The fixture
+  (`workflow/testdata/enumerate.rdkit.json`, made by
+  `scripts/identity/rdkit.py`) holds each product of the cases in
+  `workflow/testdata/enumerationCases.ts` by the SHA-256 of the molfile
+  Meno writes of it. It also holds RDKit's canonical SMILES of that
+  molfile, and of the compound written by hand for that combination. The
+  test checks that each product is that compound, configurations
+  included, and that the products set aside as *Same as n* are exactly
+  those whose SMILES are product n's. No case differs by design so far.
+- **Not yet.**
+  - A set of structures drawn held off the page can't yet be opened as a
+    table or shown with a sample of its structures, as a large set of
+    molecules in 3D is (6b, 6c). Its frame says how many it holds, and that
+    they are on no page.
+  - Copied without its step, such a set pastes as an empty frame of the
+    chemist's: what it holds is on no page to copy along.
+  - The series' core is by its atoms' places in each product as made. A
+    product edited by hand afterwards can leave them out of step; nothing
+    reads the core yet.
+  - *Substituent swap* and *Scaffold swap* come after.
 
 ### Tables (2026-10-22)
 
@@ -1876,6 +2037,59 @@ columns or more, every row - offers *Put on the page as a table* on its
 menu: a set holding it, named for the text, beside it. Prose is not
 offered.
 
+### Filter (2026-10-22)
+
+*Filter*, Meno's own, keeps the entries whose properties meet its
+conditions (lib/nodes `filter`, WORKFLOWS-FOUNDATION.md, *Meno's own
+nodes*): the first proof of a generative workflow - structures a model
+generates, made 3D, filtered on the model's NLL and 2D properties - needs
+it.
+
+- **Its conditions are typed**, one to a line or each after a semicolon
+  (one inside double quotes is a text's): a property, a comparison (< ≤ >
+  ≥ = ≠, or <= >= != as typed), and a value - a number with its unit where
+  the property has one ("nll < 30", "energy ≤ -76.4 Eh", "gap > 40
+  kcal/mol"), true or false, or a text. *Kept where* is all of them met,
+  or any. Its card says them as read ("nll < 30 and mw ≤ 500"), or why one
+  does not read - a unit Meno does not know, no comparison, one read whole
+  that is none (=<, ≥≥), a quote not closed - and it does not run until
+  they do.
+- **A number is compared in the condition's unit**, converted within its
+  dimension only: 0.5 eV against 40 kcal/mol is 11.530274 kcal/mol. A
+  property of another dimension, or of none where the condition has one,
+  or a number that is not finite (NaN, an infinity), meets nothing, and
+  says so. Kept where any is met, an entry kept with a condition that could
+  not be asked of it is counted on the line, with why ("2 of them with a
+  condition not asked (1: it has no gap; ...)").
+- **What it reads** is each entry as Meno's entry record (`entryOfSet`):
+  its properties as its molecule's frame carries them
+  (`Molecule3D.properties`, one map for each frame - a model's NLL, a
+  descriptor - each with its unit and what worked it out), and Meno's own:
+  its energy, in hartrees, its number among its compound's conformers,
+  its compound as its group, its name, its thermochemistry. A condition on
+  a name that is Meno's own and one an entry carries of its own too is
+  refused ("which is meant cannot be told"), never read as either; the
+  entry's own goes on with it, unread.
+- **Its two exits add up to what came in**: those kept, in the order they
+  came, and *The rest*, both counted on its line, with how many of the
+  rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
+  not nll < 30 (40); 1: it has no nll)"). An entry with no value for a
+  property named does not meet that condition, and is never dropped
+  unsaid. What it keeps and sets aside is as it came: its number, its
+  energy, its properties.
+- **A molecule's properties are kept in the file**, a map for each frame;
+  one that does not read - of a unit Meno does not know, or a list - is
+  left out, and a list of maps that is not one for each frame is not
+  read. A frame edited into a molecule of its own keeps none: they were
+  the result's.
+
+A descriptor's unit reads as Meno's units table has it: "mw < 500
+g/mol", "tpsa < 90 Å²" (or Å2).
+
+Not yet: structures drawn - *Generate*'s output and *Descriptors'* -
+read from their record (`DrawnEntry.record.properties`), which comes in
+a PR of its own; conditions picked from what comes in rather than typed.
+
 ### Charts (2026-10-22)
 
 **Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
@@ -1886,14 +2100,17 @@ it takes the first two columns of numbers (molecules seen as a table:
 each entry's number, then its energy).
 - A point for each row with a number in both; **a row without is counted
   and said**, by what it lacks ("4 points · 1 row left (1 with no
-  measured)"). A column named that is not there, or is no column of
+  measured)"), and each such row named, pointed at - its entry and what it
+  is, or its row ("molecule:2#2 (frame 3 of 3)", "row 3"). A column named that is not there, or is no column of
   numbers, or a table with fewer than two such: the step says why, and
   makes nothing.
 - Each axis is labelled with its column's name, unit, and what worked its
-  numbers out where that is known ("energy (Eh) · xtb · GFN2-xTB · gas
-  phase"). The ticks are 1, 2 or 5 times a power of ten, about five of
+  numbers out where that is known, and the conditions they were worked out
+  at - temperature, pressure, solvent - where stated ("energy (Eh) · xtb ·
+  GFN2-xTB · 298.15 K · 1 atm · water"; lib/chart `howOf`, which a number's
+  set says too). The ticks are 1, 2 or 5 times a power of ten, about five of
   them, from below the least value to above the greatest.
-- A point pointed at says its row and its two values; pressed, where it is
+- A point pointed at says its row, what it is, and its two values; pressed, where it is
   of a molecule on the page, that molecule is chosen at its frame.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
@@ -1909,6 +2126,12 @@ each entry's number, then its energy).
   of its own - so a set mixing the two goes into Chart, which a step that
   works on entries refuses (*A wire let go on an input that does not take
   it*; kinds `readsAsTable`).
+- Each row says what it is, in a column of its own after its id (*what*,
+  lib/table `WHAT_COLUMN`): "conformer 2 of 7", a conformer set's; "frame
+  3 of 12", a frame of a molecule of several that is no conformer set - a
+  scan's, a path's - each frame an entry, a compound, of its own, number 1;
+  "molecule", one of a single geometry. A chart of number against energy
+  draws a scan's frames beside the conformers, each saying which it is.
 
 ### Energy diagrams (2026-10-22)
 

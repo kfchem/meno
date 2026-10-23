@@ -3,7 +3,8 @@ import type { ChemClient } from "../../../../lib/roles/client";
 import { DEFAULT_STYLE_CHOICE, styleOf } from "../../../../lib/chem/style";
 import type { Molecule3D } from "../store/types";
 import { binned, chartOf, sampleOf, SAMPLE, sturges } from "./setSummary";
-import { sampleDrawings } from "./sampleDrawings";
+import { sampleDrawings, SKELETON_CELL } from "./sampleDrawings";
+import { drawnOf } from "../chem/make3d";
 
 /** A water with `n` geometries and the energies given, as a conformer search makes it. */
 function waters(energies: number[], extra: Partial<Molecule3D> = {}): Omit<Molecule3D, "id" | "at"> {
@@ -167,6 +168,24 @@ describe("a large set's sample drawn", () => {
     );
     expect(cells.map((c) => ("why" in c ? c.why : c.notAsGiven))).toEqual([[], "It could not be drawn: cannot read it", []]);
     expect(cells.every((c) => "why" in c || (c.svg.startsWith("<svg") && c.w > 0 && c.h > 0))).toBe(true);
+  });
+
+  it("draws no skeleton - its hydrogens not there - saying so in its place, the others drawn; never asked of the plugin", async () => {
+    // (water's oxygen alone: no hydrogens, not said to be whole without any)
+    const skeleton = { ...m, atoms: [m.atoms[0]], bonds: [], bondOrders: "unknown" as const };
+    let asked = 0;
+    const cells = await sampleDrawings(
+      [
+        { m, frame: 0 },
+        { m: skeleton, frame: 0 },
+      ],
+      style,
+      Promise.resolve(client(() => (asked++, WATER_BLOCK))),
+    );
+    expect(cells.map((c) => ("why" in c ? c.why : c.notAsGiven))).toEqual([[], SKELETON_CELL]);
+    expect(asked).toBe(1);
+    // (and drawnOf refuses it for any caller)
+    await expect(drawnOf(client(() => WATER_BLOCK), skeleton, 0)).rejects.toThrow(/no hydrogens/);
   });
 
   it("says why none is drawn where no plugin draws molecules", async () => {

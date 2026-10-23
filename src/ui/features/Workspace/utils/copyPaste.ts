@@ -5,6 +5,7 @@
  */
 import { ATOM_NUMBER_KINDS, type AtomNumberKind } from "./atomNumbers";
 import { readBiopolymer } from "../../../../lib/chem/biopolymer";
+import { propertiesIn } from "../../../../lib/entry";
 import type { ClipItem } from "../../../../lib/clipboard";
 import { MARK_REACH, pushAtoms } from "../document";
 import { fillsAmong } from "./rings";
@@ -25,7 +26,7 @@ import type { Arrow, Atom, AtomStack, Bond, Caption, Carried3D, CarriedList, Dra
 import type { Cycle, CycleBranch } from "../../../../lib/chem/cycle";
 import { restyled } from "../restyle";
 import { asSeen, bondsAt } from "./molecule3d";
-import { imaginaryOf, readCalc } from "../../../../lib/calc/output";
+import { imaginaryOf, readCalc, UNMARKED, type Unmarked } from "../../../../lib/calc/output";
 import { readWorkflow } from "../workflow/saved";
 import { partsBounds } from "../workflow/parts";
 import { readPdfs } from "./pdfItems";
@@ -33,6 +34,7 @@ import { pdfBounds, POINT, pointFor } from "../../../../lib/pdf/layout";
 import { drawnSheetBox } from "./textSheets";
 import { greatest, least } from "../../../../lib/chem/lists";
 import { magnificationWithin } from "./magnified";
+import { isSkeleton } from "./completeness";
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { failureKindOf, WORDS_MOST, type Failure } from "../workflow/failures";
 import { anyLeftOut, leftOut, noting, readEach } from "./readNotes";
@@ -140,7 +142,8 @@ export function clipItems(part: Drawn): ClipItem[] {
     // (a workflow's parts, pictures, PDFs, texts' sheets or slides, alone: Meno's record, which no other program reads)
     if (!ms.length) return hasFlow(part) || part.pictures?.length || part.captions?.length || part.pdfs?.length || part.sheets?.length || part.slides?.length || part.shapes?.length || part.inks?.length || part.cycles?.length ? [{ flavor: "meno", text: recordText(part) }] : [];
     const placed = ms.length > 1;
-    const seen = ms.map((m) => asSeen(m, m.turn, m.frame, placed));
+    // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
+    const seen = ms.map((m) => (isSkeleton(m) ? asSeen(m, m.turn, m.frame, placed).map((a) => ({ ...a, noImplicitH: true })) : asSeen(m, m.turn, m.frame, placed)));
     const offsets = seen.map((_, i) => seen.slice(0, i).reduce((n, a) => n + a.length, 0));
     return [
       { flavor: "meno", text: recordText(part) },
@@ -617,6 +620,27 @@ function stackOf(given: unknown): Carried3D["stack"] | undefined {
 }
 
 /**
+ * A molecule's entries as its record gives them (`Molecule3D.entryFrames`,
+ * `noEntryWhy`), of `frames` frames after its first: none said, every frame
+ * one. Given, each one it has, in order, once - or none, with why where it
+ * was said - each by its place among the geometries kept (`keep`). Given
+ * but not readable so, none is one, "which are could not be read": what
+ * counts as an entry is never widened.
+ */
+function entriesRead(entryFrames: unknown, why: unknown, keep: readonly boolean[]): Pick<Molecule3D, "entryFrames" | "noEntryWhy"> {
+  if (entryFrames === undefined) return {};
+  const reads = Array.isArray(entryFrames) && entryFrames.every((f, k, all) => Number.isInteger(f) && f >= 0 && f < keep.length && (k === 0 || f > all[k - 1]));
+  if (!reads) return { entryFrames: [], noEntryWhy: "unread" };
+  // (each by its place among the geometries kept - one left out, the entry with it: none, where none is left, is said)
+  const at = new Map<number, number>();
+  keep.forEach((k, i) => k && at.set(i, at.size));
+  const kept = (entryFrames as number[]).flatMap((f) => (at.has(f) ? [at.get(f)!] : []));
+  if (entryFrames.length && !kept.length) return { entryFrames: [], noEntryWhy: "unread" };
+  const said = !kept.length && UNMARKED.includes(why as Unmarked) ? { noEntryWhy: why as Unmarked } : {};
+  return { entryFrames: kept, ...said };
+}
+
+/**
  * A molecule's calculation as a file carries it, its results of frames
  * made those of the frames kept (`keep`, by geometry - the first, then each
  * frame): a value of each frame left out taken out with it, and a row of a
@@ -704,6 +728,14 @@ export function readCarried3D(given: unknown): Carried3D | null {
   // (a ligand's atoms whose orders are unknown: each that is one of its own kept, any other said - never all dropped for one)
   const unknownOrders = Array.isArray(m.unknownOrders) ? m.unknownOrders.filter(index) : [];
   if (m.unknownOrders !== undefined && (!Array.isArray(m.unknownOrders) || unknownOrders.length < m.unknownOrders.length)) leftOut("bondOrders");
+  // (which frames failed, and which are no minimum: marks that do not read are left out - said - and the molecule kept,
+  // marked so, never its frames shown as fine, which a step after it would weigh as minima)
+  const failedRead = failedOf(m.failed, keep);
+  const imaginaryRead = imaginaryFrames(m.imaginary, keep);
+  const marksUnread = failedRead === null || imaginaryRead === null || m.marksUnread === true;
+  if (failedRead === null || imaginaryRead === null) leftOut("frameMarks");
+  const failed = marksUnread ? undefined : failedRead;
+  const imaginary = marksUnread ? undefined : imaginaryRead;
   return {
     atoms: atoms as Carried3D["atoms"],
     bonds: bonds as Carried3D["bonds"],
@@ -729,9 +761,16 @@ export function readCarried3D(given: unknown): Carried3D | null {
     ...(biopolymer ? { biopolymer } : {}),
     ...(bondOrders ? { bondOrders } : {}),
     ...(m.chainOrders === "dictionary" ? { chainOrders: "dictionary" as const } : {}),
+    ...(m.wholeWithoutH === true ? { wholeWithoutH: true as const } : {}),
     ...(unknownOrders.length ? { unknownOrders } : {}),
+    ...(hydrogensAddedOf(m.hydrogensAdded, n) ? { hydrogensAdded: hydrogensAddedOf(m.hydrogensAdded, n) } : {}),
+    ...(ligandOrdersOf(m.ligandOrders, biopolymer?.residues.length ?? 0) ? { ligandOrders: ligandOrdersOf(m.ligandOrders, biopolymer?.residues.length ?? 0) } : {}),
     ...(typeof (m.edited as { from?: unknown } | undefined)?.from === "string" ? { edited: { from: (m.edited as { from: string }).from } } : {}),
     ...(m.path === true && frames.length ? { path: true as const } : {}),
+    // (the geometries an opened optimisation or scan converged on: each one it has, in order, once - or none, where
+    // none did. Where that does not read, none is an entry, and that is said: never every one)
+    ...entriesRead(m.entryFrames, m.noEntryWhy, keep),
+    ...(m.notConverged === true ? { notConverged: true as const } : {}),
     ...(m.bondsFrom === "distance" ? { bondsFrom: "distance" as const } : {}),
     ...(() => {
       const left = (Number.isInteger(m.framesLeftOut) && (m.framesLeftOut as number) > 0 ? (m.framesLeftOut as number) : 0) + framesDropped;
@@ -744,13 +783,19 @@ export function readCarried3D(given: unknown): Carried3D | null {
       const numbers = perFrame<number>(m.numbers, (k) => Number.isInteger(k));
       const shares = perFrame<number>(m.shares, isNum);
       const degeneracies = perFrame<number>(m.degeneracies, (d) => Number.isInteger(d) && (d as number) >= 1);
-      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}) };
+      // (each frame's properties, one map each - a frame with none, an empty one; a property that does not read left out, and counted)
+      const maps = perFrame<Record<string, unknown>>(m.properties, (p) => !!p && typeof p === "object" && !Array.isArray(p));
+      const read = maps?.map((p) => propertiesIn(p) ?? {});
+      if (maps && read) leftOut("property", maps.reduce((k, p, i) => k + Object.keys(p).length - Object.keys(read[i]).length, 0));
+      const properties = read?.some((p) => Object.keys(p).length) ? read : undefined;
+      return { ...(numbers ? { numbers } : {}), ...(shares ? { shares } : {}), ...(degeneracies ? { degeneracies } : {}), ...(properties ? { properties } : {}) };
     })(),
+    ...(failed ? { failed } : {}),
+    ...(imaginary ? { imaginary } : {}),
+    ...(marksUnread ? { marksUnread: true as const } : {}),
     ...(() => {
-      const failed = failedOf(m.failed, keep);
-      const imaginary = imaginaryFrames(m.imaginary, keep);
       const mirrors = mirrorsOf(m.mirrors, keep, n);
-      return { ...(failed ? { failed } : {}), ...(imaginary ? { imaginary } : {}), ...(mirrors ? { mirrors } : {}) };
+      return mirrors ? { mirrors } : {};
     })(),
     ...(stereo ? { stereo } : {}),
     ...(numbers ? { atomNumbers: numbers } : {}),
@@ -767,21 +812,53 @@ function mirrorsOf(given: unknown, keep: boolean[], atoms: number): (number[] | 
   return out.some(Boolean) ? out : undefined;
 }
 
-/** Why each of a molecule's frames failed in the step that made it, where one did - one for each, null where it did not - of core's kinds (workflow/failures); of the frames kept, those left out with theirs. */
-function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | undefined {
-  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
-  const out = given.filter((_, i) => keep[i]).map((f): Failure | null => {
-    const g = f as { kind?: unknown; why?: unknown } | null;
-    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : null;
+/**
+ * Why each of a molecule's frames failed in the step that made it, where one
+ * did - one for each, null where it did not - of core's kinds
+ * (workflow/failures); of the frames kept, those left out with theirs. None
+ * where none is marked; null where the marks do not read - not one for each
+ * frame, or one that is neither a failure nor null.
+ */
+function failedOf(given: unknown, keep: boolean[]): (Failure | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((f): Failure | null | undefined => {
+    if (f === null) return null;
+    const g = f as { kind?: unknown; why?: unknown };
+    return typeof g?.why === "string" ? { kind: failureKindOf(g.kind), why: g.why.slice(0, WORDS_MOST) } : undefined;
   });
+  if (read.some((f) => f === undefined)) return null;
+  const out = (read as (Failure | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
 }
 
-/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them. */
-function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | undefined {
-  if (!Array.isArray(given) || given.length !== keep.length) return undefined;
-  const out = given.filter((_, i) => keep[i]).map((f) => imaginaryOf(f) ?? null);
+/** A conformer set's imaginary frequencies, one list or null for each frame kept, as `CalcInfo.imaginary` takes them: none where none is marked; null where the marks do not read (`failedOf`). */
+function imaginaryFrames(given: unknown, keep: boolean[]): (number[] | null)[] | null | undefined {
+  if (given === undefined) return undefined;
+  if (!Array.isArray(given) || given.length !== keep.length) return null;
+  const read = given.map((f) => (f === null || (Array.isArray(f) && !f.length) ? null : (imaginaryOf(f) ?? undefined)));
+  if (read.some((f) => f === undefined)) return null;
+  const out = (read as (number[] | null)[]).filter((_, i) => keep[i]);
   return out.some(Boolean) ? out : undefined;
+}
+
+/** The hydrogens a molecule was given that its file left out (Molecule3D `hydrogensAdded`): each part's, chosen or the CCD's, by its atoms - of `atoms`. */
+function hydrogensAddedOf(given: unknown, atoms: number): Carried3D["hydrogensAdded"] | undefined {
+  if (!Array.isArray(given)) return undefined;
+  const parts = given.filter(
+    (p): p is { by: "chosen" | "dictionary"; atoms: number[] } =>
+      !!p && (p.by === "chosen" || p.by === "dictionary") && Array.isArray(p.atoms) && p.atoms.length > 0 && p.atoms.every((i: unknown) => Number.isInteger(i) && (i as number) >= 0 && (i as number) < atoms),
+  );
+  return parts.length ? parts.map((p) => ({ by: p.by, atoms: [...p.atoms] })) : undefined;
+}
+
+/** Where a PDB entry's ligands' bond orders came from, by residue (Molecule3D `ligandOrders`) - of `residues`. */
+function ligandOrdersOf(given: unknown, residues: number): Carried3D["ligandOrders"] | undefined {
+  if (!given || typeof given !== "object") return undefined;
+  const kept = Object.entries(given as Record<string, unknown>).filter(
+    ([r, by]) => Number.isInteger(Number(r)) && Number(r) >= 0 && Number(r) < residues && (by === "assigned" || by === "dictionary" || by === "estimated"),
+  );
+  return kept.length ? (Object.fromEntries(kept.map(([r, by]) => [Number(r), by])) as Carried3D["ligandOrders"]) : undefined;
 }
 
 /** The atom numbers a molecule shows (utils/atomNumbers): of a kind known, on atoms each one of its own - all, given none. */
