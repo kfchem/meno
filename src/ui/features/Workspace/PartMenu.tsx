@@ -258,7 +258,14 @@ export default function PartMenu({
   onRunStep: () => void;
   onStepOptions: () => void;
   /** What a step right-clicked can do besides, as it is: stopped, while its jobs wait or run; its logs and files shown, where it has jobs. */
-  step?: { onRunFrom?: () => void; onStop?: () => void; onShowLog?: () => void; onShowFiles?: () => void };
+  step?: {
+    onRunFrom?: () => void;
+    onStop?: () => void;
+    onShowLog?: () => void;
+    onShowFiles?: () => void;
+    /** Whether its jobs' raw outputs are kept in the workspace's file (*Don't keep raw outputs*, workflow/keptJobs): a step a plugin does. */
+    keepRaw?: { kept: boolean; set: (keep: boolean) => void };
+  };
   /** What a PDF right-clicked can do: read in the column, its pages turned, spread or gathered, made an icon or full size (docs/PDF.md). */
   pdf?: {
     spread: boolean;
@@ -791,6 +798,9 @@ export default function PartMenu({
           ...(step?.onShowLog ? [{ name: "Show log", keys: "", run: step.onShowLog }] : []),
           ...(step?.onShowFiles ? [{ name: "Show files", keys: "", run: step.onShowFiles }] : []),
           ...(onSaveProcedure ? [{ name: "Save as procedure…", keys: "", run: onSaveProcedure, divider: !!step?.onShowLog }] : []),
+          ...(step?.keepRaw
+            ? [{ name: "Don't keep raw outputs", keys: "", run: () => step.keepRaw!.set(!step.keepRaw!.kept), checked: !step.keepRaw.kept, divider: true }]
+            : []),
         ]
       : target.kind === "wire"
       ? [del("Delete wire")]

@@ -5,7 +5,7 @@
  * own.
  */
 import { numberText } from "../../../../lib/calc/results";
-import type { Option } from "../../../../lib/options";
+import type { Option, OptionValues } from "../../../../lib/options";
 import type { SetKind, StepKind } from "../../../../lib/plugins/steps";
 import { renderOptions } from "../render/renderOptions";
 
@@ -57,6 +57,8 @@ export type KindInfo = {
   options?: readonly Option[];
   /** What must be known of its entries before it runs, where something must: which stereoisomer each is (`configurations`, workflow/configurations) - asked of the plugin that perceives it, every entry its own. */
   perceives?: "configurations";
+  /** Where it needs them known only with some options: whether these do (Duplicates' mirror images counted in). Unsaid, always. */
+  perceivesWith?: (v: OptionValues) => boolean;
   /** Meno's own choices for a kind a plugin does, whoever does it, before the plugin's (Render's: a picture's size and shape, and what its molecules and surfaces are made of). */
   own?: readonly Option[];
   /** What its result set is called; `{id}`, an option's value. */
@@ -111,7 +113,23 @@ export const KINDS: readonly KindInfo[] = [
     runs: "entries",
     made: "Unlike",
     second: { id: "rest", name: "Alike", gives: "same", of: "rest" },
-    options: [{ id: "rmsd", label: "Alike within (RMSD)", type: "number", default: 0.125, min: 0, step: 0.025, unit: "Å" }],
+    // (alike: the one definition of the same conformer, workflow/sameConformer - no threshold of its own; the
+    //  maintainer, 2026-10-21. A conformer's mirror image, in an achiral molecule: kept apart by default - an atom's
+    //  average over both needs both - or counted in, its degeneracy 2 and the atoms it swaps kept: 2026-10-22)
+    options: [
+      {
+        id: "mirrors",
+        label: "Mirror images",
+        type: "choice",
+        choices: [
+          { value: "apart", label: "Kept apart" },
+          { value: "counted", label: "Counted in (degeneracy 2)" },
+        ],
+        default: "apart",
+      },
+    ],
+    perceives: "configurations",
+    perceivesWith: (v) => v.mirrors === "counted",
   },
   {
     kind: "populations",

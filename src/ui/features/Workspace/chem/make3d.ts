@@ -502,6 +502,21 @@ export function likeOf(block: Block, before: Pick<Molecule3D, "atoms" | "drawnFr
  */
 export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, style?: DrawingStyle): Promise<{ model: Model; link: (number | null)[]; ordersUnknown: boolean }> {
   if (isSkeleton(m)) throw new Error(skeletonWhy());
+  const { drawn, ordersUnknown } = await drawnOf(chem, m, frame);
+  const model = await laidOut(drawn, style).catch(() => drawn);
+  // (its heavy atoms came back in their order)
+  let k = 0;
+  const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
+  return { model, link, ordersUnknown };
+}
+
+/**
+ * A molecule in 3D as the drawing `formulaOf` lays out: the frame it is
+ * given, its heavy atoms in their order, wedged as it is in 3D, its bonds'
+ * orders found where it has none - not yet laid out by Meno's engine - and
+ * whether its orders, wanted, are still unknown.
+ */
+export async function drawnOf(chem: ChemClient, m: Pick<Molecule3D, "atoms" | "bonds" | "frames" | "bondsFrom">, frame: number): Promise<{ drawn: Model; ordersUnknown: boolean }> {
   // (the frame drawn: kept to the frames it has, as edit3d `placesOf`)
   const xyz = placesOf(m, frame);
   const atoms = m.atoms.map((a, i) => ({ el: a.el, charge: a.charge, radical: a.radical, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
@@ -510,11 +525,7 @@ export async function formulaOf(chem: ChemClient, m: Molecule3D, frame: number, 
   const wanted = bonds.length > 0 && bonds.every((b) => b.order === 1);
   const { molblock, perceived } = await chem.request("drawing_of", { molblock: writeMolfile3d(atoms, bonds), perceive: wanted });
   const drawn = editorModelOf((await processFileContent("formula.mol", molblock)).model);
-  const model = await laidOut(drawn, style).catch(() => drawn);
-  // (its heavy atoms came back in their order)
-  let k = 0;
-  const link = m.atoms.map((a) => (a.el === "H" ? null : (drawn.atoms[k++]?.id ?? null)));
-  return { model, link, ordersUnknown: wanted && !perceived };
+  return { drawn, ordersUnknown: wanted && !perceived };
 }
 
 /** Where a formula drawn of a molecule in 3D goes: beside it, to its left, level with it. */

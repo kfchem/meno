@@ -44,7 +44,7 @@ import { addedReaders } from "./lib/calc/workers";
 import { ALL_PLUGINS, READERS } from "./lib/calc/catalog";
 import { showGuidesDue, useGuide } from "./lib/plugins/guides";
 import GuideCard from "./ui/guide/GuideCard";
-import { computerResources, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
+import { computerResources, fileNow, limitsOf, stopJob, writeJobLimits } from "./lib/jobs";
 import { jobsUnderWay } from "./ui/features/Workspace/workflow/flow";
 import { madeStoreOf } from "./ui/features/Workspace/store";
 import { stopRenders } from "./ui/features/Workspace/render/renders";
@@ -416,6 +416,8 @@ export default function App() {
         continue;
       }
       try {
+        // (as it was before it was read: where its steps' job files are read from again as it is saved, while it is still as it was - workflow/keptJobs)
+        const was = await fileNow(path).then((f) => (f ? { path, ...f } : undefined), () => undefined);
         const bytes = await readFile(path);
         // (a file of styles: asked whether to add them - never opened as a workspace)
         const styles = stylesOfFile(bytes);
@@ -424,7 +426,7 @@ export default function App() {
           continue;
         }
         // (a workspace file: its workspace, and the outputs it keeps held)
-        const workspace = workspaceOfFile(bytes, name);
+        const workspace = workspaceOfFile(bytes, name, was);
         if (workspace != null) {
           workspaces.push({ name, workspace, path });
           continue;

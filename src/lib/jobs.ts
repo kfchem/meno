@@ -49,6 +49,8 @@ export type JobAsk = {
   path?: string;
   /** Programs installed beside its own to run after it, by their names in its manifest (`installed[].beside`), with their arguments. */
   then?: { program: string; args: string[] }[];
+  /** The files of its folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (lib/doc/keptJobs). */
+  reads?: string[];
 };
 
 /** Whether a job is over - and will say nothing more. */
@@ -66,6 +68,26 @@ export const jobFiles = (id: string) => runnerOf(id).files(id);
 export const readJobFile = (id: string, name: string) => runnerOf(id).read(id, name);
 /** Where a job's files are, for *Show files*. */
 export const jobFolder = (id: string) => runnerOf(id).folder(id);
+
+/** What a job's file is to it, kept in a workspace (src-tauri keptjobs.rs): given it, read back of it, what its programs said, or anything else it wrote. */
+export type KeptRole = "input" | "read" | "log" | "raw";
+/** A job's file a workspace may keep: its name in the job's folder (`work/...`, `log.txt`, `after.txt`), size, SHA-256, about how much it comes to deflated, and what it is to the job - `unsure` where the job never said (made by an older Meno). */
+export type KeptJobFile = { name: string; size: number; sha256: string; deflated: number; role: KeptRole; unsure?: true };
+/** A job's files a workspace may keep, where its folder is on this computer; null where it is not. */
+export const jobKept = (id: string) => invoke<KeptJobFile[] | null>("job_kept", { id });
+/** A file the page may read, as it is now: its size, and when it was last written (ms); none where it is not there or may not be read (src-tauri keptjobs.rs `file_now`). */
+export const fileNow = (path: string) => invoke<{ size: number; mtime: number | null } | null>("file_now", { path });
+export type WrittenBack = { work: string; differs: boolean };
+/**
+ * A file a workspace kept of the job `id` written back out (src-tauri
+ * keptjobs.rs `job_write_back`): read by Meno from the workspace's file it
+ * was opened from (`from`, a path), or else sent as its bytes. Where its
+ * work folder is; and whether a file there that is not it was left as it is.
+ */
+export const writeJobBack = (id: string, name: string, sha256: string, source: { from: string } | { bytes: Uint8Array }) =>
+  "from" in source
+    ? invoke<WrittenBack>("job_write_back", new Uint8Array(), { headers: { job: id, name, sha256, from: encodeURIComponent(source.from) } })
+    : invoke<WrittenBack>("job_write_back", source.bytes, { headers: { job: id, name, sha256 } });
 /** Asks a job to stop: its program, and everything it started - or, waiting, it never starts. */
 export const stopJob = (id: string) => runnerOf(id).stop(id);
 /** A finished job's folder taken away. */

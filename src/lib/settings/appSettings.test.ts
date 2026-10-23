@@ -72,6 +72,10 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ calculations: { cores: 2.5, coresAll: 0, memoryAll: -1 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { cores: "8", coresAll: 1025 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calculations: { cores: 16, coresAll: 32, memoryAll: 24576 } }).calculations).toEqual({ cores: 16, coresAll: 32, memoryAll: 24576 });
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 0 } }).calculations).toEqual({});
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 1024 } }).calculations).toEqual({ largeWorkspaceMB: 1024 });
+    // (past the most a workspace's file may come to at all: not taken)
+    expect(acceptAppSettings({ calculations: { largeWorkspaceMB: 2048 } }).calculations).toEqual({});
     expect(acceptAppSettings({ calcReaders: { chosen: { orca: "cclib", gaussian: 3, "x y": "cclib" } } }).files).toEqual({ read: { orca: "cclib" }, also: {} });
     expect(
       acceptAppSettings({ calcReaders: { chosen: { orca: "cclib" } }, files: { read: { orca: "pyscf" }, also: { orca: ["cclib", "cclib", 4], xtb: [] } } }).files,
@@ -161,6 +165,7 @@ describe("the settings file holds only what the user changed (the maintainer, 20
     ["words as typed", { words: { smart: false } }],
     ["cores jobs may use", { calculations: { coresAll: 2 } }],
     ["memory jobs may use", { calculations: { memoryAll: 4096 } }],
+    ["a larger workspace before a save says so", { calculations: { largeWorkspaceMB: 800 } }],
     ["pictures at another resolution", { pictures: { dpi: 300 } }],
   ];
 
