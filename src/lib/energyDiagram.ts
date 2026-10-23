@@ -51,8 +51,14 @@ export type DiagramValue = {
   left: ChartLeft[];
 };
 
-/** A quantity's symbol, where an axis names it by one: an electronic energy is E. */
-const SYMBOLS: Record<string, string> = { energy: "E" };
+/**
+ * A quantity's symbol, where an axis names it by one: an electronic energy
+ * is E; a free energy - Gibbs's - G, and an enthalpy H, as the IUPAC Green
+ * Book (3rd ed., 2007, section 2.11) writes them. The thermochemistry's
+ * corrections (zero-point energy, the free energy's correction) have none:
+ * named as they are.
+ */
+const SYMBOLS: Record<string, string> = { energy: "E", "thermo.free-energy": "G", "thermo.enthalpy": "H" };
 /** A quantity's name as an axis says it, relative to the reference: "ΔE", "ΔG". */
 export const deltaOf = (quantity: string) => `\u0394${SYMBOLS[quantity] ?? quantity}`;
 
