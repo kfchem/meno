@@ -20,7 +20,8 @@ import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
-import { letterAt, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
+import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
+import { pressOn } from "../../../lib/pdf/press";
 import { goToFound, runFind, stepFound } from "./components/pdfFind";
 import { FOUND_COLOR } from "./components/pdfMarks";
 import { placeBefore, selects } from "./utils/pdfSelection";
@@ -683,7 +684,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const q = inPdf(e);
       const link = linkUnder(e);
       const t = q?.on ? lettersOf(q.page) : null;
-      el.style.cursor = link && followsLink(e) ? "pointer" : q && t && letterNear(t, q.x, q.y) != null ? "text" : "";
+      el.style.cursor = link && followsLink(e) ? "pointer" : q && t && (letterNear(t, q.x, q.y) ?? letterInBand(t, q.x, q.y)) != null ? "text" : "";
       el.title = link ? linkHint(link) : "";
     };
     const onModifier = (e: KeyboardEvent) => {
@@ -723,13 +724,24 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         carrying = { x: e.clientX, y: e.clientY, carried: false };
         return;
       }
-      const letter = t ? letterNear(t, q.x, q.y) : null;
+      // (Shift: the selection drawn on from where it was begun, to here - on this page or another)
+      if (t && clicks.n === 1 && e.shiftKey && selects(sel) && sel.id === id) {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        drawing = { unit: "letter", first: [sel.anchor, sel.anchor], x: e.clientX, y: e.clientY, moved: true };
+        store.getState().setPdfSel({ id, anchor: sel.anchor, focus: { page: q.page, at: placeAt(t, q.x, q.y) } });
+        return;
+      }
       // in a figure, or where there are no words: a box drawn as the pointer goes - in a figure, let go where it
-      // was pressed, the figure's (two clicks and three are words', its labels' too)
+      // was pressed, the figure's (two clicks and three are words', its labels' too; and a line of text in it, a
+      // table's row, is words' at once)
       const sha = shaOf();
       const figures = q.on && sha ? figuresHad(sha, q.page, () => reader.redraw()) : null;
       const fig = figures ? figureAt(figures, q.x, q.y) : null;
-      if (q.on && clicks.n === 1 && (fig || letter == null)) {
+      // (on a letter, beside one, or in the white between the rows of a table - a line's band - words; lib/pdf/press)
+      const pressed = pressOn(t, fig, q.x, q.y);
+      const letter = pressed.begins === "words" ? pressed.letter : t ? letterNear(t, q.x, q.y) : null;
+      if (q.on && clicks.n === 1 && pressed.begins === "box") {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
         drawing = null;

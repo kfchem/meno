@@ -232,6 +232,47 @@ export function letterNear(t: PageText, x: number, y: number, reach = 3): number
   return best;
 }
 
+/** How many letters a line has, at least, to be a line of text - a table's row, a sentence - rather than a figure's label: in a figure, a press on it selects words (docs/PDF.md, *Text*). */
+export const LONG_LINE = 20;
+
+/**
+ * The line of words whose band a point of the page lies in, and the letter
+ * of it nearest the point: a line's band reaches half way to the lines over
+ * and under it - so the white between two rows of a table is one row's or
+ * the other's - and a line's height past either end. None, where the point
+ * is in no line's band: there, a press draws a box.
+ */
+export function letterInBand(t: PageText, x: number, y: number): { letter: number; line: Line } | null {
+  const lines = linesOf(t);
+  let best: { letter: number; line: Line; d: number } | null = null;
+  for (const l of lines) {
+    const h = l.y1 - l.y0;
+    if (x < l.x0 - h || x > l.x1 + h) continue;
+    // (half way to the nearest line over it and under it - lines beside it, another column's, not counted - at most a line's height)
+    let up = h;
+    let down = h;
+    for (const o of lines) {
+      if (o === l || o.x1 < l.x0 || o.x0 > l.x1) continue;
+      if (o.y1 <= l.y0) up = Math.min(up, (l.y0 - o.y1) / 2);
+      else if (o.y0 >= l.y1) down = Math.min(down, (o.y0 - l.y1) / 2);
+    }
+    if (y < l.y0 - up || y > l.y1 + down) continue;
+    const dy = y < l.y0 ? l.y0 - y : y > l.y1 ? y - l.y1 : 0;
+    for (let i = l.start; i < l.end; i++) {
+      if (!hasBox(t, i)) continue;
+      const [a, , c] = boxOf(t, i);
+      const d = dy * 4 + (x < a ? a - x : x > c ? x - c : 0);
+      if (!best || d < best.d) best = { letter: i, line: l, d };
+    }
+  }
+  return best && { letter: best.letter, line: best.line };
+}
+
+/** The line a letter is on. */
+export function lineOfLetter(t: PageText, i: number): Line | null {
+  return linesOf(t).find((l) => i >= l.start && i < l.end) ?? null;
+}
+
 /**
  * The place between letters nearest a point of the page: on the line the
  * point is on, or the nearest line - before a letter whose middle is to the
