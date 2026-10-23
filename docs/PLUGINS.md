@@ -856,10 +856,16 @@ The same for every plugin and for Meno's own parts:
     radical; 1: parts)*). A made one is another structure, with a record
     of its own (WORKFLOWS.md, *A structure drawn's record*): what the one
     it was made of came from (`from`), which of how many it is (`made`:
-    *1 of 2*), its own SMILES (`smiles`) and that of the one it was made of
-    (`made_from`), where that had one - never that one's values, which
-    were not worked out of it (an NLL of a SMILES with its stereo left
-    open). One set aside keeps its record, its status saying why. An answer that is
+    *1 of 2*), its own SMILES (`smiles`); and each value of the one it was
+    made of as that one's, named so (`made_from.nll`, `made_from.smiles`),
+    each as it was and by what worked it out then - never as its own,
+    since none was worked out of it (an NLL of a SMILES with its stereo
+    left open): a Filter takes `made_from.nll < 40` by that name, and its
+    own values are none until a step works them out. Made of one that was
+    made itself, it carries that one's `made_from.*` as they were, one
+    level - still of the structure it was made from, at a remove - that
+    one's own values over them, and not which of how many it was. One set
+    aside keeps its record, its status saying why. An answer that is
     not one for each is taken as none: nothing is taken in part.
 - **Molecules cross it in Meno's own forms.** Chemistry plugins are
   given and give back MOL blocks (decision 4, revised); a writer is given

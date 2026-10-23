@@ -22,7 +22,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
-import { frameXyz, framesOf, recordNumber, setEntries, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
@@ -494,8 +494,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       let chem = await pluginWorker(plugin);
       // (each structure drawn: on the page, by its atoms; or held in a large result set, as it holds it)
-      const sources = input.held ? input.held.map((m) => ({ model: m as Model, atoms: m.atoms.map((a) => a.id), off: true })) : input.structures.map((atoms) => ({ model: d.model, atoms, off: false }));
-      for (const [place, { model, atoms, off }] of sources.entries()) {
+      const sources = input.held
+        ? input.held.map((m) => ({ model: m as Model, atoms: m.atoms.map((a) => a.id), off: true, record: m.record }))
+        : input.structures.map((atoms, i) => ({ model: d.model, atoms, off: false, record: input.records[i] }));
+      for (const [place, { model, atoms, off, record }] of sources.entries()) {
         if (menoStops.has(id)) break;
         working({ done: place });
         const block = blocksOf(model, atoms)[0];
@@ -533,6 +535,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const calc = { readers: [], program: plugin.name, ...(made.field ? { method: made.field } : {}) };
         // (each conformer with them, and with what the molecule keeps: the conformers of one compound are made alike - entries `unlikeMade`)
         const keep = keptOf(m);
+        // (what was worked out of the structure drawn - a model's values, its descriptors, its SMILES - is of each of its
+        //  conformers too, the same structure: carried on with them, for a Filter or a table to read)
+        const properties = record?.properties && Object.keys(record.properties).length ? record.properties : undefined;
         for (let f = 0; f < framesOf(m); f++) {
           worked.push({
             compound: compounds,
@@ -541,6 +546,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
             bonds: m.bonds,
             xyz: frameXyz(m, f),
             ...(m.energies?.[f] != null ? { energy: m.energies[f] } : {}),
+            ...(properties ? { properties } : {}),
             calc,
             keep,
           });
@@ -589,6 +595,9 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    * `drawingOf`), each with the record of the one it was made of; or set
    * aside, its record saying why. Nothing taken in part.
    */
+  /** How a value of the structure one was made from is named on it (`madeRecord`): `made_from.nll`, that one's NLL - never its own. */
+  const MADE_FROM = "made_from.";
+
   async function runDrawnAtOnce(id: number, plugin: PythonPlugin, at: number): Promise<void> {
     const d = doc.getState();
     const step = stepOf(d, id)!;
@@ -630,18 +639,25 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       return Object.keys(rest).length ? rest : undefined;
     };
     // (one made anew - a stereoisomer of it - is another structure: none of the values worked out of the one it was made
-    //  of, which were not of it, but what that came from; which of how many it is, and its own SMILES; and that one's
-    //  SMILES, where it had one, as what it was made from)
+    //  of as its own, which were not of it, but what that came from; which of how many it is, and its own SMILES; and
+    //  each value of the one it was made from, as that one's - named so, `made_from.nll`, by what worked it out then -
+    //  never as its own, which stay to be worked out. That one's own made from another: what it carried of that one
+    //  carried as it is, one level - of the structure it was made from still, at a remove - its own values over
+    //  them, and which of how many it was left out)
     const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
       const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
       const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
-      const parent = e.record?.properties?.smiles?.value;
+      const had = Object.entries(e.record?.properties ?? {});
+      const parents = [
+        ...had.filter(([name]) => name.startsWith(MADE_FROM)),
+        ...had.filter(([name]) => !name.startsWith(MADE_FROM) && name !== "made").map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]),
+      ];
       return {
         ...(e.record?.from?.length ? { from: e.record.from } : {}),
         properties: {
           made: said(`${k + 1} of ${a.made.length}`),
           ...(a.smiles ? { smiles: said(a.smiles[k]) } : {}),
-          ...(typeof parent === "string" ? { made_from: said(parent) } : {}),
+          ...Object.fromEntries(parents),
         },
       };
     };
@@ -657,13 +673,21 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const aside: DrawnEntry[] = [];
     answers.forEach((a, i) => {
       const e = entries[i];
-      // (kept as drawn - with what the step worked out of it, where it did, on its record beside what it had)
-      if ("as" in a)
-        kept.push(
-          a.properties
-            ? { ...e, record: { ...e.record, properties: { ...e.record?.properties, ...Object.fromEntries(Object.entries(a.properties).map(([name, p]) => [name, valueOf(p)])) } } }
-            : e,
-        );
+      // (kept as drawn - with what the step worked out of it, where it did, on its record beside what it had. Kept,
+      //  it is not what an earlier step set aside, whatever it came in saying; and given values worked out of it as it
+      //  now is - at least one - its record says those it had before an edit were taken away, not that these are of it)
+      if ("as" in a) {
+        const { stale, ...rest } = carried(e) ?? {};
+        const record: DrawnRecord =
+          a.properties && Object.keys(a.properties).length
+            ? {
+                ...rest,
+                properties: { ...rest.properties, ...Object.fromEntries(Object.entries(a.properties).map(([name, p]) => [name, valueOf(p)])) },
+                ...(stale ? { stale: TAKEN_AT_THE_EDIT } : {}),
+              }
+            : { ...rest, ...(stale ? { stale } : {}) };
+        kept.push({ ...e, record: Object.keys(record).length ? record : undefined });
+      }
       else if ("made" in a) made[i].forEach((m, k) => kept.push({ place: kept.length, drawn: m.drawn, record: madeRecord(e, k, a) }));
       else aside.push({ ...e, record: { ...carried(e), status: { aside: a.aside } } });
     });
