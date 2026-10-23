@@ -17,8 +17,8 @@ const BEYOND = 8;
 const headOf = (c: TableColumn) => (c.kind === "number" && c.unit !== "none" ? `${c.name} (${c.unit})` : c.name);
 /** A cell as the table shows it: a number as Meno writes numbers, true or false, text as it is, none blank. */
 const cellText = (v: Cell) => (v == null ? "" : typeof v === "number" ? numberText(v) : typeof v === "boolean" ? (v ? "true" : "false") : v);
-/** How wide a column is: a number's narrow, SMILES's widest. */
-const widthOf = (c: TableColumn) => (c.name === SMILES_COLUMN ? "minmax(12rem, 3fr)" : c.kind === "number" ? "minmax(5.5rem, max-content)" : "minmax(7rem, 1fr)");
+/** How wide a column is - the same in every row, each a grid of its own: a number's narrow, SMILES's widest. */
+const widthOf = (c: TableColumn) => (c.name === SMILES_COLUMN ? "minmax(14rem, 2fr)" : c.kind === "number" ? "7rem" : "minmax(8rem, 1fr)");
 
 /** Two cells in order, for a sort: none last, numbers as numbers, text as a reader sorts it. */
 function compare(a: Cell, b: Cell): number {
