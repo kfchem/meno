@@ -136,6 +136,67 @@ describe("Generate: a step that takes nothing in", () => {
     await st().runStep(step);
     expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1's nll is not one Meno can take" });
   });
+
+  it("takes Seeds where its plugin makes from seeds - structures drawn, each given as its blocks - and each made one keeps what its seed came from and its values, as that one's", async () => {
+    useReaders.setState({ state: { crem: "added", rdkit: "added" }, problem: {} });
+    const { doc, st } = page();
+    // (two seeds drawn: C-O and C-N, apart; the first with a record of its own, as a step before gave it)
+    doc.edit("draw", (d) => ({
+      ...d,
+      model: {
+        atoms: [
+          { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+          { id: 2, el: "O", x: 1.3, y: 0, r: 0.9 },
+          { id: 3, el: "C", x: 12, y: 0, r: 0.9 },
+          { id: 4, el: "N", x: 13.3, y: 0, r: 0.9 },
+        ] as never,
+        bonds: [
+          { id: 5, a: 1, b: 2, order: 1 },
+          { id: 6, a: 3, b: 4, order: 1 },
+        ] as never,
+      },
+      nextId: 100,
+    }));
+    const set = st().addSet({ x0: -3, y0: -3, x1: 16, y1: 3 });
+    const nll = { value: 21.5, unit: "none" as const, status: "computed" as const, by: { plugin: "reinvent" } };
+    doc.edit("records", (d) => ({
+      ...d,
+      sets: d.sets!.map((b) =>
+        b.id === set ? { ...b, members: b.members!.map((m, i) => ("structure" in m && i === 0 ? { ...m, record: { from: ["molecule:7"], properties: { nll, made: { ...nll, value: "1 of 2" } } } } : m)) } : b,
+      ),
+    }));
+    const step = st().addStep("generate", "crem", 20, 0);
+    // (nothing wired in: it waits for its seeds - a model's Generate is ready as it is)
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("no-input");
+    st().connect({ set }, step);
+    expect(st().wires).toHaveLength(1);
+    expect(stateOf(st(), st().steps.find((s) => s.id === step)!, "crem")).toBe("ready");
+    run.mockResolvedValueOnce({
+      outputs: [
+        { smiles: "CCO", properties: { frequency: { value: 120, unit: "none" }, seed: { value: "CO", unit: "none" } }, seed: 0 },
+        { smiles: "CCN", properties: { frequency: { value: 45, unit: "none" }, seed: { value: "CN", unit: "none" } }, seed: 1 },
+      ],
+      said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1)",
+      by: { program: "CReM", version: "0.3.2", model: "chembl33_sa2_f5", method: "fragments replaced, radius 3, seed 1" },
+    });
+    await st().runStep(step);
+    const [, given, , holds] = run.mock.calls[0];
+    expect(holds).toBe("structures");
+    expect((given as { molblocks: string[] }[]).map((g) => g.molblocks.length)).toEqual([1, 1]);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: "2 made from 2 seeds (fragments replaced, radius 3, seed 1) · 2 made" });
+    const held = setMembers(st(), resultOf(st(), step)!);
+    // (the first seed's: what it came from, its values as that one's - never which of how many it was - beside the model's own)
+    expect(held.records[0]).toMatchObject({ from: ["molecule:7"], properties: { "made_from.nll": nll, frequency: expect.objectContaining({ value: 120 }), seed: expect.objectContaining({ value: "CO" }) } });
+    expect(held.records[0]!.properties!.nll).toBeUndefined();
+    expect(held.records[0]!.properties!["made_from.made"]).toBeUndefined();
+    // (the second seed had no record: nothing of it carried but what the plugin said of it)
+    expect(held.records[1]!.from).toBeUndefined();
+    expect(Object.keys(held.records[1]!.properties!).sort()).toEqual(["frequency", "seed", "smiles"]);
+    // (another seed wired in: another run)
+    const before = inputKey(st(), st().steps.find((s) => s.id === step)!, "crem");
+    doc.edit("move", (d) => ({ ...d, model: { ...d.model, bonds: d.model.bonds.map((b) => (b.id === 6 ? { ...b, order: 2 } : b)) } }));
+    expect(inputKey(st(), st().steps.find((s) => s.id === step)!, "crem")).not.toBe(before);
+  });
 });
 
 describe("what a Generate could not read, and its stereo not examined", () => {

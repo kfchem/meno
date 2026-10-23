@@ -21,7 +21,7 @@ import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
-import { byOf, installedFor, optionsFor, programsFor } from "../../workflow/doers";
+import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
 import { frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
@@ -597,6 +597,18 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
    */
   /** How a value of the structure one was made from is named on it (`madeRecord`): `made_from.nll`, that one's NLL - never its own. */
   const MADE_FROM = "made_from.";
+  /**
+   * The values of the structure one was made from, as that one's (`made_from.nll`): its own, and what it carried of
+   * one it was made from in turn, as it is - one level, still of the structure it was made from, at a remove - its
+   * own over them; never which of how many it was (`made`).
+   */
+  const madeFrom = (record: DrawnRecord | undefined): [string, Property][] => {
+    const had = Object.entries(record?.properties ?? {});
+    return [
+      ...had.filter(([name]) => name.startsWith(MADE_FROM)),
+      ...had.filter(([name]) => !name.startsWith(MADE_FROM) && name !== "made").map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]),
+    ];
+  };
 
   async function runDrawnAtOnce(id: number, plugin: PythonPlugin, at: number): Promise<void> {
     const d = doc.getState();
@@ -647,11 +659,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const madeRecord = (e: DrawnEntry, k: number, a: { made: string[]; smiles?: string[] }): DrawnRecord => {
       const by: By = { plugin: plugin.id, version: plugin.version, ...(program ? { program } : {}), method: `${kindInfo(step.kind).name}: ${a.made.length} made of one` };
       const said = (value: string): Property => ({ value, unit: "none", status: "computed", by });
-      const had = Object.entries(e.record?.properties ?? {});
-      const parents = [
-        ...had.filter(([name]) => name.startsWith(MADE_FROM)),
-        ...had.filter(([name]) => !name.startsWith(MADE_FROM) && name !== "made").map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]),
-      ];
+      const parents = madeFrom(e.record);
       return {
         ...(e.record?.from?.length ? { from: e.record.from } : {}),
         properties: {
@@ -714,10 +722,19 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const step = stepOf(d, id)!;
     const key = inputKey(d, step, plugin.id);
     const options: OptionValues = optionsOf(optionsFor(step.kind, plugin.id), step.options);
+    // (made from seeds, where its plugin says so: the structures wired in, each given as its blocks - those a large
+    //  result set holds off the page too)
+    const seeded = !takesNothingBy(step.kind, plugin.id);
+    const input = seeded ? inputOf(d, id) : null;
+    const seeds = input && input.holds === "structures" ? inputEntries(d.model, input) : [];
+    if (seeded && !seeds.length) return void fail(id, "No seed came in", at, key);
     let read;
     try {
       const client = await pluginClient(plugin);
-      read = readGenerated(await client.run(step.kind, [], options, "structures", GENERATE_MS));
+      const given = input?.held
+        ? seeds.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }))
+        : (input?.structures ?? []).map((ids) => ({ molblocks: blocksOf(d.model, ids).map((b) => b.molblock) }));
+      read = readGenerated(await client.run(step.kind, given, options, "structures", GENERATE_MS), given.length);
     } catch (e) {
       return void fail(id, message(e), at, key);
     }
@@ -759,7 +776,13 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           ...Object.fromEntries(Object.entries(g.properties).map(([name, p]) => [name, { value: p.value, unit: p.unit, status: "computed" as const, by }])),
           ...(unset ? { stereo_open: computed(unset, stereoBy) } : {}),
         };
-        kept.push({ place: kept.length, drawn: await drawingOf(block, style), record: { properties } });
+        // (made from a seed: what that one was made from, and its values as that one's - never as this one's own)
+        const seed = g.seed != null ? seeds[g.seed]?.record : undefined;
+        const record: DrawnRecord = {
+          ...(seed?.from?.length ? { from: seed.from } : {}),
+          properties: { ...properties, ...Object.fromEntries(madeFrom(seed)) },
+        };
+        kept.push({ place: kept.length, drawn: await drawingOf(block, style), record });
       }
     } catch (e) {
       return void fail(id, message(e), at, key);
