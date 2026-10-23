@@ -21,7 +21,13 @@ export type Comparison = "<" | "≤" | ">" | "≥" | "=" | "≠";
 /** A condition: a property, a comparison, and a value - a number with its unit, a text, or true or false. */
 export type Condition = { property: string; compare: Comparison; value: number | string | boolean; unit?: Unit | "none" };
 
-export type FilterOptions = { conditions: Condition[]; match: "all" | "any" };
+/**
+ * What Filter asks, and whether all or any; and, where given, why an
+ * entry's properties cannot be read at all (a structure drawn edited since
+ * they were given): such an entry goes to *rest* saying so, its conditions
+ * not asked.
+ */
+export type FilterOptions = { conditions: Condition[]; match: "all" | "any"; unread?: (e: Entry) => string | null };
 
 /** Two numbers equal within a part in 10¹² of the larger. */
 const near = (a: number, b: number) => Math.abs(a - b) <= 1e-12 * Math.max(Math.abs(a), Math.abs(b), Number.MIN_VALUE);
@@ -101,6 +107,11 @@ export function filter(entries: readonly Entry[], options: FilterOptions): NodeO
   const notAsked: string[] = [];
   let keptNotAsked = 0;
   for (const e of entries) {
+    const no = options.unread?.(e);
+    if (no) {
+      rest.push(setAside(e, no));
+      continue;
+    }
     const results = options.conditions.map((c) => meets(e, c));
     const unmet = results.filter((r): r is Exclude<Met, true> => r !== true);
     const ok = options.match === "all" ? unmet.length === 0 : unmet.length < results.length;

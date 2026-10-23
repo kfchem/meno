@@ -223,6 +223,8 @@ const IDENTITIES_KEPT = 4096;
 
 /** What a record says once the structure it was given for has been edited: its properties and status taken away. */
 export const BEFORE_THE_EDIT = "its properties were for the structure before the edit";
+/** What a stale record says once a step has worked new values out of the structure as it is: those it had before the edit are gone still. */
+export const TAKEN_AT_THE_EDIT = "the properties it had before the edit were taken away; those it has are of it as it is";
 
 /** A record put on a structure as it is drawn now: of that structure (`of`). */
 export const recordOn = (record: DrawnRecord, model: Model, ids: readonly number[]): DrawnRecord => ({ ...record, of: drawnHash(model, ids) });
