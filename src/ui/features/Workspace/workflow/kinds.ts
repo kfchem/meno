@@ -48,9 +48,11 @@ export type StepPort = { id: string; name: string; takes: readonly ValueKind[] }
 
 /**
  * An exit a kind gives. Every exit is a result set of its own, made with the
- * step and empty until it runs. `of` marks a second exit - what a step set
- * aside or could not do - drawn under the first with its count: nothing is
- * hidden, and it can be wired on.
+ * step and empty until it runs, each drawn under the one before it. `of`
+ * marks the exit for what a step set aside or could not do, drawn with its
+ * count: nothing is hidden, and it can be wired on. A kind has at most one
+ * such exit; its other exits each give something of their own (a
+ * Reaction's bond changes, a table).
  */
 export type StepExit = { id: string; name: string; gives: ValueKind | "chart" | "same" | "pictures"; of?: "rest" | "failed" };
 
@@ -81,8 +83,8 @@ export type KindInfo = {
   made: string;
   /** Its inputs, where it takes more than one, or names the one it takes otherwise than `ONE_INPUT`. */
   inputs?: readonly StepPort[];
-  /** Its exits beyond the first, which is `made`: entries it sets aside (*rest*), or could not do (*failed*). */
-  second?: StepExit;
+  /** Its exits beyond the first, which is `made`, in order: entries it sets aside (*rest*), or could not do (*failed*) - at most one such - and anything else it gives. */
+  others?: readonly StepExit[];
   /** How it does its work, in a line, from its options' values - where Meno does it and says it its own way (howOf). */
   how?: (values: Record<string, string | number | boolean>) => string;
   /** Whether a plugin doing it needs whole molecules - their hydrogens there, their charge and spin known (lib/chem/skeleton): a skeleton is refused before anything is sent to it. */
@@ -101,12 +103,12 @@ const FAILED: StepExit = { id: "failed", name: "Failed", gives: "same", of: "fai
 export const KINDS: readonly KindInfo[] = [
   // (new structures from nothing that comes in: a generative model's, as its plugin asks it, each drawn from the SMILES it gave - no input, so no port)
   { kind: "generate", name: "Generate", icon: "sparks", takes: [], inputs: [], gives: "structures", runs: "program", made: "Generated" },
-  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, second: { ...FAILED, gives: "molecules" } },
-  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, second: FAILED },
-  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, second: FAILED },
-  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, second: FAILED },
+  { kind: "conformers", name: "Conformers", icon: "rings", takes: ["structures", "molecules", "conformers"], gives: "conformers", runs: "program", made: "Conformers", whole: true, others: [{ ...FAILED, gives: "molecules" }] },
+  { kind: "optimise", name: "Optimise", icon: "curve", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Optimised", whole: true, others: [FAILED] },
+  { kind: "energy", name: "Energy", icon: "level", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Energies", whole: true, others: [FAILED] },
+  { kind: "frequencies", name: "Frequencies", icon: "wave", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Frequencies", whole: true, others: [FAILED] },
   // (non-covalent interactions: each molecule with a surface coloured by how they attract or repel - docs/NCI.md)
-  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, second: FAILED },
+  { kind: "nci", name: "NCI", icon: "cloud", takes: ["molecules", "conformers"], gives: "same", runs: "program", made: "Non-covalent interactions", whole: true, others: [FAILED] },
   // (each entry a picture of its own, in a set of pictures - docs/RENDER.md, *Render as a step*)
   { kind: "render", name: "Render", icon: "picture", takes: ["molecules", "conformers"], gives: "pictures", runs: "program", made: "Rendered", own: renderOptions("picture", [], true) },
   {
@@ -117,7 +119,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "conformers",
     runs: "entries",
     made: "Within {window} kcal/mol",
-    second: { id: "rest", name: "Outside it", gives: "same", of: "rest" },
+    others: [{ id: "rest", name: "Outside it", gives: "same", of: "rest" }],
     options: [{ id: "window", label: "Within", type: "number", default: 3, min: 0, step: 0.5, unit: "kcal/mol" }],
   },
   {
@@ -130,7 +132,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Unlike",
-    second: { id: "rest", name: "Alike", gives: "same", of: "rest" },
+    others: [{ id: "rest", name: "Alike", gives: "same", of: "rest" }],
     // (alike: the one definition of the same conformer, workflow/sameConformer - no threshold of its own; the
     //  maintainer, 2026-10-21. A conformer's mirror image, in an achiral molecule: kept apart by default - an atom's
     //  average over both needs both - or counted in, its degeneracy 2 and the atoms it swaps kept: 2026-10-22)
@@ -170,7 +172,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "same",
     runs: "entries",
     made: "Filtered",
-    second: { id: "rest", name: "The rest", gives: "same", of: "rest" },
+    others: [{ id: "rest", name: "The rest", gives: "same", of: "rest" }],
     options: [
       { id: "conditions", label: "Conditions", type: "text", default: "" },
       {
@@ -195,7 +197,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "molecules",
     runs: "entries",
     made: "Chosen",
-    second: { id: "rest", name: "The rest", gives: "conformers", of: "rest" },
+    others: [{ id: "rest", name: "The rest", gives: "conformers", of: "rest" }],
     options: [
       {
         id: "which",
@@ -220,7 +222,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "structures",
     runs: "program",
     made: "Checked",
-    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+    others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
   },
   // (each structure drawn that leaves stereo open as each of its stereoisomers, or set aside: a plugin's, its options its own)
   {
@@ -231,7 +233,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "structures",
     runs: "program",
     made: "Stereoisomers",
-    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+    others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
   },
   // (each structure drawn with numbers worked out of it as drawn - its molecular weight, logP and the like - on its record: a plugin's)
   {
@@ -242,7 +244,7 @@ export const KINDS: readonly KindInfo[] = [
     gives: "structures",
     runs: "program",
     made: "With descriptors",
-    second: { id: "rest", name: "Set aside", gives: "structures", of: "rest" },
+    others: [{ id: "rest", name: "Set aside", gives: "structures", of: "rest" }],
   },
   // (structures made from one drawing by rule, its R groups each given a list - Meno's own: docs/WORKFLOWS-FOUNDATION.md, *Enumerate*)
   {
@@ -254,7 +256,7 @@ export const KINDS: readonly KindInfo[] = [
     runs: "entries",
     made: "Made",
     inputs: [{ id: ONE_INPUT, name: "Template", takes: ["structures"] }],
-    second: { id: "rest", name: "Aside", gives: "same", of: "rest" },
+    others: [{ id: "rest", name: "Aside", gives: "same", of: "rest" }],
     options: [
       {
         id: "lists",
@@ -346,24 +348,32 @@ export function inputsOf(kind: StepKind): readonly StepPort[] {
 }
 
 /**
- * The exits a kind gives: its first, which `made` names and `gives` fills,
- * and its second where it has one.
+ * The exits a kind gives, in order: its first, which `made` names and
+ * `gives` fills, then its others where it has any.
  */
-export function exitsOf(kind: StepKind): readonly StepExit[] {
-  const info = kindInfo(kind);
-  const first: StepExit = { id: ONE_EXIT, name: info.made, gives: info.gives };
-  return info.second ? [first, info.second] : [first];
+export const exitsOf = (kind: StepKind): readonly StepExit[] => exitsIn(kindInfo(kind));
+
+/** The exits a kind's description declares (`exitsOf`). */
+export function exitsIn(info: Pick<KindInfo, "made" | "gives" | "others">): readonly StepExit[] {
+  return [{ id: ONE_EXIT, name: info.made, gives: info.gives }, ...(info.others ?? [])];
 }
 
+/** The exit of `kind` for what it sets aside or could not do (`StepExit.of`); none where it has none. */
+export const asideExit = (kind: StepKind): StepExit | undefined => asideIn(exitsOf(kind));
+
+/** Of `exits`, the one for what a step sets aside or could not do: the first marked so. */
+export const asideIn = (exits: readonly StepExit[]): StepExit | undefined => exits.find((e) => e.of);
+
 /**
- * What a kind's second exit holds, its first holding `first`: the kind of
- * set it declares, or - `same` - what came in, which a kind whose second
- * exit says `same` gives from its first too. None where it has no second.
+ * What a kind's exit for what it set aside holds (`asideExit`), its first
+ * holding `first`: the kind of set it declares, or - `same` - what came in,
+ * which a kind whose aside exit says `same` gives from its first too. None
+ * where it has no such exit.
  */
 export function restHolds(kind: StepKind, first: SetKind): SetKind | undefined {
-  const second = exitsOf(kind)[1];
-  if (!second) return undefined;
-  return isSetKind(second.gives) ? second.gives : first;
+  const aside = asideExit(kind);
+  if (!aside) return undefined;
+  return isSetKind(aside.gives) ? aside.gives : first;
 }
 
 /** The input of `kind` named `port`, or its first where `port` is not one of its own. */
