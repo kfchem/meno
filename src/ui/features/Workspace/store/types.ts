@@ -761,7 +761,9 @@ export type Member = { structure: number[]; record?: DrawnRecord } | { molecule:
  * *R groups*, "the set carries its core"): its template's atoms but its R atoms,
  * the bonds between them, and where each R group is attached - each by its
  * place in a product's atoms, the same in every product - so that what
- * comes after can line them up exactly.
+ * comes after can line them up exactly. By substituents, the template's
+ * atoms but the drawn H's chosen, and each position (P1, P2) by the atom
+ * its group is bonded to.
  */
 export type SeriesCore = { atoms: number[]; bonds: [number, number][]; attach: Record<string, number[]> };
 /**

@@ -96,6 +96,10 @@ export default function OptionsForm({
                 ))}
               </div>
             </fieldset>
+          ) : o.type === "atoms" ? (
+            <div className="text-xs text-gh-gray">
+              {o.label} <span className="text-gh-black">{String(values[o.id] ?? "").split(/[\s,]+/).filter(Boolean).length || "none"}</span>
+            </div>
           ) : o.type === "lines" ? (
             <LinesField option={o} value={String(values[o.id] ?? "")} onChange={(v) => set(o.id, v)} />
           ) : o.type === "switch" ? (

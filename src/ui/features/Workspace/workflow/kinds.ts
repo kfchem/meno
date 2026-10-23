@@ -10,6 +10,7 @@ import type { SetKind, StepKind, ValueKind } from "../../../../lib/plugins/steps
 import { renderOptions } from "../render/renderOptions";
 import { conditionsIn, conditionText } from "../../../../lib/nodes/filter";
 import { listsReadAs, readLists } from "./enumerate";
+import { groupsReadAs, positionIds } from "./substituents";
 
 /** What flows along a wire, and the kinds of step, by id: as plugins' manifests name them (lib/plugins/steps). */
 export type { SetKind, StepKind, ValueKind };
@@ -257,16 +258,55 @@ export const KINDS: readonly KindInfo[] = [
     second: { id: "rest", name: "Aside", gives: "same", of: "rest" },
     options: [
       {
+        id: "way",
+        label: "By",
+        type: "choice",
+        default: "rgroups",
+        choices: [
+          { value: "rgroups", label: "R groups" },
+          { value: "substituents", label: "Substituents" },
+        ],
+      },
+      {
         id: "lists",
         label: "R groups, one to a line",
         type: "lines",
         default: "R1:\n",
         rows: 6,
+        when: { id: "way", in: ["rgroups"] },
         // (read as the step runs them, beside each line - asked when shown: the reader is the canvas's)
         readAs: (text) => listsReadAs(text),
       },
+      // (substituents: atoms chosen on the drawing, one list of groups, and how the positions combine - docs/WORKFLOWS-FOUNDATION.md, *Substituent swap*)
+      { id: "positions", label: "Positions", type: "atoms", default: "", when: { id: "way", in: ["substituents"] } },
+      {
+        id: "groups",
+        label: "Groups, one to a line",
+        type: "lines",
+        default: "",
+        rows: 6,
+        when: { id: "way", in: ["substituents"] },
+        readAs: (text) => groupsReadAs(text),
+      },
+      {
+        id: "combine",
+        label: "Positions",
+        type: "choice",
+        default: "one",
+        when: { id: "way", in: ["substituents"] },
+        choices: [
+          { value: "one", label: "One at a time" },
+          { value: "together", label: "Together" },
+        ],
+      },
     ],
     how: (v) => {
+      if (v.way === "substituents") {
+        const positions = positionIds(String(v.positions ?? "")).length;
+        const groups = String(v.groups ?? "").split(/\r?\n/).filter((l) => l.trim()).length;
+        if (!positions) return "No positions yet";
+        return `${positions} position${positions === 1 ? "" : "s"} \u00d7 ${groups} group${groups === 1 ? "" : "s"}, ${v.combine === "together" ? "together" : "one at a time"}`;
+      }
       const { lists } = readLists(String(v.lists ?? ""));
       return lists.size ? [...lists].map(([n, o]) => `R${n} \u00b7 ${o.length}`).join(", ") : "No lists yet";
     },

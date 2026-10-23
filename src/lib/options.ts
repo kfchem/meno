@@ -41,9 +41,15 @@ export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
  * for each line of the text, in order, blank for a blank one).
  */
 export type LinesOption = OptionBase & { type: "lines"; default: string; rows?: number; readAs?: (text: string) => readonly LineRead[] };
+/**
+ * Atoms of the structure that comes in, chosen on its drawing - Meno's own
+ * kinds' alone, as lines are - held as their ids apart ("12 15"): the
+ * drawing's, so never remembered for the next step (`rememberable`).
+ */
+export type AtomsOption = OptionBase & { type: "atoms"; default: string };
 /** What a line of a `LinesOption` was read as, in words - or why it could not be. */
 export type LineRead = { said: string; problem?: true };
-export type Option = ChoiceOption | NumberOption | TextOption | SwitchOption | LinesOption;
+export type Option = ChoiceOption | NumberOption | TextOption | SwitchOption | LinesOption | AtomsOption;
 
 /** The options of `options` that apply, given the values chosen of them and of `context` (other options shown with them, in another form). */
 export function shownOptions<O extends Option>(options: readonly O[], values: OptionValues, context: OptionValues = {}): O[] {
@@ -66,6 +72,7 @@ function fitting(o: Option, v: unknown): string | number | boolean | undefined {
       return typeof v === "number" && Number.isFinite(v) && (o.min == null || v >= o.min) && (o.max == null || v <= o.max) ? v : undefined;
     case "text":
     case "lines":
+    case "atoms":
       return typeof v === "string" ? v : undefined;
     case "switch":
       return typeof v === "boolean" ? v : undefined;
@@ -93,7 +100,7 @@ export function valuesOf(
 
 /** The values to remember of `values`: all but those that start from what is written (`Known`). */
 export function rememberable(options: readonly Option[], values: OptionValues): OptionValues {
-  const fresh = new Set(options.filter((o) => (o.type === "number" || o.type === "text") && o.from).map((o) => o.id));
+  const fresh = new Set(options.filter((o) => ((o.type === "number" || o.type === "text") && o.from) || o.type === "atoms").map((o) => o.id));
   return Object.fromEntries(Object.entries(values).filter(([id]) => !fresh.has(id)));
 }
 
