@@ -23,7 +23,7 @@ vi.mock("../../../../lib/jobs", async (actual) => ({
   startJob: async (ask: JobAsk) => {
     const id = `00000000-0000-4000-8000-${String(nextJob++).padStart(12, "0")}`;
     const { log, files } = program(ask);
-    jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "done", created: 1000, started: 1000, ended: 2000, log, files });
+    jobs.set(id, { id, plugin: ask.plugin, program: ask.program, state: "done", created: Date.now(), started: 1000, ended: 2000, log, files, ...(ask.key ? { key: ask.key } : {}) });
     return id;
   },
   listJobs: async () => [...jobs.values()],

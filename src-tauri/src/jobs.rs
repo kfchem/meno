@@ -32,6 +32,7 @@
 
 use crate::pixienv;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
 use std::fs::{self, File, OpenOptions, TryLockError};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -121,6 +122,12 @@ pub struct JobSpec {
     pub memory: u64,
     /// When it was asked for, in milliseconds since 1970: the order jobs start in.
     pub created: u64,
+    /// What it is called, in words - its entry's, its step's (`water optimise`): its folder named from it, path-safe.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label: Option<String>,
+    /// Its key, as Meno worked it out when it asked for it (lib/jobKeys): what Meno checks a job it takes up by.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     /// Programs installed beside its own, run after it in turn where it ended
     /// well - ORCA's orca_2mkl, writing its orbitals as a Molden file - each
     /// in its work folder, given what it was given, what they say kept apart.
@@ -305,15 +312,21 @@ fn runner_there(dir: &Path) -> bool {
     }
 }
 
+/// What is said of a job's folder holding what it was to run but no record of how it ran (lib's `NO_RECORD`).
+const NO_RECORD: &str = "it has no record of how it ran";
+
 /// A job's record as it is now - none where its folder is not a job's (yet).
 /// One whose record says it is waiting or running, but whose runner is gone,
-/// is gone, and is recorded so.
+/// is gone, and is recorded so; one with no record past its start, gone,
+/// saying so (`NO_RECORD`).
 pub fn current_record(dir: &Path) -> Option<JobRecord> {
     let created = read_spec(dir)?.created;
     let Some(record) = read_record(dir) else {
-        // (its runner starting: waiting, for a while)
-        let state = if now_ms().saturating_sub(created) < STARTING_MS { JobState::Waiting } else { JobState::Gone };
-        return Some(JobRecord::new(state, created));
+        // (its runner starting: waiting, for a while - then a folder with no record, said so: Meno cannot account for it)
+        if now_ms().saturating_sub(created) < STARTING_MS {
+            return Some(JobRecord::new(JobState::Waiting, created));
+        }
+        return Some(JobRecord { why: Some(NO_RECORD.into()), ..JobRecord::new(JobState::Gone, created) });
     };
     if record.state.finished() || runner_there(dir) {
         return Some(record);
@@ -1551,8 +1564,19 @@ pub fn make_job(root: &Path, spec: &JobSpec, files: &[JobFile]) -> Result<(Strin
     if let Some(f) = files.iter().find(|f| !inside_name(&f.name)) {
         return Err(format!("a job's file must be inside its folder: {}", f.name));
     }
-    let id = uuid::Uuid::new_v4().to_string();
-    let dir = root.join(&id);
+    // (named from its label, with a short id of its own - one there already, named again)
+    fs::create_dir_all(root).map_err(|e| format!("a job's folder could not be made: {e}"))?;
+    let (id, dir) = (0..8)
+        .find_map(|_| {
+            let id = job_id(spec.label.as_deref().unwrap_or(""));
+            let dir = root.join(&id);
+            match fs::create_dir(&dir) {
+                Ok(()) => Some(Ok((id, dir))),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => None,
+                Err(e) => Some(Err(format!("a job's folder could not be made: {e}"))),
+            }
+        })
+        .unwrap_or_else(|| Err("a job's folder could not be named".into()))?;
     let work = dir.join(WORK);
     fs::create_dir_all(&work).map_err(|e| format!("a job's folder could not be made: {e}"))?;
     for f in files {
@@ -1798,11 +1822,12 @@ pub fn spec_allowed(data: &Path, plugins: &Path, spec: &JobSpec, written: &[Stri
 /// neither leads out - and holding what it is to run. Where it is there.
 pub fn runner_folder(data: &Path, dir: &Path) -> Result<PathBuf, String> {
     let refused = || format!("not a job of Meno's: {}", dir.display());
-    let jobs = jobs_in(data);
-    let root = jobs.canonicalize().map_err(|_| refused())?;
+    // (in one of Meno's jobs' folders - its own, or the working folder chosen, as Meno's data folder says, never as
+    //  the runner is told)
+    let roots: Vec<PathBuf> = jobs_roots(data).iter().filter_map(|r| r.canonicalize().ok()).collect();
     let real = dir.canonicalize().map_err(|_| refused())?;
     let id = real.file_name().and_then(|n| n.to_str()).unwrap_or_default();
-    if real.parent() != Some(root.as_path()) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
+    if !real.parent().is_some_and(|p| roots.iter().any(|r| r == p)) || !job_id_ok(id) || !real.is_dir() || !real.join(SPEC).is_file() {
         return Err(refused());
     }
     // (the folder checked, and no other found again by its name: on Windows,
@@ -1854,15 +1879,157 @@ fn jobs_in(data: &Path) -> PathBuf {
     data.join("jobs")
 }
 
-pub(crate) fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
-    let root = jobs_in(&crate::local_data_dir(app)?);
+/// Where the working folder chosen for jobs is kept: in Meno's own data folder, read by Meno and by every runner -
+/// never from what a runner is given.
+const WORKING_FOLDER: &str = "jobs-folder.json";
+/// The folder Meno makes jobs in, inside the working folder chosen: its own, beside whatever else is there.
+const IN_CHOSEN: &str = "meno-jobs";
+
+#[derive(Serialize, Deserialize)]
+struct WorkingFolder {
+    path: String,
+}
+
+/// The working folder chosen for jobs in Settings, where one is - there or not: a drive not connected, say, is
+/// still the one chosen, and no job is made anywhere else until the chemist chooses again. None, Meno's own.
+fn chosen_folder(data: &Path) -> Option<PathBuf> {
+    let chosen: WorkingFolder = serde_json::from_str(&fs::read_to_string(data.join(WORKING_FOLDER)).ok()?).ok()?;
+    let path = PathBuf::from(chosen.path);
+    path.is_absolute().then_some(path)
+}
+
+/// Why no job can be made in the working folder chosen: it is not there.
+fn missing_folder(chosen: &Path) -> String {
+    format!(
+        "The folder chosen for jobs is not there: {}. Connect it, or choose another in Settings, Calculations, Jobs",
+        chosen.display()
+    )
+}
+
+/// The folder new jobs are made in (`jobs_roots`' first) - never another where the working folder chosen is not
+/// there: said instead.
+fn new_jobs_root(data: &Path) -> Result<PathBuf, String> {
+    if let Some(chosen) = chosen_folder(data).filter(|c| !c.is_dir()) {
+        return Err(missing_folder(&chosen));
+    }
+    Ok(jobs_roots(data).remove(0))
+}
+
+/// The jobs' folders: the one new jobs are made in - the working folder chosen, its `meno-jobs`, else Meno's own -
+/// first; and Meno's own besides, where another is chosen, so that jobs made there before are still found.
+fn jobs_roots(data: &Path) -> Vec<PathBuf> {
+    let own = jobs_in(data);
+    match chosen_folder(data).map(|c| c.join(IN_CHOSEN)) {
+        Some(chosen) if chosen != own => vec![chosen, own],
+        _ => vec![own],
+    }
+}
+
+fn jobs_root(app: &AppHandle) -> Result<PathBuf, String> {
+    let root = new_jobs_root(&crate::local_data_dir(app)?)?;
     fs::create_dir_all(&root).map_err(|e| format!("the jobs' folder: {e}"))?;
     Ok(root)
 }
 
+/// Every jobs' folder there is, the one new jobs are made in first.
+pub(crate) fn all_roots(app: &AppHandle) -> Result<Vec<PathBuf>, String> {
+    Ok(jobs_roots(&crate::local_data_dir(app)?))
+}
+
+/// The working folder jobs are made in, whether it is Meno's own, and whether it is not there (Settings,
+/// *Calculations*, *Jobs*).
+#[derive(Serialize)]
+pub struct JobsFolder {
+    pub path: String,
+    pub own: bool,
+    pub missing: bool,
+}
+
+#[tauri::command]
+pub fn jobs_folder(app: AppHandle) -> Result<JobsFolder, String> {
+    let data = crate::local_data_dir(&app)?;
+    let chosen = chosen_folder(&data);
+    let path = chosen.clone().unwrap_or_else(|| jobs_in(&data));
+    Ok(JobsFolder { path: path.to_string_lossy().into_owned(), own: chosen.is_none(), missing: chosen.is_some_and(|c| !c.is_dir()) })
+}
+
+/// The working folder jobs are made in, chosen (`path`), or Meno's own again (none): a folder that is there, that
+/// Meno can write in; changed only while no job waits or runs - those under way stay where they are, and one
+/// queue never spans two folders. What jobs may use goes with it.
+#[tauri::command]
+pub fn jobs_folder_choose(app: AppHandle, path: Option<String>) -> Result<JobsFolder, String> {
+    let data = crate::local_data_dir(&app)?;
+    choose_folder(&data, path.as_deref())?;
+    jobs_folder(app)
+}
+
+fn choose_folder(data: &Path, path: Option<&str>) -> Result<(), String> {
+    let roots = jobs_roots(data);
+    let busy: u32 = roots.iter().map(|r| under_way(r)).sum();
+    if busy > 0 {
+        return Err(format!("{busy} job{} wait or run: the folder is changed once they have ended", if busy == 1 { "" } else { "s" }));
+    }
+    let limits = limits_in(&roots[0]);
+    match path {
+        None => {
+            let _ = fs::remove_file(data.join(WORKING_FOLDER));
+        }
+        Some(path) => {
+            let folder = PathBuf::from(path);
+            if !folder.is_absolute() || !folder.is_dir() {
+                return Err(format!("not a folder: {path}"));
+            }
+            let jobs = folder.join(IN_CHOSEN);
+            fs::create_dir_all(&jobs).map_err(|e| format!("Meno cannot make its folder there: {e}"))?;
+            // (written in, as a job's files will be)
+            let probe = jobs.join(format!(".probe-{}", std::process::id()));
+            fs::write(&probe, b"").map_err(|e| format!("Meno cannot write there: {e}"))?;
+            let _ = fs::remove_file(probe);
+            let text = serde_json::to_string(&WorkingFolder { path: folder.to_string_lossy().into_owned() }).map_err(|e| e.to_string())?;
+            fs::write(data.join(WORKING_FOLDER), text).map_err(|e| e.to_string())?;
+        }
+    }
+    write_limits(&jobs_roots(data)[0], limits).map_err(|e| e.to_string())
+}
+
 /// Whether `id` is a job's id, as Meno gives them: a UUID, as Meno writes one.
 pub fn job_id_ok(id: &str) -> bool {
-    uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+    // (as Meno names them now - its label, path-safe, and a short id - or as it did, a UUID alone)
+    let named = id.len() <= SLUG_MOST + 9
+        && id.rsplit_once('-').is_some_and(|(slug, tail)| tail.len() == 8 && tail.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase()) && slug_ok(slug));
+    named || uuid::Uuid::parse_str(id).is_ok_and(|u| u.hyphenated().to_string() == id)
+}
+
+/// The most characters of a label a job's folder is named by.
+const SLUG_MOST: usize = 40;
+
+/// A label made safe for a folder's name on every system (docs/WORKFLOWS-FOUNDATION.md, *The working directory
+/// is scratch*): small ASCII letters, digits and hyphens only, no hyphen at either end nor two together, at most
+/// `SLUG_MOST` long - a workspace, step or entry named with spaces or in Japanese gives what ASCII it has; none,
+/// "job".
+pub fn slug_of(label: &str) -> String {
+    let mut out = String::new();
+    for c in label.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.ends_with('-') && !out.is_empty() {
+            out.push('-');
+        }
+        if out.len() >= SLUG_MOST {
+            break;
+        }
+    }
+    let out = out.trim_end_matches('-').to_string();
+    if out.is_empty() { "job".into() } else { out }
+}
+
+fn slug_ok(slug: &str) -> bool {
+    !slug.is_empty() && slug.len() <= SLUG_MOST && slug.split('-').all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit()))
+}
+
+/// A new job's id - its folder's name: its label, path-safe, and eight characters of a UUID of its own.
+fn job_id(label: &str) -> String {
+    format!("{}-{}", slug_of(label), &uuid::Uuid::new_v4().simple().to_string()[..8])
 }
 
 /// Whether `dir` is a job's folder: one whose spec has been written (`make_job` writes it last).
@@ -1872,12 +2039,15 @@ pub fn is_job(dir: &Path) -> bool {
 
 /// A job's folder, by its id - which is only ever one Meno made.
 fn job_dir(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
-    let ok = job_id_ok(id);
-    let dir = jobs_root(app)?.join(id);
-    if !ok || !dir.join(SPEC).is_file() {
+    if !job_id_ok(id) {
         return Err(format!("no job {id}"));
     }
-    Ok(dir)
+    job_in(&all_roots(app)?, id).ok_or_else(|| format!("no job {id}"))
+}
+
+/// The folder of the job `id` in whichever of the jobs' folders `roots` holds it: none where none does.
+pub(crate) fn job_in(roots: &[PathBuf], id: &str) -> Option<PathBuf> {
+    roots.iter().map(|r| r.join(id)).find(|d| is_job(d))
 }
 
 /// What a plugin asks to run (docs/WORKFLOWS.md, `prepare`): its program, by
@@ -1905,6 +2075,12 @@ pub struct JobAsk {
     /// Programs installed beside its own to run after it (`JobSpec::then`), by their names there.
     #[serde(default)]
     pub then: Vec<ThenAsk>,
+    /// What it is called, in words: its folder named from it, path-safe (`JobSpec::label`).
+    #[serde(default)]
+    pub label: Option<String>,
+    /// Its key (`JobSpec::key`): 64 hex digits, or none.
+    #[serde(default)]
+    pub key: Option<String>,
     /// The files of its work folder its plugin reads back once it is done: kept, with what it was given, where its step keeps no raw outputs (keptjobs.rs).
     #[serde(default)]
     pub reads: Vec<String>,
@@ -1962,6 +2138,8 @@ pub async fn job_start(app: AppHandle, net: State<'_, crate::net::Net>, payload:
         cores: payload.cores.unwrap_or(1).clamp(1, 1024),
         memory: payload.memory.unwrap_or(0).min(MEMORY_MOST),
         created: now_ms(),
+        label: payload.label.map(|l| l.chars().take(200).collect()),
+        key: payload.key.filter(|k| k.len() == 64 && k.bytes().all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())),
         then,
         given: vec![],
     };
@@ -2008,13 +2186,16 @@ pub struct JobListed {
     pub id: String,
     pub plugin: String,
     pub program: String,
+    /// Its key, as it was asked for with one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     #[serde(flatten)]
     pub record: JobRecord,
 }
 
 fn listed(id: &str, dir: &Path) -> Option<JobListed> {
     let spec = read_spec(dir)?;
-    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, record: current_record(dir)? })
+    Some(JobListed { id: id.to_string(), plugin: spec.plugin, program: spec.name, key: spec.key, record: current_record(dir)? })
 }
 
 #[tauri::command]
@@ -2032,27 +2213,35 @@ pub fn under_way(root: &Path) -> u32 {
 
 /// How many of Meno's jobs wait or run - every workspace's, open or not.
 pub fn under_way_now(app: &AppHandle) -> u32 {
-    jobs_root(app).map(|root| under_way(&root)).unwrap_or(0)
+    all_roots(app).map(|roots| roots.iter().map(|r| under_way(r)).sum()).unwrap_or(0)
 }
 
 /// Every job in Meno's data folder, those asked for first first.
 #[tauri::command]
 pub async fn jobs_list(app: AppHandle) -> Result<Vec<JobListed>, String> {
-    let root = jobs_root(&app)?;
-    let mut jobs: Vec<JobListed> = fs::read_dir(&root)
-        .map_err(|e| e.to_string())?
-        .flatten()
+    Ok(listed_in(&all_roots(&app)?))
+}
+
+/// Every job in the jobs' folders `roots`, those asked for first first - each id once, from the first folder that
+/// holds it, as `job_in` finds it: never another's state in its place.
+fn listed_in(roots: &[PathBuf]) -> Vec<JobListed> {
+    let mut seen = std::collections::HashSet::new();
+    let mut jobs: Vec<JobListed> = roots
+        .iter()
+        .filter_map(|root| fs::read_dir(root).ok())
+        .flat_map(|dir| dir.flatten())
         .filter_map(|e| {
             let id = e.file_name().to_str()?.to_string();
-            // (one being taken away, or left of one: no job)
-            if id.starts_with(TAKEN) {
+            // (one being taken away, or left of one: no job; nor anything not named as a job is)
+            if id.starts_with(TAKEN) || !job_id_ok(&id) {
                 return None;
             }
             listed(&id, &e.path())
         })
+        .filter(|j| seen.insert(j.id.clone()))
         .collect();
     jobs.sort_by_key(|j| j.record.created);
-    Ok(jobs)
+    jobs
 }
 
 #[derive(Serialize, Debug)]
@@ -2083,6 +2272,66 @@ pub async fn job_read(app: AppHandle, id: String, name: String) -> Result<String
 #[tauri::command]
 pub async fn job_folder(app: AppHandle, id: String) -> Result<String, String> {
     Ok(job_dir(&app, &id)?.join(WORK).to_string_lossy().into_owned())
+}
+
+/// What a job gave, as one digest: the SHA-256 of its log and of every file in its work folder, each by its name -
+/// a file changed since, added or taken away gives another. Kept with the run that read it, and compared when the
+/// job is taken up again (docs/WORKFLOWS.md, *Job keys*).
+fn digest_of(dir: &Path) -> std::io::Result<String> {
+    let mut sum = Sha256::new();
+    let mut one = |label: &str, path: &Path| -> std::io::Result<()> {
+        sum.update(label.as_bytes());
+        sum.update([0]);
+        match File::open(path) {
+            Ok(mut f) => {
+                sum.update(f.metadata()?.len().to_le_bytes());
+                std::io::copy(&mut f, &mut sum)?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => sum.update(b"none"),
+            Err(e) => return Err(e),
+        }
+        Ok(())
+    };
+    one("log", &dir.join(LOG))?;
+    let mut names: Vec<String> = work_files(dir).into_iter().filter(|n| !os_metadata(n)).collect();
+    names.sort();
+    for name in names {
+        one(&format!("work/{name}"), &dir.join(WORK).join(&name))?;
+    }
+    Ok(sum.finalize().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Whether a file in a job's folder is one the system writes there itself - Finder's `.DS_Store` and `._` files,
+/// Explorer's `Thumbs.db` and `desktop.ini` - as *Show files* opens it: no output of the job's, left out of its
+/// digest, so that looking at a job's files never makes it one Meno cannot account for.
+fn os_metadata(name: &str) -> bool {
+    let base = name.rsplit('/').next().unwrap_or(name);
+    base == ".DS_Store" || base.starts_with("._") || base.eq_ignore_ascii_case("Thumbs.db") || base.eq_ignore_ascii_case("desktop.ini")
+}
+
+/// What a job gave, as one digest (`digest_of`): read off Meno's way, its files however large - each streamed
+/// through the hash, never held whole.
+#[tauri::command]
+pub async fn job_digest(app: AppHandle, id: String) -> Result<String, String> {
+    let dir = job_dir(&app, &id)?;
+    tauri::async_runtime::spawn_blocking(move || digest_of(&dir))
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("job {id}'s files could not be read: {e}"))
+}
+
+/// A program installed separately as it is now, for a job's key: where it is, its size, and when it was last
+/// written - a program replaced, though it says the same version, or none, gives another key.
+fn stamp_of(path: &Path) -> Result<String, String> {
+    let real = path.canonicalize().map_err(|e| format!("{}: {e}", path.display()))?;
+    let meta = fs::metadata(&real).map_err(|e| format!("{}: {e}", real.display()))?;
+    let written = meta.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).ok_or_else(|| format!("{}: no time written", real.display()))?;
+    Ok(format!("{}\n{}\n{}", real.display(), meta.len(), written.as_nanos()))
+}
+
+#[tauri::command]
+pub async fn program_stamp(path: String) -> Result<String, String> {
+    stamp_of(Path::new(&path))
 }
 
 #[tauri::command]
@@ -2121,9 +2370,11 @@ fn clear_finished(root: &Path) -> Result<u32, String> {
     let mut cleared = 0;
     for e in fs::read_dir(root).map_err(|e| e.to_string())?.flatten() {
         let dir = e.path();
-        if e.file_name().to_string_lossy().starts_with(TAKEN) {
+        let name = e.file_name().to_string_lossy().into_owned();
+        // (nothing but what Meno named: a folder chosen for jobs may hold others' - left as they are)
+        if name.starts_with(TAKEN) {
             let _ = fs::remove_dir_all(&dir);
-        } else if dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
+        } else if job_id_ok(&name) && dir.is_dir() && current_record(&dir).is_some_and(|r| r.state.finished()) && take_away(&dir).is_ok() {
             cleared += 1;
         }
     }
@@ -2133,7 +2384,7 @@ fn clear_finished(root: &Path) -> Result<u32, String> {
 /// Every finished job's folder taken away: how many.
 #[tauri::command]
 pub async fn jobs_clear_finished(app: AppHandle) -> Result<u32, String> {
-    clear_finished(&jobs_root(&app)?)
+    all_roots(&app)?.iter().filter(|r| r.is_dir()).map(|r| clear_finished(r)).sum()
 }
 
 /// The most memory a job may say it takes, in MiB: 64 TiB.
@@ -2216,10 +2467,10 @@ fn finished_bytes(root: &Path) -> u64 {
         .sum()
 }
 
-/// How many bytes the finished jobs' folders hold, all together.
+/// How many bytes the finished jobs' folders hold, all together - in every jobs' folder.
 #[tauri::command]
 pub async fn jobs_finished_bytes(app: AppHandle) -> Result<u64, String> {
-    Ok(finished_bytes(&jobs_root(&app)?))
+    Ok(all_roots(&app)?.iter().map(|r| finished_bytes(r)).sum())
 }
 
 #[cfg(test)]
@@ -2274,6 +2525,8 @@ mod tests {
             cores,
             memory,
             created: now_ms(),
+            label: None,
+            key: None,
             then: vec![],
             given: vec![],
         };
@@ -2685,6 +2938,99 @@ mod tests {
     }
 
     #[test]
+    fn names_a_job_s_folder_from_its_label_path_safe_with_a_short_id_of_its_own() {
+        assert_eq!(slug_of("BINOL Optimise"), "binol-optimise");
+        assert_eq!(slug_of("  (R)-BINOL / opt #3 "), "r-binol-opt-3");
+        // (a label in Japanese, or nothing ASCII: what ASCII it has; none, "job")
+        assert_eq!(slug_of("\u{30d3}\u{30ca}\u{30d5}\u{30c1}\u{30eb} opt"), "opt");
+        assert_eq!(slug_of("\u{30d3}\u{30ca}\u{30d5}\u{30c1}\u{30eb}"), "job");
+        assert_eq!(slug_of(&"a".repeat(100)).len(), SLUG_MOST);
+        assert!(!slug_of(&format!("{} b", "a".repeat(39))).ends_with('-'));
+        let root = temp();
+        let mut spec = read_spec(&sized(&root, ECHO, 1, 0)).unwrap();
+        spec.label = Some("water Optimise".into());
+        let (id, dir) = make_job(&root, &spec, &[]).unwrap();
+        assert!(id.starts_with("water-optimise-") && id.len() == "water-optimise-".len() + 8, "{id}");
+        assert_eq!(dir.file_name().unwrap().to_str(), Some(id.as_str()));
+        assert!(job_id_ok(&id));
+        // (one made before, as a UUID alone, still one of Meno's; anything else not)
+        assert!(job_id_ok("4f1c2a9e-0b7d-4e55-9a3c-2f8e1d6b7a10"));
+        for bad in ["../x-1234abcd", "water-optimise", "water optimise-1234abcd", "Water-1234abcd", "-x-1234abcd", "x--y-1234abcd", ".taken-1234abcd", "x-1234ABCD"] {
+            assert!(!job_id_ok(bad), "{bad}");
+        }
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn makes_jobs_in_the_working_folder_chosen_finds_those_made_before_and_changes_it_only_while_none_is_under_way() {
+        let data = temp();
+        let scratch = temp();
+        assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
+        write_limits(&jobs_in(&data), Limits { cores: 3, memory: 4096 }).unwrap();
+        // (one made in Meno's own before)
+        let before = sized(&jobs_in(&data), ECHO, 1, 0);
+        write_record(&before, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
+        choose_folder(&data, Some(scratch.to_str().unwrap())).unwrap();
+        let chosen = scratch.join(IN_CHOSEN);
+        assert_eq!(jobs_roots(&data), vec![chosen.clone(), jobs_in(&data)]);
+        // (what jobs may use goes with it)
+        assert_eq!(limits_in(&chosen), Limits { cores: 3, memory: 4096 });
+        // (a job made there: its runner takes it, as one in Meno's own; one elsewhere, never)
+        let (_, dir) = make_job(&chosen, &read_spec(&before).unwrap(), &[]).unwrap();
+        assert!(runner_folder(&data, &dir).is_ok());
+        assert!(runner_folder(&data, &before).is_ok());
+        let elsewhere = temp();
+        let (_, stray) = make_job(&elsewhere, &read_spec(&before).unwrap(), &[]).unwrap();
+        assert!(runner_folder(&data, &stray).is_err());
+        // (a job waiting: the folder is not changed)
+        write_record(&dir, &JobRecord::new(JobState::Waiting, now_ms())).unwrap();
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(dir.join(RUNNER_LOCK)).unwrap();
+        lock.lock().unwrap();
+        assert_eq!(choose_folder(&data, None), Err("1 job wait or run: the folder is changed once they have ended".into()));
+        drop(lock);
+        write_record(&dir, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
+        // (Meno's own again; a folder that is not one, refused)
+        choose_folder(&data, None).unwrap();
+        assert_eq!(jobs_roots(&data), vec![jobs_in(&data)]);
+        assert!(choose_folder(&data, Some("relative/path")).is_err());
+        assert!(choose_folder(&data, Some(data.join("not there").to_str().unwrap())).is_err());
+        // (one chosen and gone since - a drive not connected: still the one chosen, and no job made in Meno's own
+        //  instead - said, until another is chosen)
+        let gone = temp();
+        choose_folder(&data, Some(gone.to_str().unwrap())).unwrap();
+        fs::remove_dir_all(&gone).unwrap();
+        assert_eq!(jobs_roots(&data), vec![gone.join(IN_CHOSEN), jobs_in(&data)]);
+        assert_eq!(new_jobs_root(&data), Err(missing_folder(&gone)));
+        assert!(!gone.exists());
+        choose_folder(&data, None).unwrap();
+        assert_eq!(new_jobs_root(&data), Ok(jobs_in(&data)));
+        for d in [data, scratch, elsewhere] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    // (the same job in both jobs' folders - copied by hand, say: listed once, from the chosen one, as job_in finds it)
+    #[test]
+    fn lists_a_job_in_both_jobs_folders_once_from_the_first() {
+        let chosen = temp();
+        let own = temp();
+        let dir = sized(&own, ECHO, 1, 0);
+        write_record(&dir, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Failed, now_ms()) }).unwrap();
+        let id = dir.file_name().unwrap().to_str().unwrap().to_string();
+        let copy = chosen.join(&id);
+        fs::create_dir_all(&copy).unwrap();
+        fs::copy(dir.join(SPEC), copy.join(SPEC)).unwrap();
+        write_record(&copy, &JobRecord { ended: Some(now_ms()), ..JobRecord::new(JobState::Done, now_ms()) }).unwrap();
+        let roots = [chosen.clone(), own.clone()];
+        let listed = listed_in(&roots);
+        assert_eq!(listed.iter().map(|j| (j.id.as_str(), j.record.state)).collect::<Vec<_>>(), [(id.as_str(), JobState::Done)]);
+        assert_eq!(job_in(&roots, &id), Some(copy));
+        for d in [chosen, own] {
+            let _ = fs::remove_dir_all(d);
+        }
+    }
+
+    #[test]
     fn takes_the_limits_settings_wrote_and_this_computer_s_where_none_are() {
         let root = temp();
         assert_eq!(limits_in(&root), default_limits());
@@ -2794,6 +3140,12 @@ mod tests {
         // (recorded running, by a runner that holds nothing)
         write_record(&dir, &JobRecord { started: Some(2), ..JobRecord::new(JobState::Running, 1) }).unwrap();
         assert_eq!(current_record(&dir).unwrap().state, JobState::Gone);
+        assert_eq!(current_record(&dir).unwrap().why, None);
+        // (a folder with what it was to run but no record, past its start: gone, saying it has no record)
+        let mut spec = read_spec(&dir).unwrap();
+        spec.created = now_ms() - 2 * STARTING_MS;
+        let (_, bare) = make_job(&root, &spec, &[]).unwrap();
+        assert_eq!(current_record(&bare).map(|r| (r.state, r.why)), Some((JobState::Gone, Some(NO_RECORD.to_string()))));
         // and one it holds is not
         let other = shell(&root, ECHO, 1);
         let lock = OpenOptions::new().create(true).truncate(false).write(true).open(other.join(RUNNER_LOCK)).unwrap();
@@ -2899,6 +3251,54 @@ mod tests {
     }
 
     #[test]
+    fn a_job_s_digest_is_of_its_log_and_every_file_it_wrote() {
+        let root = temp();
+        let dir = shell(&root, ECHO, 1);
+        let first = digest_of(&dir).unwrap();
+        assert_eq!(digest_of(&dir).unwrap(), first);
+        assert_eq!(first.len(), 64);
+        fs::write(dir.join(LOG), "ran\n").unwrap();
+        let logged = digest_of(&dir).unwrap();
+        assert_ne!(logged, first);
+        fs::write(dir.join(WORK).join("out.txt"), "1.0").unwrap();
+        let wrote = digest_of(&dir).unwrap();
+        assert_ne!(wrote, logged);
+        // (a byte changed; the same bytes under another name)
+        fs::write(dir.join(WORK).join("out.txt"), "1.1").unwrap();
+        assert_ne!(digest_of(&dir).unwrap(), wrote);
+        fs::write(dir.join(WORK).join("out.txt"), "1.0").unwrap();
+        assert_eq!(digest_of(&dir).unwrap(), wrote);
+        fs::rename(dir.join(WORK).join("out.txt"), dir.join(WORK).join("out2.txt")).unwrap();
+        let renamed = digest_of(&dir).unwrap();
+        assert_ne!(renamed, wrote);
+        // (what the system writes as the folder is looked at - Finder's, Explorer's - no output: left out)
+        fs::create_dir_all(dir.join(WORK).join("sub")).unwrap();
+        for name in [".DS_Store", "._out2.txt", "Thumbs.db", "desktop.ini", "sub/.DS_Store", "sub/THUMBS.DB"] {
+            fs::write(dir.join(WORK).join(name), "seen").unwrap();
+        }
+        assert_eq!(digest_of(&dir).unwrap(), renamed);
+        // (a file of the job's own beginning with a dot is no such file)
+        fs::write(dir.join(WORK).join(".hidden-output"), "x").unwrap();
+        assert_ne!(digest_of(&dir).unwrap(), renamed);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn a_program_s_stamp_changes_as_it_is_replaced() {
+        let root = temp();
+        let program = root.join("prog");
+        fs::write(&program, "one").unwrap();
+        let first = stamp_of(&program).unwrap();
+        assert_eq!(stamp_of(&program).unwrap(), first);
+        // (replaced by one as long, later)
+        std::thread::sleep(Duration::from_millis(20));
+        fs::write(&program, "two").unwrap();
+        assert_ne!(stamp_of(&program).unwrap(), first);
+        assert!(stamp_of(&root.join("none")).is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn takes_finished_jobs_away_out_of_the_way_first_and_what_was_left_of_others() {
         let root = temp();
         let done = shell(&root, ECHO, 1);
@@ -2911,9 +3311,14 @@ mod tests {
         let left = root.join(format!("{TAKEN}0123"));
         fs::create_dir_all(left.join("work")).unwrap();
         fs::write(left.join(SPEC), fs::read(waiting.join(SPEC)).unwrap()).unwrap();
+        // (a folder not named as Meno names jobs - another's, in a working folder chosen - left, finished or not)
+        let theirs = root.join("their-results");
+        fs::create_dir_all(theirs.join("work")).unwrap();
+        fs::copy(done.join(SPEC), theirs.join(SPEC)).unwrap();
+        fs::copy(done.join(RECORD), theirs.join(RECORD)).unwrap();
         assert_eq!(clear_finished(&root).unwrap(), 2);
         assert!(!done.exists() && !failed.exists() && !left.exists());
-        assert!(waiting.exists());
+        assert!(waiting.exists() && theirs.exists());
         // (and one alone, by the same way: nothing of it left under its id)
         let one = shell(&root, ECHO, 1);
         write_record(&one, &JobRecord { ended: Some(3), ..JobRecord::new(JobState::Stopped, 1) }).unwrap();
@@ -3051,6 +3456,8 @@ mod tests {
             cores: 1,
             memory: 0,
             created: now_ms(),
+            label: None,
+            key: None,
             then: vec![],
             given: vec![],
         }
