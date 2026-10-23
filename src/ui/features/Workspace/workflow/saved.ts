@@ -11,7 +11,6 @@ import type { OptionValues } from "../../../../lib/options";
 import type { KeptRole } from "../../../../lib/jobs";
 import { KINDS, type SetHolds, type SetKind, type StepKind } from "./kinds";
 import { SET_KINDS } from "../../../../lib/plugins/steps";
-import { RUNS_KEPT } from "./model";
 import { readDrawnRecord, structureMember } from "./entries";
 import { readRefused } from "./programs";
 import { leftOut, readEach } from "../utils/readNotes";
@@ -115,7 +114,7 @@ function optionsIn(v: unknown): OptionValues {
 }
 
 function readRan(v: unknown): StepRan | undefined {
-  const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown; kept?: unknown } | undefined;
+  const r = v as { at?: unknown; ok?: unknown; said?: unknown; input?: unknown; stopped?: unknown; took?: unknown; jobs?: unknown; kind?: unknown; options?: unknown; kept?: unknown; keep?: unknown } | undefined;
   if (!r || !isNum(r.at) || typeof r.ok !== "boolean" || typeof r.said !== "string" || typeof r.input !== "string") return undefined;
   const jobs = Array.isArray(r.jobs) ? r.jobs.filter((j): j is string => typeof j === "string" && JOB.test(j)) : [];
   const options = optionsIn(r.options);
@@ -129,6 +128,8 @@ function readRan(v: unknown): StepRan | undefined {
     ...(jobs.length ? { jobs } : {}),
     ...(KINDS.some((k) => k.kind === r.kind) ? { kind: r.kind as StepKind } : {}),
     ...(Object.keys(options).length ? { options } : {}),
+    // (a run the chemist keeps: never dropped while kept)
+    ...(r.keep === true ? { keep: true as const } : {}),
     ...(() => {
       const kept = readKeptJobs(r.kept, new Set(jobs));
       return kept.length ? { kept } : {};
@@ -255,7 +256,7 @@ function readStep(v: unknown): WorkflowStep | null {
   const options = optionsIn(s.options);
   const ran = readRan(s.ran);
   const running = readRunning(s.running);
-  const runs = readEach(s.runs, readKept, "run").slice(0, RUNS_KEPT);
+  const runs = readEach(s.runs, readKept, "run");
   return {
     id: s.id,
     kind: s.kind as StepKind,

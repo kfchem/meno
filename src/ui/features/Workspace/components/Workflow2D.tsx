@@ -22,7 +22,8 @@ import { reachOverFrames } from "../utils/molecule3d";
 import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
-import { canWire, givesOf, stateOf, wireRefusal } from "../workflow/flow";
+import { canWire, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
+import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
@@ -212,10 +213,13 @@ function runRows(s: WorkflowStep): RunRow[] {
   const by = byOf(s);
   const how = (kind: WorkflowStep["kind"], options: WorkflowStep["options"]) =>
     [kind !== s.kind ? kindInfo(kind).name : "", howOf(optionsFor(kind, by), options, by === "meno" ? kindInfo(kind).how : undefined)].filter(Boolean).join(" \u00b7 ");
+  // (each named by when it was, to the second where two were in one minute)
+  const names = namesOf([...(s.ran ? [s.ran.at] : []), ...(s.runs ?? []).map((r) => r.at)]);
+  const first = s.ran ? 1 : 0;
   return [
-    ...(s.ran ? [{ at: s.ran.at, said: s.ran.said, how: how(s.ran.kind ?? s.kind, s.ran.options ?? s.options), shown: true }] : []),
+    ...(s.ran ? [{ at: s.ran.at, name: names[0], said: s.ran.said, how: how(s.ran.kind ?? s.kind, s.ran.options ?? s.options), shown: true, keep: !!s.ran.keep }] : []),
     // (an earlier run's molecules that did not read from its file: said with what it said)
-    ...(s.runs ?? []).map((r) => ({ at: r.at, said: notRead(r) ? `${r.said} · ${notRead(r).toLocaleString("en-US")} not read` : r.said, how: how(r.kind, r.options), shown: false })),
+    ...(s.runs ?? []).map((r, i) => ({ at: r.at, name: names[first + i], said: notRead(r) ? `${r.said} · ${notRead(r).toLocaleString("en-US")} not read` : r.said, how: how(r.kind, r.options), shown: false, keep: !!r.keep })),
   ];
 }
 
@@ -745,9 +749,11 @@ export default function Workflow2D() {
             options={optionsOf(takes, s.options)}
             kinds={kindsOf(byOf(s)).map((k) => ({ kind: k, name: kindInfo(k).name }))}
             runs={runRows(s)}
+            drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
             onOptions={(values) => store.getState().updateStep(s.id, { options: values })}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
             onShowRun={(index) => store.getState().showRun(s.id, index)}
+            onKeepRun={(index, keep) => store.getState().keepRunOf(s.id, index, keep)}
             onClose={() => store.getState().setWorkflowView({ openStep: null })}
             onCardDown={(e) => dragStep(e, s)}
             onContextMenu={menuOf("step", s.id)}

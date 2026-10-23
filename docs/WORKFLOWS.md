@@ -816,7 +816,8 @@ states an undo goes back to as well.
 - **The workspace keeps it all** (`.meno`, FILE-IO.md, *The workspace
   file*): sets, steps, wires, options; each run - when, its kind and
   options, what it said and how it ended, how long it took, its jobs by
-  id - and the molecules each of its last ten gave; the outputs its
+  id - and the molecules each of the runs it keeps gave (*Earlier
+  runs*); the outputs its
   molecules were read from, as files kept by their SHA-256, each
   molecule's calculation saying its program and version as the output
   does; a job's log, as a text, where it was shown; results as entries
@@ -1178,9 +1179,38 @@ How it works: ARCHITECTURE.md, *Workflows*.
 
 Decided while building it, for the maintainer to confirm:
 
-- **A step keeps its last ten runs**, each with the molecules it gave, in
-  the workspace. A run refused before it began - nothing coming in, say -
-  is not kept.
+- **Earlier runs** (the maintainer's ruling, 2026-10-22, in place of a
+  step keeping its last ten). A step keeps, each with what it gave, in the
+  workspace:
+  - its last run, and the run before it, in full;
+  - every run the chemist keeps: *Keep* on its row of the card's *Runs*
+    holds it, *Kept* lets it go again. A run kept is never dropped, however
+    many there are: what bounds them is the workspace file's own size -
+    the warning before a save takes it past a size, and the most a file
+    may hold, 1 GB (FILE-IO.md, *A step's jobs*: *A size warning*).
+
+  Running the step again drops the others from the workspace, and so
+  from its file when it is next saved. Meno says which, and what they gave, before
+  the run, never after. Under the icons of the step's menu, a note reads
+  *Running drops the run from 14:02 (120 molecules) from this workspace.*
+  It names a run by its time, with its day where that was not today and
+  its seconds where two of the step's runs were in one minute, and
+  says what it gave: so many molecules, conformers, or no results. The
+  note covers every step the click runs: those before it that run first,
+  being changed or not run, and, for *Run from here*, those after it
+  (*Running from here also drops ...*). *Run all* gets the same note, and
+  so does the open card under *Runs* (*Running again drops ...*). Where
+  nothing would be dropped, there is no note.
+
+  A step running already drops nothing more for being asked again. A click
+  that is refused before its run starts, with nothing coming in say,
+  drops nothing: what the step last did is kept with the rest, and the
+  refusal itself is not kept. A step after one that fails is not run, so it
+  drops nothing, though the note named its runs. A dropped run's job
+  folders stay in Meno's data folder. A copied workspace can share job
+  ids with the one it was copied from, so they are left for the clean-up
+  of jobs to come. A set's *Don't keep in the file* is about what the set
+  holds now, not the step's earlier runs.
 - **Showing a run again** puts its results in the result set and makes
   it what the step last did - one step to undo - and keeps what was shown
   among the runs in its place. The step's options stay as they are: where
