@@ -1894,6 +1894,48 @@ them again*; the maintainer's rulings of 2026-10-22):
 A workspace saved before this opens as it was: a calculation in it has
 no *Failed* set until it next runs, when it is given one.
 
+### Where a result set goes, and how many structures it shows (2026-10-23)
+
+A generative chain - *Generate*, *Check structures*, *Stereoisomers*,
+*Descriptors*, *Filter* - gives tens to hundreds of structures drawn at
+each step. Laid out whole, at the page's scale, each step's set grew over
+the next step's card, over the others' sets and over the wires, and the
+page could not be read after one run.
+
+- **Clear of everything** (workflow/place): a result set goes to the
+  right of its step, level with it, or lower, as far as it must to keep
+  `BETWEEN` clear of every other set, every step's card, every structure
+  and molecule, and every wire, each wire's curve as it is drawn (look
+  `wireCurve`). Its own line from its step, and its wires on to the steps
+  it goes into, cross no card or set where there is such a place. Below
+  everything is always clear, so a set never lies over another.
+  - **In its step's column**: where the next step's card in the same row
+    is close, its structures lie in rows no wider than the room before
+    it (`columnWidth`), the set growing down, not across the steps after
+    it.
+  - **Run again**, a set stays where it was, its top left kept, unless it
+    grew over something beside it; then it goes where a new one would.
+  - A step's second exit's set keeps under its first, and lower still
+    where something else is there (`keepExitsUnder`). A step's empty
+    exit frames, made as it is added, go clear in the same way (model
+    `withExits`).
+- **How many it shows** (look `DRAWN_ON_PAGE`, the maintainer,
+  2026-10-23): as many of its structures as take no more than 400 square
+  bond lengths of the page between them - each its drawing's box and its
+  number's room, in the step's order - and 50 at most. That is about a
+  dozen drug-sized structures, and many more small ones. The rest are
+  **held in the set**, after them, off the page
+  (`WorkflowSet.drawnCollection`). Its count line says how many it shows of how
+  many: "50 of 120 structures shown" (entries `countSaid`).
+- **Holding is the display alone.** All of them stay the set's, in order:
+  the step after it is given each, those on the page then those held
+  (flow `inputOf`, run `inputEntries`, and a plugin's step alike); the
+  step's line, the set's count, a run kept and shown again, and the file
+  (saved and read back, the shown ones as members, the rest as the set
+  holds them) all have all of them. A set whose step is deleted holds
+  them still, and deleting the set asks first, since those held go with
+  it.
+
 ### Structures drawn as results (2026-10-21)
 
 Enumerate P2 (WORKFLOWS-FOUNDATION.md, *Enumerate*): structures drawn, in
