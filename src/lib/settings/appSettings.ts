@@ -139,6 +139,8 @@ export type PluginSettings = {
 export type FileSettings = {
   read: Record<string, string>;
   also: Record<string, string[]>;
+  /** macOS: the app each format opened with before Meno was made its default there, by extension - offered back by name (lib/defaultApps). */
+  before?: Record<string, { name: string; path: string }>;
 };
 
 /** Meno keeping itself up to date (lib/update). */
@@ -284,7 +286,14 @@ function acceptFiles(raw: unknown, before: unknown): FileSettings {
     const ids = Array.isArray(readers) ? [...new Set(readers.filter((r): r is string => typeof r === "string" && ID.test(r)))] : [];
     if (ID.test(kind) && ids.length) also[kind] = ids;
   }
-  return { read, also };
+  // (an extension's app, by a name and an absolute path of some length)
+  const apps: Record<string, { name: string; path: string }> = {};
+  for (const [ext, app] of entries((raw as { before?: unknown } | null)?.before)) {
+    const a = app as { name?: unknown; path?: unknown } | null;
+    if (/^[a-z0-9]{1,8}$/.test(ext) && typeof a?.name === "string" && a.name && a.name.length <= 200 && typeof a.path === "string" && a.path.startsWith("/") && a.path.length <= 1024)
+      apps[ext] = { name: a.name, path: a.path };
+  }
+  return { read, also, ...(Object.keys(apps).length ? { before: apps } : {}) };
 }
 
 /** The plugins taken away, the roles' choices, the programs located and the guides shown, that read: ids only. */

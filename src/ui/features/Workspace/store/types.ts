@@ -542,6 +542,13 @@ export type Molecule3D = {
   /** Each frame's degeneracy - how many forms of it its conformer search found alike (CREST's rotamers) - where it said: a Boltzmann weight counts each. */
   degeneracies?: number[];
   /**
+   * Each frame's mirror image counted in, where Duplicates counted one in
+   * (workflow/meno): the atoms the mirror image swaps - atom i of this
+   * conformer plays the part of atom `mirrors[f][i]` in its mirror image -
+   * so that an average by atom can be made over both; null, none counted in.
+   */
+  mirrors?: (number[] | null)[];
+  /**
    * Its frames are the path to its last geometry - an optimisation's, made
    * by a step (docs/WORKFLOWS.md, *Results*) - so that a set takes it as
    * that one entry, not as many compounds.
