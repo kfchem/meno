@@ -8,7 +8,7 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, entryOfSet, FINISHED, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, entryOfSet, entryState, FINISHED, MARKS_UNREAD, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
 import type { StyleChoice } from "../../../../lib/chem/style";
@@ -244,9 +244,17 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
     const both = entries.filter((e) => shadowedIn(e).includes(c.property)).length;
     if (both) return { ok: false, said: `"${c.property}" is Meno's own, and ${both === 1 ? "1 entry carries one" : `${both} entries carry one`} of its own by that name too: which is meant cannot be told` };
   }
+  // (a value of one that is no result - failed, not converged, its marks unread - is not to be trusted: on a condition on any
+  //  value but its state, never kept, but set aside named, its state said; on its state alone it is judged by that)
+  const onValues = read.conditions.some((c) => c.property !== "state");
+  const notResult = (x: { id: string }) => {
+    const e = entries[Number(x.id)];
+    const state = entryState(e);
+    return state === FINISHED ? null : `${compoundLetter(e.compound)} #${e.number} ${state}`;
+  };
   const out = filter(
     entries.map((e, i) => entryOfSet(e, String(i))),
-    { conditions: read.conditions, match },
+    { conditions: read.conditions, match, ...(onValues ? { unread: notResult } : {}) },
   );
   if (!out.ok) return out;
   const back = (es: readonly { id: string }[]) => es.map((e) => entries[Number(e.id)]);

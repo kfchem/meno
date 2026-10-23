@@ -64,6 +64,18 @@ describe("a Filter step", () => {
     expect(out(doc)[0].numbers).toEqual([1, 4]);
   });
 
+  it("never keeps an entry that is no result on a condition on a value - set aside, named, its state said - though its value would pass", () => {
+    // (#2 not converged, #3's marks fine but refused: both with energies under the condition's)
+    const set = water([{}, {}, {}, {}], { conformerSet: true, failed: [null, { kind: "not-converged", why: "stopped at 200 cycles" }, { kind: "refused", why: "no parameters" }, null] });
+    const doc = runStep(filtering([set], "energy < 0 Eh"), 2, W);
+    expect(ran(doc)).toMatchObject({ ok: true, said: "2 of 4 entries kept \u00b7 rest 2 (1: A #2 not converged; 1: A #3 refused)" });
+    expect([out(doc)[0].numbers, out(doc, "rest")[0].numbers]).toEqual([[1, 4], [2, 3]]);
+    // (and where any is met, as well)
+    expect(ran(runStep(filtering([set], "energy < 0 Eh; nll < 5", "any"), 2, W))?.said).toMatch(/^2 of 4 entries kept/);
+    // (on its state alone, judged by that: kept where its state is asked for)
+    expect(ran(runStep(filtering([set], 'state = "not converged"'), 2, W))?.said).toMatch(/^1 of 4 entries kept/);
+  });
+
 
   it("keeps the conformers that meet its conditions, the rest out of its second exit - both counted, and why each of the rest was, one with no value for the property said", () => {
     // (a conformer set of four: NLL 12, 40, none, 25)
