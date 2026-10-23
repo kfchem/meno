@@ -914,7 +914,13 @@ work.meno (zip)
     tied to an arrow. Within a molecule in 3D: a calculation's record, its
     results and its notes of what could not be read. Within a structure a
     step gave a set: each property of its record, and each entry it was
-    made from.
+    made from. Within a set holding a table:
+    a column that does not read (with its cells), a row not of the table's
+    width, and a cell not of its column's kind - none in its row, and named
+    among what the table says was not read; a table with no column that
+    reads, whole. A number a set holds that is no finite number in a unit
+    Meno knows; a field of what worked a value out, or where, that does
+    not read.
   - **Nothing more is left out than what does not read.** A conformer or
     frame that does not read is left out with its own energy, number, share
     and degeneracy. Every other frame keeps its own, and its results of

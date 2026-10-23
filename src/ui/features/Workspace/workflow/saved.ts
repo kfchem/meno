@@ -86,10 +86,10 @@ function readSet(v: unknown): WorkflowSet | null {
       const unread = b.collection.length - collection.length + (Number.isInteger(b.unread) && (b.unread as number) > 0 ? (b.unread as number) : 0);
       return collection.length || unread ? { collection, ...(unread ? { unread } : {}) } : {};
     })(),
-    // (a table or a number it holds, read as the file kept it - none where it does not read)
+    // (a table or a number it holds, read as the file kept it - what does not read left out, and counted)
     ...(() => {
-      const table = b.table != null ? tableIn(b.table) : undefined;
-      const number = b.number != null ? numberIn(b.number) : undefined;
+      const table = b.table != null ? tableIn(b.table, leftOut) : undefined;
+      const number = b.number != null ? numberIn(b.number, leftOut) : undefined;
       return { ...(table ? { table } : {}), ...(number ? { number } : {}) };
     })(),
     // (a result set kept out of its file, and what it held when it was saved)
