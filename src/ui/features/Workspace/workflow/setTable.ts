@@ -11,6 +11,7 @@ import type { Result } from "../../../../lib/calc/results";
 import { factor } from "../../../../lib/units";
 import type { Molecule3D } from "../store/types";
 import { compoundLetter, frameMarks, frameXyz, framesOf, marksOf } from "./entries";
+import { FAILURE_WORDS } from "./failures";
 
 /** One entry of a set, as its table shows it. */
 export type TableRow = {
@@ -27,6 +28,8 @@ export type TableRow = {
   above?: number;
   /** How many forms of it a conformer search found alike, where it said. */
   degeneracy?: number;
+  /** Where it did not finish - it failed, or its marks did not read - in words, shown in its row: its energy no result, and no "above" of it. */
+  failed?: string;
   /** The molecule it is a frame of, and which. */
   molecule: Molecule3D;
   frame: number;
@@ -47,6 +50,20 @@ export function energiesFrom(m: Pick<Molecule3D, "calc" | "energies" | "made">):
 }
 
 const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
+/** What a row says whose file's marks of which frames failed did not read. */
+export const MARKS_NOT_READ = "marks not read";
+
+/**
+ * What the table's *above* column says of what it is over: the lowest of
+ * those that finished, and how many it did not count - "above the lowest of
+ * 8 that finished; 2 not counted". None where every row finished.
+ */
+export function aboveSaid(rows: readonly TableRow[]): string | null {
+  const left = rows.filter((r) => r.failed && r.energy != null).length;
+  if (!left) return null;
+  const counted = rows.filter((r) => r.above != null).length;
+  return `above the lowest of ${counted} that finished; ${left} not counted`;
+}
 
 /** A set's molecules as its table's rows: a frame each - one, its last, for a path to it - in the step's order. */
 export function tableRows(molecules: readonly Molecule3D[], holds: "molecules" | "conformers"): TableRow[] {
@@ -58,15 +75,20 @@ export function tableRows(molecules: readonly Molecule3D[], holds: "molecules" |
     const from = energiesFrom(m);
     // (above its compound's lowest: a conformer set's molecule is one compound, its energies all worked out alike)
     // (none of only a part of a compound's conformers: its lowest may not be among them)
-    const lowest = holds === "conformers" && energies && !m.partOf ? Math.min(...energies) : undefined;
+    // (and of those that finished alone: one that failed, or whose marks did not read, is no compound's lowest, and has none above it)
+    const unfinished = (f: number) => (m.marksUnread ? MARKS_NOT_READ : m.failed?.length === n && m.failed[f] ? FAILURE_WORDS[m.failed[f]!.kind] : undefined);
+    const done = energies?.filter((_, f) => !unfinished(f)) ?? [];
+    const lowest = holds === "conformers" && energies && !m.partOf && done.length ? Math.min(...done) : undefined;
     for (let f = m.path ? n - 1 : 0; f < n; f++) {
+      const failed = unfinished(f);
       rows.push({
         at: rows.length,
         ...(holds === "conformers" ? { compound: compoundLetter(i), number: m.numbers?.[f] ?? f + 1 } : {}),
         ...(m.name ? { name: m.name } : {}),
         ...(energies ? { energy: energies[f] } : {}),
         from,
-        ...(lowest != null && energies ? { above: (energies[f] - lowest) * KCAL_PER_HARTREE } : {}),
+        ...(lowest != null && energies && !failed ? { above: (energies[f] - lowest) * KCAL_PER_HARTREE } : {}),
+        ...(failed ? { failed } : {}),
         ...(degeneracies ? { degeneracy: degeneracies[f] } : {}),
         molecule: m,
         frame: f,

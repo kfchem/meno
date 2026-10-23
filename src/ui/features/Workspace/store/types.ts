@@ -23,6 +23,7 @@ import type { Workspace } from "../utils/workspace";
 import type { CalcInfo, Unmarked } from "../../../../lib/calc/output";
 import type { NumberValue, Table } from "../../../../lib/table";
 import type { ChartValue } from "../../../../lib/chart";
+import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { EntryStatus, Property } from "../../../../lib/entry";
 import type { PictureMedia } from "../../../../lib/picture/image";
 import type { JobState, KeptRole } from "../../../../lib/jobs";
@@ -733,8 +734,8 @@ export type WorkflowSet = {
   table?: Table;
   /** A number it holds, with its unit and what worked it out: a step's. */
   number?: NumberValue;
-  /** A chart it holds (lib/chart, docs/WORKFLOWS.md *Charts*): a Chart step's, one column of a table against another. */
-  chart?: ChartValue;
+  /** A chart it holds (docs/WORKFLOWS.md *Charts*): a Chart step's, one column of a table against another (lib/chart) - or an Energy diagram's (lib/energyDiagram). */
+  chart?: ChartValue | DiagramValue;
   /** A result set kept out of the workspace's file (*Don't keep in the file*): its members are not saved. */
   keep?: false;
   /** A result set opened from a file that did not keep it: how many it held, and their collection's hash. */
@@ -804,6 +805,8 @@ export type StepRan = {
   kept?: KeptJob[];
   /** A run the chemist keeps (docs/WORKFLOWS.md, *Earlier runs*): never dropped while kept. */
   keep?: true;
+  /** Every seed its line counts but does not name - made none, or not read, with why (workflow/programs `seedsSaid`): shown where the line is pointed at. */
+  named?: string;
 };
 /** A job's file a workspace's file keeps (docs/FILE-IO.md, *A step's jobs*): its name in the job's folder, SHA-256, size, and what it is to the job. */
 export type KeptJobEntry = { name: string; sha256: string; size: number; role: KeptRole };

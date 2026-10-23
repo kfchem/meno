@@ -160,12 +160,14 @@ export type RoleDecl = {
  * of file it takes besides, by their ids (`files`: Multiwfn's NCI, a
  * wavefunction - "molden", "gaussian-fchk", "wfn", "wfx"), each entry given
  * the file its molecule was read from where it is one of them - another
- * plugin's step's, or one opened - the two joined by the kind's id alone.
+ * plugin's step's, or one opened - the two joined by the kind's id alone;
+ * and, of a kind that takes nothing in (Generate), whether it makes its
+ * molecules from seeds wired in (`seeds`: CReM's).
  * A manifest may say several kinds in one, with the same programs and
  * options.
  */
 /** `roleOptions`: its options are its role's, the step having said none of its own (Settings' choices for the role its defaults: workflow/doers `optionsFor`). */
-export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[] };
+export type StepDecl = { kind: StepKind; programs: string[]; options: Option[]; roleOptions?: true; takes?: ValueKind[]; files?: string[]; seeds?: true };
 
 /** The systems Meno runs on, as a plugin names those it can be added on. */
 export const SYSTEMS = ["macos", "windows", "linux"] as const;
@@ -213,8 +215,11 @@ export type InstalledDecl = {
  * it - Blender): an archive for one system - and processor, where it says
  * one - unpacked (`unpack`), the program at `program` in it (`*` for the
  * one folder there is); fetched as the rest are (docs/PLUGINS.md, *A
- * program Meno fetches*). A file for another system, or processor, is not
- * fetched. Meno's backend reads and checks the same
+ * program Meno fetches*). Or one data file compressed with gzip
+ * (`unpack: "gz"` - a fragment database), unpacked by Meno into its folder,
+ * how large it is then said (`unpackedBytes`). Where its makers ask to be
+ * cited, how (`cite`), said as asking to set it up says the rest. A file
+ * for another system, or processor, is not fetched. Meno's backend reads and checks the same
  * (src-tauri/src/plugfiles.rs).
  */
 export type DownloadDecl = {
@@ -229,14 +234,18 @@ export type DownloadDecl = {
   unpack?: Unpack;
   program?: string;
   provides?: string;
+  /** Its size once unpacked, in bytes: one compressed with gzip. */
+  unpackedBytes?: number;
+  /** How its makers ask that work using it cite them. */
+  cite?: string;
 };
 
 /** The processors a program is built for, as the system names them. */
 export type Arch = "aarch64" | "x86_64";
 const ARCHES: readonly Arch[] = ["aarch64", "x86_64"];
 /** How an archive is opened, by its ending. */
-export type Unpack = "dmg" | "zip" | "tar.xz";
-const UNPACKS: readonly Unpack[] = ["dmg", "zip", "tar.xz"];
+export type Unpack = "dmg" | "zip" | "tar.xz" | "gz";
+const UNPACKS: readonly Unpack[] = ["dmg", "zip", "tar.xz", "gz"];
 
 /** How a program installed separately says its version, and the least Meno takes. */
 export type VersionRule = { args: string[]; after: string; least: string };
@@ -517,6 +526,7 @@ function stepsOf(v: unknown, roles: readonly RoleDecl[]): StepDecl[] {
     ...(roleOf(kind) ? { roleOptions: true as const } : {}),
     ...(takes.length ? { takes: [...takes] } : {}),
     ...(files.length ? { files: [...files] } : {}),
+    ...(s?.seeds === true ? { seeds: true as const } : {}),
   }));
 }
 
@@ -657,8 +667,15 @@ function downloadOf(v: unknown): DownloadDecl | null {
   if (system !== undefined && !SYSTEMS.includes(system as System)) return null;
   if (arch !== undefined && !ARCHES.includes(arch as Arch)) return null;
   if (unpack !== undefined && (!UNPACKS.includes(unpack as Unpack) || !file.endsWith(`.${unpack}`) || file === `.${unpack}`)) return null;
-  if (program !== undefined && (!unpack || !programPathOk(program) || (unpack === "dmg" && program.startsWith("*")))) return null;
+  if (program !== undefined && (!unpack || unpack === "gz" || !programPathOk(program) || (unpack === "dmg" && program.startsWith("*")))) return null;
   if (provides !== undefined && (!PROGRAM.test(provides) || !program || !system)) return null;
+  // (data compressed with gzip: how large it is unpacked, said - and only of such a file)
+  const unpackedBytes = d!.unpackedBytes;
+  if (unpackedBytes !== undefined && (unpack !== "gz" || typeof unpackedBytes !== "number" || !Number.isInteger(unpackedBytes) || unpackedBytes <= 0 || unpackedBytes > DOWNLOAD_MOST * 10))
+    return null;
+  if (unpack === "gz" && unpackedBytes === undefined) return null;
+  const cite = d!.cite === undefined ? undefined : text(d!.cite, 200);
+  if (cite === null) return null;
   return {
     ...decl,
     ...(system ? { system: system as System } : {}),
@@ -666,6 +683,8 @@ function downloadOf(v: unknown): DownloadDecl | null {
     ...(unpack ? { unpack: unpack as Unpack } : {}),
     ...(program ? { program } : {}),
     ...(provides ? { provides } : {}),
+    ...(unpackedBytes !== undefined ? { unpackedBytes: unpackedBytes as number } : {}),
+    ...(cite ? { cite } : {}),
   };
 }
 

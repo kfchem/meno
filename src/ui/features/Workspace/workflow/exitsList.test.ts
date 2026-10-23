@@ -26,6 +26,7 @@ describe("a kind's exits, as a list", () => {
       descriptors: [first("With descriptors", "structures"), rest("Set aside", "structures")],
       enumerate: [first("Made", "structures"), rest("Aside", "same")],
       chart: [first("Chart", "chart")],
+      "energy-diagram": [first("Energy diagram", "chart")],
       tag: [first("Tagged", "same")],
       species: [first("With species", "same"), failed()],
       combine: [first("Combined", "molecules")],

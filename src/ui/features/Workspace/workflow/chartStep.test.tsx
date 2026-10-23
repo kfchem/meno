@@ -4,7 +4,8 @@ import { chartIn, type ChartValue } from "../../../../lib/chart";
 import { readTable } from "../../../../lib/table";
 import { addMolecule3d, emptyWorkspaceDocument, type WorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
-import { countOf, holdsOf } from "./entries";
+import { countOf, holdsOf, MARKS_UNREAD } from "./entries";
+import { STATE_FINISHED } from "./meno";
 import { canWire, entryOnPage, inputKey, resultOf, stateOf, tableInto } from "./flow";
 import { addSet, addStep, addTableSet, connect, updateStep } from "./model";
 import { runStep, whyNot, type RunWith } from "./run";
@@ -24,7 +25,7 @@ function charted(options?: Record<string, string>): WorkspaceDocument {
   return connect(doc, { set: 1 }, 2);
 }
 
-const chartOf = (doc: WorkspaceDocument) => resultOf(doc, 2)?.chart;
+const chartOf = (doc: WorkspaceDocument) => resultOf(doc, 2)?.chart as ChartValue | undefined;
 
 describe("a Chart step", () => {
   it("charts a table's first two columns of numbers, a point a row with both - in a set of its own, the row left counted and said", () => {
@@ -108,6 +109,46 @@ describe("a Chart step", () => {
     ]);
     // (a point pressed shows that molecule at that frame; one of no molecule on the page, nothing)
     expect([entryOnPage(doc, "molecule:1#2"), entryOnPage(doc, "molecule:9#0"), entryOnPage(doc, "C1"), entryOnPage(doc, undefined)]).toEqual([{ molecule: 1, frame: 2 }, null, null, null]);
+  });
+
+  it("plots no entry that is no result - failed, by any kind, or its marks not read - refusing, each named, as an Energy diagram does", () => {
+    const water = (extra: Partial<Molecule3D>): Omit<Molecule3D, "id"> => ({
+      at: { x: 0, y: 0 },
+      atoms: [
+        { el: "O", x: 0, y: 0, z: 0 },
+        { el: "H", x: 0.96, y: 0, z: 0 },
+        { el: "H", x: -0.24, y: 0.93, z: 0 },
+      ],
+      bonds: [
+        { a1: 0, a2: 1, order: 1 },
+        { a1: 0, a2: 2, order: 1 },
+      ],
+      frames: [[0, 0, 0, 0.97, 0, 0, -0.24, 0.94, 0], [0, 0, 0, 0.95, 0, 0, -0.24, 0.92, 0]],
+      energies: [-5.07, -5.06, -5.08],
+      conformerSet: true,
+      ...extra,
+    });
+    const run = (extra: Partial<Molecule3D>) => {
+      let doc = addMolecule3d(emptyWorkspaceDocument(), water(extra));
+      doc = addSet(doc, { x0: -3, y0: -3, x1: 3, y1: 3 });
+      doc = addStep(doc, "chart", 10, 0);
+      doc = connect(doc, { set: 1 }, 2);
+      doc = runStep(doc, 2, W);
+      return [doc.steps!.find((s) => s.id === 2)!.ran, chartOf(doc)] as const;
+    };
+    const stopped = { kind: "not-converged" as const, why: "stopped at 200 cycles" };
+    const refused = { kind: "refused" as const, why: "an element it has no parameters for" };
+    for (const [extra, said] of [
+      [{ failed: [null, null, stopped] }, "a #3 not converged"],
+      [{ failed: [refused, null, null] }, "a #1 refused"],
+      [{ marksUnread: true as const }, `a #1: ${MARKS_UNREAD}; a #2: ${MARKS_UNREAD}; a #3: ${MARKS_UNREAD}`],
+    ] as const) {
+      const [ran, chart] = run(extra as Partial<Molecule3D>);
+      expect(ran).toMatchObject({ ok: false, said: `Not every entry is a result to stand on: ${said} - take ${said.includes(";") ? "them" : "it"} out first (a Filter on "${STATE_FINISHED}")` });
+      expect(chart).toBeUndefined();
+    }
+    // (all results: charted)
+    expect(run({})[1]?.points).toHaveLength(3);
   });
 
   it("takes a set mixing a conformer set with a molecule of one geometry - seen as a table, each as it is - which a step on entries refuses", () => {
@@ -222,6 +263,7 @@ describe("a Chart step", () => {
 describe("a chart, in its set's frame", () => {
   it("labels each axis with its name, unit and what worked it out, and says how many points and why rows were left", () => {
     const c: ChartValue = {
+      kind: "points",
       x: { name: "number", unit: "none" },
       y: { name: "energy", unit: "Eh", by: { program: "prog", method: "GFN2-xTB" }, at: { geometry: "own", kelvin: 298.15, atm: 1, solvent: "water" } },
       points: [

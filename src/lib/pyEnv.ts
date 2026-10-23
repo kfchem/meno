@@ -66,12 +66,16 @@ const licenceOf = (plugin: Pick<PythonPlugin, "name" | "licence">) => (plugin.li
 /** About how much room its environment takes once set up, where its manifest says (`setUpBytes`, as measured). */
 const roomOf = (plugin: Pick<PythonPlugin, "setUpBytes">) => (plugin.setUpBytes ? ` (about ${sizeOf(plugin.setUpBytes)} once set up)` : "");
 
+/** A file a plugin downloads, as asking to set it up says it: its name, licence and size - unpacked too, where it is unpacked - and how its makers ask to be cited. */
+export const fileSaid = (f: PythonPlugin["downloads"][number]) =>
+  `${f.name} (${f.licence} licence, ${sizeOf(f.bytes)}${f.unpackedBytes ? `, ${sizeOf(f.unpackedBytes)} unpacked` : ""}${f.cite ? `; cite ${f.cite}` : ""})`;
+
 /** What a plugin downloads besides its packages, as asking to set it up says it - each file, under its licence, and its size - and where from. */
 function besides(plugin: PythonPlugin | undefined): { need: string } & SetUpReach {
   const files = setUpFiles(plugin);
   if (!files.length) return { need: "", sources: [], hosts: [] };
   return {
-    need: `; and it needs ${files.map((f) => `${f.name} (${f.licence} licence, ${sizeOf(f.bytes)})`).join(" and ")} beside them`,
+    need: `; and it needs ${files.map(fileSaid).join(" and ")} beside them`,
     ...filesSetUp(files),
   };
 }

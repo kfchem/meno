@@ -25,14 +25,13 @@ import { wordsTooSmall } from "../utils/pageScale";
 import { usePresence } from "../../../theme/presence";
 import { DURATION } from "../../../theme/motion";
 import { canWire, entryOnPage, givesOf, stateOf, stepsRun, wireRefusal } from "../workflow/flow";
-import type { ChartPoint } from "../../../../lib/chart";
 import { droppedBy, namesOf } from "../workflow/earlierRuns";
 import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PORTS_Z, portDown, PX, shuttingCard, underCard } from "../workflow/look";
-import { byOf, doerOf, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
+import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -647,7 +646,7 @@ export default function Workflow2D() {
             : count.holds === "number" && b.number
               ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
             : count.holds === "chart"
-              ? plural(count.entries, "point")
+              ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
             : count.holds === "pictures"
               ? plural(count.entries, "picture")
               : count.holds === "structures"
@@ -751,7 +750,7 @@ export default function Workflow2D() {
             onContextMenu={menuOf("set", b.id)}
             onHover={(on) => (on ? hover({ hoveredSet: b.id }) : unhover("hoveredSet", b.id))}
             {...(!b.made ? { onRename: (name: string) => store.getState().renameSet(b.id, name) } : {})}
-            {...(b.chart ? { onPoint: (pt: ChartPoint) => showEntry(pt.entry) } : {})}
+            {...(b.chart ? { onEntry: showEntry } : {})}
           />
         </div>
       );
@@ -777,7 +776,7 @@ export default function Workflow2D() {
             compact={compact}
             selected={selFlow.steps.has(s.id)}
             open={openStep === s.id}
-            inputs={inputsOf(s.kind).map((p) => ({ id: p.id, name: p.name, look: portLook("take", { step: s.id, port: p.id }) }))}
+            inputs={inputsFor(s.kind, byOf(s)).map((p) => ({ id: p.id, name: p.name, look: portLook("take", { step: s.id, port: p.id }) }))}
             optionList={takes}
             options={optionsOf(takes, s.options)}
             kinds={kindsOf(byOf(s)).map((k) => ({ kind: k, name: kindInfo(k).name }))}
@@ -901,7 +900,7 @@ export default function Workflow2D() {
             );
           })}
           {steps.map((s) => {
-            const ports = inputsOf(s.kind);
+            const ports = inputsFor(s.kind, byOf(s));
             const name = kindInfo(s.kind).name;
             return (
               <div key={`s${s.id}`} className="meno-fade-in" style={{ ...onLayer(s.x, s.y), width: 0, height: 0 }}>

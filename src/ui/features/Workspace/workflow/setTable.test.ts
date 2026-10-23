@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Molecule3D } from "../store/types";
-import { chooseRows, chosenMolecules, rowMolecule, sortRows, tableRows } from "./setTable";
+import { aboveSaid, chooseRows, chosenMolecules, MARKS_NOT_READ, rowMolecule, sortRows, tableRows } from "./setTable";
 
 /** A water, its oxygen at `x`, with `frames` more geometries - each its oxygen further along - and energies where given. */
 function water(id: number, x: number, more = 0, energies?: number[], extra: Partial<Molecule3D> = {}): Molecule3D {
@@ -24,6 +24,25 @@ function water(id: number, x: number, more = 0, energies?: number[], extra: Part
 }
 
 describe("a set as a table", () => {
+  it("marks a row that did not finish, in words, and works its energy above out over those that finished alone - never from one that failed", () => {
+    // (three conformers, the third - not converged - the lowest: before, every other was above it)
+    const stopped = { kind: "not-converged" as const, why: "stopped at 200 cycles" };
+    const rows = tableRows([water(1, 0, 2, [-76, -76.0015936014, -77], { made: { how: [], energies: "Field X" }, failed: [null, null, stopped] })], "conformers");
+    expect(rows.map((r) => r.failed)).toEqual([undefined, undefined, "not converged"]);
+    expect(rows[0].above).toBeCloseTo(1.0, 6);
+    expect(rows[1].above).toBe(0);
+    expect(rows[2].above).toBeUndefined();
+    expect(aboveSaid(rows)).toBe("above the lowest of 2 that finished; 1 not counted");
+    // (marks not read: none finished - no row above any, each said)
+    const unread = tableRows([water(1, 0, 1, [-76, -77], { made: { how: [], energies: "Field X" }, marksUnread: true })], "conformers");
+    expect(unread.map((r) => [r.failed, r.above])).toEqual([
+      [MARKS_NOT_READ, undefined],
+      [MARKS_NOT_READ, undefined],
+    ]);
+    // (all finished: nothing said)
+    expect(aboveSaid(tableRows([water(1, 0, 1, [-76, -77], { made: { how: [], energies: "Field X" } })], "conformers"))).toBeNull();
+  });
+
   it("is a row for each entry - each conformer of each compound - in the step's order, with its energy above its compound's lowest", () => {
     // (1 Eh = 627.5094740631 kcal/mol, CODATA 2018: 0.0015936014 Eh above is 1.000000 kcal/mol)
     const rows = tableRows([water(1, 0, 1, [-76, -76.0015936014], { made: { how: [], energies: "Field X" } }), water(2, 5, 0, [-80])], "conformers");

@@ -269,7 +269,7 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 
 | Kind | Icon (Heroicons' outline) | Takes | Gives |
 | --- | --- | --- | --- |
-| Generate | sparks | nothing: no input, nothing wired in | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change. Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
+| Generate | sparks | nothing: no input, nothing wired in - or, where its plugin makes from seeds (CReM's), *Seeds*: structures drawn | **structures drawn**, each the SMILES the model gave, read as one pasted is - its stereo as written, what it leaves open counted on its record (`stereo_open`), never chosen - with the model's own values on its record, named (REINVENT 4's `nll` and `smiles_state`), and what made them (PLUGINS.md, *Generate*). How many and with what seed its options say. Nothing is made 3D here, nothing enumerated, nothing refused: the general steps after it do that. It is ready as it is put down, run on its options alone, and changed when they change; made from seeds, it waits for them, and each made one keeps its seed's values as the seed's (`made_from.<name>`). Its line counts what the model gave, what was made, what leaves stereo open, and what could not be read |
 | Conformers | a stack of layers | structures drawn, or molecules in 3D | **a conformer set**: each compound's conformers |
 | Optimise | a trend going down | molecules in 3D | each optimised, its path as frames - the same kind of set |
 | Energy | a bolt | molecules in 3D | each with its energy - the same kind of set |
@@ -663,6 +663,14 @@ set is (2026-10-21):
   the search found alike, where it said; and *From*, what worked its
   energy out ("not stated" where nothing says). No share is shown: a
   share needs a temperature, and the set does not hold one.
+- **A row that did not finish says so** in its *Failed* column - the
+  failure in words ("not converged", "refused"), or "marks not read" -
+  and its energy above is blank: the lowest is taken among those that
+  finished alone, and the line at the top says so ("ΔE above the lowest of
+  8 that finished; 2 not counted"). A large set's summary chart draws only
+  those that finished, its baseline among them, and names those left out;
+  none finished, it draws none and says why. An SD file written of such a
+  frame carries a *Failed* field beside its energy (2026-10-23).
 - Pressing a column's name sorts by it, again the other way; rows with no
   value go last. Only the rows in view are drawn, so 1,000 scroll as 10 do.
 - Rows are chosen as in a list (a click; ⌘ or Ctrl to add or take one;
@@ -1853,15 +1861,18 @@ them again*; the maintainer's rulings of 2026-10-22):
   Gaussian's NImag, the modes ORCA marks; never a threshold of Meno's -
   on its chip: *1 imaginary frequency, 382.6i cm-1*. A conformer set
   keeps each conformer's.
-- **Populations refuses a group with one that is no minimum** - its
-  optimisation not converged, or marked with an imaginary frequency -
-  naming it: *a #2 has 1 imaginary frequency, 382.6i cm-1: it is no
-  minimum - take it out first*. *Energy window* refuses one not
-  converged the same; a saddle point's mark would refuse it where the
-  window is on free energies, which it is not yet. *Choose one*, choosing
-  the lowest, and *Duplicates*, ranking by energy which copy it keeps,
-  refuse one that is no minimum the same - not converged, a saddle point,
-  or its marks not read (2026-10-23); *Choose one* by number chooses any.
+- **Populations refuses a group with one that is no result or no
+  minimum** - one that failed, by any kind (not converged, refused, an
+  error...), or whose marks did not read, then one marked with an
+  imaginary frequency - naming every one: *Not every entry is a result to
+  stand on: a #2: ... ; a #4 refused - take them out first*, *a #2 has 1
+  imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
+  (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
+  not converged alone before). *Energy window* refuses one that failed or
+  whose marks did not read the same; a saddle point's mark would refuse it
+  where the window is on free energies, which it is not yet. *Choose one*,
+  choosing the lowest, and *Duplicates*, ranking by energy which copy it
+  keeps, refuse as Populations does; *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
   the same two marks, rather than Boltzmann shares of an energy that is
   none (utils/molecule3d `sharesWithheld`); opened, it says why, naming
@@ -2211,6 +2222,19 @@ it.
   a name that is Meno's own and one an entry carries of its own too is
   refused ("which is meant cannot be told"), never read as either; the
   entry's own goes on with it, unread.
+- **An entry's state** is Meno's own too (`state`, entries `entryState`):
+  "finished" where it is a result to stand on - converged, not failed,
+  its file's marks read - else why not, in the words a step's line
+  counts failures in ("not converged", "refused", "the program stopped
+  with an error"), or "marks not read". "state = finished" keeps the
+  finished and sets the rest aside, each saying what it is ("not state =
+  finished (not converged)"): the Filter a step's refusal names, where a
+  value is read from results (an Energy diagram's levels: meno
+  `STATE_FINISHED`). A text or true-or-false condition not met says the
+  value, as a number's does. On a condition on any value but its state,
+  an entry that is no result is never kept, though its value would pass:
+  it goes to *The rest* named, its state said ("a #2 not converged") -
+  its value is not to be trusted.
 - **Structures drawn** - *Generate*'s, after *Check structures*,
   *Stereoisomers* or *Descriptors* - are read by their record alone (meno
   `filteredDrawn`): the properties a step gave each (`DrawnRecord.properties`:
@@ -2228,7 +2252,11 @@ it.
   why where one gave it ("Same as 2; not mw < 500 g/mol (612.4 g/mol)").
   More than are laid out on the page
   come in held in their set, and go out so (`LARGE_SET`), as any step's
-  structures drawn do.
+  structures drawn do. A structure's `state` is Meno's here too: "failed:
+  <why>" where its record says it failed, else "finished" (one set aside
+  before, the same as another, is no failure). On a condition on any value
+  but its state one that failed is never kept, but set aside named
+  ("structure 2 failed: ..."); on its state alone it is judged by that.
 - **Its two exits add up to what came in**: those kept, in the order they
   came, and *The rest*, both counted on its line, with how many of the
   rest were set aside for each reason ("2 of 4 entries kept · rest 2 (1:
@@ -2255,6 +2283,9 @@ chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
 each entry's number, then its energy).
+- **A chart of molecules plots no entry that is no result**: one that
+  failed, by any kind, or whose marks did not read refuses it, each named,
+  as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).
 - A point for each row with a number in both; **a row without is counted
   and said**, by what it lacks ("4 points · 1 row left (1 with no
   measured)"), and each such row named, pointed at - its entry and what it
@@ -2289,6 +2320,53 @@ each entry's number, then its energy).
   scan's, a path's - each frame an entry, a compound, of its own, number 1;
   "molecule", one of a single geometry. A chart of number against energy
   draws a scan's frames beside the conformers, each saying which it is.
+
+### Energy diagrams (2026-10-22)
+
+**Energy diagram** (PR 10, fourth part: `src/lib/energyDiagram.ts`) is
+Meno's own step with two inputs: *Levels*, molecules or conformer sets,
+and *Connects*, a table, where wired. It gives a chart in a set
+of its own. *Levels* reads what comes in as a table, each molecule as it
+is, so it takes a set that mixes a saddle point's conformer set with
+molecules of one geometry - which a step that works on entries refuses
+(*A wire let go on an input that does not take it*).
+- **A level** is the molecules of one name - a molecule's title, else its
+  file's name, else its group - and stands at its lowest; a level of
+  several (a saddle point's conformers) says, pointed at, of how many it is
+  the lowest and which ("lowest of 7: #3"); pressed, that one is shown.
+- **Relative to** the level its option names, none named the first - in
+  kcal/mol, written to a tenth, signed.
+- **Which energy**: an option naming the quantity, as the entries carry it
+  - their electronic energy ("energy") until free energies and enthalpies
+  are read. The levels are seen as a table (*Molecules seen as a table*),
+  where a column never holds values worked out differently: **every
+  level's energy is that one quantity, by one method, at one set of
+  conditions, or there is no diagram**, and the step says which levels
+  have which ("Its levels' energy was not worked out one way: "energy ·
+  GFN2-xTB" for R, P; "energy · B3LYP" for TS"), or which level has none.
+- The axis names the quantity relative to the reference, its unit and
+  what worked it out: "ΔE (kcal/mol) · xtb · GFN2-xTB · gas phase",
+  "ΔG (kcal/mol) · … · 298.15 K".
+- **Only results stand as levels**: where any entry under a level failed
+  - not converged, refused, an error, of any kind - or its file's marks
+  of that did not read, the step refuses and draws nothing, naming each
+  ("Not every entry is a result to stand on: TS #2 not converged - take
+  it out first"), as Energy window and Populations refuse one. The lowest
+  of the rest is never taken: the one that failed may be the level's
+  lowest (meno `notResults`).
+- **Imaginary frequencies are said, not judged**: which level should be a
+  saddle point the step cannot tell, so each level, pointed at, says those
+  of the entry it stands at - "has 1 imaginary frequency, 300.0i cm-1",
+  "no imaginary frequency", or "frequencies not computed" (lib/
+  energyDiagram `frequenciesSaid`, entries `imaginaryOf`).
+- **The lines**: each row of the table into *Connects* - its
+  columns *from* and *to*, naming levels - is one; with no table, each
+  level is joined to the next, in the order they come. A row naming no
+  other level is counted and said. A conformer of a level with no energy,
+  where the level has others, is counted and said too.
+- Its card says how many levels, relative to which; its set's count line
+  says its levels. It is kept in the workspace's file, and has changed when
+  either input, a level's name, or its options have.
 
 ## Questions
 

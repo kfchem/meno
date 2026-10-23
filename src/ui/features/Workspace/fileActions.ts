@@ -31,6 +31,7 @@ import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/
 import { leftOutSavedSaid } from "./utils/readNotes";
 import { bondsAt, notePictureMarks, pictureMarks } from "./utils/molecule3d";
 import { isSkeleton } from "./utils/completeness";
+import { FAILURE_WORDS } from "./workflow/failures";
 import { skeletonWhy } from "../../../lib/chem/skeleton";
 import { measurePictureMarks } from "./utils/measure3d";
 import { MARK_SCALE, stereoPictureItems } from "./chem/marks";
@@ -213,9 +214,12 @@ export function structureFileText(drawn: Drawn, path: string, options: OptionVal
   const records = (drawn.molecules3d ?? []).flatMap((m) => {
     const name = m.name ? stem(m.name) : title;
     // (each frame's energy, where it is known: the frame shown's too)
+    // (and, beside it, where the frame did not finish - it failed, or its marks did not read - why, so that no reader takes the value for a result)
+    const n = 1 + (m.frames?.length ?? 0);
     const data = (i: number) => {
       const energy = m.energies?.[i];
-      return energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "";
+      const failed = m.marksUnread ? "its marks of which frames failed could not be read" : m.failed?.length === n && m.failed[i] ? `${FAILURE_WORDS[m.failed[i]!.kind]}: ${m.failed[i]!.why}` : null;
+      return (energy != null && Number.isFinite(energy) ? `> <Energy (Eh)>\n${energy}\n\n` : "") + (failed ? `> <Failed>\n${failed.replace(/\s+/g, " ").slice(0, 200)}\n\n` : "");
     };
     // (a skeleton - its hydrogens not there - written as one: its atoms' valences set, so that no reader adds any)
     const skeleton = isSkeleton(m);

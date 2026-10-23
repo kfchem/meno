@@ -25,6 +25,7 @@ export const STEP_KINDS = [
   "descriptors",
   "enumerate",
   "chart",
+  "energy-diagram",
   "tag",
   "species",
   "combine",

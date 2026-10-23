@@ -16,7 +16,7 @@ import type { InstalledDecl } from "../../../../lib/plugins/manifest";
 import { tooOld, whereIs } from "../../../../lib/plugins/installed";
 import { systemHere } from "../../../../lib/plugins/here";
 import type { WorkflowSet, WorkflowStep } from "../store/types";
-import { exitOf, KINDS, kindInfo, madeName, MENO_DOES, takenBy, takes, type StepKind, type ValueKind } from "./kinds";
+import { exitOf, inputsOf, KINDS, kindInfo, madeName, MENO_DOES, takenBy, takes, type StepKind, type StepPort, type ValueKind } from "./kinds";
 
 export type Doer = { id: string; name: string };
 
@@ -44,11 +44,31 @@ export function kindsOf(by: string): StepKind[] {
  * not from structures drawn).
  */
 export function takesBy(kind: StepKind, by: string, holds: ValueKind): boolean {
+  // (a kind that takes nothing in, made from seeds by this one: the seeds' input's own)
+  if (!inputsOf(kind).length) return inputsFor(kind, by).some((p) => takenBy(p.takes, holds));
   if (!takes(kind, holds)) return false;
   if (!by || by === MENO.id) return true;
   const decl = pluginById(by)?.steps.find((d) => d.kind === kind);
   return !decl?.takes || takenBy(decl.takes, holds);
 }
+
+/** The input a kind that takes nothing in takes where its plugin makes from seeds (a manifest's `seeds`): structures drawn, each a seed. */
+export const SEEDS_INPUT: StepPort = { id: "seeds", name: "Seeds", takes: ["structures"] };
+
+/**
+ * The inputs a step of `kind` done by `by` takes: the kind's own - and, of
+ * a kind that takes nothing in (*Generate*), *Seeds* where its plugin's
+ * manifest says it makes its structures from seeds (`seeds`), none where
+ * it does not.
+ */
+export function inputsFor(kind: StepKind, by: string): readonly StepPort[] {
+  const own = inputsOf(kind);
+  if (own.length || !pluginById(by)?.steps.find((d) => d.kind === kind)?.seeds) return own;
+  return [SEEDS_INPUT];
+}
+
+/** Whether a step of `kind` done by `by` takes nothing in: no input, nothing wired to it (*Generate* from a model alone). */
+export const takesNothingBy = (kind: StepKind, by: string): boolean => inputsFor(kind, by).length === 0;
 
 /**
  * What a plugin is called where its steps are - a card, Quick Add,

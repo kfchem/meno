@@ -4,6 +4,7 @@
  * document, so that undo takes it back and Save keeps it.
  */
 import type { ChartValue } from "../../../../lib/chart";
+import type { DiagramValue } from "../../../../lib/energyDiagram";
 import type { Table } from "../../../../lib/table";
 import type { WorkspaceDocument } from "../document";
 import type { Member, StepRunKept, WireEnd, WorkflowSet, WorkflowStep } from "../store/types";
@@ -12,7 +13,8 @@ import { inside, lyingIn, membersOf, placesOf, readingOrder, recordOn, setMember
 import { drawnBox } from "../../../../utils/importers";
 import { CHART_PX, PX, SET_PAD, SET_TOP, TABLE_PX } from "./look";
 import { canWire, resultOf, wireInto } from "./flow";
-import { exitsOf, inputsOf, ONE_INPUT, takesNothing, type StepKind } from "./kinds";
+import { exitsOf, ONE_INPUT, type StepKind } from "./kinds";
+import { byOf, inputsFor } from "./doers";
 import { CARD_H, CARD_W, GAP, BETWEEN } from "./look";
 
 const idOf = (doc: WorkspaceDocument) => doc.nextWorkflowId ?? 1;
@@ -66,7 +68,7 @@ export function holdCollection(
 export const CHART_SET = { w: CHART_PX.w * PX + 2 * SET_PAD, h: SET_TOP + CHART_PX.h * PX + SET_PAD };
 
 /** A step's result set holding a chart it made (`WorkflowSet.chart`): nothing on the page among its members, and no molecules of its own. */
-export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue): WorkspaceDocument {
+export function holdChart(doc: WorkspaceDocument, id: number, chart: ChartValue | DiagramValue): WorkspaceDocument {
   return withSet(doc, id, ({ collection: _c, unread: _u, ...b }) => ({ ...b, members: [], chart }));
 }
 
@@ -254,9 +256,10 @@ export function removeStep(doc: WorkspaceDocument, id: number): WorkspaceDocumen
 /** `doc` with a wire from `from` into the step `to` - in place of one it had - where it may go there (flow `canWire`). */
 export function connect(doc: WorkspaceDocument, from: WireEnd, to: number, into?: string): WorkspaceDocument {
   // (no input named: the first of the step's that takes what comes)
-  const kind = doc.steps?.find((s) => s.id === to)?.kind;
-  if (kind && takesNothing(kind)) return doc;
-  const port = into ?? (kind ? (inputsOf(kind).find((p) => canWire(doc, from, to, p.id))?.id ?? inputsOf(kind)[0].id) : ONE_INPUT);
+  const step = doc.steps?.find((s) => s.id === to);
+  const inputs = step ? inputsFor(step.kind, byOf(step)) : undefined;
+  if (inputs && !inputs.length) return doc;
+  const port = into ?? (inputs ? (inputs.find((p) => canWire(doc, from, to, p.id))?.id ?? inputs[0].id) : ONE_INPUT);
   if (!canWire(doc, from, to, port)) return doc;
   const was = wireInto(doc, to, port);
   if (was && JSON.stringify(was.from) === JSON.stringify(from)) return doc;
