@@ -48,7 +48,7 @@ describe("an energy diagram", () => {
       "P",
       [Number((0.02 * KCAL).toFixed(3)), Number((0.04 * KCAL).toFixed(3)), 0],
       [[0, 1], [1, 2]],
-      [{ count: 2, why: "lines naming no other level (Q)" }],
+      [{ count: 2, why: "lines naming no other level (Q)", rows: ["Connects, row 3", "Connects, row 4"] }],
     ]);
     expect(diagramOf(RTP, {}, readTable("a,b\nR,P\n"))).toEqual({ why: 'Connects takes a table with columns "from" and "to"' });
   });
@@ -88,7 +88,8 @@ describe("an energy diagram", () => {
         ]),
       ),
     );
-    expect([d.levels[1].lowestOf, d.left]).toEqual([1, [{ count: 1, why: 'of "TS" with no energy' }]]);
+    // (named by its entry, as a chart names a row it leaves)
+    expect([d.levels[1].lowestOf, d.left]).toEqual([1, [{ count: 1, why: 'of "TS" with no energy', rows: ["molecule:2#0"] }]]);
   });
 
   it("names a level by its title, else its name, else its group", () => {

@@ -55,6 +55,7 @@ export function chartOfTable(table: Table, x?: string, y?: string): ChartValue |
     c.kind === "number" ? { name: c.name, unit: c.unit, ...(c.by ? { by: c.by } : {}), ...(c.at ? { at: c.at } : {}) } : { name: c.name, unit: "none" };
   const entryColumn = table.columns.findIndex((c) => c.kind === "entry");
   const whatColumn = table.columns.findIndex((c) => c.kind === "text" && c.name === WHAT_COLUMN);
+  const named = rowNamer(table);
   const points: ChartPoint[] = [];
   const noX: string[] = [];
   const noY: string[] = [];
@@ -66,15 +67,35 @@ export function chartOfTable(table: Table, x?: string, y?: string): ChartValue |
     const entry = entryColumn >= 0 ? r[entryColumn] : null;
     const is = whatColumn >= 0 ? r[whatColumn] : null;
     if (!okX || !okY) {
-      // (named as the table names it: its entry and what it is, or its row)
-      const named = typeof entry === "string" ? (typeof is === "string" ? `${entry} (${is})` : entry) : `row ${row + 1}`;
-      (okX ? noY : noX).push(named);
+      (okX ? noY : noX).push(named(row));
       return;
     }
     points.push({ x: vx as number, y: vy as number, row, ...(typeof entry === "string" ? { entry } : {}), ...(typeof is === "string" ? { is } : {}) });
   });
   const left = [...(noX.length ? [{ count: noX.length, why: `with no ${px.c.name}`, rows: noX }] : []), ...(noY.length ? [{ count: noY.length, why: `with no ${py.c.name}`, rows: noY }] : [])];
   return { kind: "points", x: axis(px.c), y: axis(py.c), points, left };
+}
+
+/** How a row left out is named (`ChartLeft.rows`): as the table names it - its entry and what it is (`WHAT_COLUMN`) - or by its row, from 1. */
+export function rowNamer(table: Table): (row: number) => string {
+  const entryColumn = table.columns.findIndex((c) => c.kind === "entry");
+  const whatColumn = table.columns.findIndex((c) => c.kind === "text" && c.name === WHAT_COLUMN);
+  return (row) => {
+    const entry = entryColumn >= 0 ? table.rows[row][entryColumn] : null;
+    const is = whatColumn >= 0 ? table.rows[row][whatColumn] : null;
+    return typeof entry === "string" ? (typeof is === "string" ? `${entry} (${is})` : entry) : `row ${row + 1}`;
+  };
+}
+
+/** What a chart left out, as a workspace's file keeps it, read back: each count kept; their names where they read, one for each. */
+export function leftIn(v: unknown): ChartLeft[] {
+  return Array.isArray(v)
+    ? (v as { count?: unknown; why?: unknown; rows?: unknown }[]).flatMap((l) =>
+        Number.isInteger(l?.count) && (l.count as number) > 0 && typeof l.why === "string"
+          ? [{ count: l.count as number, why: l.why, rows: Array.isArray(l.rows) && l.rows.length === l.count && l.rows.every((r) => typeof r === "string") ? (l.rows as string[]) : [] }]
+          : [],
+      )
+    : [];
 }
 
 /**
@@ -124,13 +145,5 @@ export function chartIn(v: unknown): ChartValue | undefined {
     if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y) || !Number.isInteger(p.row) || p.row! < 0) return undefined;
     points.push({ x: p.x!, y: p.y!, row: p.row!, ...(typeof p.entry === "string" ? { entry: p.entry } : {}), ...(typeof p.is === "string" ? { is: p.is } : {}) });
   }
-  // (rows left: each count kept; their names where they read, one for each)
-  const left = Array.isArray(c.left)
-    ? (c.left as { count?: unknown; why?: unknown; rows?: unknown }[]).flatMap((l) =>
-        Number.isInteger(l?.count) && (l.count as number) > 0 && typeof l.why === "string"
-          ? [{ count: l.count as number, why: l.why, rows: Array.isArray(l.rows) && l.rows.length === l.count && l.rows.every((r) => typeof r === "string") ? (l.rows as string[]) : [] }]
-          : [],
-      )
-    : [];
-  return { kind: "points", x, y, points, left };
+  return { kind: "points", x, y, points, left: leftIn(c.left) };
 }

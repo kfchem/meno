@@ -1,7 +1,7 @@
 import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
-import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartPoint, type ChartValue } from "../../../../lib/chart";
+import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
 import { diagramSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
 import { CHART_PX } from "./look";
 
@@ -75,6 +75,10 @@ export function NumberBody({ number }: { number: NumberValue }) {
     </div>
   );
 }
+
+/** What a chart left out, a line for each why, with what it names (`ChartLeft.rows`): said when its count line is pointed at. A chart's are rows; a diagram's say what they are. */
+const leftSaid = (left: readonly ChartLeft[], rows: boolean) =>
+  left.map((l) => `${l.count}${rows ? ` ${l.count === 1 ? "row" : "rows"}` : ""} ${l.why}${l.rows.length ? `: ${l.rows.join(", ")}` : ""}`).join("\n") || undefined;
 
 /** An axis's label in full: its name and unit, and what worked its numbers out. */
 const labelOf = (a: Axis) => [axisLabel(a), howOf(a)].filter(Boolean).join(" \u00b7 ");
@@ -184,7 +188,7 @@ export function ChartBody({ chart, onPoint, onPointDrag }: { chart: ChartValue; 
       <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: PLOT.top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
         {labelOf(chart.y)}
       </span>
-      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={chart.left.map((l) => `${l.count} ${l.count === 1 ? "row" : "rows"} ${l.why}${l.rows.length ? `: ${l.rows.join(", ")}` : ""}`).join("\n") || undefined}>
+      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={leftSaid(chart.left, true)}>
         {said}
         {!pointed && rowsLeft ? ` (${chart.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}
       </span>
@@ -265,7 +269,7 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
       <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
         {labelOf(diagram.axis)}
       </span>
-      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={diagram.left.map((l) => `${l.count} ${l.why}`).join("\n") || undefined}>
+      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={leftSaid(diagram.left, false)}>
         {said}
       </span>
     </div>

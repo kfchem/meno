@@ -10,7 +10,7 @@
  * of several conformers stands at its lowest, and says of how many and
  * which.
  */
-import { axisIn, type Axis } from "./chart";
+import { axisIn, leftIn, rowNamer, type Axis, type ChartLeft } from "./chart";
 import type { Table, TableColumn } from "./table";
 import { factor, isUnit, sameDimension } from "./units";
 
@@ -26,7 +26,8 @@ export type DiagramValue = {
   levels: DiagramLevel[];
   /** The lines drawn, each from one level to another, by their places in `levels`. */
   links: [number, number][];
-  left: { count: number; why: string }[];
+  /** What was left out, by why: each conformer with no value named by its row (as a chart names one), each line by its row of *Connects*. */
+  left: ChartLeft[];
 };
 
 /** A quantity's symbol, where an axis names it by one: an electronic energy is E. */
@@ -73,14 +74,15 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
   const numberAt = at("number");
 
   // (each level: its rows with a value, its lowest - in the order the levels first come)
-  type Gathered = { name: string; values: { v: number; row: number }[]; without: number };
+  type Gathered = { name: string; values: { v: number; row: number }[]; without: string[] };
   const gathered = new Map<string, Gathered>();
+  const named = rowNamer(table);
   table.rows.forEach((r, row) => {
     const name = levelOf(r);
-    const g = gathered.get(name) ?? { name, values: [], without: 0 };
+    const g = gathered.get(name) ?? { name, values: [], without: [] };
     const v = r[j];
     if (typeof v === "number" && Number.isFinite(v)) g.values.push({ v, row });
-    else g.without++;
+    else g.without.push(named(row));
     gathered.set(name, g);
   });
   const levels = [...gathered.values()];
@@ -109,7 +111,7 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
     };
   });
   // (a conformer of a level with no value, where others have one: counted)
-  const left = levels.flatMap((g) => (g.without ? [{ count: g.without, why: `of ${g.name ? `"${g.name}"` : "a level"} with no ${quantity}` }] : []));
+  const left: ChartLeft[] = levels.flatMap((g) => (g.without.length ? [{ count: g.without.length, why: `of ${g.name ? `"${g.name}"` : "a level"} with no ${quantity}`, rows: g.without }] : []));
 
   // (the lines: as the table of what connects says, each row naming two levels; with none, each level to the next)
   const links: [number, number][] = [];
@@ -119,18 +121,18 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
     if (from < 0 || to < 0) return { why: 'Connects takes a table with columns "from" and "to"' };
     const index = new Map(out.map((l, k) => [l.name, k]));
     const unnamed = new Set<string>();
-    let missed = 0;
-    for (const r of connects.rows) {
+    const missed: string[] = [];
+    for (const [k, r] of connects.rows.entries()) {
       const a = index.get(String(r[from] ?? ""));
       const b = index.get(String(r[to] ?? ""));
       if (a == null || b == null || a === b) {
-        missed++;
+        missed.push(`Connects, row ${k + 1}`);
         for (const x of [r[from], r[to]]) if (!index.has(String(x ?? ""))) unnamed.add(String(x ?? ""));
         continue;
       }
       links.push([a, b]);
     }
-    if (missed) left.push({ count: missed, why: `line${missed === 1 ? "" : "s"} naming no other level${unnamed.size ? ` (${[...unnamed].join(", ")})` : ""}` });
+    if (missed.length) left.push({ count: missed.length, why: `line${missed.length === 1 ? "" : "s"} naming no other level${unnamed.size ? ` (${[...unnamed].join(", ")})` : ""}`, rows: missed });
   } else for (let k = 1; k < out.length; k++) links.push([k - 1, k]);
 
   const axis: Axis = { name: deltaOf(quantity), unit: "kcal/mol", ...(column.by ? { by: column.by } : {}), ...(column.at ? { at: column.at } : {}) };
@@ -164,6 +166,5 @@ export function diagramIn(v: unknown): DiagramValue | undefined {
     if (!Array.isArray(k) || k.length !== 2 || !k.every((i) => Number.isInteger(i) && i >= 0 && i < levels.length)) return undefined;
     links.push([k[0], k[1]]);
   }
-  const left = Array.isArray(d.left) ? (d.left as { count?: unknown; why?: unknown }[]).flatMap((l) => (Number.isInteger(l?.count) && (l.count as number) > 0 && typeof l.why === "string" ? [{ count: l.count as number, why: l.why }] : [])) : [];
-  return { kind: "diagram", axis, reference: d.reference, levels, links, left };
+  return { kind: "diagram", axis, reference: d.reference, levels, links, left: leftIn(d.left) };
 }

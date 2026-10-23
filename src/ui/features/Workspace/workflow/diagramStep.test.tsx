@@ -131,12 +131,14 @@ describe("an energy diagram, in its set's frame", () => {
         [0, 1],
         [1, 2],
       ],
-      left: [{ count: 1, why: 'of "TS" with no G' }],
+      left: [{ count: 1, why: 'of "TS" with no G', rows: ["molecule:2#1 (conformer 2 of 3)"] }],
     };
     const html = renderToString(<DiagramBody diagram={d} />).split("<!-- -->").join("");
     expect(html).toContain("ΔG (kcal/mol) · prog · GFN2-xTB · 298.15 K");
     for (const t of [">R<", ">TS<", ">P<", ">0.0<", ">+12.3<", ">−5.1<"]) expect(html).toContain(t);
     expect(html).toContain('3 levels · relative to R · 1 left (1 of &quot;TS&quot; with no G)');
+    // (and what was left named, pointed at)
+    expect(html).toContain('1 of &quot;TS&quot; with no G: molecule:2#1 (conformer 2 of 3)');
     expect(html.match(/stroke-dasharray/g)?.length).toBe(2);
   });
 });
