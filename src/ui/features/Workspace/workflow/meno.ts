@@ -261,24 +261,33 @@ function filtered(entries: readonly SetEntry[], holds: Holds3D, text: string, ma
  * *Filter* on structures drawn (lib/nodes `filter`): each read by its
  * record alone - the properties a step gave it (Descriptors' molecular
  * weight, a model's NLL), each with its unit and what worked it out - the
- * drawing itself not read. Those kept as they came; the rest each with its
- * record saying why it was set aside. One edited since its properties
- * were given has none left to read (workflow/entries `recordNow`): it is
- * counted as such on the line, besides what each condition says of it.
+ * drawing itself not read. Those kept as they came, but for what an
+ * earlier step said of them: kept, none is set aside. The rest each with
+ * its record saying why - after why an earlier step set it aside, where
+ * one did. One edited since its properties were given has none left to
+ * read (workflow/entries `recordNow`): it goes to the rest saying so (its
+ * record's `stale`), counted by that on the line.
  */
 function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all" | "any"): DrawnOutcome {
   const read = conditionsIn(text);
   if ("why" in read) return { ok: false, said: read.why };
-  const out = filter(entries.map(recordAsEntry), { conditions: read.conditions, match });
+  const out = filter(entries.map(recordAsEntry), { conditions: read.conditions, match, unread: (e) => entries[Number(e.id)].record?.stale ?? null });
   if (!out.ok) return out;
-  const back = (es: readonly Entry[]) => es.map((e) => entries[Number(e.id)]);
-  // (each set aside with why, on its record: its other properties as they were)
+  // (kept: its record without the status it came in with - an earlier step's "aside" is not what this one says of it)
+  const kept = out.exits.kept.map((e) => {
+    const was = entries[Number(e.id)];
+    const { status: _status, ...rest } = was.record ?? {};
+    const { record: _record, ...drawn } = was;
+    return Object.keys(rest).length ? { ...drawn, record: rest } : drawn;
+  });
+  // (set aside: why, on its record - after an earlier step's why, where one set it aside or it failed; its properties as they were)
   const aside = out.exits.rest.map((e) => {
     const was = entries[Number(e.id)];
-    return { ...was, record: { ...was.record, status: e.status } };
+    const now = typeof e.status === "object" && "aside" in e.status ? e.status.aside : "";
+    const before = typeof was.record?.status === "object" ? ("aside" in was.record.status ? was.record.status.aside : was.record.status.failed) : "";
+    return { ...was, record: { ...was.record, status: { aside: before ? `${before}; ${now}` : now } } };
   });
-  const edited = entries.filter((e) => e.record?.stale).length;
-  return { ok: true, holds: "structures", kept: back(out.exits.kept), aside, said: `${out.said}${edited ? ` \u00b7 ${plural(edited, "structure")} edited since ${edited === 1 ? "its" : "their"} properties were given, none of them read` : ""}` };
+  return { ok: true, holds: "structures", kept, aside, said: out.said };
 }
 
 /** A structure drawn as Filter reads it, by its place: its record's properties, what it was made from and its status - its drawing no part of it (no structure, no geometry). */

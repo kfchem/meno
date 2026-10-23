@@ -2077,12 +2077,15 @@ it.
   its unit and what worked it out; the drawing itself is not read, and
   Meno has no names of its own on them. A structure edited since its
   properties were given has none left (its record's `of` no longer its
-  structure's: workflow/entries `recordNow`): what each condition says of
-  it is said as of any with no value, and how many were edited is said on
-  the line too ("1 structure edited since its properties were given, none
-  of them read"). Its exits hold structures drawn: those kept as they came,
-  and *The rest* each with its record saying why it was set aside
-  ("not mw < 500 g/mol (612.4 g/mol)"). More than are laid out on the page
+  structure's: workflow/entries `recordNow`): it goes to *The rest*
+  saying so, its conditions not asked, and counted by that on the line
+  ("rest 1 (1: its properties were for the structure before the edit)";
+  lib/nodes `filter`, its `unread`). Its exits hold structures drawn:
+  those kept as they came, but for the status an earlier step gave them -
+  kept, none is set aside, whatever it came in saying; and *The rest* each
+  with its record saying why it was set aside, after an earlier step's
+  why where one gave it ("Same as 2; not mw < 500 g/mol (612.4 g/mol)").
+  More than are laid out on the page
   come in held in their set, and go out so (`LARGE_SET`), as any step's
   structures drawn do.
 - **Its two exits add up to what came in**: those kept, in the order they

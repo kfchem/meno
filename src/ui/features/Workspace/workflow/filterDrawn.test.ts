@@ -96,7 +96,7 @@ describe("a Filter step on structures drawn", () => {
     expect(held(doc, "out", ["tpsa"])).toEqual([[50]]);
   });
 
-  it("names a structure edited since its properties were given: none of them read", () => {
+  it("sets a structure edited since its properties were given aside saying so - none of them read - counted by that on the line", () => {
     let doc = filtering([chloroethane({ mw: mw(64.51) }), chloroethane({ mw: mw(64.51) })], "mw < 500 g/mol");
     // (the second edited on the page: a chlorine made a bromine)
     const set = resultOf(doc, DESCRIPTORS(doc), "out")!;
@@ -104,7 +104,23 @@ describe("a Filter step on structures drawn", () => {
     doc = { ...doc, model: { ...doc.model, atoms: doc.model.atoms.map((a) => (second.has(a.id) && a.el === "Cl" ? { ...a, el: "Br" } : a)) } as Model };
     expect(setMembers(doc, set).records[1]?.stale).toBe(BEFORE_THE_EDIT);
     doc = runStep(doc, FILTER(doc), W);
-    expect(ran(doc)?.said).toBe("1 of 2 entries kept · rest 1 (1: it has no mw) · 1 structure edited since its properties were given, none of them read");
+    expect(ran(doc)?.said).toBe(`1 of 2 entries kept · rest 1 (1: ${BEFORE_THE_EDIT})`);
+    expect(setMembers(doc, resultOf(doc, FILTER(doc), "rest")!).records.map((r) => r?.status)).toEqual([{ aside: BEFORE_THE_EDIT }]);
+  });
+
+  it("keeps a structure without what an earlier step said of it, and sets one aside after an earlier step's why", () => {
+    // (as Enumerate's rest comes: each set aside as the same as another)
+    const aside = (p: Record<string, Property>, why: string): DrawnModel => ({ ...chloroethane(p), record: { properties: p, status: { aside: why } } });
+    const doc0 = filtering([aside({ mw: mw(64.51) }, "Same as 1"), aside({ mw: mw(612.4) }, "Same as 2"), chloroethane({ mw: mw(70) })], "mw < 500 g/mol");
+    const doc = runStep(doc0, FILTER(doc0), W);
+    expect(ran(doc)?.said).toBe("2 of 3 entries kept · rest 1 (1: not mw < 500 g/mol (612.4 g/mol))");
+    const kept = setMembers(doc, resultOf(doc, FILTER(doc), "out")!).records;
+    expect(kept.map((r) => [r?.properties?.mw?.value, r?.status])).toEqual([
+      [64.51, undefined],
+      [70, undefined],
+    ]);
+    const rest = setMembers(doc, resultOf(doc, FILTER(doc), "rest")!).records;
+    expect(rest.map((r) => r?.status)).toEqual([{ aside: "Same as 2; not mw < 500 g/mol (612.4 g/mol)" }]);
   });
 
   it("takes a set held whole (more than are laid out on the page), and holds its own so where it keeps as many", () => {
