@@ -12,7 +12,7 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { compoundLetter, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { compoundLetter, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
@@ -27,7 +27,7 @@ export { frameAt, placeFor } from "./place";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
-import { structuresAsTable } from "./structuresTable";
+import { notFinishedRows, structuresAsTable } from "./structuresTable";
 import type { Table } from "../../../../lib/table";
 
 /**
@@ -133,7 +133,15 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
 function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: string): WorkspaceDocument {
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
-  const table = tableInto(doc, step.id);
+  // (structures drawn come in: seen as a table, a row each (structuresTable) - a point stands on its record's values as results: a row
+  //  failed, or edited since its values were given, refuses the chart, each named, as molecules' do; one set aside is finished, and charted)
+  const from = wireInto(doc, step.id)?.from;
+  const set = from && !tableWired(doc, step.id) ? findSet(doc, from.set) : undefined;
+  const drawn = set && holdsOf(doc, set) === "structures" ? setStructuresTable(doc, set) : null;
+  // (those it shows on the page first, then those it holds off it: these said to be, where named)
+  const notFinished = drawn && set && notFinishedRows(drawn, setMembers(doc, set).structures.length);
+  if (notFinished) return setRan(keepRun(doc, step), step.id, said(false, notFinished));
+  const table = drawn ?? tableInto(doc, step.id);
   if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
   // (molecules come in: a point stands on its entry's values as results - one that failed, by any kind, or whose marks did
   //  not read refuses the chart, each named, as an Energy diagram's levels do: never plotted as if it were one)
@@ -143,7 +151,12 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const o = step.options ?? {};
   const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
   if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));
-  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, chartSaid(chart)));
+  // (and what of the set wired in did not read from its step's files - never charted round unsaid)
+  const wired = from ? findSet(doc, from.set) : undefined;
+  const unread = wired?.unread ?? 0;
+  const noun = wired && holdsOf(doc, wired) === "structures" ? ["structure", "structures"] : ["molecule", "molecules"];
+  const notRead = unread ? ` \u00b7 ${unread} ${unread === 1 ? `${noun[0]} could` : `${noun[1]} could`} not be read and ${unread === 1 ? "is" : "are"} not charted` : "";
+  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, `${chartSaid(chart)}${notRead}`));
 }
 
 /**
