@@ -8,7 +8,7 @@
 import { describe, expect, it } from "vitest";
 import { readStructures } from "../../../lib/io/structures";
 import { emptyWorkspaceDocument, type WorkspaceDocument } from "./document";
-import { exportedDrawn, heldNotWritten, structureFileText, withHeld } from "./fileActions";
+import { exportedDrawn, heldNotWritten, propertiesSaid, structureFileText, withHeld } from "./fileActions";
 import type { Drawn, DrawnModel, DrawnRecord } from "./store/types";
 import { BEFORE_THE_EDIT, numberedRecord, recordHow, recordNumber, recordOn, recordWhy, setMembers } from "./workflow/entries";
 import { resultOf } from "./workflow/flow";
@@ -249,5 +249,27 @@ describe("a workflow's structures drawn, written to an SD file", () => {
   it("writes what is drawn as one record, as before, where no set is selected with it", () => {
     const { doc } = enumerated();
     expect(records(written(doc, [], []))).toHaveLength(1);
+  });
+});
+
+describe("a structure drawn's property named as one of Meno's own items, written to an SD file", () => {
+  it("is written under its name and \"(property)\" - Meno's own item alone under its name - and said so", () => {
+    const { doc, step } = enumerated();
+    const out = resultOf(doc, step, "out")!;
+    // (the first product given a property named "State", as a model might name one)
+    const state = { value: "excited", unit: "none" as const, status: "computed" as const };
+    const given: WorkspaceDocument = {
+      ...doc,
+      sets: doc.sets!.map((b) => (b.id === out.id ? { ...b, members: b.members!.map((m, i) => (i === 0 && "structure" in m ? { ...m, record: { ...m.record, properties: { ...m.record?.properties, State: state } } } : m)) } : b)),
+    };
+    const drawn = { ...given.model, arrows: [], pluses: [], flow: partsOf(given, new Set([out.id]), new Set([step])) } as unknown as Drawn;
+    // (the template drawn first - no record of its own - then the products)
+    const [, first, second] = records(structureFileText(drawn, "/x/w.sdf"));
+    expect(first.items.filter(([n]) => n === "State")).toEqual([["State", "finished"]]);
+    expect(first.items).toContainEqual(["State (property)", "excited"]);
+    expect(second.items.some(([n]) => n === "State (property)")).toBe(false);
+    expect(propertiesSaid(drawn)).toEqual(['1 property written as "State (property)": its name is one of Meno\'s own items.']);
+    // (none named so: nothing said, and the record as before)
+    expect(propertiesSaid({ ...doc.model, arrows: [], pluses: [], flow: partsOf(doc, new Set([out.id]), new Set([step])) } as unknown as Drawn)).toEqual([]);
   });
 });

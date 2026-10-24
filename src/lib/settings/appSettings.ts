@@ -147,6 +147,8 @@ export type UpdateSettings = {
    * it asks once, and after that only when the user turns it on.
    */
   asked: boolean;
+  /** Whether each look for a newer Meno shows its notice in the corner, as every other use of the network does: on unless turned off - the one notice that can be. */
+  notice: boolean;
 };
 
 /** What the plugin that does the checks points out on a structure as it is drawn. */
@@ -168,7 +170,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   style3d: DEFAULT_STYLE_3D_CHOICE,
   network: { offline: false, granted: [] },
   chemistry: { valenceWarnings: true },
-  updates: { asked: false },
+  updates: { asked: false, notice: true },
   options: {},
   abbreviations: [],
   files: { read: {}, also: {} },
@@ -349,7 +351,8 @@ function acceptAbbreviations(raw: unknown): CustomAbbreviation[] {
 
 function acceptUpdates(raw: unknown): UpdateSettings {
   if (typeof raw !== "object" || raw === null) return DEFAULT_APP_SETTINGS.updates;
-  return { asked: (raw as Record<string, unknown>).asked === true };
+  const r = raw as Record<string, unknown>;
+  return { asked: r.asked === true, notice: r.notice !== false };
 }
 
 function acceptChemistry(raw: unknown): ChemistrySettings {

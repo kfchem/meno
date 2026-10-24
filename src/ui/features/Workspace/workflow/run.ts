@@ -12,12 +12,12 @@ import { partOf } from "../chem/cleanUp";
 import { levelOf } from "../../../../lib/calc/output";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { turnAfter, turnOver } from "../utils/align3d";
-import { compoundLetter, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
+import { calcProperties, compoundLetter, entryOfSet, holdsOf, setMembers, setMolecules, setEntries, frameXyz, framesOf, entriesIn, keptOf, keptAlike, imaginaryOf, marksOf, unlikeMade, structureMember, recordNumber, recordOn, LARGE_SET, plainAmong, keptKnown, type DrawnEntry, type Frame, type SetEntry } from "./entries";
 import { chipWide, hasChip } from "./selectionSet";
 export { chipWide };
 import { findSet, inputKey, inputOf, moleculesSeen, resultOf, stateOf, stepOf, stepsBefore, tableInto, tableWired, wireInto, wiresInto } from "./flow";
 import { chartOfTable, chartSaid, type ChartValue } from "../../../../lib/chart";
-import { diagramOf, diagramSaid, levelNamer, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramOf, diagramSaid, levelNamer, type DiagramValue, type RowCompound } from "../../../../lib/energyDiagram";
 import { asideExit, exitsOf, kindInfo, MENO_DOES, ONE_INPUT, readsAsTable, takenBy, restHolds, type Holds3D, type SetKind, type StepKind, type ValueKind, isSetKind } from "./kinds";
 import { inputsFor, takesBy, takesNothingBy } from "./doers";
 import { BETWEEN, SET_PAD, SET_TOP, CHIP, drawnShown, PX, SUMMARY_PX } from "./look";
@@ -27,7 +27,8 @@ export { frameAt, placeFor } from "./place";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
-import { structuresAsTable } from "./structuresTable";
+import { notFinishedRows, structuresAsTable } from "./structuresTable";
+import { diagramNeeds } from "./diagramOptions";
 import type { Table } from "../../../../lib/table";
 
 /**
@@ -95,7 +96,8 @@ export function ranAs(doc: WorkspaceDocument, id: number, outcome: Outcome, key:
 /**
  * Why a step cannot run as things are, whoever does it: the step before it
  * failed this time; nothing comes into it; what does is not what it takes;
- * nothing added does it. None, where it can.
+ * nothing added does it; what it comes to needs of its options (an Energy
+ * diagram's reference: diagramOptions `diagramNeeds`). None, where it can.
  */
 export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): string | null {
   // (not on what a step before it gave on an earlier run: it failed this time - before any of its inputs)
@@ -120,6 +122,7 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
   if (first && !takenBy(first.takes, holds)) return `${first.name} takes ${first.takes.map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!first && !takesBy(step.kind, by, holds)) return `Takes ${kindInfo(step.kind).takes.filter((s) => takesBy(step.kind, by, s)).map((s) => SET_NAMES[s]).join(" or ")}`;
   if (!by) return "Nothing added does this step";
+  if (step.kind === "energy-diagram") return diagramNeeds(doc, step) ?? null;
   return null;
 }
 
@@ -133,7 +136,15 @@ export function whyNot(doc: WorkspaceDocument, step: WorkflowStep, by: string): 
 function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: string): WorkspaceDocument {
   const as = { kind: step.kind, ...(step.options ? { options: step.options } : {}) };
   const said = (ok: boolean, text: string) => ({ at: w.now, ok, said: text, input: key, ...as });
-  const table = tableInto(doc, step.id);
+  // (structures drawn come in: seen as a table, a row each (structuresTable) - a point stands on its record's values as results: a row
+  //  failed, or edited since its values were given, refuses the chart, each named, as molecules' do; one set aside is finished, and charted)
+  const from = wireInto(doc, step.id)?.from;
+  const set = from && !tableWired(doc, step.id) ? findSet(doc, from.set) : undefined;
+  const drawn = set && holdsOf(doc, set) === "structures" ? setStructuresTable(doc, set) : null;
+  // (those it shows on the page first, then those it holds off it: these said to be, where named)
+  const notFinished = drawn && set && notFinishedRows(drawn, setMembers(doc, set).structures.length);
+  if (notFinished) return setRan(keepRun(doc, step), step.id, said(false, notFinished));
+  const table = drawn ?? tableInto(doc, step.id);
   if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
   // (molecules come in: a point stands on its entry's values as results - one that failed, by any kind, or whose marks did
   //  not read refuses the chart, each named, as an Energy diagram's levels do: never plotted as if it were one)
@@ -143,7 +154,12 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const o = step.options ?? {};
   const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
   if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));
-  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, chartSaid(chart)));
+  // (and what of the set wired in did not read from its step's files - never charted round unsaid)
+  const wired = from ? findSet(doc, from.set) : undefined;
+  const unread = wired?.unread ?? 0;
+  const noun = wired && holdsOf(doc, wired) === "structures" ? ["structure", "structures"] : ["molecule", "molecules"];
+  const notRead = unread ? ` \u00b7 ${unread} ${unread === 1 ? `${noun[0]} could` : `${noun[1]} could`} not be read and ${unread === 1 ? "is" : "are"} not charted` : "";
+  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, `${chartSaid(chart)}${notRead}`));
 }
 
 /**
@@ -169,11 +185,36 @@ function diagramRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key:
   if (joined && !connects) return setRan(keepRun(doc, step), step.id, said(false, "Connects holds no table"));
   const o = step.options ?? {};
   const text = (v: unknown) => (typeof v === "string" ? v : undefined);
-  const d = diagramOf(levels, { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}) }, connects ?? undefined);
+  const d = diagramOf(
+    levels,
+    { ...(text(o.quantity) ? { quantity: text(o.quantity) } : {}), ...(text(o.reference) ? { reference: text(o.reference) } : {}), ...(text(o.levels) ? { levels: text(o.levels) } : {}) },
+    connects ?? undefined,
+    rowCompounds(levels, seen.entries),
+  );
   if ("why" in d) return setRan(keepRun(doc, step), step.id, said(false, d.why));
   // (each level with the imaginary frequencies of the entry it stands at: said, not judged)
   const withFrequencies = { ...d, levels: d.levels.map((l) => ({ ...l, lowest: { ...l.lowest, imaginary: imaginaryOf(seen.entries[l.lowest.row]) } })) };
   return setRan(placeChart(keepRun(doc, step), step, withFrequencies), step.id, said(true, diagramSaid(d)));
+}
+
+/**
+ * What each row of molecules seen as a table is, as an energy diagram's
+ * level sums it (lib/energyDiagram `RowCompound`): its compound - its
+ * constitution (the table's), and the charge and spin in use, given or as
+ * its atoms say them (`entryOfSet`) - its atoms' elements, and its charge.
+ */
+function rowCompounds(table: Table, entries: readonly SetEntry[]): RowCompound[] {
+  const at = table.columns.findIndex((c) => c.name === "constitution");
+  return entries.map((e, k) => {
+    const species = entryOfSet(e, String(k)).species;
+    const charge = species?.charge ?? e.atoms.reduce((n, a) => n + (a.charge ?? 0), 0);
+    return {
+      key: `${String(table.rows[k][at])}|${charge}|${species?.multiplicity ?? ""}`,
+      elements: e.atoms.map((a) => a.el),
+      charge,
+      ...(species ? { multiplicity: species.multiplicity } : {}),
+    };
+  });
 }
 
 /** `doc` with a chart a step made in its result set: the set it made before - emptied of what it held - or one made to the right of it, as large as a chart is drawn. */
@@ -380,7 +421,9 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   // (of molecules in 3D, molecules in 3D: no kind's second exit gives structures drawn of them)
   const asideHolds = (restHolds(kind, outcome.holds) ?? outcome.holds) as Holds3D;
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
-  return { molecules: moleculesOf(outcome), rest, holds: outcome.holds };
+  // (structures drawn it could not make in 3D - Conformers' - in its aside exit's set as they came: there to be followed, and wired on)
+  const asideDrawn = "asideDrawn" in outcome && outcome.asideDrawn?.length ? { drawn: { made: [], rest: outcome.asideDrawn.map(drawnModel) } } : {};
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -453,7 +496,8 @@ export function placeResults(
     return aside ? fillDrawn(doc, step, aside.id, results.drawn?.rest ?? [], results.drawn?.core, restUnread) : doc;
   }
   doc = keepExitsUnder(fillExit(doc, step, first.id, made, holds, unread, w, turns), step);
-  // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on)
+  // (what it set aside, in its aside exit's set: counted and in plain view, and it can be wired on - structures drawn it could not make in 3D as they came)
+  if (aside && results.drawn?.rest.length) return fillDrawn(doc, step, aside.id, results.drawn.rest, undefined, restUnread);
   if (aside) doc = fillExit(doc, step, aside.id, rest, restHolds(step.kind, holds) ?? holds, restUnread, w);
   return doc;
 }
@@ -797,7 +841,7 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
 /** The imaginary frequencies an entry was judged to have: its calculation's verdict - one a program step just made - else its own. */
 const imaginaryOfEntry = (e: SetEntry): number[] | undefined => (e as Worked).calc?.imaginary ?? e.imaginary;
 
-function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
+function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   // (the shares a step worked out - Meno's Populations - else those the program that found them gave)
   const share = new Map(outcome.kept.map((e, i) => [e, outcome.shares?.[i] ?? (e as Worked).share]));
@@ -836,8 +880,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
     const shares = alike && g.every((e) => share.get(e) != null) ? g.map((e) => share.get(e)!) : undefined;
     // (each one's degeneracy, where all said one and one is more than one: what a Boltzmann weight of the set counts in)
     const degeneracies = g.every((e) => e.degeneracy != null) && g.some((e) => e.degeneracy !== 1) ? g.map((e) => e.degeneracy!) : undefined;
-    // (each conformer's properties, as it came - an empty map where it had none)
-    const properties = g.some((e) => e.properties) ? g.map((e) => e.properties ?? {}) : undefined;
+    // (each conformer's properties, as it came, and what its own calculation read - its free energy, its vibrations - which
+    //  the molecule's one calculation below cannot keep for each (entries `calcProperties`): an empty map where it had none)
+    const carried = g.map((e) => ({ ...e.properties, ...calcProperties(e) }));
+    const properties = carried.some((p) => Object.keys(p).length) ? carried : undefined;
     // (what the calculation was, where a program worked them out - each conformer's results its own, not the
     //  compound's - only where all were made alike, and of what they keep, what all keep alike: else no
     //  calculation, nor energies of different calculations in one list. Meno's As conformers refuses such a set
@@ -853,8 +899,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       ...(degeneracies ? { degeneracies } : {}),
       ...(properties ? { properties } : {}),
       ...(g.some((e) => e.mirror) ? { mirrors: g.map((e) => (e.mirror ? [...e.mirror] : null)) } : {}),
-      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
-      ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
+      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's; but a
+      //  search's results, which programs conformersWorked keeps with the first, are of its run, the compound's: how it
+      //  took conformers as one, as its program said - kept)
+      ...(calc ? { calc: { ...calc, results: search ? calc.results : undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),

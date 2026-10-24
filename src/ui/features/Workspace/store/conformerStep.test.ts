@@ -6,6 +6,8 @@
  * configuration never chosen for it; and the search is the one *3D structures* makes,
  * with the options chosen in Settings, Chemistry, on its 3D card.
  */
+import { openWhy } from "./slices/stepRuns";
+import { stereoOpenOf } from "../chem/fromSmiles";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 
@@ -16,7 +18,7 @@ const asked: { molblock: string; options: Record<string, unknown> }[] = [];
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
  * stereo open, by what they hold - methanol, or every one.
  */
-const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { isomers?: number; cumulenes?: number[]; free?: boolean } };
+const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; cumulenes?: number[]; cumulated?: number[][]; free?: boolean } };
 /** Whether a molblock is methanol's, C and O. */
 const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
 /** What a held request is let go with: the worker stopped. */
@@ -42,7 +44,7 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
         // (what a structure's drawing leaves open: a stereocentre, here, where it is said to)
         if (op === "open_stereo") {
           const open = worker.open === "all" || (worker.open === "methanol" && methanol(readMolfile(payload.molblock)!));
-          return open ? { atoms: [0], bonds: [], isomers: 2, cumulenes: [], free: false, ...worker.openAs } : { atoms: [], bonds: [], isomers: 1, cumulenes: [], free: false };
+          return open ? { atoms: [0], bonds: [], isomers: 2, cumulenes: [], cumulated: [], free: false, ...worker.openAs } : { atoms: [], bonds: [], isomers: 1, cumulenes: [], free: false };
         }
         if (op !== "conformers") throw new Error(`no ${op} here`);
         asked.push(payload);
@@ -77,7 +79,8 @@ vi.mock("../../../../lib/roles/worker", async (actual) => ({
 
 import { connectStoreToDocument, createEditorStore } from ".";
 import { createWorkspaceDocument } from "../document";
-import type { Atom, DrawnRecord } from "./types";
+import type { Atom, Drawn, DrawnRecord } from "./types";
+import { structureFileText } from "../fileActions";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { useReaders } from "../../../../lib/calc/workers";
 import { PLUGINS } from "../../../../lib/calc/catalog";
@@ -167,6 +170,26 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
       [[1, "g/mol"]],
       [[3, "g/mol"]],
     ]);
+  });
+
+  it("writes what was worked out of each structure drawn into an SD file with each of its conformers, as its record says it", async () => {
+    const record = (v: number): DrawnRecord => ({
+      properties: {
+        nll: { value: v, unit: "none", status: "computed" },
+        mw: { value: 18.015 + v, unit: "g/mol", status: "computed" },
+        logp: { value: 0, unit: "none", status: { notApplicable: "not defined for a lone ion" } },
+        "made_from.nll": { value: 40 + v, unit: "none", status: "computed" },
+      },
+    });
+    const { st } = await searched(undefined, [record(1), record(2), record(3)]);
+    const made = st().molecules3d.filter((m) => m.conformerSet);
+    const text = structureFileText({ atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: made } as unknown as Drawn, "/x/w.sdf", { frames: "all" });
+    const records = text.split("$$$$\n").filter(Boolean);
+    expect(records).toHaveLength(2);
+    // (each conformer's own structure's values, the number worked out with its unit, the one not worked out saying why)
+    expect(records[0]).toContain("> <nll>\n1\n\n> <mw (g/mol)>\n19.015\n\n> <logp>\nnot applicable: not defined for a lone ion\n\n> <made_from.nll>\n41\n\n");
+    expect(records[1]).toContain("> <nll>\n3\n\n");
+    expect(records[1]).not.toContain("> <nll>\n1\n");
   });
 
   it("makes the others where one cannot be made, and says which by its place - never in the library's words", async () => {
@@ -265,7 +288,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     );
   });
 
-  it("fails where every structure is a lone ion, saying why", async () => {
+  it("makes none where every structure is a lone ion - each in its Failed exit as it came, saying why", async () => {
     const doc = createWorkspaceDocument();
     doc.edit("held", (d) => ({ ...d, sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [{ atoms: [{ id: 1, el: "Na", x: 0, y: 0, r: 0.9, charge: 1 }], bonds: [] }] as never }], nextWorkflowId: 901 }));
     const store = createEditorStore(doc);
@@ -275,7 +298,10 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     st().connect({ set: 900 }, step);
     await st().runStep(step);
     expect(asked).toEqual([]);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1 of 1 left out: one atom alone has no 3D structure" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structure 1 of 1 left out: one atom alone has no 3D structure$/) });
+    const failed = st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!;
+    expect(failed.made?.holds).toBe("structures");
+    expect([...(failed.members ?? []), ...(failed.drawnCollection ?? [])]).toHaveLength(1);
   });
 
   it("says one of which none was made as one not made", async () => {
@@ -317,12 +343,36 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
   });
 
-  it("fails where every structure leaves stereo open, saying so - nothing made, no conformer asked for", async () => {
+  it("makes none where every structure leaves stereo open - no conformer asked for - each in its Failed exit as it came, saying what to put before it", async () => {
     worker.open = "all";
-    const { step, sets } = await searched();
+    const { step, st } = await searched();
     expect(asked).toHaveLength(0);
-    expect(step.ran).toMatchObject({ ok: false, said: "Structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all" });
-    expect(sets).toBe(1);
+    expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all$/) });
+    const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+    expect(failed.made?.holds).toBe("structures");
+    expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toEqual(Array(3).fill({ failed: "1 stereocentre not specified: put Stereoisomers before Conformers" }));
+  });
+
+  it("sets aside, in its Failed exit, one whose stereo is left open and one it could not make, each as it came - its record with it - and makes the others", async () => {
+    // (a propenyl's double bond left open, say: its E or Z not drawn - the stand-in says its first structure, methanol, leaves one open)
+    worker.open = "methanol";
+    worker.openAs = { atoms: [], bonds: [0], isomers: 2 };
+    const nll = { value: 21.5, unit: "none" as const, status: "computed" as const };
+    const { step, st } = await searched(undefined, [{ properties: { nll } }, { properties: { nll } }, { properties: { nll } }]);
+    expect(step.ran).toMatchObject({ ok: true });
+    const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+    expect(failed.made?.holds).toBe("structures");
+    // (the one left open, and the one the stand-in cannot make - each as it came, its record with it, saying why; the water, made, not among them)
+    // (failed, each: no result to stand on - a table says so, "state = finished" leaves it)
+    const records = (failed.members ?? []).map((m) => ("structure" in m ? m.record : undefined));
+    expect(records.map((r) => (r?.status && typeof r.status === "object" && "failed" in r.status ? r.status.failed : null)).sort()).toEqual(["1 double bond not specified: put Stereoisomers before Conformers", "could not be made in 3D"]);
+    for (const r of records) expect(r?.properties).toEqual({ nll });
+    // (and it can be wired on: into Stereoisomers, which takes structures drawn)
+    const stereo = st().addStep("stereoisomers", "rdkit", 400, 0);
+    st().connect({ set: failed.id }, stereo);
+    expect(st().wires.some((w) => w.to.step === stereo && w.from.set === failed.id)).toBe(true);
+    // (none of those made set aside: each of the others has its conformers)
+    expect(st().sets.find((b) => b.made?.step === step.id && b.made.exit === "out")!.members!.length).toBeGreaterThan(0);
   });
 
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {
@@ -358,5 +408,25 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(partsLeft(3, "Na+ and Cl\u2212", 0)).toBe("structure 3: its Na+ and Cl\u2212 left out");
     expect(partsLeft(1, undefined, 1)).toBe("structure 1: its 1 other part left out");
     expect(partsLeft(2, "Cl\u2212", 2)).toBe("structure 2: its Cl\u2212 and 2 other parts left out");
+  });
+});
+
+describe("the stereo a structure leaves open, counted once each", () => {
+  it("says an allene's cumulated bonds, named among its double bonds too, as one axis - never as double bonds and axes both", () => {
+    // (penta-2,3-diene, CC=C=CC: bonds 1 and 2 double, cumulated, both named among the bonds left open - one run)
+    expect(openWhy(stereoOpenOf({ atoms: [], bonds: [1, 2], cumulated: [[1, 2]] }))).toBe("1 axis not specified: put Stereoisomers before Conformers");
+  });
+
+  it("says a cumulene of three as one double bond, two allenes apart as two axes, and a plain double bond beside them as one", () => {
+    expect(openWhy(stereoOpenOf({ atoms: [], bonds: [1, 2, 3], cumulated: [[1, 2, 3]] }))).toBe("1 double bond not specified: put Stereoisomers before Conformers");
+    expect(openWhy(stereoOpenOf({ atoms: [3], bonds: [1, 2, 6, 7, 11], cumulated: [[1, 2], [6, 7]] }))).toBe("1 stereocentre, 1 double bond and 2 axes not specified: put Stereoisomers before Conformers");
+  });
+
+  it("says the record of an allene drawn without its axis as one axis open", async () => {
+    worker.open = "methanol";
+    worker.openAs = { atoms: [], bonds: [0, 1], isomers: 1, cumulenes: [0, 1], cumulated: [[0, 1]] };
+    const { step, st } = await searched();
+    const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+    expect((failed.members ?? []).map((m) => ("structure" in m ? m.record?.status : null))).toContainEqual({ failed: "1 axis not specified: put Stereoisomers before Conformers" });
   });
 });

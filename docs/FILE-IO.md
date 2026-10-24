@@ -39,7 +39,7 @@ built* below.
 
 | Way in | Kind decided by | Read by, where | Becomes |
 | --- | --- | --- | --- |
-| **Open** (Cmd/Ctrl+O; `<input type=file>`, `App.tsx`) | `openedAs` (`ui/views/openFile.ts`) tells a kind from text, from the extension, `detectFormat` and `outputKindOf`; the canvas then decides again (`processFileContent`, `Workspace/utils/io.ts`) | see the formats below | added to the workspace in front as a drop adds it (`ui/views/files.ts`, `openFilesAt`), in free space near the middle of the view (`utils/freePlace.ts`: clear of all on the page, a workflow's sets and steps' cards too), one step to undo - only a `.meno` opens a tab of its own (the maintainer, 2026-10-13), untouched, beside the workspace in front where other files are opened with it; one that cannot be read says so there, and no tab is made; text, a text in its column (`ui/views/texts.ts`). With no workspace in front (Settings, say), the one last in front is brought forward; with none at all, a canvas is opened for it |
+| **Open** (Cmd/Ctrl+O; `<input type=file>`, `App.tsx`) | `openedAs` (`ui/views/openFile.ts`) tells a kind from text, from the extension, `detectFormat` and `outputKindOf`; the canvas then decides again (`processFileContent`, `Workspace/utils/io.ts`) | see the formats below | added to the workspace in front as a drop adds it (`ui/views/files.ts`, `openFilesAt`), in free space near the middle of the view (`utils/freePlace.ts`: clear of all on the page, a workflow's sets and steps' cards too, and each molecule in 3D's frames chip under it and notes over it, `shownBeside`), one step to undo. A molecule in 3D a file brings is first seen along its principal axes (2026-10-24, `utils/align3d` `principalTurn`, set as it is added: modelSlice `shownTurns`) - its longest extent across the screen, its least towards the viewer: HCN side-on, not end-on as one ball, a planar molecule face-on - its coordinates as the file has them, only the view turned; one tied to a drawing as the drawing lies. The same molecule is always seen the same way, whatever noise its coordinates carry: each axis pointing the way the lowest-numbered atom off it lies, and a symmetric top's axes (benzene, methane: their spread alike two or three ways, within 2%) taken through the lowest-numbered atoms off the rest. *Reset turn* goes back to that first view. An undo of a file opened over the canvas puts the molecules it replaced back turned as they were - by hand, or as first seen - and a redo the file's own (the turns go with the step: store/turnJournal) - only a `.meno` opens a tab of its own (the maintainer, 2026-10-13), untouched, beside the workspace in front where other files are opened with it; one that cannot be read says so there, and no tab is made; text, a text in its column (`ui/views/texts.ts`). With no workspace in front (Settings, say), the one last in front is brought forward; with none at all, a canvas is opened for it |
 | **A file dropped** on the canvas (`dropAppend`, `useStructureEvents.ts`) | the extension first (`STRUCTURE_FILE`), to know whether to look at the drag's clipboard flavours; then as Open | as Open; a `.meno` opened as Open opens it, in a tab of its own (the maintainer, 2026-10-12) | added to the page; a `.meno`, a tab; text (`opensAsText`), to the column. While it is read, a small mark turns where it was dropped - coming after a moment, so that a quick one shows none - and fades as what it brings is placed, or as the card saying why not takes its place |
 | **An Office picture or object dragged** in | the drag's flavours, in order: Meno record or embedded object, Mac Office object, GVML, PNG, RXN, MOL (`fromClipboard.ts`); read by Rust (`drag_read`; on Windows an overlay window, `drop.rs`) | the record Meno put in it (EMF comment, PNG text chunk, OLE stream) | pasted |
 | **Paste** (`clipboardActions.ts`) | the clipboard's flavours, in the order above, then plain text that looks like a molfile, then SMILES (`fromClipboard.ts`; Rust `clipboard_read`) | the record; CTfiles in TS; SMILES by RDKit (chem worker) | pasted |
@@ -739,6 +739,21 @@ As this part of step 5 was built (#155, from main beside step 3):
     imaginary frequencies in cm-1 as its calculation gave them
     (`> <Imaginary frequencies (cm-1)>`), `none` where its vibrations were
     worked out and it has none, the item left out where they were not.
+    After them, what else was found of that frame - a model's value, a
+    descriptor, what it was made from (`made_from.nll`) - each under its
+    own name, as a structure drawn's record writes its properties (below):
+    a number worked out with its unit beside its name (`mw (g/mol)`), one
+    not worked out saying why in place of a value. None where the molecule
+    does not hold them one for each frame, and the export says so ("2
+    properties could not be written for ...: they are not one for each
+    frame"). A property named as one of Meno's own items (`Charge`,
+    `Multiplicity`, `Energy (Eh)`, `Failed`, `Imaginary frequencies
+    (cm-1)`, and a record's `State`, `Set aside`, `Stale`, `From`) is
+    written under that name and "(property)", here and in a structure
+    drawn's record, and the export says so: read back, a second `Charge`
+    would be taken for the species. They are written only: opened
+    again, an SD file's items other than `Charge` and `Multiplicity` are
+    not read back into a molecule in 3D.
     Opened again, an SD file's `Charge` and `Multiplicity` are what a
     molecule in 3D was given, its atom block as it is - only where nothing
     speaks against them; each not taken is named ("Part of the file not

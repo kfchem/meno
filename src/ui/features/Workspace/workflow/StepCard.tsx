@@ -10,7 +10,7 @@ import { finished } from "../../../../lib/jobs";
 import type { StepState } from "./flow";
 import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
-import { CARD_H, CARD_W, portDown, PX } from "./look";
+import { CARD_H, CARD_W, PORT_STEP, portDown, PX } from "./look";
 import { clock } from "./programs";
 
 /**
@@ -315,13 +315,13 @@ export default function StepCard(p: StepCardProps) {
         )}
         </AnimatePresence>
       </div>
-      {/* (an input's name, where there is more than one: outside the card, level with its port) */}
+      {/* (an input's name, where there is more than one: outside the card, half a port's step above its port - between its wire, coming in level with the port, and the one above: through neither) */}
       {p.inputs.length > 1 &&
         p.inputs.map((input, k) => (
           <div
             key={`n${input.id}`}
             className="pointer-events-none absolute select-none whitespace-nowrap text-right text-[10px] leading-none text-gh-gray"
-            style={{ right: `calc(100% + 8px)`, top: portDown(k) / PX, transform: "translateY(-50%)" }}
+            style={{ right: `calc(100% + 8px)`, top: (portDown(k) - PORT_STEP / 2) / PX, transform: "translateY(-50%)" }}
           >
             {input.name}
           </div>

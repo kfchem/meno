@@ -8,13 +8,14 @@
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
 import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, freeEnergyOf, madeFrom, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
+import { workedOutAs } from "../../../../lib/nodes/base";
 import { enumerated } from "./enumerate";
 import { combinedSet, measuredSet, speciesSet, taggedSet } from "./structureSteps";
 import { positionIds, substituted } from "./substituents";
 import type { StyleChoice } from "../../../../lib/chem/style";
-import type { SeriesCore } from "../store/types";
+import type { DrawnRecord, SeriesCore } from "../store/types";
 import { kindInfo, optionsOf, type Holds3D, type StepKind } from "./kinds";
 import { rmsd } from "./rmsd";
 import { cappedSaid, SAME_CONFORMER, Sameness } from "./sameConformer";
@@ -31,7 +32,7 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 export type Outcome = Outcome3D | DrawnOutcome;
 /** What a step did on molecules in 3D (`Outcome`). */
 export type Outcome3D =
-  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[] }
   | { ok: false; said: string };
 /** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
 export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string; core?: SeriesCore } | { ok: false; said: string };
@@ -86,7 +87,15 @@ export function runMenoDrawn(kind: StepKind, entries: readonly DrawnEntry[], own
           ? substituted(entries[0].drawn, positionIds(String(options.positions ?? "")), String(options.groups ?? ""), options.combine === "together" ? "together" : "one", style)
           : enumerated(entries[0].drawn, String(options.lists ?? ""), style);
       if (!r.ok) return { ok: false, said: r.problems.join(" \u00b7 ") };
-      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: numberedRecord(m.number, m.how, why) });
+      // (each made from its template: what that was made from, and its values as the template's - `made_from.nll` - never as
+      //  its own; a template drawn on the page has none)
+      const template = entries[0].record;
+      const fromTemplate = (record: DrawnRecord): DrawnRecord => ({
+        ...(template?.from?.length ? { from: template.from } : {}),
+        ...record,
+        properties: { ...record.properties, ...Object.fromEntries(madeFrom(template)) },
+      });
+      const as = (m: (typeof r.made)[number], why?: string) => ({ place: m.number - 1, drawn: m.drawn, record: fromTemplate(numberedRecord(m.number, m.how, why)) });
       // (its valence as it was checked before it ran, where it was: never claimed where it was not)
       // (run with nothing asked first - in another step's run, as one before it: neither its valence nor its configurations left open looked at, and said so)
       const valence = said.length ? said : ["Valence not checked", "Configurations left open not looked for"];
@@ -340,6 +349,50 @@ const NO_ENERGY: Outcome3D = { ok: false, said: "Not every entry has an energy" 
 /** Whether an entry has an energy: one that is a number - NaN or an infinite one is none. */
 const hasEnergy = (e: SetEntry): boolean => e.energy != null && Number.isFinite(e.energy);
 
+/**
+ * The energy a window or shares are worked out on (docs/WORKFLOWS.md,
+ * *Which energy*): the free energy G, where every entry has one (entries
+ * `freeEnergyOf`) and each compound's were all worked out alike - the same
+ * temperature, pressure, solvent, program, method, basis and treatment
+ * (lib/nodes `workedOutAs`) - at `kelvin`, where shares are asked at one;
+ * else the electronic energy, and, where any had a G, why not it. Said
+ * either way: which it was.
+ */
+type Basis = { energy: (e: SetEntry) => number | undefined; free: boolean; words: string };
+function basisOf(entries: readonly SetEntry[], kelvin?: number): Basis {
+  const name = (e: SetEntry) => `${compoundLetter(e.compound)} #${e.number}`;
+  const electronic = (why?: string): Basis => ({
+    energy: (e) => (hasEnergy(e) ? e.energy : undefined),
+    free: false,
+    words: `electronic energies${why ? ` (not free energies: ${why})` : ""}`,
+  });
+  const g = new Map(entries.map((e) => [e, freeEnergyOf(e)]));
+  if (![...g.values()].some(Boolean)) return electronic();
+  const without = entries.find((e) => !g.get(e));
+  if (without) return electronic(`${name(without)} has none`);
+  for (const c of byCompound(entries)) {
+    const first = workedOutAs(g.get(c[0])!);
+    for (const e of c.slice(1)) {
+      const these = workedOutAs(g.get(e)!);
+      const k = these.findIndex(([, v], i) => v !== first[i][1]);
+      if (k >= 0) return electronic(`compound ${compoundLetter(c[0].compound)}'s differ in ${first[k][0]}: ${first[k][1]} (${name(c[0])}) and ${these[k][1]} (${name(e)})`);
+    }
+  }
+  if (kelvin != null) {
+    const off = entries.find((e) => g.get(e)!.at?.kelvin !== kelvin);
+    if (off) {
+      const at = g.get(off)!.at?.kelvin;
+      return electronic(at == null ? `${name(off)}'s G states no temperature` : `${name(off)}'s G is at ${at} K, not ${kelvin} K`);
+    }
+  }
+  const at = g.get(entries[0])!.at?.kelvin;
+  const same = entries.every((e) => g.get(e)!.at?.kelvin === at);
+  // (G given with nothing said of how - no temperature, program, method...: said so, never read as of known conditions)
+  const unsaid = entries.every((e) => workedOutAs(g.get(e)!).every(([, v]) => v === "not stated" || v === "unknown"));
+  const words = `free energies (G${kelvin == null && same && at != null ? `, ${at} K` : ""})${unsaid ? ", conditions not stated" : ""}`;
+  return { energy: (e) => g.get(e)!.value as number, free: true, words };
+}
+
 /** Entries as a part of their compound's conformers (`SetEntry.partOf`). */
 const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? e : { ...e, partOf: true as const }));
 
@@ -351,21 +404,22 @@ const asPart = (g: readonly SetEntry[]): SetEntry[] => g.map((e) => (e.partOf ? 
 function energyWindow(entries: readonly SetEntry[], kcal: number): Outcome3D {
   // (as Populations refuses a temperature it cannot use: a window below 0 would keep nothing, not even the lowest)
   if (!(Number.isFinite(kcal) && kcal >= 0)) return { ok: false, said: "The window must be 0 kcal/mol or more" };
-  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  const basis = basisOf(entries);
+  if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
   // (one that did not converge is no minimum: its energy is where its optimisation stopped. Its imaginary
-  //  frequencies are another matter: they would refuse it where the window is on free energies, which it is not)
-  const unconverged = notAllMinima(entries.filter((e) => e.failed || e.marksUnread));
+  //  frequencies refuse it too where the window is on free energies - a saddle point's G is no minimum's)
+  const unconverged = notAllMinima(basis.free ? entries : entries.filter((e) => e.failed || e.marksUnread));
   if (unconverged) return { ok: false, said: unconverged };
   const kept: SetEntry[] = [];
   const aside: SetEntry[] = [];
   for (const g of byCompound(entries)) {
-    const lowest = least(g.map((e) => e.energy!));
-    const within = g.filter((e) => (e.energy! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9);
+    const lowest = least(g.map((e) => basis.energy(e)!));
+    const within = g.filter((e) => (basis.energy(e)! - lowest) * KCAL_PER_HARTREE <= kcal + 1e-9);
     const out = g.filter((e) => !within.includes(e));
     kept.push(...(out.length ? asPart(within) : within));
     aside.push(...asPart(out));
   }
-  return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept${onesSaid(entries)}` };
+  return { ok: true, holds: "conformers", kept, aside, said: `${kept.length} of ${entries.length} kept, on ${basis.words}${onesSaid(entries)}` };
 }
 
 /** How Duplicates takes a conformer's mirror image, in an achiral molecule: kept apart (the default), or counted in its twin. */
@@ -582,16 +636,17 @@ export function notResults(entries: readonly SetEntry[], name: (k: number) => st
  * and it says so: they are not the compound's populations.
  */
 function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
-  if (!entries.every(hasEnergy)) return NO_ENERGY;
+  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most - and none at no number of kelvins, or infinitely many)
+  if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
+  const basis = basisOf(entries, kelvin);
+  if (!basis.free && !entries.every(hasEnergy)) return NO_ENERGY;
   // (a saddle point's energy weighed as a minimum's would be a population of nothing: refused, naming it)
   const saddle = notAllMinima(entries);
   if (saddle) return { ok: false, said: saddle };
-  // (at 0 K or below there are no shares to give: all would be 0/0, or the highest energy the most - and none at no number of kelvins, or infinitely many)
-  if (!(kelvin > 0 && Number.isFinite(kelvin))) return { ok: false, said: "The temperature must be above 0 K" };
   const shares = new Map<SetEntry, number>();
   for (const g of byCompound(entries)) {
     // (each counted as many times as its conformer search found it alike, where it said: as CREST's own weights are)
-    const w = boltzmann(g.map((e) => e.energy!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
+    const w = boltzmann(g.map((e) => basis.energy(e)!), kelvin, g.every((e) => e.degeneracy != null) ? g.map((e) => e.degeneracy!) : undefined);
     g.forEach((e, i) => shares.set(e, w[i]));
   }
   const groups = byCompound(entries);
@@ -608,8 +663,8 @@ function populations(entries: readonly SetEntry[], kelvin: number): Outcome3D {
     kept: [...entries],
     aside: [],
     shares: entries.map((e) => shares.get(e)!),
-    // (from the electronic energy, which is all a set's entries carry today: said, so that its shares are not read as free energies' shares - the Populations node of lib/nodes weights G)
-    said: `${plural(groups.length, "compound")} at ${kelvin} K, from electronic energies${onesSaid(entries)}${over}`,
+    // (which energy they are of - free energies, or electronic ones and why not free: said, so that the one is never read as the other)
+    said: `${plural(groups.length, "compound")} at ${kelvin} K, from ${basis.words}${onesSaid(entries)}${over}`,
   };
 }
 

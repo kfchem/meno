@@ -66,7 +66,7 @@ import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import AboveGuide from "../../layouts/AboveGuide";
 import NameDialog from "../../layouts/NameDialog";
 import { ErrorBoundary, StoppedCard } from "../../layouts/ErrorBoundary";
-import { flowOf, procedureParts, type FlowParts } from "./workflow/parts";
+import { flowOf, partsBounds, procedureParts, type FlowParts } from "./workflow/parts";
 import { procedureNeeds, proceduresSaved, saveProcedure, suggestedName } from "./workflow/procedures";
 import { pluginWriters, WRITERS, type Writer } from "../../../lib/io/writers";
 import { anyPluginById, WRITER_PLUGINS } from "../../../lib/calc/catalog";
@@ -124,7 +124,7 @@ import {
 } from "../../../lib/doc/shortcuts";
 import { chemWorker, rolePlugin, useChem } from "../../../lib/roles/worker";
 import { stopWorker } from "../../../lib/plugins/process";
-import { useDownloads } from "../../../lib/pyEnv";
+import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 import { roleOptionsRole } from "../../../lib/plugins/roles";
 import { valuesOf } from "../../../lib/options";
 import { useAppSettings } from "../../../lib/settings/appSettings";
@@ -396,6 +396,8 @@ function WorkspaceContent({
   const chem = useChem();
   // (a plugin's files besides its packages, as they come while it is set up)
   const chemShare = useDownloads((s) => (chem.state === "setting-up" ? s[chem.id] : undefined));
+  // (a plugin's kept files read through for their fingerprints, where that takes more than a moment: a model's weights - said, as setting up is)
+  const checkingFiles = useCheckingFiles((s) => Object.values(s)[0]);
   const [chemError, setChemError] = useState<string | null>(null);
   const cleaningNow = useRef(false); // one clean-up at a time, keys included
   const runCleanUp = useCallback(
@@ -1625,7 +1627,7 @@ function WorkspaceContent({
         )}
       </AnimatePresence>
       <AnimatePresence>
-        {active && (chem.state === "setting-up" || chem.state === "starting" || working3d) && (
+        {active && (chem.state === "setting-up" || chem.state === "starting" || working3d || checkingFiles) && (
           <motion.div
             key="working"
             {...RISE}
@@ -1634,12 +1636,12 @@ function WorkspaceContent({
             className={`absolute right-3 bottom-3 z-50 flex items-center gap-2 rounded-full border border-gh-line bg-white/95 shadow-sm text-xs text-gh-gray ${making3d != null && working3d ? "pl-3 pr-1.5 py-1" : "px-3 py-1.5"}`}
           >
             <AnimatePresence mode="wait" initial={false}>
-              <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : "working"} {...FADE} className="block">
+              <motion.span key={chem.state === "setting-up" || chem.state === "starting" ? chem.state : working3d ? "working" : "checking"} {...FADE} className="block">
                 {chem.state === "setting-up"
                   ? `Setting up ${chem.plugin}…${chemShare != null ? ` ${Math.floor(chemShare * 100)}%` : ""}`
                   : chem.state === "starting"
                     ? `Starting ${chem.plugin}…`
-                    : working3d}
+                    : working3d || `Checking ${checkingFiles}'s files…`}
               </motion.span>
             </AnimatePresence>
             {/* (making in 3D: how long, and stopped as the atom map is) */}
@@ -1831,6 +1833,10 @@ function WorkspaceContent({
               // (its port that takes where Quick Add was opened - where the wire was let go)
               const id = st.addStep(kind, by, at.x, at.y + PORT_DOWN);
               if (wire) st.connect(wire, id);
+              // (and brought into view, with the sets it will give, where they are not: put down near the window's edge, or moved lower)
+              const now = store.getState();
+              const box = partsBounds({ sets: now.sets.filter((b) => b.made?.step === id), steps: now.steps.filter((s) => s.id === id), wires: [] });
+              if (box) now.requestShow(box);
             }}
             procedures={quickAdd.wire ? [] : proceduresSaved(procedures).map((p) => ({ id: p.id, name: p.name, needs: procedureNeeds(p.parts) }))}
             onProcedure={(id) => {

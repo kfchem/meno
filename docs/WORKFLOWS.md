@@ -168,7 +168,14 @@ in 3D, arrows, text - and is made of three things:
 They are page items, as an arrow or a molecule in 3D is: they lie on the
 page, at the page's scale, zoom and pan with it, and are saved with it.
 Fit (Ctrl/Cmd+1) takes them in: each set's frame and each step's card,
-closed. Their words, and the chips on the page, go below 75 % (*How it
+closed; each wire as far as it bends out past them - one going back to a
+step on the left loops out either side; and what is drawn over the page
+in HTML - each molecule's frames chip, which may be wider than its set,
+and its notes over it (2026-10-24; components/FitToContent2D, utils/
+fitExtent). A chip is as large as the page draws it at any zoom, so where
+it lies now is where it lies after; the notes are drawn as large as the
+page only between three quarters and half as large again, so how much of
+it they take is worked out at the zoom the fit comes to. Their words, and the chips on the page, go below 75 % (*How it
 looks*): a card then shows its icon and its state's icon alone, a set
 its frame and what it holds.
 
@@ -198,7 +205,14 @@ As Meno's own things look (decided: 15), not as the figures here do:
   about 8 px, they fade out, as a set's name and count do and a card's
   words; what opens for a moment - a card on pointing, a menu, Quick Add -
   stays the screen's size. The R and S beside atoms are the drawing's, not
-  chips.
+  chips. A frames chip opened by a click (2026-10-24) goes down, eased,
+  to half a bond below the foot of the set its molecule is in - over none
+  of the set's other molecules and their chips - and back up as it shuts;
+  opened, and until it is back, it lies over all else on the page, the
+  workflow's ports too, and nothing shows through it (shut, the page
+  shows through a little). Its bars are named over them (*Energy above
+  the lowest, each conformer*), laid on whole device pixels, each as wide
+  as the next; in its line a number is never parted from its unit.
 
 Everything comes and goes as Meno's things do (theme/motion): a set, a
 step and a wire fade in where they are put; a state changes its words
@@ -585,8 +599,40 @@ beside its edge - being drawn over all of it.
 - **Populations**: the same entries, with their populations;
 - where compounds have one conformer each, so that a window or shares
   over them do nothing, *Energy window* and *Populations* say so after
-  their line: "2 of 2 kept · each compound has one conformer", or "1
-  compound has one conformer" where others have more (2026-10-22);
+  their line: "2 of 2 kept, on electronic energies · each compound has
+  one conformer", or "1 compound has one conformer" where others have
+  more (2026-10-22);
+- **Which energy** *Energy window* and *Populations* are on (2026-10-24):
+  the free energy G where every entry has one and each compound's were
+  worked out alike - the same temperature, pressure, solvent, program,
+  method, basis and thermal treatment - and, for *Populations*, at the
+  temperature it is asked; else the electronic energy. The line says
+  which: "3 of 5 kept, on free energies (G, 298.15 K)", "1 compound at
+  298.15 K, from free energies (G)"; where any entry had a G but it was
+  not taken, why not: "from electronic energies (not free energies: a #2
+  has none)", "(... a #1's G is at 298.15 K, not 350 K)", "(... compound
+  a's differ in method: GFN2-xTB (a #1) and GFN1-xTB (a #3))". A G given
+  with nothing of how it was worked out - no temperature, program,
+  method - is said so: "on free energies (G), conditions not stated". On free
+  energies a window refuses a saddle point, as Populations does: its G is
+  no minimum's;
+- **A conformer set keeps each conformer's thermochemistry**
+  (2026-10-24): *Frequencies* on a conformer set runs a job for each, and
+  each conformer keeps what its own job read - its free energy, enthalpy,
+  zero-point energy and correction (`thermo.*`), each at its geometry, by
+  what, at the temperature and solvation the program said, and its
+  vibrations' frequencies - as its frame's properties: the molecule keeps
+  one calculation, not each frame's. Its imaginary frequencies are kept
+  frame by frame, a frame whose vibrations were worked out and has none
+  "none", one never worked out "not computed"; where the program judged
+  none imaginary but its table lists a negative frequency, that one is
+  said - a table with one never reads as none. A program step on them
+  later reads them again, or drops them, and a step that changes the
+  structure or its charge or spin drops them (*Species* says so: "their
+  thermochemistry was dropped"): never carried onto another geometry or
+  species. (Until 2026-10-24 a conformer set dropped them: a Frequencies
+  step on one gave nothing downstream.) The modes' displacements stay
+  with a molecule of one geometry's calculation, not each frame's;
 - **As conformers**: the same entries, as a conformer set.
 
 They are calculation results as Meno knows them: the frames chip,
@@ -710,7 +756,8 @@ anew, whole. Shares a *Populations* step worked out are always shown: it
 says at what temperature, and they are of what it was given - given a
 part, it says that too, for they are not the compound's populations ("1
 compound at 298.15 K, from electronic energies · shares over the 5
-conformers given, part of a search"). (Until
+conformers given, part of a search"), and which energy (*Which energy*,
+above). (Until
 2026-10-21 Meno showed shares worked out again over what these steps
 kept.)
 
@@ -1560,9 +1607,19 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   stereoisomers RDKit does not count. The canvas's *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
   made, and the step's line names those not made by their places
-  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*); where
-  none is made, the step fails, saying so. Until then the first
-  stereoisomer was made without a word.
+  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*). Each
+  structure drawn that is not made - its stereo left open, one atom alone,
+  or one that could not be made - goes to the step's *Failed* exit as it
+  came, its record with it, failed - no result to stand on, so a table
+  says so, a chart refuses it and "state = finished" leaves it - saying
+  why ("1 double bond not specified: put Stereoisomers before
+  Conformers"; what it was set aside for before kept beside it, "earlier:
+  ..."; 2026-10-24): there it can be followed, and wired on, into
+  *Stereoisomers* above all. Its open stereo is counted once each: an
+  allene's cumulated bonds one axis, a cumulene of three one double bond. Where none is
+  made, the step makes none and sets them all aside so. Until 2026-10-22
+  the first stereoisomer was made without a word; until 2026-10-24 those
+  not made were in no set, said on the line alone.
   - **A bridgehead its rings fix is no choice.** Adamantane's, cubane's or
     norbornane's open centres give one stereoisomer that can be made in
     3D (RDKit's enumeration with its embedding tried, seeded by the
@@ -1620,6 +1677,16 @@ Then, of the leftovers the maintainer chose:
   plugin and given back as the output form's `populations`, which a
   conformer set takes as its molecule's shares - what its chip shows -
   in place of Boltzmann's at room temperature from the energies alone.
+- **How CREST took conformers as one, as its run printed it**
+  (2026-10-24): the thresholds CREGEN prints with its sorting - its RMSD
+  threshold (Å), its rotational-constant threshold (a relative
+  difference), its population threshold and its energy window (kcal/mol),
+  each the last value the run printed - are said on the conformer set's
+  frames chip, under *Same conformer (CREGEN)*: never as asked, never a
+  default. One it does not print is not said (CREST 2.12 prints no pair
+  energy threshold). A search's results are of its run, so the conformer
+  set keeps them; a job run on each conformer keeps its own with that
+  conformer, never with the set.
 - **Each conformer's degeneracy, as CREST finds it** (2026-10-13): the
   number of its rotamers alike, from the same table (`degen`), given back
   as the output form's `degeneracies` and kept with the molecule
@@ -1876,8 +1943,8 @@ them again*; the maintainer's rulings of 2026-10-22):
   imaginary frequency, 382.6i cm-1: it is no minimum - take it out first*
   (`notAllMinima`, on `notResults`; any kind of failure from 2026-10-23,
   not converged alone before). *Energy window* refuses one that failed or
-  whose marks did not read the same; a saddle point's mark would refuse it
-  where the window is on free energies, which it is not yet. *Choose one*,
+  whose marks did not read the same, and, where the window is on free
+  energies, a saddle point too (2026-10-24). *Choose one*,
   choosing the lowest, and *Duplicates*, ranking by energy which copy it
   keeps, refuse as Populations does; *Choose one* by number chooses any.
 - **A conformer set's chip shows no shares** where a frame is no minimum,
@@ -1926,6 +1993,63 @@ page could not be read after one run.
     where something else is there (`keepExitsUnder`). A step's empty
     exit frames, made as it is added, go clear in the same way (model
     `withExits`).
+  - **A wire goes round** (look `wireRoute`). Going on to the right it
+    is a curve, running on across all the way, never back out over what
+    is beside its ends. Where its input lies less than half a bond to the
+    right of where it leaves (`WIRE_TURNS`), or to the left of it, or the
+    curve would cross another set or card, or come within half a bond of
+    one away from its ends, it goes round them all: out a bond to the
+    right of its set, up or down to a level clear of all - a bond above
+    them, a bond below, or between them, across from one end to the
+    other, where that leaves half a bond either side (`levelsFor`) -
+    across, and into its input from a bond to its left. Each way up or
+    down is stepped aside past what stands in it, or kept short of it,
+    between it and its end, where that leaves half a bond either side or
+    the frame lies across the line in or out. Of these, the way over
+    least, then the shortest; where every way is over something, each is
+    tried again round that too. Inside another set or card it never goes,
+    however near its ends. Its turns are a bond wide, on the page, so they
+    are arcs at any zoom; two turns closer than that both shrink alike.
+    It keeps half a bond from every other frame's line (docs/LOOK.md,
+    *Room*), but beside its ends. Moved past where it turns over from
+    going round to the curve, a wire changes shape once, and the drawing
+    eases that (`DURATION.move`). Into a card that names its inputs, a
+    wire comes in level for as long as the input's name, under it.
+  - **It keeps its way** while that is still clear: the side it passed
+    what it goes round, unless the other side has become a fifth shorter.
+    A card dragged past a set makes its wire change way twice at most.
+    Placement keeps clear of the same routes, and a change of way on the
+    page is eased, never a jump: its ends stay on their ports while it
+    eases, only the rest moving (look `wireToward`), and a wire dragged by
+    its card is not eased at all (`shapeMoved`).
+  - **Only what moved is worked out again.** Each wire looks at the sets
+    and cards near it (`nearWire`), and is keyed by its ends and those
+    (`wireKey`): a drag works out again only the wires whose key changed.
+    Of those, a wire whose ends moved is worked out at once; one where
+    only what is near it moved waits while the frame's 8 ms for wires is
+    spent (`FrameBudget`), and is served the longest waiting first. A
+    frame serves at least one, so none waits more frames than there are
+    wires waiting before it: dragging a card among 100 sets and 45 long
+    wires near it, each waited at most 19 frames (0.3 s), and none was
+    left waiting 19 frames after the card was let go. Within a
+    wire, the ways round are tried shortest first, and no further than the
+    first clear of all - the longest a wire takes is about 7 ms on this
+    Mac, among 100 sets and 50 cards.
+  - **Smooth** (look `byTurn`, `pointsFor`). A wire is worked out as a
+    close path, then drawn through points spread by how far it runs and
+    how much it turns: one about every 3 screen pixels and every 2
+    degrees, more at its bends. A long run up or down turns in an arc as
+    wide as the run allows: the curve's handles are half the run, from 40
+    to 240 px, but never more than its run across - so an input near
+    where it leaves turns tighter, never swinging out past it. Worked out
+    finer where it turns tight, so that it is never a kink.
+  - **A card put down** (Quick Add, or a wire let go on empty space)
+    goes where it was put, or lower where that is over a set, a card, a
+    structure or a wire, as far as it must (place `placeCard`): it is made
+    there, so nothing on the page moves. A card the chemist drags lands
+    where they let it go. Put down
+    near the window's edge, or moved lower, it is brought into view with
+    the sets it will give, as what is put down is shown.
 - **How many it shows** (look `DRAWN_ON_PAGE`, the maintainer,
   2026-10-23): as many of its structures as take no more than 400 square
   bond lengths of the page between them - each its drawing's box and its
@@ -1993,6 +2117,21 @@ molecules in 3D. *Enumerate* (P3) is the first step to use it.
   Where the set was kept out of the file, those atoms are not in it, so
   the molecule opens with its link to the drawing gone, as when the
   drawing is deleted.
+- **Through a calculation** (*Optimise*, *Energy*, *Frequencies*, or a
+  program's *Conformers*), a molecule keeps that link, and its bonds to
+  ring centres, where it is still the same compound: each atom bonded to
+  the same others, by the bonds where its atoms stand, before and after,
+  and of the charge it went with, where the calculation says one. So conformers optimised and
+  given their populations still stand by the structure drawn. It keeps
+  neither how it was made nor its stereo labels, which were of the
+  geometry it came with; its configurations are perceived anew from its
+  own geometry. Where a bond broke or formed, or the charge changed, the
+  link is dropped, and *How it was made* says why (2026-10-24; until then
+  every calculation dropped it). Two atoms are bonded within 1.2 times
+  the sum of their radii, so a bond that changes but stays within that
+  reach - a stretch towards a transition state, a symmetric hydrogen
+  bond - is read as the same compound and keeps the link: right for
+  minima. One that crosses it, as a proton shifted does, drops the link.
 
 None of Meno's steps takes structures drawn yet, so a wire from a set of
 them to one is refused, as before. P3 adds *Enumerate*, the first.
@@ -2075,8 +2214,11 @@ structure and its geometry, in 2D, so the record holds the rest
 (`DrawnRecord`, `store/types`):
 
 - `from`: the entries it was made from, by id, where they have one. A
-  generated structure names its seed's; a template drawn on the page has
-  no id, so an Enumerate product names none.
+  generated structure names its seed's, and an Enumerate product its
+  template's - a template a step gave; one drawn on the page has no id, so
+  its products name none. Each also carries the values of the one it was
+  made from as that one's (`made_from.nll`), never as its own, so that a
+  Filter on a parent's value reaches what was made from it.
 - `properties`: by name, each a `Property` as lib/entry has it, with its
   value, its unit from Meno's units table or "none", its status, and what
   worked it out. Enumerate's `number` and `made.how` are kept here, and so
@@ -2428,7 +2570,8 @@ Not yet: conditions picked from what comes in rather than typed.
 ### Charts (2026-10-22)
 
 **Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
-takes a table - or molecules or conformer sets, seen as one - and gives a
+takes a table - or molecules, conformer sets or structures drawn, seen as
+one - and gives a
 chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
@@ -2436,6 +2579,16 @@ each entry's number, then its energy).
 - **A chart of molecules plots no entry that is no result**: one that
   failed, by any kind, or whose marks did not read refuses it, each named,
   as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).
+- **Structures drawn** go into Chart too, seen as a table the way *Open as
+  a table* shows them (structuresTable `structuresAsTable`, every structure
+  a set holds, on the page and off it). A point stands on a structure's
+  record as results. A row whose state is not *finished*, because it
+  failed or was edited since its values were given, refuses the chart,
+  each named ("structure 2 of 3 failed: no 3D"), with the Filter that
+  takes it out ("state = finished") (`notFinishedRows`). A row set aside
+  is a result still, with its state finished, and is charted. A cell that
+  says a value was not worked out is no number: that row is left out,
+  counted and named, as any row without a number is.
 - A point for each row with a number in both; **a row without is counted
   and said**, by what it lacks ("4 points · 1 row left (1 with no
   measured)"), and each such row named, pointed at - its entry and what it
@@ -2450,6 +2603,10 @@ each entry's number, then its energy).
   them, from below the least value to above the greatest.
 - A point pointed at says its row, what it is, and its two values; pressed, where it is
   of a molecule on the page, that molecule is chosen at its frame.
+- Zoomed out until words on the page are too small to read, a chart - and
+  an energy diagram - is still drawn, its points, levels, lines and axes;
+  only its words fade out, as a set's name and count do. A table and a
+  number, all words, fade out whole.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`
@@ -2481,22 +2638,62 @@ is, so it takes a set that mixes a saddle point's conformer set with
 molecules of one geometry - which a step that works on entries refuses
 (*A wire let go on an input that does not take it*).
 - **A level** is the molecules of one name - a molecule's title, else its
-  file's name, else its group - and stands at its lowest; a level of
+  file's name without its extension ("R.out" is R), else its group - and
+  stands at its lowest; a level of
   several (a saddle point's conformers) says, pointed at, of how many it is
   the lowest and which ("lowest of 7: #3"); pressed, that one is shown.
-- **Relative to** the level its option names, none named the first - in
-  kcal/mol, written to a tenth, signed.
+- **A level of several compounds** (2026-10-24) - a reactant and a
+  nucleophile apart, products apart - stands at the sum of its compounds,
+  each at its lowest conformer. A compound is the level's molecules of one
+  constitution, charge and spin; its rows are its conformers. Every level
+  must hold the same atoms, element by element, and the same charge, as a
+  reaction's do; where they do not, there is no diagram, and what each
+  holds is said ("Its levels do not hold the same atoms and charge: R has
+  CH3Br; TS, P have CH4BrO−"), with what each level of several sums ("- R
+  sums two compounds: C2H4O, C2H4O"; two of one formula told apart by
+  their spin where it differs: "CH2 (singlet), CH2 (triplet)"). Its card's
+  line says which compounds each level of several sums ("R sums CH3Br +
+  HO−").
+  - A compound's stereoisomers count as its conformers here - the
+    constitution has no stereo - so the lowest of them is taken.
+  - Another spin state is another compound, never a conformer: a singlet
+    and a triplet of one molecule in one level are two.
+  - A level holds a compound once: two of the same - one constitution,
+    charge and spin - are taken as its conformers, at the lower, never
+    summed (2 A is one A). A dimer is a compound of its own.
+- **In the order the chemist means** (2026-10-24): its card lists the
+  levels that come into *Levels*, one to a line, in the order they come -
+  the set's own. The lines put in another order are the order drawn; "R =
+  HCN" shows R as HCN. A level no line names comes after the rest, as it
+  came, never left out; a line naming no level that comes in, or one
+  listed already, is said beside it and counted - the name no level has
+  said with its run too ("3 levels · relative to R · 1 left: Foo"); two
+  levels shown by one name refuse it.
+- **Relative to** the level its card's list picks - each by the name it is
+  shown by - none picked the first; in kcal/mol, written to a tenth,
+  signed. One naming no level that comes in, by either name, is said where
+  its card would say *Ready* ("No level is called "Zed"") and refuses its
+  run. A table into *Connects* names levels by either name.
+- **Which energy** is a list on its card of those its levels carry, each by
+  its symbol and what worked it out and where ("ΔG · Gibbs free energy ·
+  ORCA · r2SCAN-3c · 298.15 K"); the thermochemistry's corrections are no
+  level's energy, and not in it. A line that says a quantity with a symbol
+  says it by it ("TS has no G").
 - **Which energy**: an option naming the quantity, as the entries carry it
-  - their electronic energy ("energy") until free energies and enthalpies
-  are read. The levels are seen as a table (*Molecules seen as a table*),
+  - their electronic energy ("energy"), or a free energy
+  ("thermo.free-energy", ΔG) or enthalpy ("thermo.enthalpy", ΔH) a
+  Frequencies step read - of a conformer set too, each conformer's its
+  own (2026-10-24). The levels are seen as a table (*Molecules seen as a table*),
   where a column never holds values worked out differently: **every
   level's energy is that one quantity, by one method, at one set of
   conditions, or there is no diagram**, and the step says which levels
   have which ("Its levels' energy was not worked out one way: "energy ·
   GFN2-xTB" for R, P; "energy · B3LYP" for TS"), or which level has none.
-- The axis names the quantity relative to the reference, its unit and
-  what worked it out: "ΔE (kcal/mol) · xtb · GFN2-xTB · gas phase",
-  "ΔG (kcal/mol) · … · 298.15 K".
+- The axis names the quantity relative to the reference and its unit:
+  "ΔG (kcal/mol)". What worked it out and where is said on the line under
+  the diagram, after its levels, wrapped where it is long: "3 levels ·
+  relative to HCN · ORCA · r2SCAN-3c · 298.15 K · 1 atm" (2026-10-24: kept
+  off the axis, where a long one was cut).
 - **Only results stand as levels**: where any entry under a level failed
   - not converged, refused, an error, of any kind - or its file's marks
   of that did not read, the step refuses and draws nothing, naming each

@@ -12,7 +12,7 @@ import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugi
 import { SYSTEMS, type InstalledDecl } from "../../../lib/plugins/manifest";
 import { KINDS } from "../Workspace/workflow/kinds";
 import { kindById } from "../../../lib/io/kinds";
-import { useDownloads } from "../../../lib/pyEnv";
+import { useCheckingFiles, useDownloads } from "../../../lib/pyEnv";
 
 /** The kinds of a workflow's step a plugin fills, by their names - those Meno defines. */
 const stepNames = (p: { steps: readonly { kind: string }[] }) => KINDS.filter((k) => p.steps.some((d) => d.kind === k.kind)).map((k) => k.name);
@@ -68,18 +68,22 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
   };
   // (its files besides its packages, as they come - all come, and a program's build being unpacked: no share said)
   const share = useDownloads((s) => s[p.id]);
+  // (its files read through for their fingerprints, where that takes more than a moment: a model's weights)
+  const checking = useCheckingFiles((s) => !!s[p.id]);
   const status =
-    state === "added"
-      ? "Added"
-      : state === "adding"
-        ? share != null && share < 1
-          ? `Adding… ${Math.floor(share * 100)}%`
-          : "Adding…"
-        : state === "removing"
-          ? "Removing…"
-          : state === "absent"
-            ? "Not added"
-            : "";
+    checking && state !== "adding" && state !== "removing"
+      ? "Checking its files…"
+      : state === "added"
+        ? "Added"
+        : state === "adding"
+          ? share != null && share < 1
+            ? `Adding… ${Math.floor(share * 100)}%`
+            : "Adding…"
+          : state === "removing"
+            ? "Removing…"
+            : state === "absent"
+              ? "Not added"
+              : "";
   const refused = REFUSED.filter((r) => r.plugin === p.id);
   // (the kinds it reads by the names it gives them, or Meno's)
   const named = (id: string) => manifestOf(p.id)?.kinds.find((k) => k.id === id)?.name ?? kindById(id)?.name ?? id;

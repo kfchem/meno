@@ -355,7 +355,7 @@ describe("Meno's own steps", () => {
     const out = runMeno("energy-window", entries(bent({ x: 0, y: 0 }, 4, [0, 1, 2.9, 3.1].map(kcal)), "conformers"), "conformers", { window: 3 });
     expect(out.ok && out.kept.map((e) => e.number)).toEqual([1, 2, 3]);
     expect(out.ok && out.aside.map((e) => e.number)).toEqual([4]);
-    expect(out.said).toBe("3 of 4 kept");
+    expect(out.said).toBe("3 of 4 kept, on electronic energies");
   });
 
   it("need energies for a window and for populations", () => {
@@ -567,7 +567,7 @@ describe("running", () => {
     const by = () => "meno";
     expect(stateOf(doc, doc.steps![0], by())).toBe("done");
     expect(stateOf(doc, doc.steps![1], by())).toBe("done");
-    expect(doc.steps![1].ran).toMatchObject({ ok: true, said: "3 of 5 kept", at: 1000 });
+    expect(doc.steps![1].ran).toMatchObject({ ok: true, said: "3 of 5 kept, on electronic energies", at: 1000 });
     const made = resultOf(doc, WINDOW)!;
     expect(made.made).toEqual({ step: WINDOW, exit: "out", holds: "conformers" });
     // a conformer set: one molecule, its conformers in play as frames, numbered as they were
@@ -585,7 +585,7 @@ describe("running", () => {
     expect(stateOf(doc, doc.steps![1], "meno")).toBe("changed");
     doc = runStep(doc, WINDOW, W);
     expect(stateOf(doc, doc.steps![1], "meno")).toBe("done");
-    expect(doc.steps![1].ran!.said).toBe("5 of 5 kept");
+    expect(doc.steps![1].ran!.said).toBe("5 of 5 kept, on electronic energies");
     // (its result sets' entries replaced, not added to: all five within it now, none outside)
     expect(held(doc, resultOf(doc, WINDOW)!.id).molecules[0].numbers).toEqual([1, 2, 3, 4, 5]);
     expect(countOf(doc, resultOf(doc, WINDOW, "rest")!).entries).toBe(0);
@@ -953,11 +953,11 @@ describe("Quick Add's calculations", () => {
       ["xTB", ["optimise", "energy", "frequencies"]],
       ["Meno", ["duplicates", "filter", "as-conformers", "chart", "energy-diagram", "tag", "species", "combine", "measure"]],
     ]);
-    // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D - and Filter, on their records
+    // a set of structures drawn: a conformer search made from them - RDKit's, not CREST's, which starts from 3D - and Filter, on their records, and Chart, of them seen as a table
     doc = addSet({ ...doc, model: { atoms: [{ id: 1, x: 40, y: 0, r: 0.9, el: "C" }, { id: 2, x: 41.5, y: 0, r: 0.9, el: "O" }], bonds: [{ id: 1, a: 1, b: 2, order: 1 }] } }, { x0: 38, y0: -2, x1: 44, y1: 2 });
     const drawn = doc.sets![doc.sets!.length - 1].id;
     useReaders.setState({ state: { rdkit: "added", crest: "added" }, problem: {} });
-    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers", "check-structures", "stereoisomers", "descriptors"]], ["Meno", ["filter", "enumerate"]]]);
+    expect(offered(doc, { set: drawn }).map(([who, kinds]) => [who, kinds])).toEqual([["RDKit", ["conformers", "check-structures", "stereoisomers", "descriptors"]], ["Meno", ["filter", "enumerate", "chart"]]]);
     // an interface to a program installed separately: under the program's name, not the interface's
     useReaders.setState({ state: { orca: "added" }, problem: {} });
     expect(offered(doc)[0]).toEqual(["ORCA", ["optimise", "energy", "frequencies"]]);

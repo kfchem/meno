@@ -378,6 +378,37 @@ def sets_in(log):
     return [sets[k] for k in range(1, len(sets) + 1)]
 
 
+#: What CREGEN prints of how it took conformers as one, each as it prints it ("RMSD threshold : 0.1250"): the
+#: result it is said as - its id, its label, its unit as CREST's documentation gives it ("Command Line Keywords":
+#: --rthr in angstroms, --bthr a relative difference of rotational constants, --pthr a population, --ewin in
+#: kcal/mol). What it does not print is not said: CREST 2.12 prints no pair energy threshold (--ethr).
+CREGEN_SETTINGS = [
+    ("RMSD threshold", "cregen.rmsd", "RMSD threshold", "Å"),
+    ("Bconst threshold", "cregen.bconst", "Rotational-constant threshold (relative)", None),
+    ("population threshold", "cregen.population", "Population threshold", None),
+    ("conformer energy window  /kcal", "cregen.ewin", "Energy window", "kcal/mol"),
+]
+#: The group they are said under, on the molecule's card.
+CREGEN_GROUP = "Same conformer (CREGEN)"
+
+
+def cregen_settings_in(log):
+    """How CREGEN took conformers as one, as the run's own output prints it - each setting in the last block of them
+    it printed - as results of the molecule, each its value as printed and its unit; none of a setting not printed,
+    and none at all where it printed none. Never as asked, never a default."""
+    out = []
+    for printed, key, label, unit in CREGEN_SETTINGS:
+        found = re.findall(r"^\s*" + re.escape(printed) + r"\s*:\s*(\S+)\s*$", log, re.M)
+        try:
+            value = number(found[-1]) if found else None
+        except ValueError:
+            value = None
+        if value is None or not math.isfinite(value):
+            continue
+        out.append({"id": key, "group": CREGEN_GROUP, "label": label, "on": "molecule", "value": value, **({"unit": unit} if unit else {})})
+    return out
+
+
 def populations_in(log):
     """Each conformer's population, as CREGEN's last table gives it: the weight of each set of rotamers. None, where there is no such table."""
     sets = sets_in(log)
@@ -443,7 +474,9 @@ def output_of(entry, options, files, log):
         "energies": None if any(e is None for e in energies) else energies,
         "populations": populations if populations and len(populations) == len(found) else None,
         "degeneracies": degeneracies if degeneracies and len(degeneracies) == len(found) else None,
-        "results": [],
+        # (how CREGEN took conformers as one - its thresholds as the run printed them: said, as Meno's own Duplicates
+        #  says its own)
+        "results": cregen_settings_in(log),
     }
 
 

@@ -9,6 +9,7 @@ import { kindOf } from "../../utils/measure3d";
 import { style3dOf } from "../../style3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../../lib/chem/acs";
 import { noteTurns } from "../turnJournal";
+import { principalTurn } from "../../utils/align3d";
 import { signatureOf } from "../../utils/drawnLink";
 import { resultKey } from "../../../../../lib/calc/results";
 import { gridPlaces, middleOf, shownOf, stackMembers } from "../../utils/stacks";
@@ -130,8 +131,13 @@ export function createMolecules3dSlice(doc: DocumentStore<WorkspaceDocument>, se
         const { [id]: _, ...rest } = prev.rising3d;
         return { ...prev, rising3d: rest };
       }),
+    // (back to how it was first seen: along its principal axes - HCN side-on - but one tied to a drawing as the
+    //  drawing lies, unturned)
     resetTurn3d: (id: number) =>
       set((prev) => {
+        const m = prev.molecules3d.find((x) => x.id === id);
+        const first = m && !m.drawnFrom ? principalTurn(m.atoms.flatMap((a) => [a.x, a.y, a.z ?? 0])) : undefined;
+        if (first) return { ...prev, turns3d: { ...prev.turns3d, [id]: first } };
         if (!(id in prev.turns3d)) return prev;
         const { [id]: _was, ...turns3d } = prev.turns3d;
         return { ...prev, turns3d };

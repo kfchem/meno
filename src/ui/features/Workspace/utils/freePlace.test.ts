@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { freePlace, labelBoxes, labelledPart, pageBoxes } from "./freePlace";
+import { footOf, freePlace, labelBoxes, labelledPart, pageBoxes, shownBeside } from "./freePlace";
+import { STYLE_3D } from "../../../../lib/chem/style3d";
+import type { Molecule3D } from "../store/types";
+import type { ProcessedFileResult } from "./io";
+import { CHIP } from "../workflow/look";
 import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { editorLayoutOptions } from "../layoutOptions";
@@ -78,5 +82,38 @@ describe("all there is on a page, as what is put down takes it", () => {
     const at = freePlace(pageBoxes(st, style), foot, { x: n.x + 2 * font, y: n.y }, font / 2, 0);
     const box = { x0: at.x + foot.x0, y0: at.y + foot.y0, x1: at.x + foot.x1, y1: at.y + foot.y1 };
     expect(letters.some((b) => b.x0 < box.x1 && box.x0 < b.x1 && b.y0 < box.y1 && box.y0 < b.y1)).toBe(false);
+  });
+});
+
+describe("a molecule in 3D as what is put down takes it", () => {
+  // (HCN read from an optimisation of three steps, its last the entry: a frames chip under it, a note over it)
+  const hcn = (at = { x: 0, y: 0 }): Molecule3D => ({
+    id: 1,
+    atoms: [{ el: "H", x: 0, y: 0, z: -1.066 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "N", x: 0, y: 0, z: 1.153 }] as never,
+    bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 3 }],
+    frames: [[0, 0, -1.07, 0, 0, 0, 0, 0, 1.15], [0, 0, -1.066, 0, 0, 0, 0, 0, 1.153]],
+    energies: [-93.41, -93.42, -93.43],
+    entryFrames: [2],
+    at,
+  });
+
+  it("takes its frames chip under it and its notes over it, besides its atoms", () => {
+    const seen = { x0: -1, x1: 1, y0: -1, y1: 1 };
+    const [chip, notes] = shownBeside(hcn(), seen, STYLE_3D);
+    expect(chip.y1).toBe(seen.y0);
+    expect(chip.y0).toBeCloseTo(seen.y0 - CHIP, 9);
+    expect(chip.x1 - chip.x0).toBeGreaterThan(2);
+    expect(notes.y0).toBe(seen.y1);
+    expect(notes.y1).toBeGreaterThan(seen.y1);
+  });
+
+  it("takes one from a file as it will first be seen - HCN along z, side-on: wider than it is tall, its chip and note with it", () => {
+    const m = hcn();
+    const result = { model: { atoms: [], bonds: [] }, centroid: { x: 0, y: 0 }, molecules3d: [m] } as unknown as ProcessedFileResult;
+    const foot = footOf(result, { molecules3d: [{ ...m, at: { x: 0, y: 0 } }] }, styleOf({} as never), STYLE_3D);
+    // (its atoms across, about 2.2 Å and their balls; its chip below and its note above it besides)
+    expect(foot.x1 - foot.x0).toBeGreaterThan(2);
+    expect(foot.y0).toBeLessThan(-CHIP);
+    expect(foot.y1).toBeGreaterThan(0.5);
   });
 });

@@ -40,7 +40,14 @@ export type SwitchOption = OptionBase & { type: "switch"; default: boolean };
  * the kind says, what each line was read as, shown beside it (`readAs`: one
  * for each line of the text, in order, blank for a blank one).
  */
-export type LinesOption = OptionBase & { type: "lines"; default: string; rows?: number; readAs?: (text: string) => readonly LineRead[] };
+export type LinesOption = OptionBase & {
+  type: "lines";
+  default: string;
+  rows?: number;
+  readAs?: (text: string) => readonly LineRead[];
+  /** How a line is written, said under the box, where the label alone does not say it. */
+  note?: string;
+};
 /**
  * Atoms of the structure that comes in, chosen on its drawing - Meno's own
  * kinds' alone, as lines are - held as their ids apart ("12 15"): the

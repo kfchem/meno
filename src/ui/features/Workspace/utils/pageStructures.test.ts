@@ -4,7 +4,7 @@ import aldol from "../../../../lib/figure/fixtures/aldol-rdkitrxn.json";
 import camphor from "../../../../lib/figure/fixtures/camphor-rdkitacs.json";
 import acetate from "../../../../lib/figure/fixtures/sodium-acetate-rdkit.json";
 import { schemeDrawn } from "./figures";
-import { figuresOf } from "../../../../lib/pdf/figures";
+import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
 import { centreWithin, figureOn, pageStructuresOf, structureAt, structuresOf, type PageStructure } from "./pageStructures";
 
 const read = (s: PageStructure) => {
@@ -252,6 +252,66 @@ describe("a structure the page's figures may have cut in two", () => {
   });
 });
 
+describe("a line of words, its signs read as bonds", () => {
+  type P = [number, number];
+  const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+  const word = (text: string, x: number, y = 300) => [...text].map((c, i) => ({ c, box: [x + i * 6, y - 3.6, x + 5.5 + i * 6, y + 3.6] as [number, number, number, number], at: [x + i * 6, y + 3.6] as [number, number], size: 10 }));
+  // (a chain beside, so that the figure has a bond's length to go by)
+  const chain = [stroke([100, 360], [112.5, 352.8], [125, 360], [137.5, 352.8])];
+  const reads = (paths: FigureDrawn["paths"], letters: FigureDrawn["letters"]) => structuresOf({ paths: [...chain, ...paths], letters, pictures: [] }, 0, "pdf", 0, []).map((st) => ("none" in st.read ? st.read.none : "whole"));
+
+  it("refuses \"R2 = SPh\" - its = read as a double bond between two labels on one line - saying it is a line of words", () => {
+    const out = reads([stroke([114, 298.6], [124, 298.6]), stroke([114, 301.4], [124, 301.4])], [...word("R2", 100), ...word("SPh", 126)]);
+    expect(out).toContain('It is a line of words ("R2", "SPh"), not a structure drawn, so none of it is taken.');
+  });
+
+  it("refuses a line whose sign joins a label that reads as nothing - an italic t read as f before a hyphen", () => {
+    const out = reads([stroke([106, 300], [113, 300])], [...word("f", 100), ...word("BuNH2", 115)]);
+    expect(out.some((o) => o.startsWith("It is a line of words"))).toBe(true);
+  });
+
+  it("refuses \"PG = Boc\", \"LG = SEt\", \"Ar = Ph\" and \"n = 1\": a name of a kind of group, or a legend's term, at an end of the =", () => {
+    for (const [l, r] of [["PG", "Boc"], ["LG", "SEt"], ["Ar", "Ph"]]) {
+      const out = reads([stroke([114, 298.6], [124, 298.6]), stroke([114, 301.4], [124, 301.4])], [...word(l, 100), ...word(r, 126)]);
+      expect(out).toContain(`It is a line of words ("${l}", "${r}"), not a structure drawn, so none of it is taken.`);
+    }
+    // ("n = 1": its 1 taken for a compound's number, its = for a double bond from the n to nothing - a legend all the same)
+    const n = reads([stroke([108, 298.6], [118, 298.6]), stroke([108, 301.4], [118, 301.4])], [...word("n", 100), ...word("1", 120)]);
+    expect(n).toContain('It is a line of words ("n"), not a structure drawn, so none of it is taken.');
+  });
+
+  /** A molecule written on one line: its labels, each with the bonds after it - single, double, triple - as strokes beside each other. */
+  const written = (parts: [string, number][]) => {
+    const paths: FigureDrawn["paths"] = [];
+    const letters: FigureDrawn["letters"] = [];
+    let x = 100;
+    for (const [label, order] of parts) {
+      letters.push(...word(label, x));
+      x += label.length * 6 + 2;
+      if (order) {
+        for (let k = 0; k < order; k++) paths.push(stroke([x, 300 + (k - (order - 1) / 2) * 2.4], [x + 10, 300 + (k - (order - 1) / 2) * 2.4]));
+        x += 12;
+      }
+    }
+    return reads(paths, letters);
+  };
+
+  it("but reads molecules written on one line, their labels all elements or groups - O=C=O, S=C=S, MeC≡CMe, Me3SiC≡CSiMe3, PhN=NPh, N≡N, MeC≡N, HC≡CH, Cl-Hg-Cl", () => {
+    const molecules: [string, number][][] = [
+      [["O", 2], ["C", 2], ["O", 0]],
+      [["S", 2], ["C", 2], ["S", 0]],
+      [["H3C", 1], ["C", 3], ["C", 1], ["CH3", 0]],
+      [["Me3Si", 1], ["C", 3], ["C", 1], ["SiMe3", 0]],
+      [["Ph", 1], ["N", 2], ["N", 1], ["Ph", 0]],
+      [["N", 3], ["N", 0]],
+      [["CH3", 1], ["C", 3], ["N", 0]],
+      [["HC", 3], ["CH", 0]],
+      [["Cl", 1], ["Hg", 1], ["Cl", 0]],
+    ];
+    for (const m of molecules) expect([m.map((p) => p[0]).join(""), written(m)]).toEqual([m.map((p) => p[0]).join(""), ["whole", "whole"]]);
+  });
+});
+
 describe("every structure on a page", () => {
   const drawn = camphor as unknown as FigureDrawn;
   const [whole] = structuresOf(drawn, 0, "pdf", 0, []);
@@ -311,6 +371,67 @@ describe("every structure on a page", () => {
     const far = { kind: "text" as const, box: [figure[2] + 3 * bond, y - 4, figure[2] + 3 * bond + 60, y + 4] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [far] }, [figure], () => drawn, "pdf", 0);
     expect("model" in structures[0].read).toBe(true);
+  });
+});
+
+describe("a page drawn as Meno draws one", () => {
+  const L = 14.4;
+  type P = [number, number];
+  const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+  const letters = (text: string, [x, y]: P) => [...text].map((c, i) => ({ c, box: [x - 3.4 + 6.8 * i, y - 3.6, x + 3.4 + 6.8 * i, y + 3.6] as [number, number, number, number], at: [x - 3.4 + 6.8 * i, y + 3.6] as [number, number], size: 10 }));
+  const boxOf = (p: FigureDrawn["paths"][number]): [number, number, number, number] => {
+    const xs = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[1]]));
+    const ys = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[2]]));
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  };
+  /** Its structures, as the column finds them: the page's objects from what is drawn, its figures from those. */
+  const picked = (drawn: FigureDrawn, extra: PageObject[] = []) => {
+    // (a label's letters one text object, as a PDF sets a word)
+    const words: [number, number, number, number][] = [];
+    for (const l of drawn.letters) {
+      const last = words[words.length - 1];
+      if (last && l.box[0] - last[2] < 1 && Math.abs(l.box[1] - last[1]) < 1) last[2] = l.box[2];
+      else words.push([...l.box]);
+    }
+    const objects: PageObject[] = [...drawn.paths.map((p) => ({ kind: "path" as const, box: boxOf(p) })), ...words.map((box) => ({ kind: "text" as const, box })), ...extra];
+    const figures = figuresOf(objects, (b) => drawn.letters.filter((l) => l.box[0] >= b[0] - 0.01 && l.box[2] <= b[2] + 0.01 && l.box[1] >= b[1] - 0.01 && l.box[3] <= b[3] + 0.01).map((l) => l.c).join(""));
+    return pageStructuresOf({ objects }, figures, () => drawn, "pdf", 0).structures;
+  };
+  /** A zigzag of four bonds from `x`. */
+  const zigzag = (x: number) => stroke(...[0, 1, 2, 3, 4].map((i): P => [x + i * L * 0.866, 300 + (i % 2) * L * 0.5]));
+
+  it("reads two compounds whole with a \"+\" drawn with lines a bond from each - no line beside either", () => {
+    const right = 100 + 4 * L * 0.866;
+    const mid = right + L * 1.3;
+    const cross = [stroke([mid - 3, 303.6], [mid + 3, 303.6]), stroke([mid, 300.6], [mid, 306.6])];
+    const found = picked({ paths: [zigzag(100), ...cross, zigzag(right + 2.6 * L)], letters: [], pictures: [] });
+    expect(found.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("reads two compounds whole with a \"+\" written between them, in figures of their own", () => {
+    const right = 100 + 4 * L * 0.866;
+    const mid = right + L * 1.3;
+    const plus: PageObject = { kind: "plus", box: [mid - 3, 300.6, mid + 3, 306.6] };
+    const found = picked({ paths: [zigzag(100), zigzag(right + 2.6 * L)], letters: [], pictures: [] }, [plus]);
+    expect(found.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("finds no figure in a rule with a word or a number at its end - \"Date ____\", \"____ 12\", a 12-point word with an 11-point rule", () => {
+    const word = (text: string, x: number, size = 10): PageObject => ({ kind: "text", box: [x, 300, x + text.length * 0.6 * size, 300 + size] });
+    const said = new Map<string, string>();
+    const at = (o: PageObject, text: string) => (said.set(o.box.join(","), text), o);
+    const wordsIn = (b: [number, number, number, number]) => said.get(b.join(",")) ?? "";
+    const rule = (x0: number, x1: number): PageObject => ({ kind: "path", box: [x0, 303.8, x1, 304.3] });
+    expect(figuresOf([at(word("Date", 100), "Date"), rule(126, 166)], wordsIn)).toEqual([]);
+    expect(figuresOf([rule(100, 140), at(word("12", 143), "12")], wordsIn)).toEqual([]);
+    expect(figuresOf([at(word("Note", 100, 12), "Note"), rule(131, 142)], wordsIn)).toEqual([]);
+    // (and the same rule with an atom's label at its end, a bond long: one)
+    expect(figuresOf([rule(100, 113), at(word("NH3+", 115), "NH3+")], wordsIn)).toHaveLength(1);
+  });
+
+  it("finds a structure of one bond with a label: CH3NH3+", () => {
+    const found = picked({ paths: [stroke([100, 300], [100 + 0.6 * L, 300])], letters: letters("NH3+", [100 + L, 300]), pictures: [] });
+    expect(found.map((s) => ("model" in s.read ? [formula(s), s.read.model.atoms.reduce((t, a) => t + (a.charge ?? 0), 0)] : s.read.none))).toEqual([["C1 N1", 1]]);
   });
 });
 

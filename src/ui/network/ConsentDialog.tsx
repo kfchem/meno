@@ -63,13 +63,13 @@ export default function ConsentDialog() {
           <button
             ref={focusNo}
             onClick={() => asking.answer(false)}
-            className="rounded-md border border-gh-line px-3 py-1.5 hover:bg-gray-100"
+            className="rounded-md border border-gh-line px-3 py-1.5 outline-none hover:bg-gh-base focus-visible:border-accel-base focus-visible:ring-2 focus-visible:ring-accel-lightbase"
           >
             Not now
           </button>
           <button
             onClick={() => asking.answer(true)}
-            className="rounded-md bg-accel-base px-3 py-1.5 text-white hover:opacity-90"
+            className="rounded-md bg-accel-base px-3 py-1.5 text-white outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accel-base/40"
           >
             Allow and download
           </button>

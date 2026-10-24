@@ -17,6 +17,7 @@ import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
 import { boxPicture } from "../../../../lib/pdf/reader";
+import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
@@ -24,6 +25,8 @@ import { readDrawnLabel, structureOf, type LabelReader } from "../../../../lib/f
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import { implicitHydrogens } from "../../../../lib/chem/molecule";
+import { overBonded } from "../../../../lib/chem/molWriter";
+import { ELEMENTS } from "../../../../lib/chem/elements";
 import { labelReading, readLabel } from "./labelTyping";
 import { systemGlyphs } from "./glyphShapes";
 import { shapeLetters, sureEnough, type GlyphShape } from "../../../../lib/figure/glyphs";
@@ -58,6 +61,9 @@ export const figureLabels: LabelReader = (label) => {
   if (r.kind === "charge") return { el: "C", charge: r.charge };
   return { el: label };
 };
+
+// (a page's figures take a one-bond structure by its label, read as these read one: lib/pdf/figures)
+setAtomLabel((text) => !/^[+\-−]*$/.test(text) && readDrawnLabel(text, figureLabels).read);
 
 /** What a part is now, as far as being right goes: an atom's element, charge and bonds; a bond's order and stereo. Its mark stays while this does. */
 export function atomAs(a: Pick<Atom, "id" | "el" | "charge">, bonds: readonly Bond[]): string {
@@ -281,8 +287,18 @@ export function modelOf(read: FigureRead, spot: (x: number, y: number) => Figure
   s.bonds.forEach((b, i) => {
     if (b.unsure) bonds[i].unsure = { said: b.unsure, as: bondAs(bonds[i]) };
   });
+  // (and, written out as a file has it - its labels' atoms and all - an atom with more bonds than it takes, not yet said: said,
+  // so that no structure whose valence is broken is ever put down looking sure)
+  for (const id of overBonded({ atoms, bonds })) {
+    const a = atoms[id - 1];
+    if (a.unsure) continue;
+    const name = a.el === "C" ? "a carbon" : (ELEMENT_NAMES.get(a.el) ?? null);
+    a.unsure = { said: [name ? `More bonds meet here than ${name} has.` : `"${a.el}" written out has an atom with more bonds than it takes.`], as: atomAs(a, bonds) };
+  }
   return { atoms, bonds };
 }
+
+const ELEMENT_NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
 
 type Region = { x0: number; y0: number; x1: number; y1: number };
 const overlaps = (a: Region, b: Region) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;

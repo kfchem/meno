@@ -15,9 +15,10 @@ import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { create } from "zustand";
-import { askToConnect, useNetwork, type ConsentRequest } from "./net/network";
+import { askToConnect, useNetwork, type ConsentRequest, type NetTask } from "./net/network";
 import { useAppSettings } from "./settings/appSettings";
 import { useGuide } from "./plugins/guides";
+import { afterFirstAction } from "./firstAction";
 
 /** The purpose Meno's network knows updating by. */
 export const UPDATE_PURPOSE = "app-update";
@@ -49,8 +50,6 @@ export type UpdateState = {
 /** Where the updater is; null until the app has said. */
 export const useUpdate = create<UpdateState | null>(() => null);
 
-/** How soon after the settings are in Meno asks (once) whether it may keep itself up to date. */
-const ASK_AFTER_MS = 3_000;
 /** How soon after Meno starts it first looks, and how often after that. */
 const FIRST_LOOK_MS = 20_000;
 const EVERY_MS = 6 * 60 * 60 * 1000;
@@ -72,6 +71,38 @@ export const UPDATE_CONSENT: ConsentRequest = {
   // (and the hosts the look may reach: those alone - src-tauri/src/net.rs)
   hosts: UPDATE_HOSTS,
 };
+
+/**
+ * The update's network tasks that came to download a newer Meno, by id. A
+ * look and the download it leads to are one task (src-tauri/src/update.rs,
+ * `look`): the task is a download once the updater says it is downloading.
+ */
+export const useUpdateDownloads = create<{ tasks: string[] }>(() => ({ tasks: [] }));
+
+// (the update's task running as the download begins: a download from then on, its notice shown from its first byte)
+useUpdate.subscribe((u, was) => {
+  if (u?.phase !== "downloading" || was?.phase === "downloading") return;
+  const running = Object.values(useNetwork.getState().tasks).filter((t) => t.purpose === UPDATE_PURPOSE && !t.ended);
+  if (running.length) useUpdateDownloads.setState((d) => ({ tasks: [...new Set([...d.tasks, ...running.map((t) => t.id)])] }));
+});
+
+/**
+ * Whether a task's notice shows in the corner (ui/network/NetworkToasts):
+ * always, but a look for a newer Meno's where the user turned that off -
+ * the one notice that can be. A look that finds a newer Meno and downloads
+ * it shows its notice from the download's start: only the look itself is
+ * hidden. The record keeps every look either way.
+ */
+export function noticeShown(
+  task: Pick<NetTask, "id" | "purpose" | "ended">,
+  updateNotice: boolean,
+  update: { phase?: UpdatePhase; downloads: readonly string[] } = { phase: useUpdate.getState()?.phase, downloads: useUpdateDownloads.getState().tasks },
+): boolean {
+  if (updateNotice || task.purpose !== UPDATE_PURPOSE) return true;
+  // (the update downloading now, this task still running: the download, whether or not it was seen to begin)
+  if (!task.ended && update.phase === "downloading") return true;
+  return update.downloads.includes(task.id);
+}
 
 /** Whether Meno may look now: online, and allowed to. */
 export function mayLook(): boolean {
@@ -115,9 +146,11 @@ export async function restartIntoUpdate(): Promise<void> {
 }
 
 /**
- * Starts keeping Meno up to date, once the settings are in: asks the once,
- * looks after a little while, then every few hours - and at once whenever
- * it becomes allowed (back online, or just turned on). Returns a stop.
+ * Starts keeping Meno up to date, once the settings are in: asks the once -
+ * after the user's first action (lib/firstAction), once it has ended, never
+ * before - looks after a little while, then every few hours, and at once
+ * whenever it becomes allowed (back online, or just turned on). Returns a
+ * stop.
  */
 export function startUpdates(): () => void {
   if (!isTauri()) return () => {};
@@ -132,20 +165,37 @@ export function startUpdates(): () => void {
       const settings = useAppSettings.getState();
       const net = useNetwork.getState();
       if (net.offline || net.granted.includes(UPDATE_PURPOSE) || settings.updates.asked) return;
-      settings.setUpdates({ asked: true });
-      void askToConnect(UPDATE_CONSENT);
-    };
-    let unguided: (() => void) | null = null;
-    // (not over a guide being gone through: once it is closed)
-    const ask = setTimeout(() => {
-      if (!useGuide.getState().open) return askNow();
-      unguided = useGuide.subscribe((g) => {
-        if (g.open || stopped) return;
-        unguided?.();
-        unguided = null;
-        askNow();
+      // (kept as asked once answered - yes or not now: a question left open as Meno quits is asked again, after the next run's first action)
+      void askToConnect(UPDATE_CONSENT).then(() => {
+        const now = useAppSettings.getState();
+        now.setUpdates({ ...now.updates, asked: true });
       });
-    }, ASK_AFTER_MS);
+    };
+    // (not in the middle of what the user is doing - the pointer held - nor over a guide being gone through)
+    let pressed = false;
+    const ask = afterFirstAction(
+      askNow,
+      () => pressed || !!useGuide.getState().open,
+      (changed) => {
+        const down = () => {
+          pressed = true;
+        };
+        const up = () => {
+          pressed = false;
+          changed();
+        };
+        window.addEventListener("pointerdown", down, true);
+        window.addEventListener("pointerup", up, true);
+        window.addEventListener("pointercancel", up, true);
+        const unguided = useGuide.subscribe(changed);
+        return () => {
+          window.removeEventListener("pointerdown", down, true);
+          window.removeEventListener("pointerup", up, true);
+          window.removeEventListener("pointercancel", up, true);
+          unguided();
+        };
+      },
+    );
     const first = setTimeout(() => void checkForUpdate(), FIRST_LOOK_MS);
     const every = setInterval(() => void checkForUpdate(), EVERY_MS);
     // (an update ready: the jobs it waits for, as they start and end)
@@ -159,8 +209,7 @@ export function startUpdates(): () => void {
     });
     stops.push(() => {
       heard();
-      unguided?.();
-      clearTimeout(ask);
+      ask();
       clearTimeout(first);
       clearInterval(every);
       clearInterval(held);
