@@ -68,7 +68,10 @@ export type PageMarks = { segments: [Point, Point][]; points: Point[]; boxes: Bo
 
 /** How far from a structure a lone labelled atom - an ion beside it, Na+ by an acetate - may be and still be its, in bonds as drawn. */
 const LONE_JOINS = 1.6;
-/** How far an ion set level with the atom of a structure nearest it - a salt's counter-ion beside it in a row, NMe4+ Br- - may be, in bonds. */
+/**
+ * How far an ion set in a row with a structure - level with the atom of it nearest the ion, or with its middle, as Meno lays a
+ * salt's pieces out in a row, each centred on it (lib/layout/engine) - may be, in bonds: a salt's counter-ion, NMe4+ Br-.
+ */
 const ION_ROW = 3;
 
 const dist = (p: Point, q: Point) => Math.hypot(p.x - q.x, p.y - q.y);
@@ -115,9 +118,10 @@ export type Apart = { segments: readonly [Point, Point][]; pluses: readonly Poin
  * level with the atom nearest it, ION_ROW), with no arrow nor "+" between them (`apart`): an ion (Na+, Cl-) where the ions so
  * by it make it neutral - the structure carrying
  * their charge the other way, an ammonium's Cl-, a carboxylate's Na+ - and else its own: never a neutral molecule's, nor
- * across a scheme.
+ * across a scheme. Each with the ions of the other charge as near as ION_ROW bonds it did not take, where it is charged still
+ * (`missed`, their labels): a counter-ion of it, perhaps, not read as one.
  */
-function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }): number[][] {
+function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }): { ids: number[]; missed: string[] }[] {
   const up = f.atoms.map((_, i) => i);
   const top = (i: number): number => (up[i] === i ? i : (up[i] = top(up[i])));
   for (const b of f.bonds) up[top(b.a)] = top(b.b);
@@ -152,7 +156,9 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
     for (const g of found) {
       const j = g.reduce((m, k) => (dist(a, f.atoms[k]) < dist(a, f.atoms[m]) ? k : m), g[0]);
       const d = dist(a, f.atoms[j]);
-      const reach = ion && Math.abs(a.y - f.atoms[j].y) <= 0.5 * f.bond ? ION_ROW * Math.max(f.bond, between) : LONE_JOINS * f.bond;
+      const ys = g.map((k) => f.atoms[k].y);
+      const level = (y: number) => Math.abs(a.y - y) <= 0.5 * f.bond;
+      const reach = ion && (level(f.atoms[j].y) || level((Math.min(...ys) + Math.max(...ys)) / 2)) ? ION_ROW * Math.max(f.bond, between) : LONE_JOINS * f.bond;
       if (d > reach) continue;
       candidate = true;
       if (d < near && clear(a, f.atoms[j])) [best, near] = [g, d];
@@ -176,11 +182,24 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
     if (left === 0) g.push(...taken);
     else alone.push(...taken);
   }
+  // (a structure charged still, by an ion of the other charge none took - as near as ION_ROW bonds, level or not, across the
+  // way or not: what is not known to be its counter-ion is not known not to be)
+  const taken = new Set(found.flat());
+  const missed = new Map<number[], string[]>();
+  for (const g of found) {
+    const left = g.reduce((t, i) => t + chargeOf(f.atoms[i]), 0);
+    if (!left) continue;
+    const near = f.atoms.flatMap((a, i) => {
+      if (taken.has(i) || bonded.has(i) || !a.label || Math.sign(chargeOf(a)) !== -Math.sign(left)) return [];
+      return g.some((k) => dist(a, f.atoms[k]) <= ION_ROW * Math.max(f.bond, between)) ? [a.label] : [];
+    });
+    if (near.length) missed.set(g, near);
+  }
   // (an ion by a structure taken by none is its own; any other lone label is words, not a structure: a "DP4+" in a figure, a lone H)
   for (const i of alone) if (chargeOf(f.atoms[i])) found.push([i]);
   // (nor is one line with no label at either end: a chart's tick, a table's rule, a bracket's piece - no structure is that)
   const bondsOf = (g: number[]) => f.bonds.filter((b) => g.includes(b.a)).length;
-  return found.filter((g) => bondsOf(g) > 1 || g.some((i) => f.atoms[i].label)).map((g) => g.sort((p, q) => p - q));
+  return found.filter((g) => bondsOf(g) > 1 || g.some((i) => f.atoms[i].label)).map((g) => ({ ids: g.sort((p, q) => p - q), missed: missed.get(g) ?? [] }));
 }
 
 /** Letters of `left` - those no atom of the figure took - that lie within a structure: in its box, and within a bond of one of its bonds. */
@@ -274,7 +293,7 @@ export function figureOn(given: FigureDrawn, figure: number, sha256: string, pag
 
 /** The structures of a figure read - each refused where letters of the figure no atom took, or words it read, lie within it. */
 function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number, sha256: string, page: number, words: readonly Pick<FigureLetter, "c" | "box">[], apart?: Apart): PageStructure[] {
-  return structuresIn(f, apart).map((ids, k): PageStructure => {
+  return structuresIn(f, apart).map(({ ids, missed }, k): PageStructure => {
     const at = new Map(ids.map((i, j) => [i, j]));
     const atoms = ids.map((i) => back(f.atoms[i]));
     const mine = f.bonds.filter((b) => at.has(b.a));
@@ -289,7 +308,10 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     for (const b of mine) for (const e of [b.a, b.b]) degree.set(e, (degree.get(e) ?? 0) + 1);
     const ends = ids.filter((i) => degree.get(i) === 1 && !f.atoms[i].label).map((i) => back(f.atoms[i]));
     // (its own reading: its atoms and bonds alone, its middle at naught, each atom tied to where it lies on the page)
-    const part: FigureRead = { atoms: ids.map((i) => f.atoms[i]), bonds: mine.map((b) => ({ ...b, a: at.get(b.a)!, b: at.get(b.b)! })), bond: f.bond, left: { letters: [] } };
+    // (charged still, an ion of the other charge by it not taken: each charged atom of it unsure, saying so)
+    const said = missed.length ? `${missed.map((l) => `"${l}"`).join(", ")} beside it ${missed.length > 1 ? "are" : "is"} not taken with it: ${missed.length > 1 ? "counter-ions" : "a counter-ion"} of it, perhaps.` : null;
+    const own = ids.map((i) => (said && chargeOf(f.atoms[i]) ? { ...f.atoms[i], unsure: [...(f.atoms[i].unsure ?? []), said] } : f.atoms[i]));
+    const part: FigureRead = { atoms: own, bonds: mine.map((b) => ({ ...b, a: at.get(b.a)!, b: at.get(b.b)! })), bond: f.bond, left: { letters: [] } };
     const mid = { x: (Math.min(...part.atoms.map((a) => a.x)) + Math.max(...part.atoms.map((a) => a.x))) / 2, y: (Math.min(...part.atoms.map((a) => a.y)) + Math.max(...part.atoms.map((a) => a.y))) / 2 };
     const within = lettersWithin([...f.left.letters, ...words].map((l) => ({ c: l.c, box: boxBack(l.box, back) })), bonds, box, f.bond);
     const line = lineOfWords(part);

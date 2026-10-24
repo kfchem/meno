@@ -1545,16 +1545,22 @@ words are: by itself, not by a box drawn round it.
 - each figure of the page is read as *Read as structure* reads one (the
   one reading, `schemeDrawn`), and split into its structures: an atom and
   every atom bonded to it, on and on. A lone ion (Na+, Cl-) within 1.6
-  bonds of a structure - or within 3, set level with the atom nearest it,
-  as a salt's counter-ion is in a row beside it (bonds measured atom to
-  atom) - with no arrow nor "+" between them, is that
+  bonds of a structure - or within 3, set level with the atom nearest it
+  or with the structure's middle, as a salt's counter-ion is in a row
+  beside it (Meno lays a salt's pieces out so, each centred on the row;
+  bonds measured atom to atom) - with no arrow nor "+" between them, is that
   structure's where the ions so by it make it neutral - it carrying their
   charge the other way: sodium acetate, an ammonium chloride, NMe4+ Br-,
   are each one structure. Any other ion by a structure - as near as that, or
   within the box round the figure's bonds - is its own, never a neutral
   molecule's nor taken across a scheme; one further out (a "Na+" of a
   caption or a table) is words. A lone label that is no ion - a lone
-  metal - is the structure's it lies by so, and by none, words;
+  metal - is the structure's it lies by so, and by none, words. A
+  structure charged still, with an ion of the other charge within 3 bonds
+  of it that it did not take - level or not, across the way or not - has
+  each of its charged atoms marked unsure, saying so ('"K+" beside it is
+  not taken with it: a counter-ion of it, perhaps.'): never a salt read
+  without its counter-ion and none the wiser;
 - a line of words read as a structure - its signs taken for bonds, "R2 =
   SPh", "PG = Boc", "t-BuNH2·BH3": every atom a label, all on one line,
   each bond level, with an "=" read as a double bond beside a label that

@@ -151,6 +151,48 @@ describe("the structures of a figure, each taken whole", () => {
       const neutral: FigureDrawn = { paths: enolate, letters: [...letters("OH", o), ...right(o, "Br−")], pictures: [] };
       expect(one(neutral).sort()).toEqual([["Br1", -1], ["C2 O1", 0]]);
     });
+
+    /** What of each structure is said to be unsure of an ion by it. */
+    const unsure = (drawn: FigureDrawn) => structuresOf(drawn, 0, "pdf", 0, []).map((s) => read(s).atoms.flatMap((a) => (a.unsure?.said ?? []).filter((t) => t.includes("counter-ion"))));
+    /** An ion's label `by` bonds to the right of `p`, level with the middle of `atoms` - as Meno lays a salt out, its pieces in a row, each centred on it. */
+    const inRow = (atoms: P[], p: P, by: number, ion: string) => letters(ion, [p[0] + by * L, (Math.min(...atoms.map((q) => q[1])) + Math.max(...atoms.map((q) => q[1]))) / 2]);
+
+    it("takes a counter-ion set level with the structure's middle, as Meno lays a salt out, though off level with the atom nearest it: NMe4+ Br-, an enolate's K+, a picolinium's Cl-", () => {
+      // (its methyls at 40 degrees: the Br- 0.64 of a bond off level with the nearest, 1.9 bonds from it)
+      const n: P = [150, 200];
+      const ends = [step(n, 40), step(n, 140), step(n, 220), step(n, 320)];
+      const ammonium: FigureDrawn = { paths: ends.map((e) => bond(e, n, [false, true])), letters: [...letters("N+", n), ...inRow([n, ...ends], ends[0], 1.8, "Br−")], pictures: [] };
+      expect([one(ammonium), unsure(ammonium)]).toEqual([[["Br1 C4 N1", 0]], [[]]]);
+      // (a methyl over the enolate's middle C: the K+ 0.75 of a bond off level with the O-)
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const o = step(b, -30);
+      const m = step(b, 90);
+      const enolate: FigureDrawn = { paths: [bond(a, b), beside(a, b, -1.8), bond(b, o, [false, true]), bond(b, m)], letters: [...letters("O−", o), ...inRow([a, b, o, m], o, 2.2, "K+")], pictures: [] };
+      expect([one(enolate), unsure(enolate)]).toEqual([[["C3 K1 O1", 0]], [[]]]);
+      // (a ring stood on its point, N+ at the top, a methyl down to the right: the Cl- a bond off level with that methyl, 1.64 bonds from it)
+      const c: P = [150, 200];
+      const r = [90, 150, 210, 270, 330, 30].map((deg): P => [c[0] + L * Math.cos((deg * Math.PI) / 180), c[1] - L * Math.sin((deg * Math.PI) / 180)]);
+      const me = step(r[4], -30);
+      const ring = r.map((p, k) => bond(p, r[(k + 1) % 6], [k === 0, k === 5]));
+      const picolinium: FigureDrawn = { paths: [...ring, beside(r[1], r[2], -1.8), beside(r[3], r[4], -1.8), beside(r[5], r[0], -1.8), bond(r[4], me)], letters: [...letters("N+", r[0]), ...inRow([...r, me], me, 1.3, "Cl−")], pictures: [] };
+      expect([one(picolinium), unsure(picolinium)]).toEqual([[["C6 Cl1 N1", 0]], [[]]]);
+    });
+
+    it("leaves an ion in a row that would not make the structure neutral apart - and the structure, charged still, unsure, saying so; one with no ion by it sure", () => {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const o = step(b, -30);
+      const enolate = [bond(a, b), beside(a, b, -1.8), bond(b, o, [false, true])];
+      const calcium: FigureDrawn = { paths: enolate, letters: [...letters("O−", o), ...right(o, "Ca2+")], pictures: [] };
+      expect(one(calcium).sort()).toEqual([["C2 O1", -1], ["Ca1", 2]]);
+      expect(unsure(calcium)).toContainEqual(['"Ca2+" beside it is not taken with it: a counter-ion of it, perhaps.']);
+      // (and one as far off, not level with it: a word, the structure as unsure)
+      const below: FigureDrawn = { paths: enolate, letters: [...letters("O−", o), ...letters("K+", [o[0] + 2 * L, o[1] + 1.4 * L])], pictures: [] };
+      expect(unsure(below)).toEqual([['"K+" beside it is not taken with it: a counter-ion of it, perhaps.']]);
+      const alone: FigureDrawn = { paths: enolate, letters: letters("O−", o), pictures: [] };
+      expect([one(alone), unsure(alone)]).toEqual([[["C2 O1", -1]], [[]]]);
+    });
   });
 
   it("finds none in one line with no label - a chart's tick, a table's rule - nor in a lone word: they are no structures", () => {
