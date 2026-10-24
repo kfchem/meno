@@ -1919,25 +1919,37 @@ page could not be read after one run.
     where something else is there (`keepExitsUnder`). A step's empty
     exit frames, made as it is added, go clear in the same way (model
     `withExits`).
-  - **A wire goes round** (look `wireCurve`). Going on to the right it
-    is a curve. Where its input lies to the left of where it leaves, or
-    too near to turn, it goes round what it leaves and what it comes
-    into, half a bond clear of each, its corners rounded: out to the
-    right, across between them or above or below both, and in from the
-    left. Between 0 and 40 px of run the two shapes are eased one into
-    the other, so a step moved across never makes its wire jump; a
-    step's line to its set beside it, 64 px across, is always the curve.
-    Into a card that names its inputs, a wire comes in level for as long
-    as the input's name, under it, never through it. A wire
-    that would cross another set or card goes round that too, taken with
-    the end it is nearer. Placement keeps clear of the same route, and a
-    change of route on the page is eased, never a jump.
+  - **A wire goes round** (look `wireRoute`). Going on to the right it
+    is a curve, kept between its ends. Where its input lies to the left of
+    where it leaves, or the curve would come within half a bond of what it
+    leaves or comes into, or cross another set or card, it goes round them
+    all: out a bond to the right of its set, up or down to a level clear
+    of all - above, below, or between the two where nothing stands there -
+    across, and into its input from a bond to its left, each way up or
+    down stepped aside past what stands in it. Its turns are a bond wide,
+    on the page, so they are arcs at any zoom; two turns closer than that
+    both shrink alike. It keeps half a bond from every frame's line
+    (docs/LOOK.md, *Room*). Between 0 and 64 px of run, and as the curve
+    comes clear, the two shapes are eased one into the other, so a step
+    moved never makes its wire jump; a step's line to its set beside it
+    is always the curve. Into a card that names its inputs, a wire comes
+    in level for as long as the input's name, under it.
+  - **It keeps its way** while that is still clear: the side it passed
+    what it goes round, unless the other side has become a fifth shorter.
+    A card dragged past a set makes its wire change way twice at most.
+    Placement keeps clear of the same routes, and a change of way on the
+    page is eased, never a jump.
+  - **Only what moved is worked out again.** Each wire looks at the sets
+    and cards near it (`nearWire`), and is keyed by its ends and those
+    (`wireKey`): a drag works out again only the wires whose key changed -
+    about 7 ms a frame among 100 sets and 50 wires on this Mac.
   - **Smooth** (look `byTurn`, `pointsFor`). A wire is worked out as a
     close path, then drawn through points spread by how far it runs and
-    how much it turns: one about every 3 screen pixels and every 2.5
+    how much it turns: one about every 3 screen pixels and every 2
     degrees, more at its bends. A long run up or down turns in an arc as
-    wide as the run is long: the curve's handles are half the run, from
-    40 to 240 px. Never a kink, never a tight hook.
+    wide as the run allows: the curve's handles are half the run, from 40
+    to 240 px, but never more than its run across. Never a kink, never a
+    tight hook.
   - **A card put down** (Quick Add, or a wire let go on empty space)
     goes where it was put, or lower where that is over a set, a card, a
     structure or a wire, as far as it must (place `placeCard`): it is made
