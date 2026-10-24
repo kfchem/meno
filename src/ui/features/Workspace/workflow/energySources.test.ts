@@ -27,7 +27,7 @@ function seen(ms: Omit<Molecule3D, "id">[], holds: "molecules" | "conformers" = 
   return { columns: table.columns.filter((c) => c.name.startsWith("energy")).map((c) => c.name), diagram: diagramOf(table) };
 }
 /** A calculation's water, titled `title`, its energy `e`. */
-const calculated = (title: string, e: number, method = "GFN2-xTB"): Omit<Molecule3D, "id"> => {
+const calculated = (title: string, e: number, method = "a method"): Omit<Molecule3D, "id"> => {
   const atoms = [
     { el: "O", x: 0, y: 0, z: 0.1173 },
     { el: "H", x: 0, y: 0.7572, z: -0.4692 },
@@ -64,7 +64,7 @@ describe("an entry's energy, by what worked it out", () => {
 
   it("of a calculation's, as it was: worked out by the calculation", () => {
     const entries = setEntries([{ ...calculated("R", -76.4), id: 1 }], "molecules").map((e) => entryOfSet(e, "e"));
-    expect(entries[0].properties.energy.by).toEqual({ plugin: "a", program: "a program", method: "GFN2-xTB" });
+    expect(entries[0].properties.energy.by).toEqual({ plugin: "a", program: "a program", method: "a method" });
     expect(seen([calculated("R", -76.4), calculated("P", -76.3)]).columns).toEqual(["energy"]);
   });
 
