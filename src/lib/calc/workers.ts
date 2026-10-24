@@ -80,6 +80,9 @@ function markTakenAway(p: Plugin, away: boolean) {
  * one holds is a failure of another's.
  */
 let setUps: Promise<unknown> = Promise.resolve();
+/** Each plugin's set-up asked for last, by its number: one whose turn comes and is no longer it - skipped (`skipSetUp`), or asked for again since - is passed over. */
+const asked = new Map<string, number>();
+let lastAsked = 0;
 
 /**
  * Adds a plugin: sets its environment up, asking first whether it may
@@ -97,8 +100,11 @@ export async function addPlugin(p: Plugin): Promise<void> {
   }
   const here = useReaders.getState().state[p.id];
   if (here === "waiting" || here === "adding") return;
+  const mine = ++lastAsked;
+  asked.set(p.id, mine);
   setState(p.id, "waiting");
   const turn = setUps.then(async () => {
+    if (asked.get(p.id) !== mine) throw new Error(`${p.name}'s set-up was skipped.`);
     setState(p.id, "adding");
     try {
       await ensurePyEnv(p.profile);
@@ -111,6 +117,19 @@ export async function addPlugin(p: Plugin): Promise<void> {
   });
   setUps = turn.catch(() => undefined);
   return turn;
+}
+
+/**
+ * A set-up that waits, taken out of the line: not set up, and saying so -
+ * where the one before it holds the line, a download that goes on and on, a
+ * question not answered. One not waiting, nothing.
+ */
+export function skipSetUp(p: Plugin): void {
+  if (useReaders.getState().state[p.id] !== "waiting") return;
+  asked.delete(p.id);
+  const before = settingUp();
+  const name = before ? (anyPluginById(before)?.name ?? before) : null;
+  setState(p.id, "absent", `${p.name} was not added: skipped${name ? ` while it waited for ${name}'s set-up` : ""}.`);
 }
 
 /** The plugin whose set-up runs now, where one does: what one waiting waits for. */

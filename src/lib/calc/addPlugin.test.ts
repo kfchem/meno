@@ -14,7 +14,7 @@ vi.mock("../pyEnv", () => ({
   removePyEnv: async () => undefined,
 }));
 
-const { addPlugin, addedReaders, settingUp, useReaders } = await import("./workers");
+const { addPlugin, addedReaders, settingUp, skipSetUp, useReaders } = await import("./workers");
 const { PLUGINS } = await import("./catalog");
 
 /** Lets what is due run: a set-up's end, and the next one's start. */
@@ -81,5 +81,30 @@ describe("plugins added one after another", () => {
     ends.get(a.profile)!.done();
     await Promise.all([first, second]);
     expect(asked).toEqual([a.profile]);
+  });
+
+  it("takes one waiting out of the line where it is skipped, saying so - the rest go on, and it can be asked for again", async () => {
+    const added = [a, b, c].map((p) => addPlugin(p).catch((e: Error) => e.message));
+    await settle();
+    skipSetUp(b);
+    skipSetUp(a); // (one being set up is not skipped)
+    expect(states()).toEqual(["adding", "absent", "waiting"]);
+    expect(useReaders.getState().problem[b.id]).toBe(`${b.name} was not added: skipped while it waited for ${a.name}'s set-up.`);
+    // (asked for again before its turn came, and skipped again: still one turn, passed over)
+    void addPlugin(b).catch(() => undefined);
+    skipSetUp(b);
+    ends.get(a.profile)!.done();
+    await settle();
+    // (its turn passed over: the next set up)
+    expect(asked).toEqual([a.profile, c.profile]);
+    ends.get(c.profile)!.done();
+    expect(await Promise.all(added)).toEqual([undefined, `${b.name}'s set-up was skipped.`, undefined]);
+    expect(states()).toEqual(["added", "absent", "added"]);
+    const again = addPlugin(b);
+    await settle();
+    expect(asked).toEqual([a.profile, c.profile, b.profile]);
+    ends.get(b.profile)!.done();
+    await again;
+    expect(useReaders.getState().state[b.id]).toBe("added");
   });
 });

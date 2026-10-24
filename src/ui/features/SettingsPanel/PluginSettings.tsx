@@ -5,7 +5,7 @@ import ConfirmDiscard from "../../layouts/ConfirmDiscard";
 import { liveJobsOf, type Job } from "../../../lib/jobs";
 import { ALL_PLUGINS, anyPluginById, manifestOf, PLUGINS, REFUSED, runs, type Plugin as AnyPlugin } from "../../../lib/calc/catalog";
 import { showGuide } from "../../../lib/plugins/guides";
-import { addedReaders, addPlugin, removePlugin, useReaders, waitingSaid } from "../../../lib/calc/workers";
+import { addedReaders, addPlugin, removePlugin, skipSetUp, useReaders, waitingSaid } from "../../../lib/calc/workers";
 import { ROLES } from "../../../lib/plugins/roles";
 import { forThisSystem, systemHere, SYSTEM_NAMES } from "../../../lib/plugins/here";
 import { locate, lookForAll, programKey, useInstalled } from "../../../lib/plugins/installed";
@@ -128,6 +128,15 @@ function Plugin({ plugin: p, state, problem }: { plugin: AnyPlugin; state?: stri
         <span key={status} className="text-xs text-gh-gray meno-fade-in">
           {status}
         </span>
+        {state === "waiting" && runs(p) && (
+          // (taken out of the line, where the set-up before it holds it)
+          <button
+            onClick={() => skipSetUp(p)}
+            className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-3 text-xs text-gh-black hover:bg-gh-base"
+          >
+            Skip
+          </button>
+        )}
         {state === "absent" && !forThisSystem(p) ? (
           <span className="max-w-[10rem] text-right text-xs text-gh-gray">For {p.systems.map((s) => SYSTEM_NAMES[s]).join(" and ")} only</span>
         ) : (state === "added" || state === "absent") && (
