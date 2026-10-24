@@ -43,6 +43,8 @@ export function figureNotesOf(model: Model): FigureNote[] {
  * are not worked out again.
  */
 export function figureNotesKey(model: Model): string {
+  // (none read from a figure: no notes, whatever else is drawn)
+  if (!model.atoms.some((a) => a.seen)) return "";
   const parts: string[] = [`${model.atoms.length}`];
   // (the bonds round each atom with a mark, only: what its mark is compared with)
   const round = new Map<number, Model["bonds"]>();

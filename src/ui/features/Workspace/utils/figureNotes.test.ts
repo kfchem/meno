@@ -78,6 +78,9 @@ describe("the note over a structure read from a figure", () => {
       { ...m, atoms: [...m.atoms, { id: 11, x: 12, y: 0, r: 0.9, el: "C" }] },
     ];
     for (const c of changed) expect(figureNotesKey(c)).not.toBe(figureNotesKey(m));
+    // (nothing read from a figure: one key, whatever is drawn - there are no notes to work out)
+    const byHand: Model = { atoms: m.atoms.map(({ seen: _s, ...a }) => a), bonds: m.bonds };
+    expect([figureNotesKey(byHand), figureNotesKey({ ...byHand, bonds: [] })]).toEqual(["", ""]);
     const held: NotePlaces = new Map();
     const notes = figureNotesOf(m);
     const at = figureNotePlaces(m, notes, held).get(1)!;
