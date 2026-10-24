@@ -1523,10 +1523,12 @@ words are: by itself, not by a box drawn round it.
 - each figure of the page is read as *Read as structure* reads one (the
   one reading, `schemeDrawn`), and split into its structures: an atom and
   every atom bonded to it, on and on. A lone ion (Na+, Cl-) within 1.6
-  bonds of a structure, with no arrow nor "+" between them, is that
+  bonds of a structure - or within 3, set level with the atom nearest it,
+  as a salt's counter-ion is in a row beside it (bonds measured atom to
+  atom) - with no arrow nor "+" between them, is that
   structure's where the ions so by it make it neutral - it carrying their
-  charge the other way: sodium acetate, an ammonium chloride, are each one
-  structure. Any other ion by a structure - within those 1.6 bonds, or
+  charge the other way: sodium acetate, an ammonium chloride, NMe4+ Br-,
+  are each one structure. Any other ion by a structure - as near as that, or
   within the box round the figure's bonds - is its own, never a neutral
   molecule's nor taken across a scheme; one further out (a "Na+" of a
   caption or a table) is words. A lone label that is no ion - a lone
