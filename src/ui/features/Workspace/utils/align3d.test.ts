@@ -117,6 +117,36 @@ describe("principalTurn", () => {
     expect(across).toBeGreaterThan(up);
   });
 
+  it("shows a symmetric top the same way however its coordinates are jittered - benzene, methane, CH3Cl - two calculations of it alike", () => {
+    // (a small fixed jitter, different each time: what two calculations of one molecule differ by)
+    let seed = 1;
+    const jitter = (xyz: number[], k: number) => {
+      seed = k * 7919 + 13;
+      const next = () => ((seed = (seed * 48271) % 2147483647) / 2147483647 - 0.5) * 2e-3;
+      return xyz.map((v) => v + next());
+    };
+    // (benzene, its ring in a plane tilted to the page; methane; chloromethane, its C-Cl the long axis)
+    const tilt = (p: number[]) => [p[0], p[1] * Math.cos(0.7) - p[2] * Math.sin(0.7), p[1] * Math.sin(0.7) + p[2] * Math.cos(0.7)];
+    const benzene = Array.from({ length: 12 }, (_, k) => {
+      const r = k < 6 ? 1.39 : 2.47;
+      const t = ((k % 6) * Math.PI) / 3;
+      return tilt([r * Math.cos(t), r * Math.sin(t), 0]);
+    }).flat();
+    const methane = [0, 0, 0, 0.63, 0.63, 0.63, -0.63, -0.63, 0.63, -0.63, 0.63, -0.63, 0.63, -0.63, -0.63];
+    const ch3cl = [0, 0, 0, 0, 0, 1.78, 1.03, 0, -0.36, -0.51, 0.89, -0.36, -0.51, -0.89, -0.36];
+    for (const [name, xyz] of [["benzene", benzene], ["methane", methane], ["chloromethane", ch3cl]] as const) {
+      const shown = [1, 2, 3, 4, 5].map((k) => {
+        const jittered = jitter([...xyz], k);
+        return seen(jittered, principalTurn(jittered)!);
+      });
+      for (const other of shown.slice(1)) {
+        other.forEach((v, i) => expect(v.distanceTo(shown[0][i]), `${name}, atom ${i}`).toBeLessThan(0.05));
+      }
+    }
+    // (benzene face-on still)
+    for (const v of seen(benzene, principalTurn(benzene)!)) expect(Math.abs(v.z)).toBeLessThan(1e-6);
+  });
+
   it("turns nothing of one atom, or of atoms all in one place", () => {
     expect(principalTurn([1, 2, 3])).toBeUndefined();
     expect(principalTurn([1, 2, 3, 1, 2, 3])).toBeUndefined();
