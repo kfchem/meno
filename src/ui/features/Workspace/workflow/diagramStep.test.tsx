@@ -299,3 +299,63 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
     expect(diagramOptions(bare, bare.steps![0], stepOptions(bare.steps![0])).map((o) => o.type)).toEqual(["text", "lines", "text"]);
   });
 });
+
+describe("an Energy diagram's level of several compounds", () => {
+  type A = { el: string; charge?: number };
+  /** A molecule called `title` at `x`: its atoms (placed along a line - only their elements, charges and bonds count here), bonds, one energy in hartrees, and a charge its calculation gave. */
+  const mol = (title: string, x: number, atoms: A[], bonds: [number, number][], energy: number, charge?: number): Omit<Molecule3D, "id"> => ({
+    at: { x, y: 0 },
+    title,
+    atoms: atoms.map((a, k) => ({ ...a, x: k * 1.1, y: 0, z: 0 })),
+    bonds: bonds.map(([a1, a2]) => ({ a1, a2, order: 1 })),
+    energies: [energy],
+    calc: { readers: ["meno"], program: "prog", method: "m", ...(charge != null ? { charge, multiplicity: 1 } : {}) },
+  });
+  const H = { el: "H" };
+  // (made up, so that the answer is known by construction - each level's atoms as a reaction's are: CH4BrO, charge -1)
+  const ch3br = () => mol("R", 0, [{ el: "C" }, H, H, H, { el: "Br" }], [[0, 1], [0, 2], [0, 3], [0, 4]], -2614.0);
+  const hydroxide = () => mol("R", 2, [{ el: "O", charge: -1 }, H], [[0, 1]], -75.6);
+  const ts = () => mol("TS", 4, [{ el: "C" }, H, H, H, { el: "Br" }, { el: "O" }, H], [[0, 1], [0, 2], [0, 3], [5, 6]], -2689.58, -1);
+  const methanol = () => mol("P", 6, [{ el: "C" }, H, H, H, { el: "O" }, H], [[0, 1], [0, 2], [0, 3], [0, 4], [4, 5]], -115.7);
+  const bromide = () => mol("P", 8, [{ el: "Br", charge: -1 }], [], -2573.95);
+  function run(molecules: Omit<Molecule3D, "id">[]) {
+    let doc = emptyWorkspaceDocument();
+    for (const m of molecules) doc = addMolecule3d(doc, m);
+    const set = doc.nextWorkflowId ?? 1;
+    doc = addSet(doc, { x0: -2, y0: -2, x1: 10, y1: 2 });
+    const step = doc.nextWorkflowId!;
+    doc = addStep(doc, "energy-diagram", 14, 0);
+    const ran = runStep(connect(doc, { set }, step), step, W);
+    return { ran, step, s: ran.steps!.find((x) => x.id === step)! };
+  }
+
+  it("stands each at the sum of its compounds - R, CH3Br and OH- apart; P, CH3OH and Br- - and says which it sums", () => {
+    const { ran, step, s } = run([ch3br(), hydroxide(), ts(), methanol(), bromide()]);
+    // (R: -2614.0 - 75.6 = -2689.6; TS 0.02 above, 12.55 kcal/mol; P: -115.7 - 2573.95 = -2689.65, 0.05 below, -31.38)
+    expect(diagramOf(ran, step)!.levels.map((l) => [l.name, Number(l.value.toFixed(2)), l.sums?.map((p) => p.formula)])).toEqual([
+      ["R", 0, ["CH3Br", "HO\u2212"]],
+      ["TS", Number((0.02 * KCAL).toFixed(2)), undefined],
+      ["P", Number((-0.05 * KCAL).toFixed(2)), ["CH4O", "Br\u2212"]],
+    ]);
+    expect([(0.02 * KCAL).toFixed(2), (-0.05 * KCAL).toFixed(2)]).toEqual(["12.55", "-31.38"]);
+    expect(s.ran?.said).toBe("3 levels \u00b7 relative to R \u00b7 R sums CH3Br + HO\u2212; P sums CH4O + Br\u2212");
+    // (kept with the workspace, what each sums with it)
+    const back = readWorkflow(JSON.parse(JSON.stringify({ sets: ran.sets, steps: ran.steps, wires: ran.wires })))!;
+    expect(back.sets.find((b) => b.made?.step === step)?.chart).toEqual(diagramOf(ran, step));
+  });
+
+  it("refuses levels that do not hold the same atoms and charge, saying what each holds - never a sum of different reactions", () => {
+    // (the audit's: R CH3Br alone, against a TS and products that have OH- in them - which drew -47,496 and 1.57 x 10^6 kcal/mol)
+    const { ran, step, s } = run([ch3br(), ts(), methanol(), bromide()]);
+    expect([s.ran?.ok, s.ran?.said]).toEqual([false, "Its levels do not hold the same atoms and charge: R has CH3Br; TS, P have CH4BrO\u2212"]);
+    expect(diagramOf(ran, step)).toBeUndefined();
+  });
+
+  it("takes a compound's conformers at their lowest, and a level of one compound as before", () => {
+    const low = { ...ts(), energies: [-2689.57, -2689.58], frames: [ts().atoms.flatMap((a) => [a.x + 0.01, a.y, a.z])], conformerSet: true as const };
+    const { ran, step } = run([ch3br(), hydroxide(), low, methanol(), bromide()]);
+    const level = diagramOf(ran, step)!.levels[1];
+    expect([level.name, Number(level.value.toFixed(2)), level.lowestOf, level.sums]).toEqual(["TS", Number((0.02 * KCAL).toFixed(2)), 2, undefined]);
+  });
+});
+

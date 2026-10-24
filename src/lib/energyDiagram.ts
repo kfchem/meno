@@ -14,6 +14,7 @@ import { axisIn, howOf, leftIn, rowNamer, type Axis, type ChartLeft } from "./ch
 import type { Table, TableColumn } from "./table";
 import { factor, isUnit, sameDimension } from "./units";
 import { imaginaryWords } from "./calc/output";
+import { formulaOf } from "./io/coordinates";
 
 /**
  * A level: its name; its energy relative to the reference, in kcal/mol; how
@@ -30,7 +31,16 @@ export type DiagramLevel = {
   value: number;
   lowestOf: number;
   lowest: { row: number; entry?: string; number?: number; imaginary?: number[] | "not computed" };
+  /** Where it holds several compounds - a reactant and a nucleophile apart - each, its energy the sum of theirs: its formula, and its own lowest (the level's `lowest` the first's). */
+  sums?: { formula: string; lowestOf: number; lowest: { row: number; entry?: string; number?: number } }[];
 };
+
+/** What a row of molecules seen as a table is, as a level sums it: its compound - its constitution, charge and spin, as one key - its atoms' elements, and its charge. */
+export type RowCompound = { key: string; elements: readonly string[]; charge: number };
+
+/** A formula with its charge after it, as a chemist writes an ion's: "HO−", "SO42−", "Na+". */
+export const formulaWithCharge = (elements: readonly string[], charge: number) =>
+  `${formulaOf(elements.map((el) => ({ el })))}${charge ? `${Math.abs(charge) > 1 ? Math.abs(charge) : ""}${charge > 0 ? "+" : "\u2212"}` : ""}`;
 
 /** A level's imaginary frequencies as it says them, pointed at: "has 1 imaginary frequency, 300.0i cm-1", "no imaginary frequency", or "frequencies not computed". */
 export const frequenciesSaid = (imaginary: number[] | "not computed") =>
@@ -128,7 +138,12 @@ const said = (names: readonly string[]) => names.map((n) => `"${n}"`).join(", ")
  * the other ways it has it said; two levels shown by one name; no such
  * reference; fewer than two levels. Quantities with a symbol are said by it.
  */
-export function diagramOf(table: Table, options: { quantity?: string; reference?: string; levels?: string } = {}, connects?: Table): DiagramValue | { why: string } {
+export function diagramOf(
+  table: Table,
+  options: { quantity?: string; reference?: string; levels?: string } = {},
+  connects?: Table,
+  compounds?: readonly RowCompound[],
+): DiagramValue | { why: string } {
   const quantity = options.quantity?.trim() || "energy";
   const what = quantitySaid(quantity);
   const at = (name: string) => table.columns.findIndex((c) => c.name === name);
@@ -148,16 +163,21 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
   const entryAt = table.columns.findIndex((c) => c.kind === "entry");
   const numberAt = at("number");
 
-  // (each level: its rows with a value, its lowest - in the order the levels first come)
-  type Gathered = { name: string; values: { v: number; row: number }[]; without: string[] };
+  // (each level: its compounds - each its rows with a value, its lowest - in the order the levels, and their compounds, first come;
+  //  without what each row is, each level one compound, its rows its conformers)
+  type Part = { key: string; elements: readonly string[]; charge: number; values: { v: number; row: number }[]; without: string[] };
+  type Gathered = { name: string; parts: Part[] };
   const gathered = new Map<string, Gathered>();
   const named = rowNamer(table);
   table.rows.forEach((r, row) => {
     const name = levelOf(r);
-    const g = gathered.get(name) ?? { name, values: [], without: [] };
+    const g = gathered.get(name) ?? { name, parts: [] };
+    const c = compounds?.[row] ?? { key: "", elements: [], charge: 0 };
+    let part = g.parts.find((p) => p.key === c.key);
+    if (!part) g.parts.push((part = { key: c.key, elements: c.elements, charge: c.charge, values: [], without: [] }));
     const v = r[j];
-    if (typeof v === "number" && Number.isFinite(v)) g.values.push({ v, row });
-    else g.without.push(named(row));
+    if (typeof v === "number" && Number.isFinite(v)) part.values.push({ v, row });
+    else part.without.push(named(row));
     gathered.set(name, g);
   });
   // (in the order Levels lists them, each by the name it gives; the rest after, as they came - a line naming no level, or one listed already, counted)
@@ -165,35 +185,51 @@ export function diagramOf(table: Table, options: { quantity?: string; reference?
   if ("why" in listed) return listed;
   const levels = listed.levels;
   const shown = (g: (typeof levels)[number]) => (g.shown ? `"${g.shown}"` : "A level");
-  // (a level with no value at all: no diagram - which level, and the other ways it has one, said)
-  const none = levels.filter((g) => !g.values.length);
+  const formula = (p: Part) => formulaWithCharge(p.elements, p.charge);
+  // (a part of a level - which, where it holds several - and the level itself)
+  const shownPart = (g: (typeof levels)[number], p: Part) => `${shown(g)}${g.parts.length > 1 ? ` (${formula(p)})` : ""}`;
+  // (a level, or a compound of one, with no value at all: no diagram - which, and the other ways it has one, said)
+  const none = levels.flatMap((g) => g.parts.filter((p) => !p.values.length).map((p) => ({ g, p })));
   if (none.length) {
-    const others = (g: Gathered) =>
-      table.columns.flatMap((c, k) => (k !== j && baseOf(c.name) === baseOf(quantity) && table.rows.some((r) => levelOf(r) === g.name && r[k] != null) ? [c.name] : []));
-    return { why: none.map((g) => `${shown(g)} has no ${what}${others(g).length ? ` - it has ${said(others(g))}` : ""}`).join("; ") };
+    const others = ({ g, p }: (typeof none)[number]) =>
+      table.columns.flatMap((c, k) =>
+        k !== j && baseOf(c.name) === baseOf(quantity) && table.rows.some((r, row) => levelOf(r) === g.name && (compounds?.[row]?.key ?? "") === p.key && r[k] != null) ? [c.name] : [],
+      );
+    return { why: none.map((n) => `${shownPart(n.g, n.p)} has no ${what}${others(n).length ? ` - it has ${said(others(n))}` : ""}`).join("; ") };
   }
   if (levels.length < 2) return { why: "It takes two levels at least" };
+  // (every level the same atoms and charge, as a reaction's are - else no diagram: each set of them said, and whose)
+  if (compounds) {
+    const whole = (g: (typeof levels)[number]) => formulaWithCharge(g.parts.flatMap((p) => p.elements), g.parts.reduce((n, p) => n + p.charge, 0));
+    const holding = new Map<string, string[]>();
+    for (const g of levels) holding.set(whole(g), [...(holding.get(whole(g)) ?? []), g.shown]);
+    if (holding.size > 1)
+      return { why: `Its levels do not hold the same atoms and charge: ${[...holding].map(([f, names]) => `${names.join(", ")} ${names.length > 1 ? "have" : "has"} ${f}`).join("; ")}` };
+  }
   const reference = options.reference?.trim();
   const ref = reference ? levels.find((g) => g.shown === reference) ?? levels.find((g) => g.name === reference) : levels[0];
   if (!ref) return { why: `There is no level "${reference}"` };
-  const lowest = (g: Gathered) => g.values.reduce((a, b) => (b.v < a.v ? b : a));
-  const zero = lowest(ref).v;
-  const out: DiagramLevel[] = levels.map((g) => {
-    const low = lowest(g);
-    const entry = entryAt >= 0 ? table.rows[low.row][entryAt] : null;
-    const number = numberAt >= 0 ? table.rows[low.row][numberAt] : null;
-    return {
-      name: g.shown,
-      ...(g.shown !== g.name ? { of: g.name } : {}),
-      value: (low.v - zero) * toKcal,
-      lowestOf: g.values.length,
-      lowest: { row: low.row, ...(typeof entry === "string" ? { entry } : {}), ...(typeof number === "number" ? { number } : {}) },
-    };
-  });
-  // (a conformer of a level with no value, where others have one: counted)
+  // (each compound at its lowest; a level, the sum of its compounds')
+  const lowest = (p: Part) => p.values.reduce((a, b) => (b.v < a.v ? b : a));
+  const sum = (g: Gathered) => g.parts.reduce((n, p) => n + lowest(p).v, 0);
+  const zero = sum(ref);
+  const where = (row: number) => {
+    const entry = entryAt >= 0 ? table.rows[row][entryAt] : null;
+    const number = numberAt >= 0 ? table.rows[row][numberAt] : null;
+    return { row, ...(typeof entry === "string" ? { entry } : {}), ...(typeof number === "number" ? { number } : {}) };
+  };
+  const out: DiagramLevel[] = levels.map((g) => ({
+    name: g.shown,
+    ...(g.shown !== g.name ? { of: g.name } : {}),
+    value: (sum(g) - zero) * toKcal,
+    lowestOf: g.parts[0].values.length,
+    lowest: where(lowest(g.parts[0]).row),
+    ...(g.parts.length > 1 ? { sums: g.parts.map((p) => ({ formula: formula(p), lowestOf: p.values.length, lowest: where(lowest(p).row) })) } : {}),
+  }));
+  // (a conformer of a level - of one of its compounds - with no value, where others have one: counted)
   const left: ChartLeft[] = [
     ...listed.left,
-    ...levels.flatMap((g) => (g.without.length ? [{ count: g.without.length, why: `of ${shown(g)} with no ${what}`, rows: g.without }] : [])),
+    ...levels.flatMap((g) => g.parts.flatMap((p) => (p.without.length ? [{ count: p.without.length, why: `of ${shownPart(g, p)} with no ${what}`, rows: p.without }] : []))),
   ];
 
   // (the lines: as the table of what connects says, each row naming two levels - by either name; with none, each level to the next)
@@ -253,7 +289,21 @@ function arranged<G extends { name: string }>(levels: readonly G[], text: string
 /** What an energy diagram's step says it made: how many levels, relative to which; and what was left, where anything was. */
 export function diagramSaid(d: DiagramValue): string {
   const left = d.left.reduce((n, l) => n + l.count, 0);
-  return `${d.levels.length} levels \u00b7 relative to ${d.reference}${left ? ` \u00b7 ${left} left` : ""}`;
+  // (those that sum several compounds, each said)
+  const sums = d.levels.flatMap((l) => (l.sums ? [`${l.name} sums ${l.sums.map((p) => p.formula).join(" + ")}`] : []));
+  return `${d.levels.length} levels \u00b7 relative to ${d.reference}${sums.length ? ` \u00b7 ${sums.join("; ")}` : ""}${left ? ` \u00b7 ${left} left` : ""}`;
+}
+
+/** A level's compounds as a workspace's file keeps them, read back: each a formula, a count of one at least and its lowest's row; none where any does not read, or there are fewer than two. */
+function sumsIn(v: unknown): DiagramLevel["sums"] | undefined {
+  if (!Array.isArray(v) || v.length < 2) return undefined;
+  const out: NonNullable<DiagramLevel["sums"]> = [];
+  for (const p of v as Partial<NonNullable<DiagramLevel["sums"]>[number]>[]) {
+    const low = p?.lowest as Partial<DiagramLevel["lowest"]> | undefined;
+    if (typeof p?.formula !== "string" || !Number.isInteger(p.lowestOf) || p.lowestOf! < 1 || !low || !Number.isInteger(low.row)) return undefined;
+    out.push({ formula: p.formula, lowestOf: p.lowestOf!, lowest: { row: low.row!, ...(typeof low.entry === "string" ? { entry: low.entry } : {}), ...(Number.isFinite(low.number) ? { number: low.number } : {}) } });
+  }
+  return out;
 }
 
 /** An energy diagram as a workspace's file keeps it, read back: its axis, levels - each a finite value, a count of one at least - lines between levels it has, and what was left; none where any of that does not read. */
@@ -276,6 +326,7 @@ export function diagramIn(v: unknown): DiagramValue | undefined {
         ...(Number.isFinite(low.number) ? { number: low.number } : {}),
         ...(low.imaginary === "not computed" || (Array.isArray(low.imaginary) && low.imaginary.every(Number.isFinite)) ? { imaginary: low.imaginary } : {}),
       },
+      ...(sumsIn(l.sums) ? { sums: sumsIn(l.sums) } : {}),
     });
   }
   const links: [number, number][] = [];

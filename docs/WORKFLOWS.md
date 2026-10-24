@@ -2432,6 +2432,15 @@ molecules of one geometry - which a step that works on entries refuses
   stands at its lowest; a level of
   several (a saddle point's conformers) says, pointed at, of how many it is
   the lowest and which ("lowest of 7: #3"); pressed, that one is shown.
+- **A level of several compounds** (2026-10-24) - a reactant and a
+  nucleophile apart, products apart - stands at the sum of its compounds,
+  each at its lowest conformer. A compound is the level's molecules of one
+  constitution, charge and spin; its rows are its conformers. Every level
+  must hold the same atoms, element by element, and the same charge, as a
+  reaction's do; where they do not, there is no diagram, and what each
+  holds is said ("Its levels do not hold the same atoms and charge: R has
+  CH3Br; TS, P have CH4BrO−"). Its card's line says which compounds each
+  level of several sums ("R sums CH3Br + HO−").
 - **In the order the chemist means** (2026-10-24): its card lists the
   levels that come into *Levels*, one to a line, in the order they come -
   the set's own. The lines put in another order are the order drawn; "R =
