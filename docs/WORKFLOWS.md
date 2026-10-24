@@ -2428,7 +2428,8 @@ Not yet: conditions picked from what comes in rather than typed.
 ### Charts (2026-10-22)
 
 **Chart** (PR 10, third part: `src/lib/chart.ts`) is Meno's own step: it
-takes a table - or molecules or conformer sets, seen as one - and gives a
+takes a table - or molecules, conformer sets or structures drawn, seen as
+one - and gives a
 chart, one column of numbers against another, in a set of its own to the
 right of it. Its options name the columns, *Across* and *Up*; none named,
 it takes the first two columns of numbers (molecules seen as a table:
@@ -2436,6 +2437,16 @@ each entry's number, then its energy).
 - **A chart of molecules plots no entry that is no result**: one that
   failed, by any kind, or whose marks did not read refuses it, each named,
   as an *Energy diagram*'s levels do (`notResults`, 2026-10-23).
+- **Structures drawn** go into Chart too, seen as a table the way *Open as
+  a table* shows them (structuresTable `structuresAsTable`, every structure
+  a set holds, on the page and off it). A point stands on a structure's
+  record as results. A row whose state is not *finished*, because it
+  failed or was edited since its values were given, refuses the chart,
+  each named ("structure 2 of 3 failed: no 3D"), with the Filter that
+  takes it out ("state = finished") (`notFinishedRows`). A row set aside
+  is a result still, with its state finished, and is charted. A cell that
+  says a value was not worked out is no number: that row is left out,
+  counted and named, as any row without a number is.
 - A point for each row with a number in both; **a row without is counted
   and said**, by what it lacks ("4 points · 1 row left (1 with no
   measured)"), and each such row named, pointed at - its entry and what it

@@ -326,8 +326,8 @@ export const KINDS: readonly KindInfo[] = [
     kind: "chart",
     name: "Chart",
     icon: "chart",
-    // (a table - or molecules, seen as one: lib/table moleculesAsTable)
-    takes: ["table"],
+    // (a table - or molecules, seen as one: lib/table moleculesAsTable; or structures drawn, seen as one: structuresTable)
+    takes: ["table", "structures"],
     gives: "chart",
     runs: "entries",
     made: "Chart",

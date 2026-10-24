@@ -13,7 +13,7 @@ import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
 import { identityInputOf } from "../chem/identityOf";
-import { BEFORE_THE_EDIT, drawnAsEntry, recordWhy, type DrawnEntry } from "./entries";
+import { BEFORE_THE_EDIT, drawnAsEntry, FINISHED, recordWhy, STATE_FINISHED, type DrawnEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 
 /** The column of each structure's SMILES as the step that made it gave it, its stereo with it - none where none did. */
@@ -182,4 +182,20 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
     ...ownRows[k],
   ]);
   return { ...seen, columns, rows, left };
+}
+
+/**
+ * Structures seen as a table (`structuresAsTable`) that are no results to
+ * stand on, said as a chart refuses them - as molecules' are (meno
+ * `notResults`): each row whose state is not finished - failed, or edited
+ * since its values were given (`EDITED_SINCE`) - by what it is ("structure
+ * 3 of 120") and its state; null where every row is finished. One set
+ * aside is a result still: its state is finished, and it stands.
+ */
+export function notFinishedRows(table: Pick<Table, "columns" | "rows">): string | null {
+  const state = table.columns.findIndex((c) => c.name === STATE_COLUMN);
+  const what = table.columns.findIndex((c) => c.name === WHAT_COLUMN);
+  if (state < 0) return null;
+  const bad = table.rows.flatMap((r, k) => (r[state] === FINISHED ? [] : [`${what >= 0 ? r[what] : `row ${k + 1}`} ${r[state]}`]));
+  return bad.length ? `Not every structure is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first (a Filter on "${STATE_FINISHED}")` : null;
 }
