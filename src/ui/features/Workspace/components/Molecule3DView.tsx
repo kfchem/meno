@@ -331,8 +331,10 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
   const pieces = useRef<THREE.InstancedMesh>(null!);
   const fans = useRef<THREE.Mesh>(null!);
   const pill = useRef<THREE.Group>(null!);
-  // (its frames chip opened by a click: Frames3D says so)
+  // (its frames chip opened by a click: Frames3D says so - and kept over the rest until it is back where it hangs shut)
   const framesOpened = useRef(false);
+  const [chipRaised, setChipRaised] = useState(false);
+  const chipRaisedNow = useRef(false);
   const pillAt = useRef<number | null>(null);
   // where the mark of hydrogens left out stands: over its highest atom, followed gently
   const markAnchor = useRef<THREE.Group>(null);
@@ -1581,6 +1583,11 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
       const below = framesChipAt(low, framesOpened.current ? props.setFoot : undefined) - at.y;
       pillAt.current = pillAt.current == null || reshaped ? below : follow(pillAt.current, below, step, PILL_TAU);
       if (Math.abs(pillAt.current - below) > 1e-3) moving = true;
+      // (shut and back where it hangs: no longer over the rest)
+      else if (chipRaisedNow.current && !framesOpened.current) {
+        chipRaisedNow.current = false;
+        setChipRaised(false);
+      }
       pill.current.position.set(0, pillAt.current / g, -at.z / g);
     }
     if (moving) invalidate();
@@ -1980,8 +1987,13 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
             <Frames3D
               onOpened={(o) => {
                 framesOpened.current = o;
+                if (o && !chipRaisedNow.current) {
+                  chipRaisedNow.current = true;
+                  setChipRaised(true);
+                }
                 invalidate();
               }}
+              raised={chipRaised}
               count={solid.frames.length}
               frame={frameOf(solid, frame)}
               energies={m.energies?.length === solid.frames.length ? m.energies : undefined}

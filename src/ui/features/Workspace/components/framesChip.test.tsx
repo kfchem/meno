@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { renderToString } from "react-dom/server";
 import { FramesChip } from "./Frames3D";
+import { unitsHeld } from "../../../../lib/calc/results";
 import { barsAbove, FAILURES_ASTRAY } from "../utils/barsAbove";
 
 // Vitest runs in Node: the chip is drawn by the server's renderer, and
@@ -20,6 +21,24 @@ describe("a frames chip - a molecule's frames, or a stack's", () => {
     expect(renderToString(<FramesChip count={4} frame={0} energies={[0, 0.001, 0.002, 0.003]} open={false} onFrame={none} />)).toContain("each <!-- -->frame");
     const many = Array.from({ length: 150 }, (_, i) => i * 1e-4);
     expect(renderToString(<FramesChip count={150} frame={0} energies={many} open={false} onFrame={none} />)).not.toContain("crispEdges");
+  });
+
+  it("lays its bars on whole device pixels, each as wide as the next and as far from it - a row even", () => {
+    for (const count of [2, 3, 7, 13]) {
+      const energies = Array.from({ length: count }, (_, i) => i * 1e-4);
+      const html = renderToString(<FramesChip count={count} frame={0} energies={energies} open={false} onFrame={none} />);
+      const rects = [...html.matchAll(/<rect data-bar="" x="([^"]+)" y="[^"]+" width="([^"]+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+      expect(rects).toHaveLength(count);
+      expect(new Set(rects.map(([, w]) => w)).size).toBe(1);
+      expect(new Set(rects.slice(1).map(([x], i) => x - rects[i][0])).size).toBe(1);
+      // (on whole pixels, one device pixel each where the page is at its own size)
+      expect(rects.every(([x, w]) => Number.isInteger(x) && Number.isInteger(w))).toBe(true);
+    }
+  });
+
+  it("holds each number to its unit in its line, never broken between them", () => {
+    expect(unitsHeld("CREST 2.12 · charge 0, singlet · −8.226118 Eh")).toBe("CREST 2.12 · charge 0, singlet · −8.226118\u00a0Eh");
+    expect(unitsHeld("1.85 D · 120.5° · 2 Å")).toBe("1.85\u00a0D · 120.5° · 2\u00a0Å");
   });
 
   it("is shut as its molecule is pointed at or selected: it opens on a click (the maintainer, 2026-10-13)", () => {
