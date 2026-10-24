@@ -31,6 +31,20 @@ describe("the texts a workspace holds", () => {
     expect(state().texts[2].name).toBe("Untitled.txt");
   });
 
+  it("shown again in the column - one asked for that it holds already, a calculation's output shown from its molecule - over a PDF read there since: never the PDF left showing", () => {
+    const { state } = editor();
+    state().addTexts([{ name: "xtb.log", text: "normal termination of xtb" }]);
+    const log = state().textShown;
+    state().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [[595, 842]] }], { x: 0, y: 0 });
+    state().readPdf(state().pdfs[0].id);
+    expect([state().pdfShown, state().textsOpen]).toEqual([state().pdfs[0].id, true]);
+    // (the same output asked for again: the one held, shown - the PDF read before giving way, and staying so)
+    state().addTexts([{ name: "xtb.log", text: "normal termination of xtb" }]);
+    expect([state().textShown, state().pdfShown, state().textsOpen]).toEqual([log, null, true]);
+    state().setTextOf(log!, { molecule: 7 });
+    expect([state().textShown, state().pdfShown]).toEqual([log, null]);
+  });
+
   it("are held with their lines ended \"\\n\", however their files ended them", () => {
     const { state } = editor();
     state().addTexts([{ name: "w.inp", text: "! B3LYP\r\n\r\n* xyz 0 1\r\nO 0 0 0\r*\r\n" }]);

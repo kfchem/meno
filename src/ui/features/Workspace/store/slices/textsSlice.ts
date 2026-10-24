@@ -22,7 +22,8 @@ export function createTextsSlice(doc: DocumentStore<WorkspaceDocument>, set: Set
       // (one with a sheet: into the column from its sheet, as it opens)
       const lastSheet = onPage && last != null && next.texts?.find((t) => t.id === last)?.at;
       if (next !== doc.getState()) doc.edit(texts.length > 1 ? "open texts" : "open text", () => next);
-      set({ textShown: last, textsOpen: last != null, setTableShown: null, ...(lastSheet ? { textFlight: { id: last!, to: "column" as const, start: performance.now() } } : {}) });
+      // (the one asked for shown - a PDF read there before giving way, as `showText` has it: one held already, its document unchanged, is shown too)
+      set({ textShown: last, textsOpen: last != null, setTableShown: null, ...(last != null ? { pdfShown: null } : {}), ...(lastSheet ? { textFlight: { id: last!, to: "column" as const, start: performance.now() } } : {}) });
     },
     newText: (onPage?: { x: number; y: number }) => {
       getState().addTexts([{ name: "", text: "" }], onPage);
