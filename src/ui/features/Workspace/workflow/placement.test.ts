@@ -383,6 +383,23 @@ describe("a wire never runs on past its ends and back", () => {
     expect(doublesBack(r.corners!, [card, energies, failed])).toBe(false);
   });
 
+  it("from a card beside a set under a bond off, to its two sets below and right: each in at a level between, never below all and back", () => {
+    // (in page pixels: the card, a set to its right 47 px off reaching above and below it, the card's first set below, its second right of that)
+    const f = (x0: number, x1: number, y0: number, y1: number): Frame => ({ x0: x0 * PX, x1: x1 * PX, y0: y0 * PX, y1: y1 * PX });
+    const card = f(0, 208, -76, 0);
+    const beside = f(255, 623, -116, 225);
+    const first = f(274, 485, -400, -364);
+    const second = f(700, 911, -300, -264);
+    const all = [card, beside, first, second];
+    for (const to of [first, second]) {
+      const p = stepGives({ x: 0, y: 0 });
+      const q = setTakes(to);
+      const r = wireRoute(p, q, { from: card, to }, nearWire(p, q, { from: card, to }, all));
+      // (never lower than the set it goes into: every way passes the gap beside the card alike, and the shorter is taken)
+      expect(Math.min(...r.pts.map((pt) => pt.y))).toBeGreaterThanOrEqual(to.y0 - 1e-9);
+    }
+  });
+
   it("is told: a turn out past both ends round nothing, not one round a frame, nor a way on one way across", () => {
     const pt = (x: number, y: number) => ({ x, y });
     // (down past both ends, a step left, up into the other: round nothing - and round a frame lying within the turn)

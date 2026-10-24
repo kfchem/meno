@@ -256,8 +256,11 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
   };
   // (never out past both its ends and back again round nothing: where the way it would go does, straight across at the level of the one end
   //  or the other instead, where that runs on one way across and is over what it passes no further)
+  // (where one of its ends lies within half a bond of another frame - frames laid over each other - every way is over that, and how far
+  //  says nothing of the way: the ways are taken as they were before, by how many of their points are over what they pass)
+  const buried = others.some((f) => within(grown.get(f)!, p) || within(grown.get(f)!, q));
   const straight = (r: WireRouted): WireRouted => {
-    if (!r.corners || !doublesBack(r.corners, [...[ends.from, ends.to].filter((f): f is Side => !!f), ...others])) return r;
+    if (buried || !r.corners || !doublesBack(r.corners, [...[ends.from, ends.to].filter((f): f is Side => !!f), ...others])) return r;
     let best = r;
     let least = overAlong(r.pts);
     for (const y of [p.y, q.y]) {
@@ -313,11 +316,20 @@ export function wireRoute(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: 
     past = [...past, ...more];
     tryAll(past);
   }
-  const scored = tried;
-  const best = scored.reduce((x, y) => (y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x));
+  // (over what they pass, weighed by how far each runs over it (`overAlong`) - ways over alike, to within half a bond, then the shorter: where
+  //  every way must pass the same narrow gap, nearer a frame than half a bond, the way down past all and back is no less over than the way
+  //  straight in, only longer)
+  const scored = tried.map((r) => ({ ...r, along: buried ? r.over : r.over ? overAlong(r.pts) : 0 }));
+  const better = (x: (typeof scored)[number] | undefined, y: (typeof scored)[number]) => {
+    if (!x) return true;
+    if ((x.over === 0) !== (y.over === 0)) return y.over === 0;
+    if (buried ? y.along !== x.along : Math.abs(y.along - x.along) > BETWEEN) return y.along < x.along;
+    return y.length < x.length;
+  };
+  const best = scored.reduce((x, y) => (better(x, y) ? y : x));
   // (the side it passed before, kept where it is clear - or no worse - and the other is not a fifth shorter)
-  const kept = wasSide && scored.filter((r) => r.side === wasSide).reduce<(typeof scored)[number] | undefined>((x, y) => (!x || y.over < x.over || (y.over === x.over && y.length < x.length) ? y : x), undefined);
-  if (kept && kept !== best && (kept.over === 0 || kept.over <= best.over) && kept.length * 0.8 <= best.length) return straight({ pts: kept.pts, way: kept.side, corners: kept.corners });
+  const kept = wasSide && scored.filter((r) => r.side === wasSide).reduce<(typeof scored)[number] | undefined>((x, y) => (better(x, y) ? y : x), undefined);
+  if (kept && kept !== best && (kept.over === 0 || kept.along <= best.along + BETWEEN) && kept.length * 0.8 <= best.length) return straight({ pts: kept.pts, way: kept.side, corners: kept.corners });
   return straight({ pts: best.pts, way: best.side, corners: best.corners });
 }
 

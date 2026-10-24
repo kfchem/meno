@@ -2009,7 +2009,13 @@ page could not be read after one run.
     between it and its end, where that leaves half a bond either side or
     the frame lies across the line in or out. Of these, the way over
     least, then the shortest; where every way is over something, each is
-    tried again round that too. It never goes out past both its ends and
+    tried again round that too, and of those the one over least as far
+    along it - to within half a bond, ways over alike - then the shortest:
+    where every way must pass a gap narrower than a bond beside a frame,
+    the way down past all and back is no less over than the way straight
+    in, only longer (where one of its ends lies within half a bond of
+    another frame, frames laid over each other, by how many of its points
+    are over, as before). It never goes out past both its ends and
     back again round nothing (look `doublesBack`): where the way chosen
     would - every way passing too near something, as a gap of less than a
     bond between a card and the set beside it - it goes straight across
