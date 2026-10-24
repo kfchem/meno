@@ -21,7 +21,7 @@ import { styleOf } from "../../../../../lib/chem/style";
 import { useAppSettings } from "../../../../../lib/settings/appSettings";
 import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
-import { blocksOf, CONFORMERS_MS, moleculeOf } from "../../chem/make3d";
+import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
 import { compoundLetter, frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
@@ -90,6 +90,17 @@ export function notMade(places: readonly number[], of: number): string {
  */
 export function stereoOpen(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
+}
+
+/** The structures not made in 3D because each is a lone atom or ion alone, by their places among `of`: Na+, Cl-, a lone metal. */
+export function bareLeft(places: readonly number[], of: number): string {
+  return `${structuresAt(places)} of ${of} left out: one atom alone has no 3D structure`;
+}
+
+/** A structure made in 3D without some of its parts, by its place: its lone ions named, any other part counted - only its first is made. */
+export function partsLeft(place: number, bare: string | undefined, others: number): string {
+  const what = [...(bare ? [bare] : []), ...(others ? [`${others} other part${others === 1 ? "" : "s"}`] : [])].join(" and ");
+  return `${structuresAt([place])}: its ${what} left out`;
 }
 
 /** The structures made in 3D with their stereo free, by their places among `of`: open, and no stereoisomer of them holds in 3D. */
@@ -500,6 +511,10 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const open: number[] = [];
     // (those left open where no stereoisomer holds in 3D - a strained cage's: made as the embedding places them, and said so)
     const free: number[] = [];
+    // (those that are a lone atom or ion alone, by their places: one atom alone has no 3D structure - left out, and said so)
+    const bareOnly: number[] = [];
+    // (those made without some of their parts - a salt's counter-ion, which has no 3D structure; any part past the first: said, each by its place)
+    const partly: string[] = [];
     try {
       let chem = await pluginWorker(plugin);
       // (each structure drawn: on the page, by its atoms; then those held in its result set off the page, as it holds them)
@@ -510,8 +525,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       for (const [place, { model, atoms, off, record }] of sources.entries()) {
         if (menoStops.has(id)) break;
         working({ done: place });
-        const block = blocksOf(model, atoms)[0];
-        if (!block) continue;
+        const blocks = blocksOf(model, atoms);
+        const bare = bareAtomsOf(model, atoms);
+        const block = blocks[0];
+        if (!block) {
+          if (bare.length) bareOnly.push(place + 1);
+          else failed.push(place + 1);
+          continue;
+        }
         let made;
         try {
           // (a step cannot ask, as the canvas's 3D structure does, which stereoisomer is meant: one whose drawing leaves any open that could go
@@ -562,6 +583,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           });
         }
         compounds++;
+        if (bare.length || blocks.length > 1) partly.push(partsLeft(place + 1, bare.length ? bareNames(bare) : undefined, blocks.length - 1));
       }
     } catch (e) {
       if (!menoStops.has(id)) return void fail(id, message(e), at, key);
@@ -576,15 +598,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     }
     const of = drawnIn(input);
     // (each not made said: those that could not be, and those whose stereo is left open)
-    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : [])];
+    const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
     // (made, but said: their stereo not held - only those that were made)
     const freed = free.filter((p) => !failed.includes(p));
     if (!worked.length) {
-      const why = open.length ? unmade.join(" \u00b7 ") : "No structure drawn could be made in 3D";
+      const why = open.length || bareOnly.length ? unmade.join(" \u00b7 ") : "No structure drawn could be made in 3D";
       return void fail(id, why[0].toUpperCase() + why.slice(1), at, key);
     }
     const took = Date.now() - at;
-    const left = [...unmade, ...(freed.length ? [stereoFree(freed, of)] : [])].map((u) => ` \u00b7 ${u}`).join("");
+    const left = [...unmade, ...(freed.length ? [stereoFree(freed, of)] : []), ...partly].map((u) => ` \u00b7 ${u}`).join("");
     bringIn(id, worked, "conformers", {
       at,
       ok: true,
@@ -645,7 +667,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     try {
       const client = await pluginClient(plugin);
       // (each as its entry draws it: on the page, then held - inputEntries)
-      const given = entries.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
+      const given = entries.map((e) => ({ molblocks: drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
       answers = readDrawnAnswers(await client.run(step.kind, given, options, "structures", drawnMs(given.length)), entries.length);
       if (typeof answers === "string") return void fail(id, answers, at, key);
       const style = styleOf(get().docStyle);
@@ -753,7 +775,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     let read;
     try {
       const client = await pluginClient(plugin);
-      const given = seeds.map((e) => ({ molblocks: blocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
+      const given = seeds.map((e) => ({ molblocks: drawnBlocksOf(e.drawn, e.drawn.atoms.map((a) => a.id)).map((b) => b.molblock) }));
       read = readGenerated(await client.run(step.kind, given, options, "structures", GENERATE_MS), given.length);
     } catch (e) {
       return void fail(id, message(e), at, key);

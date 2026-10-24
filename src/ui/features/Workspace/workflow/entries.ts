@@ -244,7 +244,7 @@ function joined(a: DrawnRecord | undefined, b: DrawnRecord): DrawnRecord | undef
 }
 
 /** A record as its structure stands now: as it is, where that is the structure it was given for (or it does not say); else its properties and status taken away (`joined`). */
-function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
+export function recordNow(record: DrawnRecord | undefined, model: Model, ids: readonly number[]): DrawnRecord | undefined {
   if (!record?.of || record.of === drawnHash(model, ids)) return record;
   return joined(undefined, record);
 }

@@ -12,6 +12,9 @@ import Checkbox from "../../controls/Checkbox";
  * Ask3D is. Atoms mixed with another column's cannot be ticked. Text
  * pasted on the page may go there as words instead (`onText`).
  */
+/** A structure not to be placed: its atoms mixed with another column's, or a line among them that does not read. */
+const placeless = (s: CoordinateStructure) => !!s.mixed || !!s.broken?.length;
+
 export default function CoordinatesCard({
   structures,
   onPlace,
@@ -23,13 +26,13 @@ export default function CoordinatesCard({
   onText?: () => void;
   onCancel: () => void;
 }) {
-  const [ticked, setTicked] = useState(() => structures.map((s) => !s.mixed));
+  const [ticked, setTicked] = useState(() => structures.map((s) => !placeless(s)));
   const [names, setNames] = useState(() => structures.map((s) => s.name));
   const placeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     placeRef.current?.focus();
   }, []);
-  const chosen = structures.flatMap((structure, i) => (ticked[i] && !structure.mixed ? [{ structure, name: names[i].trim() || structure.name }] : []));
+  const chosen = structures.flatMap((structure, i) => (ticked[i] && !placeless(structure) ? [{ structure, name: names[i].trim() || structure.name }] : []));
   const inFront = useInFront();
   useEffect(() => {
     if (!inFront) return;
@@ -61,8 +64,8 @@ export default function CoordinatesCard({
           <li key={i} className="flex items-start gap-2 px-1 py-1 rounded-md hover:bg-gh-base">
             <Checkbox
               label={`Place ${names[i]}`}
-              checked={ticked[i] && !s.mixed}
-              disabled={!!s.mixed}
+              checked={ticked[i] && !placeless(s)}
+              disabled={placeless(s)}
               onChange={(v) => setTicked((t) => t.map((x, k) => (k === i ? v : x)))}
               className="mt-1.5"
             />
@@ -78,6 +81,12 @@ export default function CoordinatesCard({
                 <span className="shrink-0 w-28 text-right text-gh-gray truncate">{formulaOf(s.atoms)}</span>
               </div>
               {s.notes.length > 0 && <div className="text-xs text-gh-gray truncate">{s.notes.join(" · ")}</div>}
+              {s.continues && s.continues.length > 0 && <div className="text-xs text-gh-gray">{`Continues across a page break (${s.continues.join(", ")})`}</div>}
+              {s.skipped && s.skipped.length > 0 && (
+                <div className="text-xs text-gh-gray truncate" title={s.skipped.join("\n")}>
+                  {`${s.skipped.length === 1 ? "1 line" : `${s.skipped.length} lines`} not read: ${s.skipped.join(" · ")}`}
+                </div>
+              )}
               {s.warnings.map((w) => (
                 <div key={w} className="text-xs text-accel-accent">
                   {w}
