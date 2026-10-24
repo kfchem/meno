@@ -138,7 +138,8 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const from = wireInto(doc, step.id)?.from;
   const set = from && !tableWired(doc, step.id) ? findSet(doc, from.set) : undefined;
   const drawn = set && holdsOf(doc, set) === "structures" ? setStructuresTable(doc, set) : null;
-  const notFinished = drawn && notFinishedRows(drawn);
+  // (those it shows on the page first, then those it holds off it: these said to be, where named)
+  const notFinished = drawn && set && notFinishedRows(drawn, setMembers(doc, set).structures.length);
   if (notFinished) return setRan(keepRun(doc, step), step.id, said(false, notFinished));
   const table = drawn ?? tableInto(doc, step.id);
   if (!table) return setRan(keepRun(doc, step), step.id, said(false, "Nothing comes into it"));
@@ -150,7 +151,12 @@ function chartRun(doc: WorkspaceDocument, step: WorkflowStep, w: RunWith, key: s
   const o = step.options ?? {};
   const chart = chartOfTable(table, typeof o.x === "string" && o.x.trim() ? o.x.trim() : undefined, typeof o.y === "string" && o.y.trim() ? o.y.trim() : undefined);
   if ("why" in chart) return setRan(keepRun(doc, step), step.id, said(false, chart.why));
-  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, chartSaid(chart)));
+  // (and what of the set wired in did not read from its step's files - never charted round unsaid)
+  const wired = from ? findSet(doc, from.set) : undefined;
+  const unread = wired?.unread ?? 0;
+  const noun = wired && holdsOf(doc, wired) === "structures" ? ["structure", "structures"] : ["molecule", "molecules"];
+  const notRead = unread ? ` \u00b7 ${unread} ${unread === 1 ? `${noun[0]} could` : `${noun[1]} could`} not be read and ${unread === 1 ? "is" : "are"} not charted` : "";
+  return setRan(placeChart(keepRun(doc, step), step, chart), step.id, said(true, `${chartSaid(chart)}${notRead}`));
 }
 
 /**

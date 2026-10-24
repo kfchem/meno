@@ -184,18 +184,28 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
   return { ...seen, columns, rows, left };
 }
 
+/** How many unfinished rows a refusal names, before it says how many more (`notFinishedRows`). */
+const NAMED = 5;
+
 /**
  * Structures seen as a table (`structuresAsTable`) that are no results to
  * stand on, said as a chart refuses them - as molecules' are (meno
  * `notResults`): each row whose state is not finished - failed, or edited
  * since its values were given (`EDITED_SINCE`) - by what it is ("structure
- * 3 of 120") and its state; null where every row is finished. One set
- * aside is a result still: its state is finished, and it stands.
+ * 3 of 120") and its state, the first few by name and how many more; one
+ * of those its set holds off the page (from row `shown` on) said to be, and
+ * where to see it. Null where every row is finished. One set aside is a
+ * result still: its state is finished, and it stands. A table that says no
+ * state is refused whole: whether its rows are results cannot be told.
  */
-export function notFinishedRows(table: Pick<Table, "columns" | "rows">): string | null {
+export function notFinishedRows(table: Pick<Table, "columns" | "rows">, shown = Infinity): string | null {
   const state = table.columns.findIndex((c) => c.name === STATE_COLUMN);
   const what = table.columns.findIndex((c) => c.name === WHAT_COLUMN);
-  if (state < 0) return null;
-  const bad = table.rows.flatMap((r, k) => (r[state] === FINISHED ? [] : [`${what >= 0 ? r[what] : `row ${k + 1}`} ${r[state]}`]));
-  return bad.length ? `Not every structure is a result to stand on: ${bad.join("; ")} - take ${bad.length === 1 ? "it" : "them"} out first (a Filter on "${STATE_FINISHED}")` : null;
+  if (state < 0) return "Its structures say no state: whether each is a result to stand on cannot be told";
+  const bad = table.rows.flatMap((r, k) =>
+    r[state] === FINISHED ? [] : [`${what >= 0 ? r[what] : `row ${k + 1}`}${k >= shown ? " (off the page; open the set as a table to see it)" : ""} ${r[state]}`],
+  );
+  if (!bad.length) return null;
+  const named = bad.slice(0, NAMED).join("; ") + (bad.length > NAMED ? `; and ${bad.length - NAMED} more` : "");
+  return `Not every structure is a result to stand on: ${named} - take ${bad.length === 1 ? "it" : "them"} out first (a Filter on "${STATE_FINISHED}")`;
 }

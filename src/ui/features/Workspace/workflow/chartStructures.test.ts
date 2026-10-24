@@ -7,6 +7,8 @@ import { inputKey, resultOf } from "./flow";
 import { addStep, connect, setRan } from "./model";
 import { placeResults, runStep, type RunWith } from "./run";
 import { takes } from "./kinds";
+import { notFinishedRows } from "./structuresTable";
+import { DRAWN_ON_PAGE } from "./look";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
 
@@ -23,11 +25,11 @@ const value = (v: number, unit: Property["unit"] = "none"): Property => ({ value
 const done = (mw: number, logp: number): DrawnRecord => ({ properties: { mw: value(mw, "g/mol"), logp: value(logp) }, status: "done" });
 
 /** A step's result set holding `made`, wired into a Chart of logp against mw, run. */
-function charted(made: DrawnRecord[]): WorkspaceDocument {
+function charted(made: DrawnRecord[], unread?: number): WorkspaceDocument {
   // (a step that made them from nothing, run and up to date: the chart runs on what it gave)
   let doc = addStep(emptyWorkspaceDocument(), "generate", 0, 0);
   const made0 = doc.steps![0];
-  doc = placeResults(doc, made0, { molecules: [], rest: [], holds: "structures", drawn: { made: made.map(ethane), rest: [] } }, W);
+  doc = placeResults(doc, made0, { molecules: [], rest: [], holds: "structures", drawn: { made: made.map(ethane), rest: [] }, ...(unread ? { unread } : {}) }, W);
   doc = setRan(doc, made0.id, { at: 1, ok: true, said: "made", input: inputKey(doc, made0, "meno"), kind: made0.kind });
   doc = addStep(doc, "chart", 40, 0, { x: "mw", y: "logp" });
   const chart = doc.steps![1];
@@ -87,5 +89,30 @@ describe("Chart, taking structures drawn", () => {
     const c = chartOf(doc)!;
     expect(c.kind === "points" && c.points.length).toBe(2);
     expect(c.kind === "points" && c.left.map((l) => [l.count, l.why, l.rows.length])).toEqual([[1, "with no logp", 1]]);
+  });
+
+  it("names a failed structure held off the page as such, and where to see it", () => {
+    // (more than the page shows: the last held in the set, off it)
+    const n = DRAWN_ON_PAGE.most + 2;
+    const made = Array.from({ length: n }, (_, k) => (k === n - 1 ? { properties: { mw: value(60, "g/mol"), logp: value(0.2) }, status: { failed: "no 3D" } } : done(40 + k, k / 10)) as DrawnRecord);
+    const doc = charted(made);
+    expect(ran(doc).said).toBe(`Not every structure is a result to stand on: structure ${n} of ${n} (off the page; open the set as a table to see it) failed: no 3D - take it out first (a Filter on "${STATE_FINISHED}")`);
+  });
+
+  it("names the first five refused, and says how many more", () => {
+    const failed: DrawnRecord = { properties: { mw: value(60, "g/mol"), logp: value(0.2) }, status: { failed: "no 3D" } };
+    const doc = charted(Array.from({ length: 7 }, () => failed));
+    expect(ran(doc).said).toBe(
+      `Not every structure is a result to stand on: ${[1, 2, 3, 4, 5].map((k) => `structure ${k} of 7 failed: no 3D`).join("; ")}; and 2 more - take them out first (a Filter on "${STATE_FINISHED}")`,
+    );
+  });
+
+  it("refuses a table that says no state: whether its rows are results cannot be told", () => {
+    expect(notFinishedRows({ columns: [{ name: "mw", kind: "number", unit: "g/mol" }], rows: [[60]] } as never)).toBe("Its structures say no state: whether each is a result to stand on cannot be told");
+  });
+
+  it("says how many structures did not read from its step's files, and are not charted", () => {
+    const doc = charted([done(46, -0.3), done(60, 0.2)], 3);
+    expect(ran(doc)).toMatchObject({ ok: true, said: "2 points \u00b7 3 structures could not be read and are not charted" });
   });
 });
