@@ -233,4 +233,13 @@ input[type="range"]::-moz-range-thumb {
     transition-duration: 150ms;
     transition-timing-function: var(--ease-meno);
   }
+  /* A field's words are always selectable, in what is not (the canvas and
+     what lies over it, Workspace's select-none): WebKit would otherwise
+     carry that on into an input there. */
+  input,
+  textarea,
+  [contenteditable="true"] {
+    -webkit-user-select: text;
+    user-select: text;
+  }
 }

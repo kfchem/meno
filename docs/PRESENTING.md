@@ -171,7 +171,8 @@ words, a width they break into lines at, and how their lines lie.
   the highlight's colour, just inside its top left corner, where their
   curve begins - dragged along its top, it rounds them, from square to
   round ends, as one step; and *Corners…* in its menu opens a card of
-  them: *Square*, *Rounded* (9 points, as *Box around these* rounds them),
+  them: *Square*, *Rounded* (a fifth of a bond, as *Box around these*
+  rounds them - the maintainer, 2026-10-24: 9 points was far too round),
   *Round ends*, or another radius typed in points. Chosen there, or undone
   and redone, the corners go round or square eased; a new rectangle's are
   square.

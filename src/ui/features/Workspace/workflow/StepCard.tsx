@@ -12,6 +12,7 @@ import { StepGlyph } from "./icons";
 import type { KindInfo, StepKind } from "./kinds";
 import { CARD_H, CARD_W, PORT_STEP, portDown, PX } from "./look";
 import { clock } from "./programs";
+import { COPYABLE } from "../hooks/useKeepUnselected";
 
 /**
  * A port's look (docs/WORKFLOWS.md, *How it looks*): as it is; or, while a
@@ -221,13 +222,18 @@ export default function StepCard(p: StepCardProps) {
             <span className={clsx("mt-1.5 flex h-4 items-center transition-colors duration-200 ease-meno", line.tone)}>
               {line.Icon && <line.Icon className={clsx("h-3.5 w-3.5", line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
             </span>
-            <span className={clsx("mt-1.5 line-clamp-2 text-[11px] leading-4 transition-colors duration-200 ease-meno", line.tone)} title={[line.text, p.step.ran?.named].filter(Boolean).join("\n")}>
+            {/* (a failure's words - a program's own error among them - can be selected and copied: COPYABLE) */}
+            <span
+              {...(line.tone === "text-accel-accent" ? COPYABLE : {})}
+              className={clsx("mt-1.5 line-clamp-2 text-[11px] leading-4 transition-colors duration-200 ease-meno", line.tone, line.tone === "text-accel-accent" && "select-text")}
+              title={[line.text, p.step.ran?.named].filter(Boolean).join("\n")}
+            >
               {line.text}
             </span>
             {said && (
               <>
                 <span />
-                <span className="truncate font-mono text-[10px] leading-4 text-gh-gray" title={said}>
+                <span {...COPYABLE} className="truncate select-text font-mono text-[10px] leading-4 text-gh-gray" title={said}>
                   {said}
                 </span>
               </>
@@ -276,7 +282,7 @@ export default function StepCard(p: StepCardProps) {
                   {p.runs.map((r, i) => (
                     <div key={`${r.at}-${i}`} className="flex items-start gap-2">
                       <div className="min-w-0 flex-1">
-                        <div className="text-[11px] leading-4 text-gh-black truncate" title={r.said}>
+                        <div {...COPYABLE} className="text-[11px] leading-4 text-gh-black truncate select-text" title={r.said}>
                           {`${r.name} \u00b7 ${r.said}`}
                         </div>
                         {r.how && <div className="text-[10px] leading-4 text-gh-gray truncate">{r.how}</div>}

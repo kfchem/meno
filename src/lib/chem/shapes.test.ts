@@ -18,6 +18,7 @@ import {
   asBonds,
   bondLinePtOf,
   cornerRadius,
+  roundedOfBondPt,
   roundedPt,
   tintOf,
   turned,
@@ -146,8 +147,9 @@ describe("where a shape is", () => {
     // (10 units tall: at most 5 round, its ends whole half circles)
     expect(cornerRadius(box("rect", { radius: 500 }), PT)).toBe(5);
     expect(cornerRadius(box("ellipse", { radius: 9 }), PT)).toBe(0);
-    // (as *Box around these* rounds them: 9 points, less in a small box)
-    expect(roundedPt(20, 10, PT)).toBeCloseTo(9);
+    // (as *Box around these* rounds them: a fifth of a bond - 1.8 units here - less in a small box)
+    expect(roundedPt(20, 10, PT)).toBeCloseTo((0.2 * 1.8) / PT);
+    expect(roundedOfBondPt(PT)).toBeCloseTo((0.2 * 1.8) / PT);
     expect(roundedPt(2, 1, PT)).toBeCloseTo((1 * 0.18) / PT);
   });
 });
