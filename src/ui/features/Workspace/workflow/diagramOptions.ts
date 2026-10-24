@@ -48,6 +48,19 @@ export function diagramValues(options: readonly Option[], own: OptionValues | un
   return values;
 }
 
+/**
+ * What an Energy diagram step keeps of its card's values, `values`, as the
+ * chemist changed them from those it showed (`shown`, `diagramValues`): one
+ * left as shown that it kept blank stays blank - its list's default, which
+ * follows the levels as they come and are listed - never that default as it
+ * stood when something else was changed.
+ */
+export function diagramKept(values: OptionValues, shown: OptionValues, own: OptionValues | undefined): OptionValues {
+  const kept: OptionValues = { ...values };
+  for (const [id, v] of Object.entries(values)) if ((own?.[id] == null || own[id] === "") && v === shown[id]) kept[id] = own?.[id] ?? "";
+  return kept;
+}
+
 function listed(flow: Seen, id: number, levels: string, declared: readonly Option[]): Option[] {
   const seen = moleculesSeen(flow, id, "levels");
   if (!seen) return [...declared];
@@ -67,7 +80,7 @@ function listed(flow: Seen, id: number, levels: string, declared: readonly Optio
   });
 }
 
-/** What each line of Levels was read as: the level it puts where, and the name it shows it by; or that it names no level that comes in, or one listed already. */
+/** What each line of Levels was read as: where it puts the level - 1, 2, ... - and the name it shows it by ("1 · as HCN"); or that it names no level that comes in, or one listed already. */
 function readAs(text: string, names: readonly string[]): LineRead[] {
   const seen = new Set<string>();
   let k = 0;
@@ -77,6 +90,6 @@ function readAs(text: string, names: readonly string[]): LineRead[] {
     if (seen.has(l.of)) return { said: "Listed already", problem: true };
     seen.add(l.of);
     k += 1;
-    return { said: `Level ${k}${l.as ? `, shown as ${l.as}` : ""}` };
+    return { said: `${k}${l.as ? ` \u00b7 as ${l.as}` : ""}` };
   });
 }

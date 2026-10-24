@@ -31,7 +31,7 @@ import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
 import { HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
-import { diagramOptions, diagramValues } from "../workflow/diagramOptions";
+import { diagramKept, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { dragSelection } from "../utils/dragSelection";
@@ -752,7 +752,7 @@ export default function Workflow2D() {
             kinds={kindsOf(byOf(s)).map((k) => ({ kind: k, name: kindInfo(k).name }))}
             runs={runRows(s)}
             drops={openStep === s.id ? droppedBy(flow, stepsRun(flow, [s.id])) : undefined}
-            onOptions={(values) => store.getState().updateStep(s.id, { options: values })}
+            onOptions={(values) => store.getState().updateStep(s.id, { options: diagram ? diagramKept(values, optionsOf(takes, own), s.options) : values })}
             choosing={choosingAtoms?.step === s.id ? choosingAtoms.option : null}
             onChoose={(option) => store.getState().setWorkflowView({ choosingAtoms: option ? { step: s.id, option } : null })}
             onKind={(kind) => store.getState().updateStep(s.id, { kind })}
