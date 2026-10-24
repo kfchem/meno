@@ -11,7 +11,7 @@ import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { inputsOf } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
+import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wirePath } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
@@ -41,11 +41,9 @@ export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: Reado
 /** A step's card, shut: where it stands on the page. */
 const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
 
-/** A wire as Workflow2D draws it: round its ends, and the sets and cards near it (look `nearWire`). */
-const routed = (p: Pt, q: Pt, e: { from?: Frame; to?: Frame; lead?: number }, round: readonly Frame[]) => wireCurve(p, q, WIRE_POINTS, e, nearWire(p, q, e, round));
+/** A wire as Workflow2D draws it: round its ends, and the sets and cards near it (look `nearWire`) - its whole path, close enough everywhere to stand for it (look `wirePath`). */
+const routed = (p: Pt, q: Pt, e: { from?: Frame; to?: Frame; lead?: number }, round: readonly Frame[]) => wirePath(p, q, e, nearWire(p, q, e, round));
 
-/** How many points along a wire stand for it, as `clearOf` keeps clear of it. */
-const WIRE_POINTS = 24;
 
 type Pt = { x: number; y: number };
 /** What a frame keeps clear of: frames - a card's with its step - and points; and the lines its own wires would be, each with the card at its far end, which it meets. */
@@ -57,7 +55,7 @@ const INK_REACH = 8 * NOMINAL_BOND_LENGTH;
 /**
  * What a frame keeps clear of on the page: its sets and steps' cards, as
  * frames; its structures' atoms, its molecules in 3D, and its wires - each
- * a curve as Workflow2D draws it (look `wireCurve`), its points along it -
+ * a curve as Workflow2D draws it (look `wirePath`), its points along it -
  * as points; and each structure as far as its ink, its labels' letters too
  * (chem/make3d `boxOf`, as a set's frame keeps round it), as a frame -
  * those near `along`, the stretch across the page frames are looked for in.
@@ -90,14 +88,14 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     else if (!own(b.id)) {
       const e = { from: b, to: cardOf(s), ...lead(s, w.to.port) };
       const q = takes(s, w.to.port);
-      points.push(...wireCurve(setGives(b), q, WIRE_POINTS, e, nearWire(setGives(b), q, e, round)));
+      points.push(...wirePath(setGives(b), q, e, nearWire(setGives(b), q, e, round)));
     }
   }
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
     if (s && !own(b.id)) {
       const e = { from: cardOf(s), to: b };
-      points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS, e, nearWire(stepGives(s), setTakes(b), e, round)));
+      points.push(...wirePath(stepGives(s), setTakes(b), e, nearWire(stepGives(s), setTakes(b), e, round)));
     }
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;

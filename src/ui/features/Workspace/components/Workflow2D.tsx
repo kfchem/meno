@@ -29,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve, wireKey } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, pointsFor, wirePath, wireKey } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -63,8 +63,6 @@ const stepTakes = (s: Pick<WorkflowStep, "x" | "y" | "kind">, port?: string): Pt
 
 /** What a wire leaves and comes into - a set's frame, a step's card - and the page's other sets and cards, for it to go round (look `wireCurve`). */
 type Ends = { from?: Frame; to?: Frame; lead?: number; around?: readonly Frame[]; aroundKey?: number };
-/** How many points along a wire it is drawn through. */
-const N = 48;
 /** How far a wire's point may move at once, in screen pixels, and be drawn there straight away: further, it is eased there (`useEasedPoints`). */
 const WIRE_JUMP_PX = 4;
 
@@ -80,8 +78,10 @@ function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
   const was = useRef(target);
   const { invalidate } = useThree();
   if (was.current !== target) {
-    const jump = Math.max(...target.map((p, i) => Math.hypot(p.x - (shown[i]?.x ?? p.x), p.y - (shown[i]?.y ?? p.y))));
-    from.current = jump > WIRE_JUMP_PX / zoom ? { pts: shown, at: performance.now() } : null;
+    // (as many points as it is drawn through now: where that changed - zoomed, or grown - what was shown spread over as many, to be eased from)
+    const prior = shown.length === target.length ? shown : byTurn(shown, target.length - 1);
+    const jump = Math.max(...target.map((p, i) => Math.hypot(p.x - prior[i].x, p.y - prior[i].y)));
+    from.current = jump > WIRE_JUMP_PX / zoom ? { pts: prior, at: performance.now() } : null;
     was.current = target;
     if (!from.current) setShown(target);
   }
@@ -97,8 +97,13 @@ function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
   return shown;
 }
 
-/** A wire's points from `p` to `q`, leaving and arriving level - round its ends and what else is in its way (look `wireCurve`). */
-const wirePoints = (p: Pt, q: Pt, ends?: Ends) => wireCurve(p, q, N, ends && { from: ends.from, to: ends.to, lead: ends.lead }, ends?.around ?? []);
+/** A wire's points from `p` to `q`, leaving and arriving level - round its ends and what else is in its way (look `wirePath`) - as many as make it smooth at `zoom`, closer where it bends (look `pointsFor`, `byTurn`). */
+function wirePoints(p: Pt, q: Pt, ends: Ends | undefined, zoom: number): Pt[] {
+  const path = wirePath(p, q, ends && { from: ends.from, to: ends.to, lead: ends.lead }, ends?.around ?? []);
+  return byTurn(path, pointsFor(path, zoom));
+}
+/** A zoom as the points a wire is drawn through are worked out at: by quarter steps of doubling, so that a wire is not worked out again for every frame of a zoom. */
+const zoomStep = (zoom: number) => 2 ** (Math.round(Math.log2(zoom) * 4) / 4);
 
 /** A wire through `pts` as a ribbon `width` wide. */
 function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
@@ -111,12 +116,12 @@ function ribbon(pts: readonly Pt[], width: number): THREE.BufferGeometry {
     if (i > 0) run += Math.hypot(pt.x - pts[i - 1].x, pt.y - pts[i - 1].y);
     along.push(run, run);
     const a = pts[Math.max(0, i - 1)];
-    const b = pts[Math.min(N, i + 1)];
+    const b = pts[Math.min(pts.length - 1, i + 1)];
     const len = Math.hypot(b.x - a.x, b.y - a.y) || 1;
     const nx = (-(b.y - a.y) / len) * (width / 2);
     const ny = ((b.x - a.x) / len) * (width / 2);
     positions.push(pt.x + nx, pt.y + ny, 0, pt.x - nx, pt.y - ny, 0);
-    if (i < N) index.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
+    if (i < pts.length - 1) index.push(2 * i, 2 * i + 1, 2 * i + 2, 2 * i + 1, 2 * i + 3, 2 * i + 2);
   });
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
@@ -145,7 +150,8 @@ void main() {
 
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
 function MovingWire({ p, q, ends, color, zoom }: { p: Pt; q: Pt; ends?: Ends; color: string; zoom: number }) {
-  const target = useMemo(() => wirePoints(p, q, ends), [wireKey(p, q, ends, ends?.aroundKey ?? 0)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const at = zoomStep(zoom);
+  const target = useMemo(() => wirePoints(p, q, ends, at), [wireKey(p, q, ends, ends?.aroundKey ?? 0), at]); // eslint-disable-line react-hooks/exhaustive-deps
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
   useEffect(() => () => line.dispose(), [line]);
@@ -204,7 +210,8 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
 function WireLine({ p, q, ends, color, zoom, onHover, leaving = false }: { p: Pt; q: Pt; ends?: Ends; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
   // (as wide on the screen at any zoom: a hair, as the frames' lines are)
-  const target = useMemo(() => wirePoints(p, q, ends), [wireKey(p, q, ends, ends?.aroundKey ?? 0)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const at = zoomStep(zoom);
+  const target = useMemo(() => wirePoints(p, q, ends, at), [wireKey(p, q, ends, ends?.aroundKey ?? 0), at]); // eslint-disable-line react-hooks/exhaustive-deps
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
   const hit = useMemo(() => (onHover && !leaving ? ribbon(pts, WIRE_HIT_PX / zoom) : null), [pts, zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps

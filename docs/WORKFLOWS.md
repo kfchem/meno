@@ -1932,6 +1932,12 @@ page could not be read after one run.
     that would cross another set or card goes round that too, taken with
     the end it is nearer. Placement keeps clear of the same route, and a
     change of route on the page is eased, never a jump.
+  - **Smooth** (look `byTurn`, `pointsFor`). A wire is worked out as a
+    close path, then drawn through points spread by how far it runs and
+    how much it turns: one about every 3 screen pixels and every 2.5
+    degrees, more at its bends. A long run up or down turns in an arc as
+    wide as the run is long: the curve's handles are half the run, from
+    40 to 240 px. Never a kink, never a tight hook.
   - **A card put down** (Quick Add, or a wire let go on empty space)
     goes where it was put, or lower where that is over a set, a card, a
     structure or a wire, as far as it must (place `placeCard`): it is made

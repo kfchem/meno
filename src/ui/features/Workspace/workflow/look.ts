@@ -132,25 +132,34 @@ const union = (fs: readonly Side[], at: Pt): Side =>
 
 /**
  * A wire's curve from `p` to `q`, leaving and arriving level: `n` + 1
- * points along it. Going on to the right, a cubic Bézier, its handles half
- * the run across, 40 px at least. Coming back - its input to the left of
- * where it leaves, or too near to turn (`WIRE_BAND`) - where what it leaves
- * and what it comes into are given (`ends`: a set's frame, a step's card),
+ * points along it, the closer together the more it turns, so that every
+ * bend is drawn as one (`byTurn`). Going on to the right, a cubic Bézier,
+ * its handles half the run across - 40 px at least, and more on a long run
+ * up or down, half of it to 240 px, so that it turns in an arc as wide as
+ * its run is long, never a tight hook. Coming back - its input to the left of where it
+ * leaves, or too near to turn (`WIRE_BAND`) - where what it leaves and
+ * what it comes into are given (`ends`: a set's frame, a step's card),
  * round them rather than over them (`roundEnds`). And where it would cross
  * any other of `around` - the page's sets and cards - round that too, taken
  * with the end it is nearer as one (`roundEnds` again): never over a set,
  * a card, or what a set holds, where it can go round.
  */
 export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = []): Pt[] {
+  return byTurn(wirePath(p, q, ends, around), n);
+}
+
+/** How many points a wire's path is first worked out as, before they are spread by how it turns (`byTurn`). */
+const DENSE = 256;
+
+/** A wire's path (`wireCurve`) as `DENSE` + 1 points or so, close enough everywhere to stand for it. */
+export function wirePath(p: Pt, q: Pt, ends?: { from?: Side; to?: Side; lead?: number }, around: readonly Side[] = []): Pt[] {
   // (into an input named beside it: level for as long as its name - under it, never through it - the rest as any wire to where that begins)
   if (ends?.lead) {
     const at = { x: q.x - ends.lead, y: q.y };
     const to = ends.to && { ...ends.to, x0: Math.min(ends.to.x0, at.x) };
-    const most = Math.max(4, Math.round(n / 8));
-    const run = wireCurve(p, at, n - most, { from: ends.from, to }, around);
-    return [...run, ...Array.from({ length: most }, (_, i) => ({ x: at.x + ((i + 1) / most) * ends.lead!, y: q.y }))];
+    return [...wirePath(p, at, { from: ends.from, to }, around), q];
   }
-  const d = Math.max(Math.abs(q.x - p.x) / 2, 40 * PX);
+  const d = Math.max(Math.abs(q.x - p.x) / 2, Math.min(Math.max(Math.abs(q.y - p.y) / 2, 40 * PX), 240 * PX));
   const c1 = { x: p.x + d, y: p.y };
   const c2 = { x: q.x - d, y: q.y };
   const at = (t: number): Pt => {
@@ -160,13 +169,13 @@ export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side;
       y: u * u * u * p.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * q.y,
     };
   };
-  const curve = Array.from({ length: n + 1 }, (_, i) => at(i / n));
+  const curve = Array.from({ length: DENSE + 1 }, (_, i) => at(i / DENSE));
   if (!ends) return curve;
   // (across the band, the one eased into the other: smoothly, at each end the one or the other whole)
   const run = q.x - p.x;
   let shape = curve;
   if (run < WIRE_BAND.to) {
-    const round = roundEnds(p, q, n, ends);
+    const round = roundEnds(p, q, DENSE, ends);
     const u = Math.min(1, Math.max(0, (run - WIRE_BAND.from) / (WIRE_BAND.to - WIRE_BAND.from)));
     const k = u * u * (3 - 2 * u);
     shape = k === 0 ? round : round.map((a, i) => ({ x: a.x + (curve[i].x - a.x) * k, y: a.y + (curve[i].y - a.y) * k }));
@@ -179,13 +188,12 @@ export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side;
   const mid = (f: Side) => ({ x: (f.x0 + f.x1) / 2, y: (f.y0 + f.y1) / 2 });
   const nearer = (f: Side) => Math.hypot(mid(f).x - p.x, mid(f).y - p.y) <= Math.hypot(mid(f).x - q.x, mid(f).y - q.y);
   const over = (pts: readonly Pt[]) => pts.reduce((k, pt) => k + others.filter((f) => within(f, pt)).length, 0);
-  const length = (pts: readonly Pt[]) => pts.reduce((k, pt, i) => (i ? k + Math.hypot(pt.x - pts[i - 1].x, pt.y - pts[i - 1].y) : 0), 0);
-  let best = { pts: shape, over: over(shape), length: length(shape) };
+  let best = { pts: shape, over: over(shape), length: lengthOf(shape) };
   const tried = (withFrom: readonly Side[], withTo: readonly Side[]) => {
     const e = { from: union([...(ends.from ? [ends.from] : []), ...withFrom], p), to: union([...(ends.to ? [ends.to] : []), ...withTo], q) };
-    const pts = roundEnds(p, q, n, e);
+    const pts = roundEnds(p, q, DENSE, e);
     const k = over(pts);
-    const l = length(pts);
+    const l = lengthOf(pts);
     if (k < best.over || (k === best.over && l < best.length)) best = { pts, over: k, length: l };
     return pts;
   };
@@ -200,6 +208,62 @@ export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side;
     if (best.over === 0) return best.pts;
   }
   return best.pts;
+}
+
+/** How long a line through `pts` is. */
+const lengthOf = (pts: readonly Pt[]) => pts.reduce((k, pt, i) => (i ? k + Math.hypot(pt.x - pts[i - 1].x, pt.y - pts[i - 1].y) : 0), 0);
+
+/** How much a turn counts for, as a length (`byTurn`): a radian of it as much as 48 px of straight - a quarter turn about 75 px of points. */
+const TURN = 48 * PX;
+
+/**
+ * `n` + 1 points along a line through `pts`, from its first to its last,
+ * spread by how long it runs and how much it turns (`TURN`): close together
+ * where it bends, further apart where it runs straight - so that a bend is
+ * drawn as a bend, never a kink, however long the run beside it.
+ */
+export function byTurn(given: readonly Pt[], n: number): Pt[] {
+  // (a point where the one before is - two rounded corners meeting - turns nowhere: one of them)
+  const pts = given.filter((pt, i) => i === 0 || Math.hypot(pt.x - given[i - 1].x, pt.y - given[i - 1].y) > 1e-9);
+  if (pts.length < 2) return Array.from({ length: n + 1 }, () => given[0]);
+  // (each step along it weighed by its length, and by half the turn at either end of it)
+  const angle = (i: number) => {
+    if (i <= 0 || i >= pts.length - 1) return 0;
+    const a = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
+    const b = Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x);
+    let t = Math.abs(b - a);
+    if (t > Math.PI) t = 2 * Math.PI - t;
+    return t;
+  };
+  const w = [0];
+  for (let i = 1; i < pts.length; i++) w.push(w[i - 1] + Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) + (TURN * (angle(i - 1) + angle(i))) / 2);
+  const total = w[w.length - 1] || 1;
+  let k = 1;
+  return Array.from({ length: n + 1 }, (_, i) => {
+    if (i === n) return pts[pts.length - 1];
+    const want = (total * i) / n;
+    while (k < pts.length - 1 && w[k] < want) k++;
+    const span = w[k] - w[k - 1] || 1;
+    const t = Math.min(1, Math.max(0, (want - w[k - 1]) / span));
+    return { x: pts[k - 1].x + (pts[k].x - pts[k - 1].x) * t, y: pts[k - 1].y + (pts[k].y - pts[k - 1].y) * t };
+  });
+}
+
+/**
+ * How many points a wire through `pts` is drawn through at `zoom` (screen
+ * pixels to a page unit): about one every 3 screen pixels of it, and every
+ * 2.5 degrees it turns - 48 at the least, 800 at the most.
+ */
+export function pointsFor(pts: readonly Pt[], zoom: number): number {
+  let turn = 0;
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
+    const b = Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x);
+    let t = Math.abs(b - a);
+    if (t > Math.PI) t = 2 * Math.PI - t;
+    turn += t;
+  }
+  return Math.min(800, Math.max(48, Math.ceil((lengthOf(pts) * zoom) / 3 + (turn * 180) / Math.PI / 2.5)));
 }
 
 /**
@@ -270,7 +334,8 @@ export const wireKey = (p: Pt, q: Pt, ends: { from?: Side; to?: Side; lead?: num
 
 /**
  * A line through `corners`, each corner rounded - as far as `r` from it, or
- * half the shorter side - as `n` + 1 points evenly along it.
+ * half the shorter side - as `n` + 1 points along it, closer at its corners
+ * (`byTurn`).
  */
 function rounded(corners: readonly Pt[], r: number, n: number): Pt[] {
   const pts = corners.filter((c, i) => i === 0 || Math.hypot(c.x - corners[i - 1].x, c.y - corners[i - 1].y) > 1e-9);
@@ -283,25 +348,15 @@ function rounded(corners: readonly Pt[], r: number, n: number): Pt[] {
     const s = { x: c.x + ((a.x - c.x) / la) * k, y: c.y + ((a.y - c.y) / la) * k };
     const e = { x: c.x + ((b.x - c.x) / lb) * k, y: c.y + ((b.y - c.y) / lb) * k };
     // (a quarter turn: a quadratic Bézier from where it starts turning to where it ends, the corner its control)
-    for (let j = 0; j <= 8; j++) {
-      const t = j / 8;
+    for (let j = 0; j <= 24; j++) {
+      const t = j / 24;
       const u = 1 - t;
       fine.push({ x: u * u * s.x + 2 * u * t * c.x + t * t * e.x, y: u * u * s.y + 2 * u * t * c.y + t * t * e.y });
     }
   }
   fine.push(pts[pts.length - 1]);
-  // (evenly along it, by length)
-  const run = [0];
-  for (let i = 1; i < fine.length; i++) run.push(run[i - 1] + Math.hypot(fine[i].x - fine[i - 1].x, fine[i].y - fine[i - 1].y));
-  const total = run[run.length - 1] || 1;
-  let k = 1;
-  return Array.from({ length: n + 1 }, (_, i) => {
-    const want = (total * i) / n;
-    while (k < fine.length - 1 && run[k] < want) k++;
-    const span = run[k] - run[k - 1] || 1;
-    const t = Math.min(1, Math.max(0, (want - run[k - 1]) / span));
-    return { x: fine[k - 1].x + (fine[k].x - fine[k - 1].x) * t, y: fine[k - 1].y + (fine[k].y - fine[k - 1].y) * t };
-  });
+  // (spread by how it runs and turns: its corners drawn round)
+  return byTurn(fine, n);
 }
 
 /**

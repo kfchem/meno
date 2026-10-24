@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, framesHash, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_BAND, wireCurve, wireKey } from "./look";
+import { BETWEEN, byTurn, CARD_H, CARD_W, framesHash, pointsFor, wirePath, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_BAND, wireCurve, wireKey } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -39,6 +39,8 @@ function overlaps(doc: WorkspaceDocument): string[] {
   const steps = doc.steps ?? [];
   const said: string[] = [];
   const made = sets.filter((b) => b.made);
+  // (what wires go round, as Workflow2D has them: the page's sets and cards)
+  const page: Frame[] = [...sets, ...steps.map(cardOf)];
   for (const b of made) {
     for (const o of sets) if (o.id !== b.id && overlap(b, o)) said.push(`set ${b.id} over set ${o.id}`);
     for (const s of steps) if (overlap(b, cardOf(s))) said.push(`set ${b.id} over step ${s.id}'s card`);
@@ -48,21 +50,27 @@ function overlaps(doc: WorkspaceDocument): string[] {
       const from = sets.find((x) => x.id === w.from.set)!;
       const to = steps.find((x) => x.id === w.to.step)!;
       if (from.id === b.id) continue;
-      lines.push({ name: `wire ${w.id}`, pts: wireCurve(setGives(from), stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port))), 96, { from, to: cardOf(to) }) });
+      const e = { from, to: cardOf(to) };
+      const q = stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port)));
+      lines.push({ name: `wire ${w.id}`, pts: wirePath(setGives(from), q, e, nearWire(setGives(from), q, e, page)) });
     }
     for (const o of sets) {
       const s = o.made && steps.find((x) => x.id === o.made!.step);
-      if (s && o.id !== b.id) lines.push({ name: `line to set ${o.id}`, pts: wireCurve(stepGives(s), setTakes(o), 96, { from: cardOf(s), to: o }) });
+      const e = s && { from: cardOf(s), to: o as Frame };
+      if (s && e && o.id !== b.id) lines.push({ name: `line to set ${o.id}`, pts: wirePath(stepGives(s), setTakes(o), e, nearWire(stepGives(s), setTakes(o), e, page)) });
     }
     for (const l of lines) if (l.pts.some((p) => inside(b, p))) said.push(`set ${b.id} over ${l.name}`);
     // (and its own wires and line, none turning back over it: in it, off its sides)
     const within = (p: { x: number; y: number }) => p.x > b.x0 + 1e-6 && p.x < b.x1 - 1e-6 && p.y > b.y0 + 1e-6 && p.y < b.y1 - 1e-6;
     for (const w of (doc.wires ?? []).filter((w) => w.from.set === b.id)) {
       const to = steps.find((x) => x.id === w.to.step)!;
-      if (wireCurve(setGives(b), stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port))), 96, { from: b, to: cardOf(to) }).some(within)) said.push(`set ${b.id} under its own wire ${w.id}`);
+      const e = { from: b as Frame, to: cardOf(to) };
+      const q = stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port)));
+      if (wirePath(setGives(b), q, e, nearWire(setGives(b), q, e, page)).some(within)) said.push(`set ${b.id} under its own wire ${w.id}`);
     }
     const by = steps.find((x) => x.id === b.made!.step);
-    if (by && wireCurve(stepGives(by), setTakes(b), 96, { from: cardOf(by), to: b }).some(within)) said.push(`set ${b.id} under its own line`);
+    const own = by && { from: cardOf(by), to: b as Frame };
+    if (by && own && wirePath(stepGives(by), setTakes(b), own, nearWire(stepGives(by), setTakes(b), own, page)).some(within)) said.push(`set ${b.id} under its own line`);
   }
   return said;
 }
@@ -174,6 +182,50 @@ describe("what a set keeps clear of: a structure's ink, and its own wires", () =
 
 describe("a wire's shape", () => {
   const strictly = (b: Frame) => (pt: { x: number; y: number }) => pt.x > b.x0 + 1e-9 && pt.x < b.x1 - 1e-9 && pt.y > b.y0 + 1e-9 && pt.y < b.y1 - 1e-9;
+
+  it("is smooth: a long run down with little across, its bends drawn through points a few px and a few degrees apart", () => {
+    const p = { x: 0, y: 0 };
+    for (const [across, down] of [[30, 600], [8, 300], [200, 40], [-60, 400]]) {
+      const q = { x: across * PX, y: -down * PX };
+      const from: Frame = { x0: -20 * PX, x1: 0, y0: -10 * PX, y1: 10 * PX };
+      const path = wirePath(p, q, { from, to: cardOf({ x: q.x, y: q.y + PORT_DOWN }) });
+      // (drawn at the page's own size: a page pixel a screen pixel)
+      const pts = byTurn(path, pointsFor(path, 1 / PX));
+      let far = 0;
+      let turn = 0;
+      for (let i = 1; i < pts.length; i++) {
+        far = Math.max(far, Math.hypot(pts[i].x - pts[i - 1].x, pts[i].y - pts[i - 1].y) / PX);
+        if (i < pts.length - 1) {
+          const a = Math.atan2(pts[i].y - pts[i - 1].y, pts[i].x - pts[i - 1].x);
+          const b = Math.atan2(pts[i + 1].y - pts[i].y, pts[i + 1].x - pts[i].x);
+          let t = Math.abs(b - a);
+          if (t > Math.PI) t = 2 * Math.PI - t;
+          turn = Math.max(turn, (t * 180) / Math.PI);
+        }
+      }
+      expect(far).toBeLessThan(4);
+      expect(turn).toBeLessThan(5);
+      expect([pts[0], pts[pts.length - 1]]).toEqual([p, q]);
+    }
+  });
+
+  it("turns in an arc as wide as its run is long, not a tight hook: the tighter the shorter the run", () => {
+    // (the least radius it turns at, from three points at a time along its path)
+    const radius = (pts: { x: number; y: number }[]) => {
+      let least = Infinity;
+      for (let i = 1; i < pts.length - 1; i++) {
+        const [a, b, c] = [pts[i - 1], pts[i], pts[i + 1]];
+        const area = Math.abs((b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y)) / 2;
+        if (area > 1e-12) least = Math.min(least, (Math.hypot(b.x - a.x, b.y - a.y) * Math.hypot(c.x - b.x, c.y - b.y) * Math.hypot(a.x - c.x, a.y - c.y)) / (4 * area));
+      }
+      return least / PX;
+    };
+    const p = { x: 0, y: 0 };
+    const [long, middling, short] = [600, 300, 60].map((down) => radius(wirePath(p, { x: 30 * PX, y: -down * PX })));
+    expect(long).toBeGreaterThan(45);
+    expect(long).toBeGreaterThan(middling);
+    expect(middling).toBeGreaterThan(short);
+  });
 
   it("never jumps as its input is moved across the band where it turns from going round to the curve: 1 px apart, a few px at most", () => {
     const from: Frame = { x0: 0, x1: 6, y0: -12, y1: -2 };
