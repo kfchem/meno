@@ -2,6 +2,7 @@ import { motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { formulaOf, type CoordinateStructure } from "../../../lib/io/coordinates";
 import { useInFront } from "../../layouts/inFront";
+import Checkbox from "../../controls/Checkbox";
 
 /**
  * The structures found in coordinates pasted, dropped or selected in a PDF
@@ -61,13 +62,12 @@ export default function CoordinatesCard({
       <ul className="max-h-[50vh] overflow-y-auto -mx-1 mb-2" aria-label="Structures found">
         {structures.map((s, i) => (
           <li key={i} className="flex items-start gap-2 px-1 py-1 rounded-md hover:bg-gh-base">
-            <input
-              type="checkbox"
-              className="mt-1.5 accent-accel-base"
-              aria-label={`Place ${names[i]}`}
+            <Checkbox
+              label={`Place ${names[i]}`}
               checked={ticked[i] && !placeless(s)}
               disabled={placeless(s)}
-              onChange={(e) => setTicked((t) => t.map((v, k) => (k === i ? e.target.checked : v)))}
+              onChange={(v) => setTicked((t) => t.map((x, k) => (k === i ? v : x)))}
+              className="mt-1.5"
             />
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline gap-2">

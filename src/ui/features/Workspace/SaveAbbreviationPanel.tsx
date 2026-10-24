@@ -4,6 +4,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import AbbreviationForm from "../../abbreviations/AbbreviationForm";
 import { useEditor } from "./store";
 import { groupShape } from "./utils/groupShape";
+import Checkbox from "../../controls/Checkbox";
 
 /**
  * The selected group saved as an abbreviation of the user's own, beside the
@@ -62,10 +63,9 @@ export default function SaveAbbreviationPanel({
             onClose();
           }}
         >
-          <label className="flex items-center gap-2 text-xs text-gh-black">
-            <input type="checkbox" checked={here} onChange={(e) => setHere(e.target.checked)} />
+          <Checkbox checked={here} onChange={setHere} className="text-xs text-gh-black">
             Show these atoms as the label here
-          </label>
+          </Checkbox>
         </AbbreviationForm>
       </div>
     </aside>
