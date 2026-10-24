@@ -12,6 +12,7 @@
  * across a column, or the page's own frame, is no figure.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { idle } from "../core/idle";
 import { textOf, type PageText } from "./text";
 
 /** A box on a page, in points from its top left: left, top, right, bottom. */
@@ -59,6 +60,8 @@ export async function figuresOn(sha256: string, page: number): Promise<Box[]> {
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
   // (its words, for the one thing told by what words say: a one-bond structure's label)
   const text = isTauri() ? await textOf(sha256, page).catch(() => null) : null;
+  // (worked out once the window is idle: a page turned to is drawn first, never held up by this)
+  if (isTauri()) await idle();
   const figures = figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined);
   objectsKept.set(key, objects);
   had.set(key, figures);
