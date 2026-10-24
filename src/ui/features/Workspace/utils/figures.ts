@@ -17,6 +17,7 @@ import { arrowPoints } from "../../../../lib/chem/reactionScheme";
 import type { ImportedScheme } from "../document";
 import { pictureFigure, scaledFigure } from "../../../../lib/figure/picture";
 import { boxPicture } from "../../../../lib/pdf/reader";
+import { setAtomLabel } from "../../../../lib/pdf/figures";
 import { chemWorker } from "../../../../lib/roles/worker";
 import { ChemTimeout, type ChemClient } from "../../../../lib/roles/client";
 import { toBase64 } from "../../../../lib/clipboard";
@@ -60,6 +61,9 @@ export const figureLabels: LabelReader = (label) => {
   if (r.kind === "charge") return { el: "C", charge: r.charge };
   return { el: label };
 };
+
+// (a page's figures take a one-bond structure by its label, read as these read one: lib/pdf/figures)
+setAtomLabel((text) => !/^[+\-−]*$/.test(text) && readDrawnLabel(text, figureLabels).read);
 
 /** What a part is now, as far as being right goes: an atom's element, charge and bonds; a bond's order and stereo. Its mark stays while this does. */
 export function atomAs(a: Pick<Atom, "id" | "el" | "charge">, bonds: readonly Bond[]): string {
