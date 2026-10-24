@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { DURATION } from "../../../theme/motion";
 import { useEditor, useEditorStore } from "../store";
-import { figureNotePlaces, figureNotesKey, figureNotesOf, figureNoteText, figureNoteTitle, type FigureNote, type NotePlaces } from "../utils/figureNotes";
+import { figureNotePlaces, figureNoteShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type FigureNote, type NotePlaces } from "../utils/figureNotes";
 import { pageScale } from "../utils/pageScale";
 import PageHtml from "./PageHtml";
 
@@ -10,7 +10,7 @@ import PageHtml from "./PageHtml";
 const DOT_BELOW = 12 / 48;
 
 /** A note shown, or going: what it says, where it stands, and since when it has been going. */
-type Shown = { key: number; note: FigureNote; at: { x: number; y: number }; leaving: number | null };
+type Shown = { key: number; note: FigureNote; at: { x: number; y: number }; leaving: number | null; quiet: boolean };
 
 /**
  * The notes over the structures in 2D read from a figure (docs/PDF.md,
@@ -29,7 +29,10 @@ export default function FigureNotes2D() {
   const key = useMemo(() => figureNotesKey(model), [model]);
   const held = useRef<{ key: string; notes: FigureNote[] } | null>(null);
   if (held.current?.key !== key) held.current = { key, notes: figureNotesOf(model) };
-  const notes = held.current.notes;
+  const all = held.current.notes;
+  // (the note over each with parts still unsure; where one came from, only while the pointer is on it - on an atom or a bond of it)
+  const pointed = useEditor((s) => s.hovered.atomId ?? (s.hovered.bondId != null ? (s.model.bonds.find((b) => b.id === s.hovered.bondId)?.a ?? null) : null));
+  const notes = useMemo(() => all.filter((n) => figureNoteShown(n) || (pointed != null && n.atoms.has(pointed))), [all, pointed]);
   // (and where they stand, again only for a structure moved: the one dragged - figureNotePlaces)
   const places = useRef<NotePlaces>(new Map());
   const [shown, setShown] = useState<Shown[]>([]);
@@ -37,7 +40,7 @@ export default function FigureNotes2D() {
     setShown((was) => {
       const now = performance.now();
       const at = figureNotePlaces(model, notes, places.current);
-      const fresh = notes.map((note): Shown => ({ key: Math.min(...note.atoms), note, at: at.get(Math.min(...note.atoms))!, leaving: null }));
+      const fresh = notes.map((note): Shown => ({ key: Math.min(...note.atoms), note, at: at.get(Math.min(...note.atoms))!, leaving: null, quiet: !figureNoteShown(note) }));
       const keys = new Set(fresh.map((s) => s.key));
       const had = new Set(was.filter((s) => s.leaving == null).map((s) => s.key));
       // (while one is carried out of a PDF: none comes in that was not shown before - it comes once the structure has landed)
@@ -70,7 +73,7 @@ function FigureNote2D({ shown }: { shown: Shown }) {
     const now = pageScale(camera.zoom || 1) < DOT_BELOW;
     if (now !== farRef.current) setFar((farRef.current = now));
   });
-  const { note, at, leaving } = shown;
+  const { note, at, leaving, quiet } = shown;
   const from = useEditor((s) => s.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? s.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure");
   const title = figureNoteTitle(from, note.page);
   // (its structure's menu, where it is right-clicked: as a right-click on the structure gives it)
@@ -89,13 +92,16 @@ function FigureNote2D({ shown }: { shown: Shown }) {
             transformOrigin: "50% 100%",
             opacity: leaving == null ? 1 : 0,
             transition: `opacity ${DURATION.base * 1000}ms var(--ease-meno-leave)`,
-            pointerEvents: leaving == null ? "auto" : "none",
+            // (where it came from, said quietly: never in the pointer's way)
+            pointerEvents: leaving == null && !quiet ? "auto" : "none",
           }}
           onContextMenu={menu}
           onPointerDown={(e) => e.button === 2 && e.stopPropagation()}
           title={title}
         >
-          {far ? (
+          {quiet ? (
+            far ? null : <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteSource(from, note.page)}</div>
+          ) : far ? (
             <div aria-label={figureNoteText(note.unsure)} className="h-1.5 w-1.5 rounded-full border border-gh-line bg-white" />
           ) : (
             <div className="rounded-full border border-gh-line bg-white/90 px-2 text-[11px] leading-[20px] text-gh-gray shadow-sm whitespace-nowrap">{figureNoteText(note.unsure)}</div>

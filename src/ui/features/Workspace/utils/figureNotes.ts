@@ -1,8 +1,9 @@
 /**
  * The notes over structures read from a figure (docs/PDF.md, *Read from a
- * figure*): every structure taken from a PDF's figure, or a picture's, says
- * so - and to check it - until the chemist says it was checked, whatever is
- * edited of it meanwhile: putting one part right does not make the rest so.
+ * figure*): a structure taken from a PDF's figure, or a picture's, with
+ * parts still unsure says so - and to check it - until those are put right
+ * or the chemist says it was checked; where it came from is kept with its
+ * atoms and said quietly, the pointer on it, and in its menu.
  */
 import { structuresOf } from "../../../../lib/chem/magnified2d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
@@ -10,27 +11,27 @@ import { drawnBox } from "../../../../utils/importers";
 import type { Model } from "../store/types";
 import { atomAs, bondAs, readMarks } from "./figures";
 
-/** A structure read from a figure and not yet said to be checked: its atoms, where it was read from, and how many of its parts are still marked unsure. */
-export type FigureNote = { atoms: ReadonlySet<number>; sha256: string; page?: number; unsure: number };
+/** A structure read from a figure: its atoms, where it was read from, how many parts of what is not said to be checked of it are still marked unsure, and whether all of it is said to be checked. */
+export type FigureNote = { atoms: ReadonlySet<number>; sha256: string; page?: number; unsure: number; checked: boolean };
 
 /**
- * Each structure of `model` with an atom read from a figure not yet said to
- * be checked - joined by a bond to one that was, still (its own "check it"
- * kept): where that atom was read from, and how many parts of what is
- * unchecked of it are still marked unsure.
+ * Each structure of `model` with an atom read from a figure: where it was
+ * read from (an atom not said to be checked first - joined by a bond to one
+ * that was, its own kept), how many parts of what is unchecked of it are
+ * still marked unsure, and whether all of it is said to be checked.
  */
 export function figureNotesOf(model: Model): FigureNote[] {
-  if (!model.atoms.some((a) => a.seen && !a.seen.checked)) return [];
+  if (!model.atoms.some((a) => a.seen)) return [];
   const marks = readMarks(model);
   return structuresOf(model.atoms, model.bonds).flatMap((group): FigureNote[] => {
     const atoms = group.map((i) => model.atoms[i]);
     const open = atoms.filter((a) => a.seen && !a.seen.checked);
-    const read = open[0];
+    const read = open[0] ?? atoms.find((a) => a.seen);
     if (!read?.seen) return [];
     const ids = new Set(atoms.map((a) => a.id));
     const unchecked = new Set(open.map((a) => a.id));
     const unsure = open.filter((a) => marks.atoms.has(a.id)).length + model.bonds.filter((b) => ids.has(b.a) && (unchecked.has(b.a) || unchecked.has(b.b)) && marks.bonds.has(b.id)).length;
-    return [{ atoms: ids, sha256: read.seen.sha256, ...(read.seen.page != null ? { page: read.seen.page } : {}), unsure }];
+    return [{ atoms: ids, sha256: read.seen.sha256, ...(read.seen.page != null ? { page: read.seen.page } : {}), unsure, checked: !open.length }];
   });
 }
 
@@ -112,12 +113,22 @@ export function figureNotePlaces(model: Model, notes: readonly FigureNote[], hel
   return out;
 }
 
+/** Whether a structure read from a figure has its note over it at all times: while parts of it not said to be checked are still unsure. Else where it came from is said only with the pointer on it, and in its menu. */
+export function figureNoteShown(note: FigureNote): boolean {
+  return !note.checked && note.unsure > 0;
+}
+
 /** What a structure's note says: that it was read from a figure, to be checked - and how many of its parts are still unsure. */
 export function figureNoteText(unsure: number): string {
   return `Read from a figure: check it${unsure ? ` · ${unsure} ${unsure === 1 ? "part" : "parts"} unsure` : ""}`;
 }
 
+/** Where a structure read from a figure came from, as said quietly with the pointer on it and in its menu. */
+export function figureNoteSource(from: string, page?: number): string {
+  return `From ${from}${page != null ? `, p. ${page + 1}` : ""}`;
+}
+
 /** What a structure's note says where the pointer is on it: where it was read from, and how to say it was checked. */
 export function figureNoteTitle(from: string, page?: number): string {
-  return `From ${from}${page != null ? `, p. ${page + 1}` : ""}, read as drawn there. Check it against the figure; right-click it to say it was checked.`;
+  return `${figureNoteSource(from, page)}, read as drawn there. Check it against the figure; right-click it to say it was checked.`;
 }

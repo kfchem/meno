@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Model } from "../store/types";
 import { emptyWorkspaceDocument, setFigureChecked } from "../document";
-import { figureNotePlaces, figureNotesKey, figureNotesOf, figureNoteText, figureNoteTitle, type NotePlaces } from "./figureNotes";
+import { figureNotePlaces, figureNoteShown, figureNotesKey, figureNoteSource, figureNotesOf, figureNoteText, figureNoteTitle, type NotePlaces } from "./figureNotes";
 import { atomAs, bondAs } from "./figures";
 
 const SHA = "a".repeat(64);
@@ -30,20 +30,22 @@ describe("the note over a structure read from a figure", () => {
 
   it("says to check it, and how many parts are unsure; where the pointer is on it, where it was read from and how to say it was checked", () => {
     expect([figureNoteText(0), figureNoteText(1), figureNoteText(2)]).toEqual(["Read from a figure: check it", "Read from a figure: check it · 1 part unsure", "Read from a figure: check it · 2 parts unsure"]);
+    expect([figureNoteSource("paper.pdf", 2), figureNoteSource("figure.png")]).toEqual(["From paper.pdf, p. 3", "From figure.png"]);
     expect(figureNoteTitle("paper.pdf", 2)).toBe("From paper.pdf, p. 3, read as drawn there. Check it against the figure; right-click it to say it was checked.");
   });
 
-  it("stays when a part is edited - its unsure count going down as that part's mark goes - and goes only once it is said to be checked, one step", () => {
+  it("is shown over it only while parts of it are unsure: put right, or it said to be checked, one step, it goes - where it came from kept", () => {
     const m = model();
-    // (the O changed by hand: its mark goes, the note stays)
+    expect(figureNotesOf(m).map(figureNoteShown)).toEqual([true]);
+    // (the O changed by hand: its mark goes, and the note with it - where it came from still known)
     const edited: Model = { ...m, atoms: m.atoms.map((a) => (a.id === 3 ? { ...a, el: "N" } : a)) };
-    expect(figureNotesOf(edited).map((n) => n.unsure)).toEqual([0]);
-    const doc = { ...emptyWorkspaceDocument(), model: edited };
+    expect(figureNotesOf(edited).map((n) => [n.unsure, n.checked, figureNoteShown(n), n.sha256, n.page])).toEqual([[0, false, false, SHA, 2]]);
+    const doc = { ...emptyWorkspaceDocument(), model: m };
     const checked = setFigureChecked(doc, [1, 2, 3], true);
-    expect(figureNotesOf(checked.model)).toEqual([]);
+    expect(figureNotesOf(checked.model).map((n) => [n.checked, figureNoteShown(n), n.sha256])).toEqual([[true, false, SHA]]);
     expect(checked.model.atoms.find((a) => a.id === 1)?.seen).toEqual({ sha256: SHA, page: 2, x: 0, y: 0, bond: 14.4, checked: true });
     // (and said not to be, again: back)
-    expect(figureNotesOf(setFigureChecked(checked, [1, 2, 3], false).model)).toHaveLength(1);
+    expect(figureNotesOf(setFigureChecked(checked, [1, 2, 3], false).model).map(figureNoteShown)).toEqual([true]);
     // (nothing to say of a structure drawn by hand: the document as it was)
     expect(setFigureChecked(doc, [10], true)).toBe(doc);
   });
@@ -60,9 +62,9 @@ describe("the note over a structure read from a figure", () => {
     // (the checked one first in the drawing: still the unchecked one's file and page)
     const first: Model = { ...joined, atoms: [joined.atoms[4], ...joined.atoms.slice(0, 4)] };
     expect(figureNotesOf(first).map((n) => [n.sha256, n.page])).toEqual([[SHA, 2]]);
-    // (all of it checked: gone)
+    // (all of it checked: its note gone, where it came from kept)
     const doc = { ...emptyWorkspaceDocument(), model: joined };
-    expect(figureNotesOf(setFigureChecked(doc, [1, 2, 3], true).model)).toEqual([]);
+    expect(figureNotesOf(setFigureChecked(doc, [1, 2, 3], true).model).map((n) => [figureNoteShown(n), n.checked])).toEqual([[false, true]]);
   });
 
   it("are not worked out again for what they do not depend on - an atom moved - and only the moved structure's place is", () => {

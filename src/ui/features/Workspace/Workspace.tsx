@@ -223,7 +223,7 @@ import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
 import MagnifiedMarks2D from "./components/MagnifiedMarks2D";
 import FigureNotes2D from "./components/FigureNotes2D";
-import { figureNotesOf } from "./utils/figureNotes";
+import { figureNoteSource, figureNotesOf } from "./utils/figureNotes";
 import StackChips2D from "./components/StackChips2D";
 import StackSwap2D from "./components/StackSwap2D";
 import Shapes2D from "./components/Shapes2D";
@@ -2371,13 +2371,15 @@ function WorkspaceContent({
             if (at != null) store.getState().selectStructure(at);
           }}
           figure={(() => {
-            // (its structure read from a figure, not yet said to be checked: saying so, one step - its note going)
+            // (its structure read from a figure: where it came from - and, not yet said to be checked, saying so, one step)
             const at = menu.kind === "atom" || menu.kind === "bond" ? structureAt(menu.kind, menu.id) : null;
             if (at == null) return undefined;
-            const m = store.getState().model;
-            const atoms = fragmentOf(m, at);
-            const note = figureNotesOf(m).find((n) => n.atoms.has(at));
-            return note ? { run: () => store.getState().setFigureChecked([...atoms], true) } : undefined;
+            const st = store.getState();
+            const atoms = fragmentOf(st.model, at);
+            const note = figureNotesOf(st.model).find((n) => n.atoms.has(at));
+            if (!note) return undefined;
+            const from = st.pdfs.find((p) => p.sha256 === note.sha256)?.name ?? st.pictures.find((p) => p.sha256 === note.sha256)?.name ?? "the figure";
+            return { from: figureNoteSource(from, note.page), ...(note.checked ? {} : { run: () => st.setFigureChecked([...atoms], true) }) };
           })()}
           stereo={(() => {
             const st = store.getState();
