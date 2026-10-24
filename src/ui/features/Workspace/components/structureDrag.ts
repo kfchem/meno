@@ -10,7 +10,8 @@
 import { styleOf } from "../../../../lib/chem/style";
 import { DURATION } from "../../../theme/motion";
 import type { EditorStore } from "../store";
-import type { Model, PdfItem } from "../store/types";
+import type { Model, PdfItem, PdfStructurePick } from "../store/types";
+import { addsToSelection } from "../../../../lib/doc/shortcuts";
 import { drawingSvg, exportPxPerWorld } from "../fileActions";
 import type { PageStructure } from "../utils/pageStructures";
 import { overCanvasAt, putDownAt, type OnScreen } from "./wordsDrag";
@@ -30,6 +31,21 @@ export function sayWhy(store: EditorStore, why: string): void {
 }
 
 /** `model` moved so that its middle - where a structure read has naught - is at `at`. */
+/**
+ * Whether a click on a structure of a PDF adds it to those picked or takes it out of them, rather than picking it alone: with
+ * Ctrl (⌘ on a Mac), as everywhere in Meno - or with Shift, which does the same, structures having no range between them.
+ */
+export function togglesPick(e: { shiftKey: boolean; ctrlKey: boolean; metaKey: boolean }, mac?: boolean): boolean {
+  return e.shiftKey || addsToSelection(e, mac);
+}
+
+/** The structures picked once `pick` is clicked: added or taken out where the click toggles (`togglesPick`), else it alone. */
+export function picksAfter(was: readonly PdfStructurePick[], pick: PdfStructurePick, toggles: boolean): PdfStructurePick[] {
+  if (!toggles) return [pick];
+  const same = (k: PdfStructurePick) => k.page === pick.page && k.key === pick.key;
+  return was.some(same) ? was.filter((k) => !same(k)) : [...was, pick];
+}
+
 export function movedTo(model: Model, at: { x: number; y: number }): Model {
   return { ...model, atoms: model.atoms.map((a) => ({ ...a, x: a.x + at.x, y: a.y + at.y })) };
 }
