@@ -7,7 +7,7 @@ import type { Property } from "../../../../lib/entry";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
 import { BEFORE_THE_EDIT, readAsTable } from "./entries";
 import { resultOf } from "./flow";
-import { drawnSmiles, structuresAsTable } from "./structuresTable";
+import { drawnSmiles, drawnStereo, sortedRows, structuresAsTable } from "./structuresTable";
 import { setStructures, setStructuresTable } from "./run";
 import StructuresTableBody from "./StructuresTableBody";
 
@@ -77,7 +77,7 @@ describe("a set of structures drawn as a table", () => {
     expect(column(t, "what")).toEqual(Array.from({ length: 120 }, (_, k) => `structure ${k + 1} of 120`));
     // (each with its own record, in order: the page's first, then those held)
     expect(column(t, "k")).toEqual(Array.from({ length: 120 }, (_, k) => k));
-    expect(column(t, "SMILES (drawing, no stereo)").slice(48, 52)).toEqual(["CCO", "CCO", "CCCO", "CCCO"]);
+    expect(column(t, "SMILES (drawing, constitution only)").slice(48, 52)).toEqual(["CCO", "CCO", "CCCO", "CCCO"]);
     // (no step gave any its SMILES: no column of them)
     expect(t.columns.map((c) => c.name)).not.toContain("SMILES (record)");
     expect(column(t, "id")[0]).toBe("structure:5#0");
@@ -97,10 +97,10 @@ describe("a set of structures drawn as a table", () => {
     const { store, set } = holding(2, 0, record);
     const t = setStructuresTable(store.getState(), set);
     const head = t.columns.map((c) => (c.kind === "number" && c.unit !== "none" ? `${c.name} (${c.unit})` : c.name));
-    expect(head).toEqual(["id", "what", "SMILES (record)", "SMILES (drawing, no stereo)", "state", "made", "made_from.nll", "mw (g/mol)", "tpsa (Å2)"]);
+    expect(head).toEqual(["id", "what", "SMILES (record)", "SMILES (drawing, constitution only)", "state", "made", "made_from.nll", "mw (g/mol)", "tpsa (Å2)"]);
     // (its SMILES as the step that made it gave it - its stereo with it - and not again among its values; the drawing's beside it, never in its place)
     expect(column(t, "SMILES (record)")).toEqual(["CC[C@@H](C)O", "CC[C@H](C)O"]);
-    expect(column(t, "SMILES (drawing, no stereo)")).toEqual(["CCO", "CCO"]);
+    expect(column(t, "SMILES (drawing, constitution only)")).toEqual(["CCO", "CCO"]);
     expect(column(t, "mw")).toEqual([74.123, 74.123]);
     expect(column(t, "made_from.nll")).toEqual([23.5, 23.5]);
     expect(column(t, "state")).toEqual(["finished", "finished"]);
@@ -125,7 +125,43 @@ describe("a set of structures drawn as a table", () => {
     const { store, set } = holding(3, 0, record);
     const t = setStructuresTable(store.getState(), set);
     expect(column(t, "SMILES (record)")).toEqual(["F[C@](Cl)Br", "F[C@@](Cl)Br", null]);
-    expect(column(t, "SMILES (drawing, no stereo)")).toEqual(["CCO", "CCO", "CCO"]);
+    expect(column(t, "SMILES (drawing, constitution only)")).toEqual(["CCO", "CCO", "CCO"]);
+  });
+
+  it("says where a drawing carries stereo its SMILES from the drawing leaves out: two enantiomers never read alike unsaid", () => {
+    // (CHFClBr: its F wedged up, wedged down, and plain - the SMILES from the drawing the same for all three)
+    const chfclbr = (stereo?: "up" | "down"): Model => ({
+      atoms: [
+        { id: 1, el: "C", x: 0, y: 0, r: 0.9 },
+        { id: 2, el: "F", x: 0, y: 1.5, r: 0.9 },
+        { id: 3, el: "Cl", x: 1.3, y: -0.75, r: 0.9 },
+        { id: 4, el: "Br", x: -1.3, y: -0.75, r: 0.9 },
+      ] as Atom[],
+      bonds: [
+        { id: 5, a: 1, b: 2, order: 1, ...(stereo ? { stereo } : {}) },
+        { id: 6, a: 1, b: 3, order: 1 },
+        { id: 7, a: 1, b: 4, order: 1 },
+      ],
+    });
+    expect([drawnStereo(chfclbr("up")), drawnStereo(chfclbr("down")), drawnStereo(chfclbr())]).toEqual([true, true, false]);
+    const t = structuresAsTable([chfclbr("up"), chfclbr("down"), chfclbr()].map((drawn, place) => ({ place, drawn })));
+    expect(column(t, "SMILES (drawing, constitution only)")).toEqual(["C(F)(Cl)Br", "C(F)(Cl)Br", "C(F)(Cl)Br"]);
+    expect(column(t, "stereo in the drawing")).toEqual(["stereo drawn, not written here", "stereo drawn, not written here", null]);
+    // (none drawn with stereo: no such column)
+    expect(structuresAsTable([{ place: 0, drawn: chfclbr() }]).columns.map((c) => c.name)).not.toContain("stereo in the drawing");
+  });
+
+  it("sorts each way with the values in order and those with none - blank, or not worked out - last either way", () => {
+    const rows = [[300], [null], [100], ["not worked out: ran out of memory"], [200]];
+    expect(sortedRows({ rows }, 0, true)).toEqual([0, 4, 2, 1, 3]);
+    expect(sortedRows({ rows }, 0, false)).toEqual([2, 4, 0, 1, 3]);
+    // (mw down, a failed row and a blank one among them, through a set's table)
+    const record = (k: number): DrawnRecord =>
+      k === 1 ? { properties: { mw: { value: 0, unit: "g/mol", status: { failed: "ran out of memory" }, by } } } : k === 2 ? {} : { properties: { mw: value(40 + k, "g/mol") } };
+    const { store, set } = holding(4, 0, record);
+    const t = setStructuresTable(store.getState(), set);
+    const mw = t.columns.findIndex((c) => c.name === "mw");
+    expect(sortedRows(t, mw, true).map((k) => t.rows[k][mw])).toEqual([43, 40, "not worked out: ran out of memory", null]);
   });
 
   it("says a structure edited since its record was given is that - never finished", () => {
@@ -174,7 +210,7 @@ describe("a set of structures drawn as a table", () => {
     expect(column(t, "number")).toEqual(Array.from({ length: 51 }, (_, k) => k + 1));
     expect(column(t, "made.how")[0]).toMatch(/R1/);
     // (written from the drawing, where no step gave its SMILES)
-    expect(column(t, "SMILES (drawing, no stereo)").every((s) => typeof s === "string" && s.length > 0)).toBe(true);
+    expect(column(t, "SMILES (drawing, constitution only)").every((s) => typeof s === "string" && s.length > 0)).toBe(true);
     expect(readAsTable(st(), st().sets.find((b) => b.id === out.id)!)).toBe(true);
   });
 
@@ -193,7 +229,7 @@ describe("a set of structures drawn as a table", () => {
       </EditorProvider>,
     );
     const names = [...html.matchAll(/role="columnheader"[^>]*><button[^>]*><span[^>]*>([^<]*)</g)].map((m) => m[1]);
-    expect(names).toEqual(["#", "SMILES (drawing, no stereo)", "state", "mw (g/mol)"]);
+    expect(names).toEqual(["#", "SMILES (drawing, constitution only)", "state", "mw (g/mol)"]);
     expect(html).toContain("120 structures");
     expect(html).toContain(`aria-rowcount="121"`);
     const drawn = html.match(/role="row" aria-rowindex/g) ?? [];

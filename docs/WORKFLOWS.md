@@ -2145,10 +2145,15 @@ molecules in 3D does: *Open as a table* on its menu (workflow
 - **Its columns**: its place (#); its SMILES as the step that made it
   gave it (`SMILES (record)`, `smiles` on its record, its stereo with it),
   where any did; its SMILES as Meno writes it from the drawing (`SMILES
-  (drawing, no stereo)`: its constitution, Kekulé, a label of no element
-  as `*` - Meno's own code reads no stereo from wedges, and the head says
-  so). The two are never mixed in one column: two enantiomers would read
-  the same. Then its state - "finished", "failed: <why>", or "edited
+  (drawing, constitution only)`: Kekulé, a label of no element as `*`,
+  no `@` or `/`). Meno reads the drawing's stereo - wedged centres, cis
+  and trans, axes (lib/layout `readStereo`, as a structure's identity
+  does) - but does not write it in this SMILES yet: where a drawing
+  carries any, or wedges that do not read, its row says so in *stereo in
+  the drawing* ("stereo drawn, not written here"). The two SMILES are
+  never mixed in one column, and two enantiomers never read alike
+  unsaid.
+  Then its state - "finished", "failed: <why>", or "edited
   since: its properties were for the structure before the edit", never
   finished then (`drawnAsEntry`, the record's `stale`); why it was set
   aside, where any was; then each value its record holds, under its own
@@ -2164,7 +2169,8 @@ molecules in 3D does: *Open as a table* on its menu (workflow
   number; a column of its own where no row has it worked out. A chart
   takes a failed row as no result.
 - **Sorted by any column**, its name pressed, once up and again down; #
-  back to the step's order. As many rows as there are drawn only where
+  back to the step's order. Those with no value there - none, or not
+  worked out - come last either way. As many rows as there are drawn only where
   they are seen.
 - **One conversion** (`structuresAsTable`, of the entries a step takes):
   the table Chart is to take structures by too, each row's id and what it

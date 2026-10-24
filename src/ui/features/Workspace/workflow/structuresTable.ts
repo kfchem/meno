@@ -12,13 +12,18 @@ import { writeSmiles, type SmilesAtomOut } from "../../../../lib/chem/smiles";
 import { isElementSymbol } from "../../../../lib/roles/molblock";
 import type { Model } from "../store/types";
 import { undrawnHydrogens } from "../chem/drawing";
+import { identityInputOf } from "../chem/identityOf";
 import { BEFORE_THE_EDIT, drawnAsEntry, recordWhy, type DrawnEntry } from "./entries";
 import type { Property } from "../../../../lib/entry";
 
 /** The column of each structure's SMILES as the step that made it gave it, its stereo with it - none where none did. */
 export const SMILES_RECORD_COLUMN = "SMILES (record)";
-/** The column of each structure's SMILES as Meno writes it from the drawing (`drawnSmiles`): no stereo, which Meno's own code does not read from wedges. */
-export const SMILES_DRAWING_COLUMN = "SMILES (drawing, no stereo)";
+/** The column of each structure's SMILES as Meno writes it from the drawing (`drawnSmiles`): its constitution only - what the drawing says of its stereo is read (`identityInputOf`), but not written in it. */
+export const SMILES_DRAWING_COLUMN = "SMILES (drawing, constitution only)";
+/** The column that says where a structure's drawing carries stereo that its SMILES from the drawing leaves out, where any does. */
+export const STEREO_COLUMN = "stereo in the drawing";
+/** What it says there: so that two enantiomers never read the same without it. */
+export const STEREO_NOT_WRITTEN = "stereo drawn, not written here";
 /** The column of why a structure was set aside, where any was. */
 export const ASIDE_COLUMN = "set aside";
 /** Meno's own column of each structure's state: "finished", "failed: <why>", or edited since its properties were given. */
@@ -31,7 +36,8 @@ const SMILES_PROPERTY = "smiles";
 /**
  * A structure drawn as SMILES, as Meno writes it from the drawing: its
  * constitution, bonds in Kekulé form, each atom's hydrogens as Meno counts
- * them, and no stereo. A label that is no element - an abbreviation, an R
+ * them - no stereo written, though Meno reads what the drawing says of it
+ * (`drawnStereo`). A label that is no element - an abbreviation, an R
  * group - is written as "*".
  */
 export function drawnSmiles(drawn: Model): string {
@@ -50,6 +56,39 @@ export function drawnSmiles(drawn: Model): string {
   return atoms.length ? writeSmiles(atoms, bonds, 0) : "";
 }
 
+/**
+ * Whether a structure's drawing carries stereo - a centre wedged, a double
+ * bond's cis or trans, an axis - or wedges that do not read: what Meno
+ * reads of it (`identityInputOf`), which its SMILES from the drawing does
+ * not write.
+ */
+export function drawnStereo(drawn: Model): boolean {
+  if (!drawn.atoms.length) return false;
+  const { input, unread } = identityInputOf(drawn);
+  return unread.length > 0 || input.atoms.some((a) => a.tetra) || input.bonds.some((b) => b.stereo) || !!input.axes?.length;
+}
+
+/** Whether a cell holds no value: none at all, or a value not worked out or not applicable (`notGiven`) - last in a sort, either way. */
+export const noValue = (c: Cell) => c == null || (typeof c === "string" && /^not (worked out|applicable): /.test(c));
+
+/**
+ * The rows of a table in the order a column sorts them: the values in
+ * order, up or `down` - numbers as numbers, text as a reader sorts it -
+ * and those with no value (`noValue`) after them, either way, in the
+ * table's order; rows alike in the table's order too.
+ */
+export function sortedRows(table: Pick<Table, "rows">, column: number, down: boolean): number[] {
+  const order = (a: Cell, b: Cell) => (typeof a === "number" && typeof b === "number" ? a - b : String(a).localeCompare(String(b), "en", { numeric: true }));
+  return table.rows
+    .map((r, k) => ({ v: r[column], k }))
+    .sort((x, y) => {
+      const nx = noValue(x.v), ny = noValue(y.v);
+      if (nx || ny) return nx === ny ? x.k - y.k : nx ? 1 : -1;
+      return (down ? -1 : 1) * order(x.v, y.v) || x.k - y.k;
+    })
+    .map((x) => x.k);
+}
+
 /** A value a step was to give and did not, as its cell says it: "not worked out: <why>" - never blank, never a number. */
 function notGiven(p: Property | undefined): string | null {
   const st = p?.status;
@@ -62,7 +101,10 @@ function notGiven(p: Property | undefined): string | null {
  * for each, in their order. Its columns: the row's id (`idOf`); what it is
  * ("structure 3 of 120"); its SMILES as the step that made it gave it,
  * where any did (`SMILES (record)`), and as Meno writes it from the
- * drawing, no stereo (`drawnSmiles`) - the two never mixed in one column;
+ * drawing, its constitution only (`drawnSmiles`) - the two never mixed in
+ * one column - and, where its drawing carries stereo that leaves out
+ * (`drawnStereo`), that it does, so that two enantiomers never read alike
+ * unsaid;
  * its state - "finished", "failed: <why>", or edited since its properties
  * were given (`EDITED_SINCE`), never finished then; why it was set aside,
  * where any was; then each property its record holds, under its own name,
@@ -114,6 +156,8 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
     return typeof v === "string" && v ? v : null;
   });
   const aside = entries.map((e) => recordWhy(e.record));
+  const stereo = entries.map((e) => drawnStereo(e.drawn));
+  const anyStereo = stereo.some(Boolean);
   const anyRecorded = recorded.some((s) => s != null);
   const anyAside = aside.some((w) => w != null);
   const columns: TableColumn[] = [
@@ -121,6 +165,7 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
     { name: WHAT_COLUMN, kind: "text" },
     ...(anyRecorded ? [{ name: SMILES_RECORD_COLUMN, kind: "text" } as const] : []),
     { name: SMILES_DRAWING_COLUMN, kind: "text" },
+    ...(anyStereo ? [{ name: STEREO_COLUMN, kind: "text" } as const] : []),
     { name: STATE_COLUMN, kind: "text" },
     ...(anyAside ? [{ name: ASIDE_COLUMN, kind: "text" } as const] : []),
     ...own,
@@ -131,6 +176,7 @@ export function structuresAsTable(entries: readonly DrawnEntry[], idOf: (k: numb
     `structure ${k + 1} of ${n}`,
     ...(anyRecorded ? [recorded[k]] : []),
     drawnSmiles(e.drawn),
+    ...(anyStereo ? [stereo[k] ? STEREO_NOT_WRITTEN : null] : []),
     e.record?.stale === BEFORE_THE_EDIT ? EDITED_SINCE : String(read[k].properties[STATE_COLUMN]?.value ?? ""),
     ...(anyAside ? [aside[k] ?? null] : []),
     ...ownRows[k],
