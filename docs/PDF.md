@@ -1549,7 +1549,7 @@ words are: by itself, not by a box drawn round it.
 - the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
 - a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
 - dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;
-- clicked, it is picked; Shift-click adds or takes away; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
+- clicked, it is picked; ⌘-click (Ctrl-click on Windows) adds it to those picked or takes it out, as everywhere in Meno, and Shift-click does the same, structures having no range between them (in words, Shift-click still draws the selection on, onto another page too); a link under a structure is not followed, the structure taken first; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
 - one not read whole is never carried: a press says why, where the chemistry's notices are said.
 
 **A structure, and where it lies** (`utils/pageStructures`):

@@ -24,7 +24,7 @@ import { useAppSettings } from "../../../lib/settings/appSettings";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
 import { figureStructuresHad } from "./utils/pdfStructures";
 import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
-import { dragStructure, sayWhy } from "./components/structureDrag";
+import { dragStructure, picksAfter, sayWhy, togglesPick } from "./components/structureDrag";
 import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
 import { pressOn } from "../../../lib/pdf/press";
 import { goToFound, runFind, stepFound } from "./components/pdfFind";
@@ -608,7 +608,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     let lifting: { x: number; y: number; carried: boolean } | null = null;
     // a structure of a figure pressed (docs/PDF.md, *Structures picked from a PDF*): carried out once the pointer moves, else picked
     let picking: { x: number; y: number; page: number; pick: PdfStructurePick; s: PageStructure } | null = null;
-    let shiftPick = false;
+    let togglePick = false;
     /** The structure of a figure at a point of a page, its figure read as it is pointed at (utils/pdfStructures) - `widened` for a press. */
     const structureUnder = (page: number, x: number, y: number, widened = 1): { pick: PdfStructurePick; s: PageStructure } | null => {
       const sha = shaOf();
@@ -749,7 +749,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         el.setPointerCapture(e.pointerId);
         drawing = null;
         picking = { x: e.clientX, y: e.clientY, page: q.page, ...under };
-        shiftPick = e.shiftKey;
+        togglePick = togglesPick(e);
         return;
       }
       // (on words selected, once: carried out, as the pointer moves)
@@ -815,7 +815,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       }
       const drawn = drawing;
       drawing = null;
-      // (a structure pressed and let go where it was: picked - with Shift, added, or let go where it was picked; one not read whole saying why)
+      // (a structure pressed and let go where it was: picked - with Ctrl (⌘) or Shift, added, or let go where it was picked; one not read whole saying why)
       const picked = picking;
       picking = null;
       if (picked) {
@@ -824,9 +824,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
           return;
         }
         const st = store.getState();
-        const was = shiftPick && st.pdfStructures?.id === id ? st.pdfStructures.picks : [];
-        const same = (k: PdfStructurePick) => k.page === picked.pick.page && k.key === picked.pick.key;
-        const picks = shiftPick ? (was.some(same) ? was.filter((k) => !same(k)) : [...was, picked.pick]) : [picked.pick];
+        const was = togglePick && st.pdfStructures?.id === id ? st.pdfStructures.picks : [];
+        const picks = picksAfter(was, picked.pick, togglePick);
         st.setPdfStructures(picks.length ? { id, picks } : null);
         return;
       }
