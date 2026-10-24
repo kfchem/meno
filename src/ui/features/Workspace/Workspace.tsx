@@ -171,6 +171,7 @@ import { pdfRoom } from "../../../lib/pdf/layout";
 import { copying, readClipboard, writeClipboard } from "../../../lib/clipboard";
 import { PdfPictures } from "./components/pdfPictures";
 import { FollowCover, PageHtmlLayer, pageHtmlLayerStyle } from "./components/coverLayer";
+import { useKeepUnselected } from "./hooks/useKeepUnselected";
 import { FollowStyle } from "./components/FollowStyle";
 import { pointOfStyle } from "./restyle";
 import CaptionTyping2D from "./components/CaptionTyping2D";
@@ -1474,6 +1475,8 @@ function WorkspaceContent({
   // Drops on the drawing: files, and objects and pictures out of Office (lib/drop)
   const dropRef = useRef<HTMLDivElement>(null);
   useDropZone(dropRef, dropZone);
+  // (no text of the page's selected on it or over it: Meno's own selection is what selects here)
+  useKeepUnselected(dropRef);
   // Render: a picture or a film of molecules in 3D, asked in a card over the canvas (docs/RENDER.md)
   const [rendering, setRendering] = useState<{ ids: number[]; motions: Motion[]; surfaces: boolean } | null>(null);
   const askRender = (ids: number[]) => {
@@ -1567,7 +1570,7 @@ function WorkspaceContent({
     <div
       ref={dropRef}
       data-guide="page"
-      className={`flex-1 min-w-0 h-full relative${fadeIn ? " meno-fade-in" : ""}`}
+      className={`flex-1 min-w-0 h-full relative select-none${fadeIn ? " meno-fade-in" : ""}`}
       onMouseDownCapture={handleMouseDownCapture}
       onMouseMove={handleWrapperMouseMove}
       onMouseLeave={handleWrapperMouseLeave}
