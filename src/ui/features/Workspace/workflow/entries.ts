@@ -960,10 +960,24 @@ export function freeEnergyOf(e: SetEntry): Property | undefined {
   return p.at?.geometry == null || p.at.geometry === geometry ? p : undefined;
 }
 
-/** An entry's imaginary frequencies, as its calculation judged them (cm-1): none where its vibrations were worked out - its calculation's, or those it carries (`calcProperties`) - and it has none; "not computed" where they were not. */
+/**
+ * An entry's imaginary frequencies (cm-1): as its calculation judged them;
+ * else, where its vibrations were worked out - its calculation's, or those
+ * it carries (`calcProperties`) - those the table lists as negative, none
+ * where it lists none: a table with one never reads as none; "not computed"
+ * where they were not worked out.
+ */
 export function imaginaryOf(e: Pick<SetEntry, "imaginary" | "calc" | "properties">): number[] | "not computed" {
   if (e.imaginary?.length) return [...e.imaginary];
-  return e.calc?.results?.some((x) => x.on === "list" && x.id === "vibrations") || e.properties?.vibrations ? [] : "not computed";
+  const list = e.calc?.results?.find((x) => x.on === "list" && x.id === "vibrations");
+  if (list && list.on === "list") {
+    const k = list.columns.findIndex((c) => c.quantity === "wavenumber");
+    return k < 0 ? [] : list.rows.map((r) => r.cells[k]).filter((f): f is number => typeof f === "number" && f < 0);
+  }
+  const table = e.properties?.vibrations?.value;
+  if (!e.properties?.vibrations) return "not computed";
+  const rows = typeof table === "object" && table && "table" in table ? table.table.rows : [];
+  return rows.map((r) => r[0]).filter((f): f is number => typeof f === "number" && f < 0);
 }
 
 /** The names Meno gives what it has found of an entry (`menoProperties`), each a field of a step's entry - its compound, its energy, its vibrations, its state - never one of its own properties. */

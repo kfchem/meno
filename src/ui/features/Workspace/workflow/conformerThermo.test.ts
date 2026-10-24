@@ -106,6 +106,36 @@ describe("Frequencies on a conformer set", () => {
     expect(imaginaryOf(water(1, 0))).toBe("not computed");
   });
 
+  it("never reads a vibrations table that lists a negative frequency as none - where the program judged none imaginary", () => {
+    // (xtb lists -15 cm-1, under its own cutoff: judged none imaginary, but the table has it)
+    const { entries } = frequencied();
+    const vibrations = entries[0].properties!.vibrations;
+    const table = (vibrations.value as { table: { rows: number[][] } }).table;
+    const soft: SetEntry = { ...entries[0], properties: { ...entries[0].properties, vibrations: { ...vibrations, value: { table: { ...table, rows: [[-15], ...table.rows] } } as typeof vibrations.value } } };
+    expect(imaginaryOf(soft)).toEqual([-15]);
+    // (the same, from a calculation's own list)
+    const done = workedOf("frequencies", water(1, 0), { ...xtbFrequencies(water(1, 0).xyz, -5.07, -5.05), imaginary: [] }, ["xtb 6.7.1"]);
+    if (isFailure(done)) throw new Error(done.why);
+    const list = done.calc!.results!.find((r) => r.id === "vibrations")!;
+    if (list.on !== "list") throw new Error("no list");
+    const withSoft = { ...done, calc: { ...done.calc!, results: [{ ...list, rows: [{ cells: [-15] }, ...list.rows] }] } };
+    expect(imaginaryOf(withSoft)).toEqual([-15]);
+  });
+
+  it("drops what a conformer carries of a calculation where a Species step gives it another charge or spin - and says so", () => {
+    const { entries } = frequencied(undefined, undefined, undefined, [[-85.3], [], []]);
+    const out = runMeno("species", entries, "conformers", { charge: "1", multiplicity: "2" });
+    if (!out.ok) throw new Error(out.said);
+    for (const e of out.kept) {
+      const p = entryOfSet(e, "x").properties;
+      expect(p["thermo.free-energy"]).toBeUndefined();
+      expect(p.vibrations).toBeUndefined();
+      expect(p.imaginary).toBeUndefined();
+      expect(imaginaryOf(e)).toBe("not computed");
+    }
+    expect(out.said).toBe("3 entries set; their imaginary frequencies and thermochemistry were dropped (they were for the other species)");
+  });
+
   it("drops what a conformer carries of a calculation where a program works it out anew, or it is no longer at that geometry", () => {
     const { entries } = frequencied();
     const again = workedOf("energy", entries[0], { schema: 1, program: "xtb", atoms: ["O", "H", "H"], frames: [[...entries[0].xyz]], energies: [-5.07] }, ["xtb 6.7.1"]);
@@ -163,6 +193,16 @@ describe("Populations and Energy window on a conformer set with free energies", 
     // (a saddle point's G is no minimum's: the window on G refuses it, naming it)
     const { entries: saddle } = frequencied(undefined, undefined, undefined, [[], [-85.3], []]);
     expect(runMeno("energy-window", saddle, "conformers", { window: 3 })).toMatchObject({ ok: false, said: expect.stringContaining("a #2 has") });
+  });
+
+  it("says, of a window on G given with nothing of how it was worked out, that its conditions were not stated", () => {
+    // (each conformer's G as a plugin of the chemist's might give it: a value, nothing of how or where)
+    const given = [0, 1, 2].map((k) => {
+      const e = { ...water(k + 1, 0.01 * k), energy: -5.07 + 0.001 * k };
+      return { ...e, properties: { "thermo.free-energy": { value: [-5.05, -5.0505, -5.0508][k], unit: "Eh" as const, status: "computed" as const } } };
+    });
+    const out = runMeno("energy-window", given, "conformers", { window: 0.3 });
+    expect(out.ok && out.said).toBe("2 of 3 kept, on free energies (G), conditions not stated");
   });
 
   it("falls back to E where the conformers' G were worked out unlike, saying how", () => {

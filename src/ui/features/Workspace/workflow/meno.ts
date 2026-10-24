@@ -379,7 +379,10 @@ function basisOf(entries: readonly SetEntry[], kelvin?: number): Basis {
   }
   const at = g.get(entries[0])!.at?.kelvin;
   const same = entries.every((e) => g.get(e)!.at?.kelvin === at);
-  return { energy: (e) => g.get(e)!.value as number, free: true, words: `free energies (G${kelvin == null && same && at != null ? `, ${at} K` : ""})` };
+  // (G given with nothing said of how - no temperature, program, method...: said so, never read as of known conditions)
+  const unsaid = entries.every((e) => workedOutAs(g.get(e)!).every(([, v]) => v === "not stated" || v === "unknown"));
+  const words = `free energies (G${kelvin == null && same && at != null ? `, ${at} K` : ""})${unsaid ? ", conditions not stated" : ""}`;
+  return { energy: (e) => g.get(e)!.value as number, free: true, words };
 }
 
 /** Entries as a part of their compound's conformers (`SetEntry.partOf`). */

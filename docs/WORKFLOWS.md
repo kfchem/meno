@@ -597,7 +597,9 @@ beside its edge - being drawn over all of it.
   298.15 K, from free energies (G)"; where any entry had a G but it was
   not taken, why not: "from electronic energies (not free energies: a #2
   has none)", "(... a #1's G is at 298.15 K, not 350 K)", "(... compound
-  a's differ in method: GFN2-xTB (a #1) and GFN1-xTB (a #3))". On free
+  a's differ in method: GFN2-xTB (a #1) and GFN1-xTB (a #3))". A G given
+  with nothing of how it was worked out - no temperature, program,
+  method - is said so: "on free energies (G), conditions not stated". On free
   energies a window refuses a saddle point, as Populations does: its G is
   no minimum's;
 - **A conformer set keeps each conformer's thermochemistry**
@@ -608,9 +610,13 @@ beside its edge - being drawn over all of it.
   vibrations' frequencies - as its frame's properties: the molecule keeps
   one calculation, not each frame's. Its imaginary frequencies are kept
   frame by frame, a frame whose vibrations were worked out and has none
-  "none", one never worked out "not computed". A program step on them
-  later reads them again, or drops them: never carried onto another
-  geometry. (Until 2026-10-24 a conformer set dropped them: a Frequencies
+  "none", one never worked out "not computed"; where the program judged
+  none imaginary but its table lists a negative frequency, that one is
+  said - a table with one never reads as none. A program step on them
+  later reads them again, or drops them, and a step that changes the
+  structure or its charge or spin drops them (*Species* says so: "their
+  thermochemistry was dropped"): never carried onto another geometry or
+  species. (Until 2026-10-24 a conformer set dropped them: a Frequencies
   step on one gave nothing downstream.) The modes' displacements stay
   with a molecule of one geometry's calculation, not each frame's;
 - **As conformers**: the same entries, as a conformer set.
