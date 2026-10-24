@@ -168,6 +168,31 @@ describe("every structure on a page", () => {
     expect("none" in structures[0].read).toBe(true);
   });
 
+  it("reads a structure whole on a page with a background behind all of it - three full-page paths, as a browser prints a page", () => {
+    const page = { kind: "path" as const, box: [0, 0, 612, 792] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [page, page, page, { kind: "path", box: whole.box }] }, [figure], () => drawn, "pdf", 0);
+    expect("model" in structures[0].read).toBe(true);
+  });
+
+  it("reads a structure whole in a frame drawn round it, and two whole on a coloured panel behind both", () => {
+    const frame = { kind: "path" as const, box: [figure[0] - 0.5 * bond, figure[1] - 0.5 * bond, figure[2] + 0.5 * bond, figure[3] + 0.5 * bond] as [number, number, number, number] };
+    expect("model" in pageStructuresOf({ objects: [frame] }, [figure], () => drawn, "pdf", 0).structures[0].read).toBe(true);
+    // (the same structure again, four bonds to the right, in a figure of its own: a panel behind both, its middle between them)
+    const shift = (b: [number, number, number, number], dx: number) => [b[0] + dx, b[1], b[2] + dx, b[3]] as [number, number, number, number];
+    const dx = figure[2] - figure[0] + 4 * bond;
+    const moved: FigureDrawn = { ...drawn, paths: drawn.paths.map((p) => ({ ...p, d: p.d.map((st) => (st[0] === "Z" ? st : ([st[0], st[1] + dx, st[2]] as typeof st))) })), letters: drawn.letters.map((l) => ({ ...l, box: shift(l.box, dx), at: l.at ? ([l.at[0] + dx, l.at[1]] as [number, number]) : l.at })) };
+    const panel = { kind: "shading" as const, box: [figure[0] - bond, figure[1] - bond, figure[2] + dx + bond, figure[3] + bond] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [panel] }, [figure, shift(figure, dx)], (k) => (k === 0 ? drawn : moved), "pdf", 0);
+    expect(structures.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("still refuses a structure where lines cross into it from outside its figure, though a background lies behind all", () => {
+    const page = { kind: "path" as const, box: [0, 0, 612, 792] as [number, number, number, number] };
+    const crossing = { kind: "path" as const, box: [figure[2] - 0.5 * bond, y - 2, figure[2] + 3 * bond, y + 2] as [number, number, number, number] };
+    const { structures } = pageStructuresOf({ objects: [page, crossing] }, [figure], () => drawn, "pdf", 0);
+    expect(structures[0].read).toEqual({ none: "Part of this structure could not be read (lines drawn beside it lie outside its figure), so none of it is taken." });
+  });
+
   it("reads a structure whole where all else on the page lies far from it", () => {
     const far = { kind: "text" as const, box: [figure[2] + 3 * bond, y - 4, figure[2] + 3 * bond + 60, y + 4] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [far] }, [figure], () => drawn, "pdf", 0);
