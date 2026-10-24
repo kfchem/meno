@@ -1561,7 +1561,8 @@ words are: by itself, not by a box drawn round it.
   structure charged still, with an ion of the other charge within 4.5
   bonds of it that it did not take - the 3 and as far again as Meno sets
   one piece of a drawing from the next; level or not, read as an ion or
-  left a word, with no arrow nor "+" between them - has
+  left a word - one written as an ion though it reads as no label, a
+  Bu4N+, too - with no arrow nor "+" between them - has
   each of its charged atoms marked unsure, saying so ('"K+" beside it is
   not taken with it: a counter-ion of it, perhaps.'): never a salt read
   without its counter-ion and none the wiser;

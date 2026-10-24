@@ -105,6 +105,19 @@ function chargeOf(a: FigureRead["atoms"][number]): number {
   return (label?.read ? (label.charge ?? 0) : 0) + (a.marked ?? 0);
 }
 
+/**
+ * The sign of the charge a word is written with, read as a label or not: a label's charge, where it reads with one; else, a word
+ * written as an ion - a capital, letters and digits, a + or - at its end (Bu4N+, a group's name Meno does not know, an OTf- read
+ * as its group) - its sign; else naught.
+ */
+function writtenSign(text: string): number {
+  const t = text.trim();
+  const label = readDrawnLabel(t, figureLabels);
+  if (label.read && label.charge) return Math.sign(label.charge);
+  const m = /^[A-Z][A-Za-z0-9]*([+\-\u2212])$/.exec(t);
+  return m ? (m[1] === "+" ? 1 : -1) : 0;
+}
+
 /** Whether segments p-q and r-s cross. */
 function crosses(p: Point, q: Point, r: Point, s: Point): boolean {
   const side = (a: Point, b: Point, c: Point) => Math.sign((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x));
@@ -201,7 +214,7 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
     const left = g.reduce((t, i) => t + chargeOf(f.atoms[i]), 0);
     if (!left) continue;
     const near = f.atoms.flatMap((a, i) => {
-      if (taken.has(i) || bonded.has(i) || !a.label || Math.sign(chargeOf(a)) !== -Math.sign(left)) return [];
+      if (taken.has(i) || bonded.has(i) || !a.label || Math.sign(chargeOf(a) || writtenSign(a.label)) !== -Math.sign(left)) return [];
       const j = g.reduce((m, k) => (dist(a, f.atoms[k]) < dist(a, f.atoms[m]) ? k : m), g[0]);
       return dist(a, f.atoms[j]) <= (ION_ROW + PIECE_GAP) * Math.max(f.bond, between) && clear(a, f.atoms[j]) ? [a.label] : [];
     });
@@ -325,11 +338,12 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     const left = ids.reduce((t, i) => t + chargeOf(f.atoms[i]), 0);
     const ionWords = left
       ? words.flatMap((w) => {
-          const label = readDrawnLabel(w.c.trim(), figureLabels);
           const mid = { x: (w.box[0] + w.box[2]) / 2, y: (w.box[1] + w.box[3]) / 2 };
           const j = ids.reduce((m, k) => (toBox(f.atoms[k], w.box) < toBox(f.atoms[m], w.box) ? k : m), ids[0]);
           const near = toBox(f.atoms[j], w.box) <= (ION_ROW + PIECE_GAP) * f.bond && (!apart || clearBetween(apart, f.bond, f.atoms[j], mid));
-          return label.read && Math.sign(label.charge ?? 0) === -Math.sign(left) && near ? [w.c.trim()] : [];
+          // (written as an ion, read as a label or not - a cation's name with its group repeated, Bu4N+ - for what is said: what
+          // is taken stays what reads)
+          return writtenSign(w.c) === -Math.sign(left) && near ? [w.c.trim()] : [];
         })
       : [];
     const missed = [...notTaken, ...ionWords];

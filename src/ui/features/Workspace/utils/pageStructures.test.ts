@@ -200,6 +200,25 @@ describe("the structures of a figure, each taken whole", () => {
       expect(unsure(apart)).toEqual([[]]);
     });
 
+    it("says a structure charged still is unsure of an ion written out as one word that reads as no label - Bu4N+ - within as far, either sign", () => {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const o = step(b, -30);
+      const enolate = [bond(a, b), beside(a, b, -1.8), bond(b, o, [false, true])];
+      const by = (word: string, bonds: number): FigureDrawn => ({ paths: enolate, letters: [...letters("O−", o), ...letters(word, [o[0] + bonds * L, o[1]])], pictures: [] });
+      const said = '"Bu4N+" beside it is not taken with it: a counter-ion of it, perhaps.';
+      for (const at of [2, 4]) {
+        expect(one(by("Bu4N+", at))).toEqual([["C2 O1", -1]]);
+        expect(unsure(by("Bu4N+", at))).toEqual([[said]]);
+      }
+      expect(unsure(by("Bu4N+", 6))).toEqual([[]]);
+      // (and an anion so by a cation: a pyridinium's triflate)
+      const r = ring([150, 200]);
+      const paths = r.map((p, k) => bond(p, r[(k + 1) % 6], [k === 0, k === 5]));
+      const pyridinium: FigureDrawn = { paths: [...paths, beside(r[1], r[2], -1.8), beside(r[3], r[4], -1.8), beside(r[5], r[0], -1.8)], letters: [...letters("N+", r[0]), ...letters("OTf−", [r[0][0] + 4 * L, 200])], pictures: [] };
+      expect(unsure(pyridinium)).toEqual([['"OTf−" beside it is not taken with it: a counter-ion of it, perhaps.']]);
+    });
+
     it("leaves an ion in a row that would not make the structure neutral apart - and the structure, charged still, unsure, saying so; one with no ion by it sure", () => {
       const a: P = [100, 200];
       const b = step(a, 30);
