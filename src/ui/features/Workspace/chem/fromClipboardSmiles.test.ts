@@ -8,7 +8,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { writeClipboard } from "../../../../lib/clipboard";
 import type { Model } from "../store/types";
-import { structureOnClipboard } from "./fromClipboard";
+import { SEVERAL_SMILES, structureOnClipboard } from "./fromClipboard";
 
 /** What a SMILES read is asked for, and what it gives: one atom per letter, in a row - the SMILES's own reading is the plugin's. */
 const asked: string[] = [];
@@ -70,5 +70,16 @@ describe("a structure pasted as a MOL file or a SMILES", () => {
     expect((await structureOnClipboard())!.atoms).toHaveLength(3);
     await writeClipboard([{ flavor: "smiles", text: "  " }]);
     expect(await structureOnClipboard()).toBeNull();
+  });
+
+  it("refuses several SMILES on lines of their own, saying so - none of them chosen, none dropped unsaid", async () => {
+    asked.length = 0;
+    await writeClipboard([{ flavor: "smiles", text: "CCO\nCCN" }]);
+    await expect(structureOnClipboard()).rejects.toThrow(SEVERAL_SMILES);
+    expect(asked).toEqual([]);
+    // (one line with a name after it, and blank lines round it: one SMILES, read as typed in)
+    await writeClipboard([{ flavor: "smiles", text: "\nCCO ethanol\n\n" }]);
+    await structureOnClipboard();
+    expect(asked).toEqual(["CCO ethanol"]);
   });
 });
