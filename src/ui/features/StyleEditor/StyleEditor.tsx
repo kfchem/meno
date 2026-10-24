@@ -40,6 +40,8 @@ import CardMenu from "./CardMenu";
 import { exportStyles } from "./exportStyle";
 import { chosenCard, presetCards } from "./styleMenus";
 import TypefacePicker from "./TypefacePicker";
+import Checkbox from "../../controls/Checkbox";
+import Select from "../../controls/Select";
 
 /**
  * Every drawing setting, grouped, with a preview drawn by the same layout as
@@ -607,17 +609,13 @@ export function SettingRow({
             {field.description}
           </p>
           {field.automatic && (
-            <label className="mt-1.5 inline-flex items-center gap-1.5 text-xs text-gh-gray select-none">
-              <input
-                type="checkbox"
-                checked={isAuto}
-                onChange={(e) =>
-                  set(e.target.checked ? undefined : (auto as never))
-                }
-                className="accent-accel-base"
-              />
+            <Checkbox
+              checked={isAuto}
+              onChange={(on) => set(on ? undefined : (auto as never))}
+              className="mt-1.5 gap-1.5 text-xs text-gh-gray select-none"
+            >
               Automatic: {field.automatic}
-            </label>
+            </Checkbox>
           )}
         </div>
         <div
@@ -709,12 +707,15 @@ function Control({
             onChange={(n) => set({ value: inPt ? n : n / 100, unit: len.unit })}
             label={field.label}
           />
-          <select
+          <Select
             value={len.unit}
             disabled={disabled}
-            aria-label={`${field.label}: unit`}
-            onChange={(e) => {
-              const unit = e.target.value as Length["unit"];
+            label={`${field.label}: unit`}
+            options={[
+              { value: "pt", label: "pt" },
+              { value: "bond", label: "% of bond" },
+            ]}
+            onChange={(unit: Length["unit"]) => {
               if (unit === len.unit) return;
               // The same length, given the other way.
               const pts = inPt ? len.value : len.value * L;
@@ -724,11 +725,7 @@ function Control({
                   : { value: round(pts / L, 4), unit },
               );
             }}
-            className="h-7 rounded-md border border-gh-line bg-white px-1 text-xs text-gh-black disabled:opacity-50"
-          >
-            <option value="pt">pt</option>
-            <option value="bond">% of bond</option>
-          </select>
+          />
         </div>
       );
     }

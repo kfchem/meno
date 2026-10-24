@@ -6,6 +6,7 @@ import { useReaders } from "../../../lib/calc/workers";
 import { valuesOf } from "../../../lib/options";
 import OptionRows from "../../options/OptionRows";
 import clsx from "clsx";
+import Select from "../../controls/Select";
 
 /**
  * Who fills each role shown in a part of Settings (docs/PLUGINS.md, the
@@ -34,18 +35,12 @@ export default function RoleChoices({ where, heading }: { where: Role["where"]; 
             <div className="px-3 py-2.5 flex items-center gap-3">
               <span className="min-w-0 flex-1 text-sm text-gh-black">{ROLES[role].name}</span>
               {can.length > 1 ? (
-                <select
-                  aria-label={`Who does this: ${ROLES[role].name}`}
-                  value={chosen?.id ?? ""}
-                  onChange={(e) => setPlugins({ ...plugins, roles: { ...plugins.roles, [role]: e.target.value } })}
-                  className="h-7 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black"
-                >
-                  {can.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  label={`Who does this: ${ROLES[role].name}`}
+                  value={chosen?.id ?? null}
+                  options={can.map((p) => ({ value: p.id, label: p.name }))}
+                  onChange={(v) => setPlugins({ ...plugins, roles: { ...plugins.roles, [role]: v } })}
+                />
               ) : (
                 <span className="text-xs text-gh-black">{chosen?.name ?? <span className="text-gh-gray">Nothing yet</span>}</span>
               )}

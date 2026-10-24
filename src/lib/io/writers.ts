@@ -189,6 +189,11 @@ export function speciesProblem(m: Pick<WrittenMolecule, "atoms">, charge: number
   return null;
 }
 
+/** The names of an SD file's data items Meno writes a molecule in 3D's species and imaginary frequencies under, and reads its species back from (lib/io/structures). */
+export const SD_CHARGE = "Charge";
+export const SD_MULTIPLICITY = "Multiplicity";
+export const SD_IMAGINARY = "Imaginary frequencies (cm-1)";
+
 /** A molecule's charge and spin multiplicity, and where each came from: given (by the chemist, or the calculation it was read from), or its atoms. */
 export type Species = { charge: number; multiplicity: number; from: { charge: "given" | "atoms"; multiplicity: "given" | "atoms" } };
 

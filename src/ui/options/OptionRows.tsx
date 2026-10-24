@@ -1,5 +1,7 @@
 import clsx from "clsx";
 import { MANY_CHOICES, type Option, type OptionValues } from "../../lib/options";
+import Checkbox from "../controls/Checkbox";
+import Select from "../controls/Select";
 
 /**
  * A role's options as rows of Settings (lib/options): each its label on
@@ -26,18 +28,7 @@ export default function OptionRows({
         <div key={o.id} className={clsx("py-2 pr-3 flex items-center gap-3", indent ? "pl-8" : "pl-3")}>
           <span className="min-w-0 flex-1 text-sm text-gh-black">{o.label}</span>
           {o.type === "choice" && o.choices.length > MANY_CHOICES ? (
-            <select
-              aria-label={o.label}
-              value={String(values[o.id] ?? "")}
-              onChange={(e) => set(o.id, e.target.value)}
-              className="h-7 shrink-0 rounded-md border border-gh-line bg-white px-2 text-xs text-gh-black"
-            >
-              {o.choices.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <Select label={o.label} value={String(values[o.id] ?? "")} options={o.choices} onChange={(v) => set(o.id, v)} className="shrink-0" />
           ) : o.type === "choice" ? (
             <div className="flex rounded-md border border-gh-line overflow-hidden shrink-0" role="radiogroup" aria-label={o.label}>
               {o.choices.map((c) => (
@@ -56,13 +47,7 @@ export default function OptionRows({
               ))}
             </div>
           ) : o.type === "switch" ? (
-            <input
-              type="checkbox"
-              aria-label={o.label}
-              checked={values[o.id] === true}
-              onChange={(e) => set(o.id, e.target.checked)}
-              className="accent-accel-base"
-            />
+            <Checkbox label={o.label} checked={values[o.id] === true} onChange={(v) => set(o.id, v)} />
           ) : (
             <span className="shrink-0 flex items-center gap-1.5">
               <input

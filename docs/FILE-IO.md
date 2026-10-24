@@ -48,7 +48,7 @@ built* below.
 | **A promise asked for** (a list row chosen) | the result's key | the reader that gave the promise, sent the output again (`askFor`, `lib/calc/asks.ts`) | a grid, drawn as a surface |
 | **`.meno`** (Open, drop) | the extension | `readWorkspace` (versions 1 and 2); its results checked as a reader's answers are | the workspace, in a tab of its own - dropped too. Dropped from the Finder, or pasted from the Finder or Explorer, it is opened by its path, as from the system, and Save writes it back (`open_workspaces_from`, `src-tauri/src/clipboard.rs`); one already open in a tab, by where it is saved - its one true path, however the path it came by was written (*One file, one tab*) - brings that tab forward rather than a second one (`tabHolding`, `lib/doc/savers.ts`); a drop on Windows is read by what it holds, the webview naming no path, and Save asks where |
 | **`.meno` from the system** (double-clicked, dropped on Meno's icon) | the extension (`src-tauri/src/opened.rs`) | as Open (`openPaths`, `App.tsx`) | a tab of its own, as Open opens a `.meno` |
-| **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page |
+| **SMILES** typed or pasted | the panel; text that looks like SMILES | RDKit (chem worker), back as a molfile | added to the page - and, where it leaves stereocentres or double bonds without a configuration, said where a paste says what it left out: "1 stereocentre not specified", "2 stereocentres and 1 double bond not specified", "1 axis not specified" - a run of cumulated double bonds one element, an allene's axis or a butatriene's cis or trans (`stereoOpenSaid`, by the worker's `stereo_left_open` - the one definition a step refusing a structure for open stereo uses; asked of the same worker as the structure is drawn, nothing said where it cannot be asked or has not answered within 3 s). Drawn as it is, nothing chosen for it; a word made into a structure from Meno's own dictionary is not looked at |
 
 ### Structure formats
 
@@ -732,7 +732,22 @@ As this part of step 5 was built (#155, from main beside step 3):
     offered where the page holds molecules in 3D alone.
   - **An SD file** may hold every frame of each molecule in 3D, a record
     each, numbered, with its energy where it is known
-    (`> <Energy (Eh)>`). Each keeps its atoms' charges, radicals and
+    (`> <Energy (Eh)>`). Beside it: why a frame did not finish
+    (`> <Failed>`); the charge and spin multiplicity every step is told -
+    what it was given, by a calculation or the chemist, else what its atoms
+    say - (`> <Charge>`, `> <Multiplicity>`; none of a skeleton); and its
+    imaginary frequencies in cm-1 as its calculation gave them
+    (`> <Imaginary frequencies (cm-1)>`), `none` where its vibrations were
+    worked out and it has none, the item left out where they were not.
+    Opened again, an SD file's `Charge` and `Multiplicity` are what a
+    molecule in 3D was given, its atom block as it is - only where nothing
+    speaks against them; each not taken is named ("Part of the file not
+    taken"), never guessed at. Not taken: an item given twice, or not one
+    whole number (a multiplicity, one or more); a charge other than the
+    one its atoms carry, where they carry one (where they carry none - a
+    radical cation from a calculation - it is taken); and both, where the
+    electrons they leave cannot have the multiplicity.
+    Each keeps its atoms' charges, radicals and
     isotopes, as a copy's MOL file does (docs/CTFILE.md). Each frame - the
     one shown, or every one - is written with the bonds it has, as the
     page shows them: a trajectory's bonds, found from distances, form and
