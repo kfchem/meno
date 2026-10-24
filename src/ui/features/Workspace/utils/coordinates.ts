@@ -39,32 +39,74 @@ export function coordinateMolecules(chosen: readonly { structure: CoordinateStru
 /** A unit of energy in hartrees, as a note says it after its value, or in brackets after its name ("SCF energy (a.u.)"). */
 const HARTREES = /^(?:hartrees?|a\.\s*u\.|au|eh)$/i;
 
+/** The names of a geometry's electronic energy a note may give before its bracket, if any: E (E_SCF, Etot, E_tot, E_el), Energy, and the electronic, total, SCF or final single-point energy. */
+const ELECTRONIC_NAME = /^(?:e|e_?scf|e_?tot|etot|e_?el|(?:(?:electronic|total|scf|final\s+single[\s-]point)\s+)?energy)$/i;
+
 /**
- * Whether a note's name, before its "=", is of a geometry's electronic
- * energy, as a calculation states it: E, E(B3LYP), "SCF Done: E(RB3LYP)";
- * Energy, and the electronic, total, SCF or final single-point energy -
- * with a bracket after it (its method, or its unit). Nothing else: a
- * zero-point energy, a thermal correction, an enthalpy, a free energy and
- * a sum of any of them are other quantities, never taken for it.
+ * Words that say a bracket after an energy's name is no method but another
+ * quantity - a correction, a part, a sum (E(ZPE), E(corr), E(solv)) - in
+ * any case, each a whole word of it.
  */
-const ELECTRONIC = /^(?:scf\s+done:?\s*)?(?:e|(?:(?:electronic|total|scf|final\s+single[\s-]point)\s+)?energy)(?:\s*\([^()]*\))?$/i;
+const NOT_A_METHOD = new Set(["zpe", "zpve", "zero", "thermal", "corr", "correction", "corrected", "disp", "dispersion", "solv", "solvation", "vib", "rot", "trans", "int", "rel", "free", "gibbs", "enthalpy", "incl", "with"]);
+
+/**
+ * Whether a bracket after an energy's name says what kind of electronic
+ * energy it is, and nothing else: a unit in hartrees; or one method, its
+ * basis after a "/" where given - letters, digits and "-", one bracket
+ * within (RB3LYP/6-31G(d), CCSD(T), B3LYP-D3(BJ)/def2-TZVP) - with no space
+ * and no "+", and no word of another quantity (`NOT_A_METHOD`); never a
+ * dispersion correction alone (D3, D4), nor a lone T, G, H or S. Where it
+ * may be anything else, it is not one: a false refusal costs an energy not
+ * shown, a false taking an energy that is wrong.
+ */
+function bracketSays(inner: string): boolean {
+  const t = inner.trim();
+  if (HARTREES.test(t)) return true;
+  if (!/^[A-Za-z0-9-]+(?:\([A-Za-z0-9-]+\)[A-Za-z0-9-]*)?(?:\/[A-Za-z0-9-]+(?:\([A-Za-z0-9-]+\)[A-Za-z0-9-]*)?)?$/.test(t)) return false;
+  if (!/[A-Za-z]/.test(t) || /^[TGHS]$/i.test(t) || /^D[34](?:\([A-Za-z0-9-]+\))?$/i.test(t)) return false;
+  return !t.split(/[^A-Za-z0-9]+/).some((w) => NOT_A_METHOD.has(w.toLowerCase()));
+}
+
+/** Whether a note's name, before its "=" or ":", is of a geometry's electronic energy, as a calculation states it (`ELECTRONIC_NAME`, `bracketSays`) - and, where it is, whether its bracket gives its unit in hartrees. */
+function electronicName(name: string): { unit: boolean } | null {
+  const m = /^(?:scf\s+done:?\s*)?([A-Za-z_][A-Za-z_\s-]*?)\s*(?:\((.*)\))?$/i.exec(name.trim());
+  if (!m || !ELECTRONIC_NAME.test(m[1].trim())) return null;
+  if (m[2] == null) return { unit: false };
+  return bracketSays(m[2]) ? { unit: HARTREES.test(m[2].trim()) } : null;
+}
+
+/** A value as a note gives it: with a decimal point, or a power of ten. */
+const VALUE = String.raw`[-+]?(?:\d+\.\d*(?:[eE][-+]?\d+)?|\d+[eE][-+]?\d+)`;
 
 /**
  * The electronic energy a structure's notes give it in hartrees, and what
  * they name it (its method with it: "E(MP2)"): that of a note naming one
- * (`ELECTRONIC`) - "E = -154.987654 Hartree", "E(RB3LYP) = -154.98 A.U.",
- * "SCF energy (a.u.) = -154.98" - where they give one, or give it alike.
- * None where they give none, or only in other units; and none, saying why,
+ * (`electronicName`) - "E = -154.987654 Hartree", "E(RB3LYP) = -154.98
+ * A.U.", "SCF energy (a.u.) = -154.98", "Total energy: -154.98 Eh", ORCA's
+ * "FINAL SINGLE POINT ENERGY -154.98" - where they give one, or give it
+ * alike. Its unit in hartrees, after its value or in its bracket; none said,
+ * hartrees only of a method's energy as an output states it (E(RB3LYP),
+ * the final single point). None where they give none; and none, saying why,
  * where two differ (an MP2 energy and an HF one): never one chosen of them,
- * nor another quantity - a zero-point energy, a free energy - in its place.
+ * nor another quantity - a zero-point energy, a free energy, a correction -
+ * in its place.
  */
 export function energyNoted(notes: readonly string[]): { energy: number; name: string } | { why: string } | null {
   const found: { energy: number; name: string }[] = [];
   for (const n of notes) {
-    for (const m of n.matchAll(/([^=,;]*?)\s*=\s*([-+]?\d+\.\d+)\s*(hartrees?|a\.\s*u\.|au|eh)?(?![a-z])/gi)) {
-      const name = m[1].trim();
-      const unit = /\(([^()]*)\)\s*$/.exec(name)?.[1].trim();
-      if (!ELECTRONIC.test(name) || !(m[3] || (unit && HARTREES.test(unit)))) continue;
+    // (ORCA's own line, no "=": a final single point's, in hartrees)
+    const orca = new RegExp(String.raw`^\s*final\s+single\s+point\s+energy\s+(${VALUE})\s*$`, "i").exec(n);
+    if (orca) {
+      found.push({ energy: Number(orca[1]), name: "Final single point energy" });
+      continue;
+    }
+    for (const m of n.matchAll(new RegExp(String.raw`([^=:,;]*?)\s*[=:]\s*(${VALUE})\s*(hartrees?|a\.\s*u\.|au|eh)?(?![a-z])`, "gi"))) {
+      // (a name run on from the last - "... Eh and E(HF)" - taken without its joining word: two energies, both seen)
+      const name = m[1].trim().replace(/^(?:and|or|&|\/)\s+/i, "").replace(/^\/\s*/, "");
+      const named = electronicName(name);
+      if (!named) continue;
+      const method = /\(/.test(name) && !named.unit;
+      if (!(m[3] || named.unit || method)) continue;
       found.push({ energy: Number(m[2]), name: name.replace(/^scf\s+done:?\s*/i, "") });
     }
   }

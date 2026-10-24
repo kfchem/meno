@@ -928,10 +928,13 @@ export const MENO_OWN: ReadonlySet<string> = new Set(MENO_NAMES);
 function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number], Property>> {
   const at: At = { geometry: geometryKey(e.xyz), ...(e.calc?.solvation ? { solvent: e.calc.solvation } : {}) };
   const by = byOf(e.calc);
+  // (what its energy is, where no calculation says: what made it says - "E(MP2)" its notes named, a force field - so that energies
+  //  from two sources, or one from a calculation and one not, are never one column, set against one another: a diagram's levels, a window)
+  const energyBy = by ?? (e.keep?.made?.energies ? { method: e.keep.made.energies } : undefined);
   return {
     group: { value: compoundLetter(e.compound), unit: "none", status: "computed" },
     number: { value: e.number, unit: "none", status: "computed" },
-    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(by ? { by } : {}), status: "computed" as const } } : {}),
+    ...(e.energy != null ? { energy: { value: e.energy, unit: "Eh" as const, at, ...(energyBy ? { by: energyBy } : {}), status: "computed" as const } } : {}),
     ...thermoOf(e, at.geometry),
     ...vibrationsOf(e, at),
     ...(e.degeneracy != null ? { degeneracy: { value: e.degeneracy, unit: "none" as const, status: "computed" as const } } : {}),
