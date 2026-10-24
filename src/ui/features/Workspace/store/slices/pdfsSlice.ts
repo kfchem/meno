@@ -38,9 +38,11 @@ export function createPdfsSlice(doc: DocumentStore<WorkspaceDocument>, set: SetS
       // (from its page on top; read before, from where it was left)
       if (!pdf.reading) doc.amend((d) => ops.updatePdf(d, id, { reading: { at: pdf.page, zoom: 1 } }));
       const open = get().textsOpen && get().pdfShown === id;
-      set({ pdfShown: id, textsOpen: true, setTableShown: null, ...(open ? {} : { pdfFlight: { id, page: pdf.page, to: "column", start: performance.now() } }) });
+      // (and no PDF hovered on the canvas: the column now lies over where it was double-clicked open, and the pointer never
+      //  leaves it there as the canvas knows - so that Delete, the page keys or a drop out of it do not act on it unasked)
+      set({ pdfShown: id, textsOpen: true, setTableShown: null, hoveredPdf: null, ...(open ? {} : { pdfFlight: { id, page: pdf.page, to: "column", start: performance.now() } }) });
     },
-    showPdf: (id: number) => set({ pdfShown: id, textsOpen: true, setTableShown: null }),
+    showPdf: (id: number) => set({ pdfShown: id, textsOpen: true, setTableShown: null, hoveredPdf: null }),
     stopReadingPdf: (id: number) => {
       const st = get();
       const pdf = st.pdfs.find((p) => p.id === id);

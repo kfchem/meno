@@ -29,6 +29,24 @@ function settle(r: ReturnType<typeof reading>["r"]): number {
   return n;
 }
 
+describe("a PDF double-clicked open in the column", () => {
+  it("is no longer the PDF hovered on the canvas - the column lies over where it was: Delete, the page keys and a drop out of it, which act on the PDF hovered, do not act on it", () => {
+    const doc = createWorkspaceDocument();
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    store.getState().addPdfs([{ name: "paper.pdf", sha256: "a".repeat(64), pages: [A4] }], { x: 0, y: 0 });
+    // (double-clicked on its icon: hovered, as the canvas saw the pointer there)
+    store.getState().setHoveredPdf(1);
+    store.getState().readPdf(1);
+    expect(store.getState().hoveredPdf).toBeNull();
+    // (and shown again, from the column's tabs, the same)
+    store.getState().setHoveredPdf(1);
+    store.getState().showPdf(1);
+    expect(store.getState().hoveredPdf).toBeNull();
+    expect(store.getState().pdfs).toHaveLength(1);
+  });
+});
+
 describe("the column's reader", () => {
   beforeEach(() => vi.mocked(openUrl).mockClear());
 

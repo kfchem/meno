@@ -6,6 +6,8 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { createWorkspaceDocument } from "../document";
 import { PRESS_WIDENED, structureAt, structuresOf, type PageStructure } from "../utils/pageStructures";
 import { dragStructure, inRow, movedTo, setStructureSay } from "./structureDrag";
+import { setCanvasPlace } from "./wordsDrag";
+import { pdfRoom } from "../../../../lib/pdf/layout";
 import { marksOn, shadesNow } from "./pdfMarks";
 import { PICKED_POINTED_SHADE, POINTED_SHADE, SELECTION_SHADE } from "./selectionShade";
 
@@ -58,6 +60,36 @@ describe("structures picked from a PDF, in the editor", () => {
     // (let go off the canvas: back, and nothing put on the page)
     expect(store.getState().pdfStructureFlight?.now.end?.to).toBe("back");
     expect(store.getState().model.atoms).toHaveLength(0);
+  });
+
+  it("pressed, moved and let go on the canvas beside the PDF they came from, are put down - whichever PDF was hovered last, as the column, laid over where that PDF was double-clicked open, leaves it said", () => {
+    const store = editor();
+    // (the canvas under every point of the window, ten pixels to a unit of the page, y up)
+    const canvas = {} as HTMLElement;
+    const doc = globalThis.document as unknown as { elementFromPoint: (x: number, y: number) => unknown };
+    const was = doc.elementFromPoint;
+    doc.elementFromPoint = () => canvas;
+    setCanvasPlace(store, { canvas: () => canvas, worldAt: (x, y) => ({ x: x / 10, y: -y / 10 }) });
+    try {
+      store.getState().setHoveredPdf(1);
+      const room = pdfRoom(store.getState().pdfs[0]);
+      const carry = (x: number, y: number) => {
+        dragStructure(store, { id: 1, sha256: "a".repeat(64) }, 0, ring, { x: ring.box[0] + 1, y: ring.box[1] + 1 }, screen);
+        window.dispatchEvent(Object.assign(new Event("pointermove"), { clientX: x / 2, clientY: y / 2 }));
+        window.dispatchEvent(Object.assign(new Event("pointerup"), { clientX: x, clientY: y }));
+        return store.getState().pdfStructureFlight?.now.end?.to;
+      };
+      // (let go a few units past the PDF's right: put down there)
+      expect(carry((room.x1 + 5) * 10, -((room.y0 + room.y1) / 2) * 10)).toBe("page");
+      expect(store.getState().model.atoms.length).toBeGreaterThan(0);
+      // (let go on the PDF itself: back, nothing more put down)
+      const atoms = store.getState().model.atoms.length;
+      expect(carry(((room.x0 + room.x1) / 2) * 10, -((room.y0 + room.y1) / 2) * 10)).toBe("back");
+      expect(store.getState().model.atoms.length).toBe(atoms);
+    } finally {
+      doc.elementFromPoint = was;
+      setCanvasPlace(store, null);
+    }
   });
 
   it("put down at a point: their middle there", () => {

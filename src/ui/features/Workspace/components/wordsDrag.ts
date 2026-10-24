@@ -8,7 +8,7 @@
 import type { EditorStore } from "../store";
 import type { Caption, PdfItem, PdfSelection, WordsFlight, WordsFrom } from "../store/types";
 import { blockOf, marksBetween, textOf, wordBoxesBetween, type Block, type PageText } from "../../../../lib/pdf/text";
-import { POINT, pointOf } from "../../../../lib/pdf/layout";
+import { pdfRoom, POINT, pointOf } from "../../../../lib/pdf/layout";
 import { onPage, ordered, selectedWords } from "../utils/pdfSelection";
 
 /** Where the canvas is, and the page under a point of the window: what words let go are put down by. */
@@ -29,10 +29,20 @@ export function canvasPxPerUnit(store: EditorStore, x: number, y: number): numbe
   return a && b && Math.abs(b.x - a.x) > 1e-9 ? 100 / Math.abs(b.x - a.x) : null;
 }
 
-/** Where on the page something carried out of a PDF and let go at a point of the window is put down: on the canvas, not on the PDF it came from (`home`) - else nowhere. */
+/**
+ * Where on the page something carried out of a PDF and let go at a point of
+ * the window is put down: on the canvas, not on the PDF it came from (`home`)
+ * - where it lies on the page as it is let go, by the PDF's own room there;
+ * never by which PDF was last hovered, which the column, laid over the canvas
+ * where that PDF was double-clicked open, can leave said - else nowhere.
+ */
 export function putDownAt(store: EditorStore, home: number, e: PointerEvent): { x: number; y: number } | null {
-  const onCanvas = overCanvasAt(store, e.clientX, e.clientY);
-  return e.type === "pointerup" && onCanvas && store.getState().hoveredPdf !== home ? (places.get(store)?.worldAt(e.clientX, e.clientY) ?? null) : null;
+  if (e.type !== "pointerup" || !overCanvasAt(store, e.clientX, e.clientY)) return null;
+  const at = places.get(store)?.worldAt(e.clientX, e.clientY) ?? null;
+  const pdf = store.getState().pdfs.find((p) => p.id === home);
+  if (!at || !pdf) return at;
+  const room = pdfRoom(pdf);
+  return at.x >= room.x0 && at.x <= room.x1 && at.y >= room.y0 && at.y <= room.y1 ? null : at;
 }
 
 /** Whether a point of the window is over the canvas, not what lies over it. */
