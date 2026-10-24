@@ -200,6 +200,15 @@ describe("the energy a note names, among the ways notes write it", () => {
     expect(energyNoted(["SCF Done:  E(RB3LYP) =  -154.98765432     A.U. after   12 cycles"])).toEqual({ energy: -154.98765432, name: "E(RB3LYP)" });
   });
 
+  it("is none of a bracket naming a part of an energy, a correction or a counterpoise, though it reads like a method", () => {
+    for (const part of ["gCP", "CP", "NL", "vdW", "SRB", "XC", "Coul", "Exch", "Kin", "Nuc", "Rep", "BSSE"]) expect(energyNoted([`E(${part}) = -0.0123 Eh`]), part).toBeNull();
+  });
+
+  it("is taken of a final energy and an E_elec, named so", () => {
+    expect(energyNoted(["Final energy = -154.98 Eh"])).toEqual({ energy: -154.98, name: "Final energy" });
+    expect(energyNoted(["E_elec = -154.98 Eh"])).toEqual({ energy: -154.98, name: "E_elec" });
+  });
+
   it("is never one with no unit and no method said: a bare E with a number", () => {
     expect(energyNoted(["E = -154.98"])).toBeNull();
   });

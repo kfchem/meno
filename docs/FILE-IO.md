@@ -81,14 +81,15 @@ orders unknown, as an XYZ file's; its chip says its name always, with its
 energy where a note gives one in hartrees, and a click on it opens what
 the text says of it - its charge and multiplicity and its notes (*In the
 text*). Its energy is an electronic energy a note names as one - E (or
-E_SCF, Etot, E_tot, E_el), "SCF Done: E(...)", Energy, or the
-electronic, total, SCF or final single-point energy, after "=" or ":",
+E_SCF, Etot, E_tot, E_el, E_elec), "SCF Done: E(...)", Energy, or the
+electronic, total, SCF, final or final single-point energy, after "=" or ":",
 and ORCA's "FINAL SINGLE POINT ENERGY" line - in hartrees, said after
 it or in its bracket, or not said where the bracket names a method. A
 bracket after the name says a method (its basis after a "/":
 RB3LYP/6-31G(d), CCSD(T), B3LYP-D3(BJ)/def2-TZVP) or a unit, nothing
-else: one with a space or a "+", a word of another quantity (ZPE, corr,
-thermal, solv, rel, ...), a dispersion correction alone (D3) or a lone
+else: one with a space or a "+", a word of another quantity or a part
+of one (ZPE, corr, thermal, solv, rel, gCP, CP, vdW, BSSE, XC, ...), a
+dispersion correction alone (D3) or a lone
 T, G, H or S is no electronic energy's. Its name is kept with it
 ("E(MP2)") as what its energies are, and is what worked its energy out
 wherever its energy is read - a set's table, a diagram's ΔE - so that

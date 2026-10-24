@@ -39,15 +39,16 @@ export function coordinateMolecules(chosen: readonly { structure: CoordinateStru
 /** A unit of energy in hartrees, as a note says it after its value, or in brackets after its name ("SCF energy (a.u.)"). */
 const HARTREES = /^(?:hartrees?|a\.\s*u\.|au|eh)$/i;
 
-/** The names of a geometry's electronic energy a note may give before its bracket, if any: E (E_SCF, Etot, E_tot, E_el), Energy, and the electronic, total, SCF or final single-point energy. */
-const ELECTRONIC_NAME = /^(?:e|e_?scf|e_?tot|etot|e_?el|(?:(?:electronic|total|scf|final\s+single[\s-]point)\s+)?energy)$/i;
+/** The names of a geometry's electronic energy a note may give before its bracket, if any: E (E_SCF, Etot, E_tot, E_el, E_elec), Energy, and the electronic, total, SCF, final or final single-point energy. */
+const ELECTRONIC_NAME = /^(?:e|e_?scf|e_?tot|etot|e_?el|e_?elec|(?:(?:electronic|total|scf|final|final\s+single[\s-]point)\s+)?energy)$/i;
 
 /**
  * Words that say a bracket after an energy's name is no method but another
- * quantity - a correction, a part, a sum (E(ZPE), E(corr), E(solv)) - in
+ * quantity - a correction, a part, a sum (E(ZPE), E(corr), E(solv), E(gCP),
+ * E(vdW), E(BSSE)) - in
  * any case, each a whole word of it.
  */
-const NOT_A_METHOD = new Set(["zpe", "zpve", "zero", "thermal", "corr", "correction", "corrected", "disp", "dispersion", "solv", "solvation", "vib", "rot", "trans", "int", "rel", "free", "gibbs", "enthalpy", "incl", "with"]);
+const NOT_A_METHOD = new Set(["zpe", "zpve", "zero", "thermal", "corr", "correction", "corrected", "disp", "dispersion", "solv", "solvation", "vib", "rot", "trans", "int", "rel", "free", "gibbs", "enthalpy", "incl", "with", "gcp", "cp", "nl", "vdw", "srb", "xc", "coul", "exch", "kin", "nuc", "rep", "bsse"]);
 
 /**
  * Whether a bracket after an energy's name says what kind of electronic
