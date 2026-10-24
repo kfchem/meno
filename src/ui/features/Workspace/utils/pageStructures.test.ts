@@ -76,6 +76,12 @@ describe("the structures of a figure, each taken whole", () => {
       expect(found.map((s) => [formula(s), charge(s)])).toEqual([["C2 Cl1 N1", 0]]);
     });
 
+    it("leaves a \"Na+\" of a caption below the figure, two bonds off - past 1.6 bonds and the box of its bonds - a word: no structure of its own", () => {
+      const drawn = chain("O", true);
+      const found = structuresOf({ ...drawn, letters: [...drawn.letters, ...letters("Na+", [100, 200 + 2 * L])] }, 0, "pdf", 0, []);
+      expect(found.map(formula)).toEqual(["C2 O1"]);
+    });
+
     it("never takes an ion across a \"+\": the ammonium and the Cl- each their own", () => {
       const found = structuresOf(withIon(chain("NH3+", false), "Cl−", true), 0, "pdf", 0, []);
       expect(found.map((s) => [formula(s), charge(s)]).sort()).toEqual([["C2 N1", 1], ["Cl1", -1]]);

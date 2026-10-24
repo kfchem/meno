@@ -1516,9 +1516,11 @@ words are: by itself, not by a box drawn round it.
   bonds of a structure, with no arrow nor "+" between them, is that
   structure's where the ions so by it make it neutral - it carrying their
   charge the other way: sodium acetate, an ammonium chloride, are each one
-  structure. Any other ion is its own - never a neutral molecule's, nor
-  taken across a scheme. A lone label that is no ion - a lone metal - is
-  the structure's it lies by so, and by none, words;
+  structure. Any other ion by a structure - within those 1.6 bonds, or
+  within the box round the figure's bonds - is its own, never a neutral
+  molecule's nor taken across a scheme; one further out (a "Na+" of a
+  caption or a table) is words. A lone label that is no ion - a lone
+  metal - is the structure's it lies by so, and by none, words;
 - where each lies is its bonds and its labels' boxes, on the page;
 - the pointer takes the nearest within a third of a bond of one of its
   bonds or labels, and none where an arrow, a "+" or words lie nearer.

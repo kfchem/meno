@@ -129,17 +129,24 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
   // (each lone labelled atom by the structure nearest it, the way clear; those by each, nearest first)
   const by = new Map<number[], { i: number; d: number }[]>();
   const alone: number[] = [];
+  // (the box round the figure's bonds: a lone label within it, or within LONE_JOINS bonds of a structure, may be an ion of its
+  // own; one further out - a word of a caption or a table, "Na+" - is words, as any other is)
+  const xs = [...bonded].map((i) => f.atoms[i].x);
+  const ys = [...bonded].map((i) => f.atoms[i].y);
+  const drawn = (p: Point) => xs.length > 0 && p.x >= Math.min(...xs) && p.x <= Math.max(...xs) && p.y >= Math.min(...ys) && p.y <= Math.max(...ys);
   f.atoms.forEach((a, i) => {
     if (bonded.has(i) || !a.label) return;
     let best: number[] | null = null;
     let near = LONE_JOINS * f.bond;
+    let candidate = drawn(a);
     for (const g of found) {
       const j = g.reduce((m, k) => (dist(a, f.atoms[k]) < dist(a, f.atoms[m]) ? k : m), g[0]);
       const d = dist(a, f.atoms[j]);
+      if (d <= LONE_JOINS * f.bond) candidate = true;
       if (d <= near && clear(a, f.atoms[j])) [best, near] = [g, d];
     }
     if (best) by.set(best, [...(by.get(best) ?? []), { i, d: near }]);
-    else alone.push(i);
+    else if (candidate) alone.push(i);
   });
   // (taken nearest first while each brings its charge the structure's way back to naught - neutral, or none taken)
   for (const [g, near] of by) {
@@ -157,7 +164,7 @@ function structuresIn(f: FigureRead, apart: Apart = { segments: [], pluses: [] }
     if (left === 0) g.push(...taken);
     else alone.push(...taken);
   }
-  // (an ion taken by none is its own; any other lone label by no structure is words, not a structure: a "DP4+" in a figure, a lone H)
+  // (an ion by a structure taken by none is its own; any other lone label is words, not a structure: a "DP4+" in a figure, a lone H)
   for (const i of alone) if (chargeOf(f.atoms[i])) found.push([i]);
   // (nor is one line with no label at either end: a chart's tick, a table's rule, a bracket's piece - no structure is that)
   const bondsOf = (g: number[]) => f.bonds.filter((b) => g.includes(b.a)).length;
