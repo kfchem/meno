@@ -209,7 +209,7 @@ function useScreenSize(place: (px: number) => void, deps: readonly unknown[]): v
 
 /**
  * A slide's number: a disc in Meno's colour, its figures in white, the same
- * size on the screen at any zoom - but never more than a quarter of its
+ * size on the screen at any zoom - but never more than a sixth of its
  * slide's height there (`h`, the slide's on the page), shrinking with it
  * from there, and fading out where its figures are too small to read
  * (presenting/slides `markScale`); as seen as `opacity` says, frame by frame.

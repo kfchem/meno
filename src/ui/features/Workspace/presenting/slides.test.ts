@@ -157,16 +157,16 @@ describe("a slide laid for a talk below a Mac's notch", () => {
 describe("a slide's number, and the line to the next, as the page is zoomed out", () => {
   // (Slides2D's: a disc 22 px across, its figures 12 px; a slide 9 units tall on the page)
   const mark = (screenH: number) => markScale(9, 9 / screenH, 22, 12);
-  it("keeps its size on the screen while its disc is no more than a quarter of its slide's height there", () => {
+  it("keeps its size on the screen while its disc is no more than a sixth of its slide's height there", () => {
     expect(mark(600)).toEqual({ k: 1, seen: 1 });
-    expect(mark(88).k).toBeCloseTo(1, 9);
+    expect(mark(132).k).toBeCloseTo(1, 9);
   });
 
-  it("from there shrinks with its slide - a quarter of its height - and fades out where its figures are too small to read", () => {
-    expect(mark(44).k).toBeCloseTo(0.5, 9);
-    expect(mark(44).seen).toBe(0);
+  it("from there shrinks with its slide - a sixth of its height - and fades out where its figures are too small to read", () => {
+    expect(mark(66).k).toBeCloseTo(0.5, 9);
+    expect(mark(66).seen).toBe(0);
     // (figures at 8.25 px - the least the page's words are read at - half seen; at 1.15 times that all, at 1/1.15 none)
-    const at = (figures: number) => mark((figures / 12) * 88);
+    const at = (figures: number) => mark((figures / 12) * 132);
     expect(at(FIGURES_LEAST_PX).seen).toBeCloseTo(0.5, 9);
     expect(at(FIGURES_LEAST_PX * 1.15).seen).toBeCloseTo(1, 9);
     expect(at(FIGURES_LEAST_PX / 1.15).seen).toBeCloseTo(0, 9);

@@ -151,8 +151,8 @@ export function joinOf(a: Pick<Slide, "x" | "y" | "w" | "h">, b: Pick<Slide, "x"
   return { from, to };
 }
 
-/** How much of a slide's height on the screen its number's disc may take at most (docs/PRESENTING.md): a quarter. */
-export const NUMBER_SHARE = 0.25;
+/** How much of a slide's height on the screen its number's disc may take at most (docs/PRESENTING.md): a sixth - a quarter still read as a large disc on a small frame's corner (LOOK). */
+export const NUMBER_SHARE = 1 / 6;
 /**
  * The least size on the screen a slide's figures are read at, in pixels:
  * 8.25, as the page's words (utils/pageScale `WORDS_LEAST`, 0.75 of their
@@ -166,7 +166,7 @@ const FIGURES_FADE = 1.15;
  * How a slide's number - and the line from it to the next, and its
  * arrowhead - is drawn for a slide `h` tall on the page, a screen pixel
  * being `px` on the page: at `k` of its own size, the same on the screen
- * (`k` 1) until its disc, `disc` px across, would be more than a quarter
+ * (`k` 1) until its disc, `disc` px across, would be more than a sixth
  * of the slide's height on the screen (`NUMBER_SHARE`), and from there
  * shrinking with the slide; and seen as much as `seen` says, all where its
  * figures, `figures` px at their own size, are large enough to read, none

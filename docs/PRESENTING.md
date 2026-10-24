@@ -42,7 +42,7 @@ page; a talk is a way through it.
   half way along it, from the edge of the one to the edge of the other -
   or, one within the other (a detail zoomed into), from number to number.
   All in Meno's own colour, faint, the same on the screen at any zoom -
-  until a number's disc would be more than a quarter of its slide's
+  until a number's disc would be more than a sixth of its slide's
   height on the screen: from there the number shrinks with its slide, and
   the line and its arrowhead with the smaller of the two it joins; and
   where its figures are too small to read, it fades out, from 1.15 times
