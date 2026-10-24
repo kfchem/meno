@@ -353,7 +353,7 @@ export const KINDS: readonly KindInfo[] = [
     // (on its card, each a list of what comes into Levels - its energies, its levels: workflow/diagramOptions)
     options: [
       { id: "quantity", label: "Energy", type: "text", default: "energy" },
-      { id: "levels", label: "Levels in order, = to rename", type: "lines", default: "", rows: 3 },
+      { id: "levels", label: "Levels, in order", type: "lines", default: "", rows: 3, note: "Rename one by writing = and the name after it, as R = HCN" },
       { id: "reference", label: "Relative to", type: "text", default: "" },
     ],
     how: (v) => `${deltaOf(String(v.quantity || "energy"))}, relative to ${shownAs(String(v.levels ?? ""), String(v.reference ?? "")) || "the first"}`,

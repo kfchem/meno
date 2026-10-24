@@ -34,6 +34,7 @@ function LinesField({ option, value, onChange }: { option: LinesOption; value: s
           </span>
         )}
       </span>
+      {option.note && <span className="mt-1 block text-xs text-gh-gray">{option.note}</span>}
     </label>
   );
 }

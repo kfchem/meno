@@ -2,7 +2,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import type { NumberValue, Table, TableColumn } from "../../../../lib/table";
 import { numberText } from "../../../../lib/calc/results";
 import { axisLabel, chartSaid, howOf, ticksOf, type Axis, type ChartLeft, type ChartPoint, type ChartValue } from "../../../../lib/chart";
-import { diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
+import { diagramHow, diagramSaid, frequenciesSaid, type DiagramLevel, type DiagramValue } from "../../../../lib/energyDiagram";
 import { CHART_PX } from "./look";
 
 /** How many of a table's rows its frame shows. */
@@ -219,7 +219,8 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
   // (room above the highest bar for its name, below the lowest for its value)
   const top = PLOT.top + 14;
   const w = CHART_PX.w - left - PLOT.right;
-  const h = CHART_PX.h - top - 34;
+  // (room below for the lowest's value, and two lines saying what it is)
+  const h = CHART_PX.h - top - 46;
   const slot = w / Math.max(1, diagram.levels.length);
   const bar = Math.min(48, slot * 0.6);
   const cx = (k: number) => slot * (k + 0.5);
@@ -232,7 +233,7 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
         // (its imaginary frequencies, as the entry it stands at has them - said, whatever it should be)
         ...(pointed.lowest.imaginary == null ? [] : [frequenciesSaid(pointed.lowest.imaginary)]),
       ].join(" \u00b7 ")
-    : `${diagramSaid(diagram)}${rowsLeft ? ` (${diagram.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""}`;
+    : [diagramSaid({ ...diagram, left: [] }), diagramHow(diagram.axis), rowsLeft ? `${rowsLeft} left (${diagram.left.map((l) => `${l.count} ${l.why}`).join(", ")})` : ""].filter(Boolean).join(" \u00b7 ");
   return (
     <div className="relative text-[10px] leading-3 text-gh-gray tabular-nums" style={{ width: CHART_PX.w, height: CHART_PX.h }} data-set-diagram="">
       <svg className="absolute overflow-visible" style={{ left, top, pointerEvents: "auto" }} width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
@@ -269,9 +270,10 @@ export function DiagramBody({ diagram, onLevel }: { diagram: DiagramValue; onLev
         </span>
       ))}
       <span className="absolute whitespace-nowrap text-gh-black origin-center -rotate-90" style={{ left: PLOT.label / 2 - h / 2, top: top + h / 2 - 6, width: h, textAlign: "center" }} data-axis="y">
-        {labelOf(diagram.axis)}
+        {axisLabel(diagram.axis)}
       </span>
-      <span className="absolute left-0 right-0 truncate" style={{ top: CHART_PX.h - 12 }} title={leftSaid(diagram.left, false)}>
+      {/* (wrapped, two lines at most, never cut short where it fits: what worked it out is said here, the axis kept short) */}
+      <span className="absolute left-0 right-0 bottom-0 overflow-hidden" style={{ display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }} title={leftSaid(diagram.left, false)}>
         {said}
       </span>
     </div>

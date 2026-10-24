@@ -210,9 +210,10 @@ describe("an energy diagram, in its set's frame", () => {
       left: [{ count: 1, why: 'of "TS" with no G', rows: ["molecule:2#1 (conformer 2 of 3)"] }],
     };
     const html = renderToString(<DiagramBody diagram={d} />).split("<!-- -->").join("");
-    expect(html).toContain("ΔG (kcal/mol) · prog · GFN2-xTB · 298.15 K");
+    // (the axis its quantity and unit alone; what worked it out on the line under it, a number and its unit never apart)
+    expect(html).toContain('data-axis="y">ΔG (kcal/mol)</span>');
     for (const t of [">R<", ">TS<", ">P<", ">0.0<", ">+12.3<", ">−5.1<"]) expect(html).toContain(t);
-    expect(html).toContain('3 levels · relative to R · 1 left (1 of &quot;TS&quot; with no G)');
+    expect(html).toContain("3 levels · relative to R · prog · GFN2-xTB · 298.15\u00a0K · 1 left (1 of &quot;TS&quot; with no G)");
     // (and what was left named, pointed at)
     expect(html).toContain('1 of &quot;TS&quot; with no G: molecule:2#1 (conformer 2 of 3)');
     expect(html.match(/stroke-dasharray/g)?.length).toBe(2);
@@ -280,7 +281,7 @@ describe("an Energy diagram of outputs opened, its levels as its card lists them
       default: "energy",
       choices: [
         { value: "energy", label: "ΔE · electronic energy · ORCA · r2SCAN-3c" },
-        { value: "thermo.free-energy", label: "ΔG · Gibbs free energy · ORCA · r2SCAN-3c · 298.15 K" },
+        { value: "thermo.free-energy", label: "ΔG · Gibbs free energy · ORCA · r2SCAN-3c · 298.15\u00a0K" },
       ],
     });
     expect(byId("levels")).toMatchObject({ type: "lines", default: "P\nR\nTS" });
@@ -360,7 +361,7 @@ describe("an Energy diagram's level of several compounds", () => {
   it("refuses levels that do not hold the same atoms and charge, saying what each holds - never a sum of different reactions", () => {
     // (the audit's: R CH3Br alone, against a TS and products that have OH- in them - which drew -47,496 and 1.57 x 10^6 kcal/mol)
     const { ran, step, s } = run([ch3br(), ts(), methanol(), bromide()]);
-    expect([s.ran?.ok, s.ran?.said]).toEqual([false, "Its levels do not hold the same atoms and charge: R has CH3Br; TS, P have CH4BrO\u2212"]);
+    expect([s.ran?.ok, s.ran?.said]).toEqual([false, "Its levels do not hold the same atoms and charge: R has CH3Br; TS, P have CH4BrO\u2212 - P sums two compounds: CH4O, Br\u2212"]);
     expect(diagramOf(ran, step)).toBeUndefined();
   });
 

@@ -2439,8 +2439,18 @@ molecules of one geometry - which a step that works on entries refuses
   must hold the same atoms, element by element, and the same charge, as a
   reaction's do; where they do not, there is no diagram, and what each
   holds is said ("Its levels do not hold the same atoms and charge: R has
-  CH3Br; TS, P have CH4BrO−"). Its card's line says which compounds each
-  level of several sums ("R sums CH3Br + HO−").
+  CH3Br; TS, P have CH4BrO−"), with what each level of several sums ("- R
+  sums two compounds: C2H4O, C2H4O"; two of one formula told apart by
+  their spin where it differs: "CH2 (singlet), CH2 (triplet)"). Its card's
+  line says which compounds each level of several sums ("R sums CH3Br +
+  HO−").
+  - A compound's stereoisomers count as its conformers here - the
+    constitution has no stereo - so the lowest of them is taken.
+  - Another spin state is another compound, never a conformer: a singlet
+    and a triplet of one molecule in one level are two.
+  - A level holds a compound once: two of the same - one constitution,
+    charge and spin - are taken as its conformers, at the lower, never
+    summed (2 A is one A). A dimer is a compound of its own.
 - **In the order the chemist means** (2026-10-24): its card lists the
   levels that come into *Levels*, one to a line, in the order they come -
   the set's own. The lines put in another order are the order drawn; "R =
@@ -2464,9 +2474,11 @@ molecules of one geometry - which a step that works on entries refuses
   conditions, or there is no diagram**, and the step says which levels
   have which ("Its levels' energy was not worked out one way: "energy ·
   GFN2-xTB" for R, P; "energy · B3LYP" for TS"), or which level has none.
-- The axis names the quantity relative to the reference, its unit and
-  what worked it out: "ΔE (kcal/mol) · xtb · GFN2-xTB · gas phase",
-  "ΔG (kcal/mol) · … · 298.15 K".
+- The axis names the quantity relative to the reference and its unit:
+  "ΔG (kcal/mol)". What worked it out and where is said on the line under
+  the diagram, after its levels, wrapped where it is long: "3 levels ·
+  relative to HCN · ORCA · r2SCAN-3c · 298.15 K · 1 atm" (2026-10-24: kept
+  off the axis, where a long one was cut).
 - **Only results stand as levels**: where any entry under a level failed
   - not converged, refused, an error, of any kind - or its file's marks
   of that did not read, the step refuses and draws nothing, naming each

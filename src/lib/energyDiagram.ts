@@ -13,7 +13,7 @@
 import { axisIn, howOf, leftIn, rowNamer, type Axis, type ChartLeft } from "./chart";
 import type { Table, TableColumn } from "./table";
 import { factor, isUnit, sameDimension } from "./units";
-import { imaginaryWords } from "./calc/output";
+import { imaginaryWords, multiplicityName } from "./calc/output";
 import { formulaOf } from "./io/coordinates";
 
 /**
@@ -35,8 +35,8 @@ export type DiagramLevel = {
   sums?: { formula: string; lowestOf: number; lowest: { row: number; entry?: string; number?: number } }[];
 };
 
-/** What a row of molecules seen as a table is, as a level sums it: its compound - its constitution, charge and spin, as one key - its atoms' elements, and its charge. */
-export type RowCompound = { key: string; elements: readonly string[]; charge: number };
+/** What a row of molecules seen as a table is, as a level sums it: its compound - its constitution, charge and spin, as one key - its atoms' elements, its charge, and its multiplicity where known. */
+export type RowCompound = { key: string; elements: readonly string[]; charge: number; multiplicity?: number };
 
 /** A formula with its charge after it, as a chemist writes an ion's: "HO−", "SO42−", "Na+". */
 export const formulaWithCharge = (elements: readonly string[], charge: number) =>
@@ -103,6 +103,12 @@ const WORDS: Record<string, string> = { energy: "electronic energy", "thermo.fre
 /** The thermochemistry's corrections, which are no level's energy: never offered as one (lib/calc thermo, workflow/entries `THERMO_PROPERTIES`). */
 const CORRECTIONS: ReadonlySet<string> = new Set(["thermo.zpve", "thermo.g-correction"]);
 
+/** `text` with each number and its unit - "298.15 K", "1 atm" - kept on one line, wherever it is wrapped. */
+const unbroken = (text: string) => text.replace(/(\d) (K|atm)\b/g, "$1\u00a0$2");
+
+/** What worked an energy diagram's levels out and where, as the line under it says it - the axis says the quantity and unit alone: "ORCA · r2SCAN-3c · 298.15 K · 1 atm". */
+export const diagramHow = (axis: Axis) => unbroken(howOf(axis));
+
 /** The name a column of molecules seen as a table has before what tells its ways apart: "energy · A" is "energy". */
 const baseOf = (name: string) => name.split(" \u00b7 ")[0];
 
@@ -120,7 +126,7 @@ export function diagramQuantities(table: Pick<Table, "columns">): { value: strin
     if (CORRECTIONS.has(base)) return [];
     // (a way of several, named for how in its column's name; one way alone, by what its column says)
     const how = c.name === base ? howOf(c) : c.name.slice(base.length + 3);
-    return [{ value: c.name, label: [deltaOf(base), WORDS[base], how].filter(Boolean).join(" \u00b7 ") }];
+    return [{ value: c.name, label: unbroken([deltaOf(base), WORDS[base], how].filter(Boolean).join(" \u00b7 ")) }];
   });
 }
 
@@ -165,7 +171,7 @@ export function diagramOf(
 
   // (each level: its compounds - each its rows with a value, its lowest - in the order the levels, and their compounds, first come;
   //  without what each row is, each level one compound, its rows its conformers)
-  type Part = { key: string; elements: readonly string[]; charge: number; values: { v: number; row: number }[]; without: string[] };
+  type Part = { key: string; elements: readonly string[]; charge: number; multiplicity?: number; values: { v: number; row: number }[]; without: string[] };
   type Gathered = { name: string; parts: Part[] };
   const gathered = new Map<string, Gathered>();
   const named = rowNamer(table);
@@ -174,7 +180,7 @@ export function diagramOf(
     const g = gathered.get(name) ?? { name, parts: [] };
     const c = compounds?.[row] ?? { key: "", elements: [], charge: 0 };
     let part = g.parts.find((p) => p.key === c.key);
-    if (!part) g.parts.push((part = { key: c.key, elements: c.elements, charge: c.charge, values: [], without: [] }));
+    if (!part) g.parts.push((part = { key: c.key, elements: c.elements, charge: c.charge, ...(c.multiplicity != null ? { multiplicity: c.multiplicity } : {}), values: [], without: [] }));
     const v = r[j];
     if (typeof v === "number" && Number.isFinite(v)) part.values.push({ v, row });
     else part.without.push(named(row));
@@ -203,8 +209,12 @@ export function diagramOf(
     const whole = (g: (typeof levels)[number]) => formulaWithCharge(g.parts.flatMap((p) => p.elements), g.parts.reduce((n, p) => n + p.charge, 0));
     const holding = new Map<string, string[]>();
     for (const g of levels) holding.set(whole(g), [...(holding.get(whole(g)) ?? []), g.shown]);
+    // (and what each level of several compounds sums - a keto and an enol, a singlet and a triplet, held as two - so that the sum is no puzzle)
+    const summed = levels.filter((g) => g.parts.length > 1).map((g) => `${g.shown} sums ${countWord(g.parts.length)} compounds: ${partsSaid(g.parts).join(", ")}`);
     if (holding.size > 1)
-      return { why: `Its levels do not hold the same atoms and charge: ${[...holding].map(([f, names]) => `${names.join(", ")} ${names.length > 1 ? "have" : "has"} ${f}`).join("; ")}` };
+      return {
+        why: `Its levels do not hold the same atoms and charge: ${[...holding].map(([f, names]) => `${names.join(", ")} ${names.length > 1 ? "have" : "has"} ${f}`).join("; ")}${summed.length ? ` - ${summed.join("; ")}` : ""}`,
+      };
   }
   const reference = options.reference?.trim();
   const ref = reference ? levels.find((g) => g.shown === reference) ?? levels.find((g) => g.name === reference) : levels[0];
@@ -256,6 +266,19 @@ export function diagramOf(
 
   const axis: Axis = { name: deltaOf(quantity), unit: "kcal/mol", ...(column.by ? { by: column.by } : {}), ...(column.at ? { at: column.at } : {}) };
   return { kind: "diagram", axis, reference: ref.shown, levels: out, links, left };
+}
+
+/** A count as a line says it: in words up to ten, else in figures. */
+const countWord = (n: number) => ["no", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"][n] ?? String(n);
+
+/** A level's compounds, each by its formula with its charge - and, where two of them have one formula, its spin too, where known ("CH2 (singlet)", "CH2 (triplet)"). */
+function partsSaid(parts: readonly { elements: readonly string[]; charge: number; multiplicity?: number }[]): string[] {
+  const formulas = parts.map((p) => formulaWithCharge(p.elements, p.charge));
+  return formulas.map((f, k) => {
+    const m = parts[k].multiplicity;
+    const twin = formulas.some((g, j) => j !== k && g === f && parts[j].multiplicity !== m);
+    return twin && m != null ? `${f} (${multiplicityName(m)})` : f;
+  });
 }
 
 /**

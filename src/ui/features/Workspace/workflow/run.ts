@@ -191,7 +191,12 @@ function rowCompounds(table: Table, entries: readonly SetEntry[]): RowCompound[]
   return entries.map((e, k) => {
     const species = entryOfSet(e, String(k)).species;
     const charge = species?.charge ?? e.atoms.reduce((n, a) => n + (a.charge ?? 0), 0);
-    return { key: `${String(table.rows[k][at])}|${charge}|${species?.multiplicity ?? ""}`, elements: e.atoms.map((a) => a.el), charge };
+    return {
+      key: `${String(table.rows[k][at])}|${charge}|${species?.multiplicity ?? ""}`,
+      elements: e.atoms.map((a) => a.el),
+      charge,
+      ...(species ? { multiplicity: species.multiplicity } : {}),
+    };
   });
 }
 

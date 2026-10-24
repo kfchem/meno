@@ -197,11 +197,50 @@ describe("the energies an energy diagram may be drawn by", () => {
     };
     expect(diagramQuantities(t)).toEqual([
       { value: "energy", label: "\u0394E \u00b7 electronic energy \u00b7 ORCA \u00b7 r2SCAN-3c" },
-      { value: "thermo.free-energy", label: "\u0394G \u00b7 Gibbs free energy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15 K \u00b7 1 atm" },
-      { value: "thermo.enthalpy", label: "\u0394H \u00b7 enthalpy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15 K" },
+      { value: "thermo.free-energy", label: "\u0394G \u00b7 Gibbs free energy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15\u00a0K \u00b7 1\u00a0atm" },
+      { value: "thermo.enthalpy", label: "\u0394H \u00b7 enthalpy \u00b7 ORCA \u00b7 r2SCAN-3c \u00b7 298.15\u00a0K" },
       { value: "barrier", label: "\u0394barrier" },
     ]);
     // (one worked out two ways: each a column, named for how)
     expect(diagramQuantities({ columns: [{ name: "energy \u00b7 GFN2-xTB", kind: "number", unit: "Eh" }] })).toEqual([{ value: "energy \u00b7 GFN2-xTB", label: "\u0394E \u00b7 electronic energy \u00b7 GFN2-xTB" }]);
   });
 });
+
+describe("an energy diagram's level of several compounds, told apart", () => {
+  /** Levels each a row - its level, its compound's key, elements, charge and multiplicity - and an energy in hartrees. */
+  const rows = (given: [string, string, string[], number, number, number][]) => ({
+    table: levels(given.map(([level, , , , , e], k) => [level, k + 1, e])),
+    compounds: given.map(([, key, elements, charge, multiplicity]) => ({ key, elements, charge, multiplicity })),
+  });
+  const C2H4O = ["C", "C", "H", "H", "H", "H", "O"];
+
+  it("says what each level of several sums, where it refuses them on their atoms - a keto and an enol held as two, a singlet and a triplet", () => {
+    const keto = rows([
+      ["R", "keto", C2H4O, 0, 1, -153.1],
+      ["R", "enol", C2H4O, 0, 1, -153.08],
+      ["P", "keto", C2H4O, 0, 1, -153.1],
+    ]);
+    expect(diagramOf(keto.table, {}, undefined, keto.compounds)).toEqual({
+      why: "Its levels do not hold the same atoms and charge: R has C4H8O2; P has C2H4O - R sums two compounds: C2H4O, C2H4O",
+    });
+    const carbene = rows([
+      ["R", "CH2|0|1", ["C", "H", "H"], 0, 1, -39.0],
+      ["R", "CH2|0|3", ["C", "H", "H"], 0, 3, -39.02],
+      ["P", "CH2|0|3", ["C", "H", "H"], 0, 3, -39.02],
+    ]);
+    expect(diagramOf(carbene.table, {}, undefined, carbene.compounds)).toEqual({
+      why: "Its levels do not hold the same atoms and charge: R has C2H4; P has CH2 - R sums two compounds: CH2 (singlet), CH2 (triplet)",
+    });
+  });
+
+  it("takes one compound held twice as one, at its lower - two A is one A; a dimer is a compound of its own", () => {
+    const twice = rows([
+      ["R", "A", ["C", "H", "H", "H", "H"], 0, 1, -40.5],
+      ["R", "A", ["C", "H", "H", "H", "H"], 0, 1, -40.52],
+      ["P", "A", ["C", "H", "H", "H", "H"], 0, 1, -40.5],
+    ]);
+    const d = ok(diagramOf(twice.table, {}, undefined, twice.compounds));
+    expect([d.levels[0].lowestOf, d.levels[0].sums, Number(d.levels[1].value.toFixed(2))]).toEqual([2, undefined, Number((0.02 * KCAL).toFixed(2))]);
+  });
+});
+
