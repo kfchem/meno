@@ -189,16 +189,24 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
   type Laned = { corners: Pt[]; way: Pt[]; p: Pt; q: Pt; key: string };
   const lanes = useRef<{ of: string; laned: Map<string, Laned> } | null>(null);
   // (while a card or a set is dragged, the wires not on it keep the lanes they had - moved aside from their way as far as they were, where
-  //  it goes the same way - and only those it moves, or makes go another way, put in lanes among them; all put in lanes anew once it is let go)
+  //  it goes the same way - and only those it moves, or makes go another way, put in lanes among them; all put in lanes anew once it is let go.
+  //  As far aside as they were when it began, where they are as they were then: a lane taken in for a frame, to keep a frame's room, is
+  //  not taken in for good - it is as wide again once the card has passed)
   const held = moving ? lanes.current?.laned : undefined;
+  const began = useRef<Map<string, Laned> | null>(null);
+  if (!moving) began.current = null;
+  else if (!began.current) began.current = new Map(lanes.current?.laned ?? []);
   const round = [...routed.current.entries()].filter(([, r]) => r.route.corners);
   const holds = round.map(([key, r]) => {
     const h = held?.get(key);
     const c = r.route.corners!;
-    if (!h || h.p.x !== r.p.x || h.p.y !== r.p.y || h.q.x !== r.q.x || h.q.y !== r.q.y || h.way.length !== c.length) return null;
+    const same = (l: Laned | undefined): l is Laned => !!l && l.p.x === r.p.x && l.p.y === r.p.y && l.q.x === r.q.x && l.q.y === r.q.y && l.way.length === c.length;
+    if (!same(h)) return null;
     // (going the same way still - none of its corners further than a lane from where it was: else it goes another way, and is put in a lane anew)
     if (c.some((pt, i) => Math.hypot(pt.x - h.way[i].x, pt.y - h.way[i].y) >= WIRE_LANE)) return null;
-    return c.map((pt, i) => ({ x: pt.x + h.corners[i].x - h.way[i].x, y: pt.y + h.corners[i].y - h.way[i].y }));
+    const b = began.current?.get(key);
+    const from = same(b) ? b : h;
+    return c.map((pt, i) => ({ x: pt.x + from.corners[i].x - from.way[i].x, y: pt.y + from.corners[i].y - from.way[i].y }));
   });
   const lanesOf = `${round.map(([key, r], i) => `${key}:${r.key}${holds[i] ? `*${holds[i]!.map((c) => `${c.x},${c.y}`).join(";")}` : ""}`).join("|")}#${framesHash(frames)}`;
   if (lanes.current?.of !== lanesOf) {
@@ -506,7 +514,10 @@ export default function Workflow2D() {
     return { x: p.x, y: p.y };
   };
 
-  /** A press followed: each move past MOV_PX, at its place on the page, and the button coming up - whether it moved. */
+  // (a card or a set being dragged: the wires not on it kept in their lanes till it is let go - `useWirePoints`)
+  const [moving, setMoving] = useState(false);
+
+  /** A press followed: each move past MOV_PX, at its place on the page, and the button coming up - whether it moved; or lost, without a click (`onCancel`). */
   const follow = (e: ReactPointerEvent, move: (p: Pt, ev: PointerEvent) => void, up: (moved: boolean, ev: PointerEvent) => void) => {
     e.stopPropagation();
     const sx = e.clientX;
@@ -518,11 +529,24 @@ export default function Workflow2D() {
       move(worldOf(ev.clientX, ev.clientY), ev);
       invalidate();
     };
-    const onUp = (ev: PointerEvent) => {
+    const stop = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onCancel, true);
+      window.removeEventListener("blur", onCancel);
       window.removeEventListener("keydown", onKey, true);
+    };
+    const onUp = (ev: PointerEvent) => {
+      stop();
       up(moved, ev);
+      invalidate();
+    };
+    // (the press lost without being let go - a gesture of the trackpad's or a pen's, or the window left: an end, but no click, and no drop -
+    //  what was dragged stays where it was last moved; a wire being drawn let go, as Escape does)
+    const onCancel = () => {
+      stop();
+      setMoving(false);
+      if (store.getState().wireDrag) store.getState().setWorkflowView({ wireDrag: null });
       invalidate();
     };
     // (Escape lets a wire being drawn go)
@@ -530,14 +554,14 @@ export default function Workflow2D() {
       if (ev.key !== "Escape" || !store.getState().wireDrag) return;
       ev.preventDefault();
       ev.stopPropagation();
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp, true);
-      window.removeEventListener("keydown", onKey, true);
+      stop();
       store.getState().setWorkflowView({ wireDrag: null });
       invalidate();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onCancel, true);
+    window.addEventListener("blur", onCancel);
     window.addEventListener("keydown", onKey, true);
   };
 
@@ -639,9 +663,6 @@ export default function Workflow2D() {
     });
     return true;
   };
-
-  // (a card or a set being dragged: the wires not on it kept in their lanes till it is let go - `useWirePoints`)
-  const [moving, setMoving] = useState(false);
 
   /** A set dragged by its tab, with all it holds; clicked, chosen. */
   const dragSet = (e: ReactPointerEvent, set: WorkflowSet) => {

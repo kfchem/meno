@@ -2027,9 +2027,11 @@ page could not be read after one run.
     far apart, they are left as they ran; and a lane that would bring a
     wire nearer a frame than its own way went - its turn round a frame's
     corner - takes it only as far in as keeps that room. While a card or a
-    set is dragged, the wires not on it keep the lanes they had, and only
-    those it moves are put in lanes among them; all are put in lanes anew
-    once it is let go. A wire moved into a lane, or out of one, is eased
+    set is dragged, the wires not on it keep the lanes they had when it
+    began - taken in for a frame only where a frame's room needs it - and
+    only those it moves, or sends another way, are put in lanes among
+    them; all are put in lanes anew once it is let go, or the press is
+    lost (the window left, a gesture taking it over), with no click. A wire moved into a lane, or out of one, is eased
     there by the drawing. So wires run together as little as there is room
     for: where a way has no room for lanes, or the runs are into their
     wires' ends, they still do.
