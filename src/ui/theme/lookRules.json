@@ -92,7 +92,6 @@
       "src/ui/features/Workspace/hooks/useCanvasSetup.ts": 1,
       "src/ui/features/Workspace/presenting/PresentLayer.tsx": 1,
       "src/ui/features/Workspace/presenting/Presenter.tsx": 2,
-      "src/ui/features/Workspace/render/RenderCard.tsx": 2,
       "src/ui/features/Workspace/render/renderScene.ts": 3,
       "src/ui/features/Workspace/utils/atomNumbers.ts": 1,
       "src/ui/features/Workspace/utils/glyphShapes.ts": 1,
