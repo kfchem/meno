@@ -4,7 +4,7 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_BAND, wireCurve } from "./look";
+import { BETWEEN, CARD_H, CARD_W, framesHash, GAP, inputLead, nearWire, PORT_DOWN, PORT_STEP, PX, setGives, setTakes, stepGives, stepTakes, WIRE_BAND, wireCurve, wireKey } from "./look";
 import { addStep, connect } from "./model";
 import { clearOf } from "./place";
 import { boxOf } from "../chem/make3d";
@@ -195,6 +195,22 @@ describe("a wire's shape", () => {
     expect(wireCurve(p, stepTakes(before, 0), 48, { from, to: cardOf(before) }).some(strictly(from))).toBe(false);
   });
 
+  it("where no way round is clear of all, goes the way over least - over what it must, not over what a set holds", () => {
+    // (as steps laid close have it: a set below a step's card, the step before's empty second exit just under that, and a set lower right wired back up into the card)
+    const card = cardOf({ x: 20, y: 0 });
+    const full: Frame = { x0: 10, x1: 22, y0: -40, y1: -4 };
+    const rest: Frame = { x0: 10, x1: 16, y0: -42, y1: -41 };
+    const from: Frame = { x0: 15, x1: 30, y0: -60, y1: -41.5 };
+    const p = setGives(from);
+    const q = stepTakes({ x: 20, y: 0 }, 0);
+    // (and a tall frame just right of where it leaves, that every way round must cross)
+    const wall: Frame = { x0: from.x1 + BETWEEN / 2, x1: from.x1 + 2 * BETWEEN, y0: -90, y1: 30 };
+    const around = [card, full, rest, from, wall];
+    const pts = wireCurve(p, q, 96, { from, to: card }, around);
+    expect([pts[0], pts[96]]).toEqual([p, q]);
+    expect(pts.some(strictly(full))).toBe(false);
+  });
+
   it("into a card that names its inputs, comes in level under the name: from above or below, never through it", () => {
     const at = { x: 40, y: 0 };
     const card = cardOf(at);
@@ -221,5 +237,30 @@ describe("a wire's shape", () => {
     const pts = wireCurve(p, q, 96, { from: card, to: own }, [card, between, own]);
     expect([pts[0], pts[96]]).toEqual([p, q]);
     for (const f of [card, between, own]) expect(pts.some(strictly(f))).toBe(false);
+  });
+});
+
+describe("a page's wires, worked out again", () => {
+  it("only where a wire or something near it moved - 50 wires on a page of 100 sets and 50 cards, keyed in well under a frame", () => {
+    // (100 sets in a grid, 50 steps' cards beside them, and 50 wires each from a set into a card)
+    const sets: Frame[] = Array.from({ length: 100 }, (_, i) => ({ x0: (i % 10) * 30, x1: (i % 10) * 30 + 10, y0: -Math.floor(i / 10) * 30 - 10, y1: -Math.floor(i / 10) * 30 }));
+    const cards = Array.from({ length: 50 }, (_, i) => cardOf({ x: (i % 10) * 30 + 15, y: -Math.floor(i / 5) * 30 }));
+    const wires = Array.from({ length: 50 }, (_, i) => ({ p: setGives(sets[i * 2]), q: { x: cards[i].x0, y: cards[i].y1 - PORT_DOWN }, e: { from: sets[i * 2], to: cards[i] } }));
+    const keys = (all: Frame[]) => wires.map((w) => wireKey(w.p, w.q, w.e, framesHash(nearWire(w.p, w.q, w.e, all))));
+    const page = [...sets, ...cards];
+    const k0 = keys(page);
+    // (as a drag has it: the keys of all, each frame - 100 frames)
+    const t0 = performance.now();
+    for (let k = 0; k < 100; k++) keys(page);
+    const each = (performance.now() - t0) / 100;
+    expect(each).toBeLessThan(4);
+    // (a set far to the bottom right moved: the wires near it keyed anew, those far off - the first, at the top left - as they were)
+    const moved = page.map((f, i) => (i === 99 ? { ...f, x0: f.x0 + 1, x1: f.x1 + 1 } : f));
+    const k1 = keys(moved);
+    const changed = k1.filter((k, i) => k !== k0[i]).length;
+    expect(k1[0]).toBe(k0[0]);
+    expect(changed).toBeLessThan(wires.length);
+    // (and the same page, the same keys)
+    expect(keys(page)).toEqual(k0);
   });
 });

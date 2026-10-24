@@ -11,7 +11,7 @@ import { inside, setMembers, structuresOf, type Frame } from "./entries";
 import { boxOf } from "../chem/make3d";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { inputsOf } from "./kinds";
-import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
+import { BETWEEN, CARD_H, CARD_W, GAP, inputLead, nearWire, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
 
 /** A frame `w` by `h`, its top left at (x, y). */
 export const frameAt = (x: number, y: number, w: number, h: number): Frame => ({ x0: x, x1: x + w, y0: y - h, y1: y });
@@ -40,6 +40,9 @@ export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: Reado
 
 /** A step's card, shut: where it stands on the page. */
 const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
+
+/** A wire as Workflow2D draws it: round its ends, and the sets and cards near it (look `nearWire`). */
+const routed = (p: Pt, q: Pt, e: { from?: Frame; to?: Frame; lead?: number }, round: readonly Frame[]) => wireCurve(p, q, WIRE_POINTS, e, nearWire(p, q, e, round));
 
 /** How many points along a wire stand for it, as `clearOf` keeps clear of it. */
 const WIRE_POINTS = 24;
@@ -84,11 +87,18 @@ function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: 
     const s = steps.get(w.to.step);
     if (!b || !s) continue;
     if (b.id === self?.set) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s), ...lead(s, w.to.port) });
-    else if (!own(b.id)) points.push(...wireCurve(setGives(b), takes(s, w.to.port), WIRE_POINTS, { from: b, to: cardOf(s), ...lead(s, w.to.port) }, round));
+    else if (!own(b.id)) {
+      const e = { from: b, to: cardOf(s), ...lead(s, w.to.port) };
+      const q = takes(s, w.to.port);
+      points.push(...wireCurve(setGives(b), q, WIRE_POINTS, e, nearWire(setGives(b), q, e, round)));
+    }
   }
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
-    if (s && !own(b.id)) points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS, { from: cardOf(s), to: b }, round));
+    if (s && !own(b.id)) {
+      const e = { from: cardOf(s), to: b };
+      points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS, e, nearWire(stepGives(s), setTakes(b), e, round)));
+    }
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;
   return { frames, round, points, ...(step ? { from: { step: step.id, at: stepGives(step), card: cardOf(step) } } : {}), to };
@@ -127,8 +137,8 @@ function clearIn(taken: Taken, f: Frame, lines = true): boolean {
   if (!lines) return true;
   const over = [...taken.frames, f];
   const crosses = (pts: readonly Pt[], meets: number) => pts.some((p) => over.some((t) => (t as { card?: number }).card !== meets && p.x > t.x0 && p.x < t.x1 && p.y > t.y0 && p.y < t.y1));
-  if (taken.from && crosses(wireCurve(taken.from.at, setTakes(f), WIRE_POINTS, { from: taken.from.card, to: f }, taken.round), taken.from.step)) return false;
-  return !taken.to.some((w) => crosses(wireCurve(setGives(f), w.at, WIRE_POINTS, { from: f, to: w.card, lead: w.lead }, taken.round), w.step));
+  if (taken.from && crosses(routed(taken.from.at, setTakes(f), { from: taken.from.card, to: f }, taken.round), taken.from.step)) return false;
+  return !taken.to.some((w) => crosses(routed(setGives(f), w.at, { from: f, to: w.card, lead: w.lead }, taken.round), w.step));
 }
 
 /**

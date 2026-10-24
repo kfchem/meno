@@ -174,16 +174,32 @@ export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side;
   const others = around.filter((f) => !same(f, ends.from) && !same(f, ends.to));
   const crossed = others.filter((f) => shape.some((pt) => within(f, pt)));
   if (!crossed.length) return shape;
-  // (what it would cross taken each with the end it is nearer - by its middle - and gone round as one; else all with what it leaves, else all with what it comes into; else as it was)
+  // (what it would cross taken each with the end it is nearer - by its middle - and gone round as one; else all with what it leaves, else all with what it comes into;
+  //  and each of those again with what it crosses then. The first clear of all; where none is, the one over least of them - each point of it over a frame counted - then the shortest)
   const mid = (f: Side) => ({ x: (f.x0 + f.x1) / 2, y: (f.y0 + f.y1) / 2 });
   const nearer = (f: Side) => Math.hypot(mid(f).x - p.x, mid(f).y - p.y) <= Math.hypot(mid(f).x - q.x, mid(f).y - q.y);
+  const over = (pts: readonly Pt[]) => pts.reduce((k, pt) => k + others.filter((f) => within(f, pt)).length, 0);
+  const length = (pts: readonly Pt[]) => pts.reduce((k, pt, i) => (i ? k + Math.hypot(pt.x - pts[i - 1].x, pt.y - pts[i - 1].y) : 0), 0);
+  let best = { pts: shape, over: over(shape), length: length(shape) };
+  const tried = (withFrom: readonly Side[], withTo: readonly Side[]) => {
+    const e = { from: union([...(ends.from ? [ends.from] : []), ...withFrom], p), to: union([...(ends.to ? [ends.to] : []), ...withTo], q) };
+    const pts = roundEnds(p, q, n, e);
+    const k = over(pts);
+    const l = length(pts);
+    if (k < best.over || (k === best.over && l < best.length)) best = { pts, over: k, length: l };
+    return pts;
+  };
   for (const withFrom of [crossed.filter(nearer), crossed, []]) {
     const withTo = crossed.filter((f) => !withFrom.includes(f));
-    const e = { from: union([...(ends.from ? [ends.from] : []), ...withFrom], p), to: union([...(ends.to ? [ends.to] : []), ...withTo], q) };
-    const round = roundEnds(p, q, n, e);
-    if (!others.some((f) => round.some((pt) => within(f, pt)))) return round;
+    const pts = tried(withFrom, withTo);
+    if (best.over === 0) return best.pts;
+    // (and with what that crosses too, taken with the same ends)
+    const more = others.filter((f) => !crossed.includes(f) && pts.some((pt) => within(f, pt)));
+    if (!more.length) continue;
+    tried([...withFrom, ...more.filter(nearer)], [...withTo, ...more.filter((f) => !nearer(f))]);
+    if (best.over === 0) return best.pts;
   }
-  return shape;
+  return best.pts;
 }
 
 /**
@@ -206,6 +222,51 @@ function roundEnds(p: Pt, q: Pt, n: number, ends: { from?: Side; to?: Side }): P
   const level = levels.reduce((a, b) => (way(b) < way(a) ? b : a));
   return rounded([p, { x: out, y: p.y }, { x: out, y: level }, { x: into, y: level }, { x: into, y: q.y }, q], BETWEEN, n);
 }
+
+/**
+ * The frames of `around` near enough to a wire from `p` to `q` - leaving and
+ * coming into `ends` - for it to cross or go round: those that meet the box
+ * round its ends, grown by as far as its curve can swing past them (half
+ * its run across, 40 px at least) and as far again as it goes round,
+ * `WIRE_NEAR` more. What `wireCurve` is given as `around`, by the drawing
+ * and by placement alike.
+ */
+export function nearWire(p: Pt, q: Pt, ends: { from?: Side; to?: Side; lead?: number } | undefined, around: readonly Side[]): Side[] {
+  const fs = [ends?.from, ends?.to].filter((f): f is Side => !!f);
+  const swing = Math.max(Math.abs(q.x - p.x) / 2, 40 * PX) + (ends?.lead ?? 0) + WIRE_NEAR;
+  const box = {
+    x0: Math.min(p.x, q.x, ...fs.map((f) => f.x0)) - swing,
+    x1: Math.max(p.x, q.x, ...fs.map((f) => f.x1)) + swing,
+    y0: Math.min(p.y, q.y, ...fs.map((f) => f.y0)) - swing,
+    y1: Math.max(p.y, q.y, ...fs.map((f) => f.y1)) + swing,
+  };
+  return around.filter((f) => f.x0 < box.x1 && f.x1 > box.x0 && f.y0 < box.y1 && f.y1 > box.y0);
+}
+/** How much further than its swing a wire looks for what it may go round (`nearWire`): a few cards' room. */
+const WIRE_NEAR = 4 * CARD_W;
+
+/** Frames said as one number - each side to a thousandth of a page unit - for what is worked out from them to be kept while they stay where they are: one pass, however many there are. */
+export function framesHash(fs: readonly (Side | undefined)[]): number {
+  let h = fs.length;
+  for (const f of fs) {
+    if (!f) {
+      h = (Math.imul(h, 31) + 7) | 0;
+      continue;
+    }
+    for (const v of [f.x0, f.x1, f.y0, f.y1]) h = (Math.imul(h, 31) + Math.round(v * 1000)) | 0;
+  }
+  return h;
+}
+
+/**
+ * What a wire's points are worked out from, said as a key: its ends' points,
+ * the frames it leaves and comes into, its lead - and the page's sets and
+ * cards near it (`nearWire`), as one number (`framesHash`). The same key,
+ * the same points: a wire is worked out again only where it, or something
+ * near it, moved.
+ */
+export const wireKey = (p: Pt, q: Pt, ends: { from?: Side; to?: Side; lead?: number } | undefined, around: number): string =>
+  `${p.x},${p.y},${q.x},${q.y},${framesHash([ends?.from, ends?.to])},${ends?.lead ?? 0},${around}`;
 
 /**
  * A line through `corners`, each corner rounded - as far as `r` from it, or
