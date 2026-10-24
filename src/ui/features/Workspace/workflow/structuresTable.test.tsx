@@ -228,7 +228,8 @@ describe("a set of structures drawn as a table", () => {
         <StructuresTableBody set={set} />
       </EditorProvider>,
     );
-    const names = [...html.matchAll(/role="columnheader"[^>]*><button[^>]*><span[^>]*>([^<]*)</g)].map((m) => m[1]);
+    // (a name's chevron before it where it is set to the right: the name read past it)
+    const names = [...html.matchAll(/role="columnheader"[^>]*><button[^>]*>(?:<svg.*?<\/svg>)?<span[^>]*>([^<]*)</g)].map((m) => m[1]);
     expect(names).toEqual(["#", "SMILES (drawing, constitution only)", "state", "mw (g/mol)"]);
     expect(html).toContain("120 structures");
     expect(html).toContain(`aria-rowcount="121"`);

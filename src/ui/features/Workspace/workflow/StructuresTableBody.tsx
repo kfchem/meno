@@ -21,6 +21,10 @@ const cellText = (v: Cell) => (v == null ? "" : typeof v === "number" ? numberTe
 /** How wide a column is - the same in every row, each a grid of its own: a number's narrow, SMILES's widest. */
 const widthOf = (c: TableColumn) => (c.name === SMILES_RECORD_COLUMN || c.name === SMILES_DRAWING_COLUMN ? "minmax(14rem, 2fr)" : c.kind === "number" ? "7rem" : "minmax(8rem, 1fr)");
 
+/** A column name's sort chevron: down or up where it is sorted by, else its room kept, unseen. */
+const chevron = (sorted: boolean, down: boolean) =>
+  sorted && down ? <ChevronDownIcon className="h-3 w-3 shrink-0" /> : <ChevronUpIcon className={clsx("h-3 w-3 shrink-0", !sorted && "invisible")} />;
+
 /**
  * A set of structures drawn read as a table in the column (docs/WORKFLOWS.md,
  * *A structures set as a table*): a row for each structure it holds - on
@@ -80,9 +84,11 @@ export default function StructuresTableBody({ set }: { set: WorkflowSet }) {
                     onClick={() => setSort(h.at < 0 ? null : on ? { at: h.at, down: !sort!.down } : { at: h.at, down: false })}
                     className={clsx("w-full h-full px-2 flex items-center gap-0.5 whitespace-nowrap hover:text-gh-black transition-colors duration-150 ease-meno", h.numeric && "justify-end", on && "text-gh-black")}
                   >
+                    {/* (its room kept whether or not it is sorted by, so that its name does not move as the sort comes and goes - left
+                        of a name set to the right, which then ends where its numbers do) */}
+                    {h.numeric && chevron(on && !!sort, !!sort?.down)}
                     <span className="truncate">{h.name}</span>
-                    {/* (its room kept whether or not it is sorted by: a name set to the right does not move as the sort comes and goes) */}
-                    {on && sort?.down ? <ChevronDownIcon className="h-3 w-3 shrink-0" /> : <ChevronUpIcon className={clsx("h-3 w-3 shrink-0", !(on && sort) && "invisible")} />}
+                    {!h.numeric && chevron(on && !!sort, !!sort?.down)}
                   </button>
                 </div>
               );
