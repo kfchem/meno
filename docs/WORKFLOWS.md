@@ -231,7 +231,9 @@ pointer does; put back by an undo, they glide back.
    structures or molecules in 3D (a few atoms of a structure make no
    input). It fades in once the selection is made; nothing else of the
    selection changes, and a chemist who never pulls it never meets a
-   workflow.
+   workflow. Where any of the selection lies in a set already, it shows
+   none (`selectionInSet`): a port there is the set's own, not one of
+   what is chosen inside it.
 3. **Pull a wire out of the port.** The selection's frame stays, as an
    *Input* set; a wire follows the pointer.
    - Let go on empty space: Quick Add opens there, at the kinds of step
@@ -2628,7 +2630,12 @@ each entry's number, then its energy).
 - Zoomed out until words on the page are too small to read, a chart - and
   an energy diagram - is still drawn, its points, levels, lines and axes;
   only its words fade out, as a set's name and count do. A table and a
-  number, all words, fade out whole.
+  number, all words, fade out whole. All of these, and a step's card's
+  words - its icons alone growing in as they go - fade with the zoom, not
+  at once: from fully shown at 1.15 times the least scale words are read
+  at to gone at 1/1.15 of it, about four notches of a mouse wheel
+  (utils/pageScale `wordsShown`, `--words` on the page's layer), as a
+  molecule's chips do.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`

@@ -82,7 +82,7 @@ export default function SetFrame(p: SetFrameProps) {
         className="absolute flex items-center gap-1.5 whitespace-nowrap overflow-hidden text-[11px] leading-4"
         style={{ left: 0, right: 0, top: 0, height: (2 * NAME_DOWN) / PX, paddingLeft: SET_PAD / PX, paddingRight: SET_PAD / PX, pointerEvents: "auto", cursor: "default" }}
       >
-        <span className={clsx("flex items-center gap-1.5 transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}>
+        <span className="meno-words flex items-center gap-1.5">
           {naming != null ? (
             <input
               autoFocus
@@ -114,7 +114,7 @@ export default function SetFrame(p: SetFrameProps) {
       </div>
       {p.summary && (
         <div
-          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
+          className="meno-words absolute overflow-hidden"
           style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
         >
           {/* (made at its own size, and made smaller to fit a frame sized smaller - by hand, or before it was this large) */}
@@ -142,15 +142,15 @@ export default function SetFrame(p: SetFrameProps) {
           points and axes drawn at any zoom, its words alone left out where they are too small to read) */}
       {(p.set.table || p.set.number || p.set.chart) && (
         <div
-          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && !p.set.chart && "opacity-0")}
+          className={clsx("absolute overflow-hidden", !p.set.chart && "meno-words")}
           style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
         >
           {p.set.chart ? (
             <div className="origin-top-left" style={{ width: CHART_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / CHART_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / CHART_PX.h)})` }}>
               {p.set.chart.kind === "diagram" ? (
-                <DiagramBody diagram={p.set.chart} compact={p.compact} {...(p.onEntry ? { onLevel: (l: DiagramLevel) => p.onEntry!(l.lowest.entry) } : {})} />
+                <DiagramBody diagram={p.set.chart} {...(p.onEntry ? { onLevel: (l: DiagramLevel) => p.onEntry!(l.lowest.entry) } : {})} />
               ) : (
-                <ChartBody chart={p.set.chart} compact={p.compact} {...(p.onEntry ? { onPoint: (pt: ChartPoint) => p.onEntry!(pt.entry) } : {})} />
+                <ChartBody chart={p.set.chart} {...(p.onEntry ? { onPoint: (pt: ChartPoint) => p.onEntry!(pt.entry) } : {})} />
               )}
             </div>
           ) : p.set.table ? (

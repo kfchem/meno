@@ -202,14 +202,15 @@ export default function StepCard(p: StepCardProps) {
         className={`rounded-xl bg-white shadow-sm ${p.selected ? "border-accel-base" : "border-gh-line"}`}
         style={{ borderWidth: HAIR, borderStyle: "solid", cursor: "default" }}
       >
-        {p.compact ? (
-          <div className="flex items-center justify-center gap-3 text-gh-black" style={{ height: CARD_H / PX }}>
+        {/* (its words, and its icons alone large where they are too small to read: one over the other, the one fading into the other with the
+            zoom - utils/pageScale `wordsShown` - never one put for the other at once) */}
+        <div className="grid">
+          <div className="meno-words-gone pointer-events-none flex items-center justify-center gap-3 text-gh-black" style={{ gridArea: "1 / 1", height: CARD_H / PX }} aria-hidden={!p.compact}>
             <StepGlyph icon={p.info.icon} size={28} />
             {line.Icon && <line.Icon className={clsx("h-6 w-6 transition-colors duration-200 ease-meno", line.tone, line.turning && "animate-spin motion-reduce:animate-none [animation-duration:2s]")} aria-hidden />}
           </div>
-        ) : (
-          // (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports)
-          <div className="grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: CARD_H / PX }}>
+          {/* (two columns: the icons - what it does, and its state - and the words beside them; its first line level with its ports) */}
+          <div className="meno-words grid items-start gap-x-2 px-3 pt-2 pb-2.5" style={{ gridArea: "1 / 1", gridTemplateColumns: "16px minmax(0, 1fr)", minHeight: CARD_H / PX }} aria-hidden={p.compact}>
             <span className="flex h-5 items-center text-gh-gray">
               <StepGlyph icon={p.info.icon} />
             </span>
@@ -242,7 +243,7 @@ export default function StepCard(p: StepCardProps) {
               </>
             )}
           </div>
-        )}
+        </div>
         {/* (its options open and shut as a card does, never at a jump: the card grows and shrinks with them) */}
         <AnimatePresence initial={false}>
         {p.open && !p.compact && (
