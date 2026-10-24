@@ -138,18 +138,19 @@ export default function SetFrame(p: SetFrameProps) {
           )}
         </div>
       )}
-      {/* (a table, a number or a chart it holds: what it is, inside it - made smaller to fit a frame sized smaller) */}
+      {/* (a table, a number or a chart it holds: what it is, inside it - made smaller to fit a frame sized smaller; a chart's
+          points and axes drawn at any zoom, its words alone left out where they are too small to read) */}
       {(p.set.table || p.set.number || p.set.chart) && (
         <div
-          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && "opacity-0")}
+          className={clsx("absolute overflow-hidden transition-opacity duration-150 ease-meno", p.compact && !p.set.chart && "opacity-0")}
           style={{ left: SET_PAD / PX, right: SET_PAD / PX, top: (2 * NAME_DOWN) / PX, bottom: SET_PAD / PX }}
         >
           {p.set.chart ? (
             <div className="origin-top-left" style={{ width: CHART_PX.w, transform: `scale(${Math.min(1, (w - (2 * SET_PAD) / PX) / CHART_PX.w, (h - (2 * NAME_DOWN + SET_PAD) / PX) / CHART_PX.h)})` }}>
               {p.set.chart.kind === "diagram" ? (
-                <DiagramBody diagram={p.set.chart} {...(p.onEntry ? { onLevel: (l: DiagramLevel) => p.onEntry!(l.lowest.entry) } : {})} />
+                <DiagramBody diagram={p.set.chart} compact={p.compact} {...(p.onEntry ? { onLevel: (l: DiagramLevel) => p.onEntry!(l.lowest.entry) } : {})} />
               ) : (
-                <ChartBody chart={p.set.chart} {...(p.onEntry ? { onPoint: (pt: ChartPoint) => p.onEntry!(pt.entry) } : {})} />
+                <ChartBody chart={p.set.chart} compact={p.compact} {...(p.onEntry ? { onPoint: (pt: ChartPoint) => p.onEntry!(pt.entry) } : {})} />
               )}
             </div>
           ) : p.set.table ? (
