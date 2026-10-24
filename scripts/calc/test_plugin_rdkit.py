@@ -1222,7 +1222,8 @@ class OpenStereo(unittest.TestCase):
                 left = self.worker.op_stereo_left_open({"molblock": block})
             finally:
                 self.worker.EnumerateStereoisomers = real
-            self.assertEqual(left, {"atoms": full["atoms"], "bonds": full["bonds"]}, smiles)
+            # (and the open bonds that run on into one another, by run: an allene's two, one axis)
+            self.assertEqual(left, {"atoms": full["atoms"], "bonds": full["bonds"], "cumulated": [full["cumulenes"]] if full["cumulenes"] else []}, smiles)
             self.assertEqual(calls, [], smiles)
 
     def test_works_out_what_embeds_once_for_a_structure_asked_about_again(self):
@@ -1496,7 +1497,7 @@ class MovingCN(unittest.TestCase):
             self.assertEqual(got["as"], "drawn", smiles)
             self.assertIn(why, self.note(got), smiles)
             self.assertEqual(self.worker.op_open_stereo({"molblock": self.block(smiles)})["bonds"], [], smiles)
-            self.assertEqual(self.worker.op_stereo_left_open({"molblock": self.block(smiles)}), {"atoms": [], "bonds": []}, smiles)
+            self.assertEqual(self.worker.op_stereo_left_open({"molblock": self.block(smiles)}), {"atoms": [], "bonds": [], "cumulated": []}, smiles)
 
     def test_one_drawn_with_its_e_z_keeps_it_and_nothing_is_said(self):
         got = self.stereoisomers("CC/N=C(/N)NCC")
@@ -1515,7 +1516,7 @@ class MovingCN(unittest.TestCase):
         bond.SetBondDir(Chem.BondDir.UNKNOWN)
         wavy = Chem.MolToMolBlock(mol)
         self.assertEqual(self.worker.op_open_stereo({"molblock": wavy})["atoms"], [1])
-        self.assertEqual(self.worker.op_stereo_left_open({"molblock": wavy}), {"atoms": [1], "bonds": []})
+        self.assertEqual(self.worker.op_stereo_left_open({"molblock": wavy}), {"atoms": [1], "bonds": [], "cumulated": []})
 
     def test_conformers_of_a_guanidine_choose_nothing_for_its_c_n(self):
         # (one 3D structure of each of its two, its C=N as the embedding places it: never a configuration given it)
