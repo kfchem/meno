@@ -1,33 +1,76 @@
-import { forwardRef } from "react";
+import { ChevronRightIcon } from "@heroicons/react/24/outline";
+import { forwardRef, useState } from "react";
+import { EASED } from "../../../theme/motion";
 
 /**
  * A card's rows, group by group: each row its name and its value, written;
  * `marked`, said in the accent colour; `source`, the reader the groups from
- * it on came from - where two readers' stand on the card.
+ * it on came from - where two readers' stand on the card; `folded`, its
+ * rows shut under its name until it is opened - what would fill the card
+ * past what it is of (how a structure was made).
  */
 export type CardGroups = {
   source?: string;
   group: string;
   rows: { label: string; text: string; marked?: boolean }[];
+  folded?: true;
 }[];
 
-/** Results said group by group - under each reader's name, where there are two - each group's name, then its rows, each its name and value. */
+/** A group's rows: each its name and value - a value too long for the card goes on to another line, inside it. */
+function Rows({ rows }: { rows: CardGroups[number]["rows"] }) {
+  return (
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+      {rows.map((r, k) => (
+        <div key={k} className="contents">
+          <span className="text-gh-gray whitespace-nowrap">{r.label}</span>
+          <span className={`text-right [overflow-wrap:anywhere] ${r.marked ? "text-accel-accent" : "text-gh-black"}`}>{r.text}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** A group shut under its name, opened and shut by it - eased, its chevron turning - never by the card it is on. */
+function FoldedGroup({ group, rows }: { group: string; rows: CardGroups[number]["rows"] }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        aria-expanded={open}
+        className="flex items-center gap-0.5 text-[10px] text-gh-gray hover:text-gh-black transition-colors duration-150 ease-meno"
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen((o) => !o);
+        }}
+      >
+        <ChevronRightIcon className={`h-2.5 w-2.5 transition-transform ${open ? "rotate-90" : ""}`} style={EASED} strokeWidth={2.5} />
+        {group}
+      </button>
+      <div className="grid transition-[grid-template-rows,opacity]" style={{ ...EASED, gridTemplateRows: open ? "1fr" : "0fr", opacity: open ? 1 : 0 }}>
+        <div className="overflow-hidden">
+          <Rows rows={rows} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Results said group by group - under each reader's name, where there are two - each group's name, then its rows, each its name and value; a group `folded`, shut under its name. */
 export function ResultGroups({ groups }: { groups: CardGroups }) {
   return (
     <>
       {groups.map((g, k) => (
         <div key={`${k}:${g.group}`} className="mt-1">
           {g.source && <div className="mt-1.5 text-[10px] font-medium text-gh-black">{g.source}</div>}
-          <div className="text-[10px] text-gh-gray">{g.group}</div>
-          {/* (a value too long for the card goes on to another line, inside it) */}
-          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
-            {g.rows.map((r, k) => (
-              <div key={k} className="contents">
-                <span className="text-gh-gray whitespace-nowrap">{r.label}</span>
-                <span className={`text-right [overflow-wrap:anywhere] ${r.marked ? "text-accel-accent" : "text-gh-black"}`}>{r.text}</span>
-              </div>
-            ))}
-          </div>
+          {g.folded ? (
+            <FoldedGroup group={g.group} rows={g.rows} />
+          ) : (
+            <>
+              <div className="text-[10px] text-gh-gray">{g.group}</div>
+              <Rows rows={g.rows} />
+            </>
+          )}
         </div>
       ))}
     </>
