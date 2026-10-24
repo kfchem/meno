@@ -1,4 +1,3 @@
-import { numberText } from "../../../../lib/calc/results";
 import * as THREE from "three";
 import { Fragment, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -13,7 +12,7 @@ import SetFrame, { type Edge } from "../workflow/SetFrame";
 import StepCard, { Port, shareOf, type PortLook, type RunRow, type RunView } from "../workflow/StepCard";
 import { clickedOpen } from "../workflow/cardOpen";
 import { positionMarks } from "../workflow/substituents";
-import { countOf, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
+import { countOf, countSaid, numberedOn, recordHow, recordNumber, recordWhy, type Frame } from "../workflow/entries";
 import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { lookEvery } from "../workflow/lookEvery";
 import { labelReach, selectionFrame } from "../workflow/selectionSet";
@@ -30,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_W, HTML_DISTANCE, onLayer, PORT_DOWN, PORTS_Z, portDown, PX, shuttingCard, underCard } from "../workflow/look";
+import { HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -59,27 +58,13 @@ const DASH_SPEED = 12;
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
-/** Where a set gives; where a result set takes. */
-const setGives = (b: Frame): Pt => ({ x: b.x1, y: (b.y0 + b.y1) / 2 });
-const setTakes = (b: Frame): Pt => ({ x: b.x0, y: (b.y0 + b.y1) / 2 });
-/** Where a step's input `port` takes - its first, where it has no such input; and where its card meets the lines to its exits' sets. */
-const stepTakes = (s: Pick<WorkflowStep, "x" | "y" | "kind">, port?: string): Pt => ({ x: s.x, y: s.y - portDown(Math.max(0, inputsOf(s.kind).findIndex((p) => p.id === port))) });
-const stepGives = (s: Pick<WorkflowStep, "x" | "y">): Pt => ({ x: s.x + CARD_W, y: s.y - PORT_DOWN });
+/** Where a step's input `port` takes - its first, where it has no such input (look `stepTakes`). */
+const stepTakes = (s: Pick<WorkflowStep, "x" | "y" | "kind">, port?: string): Pt => portTakes(s, Math.max(0, inputsOf(s.kind).findIndex((p) => p.id === port)));
 
 /** A wire's curve from `p` to `q`, leaving and arriving level, as a ribbon `width` wide. */
 function ribbon(p: Pt, q: Pt, width: number): THREE.BufferGeometry {
-  const d = Math.max(Math.abs(q.x - p.x) / 2, 40 * PX);
-  const c1 = { x: p.x + d, y: p.y };
-  const c2 = { x: q.x - d, y: q.y };
   const N = 48;
-  const at = (t: number): Pt => {
-    const u = 1 - t;
-    return {
-      x: u * u * u * p.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * q.x,
-      y: u * u * u * p.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * q.y,
-    };
-  };
-  const pts = Array.from({ length: N + 1 }, (_, i) => at(i / N));
+  const pts = wireCurve(p, q, N);
   const positions: number[] = [];
   const index: number[] = [];
   // (how far along it each point is, for a dash)
@@ -633,30 +618,11 @@ export default function Workflow2D() {
       new Map(
         sets.map((b) => {
           const count = countOf(flow, b);
-          // (a result set the file did not keep: how many it held; one kept out of the file from now on, said so;
-          // a step's exit not run yet, so - not empty, which would say it ran and gave nothing)
-          const counted = b.notKept && !count.entries
-            ? `Not kept · ${b.notKept.count}`
-            : b.made && !b.made.holds
-            ? "Not run yet"
-            : !count.entries
-            ? "Empty"
-            : count.holds === "table"
-              ? plural(count.entries, "row")
-            : count.holds === "number" && b.number
-              ? `${numberText(b.number.value)}${b.number.unit !== "none" ? ` ${b.number.unit}` : ""}`
-            : count.holds === "chart"
-              ? plural(count.entries, b.chart?.kind === "diagram" ? "level" : "point")
-            : count.holds === "pictures"
-              ? plural(count.entries, "picture")
-              : count.holds === "structures"
-                ? plural(count.entries, "structure")
-                : count.holds === "molecules"
-                  ? plural(count.compounds, "compound")
-                  : `${plural(count.compounds, "compound")} · ${count.entries}`;
+          const counted = countSaid(b, count);
           // (a large result set: what it holds, said large in its frame)
+          // (structures drawn held, none of them on the page: summed up in its frame too - those it shows are on the page, and it says how many)
           const summary =
-            b.collection || b.drawnCollection
+            b.collection || (b.drawnCollection && count.entries <= b.drawnCollection.length)
               ? {
                   count: count.entries.toLocaleString("en-US"),
                   nouns:

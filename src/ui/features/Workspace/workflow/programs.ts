@@ -372,10 +372,13 @@ export function jobEntries(kind: StepKind, entries: readonly SetEntry[], holds: 
  * What a plugin's step on structures drawn said of one of them (`run`,
  * docs/PLUGINS.md, *Steps on structures drawn*): kept as drawn; made anew,
  * as drawings - a MOL block each, its stereoisomers, say, and each one's
- * own SMILES beside, where given; or set aside, why and what kind of
- * reason it is.
+ * own SMILES beside, where given - each with values it worked out, where
+ * it did; or set aside, why and what kind of reason it is.
  */
-export type DrawnAnswer = { as: "drawn"; properties?: Record<string, DrawnValue> } | { made: string[]; smiles?: string[] } | { aside: string; kind: string };
+export type DrawnAnswer =
+  | { as: "drawn"; properties?: Record<string, DrawnValue> }
+  | { made: string[]; smiles?: string[]; properties?: Record<string, DrawnValue> }
+  | { aside: string; kind: string };
 /** A value a step worked out of a structure drawn, as its plugin says it: a number, a text or true/false, its unit from Meno's units table or "none", and how it was worked out. */
 export type DrawnValue = { value: number | string | boolean; unit: Unit | "none"; method?: string };
 
@@ -387,29 +390,33 @@ export function readDrawnAnswers(raw: unknown, count: number): DrawnAnswer[] | s
   const list = (raw as { structures?: unknown } | null)?.structures;
   if (!Array.isArray(list) || list.length !== count) return "It said nothing Meno can take";
   const out: DrawnAnswer[] = [];
-  for (const a of list as { as?: unknown; made?: unknown; aside?: unknown; kind?: unknown }[]) {
+  // (the values a structure was given, each its value, a unit Meno knows and how; none, where none was given; null where any is not one)
+  const valuesIn = (given: unknown): Record<string, DrawnValue> | undefined | null => {
+    if (given == null) return undefined;
+    if (typeof given !== "object" || Array.isArray(given)) return null;
+    const properties: Record<string, DrawnValue> = {};
+    for (const [name, p] of Object.entries(given as Record<string, { value?: unknown; unit?: unknown; method?: unknown }>)) {
+      const v = p?.value;
+      const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
+      const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
+      if (value == null || unit == null || !name.trim()) return null;
+      properties[name] = { value, unit, ...(typeof p.method === "string" && p.method.trim() ? { method: p.method.trim().slice(0, 200) } : {}) };
+    }
+    return properties;
+  };
+  for (const a of list as { as?: unknown; made?: unknown; aside?: unknown; kind?: unknown; properties?: unknown }[]) {
     if (a?.as === "drawn") {
-      const given = (a as { properties?: unknown }).properties;
-      if (given == null) {
-        out.push({ as: "drawn" });
-        continue;
-      }
-      if (typeof given !== "object" || Array.isArray(given)) return "It said nothing Meno can take";
-      const properties: Record<string, DrawnValue> = {};
-      for (const [name, p] of Object.entries(given as Record<string, { value?: unknown; unit?: unknown; method?: unknown }>)) {
-        const v = p?.value;
-        const value = typeof v === "number" ? (Number.isFinite(v) ? v : null) : typeof v === "string" || typeof v === "boolean" ? v : null;
-        const unit = p?.unit === "none" || (typeof p?.unit === "string" && isUnit(p.unit)) ? (p.unit as Unit | "none") : null;
-        if (value == null || unit == null || !name.trim()) return "It said nothing Meno can take";
-        properties[name] = { value, unit, ...(typeof p.method === "string" && p.method.trim() ? { method: p.method.trim().slice(0, 200) } : {}) };
-      }
-      out.push({ as: "drawn", properties });
+      const properties = valuesIn(a.properties);
+      if (properties === null) return "It said nothing Meno can take";
+      out.push(properties ? { as: "drawn", properties } : { as: "drawn" });
     }
     else if (Array.isArray(a?.made) && a.made.length && a.made.length <= MADE_OF_ONE && a.made.every((b) => typeof b === "string" && b.length)) {
-      // (each one's own SMILES, where given one for each: else none)
+      // (each one's own SMILES, where given one for each: else none; and what was worked out, of each alike)
       const smiles = (a as { smiles?: unknown }).smiles;
       const named = Array.isArray(smiles) && smiles.length === a.made.length && smiles.every((x) => typeof x === "string" && x.length && x.length <= 2000);
-      out.push({ made: a.made as string[], ...(named ? { smiles: smiles as string[] } : {}) });
+      const properties = valuesIn(a.properties);
+      if (properties === null) return "It said nothing Meno can take";
+      out.push({ made: a.made as string[], ...(named ? { smiles: smiles as string[] } : {}), ...(properties ? { properties } : {}) });
     }
     else if (typeof a?.aside === "string" && a.aside.trim()) out.push({ aside: a.aside.trim().slice(0, 200), kind: typeof a.kind === "string" && a.kind.trim() ? a.kind.trim().slice(0, 40) : "other" });
     else return "It said nothing Meno can take";

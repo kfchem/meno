@@ -21,6 +21,14 @@ export function setCanvasPlace(store: EditorStore, place: CanvasPlace | null): v
   else places.delete(store);
 }
 
+/** How many of the window's pixels the canvas shows a unit of the page in, at a point of the window over it; none where the canvas is not known. */
+export function canvasPxPerUnit(store: EditorStore, x: number, y: number): number | null {
+  const place = places.get(store);
+  const a = place?.worldAt(x, y);
+  const b = place?.worldAt(x + 100, y);
+  return a && b && Math.abs(b.x - a.x) > 1e-9 ? 100 / Math.abs(b.x - a.x) : null;
+}
+
 /** Where on the page something carried out of a PDF and let go at a point of the window is put down: on the canvas, not on the PDF it came from (`home`) - else nowhere. */
 export function putDownAt(store: EditorStore, home: number, e: PointerEvent): { x: number; y: number } | null {
   const onCanvas = overCanvasAt(store, e.clientX, e.clientY);

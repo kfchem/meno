@@ -5,7 +5,7 @@ import { connectStoreToDocument, createEditorStore } from "../store";
 import { readCarried3D } from "./copyPaste";
 import { noting } from "./readNotes";
 import { readWorkspace, workspaceText } from "./workspace";
-import { setMembers } from "../workflow/entries";
+import { entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { placeAsSet } from "../workflow/run";
 import { coordinateMolecules, energyOf } from "./coordinates";
 
@@ -87,5 +87,33 @@ describe("what was said of a structure read from coordinates, saved", () => {
     const { value: m, left } = noting(() => readCarried3D({ ...water, at: { x: 0, y: 0 }, said: [{ label: "Note", text: "E = -76.4 Hartree" }, { label: "Note" }, 7] }));
     expect(m?.said).toEqual([{ label: "Note", text: "E = -76.4 Hartree" }]);
     expect(left).toEqual({ said: 2 });
+  });
+});
+
+describe("the charge and multiplicity a text gives a structure read from its coordinates", () => {
+  // (made up for the test: the methyl cation, its charge and multiplicity on the line before its atoms)
+  const CATION = ["Methyl cation", "1 1", "C 0.000000 0.000000 0.000000", "H 1.087000 0.000000 0.000000", "H -0.543500 0.941370 0.000000", "H -0.543500 -0.941370 0.000000"].join("\n");
+  const species = (text: string) => {
+    const ms = coordinateMolecules(readCoordinates(text).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+    const doc = placeAsSet(emptyWorkspaceDocument(), ms, { x: 0, y: 0 }, { extentOf: () => ({ x0: -2, x1: 2, y0: -2, y1: 2 }) });
+    return setEntries(setMolecules(doc, doc.sets![0]), "molecules").map((e) => entryOfSet(e, "x").species);
+  };
+
+  it("are what each step is told: a cation stays a cation and a singlet - never what its atoms alone say, a neutral radical", () => {
+    expect(species(CATION)).toEqual([{ charge: 1, multiplicity: 1, from: { charge: "given", multiplicity: "given" } }]);
+  });
+
+  it("are none given where a title ends in two numbers: its number and another are no charge and multiplicity", () => {
+    for (const title of ["Conformer 12 3", "TS 2 1"]) {
+      const [m] = coordinateMolecules(readCoordinates([title, "C 0.000000 0.000000 0.000000", "H 1.087000 0.000000 0.000000", "H -0.543500 0.941370 0.000000", "H -0.543500 -0.941370 0.000000"].join("\n")).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+      expect(m.calc, title).toBeUndefined();
+    }
+  });
+
+  it("are given only where the text gives them: a structure with none stated is as its atoms say", () => {
+    expect(species(TEXT).map((s) => s?.from)).toEqual([
+      { charge: "given", multiplicity: "given" },
+      { charge: "atoms", multiplicity: "atoms" },
+    ]);
   });
 });

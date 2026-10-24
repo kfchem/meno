@@ -283,8 +283,8 @@ new kind comes with Meno, as a new role does (PLUGINS.md, *Roles*).
 | Filter | sliders | molecules in 3D, or a conformer set | those whose properties meet its conditions - each a property, a comparison and a value with its unit; all of them, or any; the rest out of its second exit, *The rest*, each saying why - one with no value for a property named, that it has none (*Filter*, below) |
 | Choose one | a pointer choosing | a conformer set | **a compound set**: one conformer of each compound - its lowest in energy, or one by its number; the rest out of its second exit, *The rest* - a conformer set |
 | Check structures | a funnel | structures drawn | each kept as drawn - never one changed - or set aside out of its second exit, *Set aside*, saying why: more than one part (a salt, a mixture), an atom with more bonds than it can have, a part with no electrons (H+), a radical; each looked for unless the step's options keep it |
-| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing; one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
-| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
+| Stereoisomers | two squares, one over the other | structures drawn | each that leaves stereo open as every stereoisomer of it that can be made in 3D, each a drawing - a C=N whose E/Z is none of its own never enumerated, and said so on each one's record (*C=N double bonds whose E/Z is none of their own*); one with nothing open, or nothing that could go more than one way (a bridgehead its rings fix), as drawn; set aside out of its second exit, *Set aside*, saying why: an allene's axis left open, more than 32 stereoisomers (whole, never some of them: counted only as far as 33, saying the most its open stereo could give), one that takes more than 30 s to look at (alone, the rest as they are), or - as the option says - all that leave stereo open |
+| Descriptors | bars | structures drawn | each as drawn, with numbers worked out of it on its record (*A structure drawn's record*), each its unit and how: RDKit's average molecular weight (`mw`, g/mol), Wildman-Crippen logP (`logp`), topological polar surface area (`tpsa`, Å²), hydrogen-bond donors and acceptors (`hbd`, `hba`) and strict rotatable bonds (`rotatable`) - a lone atom or ion (Na+, Cl-) without its logP, which is defined for none, saying so (`not_given`: "logp: not defined for a lone ion"); one RDKit cannot make sense of set aside out of *Set aside*, saying why |
 | Tag | a tag | molecules in 3D, or a conformer set | each the same, with an ID of its own - *start-1*, *start-2* - under the name given, which rides along with every entry made from it, so that two inputs are matched on it later (STRUCTURE-STEPS.md); no name, it does not run; a name the entries carry already is refused |
 | Species | a plus in a circle | molecules in 3D, or a conformer set | each with the charge and multiplicity given - one left blank as the entry has it - its energy and calculation, of another state, gone; one whose electrons cannot have them out of its second exit, *Failed*, saying why (STRUCTURE-STEPS.md, *Species*) |
 | Combine | a link | molecules in 3D | **one molecule**: the entries, in the set's order, as one complex, each part where it stands; none of a part's properties carried, each named (STRUCTURE-STEPS.md, *Combine*) |
@@ -1575,6 +1575,13 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   - Not seen: a metal's centre (square-planar platinum) and an axis of
     hindered rotation (a biaryl's); they are made as the embedding places
     them.
+- **A lone atom or ion is not made, and said so** (2026-10-23): one atom
+  alone has no 3D structure, as on the canvas (*structure 2 of 3 left
+  out: one atom alone has no 3D structure*); where every one is, the
+  step fails, saying so. A structure made of its parts makes its first
+  molecule, and names what it left out (*structure 3: its Cl− left
+  out*, a salt's counter-ion; *its 1 other part left out*). Until then
+  each was passed by without a word.
 
 Decided while building it, for the maintainer to confirm:
 
@@ -1894,6 +1901,48 @@ them again*; the maintainer's rulings of 2026-10-22):
 A workspace saved before this opens as it was: a calculation in it has
 no *Failed* set until it next runs, when it is given one.
 
+### Where a result set goes, and how many structures it shows (2026-10-23)
+
+A generative chain - *Generate*, *Check structures*, *Stereoisomers*,
+*Descriptors*, *Filter* - gives tens to hundreds of structures drawn at
+each step. Laid out whole, at the page's scale, each step's set grew over
+the next step's card, over the others' sets and over the wires, and the
+page could not be read after one run.
+
+- **Clear of everything** (workflow/place): a result set goes to the
+  right of its step, level with it, or lower, as far as it must to keep
+  `BETWEEN` clear of every other set, every step's card, every structure
+  and molecule, and every wire, each wire's curve as it is drawn (look
+  `wireCurve`). Its own line from its step, and its wires on to the steps
+  it goes into, cross no card or set where there is such a place. Below
+  everything is always clear, so a set never lies over another.
+  - **In its step's column**: where the next step's card in the same row
+    is close, its structures lie in rows no wider than the room before
+    it (`columnWidth`), the set growing down, not across the steps after
+    it.
+  - **Run again**, a set stays where it was, its top left kept, unless it
+    grew over something beside it; then it goes where a new one would.
+  - A step's second exit's set keeps under its first, and lower still
+    where something else is there (`keepExitsUnder`). A step's empty
+    exit frames, made as it is added, go clear in the same way (model
+    `withExits`).
+- **How many it shows** (look `DRAWN_ON_PAGE`, the maintainer,
+  2026-10-23): as many of its structures as take no more than 400 square
+  bond lengths of the page between them - each its drawing's box and its
+  number's room, in the step's order - and 50 at most. That is about a
+  dozen drug-sized structures, and many more small ones. The rest are
+  **held in the set**, after them, off the page
+  (`WorkflowSet.drawnCollection`). Its count line says how many it shows of how
+  many: "50 of 120 structures shown" (entries `countSaid`).
+- **Holding is the display alone.** All of them stay the set's, in order:
+  the step after it is given each, those on the page then those held
+  (flow `inputOf`, run `inputEntries`, and a plugin's step alike); the
+  step's line, the set's count, a run kept and shown again, and the file
+  (saved and read back, the shown ones as members, the rest as the set
+  holds them) all have all of them. A set whose step is deleted holds
+  them still, and deleting the set asks first, since those held go with
+  it.
+
 ### Structures drawn as results (2026-10-21)
 
 Enumerate P2 (WORKFLOWS-FOUNDATION.md, *Enumerate*): structures drawn, in
@@ -1962,6 +2011,61 @@ the page as before. Copied with its step, the set holds nothing until the
 step runs again, as a large set of molecules does. Held off the page,
 they are kept as the step drew them: a change of the workspace's style
 reaches them only once they are on the page.
+
+### C=N double bonds whose E/Z is none of their own (2026-10-23)
+
+A guanidine a Generate made, CN=C(N)NCC(O)c1ccc(OC(F)F)cc1, came out of
+*Stereoisomers* as four: two for its stereocentre, times two for its
+C=N. Those two are one compound. A hydrogen on either of the carbon's
+other nitrogens moves to the imine nitrogen, and the double bond moves
+with it, so the two "isomers" interconvert. Its E/Z is no configuration
+of its own, and Meno never chooses one for it.
+
+- **Which C=N** (the RDKit plugin's `moving_cn`), as the InChI Technical
+  Manual takes them (S. E. Stein, S. R. Heller, D. V. Tchekhovskoi,
+  I. V. Pletnev, *InChI version 1, software version 1.04 (2011),
+  Technical Manual*):
+  - one whose carbon has another neighbour, an N, O or S, that carries
+    a hydrogen: an amidine, a guanidine, an N-acyl amidine, an imidic
+    acid (the amide's other form). That hydrogen's 1,3-shift is the
+    manual's mobile H (IV.b, Step 6, Table 6), and a bond that is double
+    with the H in one place and single with it in another it presumes
+    rotatable, with no E/Z (Appendix 5b; its example is an N-methyl
+    imidic acid);
+  - one whose N carries a hydrogen, C=NH, which RDKit's enumeration
+    already gives one way only;
+  - an amidinium or guanidinium C=N+, its double bond shared with the
+    neutral amino N beside it on the carbon.
+
+  An imine whose N bears a carbon (an N-alkyl aldimine turns over by
+  inversion at N, some 30 kcal/mol: J. Chem. Soc., Perkin Trans. 2,
+  1976, 1501), an oxime and a hydrazone keep theirs: their E/Z is a
+  configuration at room temperature, or one Meno cannot rule out. Only a
+  C=N in a localised double bond is looked at; one in a ring of seven
+  atoms or fewer has none to give anyway.
+- **One definition, everywhere stereo is counted or made**: the plugin's
+  `open_stereo` leaves such a C=N out of what a structure leaves open,
+  and its enumeration holds it one way while the rest are tried in 3D
+  (the other way where nothing embeds so), then lets it go again. So
+  *Stereoisomers* gives the guanidine two, *Generate*'s count of those
+  with stereo left open does not count it, *Conformers* does not refuse
+  it for it, and *3D structure* does not ask about it. A C=N drawn with
+  its E/Z keeps it, as anything drawn does.
+- **Said on the record**: each structure *Stereoisomers* keeps or makes
+  that has one carries `stereo_not_enumerated`, a text - "E/Z of 1 C=N
+  not enumerated: its double bond moves with a hydrogen on an N, O or S
+  beside it (an amidine, a guanidine, an imidic acid) - no configuration
+  of its own" - so that a table or a Filter can read it.
+- **A double bond of either configuration**, as Meno draws one a SMILES
+  gives no E/Z for (CFG=2), and a stereocentre on a wavy bond, are left
+  open, as one drawn plain is. Before, `open_stereo` counted them as
+  nothing open, though RDKit's enumeration gave each both ways the
+  moment anything else was open: an N-methyl imine alone came out as
+  drawn, beside a stereocentre as both, and *Conformers* chose one for
+  it, unsaid. Now each is counted, made and refused alike.
+
+The C=N's E/Z is left to the 3D structure: a molecule made in 3D from it
+has whichever the embedding places, as a single bond has its turn.
 
 ### A structure drawn's record (2026-10-22)
 

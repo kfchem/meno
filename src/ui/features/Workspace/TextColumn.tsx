@@ -11,7 +11,7 @@ import MarkdownBody from "../TextEditor/MarkdownBody";
 import { isMarkdown } from "../../../lib/text/markdown";
 import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
-import type { LostText, PdfFind, PdfItem, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
+import type { LostText, PdfFind, PdfItem, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
 import { setName } from "./workflow/doers";
 import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
@@ -20,7 +20,11 @@ import { shortcutLabel } from "../../../lib/doc/shortcuts";
 import { isPinch, wheelReader } from "../../../lib/input/wheel";
 import { useAppSettings } from "../../../lib/settings/appSettings";
 import { pageUnder, pointOn } from "../../../lib/pdf/column";
-import { letterAt, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
+import { figureStructuresHad } from "./utils/pdfStructures";
+import { PRESS_WIDENED, structureAt, type PageStructure } from "./utils/pageStructures";
+import { dragStructure, sayWhy } from "./components/structureDrag";
+import { letterAt, letterInBand, letterNear, lineAt, placeAt, textHad, wordAt, wordsBetween } from "../../../lib/pdf/text";
+import { pressOn } from "../../../lib/pdf/press";
 import { goToFound, runFind, stepFound } from "./components/pdfFind";
 import { FOUND_COLOR } from "./components/pdfMarks";
 import { placeBefore, selects } from "./utils/pdfSelection";
@@ -598,6 +602,19 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     let clicks = { n: 0, t: 0, x: 0, y: 0 };
     // words selected, pressed: carried out once the pointer moves (components/wordsDrag)
     let lifting: { x: number; y: number; carried: boolean } | null = null;
+    // a structure of a figure pressed (docs/PDF.md, *Structures picked from a PDF*): carried out once the pointer moves, else picked
+    let picking: { x: number; y: number; page: number; pick: PdfStructurePick; s: PageStructure } | null = null;
+    let shiftPick = false;
+    /** The structure of a figure at a point of a page, its figure read as it is pointed at (utils/pdfStructures) - `widened` for a press. */
+    const structureUnder = (page: number, x: number, y: number, widened = 1): { pick: PdfStructurePick; s: PageStructure } | null => {
+      const sha = shaOf();
+      const figs = sha ? figuresHad(sha, page, () => reader.redraw()) : null;
+      const k = figs ? figs.findIndex((b) => x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) : -1;
+      if (!sha || !figs || k < 0) return null;
+      const read = figureStructuresHad(sha, page, figs, k, () => reader.redraw());
+      const s = read ? structureAt(read.structures, x, y, read.marks, widened) : null;
+      return s ? { pick: { id, page, figure: figs[k], key: s.key }, s } : null;
+    };
     // a box being drawn, from where it was pressed - in a figure, its box were it let go there
     let boxing: { page: number; x: number; y: number; fig: Box | null; cx: number; cy: number; moved: boolean } | null = null;
     // a box drawn, pressed: carried out once the pointer moves (components/boxDrag)
@@ -626,6 +643,16 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
           const pdfNow = st.pdfs.find((x) => x.id === id);
           // (from where it was pressed, where the words lie on the screen now)
           if (pdfNow && selects(st.pdfSel)) void dragWords(store, pdfNow, st.pdfSel, { x: lifting.x, y: lifting.y }, onScreen());
+        }
+        return;
+      }
+      if (picking) {
+        if (e.buttons & 1 && Math.hypot(e.clientX - picking.x, e.clientY - picking.y) >= CLICK_PX) {
+          const st = store.getState();
+          const pdfNow = st.pdfs.find((x) => x.id === id);
+          const { x, y, page, s } = picking;
+          picking = null;
+          if (pdfNow) dragStructure(store, pdfNow, page, s, { x, y }, onScreen());
         }
         return;
       }
@@ -673,6 +700,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const st = store.getState();
       const sha = st.pdfs.find((x) => x.id === id)?.sha256;
       st.setFigureLit(q.on && sha ? atomAtSpot(st.model, sha, q.page, q.x, q.y) : null);
+      // (over a structure of a figure: it lit whole, as a word is)
+      st.setPdfStructureLit(q.on ? (structureUnder(q.page, q.x, q.y)?.pick ?? null) : null);
       // (over a link, what ⌘- or Ctrl-click does - the system's hand only with the key held; over words, the text cursor)
       hovered = e;
       pointerOver(e);
@@ -683,7 +712,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       const q = inPdf(e);
       const link = linkUnder(e);
       const t = q?.on ? lettersOf(q.page) : null;
-      el.style.cursor = link && followsLink(e) ? "pointer" : q && t && letterNear(t, q.x, q.y) != null ? "text" : "";
+      const onStructure = !!q?.on && !!store.getState().pdfStructureLit;
+      el.style.cursor = link && followsLink(e) ? "pointer" : onStructure ? "grab" : q && t && (letterNear(t, q.x, q.y) ?? letterInBand(t, q.x, q.y)) != null ? "text" : "";
       el.title = link ? linkHint(link) : "";
     };
     const onModifier = (e: KeyboardEvent) => {
@@ -694,6 +724,7 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       setOver(false);
       lit(false);
       store.getState().setFigureLit(null);
+      store.getState().setPdfStructureLit(null);
     };
     let press: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
@@ -705,6 +736,16 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       // on words: a selection begun - a letter's place, a word, a line - and drawn on
       const q = inPdf(e);
       const t = q.on ? lettersOf(q.page) : null;
+      // (on a structure of a figure - within half a bond of it, before any words about it - once: picked, or carried out as the pointer moves)
+      const under = q.on && clicks.n === 1 ? structureUnder(q.page, q.x, q.y, PRESS_WIDENED) : null;
+      if (under) {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        drawing = null;
+        picking = { x: e.clientX, y: e.clientY, page: q.page, ...under };
+        shiftPick = e.shiftKey;
+        return;
+      }
       // (on words selected, once: carried out, as the pointer moves)
       const sel = store.getState().pdfSel;
       if (t && clicks.n === 1 && selects(sel) && sel.id === id && onSelected(t, sel, q.page, q.x, q.y)) {
@@ -723,13 +764,24 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
         carrying = { x: e.clientX, y: e.clientY, carried: false };
         return;
       }
-      const letter = t ? letterNear(t, q.x, q.y) : null;
+      // (Shift: the selection drawn on from where it was begun, to here - on this page or another)
+      if (t && clicks.n === 1 && e.shiftKey && selects(sel) && sel.id === id) {
+        e.preventDefault();
+        el.setPointerCapture(e.pointerId);
+        drawing = { unit: "letter", first: [sel.anchor, sel.anchor], x: e.clientX, y: e.clientY, moved: true };
+        store.getState().setPdfSel({ id, anchor: sel.anchor, focus: { page: q.page, at: placeAt(t, q.x, q.y) } });
+        return;
+      }
       // in a figure, or where there are no words: a box drawn as the pointer goes - in a figure, let go where it
-      // was pressed, the figure's (two clicks and three are words', its labels' too)
+      // was pressed, the figure's (two clicks and three are words', its labels' too; and a line of text in it, a
+      // table's row, is words' at once)
       const sha = shaOf();
       const figures = q.on && sha ? figuresHad(sha, q.page, () => reader.redraw()) : null;
       const fig = figures ? figureAt(figures, q.x, q.y) : null;
-      if (q.on && clicks.n === 1 && (fig || letter == null)) {
+      // (on a letter, beside one, or in the white between the rows of a table - a line's band - words; lib/pdf/press)
+      const pressed = pressOn(t, fig, q.x, q.y);
+      const letter = pressed.begins === "words" ? pressed.letter : t ? letterNear(t, q.x, q.y) : null;
+      if (q.on && clicks.n === 1 && pressed.begins === "box") {
         e.preventDefault();
         el.setPointerCapture(e.pointerId);
         drawing = null;
@@ -757,6 +809,21 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
       }
       const drawn = drawing;
       drawing = null;
+      // (a structure pressed and let go where it was: picked - with Shift, added, or let go where it was picked; one not read whole saying why)
+      const picked = picking;
+      picking = null;
+      if (picked) {
+        if ("none" in picked.s.read) {
+          sayWhy(store, picked.s.read.none);
+          return;
+        }
+        const st = store.getState();
+        const was = shiftPick && st.pdfStructures?.id === id ? st.pdfStructures.picks : [];
+        const same = (k: PdfStructurePick) => k.page === picked.pick.page && k.key === picked.pick.key;
+        const picks = shiftPick ? (was.some(same) ? was.filter((k) => !same(k)) : [...was, picked.pick]) : [picked.pick];
+        st.setPdfStructures(picks.length ? { id, picks } : null);
+        return;
+      }
       // (words selected pressed and let go where they were: a click, nothing selected)
       const lifted = lifting;
       lifting = null;
@@ -802,6 +869,12 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     // (a right-click: the PDF's menu, its words' Copy in it)
     const onMenu = (e: MouseEvent) => {
       e.preventDefault();
+      // (on a structure of a figure not picked: it picked, for the menu's Put on the page and Copy)
+      const q = inPdf(e);
+      const under = q.on ? structureUnder(q.page, q.x, q.y, PRESS_WIDENED) : null;
+      const st = store.getState();
+      const already = st.pdfStructures?.id === id && st.pdfStructures.picks.some((k) => k.page === under?.pick.page && k.key === under?.pick.key);
+      if (under && !already && "model" in under.s.read) st.setPdfStructures({ id, picks: [under.pick] });
       store.getState().askPdfMenu({ id, clientX: e.clientX, clientY: e.clientY });
     };
     // (the webview's own Back, on the mouse's back button, is not Meno's)

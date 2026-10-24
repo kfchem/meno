@@ -489,6 +489,96 @@ def orca_for_cclib(text):
     return "\n".join(out), ghosts
 
 
+# ORCA's own statement of a geometry's whole electronic energy, after it: the SCF's and every term the method adds to
+# it - dispersion, gCP, a composite method's others - of which cclib's SCF energies leave some out
+# ("FINAL SINGLE POINT ENERGY       -93.399651434575")
+ORCA_FINAL = re.compile(r"^FINAL SINGLE POINT ENERGY\s+(\S+)\s*$")
+# where ORCA writes each geometry it works an energy out at, as cclib reads its geometries
+ORCA_GEOMETRY = "CARTESIAN COORDINATES (ANGSTROEM)"
+# what an ORCA output's energies are, said with them
+ORCA_FINAL_SAID = "ORCA final single-point energy (includes dispersion and gCP where the method has them)"
+# a nudged elastic band among ORCA's simple keywords: NEB, NEB-CI, NEB-TS, ZOOM-NEB and the like
+ORCA_NEB = re.compile(r"(ZOOM-)?NEB(-[A-Z]+)?", re.I)
+# what ORCA says it took a keyword as: "The B3LYP functional is recognized", "The B97-3c composite method is recognized"
+ORCA_RECOGNISED = re.compile(r"^The (\S+) (?:functional|composite method) is recognized\s*$", re.M)
+# the orbital basis it says it used, under that heading - not an auxiliary one, under its own
+ORCA_BASIS = re.compile(r"^----- Orbital basis set information -----\s*\nYour calculation utilizes the basis: (\S+)\s*$", re.M)
+
+
+def orca_echoed(text):
+    """ORCA's input as its output echoes it ("|  1> ! r2SCAN-3c Opt"), each line's text."""
+    return [(m.group(2) + m.group(3)).strip() for m in map(ORCA_ECHO.match, text.split("\n")) if m]
+
+
+def orca_keywords(text):
+    """The simple keywords of ORCA's input, as its output echoes it: each word after a "!", its comments (# to the
+    line's end, or to the next #) left out."""
+    words = []
+    for line in orca_echoed(text):
+        if line.startswith("!"):
+            words += re.sub(r"#[^#]*#?", " ", line[1:]).split()
+    return words
+
+
+def orca_energies(text, frames, kept):
+    """Each geometry's electronic energy as ORCA states it (`ORCA_FINAL`), one to each geometry cclib read and in
+    their order - the first `kept`, as many as the SCF energies kept (`Kept`) - with no reason; or none, and why.
+    Where they are not one to each geometry, exactly, no energy is given: never some taken another way."""
+    if any(line.lower().startswith("%compound") for line in orca_echoed(text)):
+        return None, "a compound job's single points are not one to each geometry"
+    if any(ORCA_NEB.fullmatch(w) for w in orca_keywords(text)):
+        return None, "a nudged elastic band's images are not one to each geometry"
+    values, open_ = [], False
+    for line in text.split("\n"):
+        if line.startswith(ORCA_GEOMETRY):
+            if open_:
+                return None, "a geometry has no final single-point energy of its own"
+            open_ = True
+            continue
+        m = ORCA_FINAL.match(line)
+        if not m:
+            continue
+        # (one after none of its own geometry: another single point's - a displaced geometry's, for frequencies)
+        if not open_:
+            return None, "a final single-point energy stands at no geometry of its own"
+        try:
+            value = float(m.group(1))
+        except ValueError:
+            value = math.nan
+        if not math.isfinite(value):
+            return None, "a final single-point energy is not a number"
+        values.append(value)
+        open_ = False
+    # (a run cut short after its last geometry, before its energy: that geometry has none, and is not kept either)
+    values = values[:kept]
+    if len(values) != frames:
+        return None, f"{len(values)} final single-point energies for {frames} geometries"
+    return values, None
+
+
+def orca_level(text, meta):
+    """ORCA's method and basis set, each as its input names it - a simple keyword the output says it took as
+    that: the functional or composite method it says it recognised, else the method cclib read where the input
+    names it so (HF, MP2); the orbital basis it says it used, where the input names it. Otherwise none: never a
+    kind of method (cclib's "DFT") or an auxiliary basis in its place - and no basis for a composite method,
+    whose own it is."""
+    words = orca_keywords(text)
+
+    def key(word):
+        return re.sub(r"[^0-9a-z]", "", word.lower())
+
+    recognised = {key(x) for x in ORCA_RECOGNISED.findall(text)}
+    methods = [w for w in words if key(w) in recognised]
+    if not methods:
+        last = ([str(x) for x in meta.get("methods") or [] if x] or [None])[-1]
+        methods = [w for w in words if last and w.lower() == last.lower()]
+    method = methods[0] if len({key(w) for w in methods}) == 1 else None
+    # (as ORCA writes it, where the input names it, in whatever case: "STO-3G" for "sto-3g")
+    basis = ORCA_BASIS.search(text)
+    basis = basis.group(1) if basis and any(w.lower() == basis.group(1).lower() for w in words) else None
+    return method, basis
+
+
 def gaussian_ghosts(text):
     """The ghost atoms of a Gaussian job, by their place: those its input names with "-Bq" after the element (the
     manual's "Molecule Specification"), as the output echoes the input under "Symbolic Z-matrix"."""
@@ -622,19 +712,27 @@ def op_read(m):
     if ended in ("error", "cut") and 0 < good < len(frames):
         frames = frames[:good]
     data = Kept(data, good, len(frames))
+    # (each geometry's energy: an ORCA output's as ORCA states it, all of them or none, and why - the rest as cclib reads them)
+    energies, unread = None, None
+    if frames and not excited_path(data, len(frames)):
+        if program == "orca":
+            energies, unread = orca_energies(text, len(frames), good)
+        else:
+            energies = frame_energies(data, len(frames))
+    method, basis = orca_level(text, meta) if program == "orca" else (method_of(meta), meta.get("basis_set"))
     result = {
         "schema": SCHEMA,
         "program": meta.get("package"),
         "version": meta.get("package_version"),
-        "method": method_of(meta),
-        "basis": meta.get("basis_set"),
+        "method": method,
+        "basis": basis,
         "charge": int(data.charge) if has(data, "charge") else None,
         "multiplicity": int(data.mult) if has(data, "mult") else None,
         "atoms": atoms,
         "frames": frames,
         # (an excited state's geometries: their energies the excited state's, which are not read here - not the
         # ground state's at each, which cclib gives)
-        "energies": frame_energies(data, len(frames)) if frames and not excited_path(data, len(frames)) else None,
+        "energies": energies,
         # (a scan's or a reaction path's last geometry is no optimum)
         "optimised": bool(data.optdone) if has(data, "optdone") and not path_kind(data, text) else None,
     }
@@ -653,6 +751,7 @@ def op_read(m):
     result["results"] = (
         run_results(ended, why, scf, whole)
         + path_said(data, text, len(frames))
+        + energies_said(program, energies, unread)
         + molecule_wide(data)
         + of_state(dipole(data, text, program, frames[-1] if frames else None), states[0])
         + per_frame(data, len(frames))
@@ -806,6 +905,18 @@ def path_said(data, text, frames):
     if excited_path(data, frames):
         out.append({"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Excited state", "value": "energies not read", "rank": 0})
     return out
+
+
+def energies_said(program, energies, unread):
+    """What an ORCA output's energies are, where they were read - and, where they could not be, that they were
+    not and why, first in the chip's line."""
+    if program != "orca":
+        return []
+    if energies:
+        return [{"id": "energy.what", "on": "molecule", "group": "Calculation", "label": "Energy", "value": ORCA_FINAL_SAID}]
+    if unread:
+        return [{"id": "run.energies", "on": "molecule", "group": "Calculation", "label": "Energies", "value": f"not read: {unread}", "rank": 0}]
+    return []
 
 
 def irc_order(text, frames):

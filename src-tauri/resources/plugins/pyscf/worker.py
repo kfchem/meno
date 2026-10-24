@@ -318,20 +318,25 @@ def method_of(meta):
 def molecule_of(data):
     """The molecule an output is of, in Meno's form: its atoms, each
     geometry it went through, each one's SCF energy (hartrees) where every
-    one has one, and what the calculation was."""
+    one has one, and what the calculation was - but an ORCA output's energy,
+    method and basis, which are the cclib plugin's to give."""
     meta = getattr(data, "metadata", {}) or {}
     atoms = [ELEMENTS[int(z)] for z in data.atomnos]
     frames = [[float(v) for xyz in step for v in xyz] for step in getattr(data, "atomcoords", []) if len(step) == len(atoms)]
+    # (an ORCA output's energy is ORCA's final one, which cclib's SCF energies are not where the method adds more -
+    # gCP, a composite method's terms - and its method and basis are those the input names: the cclib plugin gives
+    # them, or none, and says which (docs/FILE-IO.md); none here, so that cclib's are never put in their place)
+    orca = meta.get("package") == "ORCA"
     energies = None
-    if has(data, "scfenergies") and len(data.scfenergies) == len(frames) and frames:
+    if not orca and has(data, "scfenergies") and len(data.scfenergies) == len(frames) and frames:
         # (cclib's electronvolts, in hartrees again by cclib's own factor: the output's values as printed)
         energies = [convertor(float(e), "eV", "hartree") for e in data.scfenergies]
     return {
         "schema": SCHEMA,
         "program": meta.get("package"),
         "version": meta.get("package_version"),
-        "method": method_of(meta),
-        "basis": meta.get("basis_set"),
+        "method": None if orca else method_of(meta),
+        "basis": None if orca else meta.get("basis_set"),
         "charge": int(data.charge) if has(data, "charge") else None,
         "multiplicity": int(data.mult) if has(data, "mult") else None,
         "atoms": atoms,

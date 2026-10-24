@@ -29,6 +29,7 @@ import { StoreApi } from "zustand";
 import { nextIdAfter } from "../../workflow/saved";
 import { membersFound } from "../../workflow/model";
 import { appendParts, carriedRenumbered, NO_PARTS, removeParts } from "../../workflow/parts";
+import { holdsOwn } from "../../workflow/entries";
 import { recordsShownAdded, recordsShownOf, shownModel } from "../../utils/stacks";
 import { editAtTrueSize } from "../../utils/trueSize";
 import { style3dOf } from "../../style3d";
@@ -228,7 +229,7 @@ export const createModelSlice = (
     // which is asked about on its own
     const among = selectionScheme(get());
     const ids = (xs: { id: number }[]) => new Set(xs.map((x) => x.id));
-    const held = [...selFlow.sets].filter((id) => get().sets.find((b) => b.id === id)?.collection?.length);
+    const held = [...selFlow.sets].filter((id) => holdsOwn(get().sets.find((b) => b.id === id)));
     const idle = [...selFlow.steps].filter((id) => !steps.find((s) => s.id === id)?.running);
     const gone = steps.filter((s) => idle.includes(s.id));
     const deleted = doc.edit("delete selection", (d) =>

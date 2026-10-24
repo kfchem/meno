@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { diagramOf, diagramSaid, type DiagramValue } from "./energyDiagram";
+import { deltaOf, diagramOf, diagramSaid, type DiagramValue } from "./energyDiagram";
 import { readTable, type Table } from "./table";
 import { factor } from "./units";
 
@@ -39,6 +39,16 @@ describe("an energy diagram", () => {
     expect(Number((0.02 * KCAL).toFixed(3))).toBe(12.55);
     expect([d.axis, d.reference, d.links, d.left]).toEqual([{ name: "\u0394E", unit: "kcal/mol", by: BY, at: { geometry: "own" } }, "R", [[0, 1], [1, 2]], []]);
     expect(diagramSaid(d)).toBe("3 levels \u00b7 relative to R");
+  });
+
+  it("names a free energy's axis and card line by its symbol, G, and an enthalpy's H - a correction as it is named", () => {
+    const g = levels([
+      ["R", 1, -76.4],
+      ["P", 1, -76.42],
+    ]);
+    g.columns[3] = { ...g.columns[3], name: "thermo.free-energy" };
+    expect(ok(diagramOf(g, { quantity: "thermo.free-energy" })).axis.name).toBe("\u0394G");
+    expect([deltaOf("thermo.free-energy"), deltaOf("thermo.enthalpy"), deltaOf("energy"), deltaOf("thermo.zpve")]).toEqual(["\u0394G", "\u0394H", "\u0394E", "\u0394thermo.zpve"]);
   });
 
   it("is relative to the level named, and joins the levels as a table of what connects says - a line naming no level counted", () => {

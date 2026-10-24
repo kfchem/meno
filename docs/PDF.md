@@ -222,6 +222,16 @@ stops being part of the work.
   stack, a drag moves the view, and a long press on its words selects
   from the word under it (*As built*, step 3). ⌘C copies it, and the
   right-click menu has *Copy*.
+- **A line's band is its words'** (2026-10-23): a press in the white
+  between two lines - half way to each - or up to a line's height past its
+  ends selects from the line it is in, so a press between the rows of a
+  table of coordinates, or in the gaps between its numbers, selects text
+  and never draws a box. In a figure, a line of twenty letters or more (a
+  table's row, a sentence) is text too; a figure's labels are the
+  figure's, as before. A box is drawn from where there are no words.
+- **Shift-click** in the column draws the selection on from where it was
+  begun to the point clicked, on the same page or a later one - as a drag
+  across pages, the column scrolling on at its top and foot, does.
 - **PDFium says where each letter is**, and Meno selects and marks by
   that, on the stack and in the column alike.
 
@@ -1500,6 +1510,14 @@ words are: by itself, not by a box drawn round it.
   one.
 - In the column first. The PDF on the page, whose presses move the view,
   comes later.
+
+**In the column, as built** (`TextColumn`, `utils/pdfStructures`, `components/structureDrag`, `components/StructureFlight`):
+- a figure is read the first time the pointer comes over it (`pdf_figure`, as *Read as structure* reads it), with all of its page that does not reach into it beside it, and kept;
+- the structure under the pointer is lit along its bonds and over its labels, the cursor a hand; one picked is lit stronger;
+- a press within half a bond of a structure takes it, before any words about it (a scheme's conditions set close by);
+- dragged, Meno's drawing of it lifts off where it lay on the page, as large as it was there, and grows to the canvas's size over the canvas, held where it was pressed; let go there, it is put down with its middle under the pointer, one step, selected; let go anywhere else, it eases back and fades;
+- clicked, it is picked; Shift-click adds or takes away; a right-click on one picks it, and the menu has *Put on the page* (beside the PDF, all picked in a row, one step) and *Copy*;
+- one not read whole is never carried: a press says why, where the chemistry's notices are said.
 
 **A structure, and where it lies** (`utils/pageStructures`):
 - each figure of the page is read as *Read as structure* reads one (the

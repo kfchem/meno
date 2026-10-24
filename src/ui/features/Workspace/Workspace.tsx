@@ -74,6 +74,7 @@ import { knownOfMolecules } from "./utils/written";
 import { carriedOf } from "./utils/workspace";
 import { runAllNote, runNote } from "./workflow/earlierRuns";
 import PartMenu, { type CanvasCommand, type MenuMolecule3D, type MenuTarget } from "./PartMenu";
+import { deleteFromMenu } from "./menuDelete";
 import { aboutDrawing, menuTargetGone } from "./utils/menuTarget";
 import { hasLonePair, tailOf } from "./utils/pushes";
 import { unsureOf, type Unsure } from "./chem/drawing";
@@ -186,16 +187,20 @@ import Ask3D from "./Ask3D";
 import Cycles2D from "./components/Cycles2D";
 import { cyclePointed, cycleThings, endsAt, turnCycle } from "./utils/cycles";
 import { branchPath, CYCLE_RADIUS, MARGIN as CYCLE_MARGIN } from "../../../lib/chem/cycle";
+import { inRow } from "./components/structureDrag";
+import { pickedStructure } from "./utils/pdfStructures";
+import StructureFlight from "./components/StructureFlight";
+import { setStructureSay } from "./components/structureDrag";
 import CoordinatesCard from "./CoordinatesCard";
 import { readCoordinates, textOfPages, type CoordinateStructure, type PlacedPage } from "../../../lib/io/coordinates";
 import { useTextMenu } from "../TextEditor/textMenu";
 import { coordinateMolecules } from "./utils/coordinates";
 import { pictureRegion, readStructure } from "./components/readStructure";
 import { isFilm } from "../../../lib/picture/image";
-import { readMarks } from "./utils/figures";
+import { placedBeside, readMarks } from "./utils/figures";
 import { useNotices } from "../../notices";
 import { bareAtomsOf, bareWords, blocksOf, blocksStill, boxOf, conformersOf, formulaOf, formulaPlace, likeOf, linkOf, moleculeOf, openIn, placeRow, rowFrom, takenOnPage, turnedOver, type Block, type Box, type Open } from "./chem/make3d";
-import { centredAt } from "./utils/copyPaste";
+import { centredAt, clipItems } from "./utils/copyPaste";
 import { putDownSmiles } from "./utils/quickAddSmiles";
 import { addedBox } from "./store/slices/modelSlice";
 import { viewPanning } from "./components/viewGoal";
@@ -210,7 +215,7 @@ import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
-import { heldOwn } from "./workflow/entries";
+import { heldOwn, holdsOwn } from "./workflow/entries";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -740,7 +745,12 @@ function WorkspaceContent({
   // where words taken out of a PDF are let go (components/wordsDrag)
   useEffect(() => {
     setCanvasPlace(store, { canvas: () => domRef.current, worldAt: (x, y) => clientToWorld(x, y) });
-    return () => setCanvasPlace(store, null);
+    // (and why a structure picked from a PDF was not taken, said where the chemistry's notices are: components/structureDrag)
+    setStructureSay(store, setChemError);
+    return () => {
+      setCanvasPlace(store, null);
+      setStructureSay(store, null);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [store]);
   // a PDF's menu, asked for by the column it is read in, where it was right-clicked
@@ -1667,6 +1677,8 @@ function WorkspaceContent({
           </motion.div>
         )}
       </AnimatePresence>
+      {/* (a structure carried out of a PDF, over everything: components/StructureFlight) */}
+      <StructureFlight />
       {/* (what the chemist opens over the canvas - its questions, cards and menus - above the first-run guide: ui/guide/layers) */}
       <AboveGuide over={dropRef} shown={active} measureKey={`${styleOpen}:${textsOpen}`}>
       <AnimatePresence>
@@ -1997,27 +2009,7 @@ function WorkspaceContent({
           key={`${menu.x},${menu.y}`}
           target={menu}
           onClose={closeMenu}
-          onDelete={() => {
-            const st = store.getState();
-            if (menu.kind === "arrow" && menu.id != null) st.removeArrow(menu.id);
-            else if (menu.kind === "caption" && menu.id != null) st.removeCaption(menu.id);
-            else if (menu.kind === "pdf" && menu.id != null) st.removePdf(menu.id);
-            else if (menu.kind === "picture" && menu.id != null) st.removePicture(menu.id);
-            else if (menu.kind === "shape" && menu.id != null) st.removeShape(menu.id);
-            else if (menu.kind === "cycle" && menu.id != null) st.removeCycle(menu.id);
-            else if (menu.kind === "ink" && menu.id != null) st.removeInk(menu.id);
-            else if (menu.kind === "text" && menu.id != null) st.removeTexts([menu.id]);
-            // (the menu says what goes with a set that holds its molecules itself: asked there, in its words)
-            else if (menu.kind === "set" && menu.id != null) st.removeSet(menu.id, true);
-            else if (menu.kind === "step" && menu.id != null) st.removeStep(menu.id);
-            else if (menu.kind === "wire" && menu.id != null) st.removeWire(menu.id);
-            else if (menu.kind === "plus" && menu.id != null) st.removePlus(menu.id);
-            else if (menu.kind === "push" && menu.id != null) st.removePush(menu.id);
-            else if (menu.kind === "measure3d" && menu.id != null && menu.measure != null) st.removeMeasure3d(menu.id, menu.measure);
-            else if (menu.selection === "here") st.deleteSelection();
-            else if (menu.kind === "molecule3d" && menu.id != null) st.removeMolecule3d(menu.id);
-            else if (menu.kind && menu.id != null) deletePart(menu.kind, menu.id);
-          }}
+          onDelete={() => deleteFromMenu(store.getState(), menu, deletePart)}
           molecule3d={menu3d}
           records={menuRecords}
           measure3d={measure3dMenu}
@@ -2076,7 +2068,7 @@ function WorkspaceContent({
             if (menu.kind !== "set" || menu.id == null) return undefined;
             const st = store.getState();
             const set = st.sets.find((b) => b.id === menu.id);
-            return set?.collection?.length ? heldOwn(st, set) : undefined;
+            return set && holdsOwn(set) ? heldOwn(st, set) : undefined;
           })()}
           keepInFile={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
@@ -2313,6 +2305,32 @@ function WorkspaceContent({
                 : st.pdfBox?.id === p.id
                   ? { onStructures: () => void structuresFrom(boxedPlaced(st.pdfBox!, p), p.name, st.pdfBox!.page, st.pdfBox!.page, pasteTarget()) }
                   : {}),
+              // (structures picked in it: put on the page beside it, one step - or copied - read as each was)
+              ...(st.pdfStructures?.id === p.id
+                ? (() => {
+                    const models = st.pdfStructures.picks.flatMap((k) => {
+                      const s = pickedStructure(p.sha256, k);
+                      return s && "model" in s.read ? [s.read.model] : [];
+                    });
+                    // (a pick whose figure is no longer read - and kept - is said, never left out unsaid)
+                    const missing = st.pdfStructures.picks.length - models.length;
+                    const said = () => missing && setChemError(missing === 1 ? "1 picked structure is not available: point at it again to read it." : `${missing} picked structures are not available: point at them again to read them.`);
+                    if (!models.length) return { onPutStructures: said, onCopyStructures: said };
+                    const model = inRow(models, NOMINAL_BOND_LENGTH);
+                    return {
+                      onPutStructures: () => {
+                        said();
+                        const now = store.getState();
+                        const style = styleOf(now.docStyle);
+                        now.putRead(placedBeside({ model }, pdfRoom(p), pageBoxes(now, style), style).model);
+                      },
+                      onCopyStructures: () => {
+                        said();
+                        void writeClipboard(clipItems(model)).catch((e: unknown) => setChemError(`Copy failed: ${e instanceof Error ? e.message : String(e)}`));
+                      },
+                    };
+                  })()
+                : {}),
               // (a box drawn on it: put on the page, or copied, as a picture)
               ...(st.pdfBox?.id === p.id
                 ? (() => {

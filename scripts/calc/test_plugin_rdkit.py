@@ -1434,3 +1434,108 @@ class StructureSteps(unittest.TestCase):
         self.assertEqual(got[0]["as"], "drawn")
         # (a lone proton, read as drawn: its weight and the rest, none chosen for it)
         self.assertEqual(got[1]["properties"]["mw"]["value"], 1.008)
+
+    def test_descriptors_of_a_lone_ion_leave_out_its_logp_saying_why(self):
+        # (a lone atom or ion as Meno gives one - its valence written as none: Na+, Cl-, a sodium atom - has no logP of
+        #  its own, Crippen's typing giving every one the same; its weight as any. Methane, a lone C with its H, has one)
+        def lone(el, charge):
+            chg = f" CHG={charge}" if charge else ""
+            return {"molblocks": [
+                "\n  Meno\n\n  0  0  0     0  0            999 V3000\nM  V30 BEGIN CTAB\nM  V30 COUNTS 1 0 0 0 0\nM  V30 BEGIN ATOM\n"
+                f"M  V30 1 {el} 0.0000 0.0000 0 0{chg} VAL=-1\nM  V30 END ATOM\nM  V30 END CTAB\nM  END\n"
+            ]}
+        got = self.run_step("descriptors", [lone("Na", 1), lone("Cl", -1), lone("Na", 0), self.entry("C")])
+        for g, mw in zip(got[:3], [22.99, 35.453, 22.99]):
+            props = g["properties"]
+            self.assertNotIn("logp", props)
+            self.assertEqual(props["not_given"]["value"], "logp: not defined for a lone ion")
+            self.assertEqual(props["mw"]["value"], mw)
+            self.assertEqual((props["tpsa"]["value"], props["hbd"]["value"]), (0.0, 0))
+        self.assertIn("logp", got[3]["properties"])
+        self.assertNotIn("not_given", got[3]["properties"])
+
+@unittest.skipUnless(Chem, "RDKit is not installed here")
+class MovingCN(unittest.TestCase):
+    """C=N double bonds whose E/Z is none of their own (`moving_cn`), as the InChI Technical Manual (v1.04) takes
+    them: never enumerated, never counted as left open, and said so on the record - wherever stereo is counted or
+    made, one definition. A double bond drawn of either configuration, as Meno writes one the SMILES gave none for
+    (CFG=2), is left open as one drawn plain is."""
+
+    @classmethod
+    def setUpClass(cls):
+        spec = importlib.util.spec_from_file_location("plugin_rdkit", WORKER)
+        cls.worker = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(cls.worker)
+
+    def block(self, smiles):
+        """`smiles` as Meno gives a structure Generate made of it: laid out in 2D, a V3000 block, each double bond the
+        SMILES gives no E/Z for of either configuration."""
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles(smiles)
+        AllChem.Compute2DCoords(mol)
+        for b in mol.GetBonds():
+            if b.GetBondType() == Chem.BondType.DOUBLE and b.GetStereo() == Chem.BondStereo.STEREONONE and not b.IsInRing():
+                b.SetStereo(Chem.BondStereo.STEREOANY)
+        return Chem.MolToV3KMolBlock(mol)
+
+    def stereoisomers(self, smiles):
+        return self.worker.op_run({"step": "stereoisomers", "entries": [{"molblocks": [self.block(smiles)]}], "options": {}, "holds": "structures"})["structures"][0]
+
+    def note(self, got):
+        return got.get("properties", {}).get("stereo_not_enumerated", {}).get("value")
+
+    def test_a_guanidines_c_n_is_not_enumerated_its_stereocentre_is(self):
+        # (the guanidine a Generate made: 2 for its stereocentre, not 4 - its C=N's E/Z moves with the NH's hydrogen)
+        got = self.stereoisomers("CN=C(N)NCC(O)c1ccc(OC(F)F)cc1")
+        self.assertEqual(got["smiles"], ["CN=C(N)NC[C@@H](O)c1ccc(OC(F)F)cc1", "CN=C(N)NC[C@H](O)c1ccc(OC(F)F)cc1"])
+        self.assertEqual(self.note(got), "E/Z of 1 C=N not enumerated: its double bond moves with a hydrogen on an N, O or S beside it (an amidine, a guanidine, an imidic acid) - no configuration of its own")
+        self.assertEqual(got["properties"]["stereo_not_enumerated"]["unit"], "none")
+        # (each made leaves it of either configuration, as it came: read again, nothing left to choose but what was)
+        for block in got["made"]:
+            self.assertEqual(self.worker.op_open_stereo({"molblock": block})["bonds"], [])
+        opened = self.worker.op_open_stereo({"molblock": self.block("CN=C(N)NCC(O)c1ccc(OC(F)F)cc1")})
+        self.assertEqual((opened["atoms"], opened["bonds"], opened["isomers"]), ([6], [], 2))
+
+    def test_an_n_alkyl_imine_and_an_oxime_keep_theirs(self):
+        for smiles, made in [("CC(=NC)CC", ["CC/C(C)=N/C", "CC/C(C)=N\\C"]), ("CCC(C)=NO", ["CC/C(C)=N/O", "CC/C(C)=N\\O"])]:
+            got = self.stereoisomers(smiles)
+            self.assertEqual(got["smiles"], made, smiles)
+            self.assertIsNone(self.note(got), smiles)
+
+    def test_an_imidic_acid_an_n_acyl_amidine_and_an_amidinium_are_not_enumerated(self):
+        for smiles, why in [
+            ("CC(O)=NC", "its double bond moves with a hydrogen on an N, O or S beside it"),
+            ("CCC(N)=NC(C)=O", "its double bond moves with a hydrogen on an N, O or S beside it"),
+            ("CCN(C)C(C)=[N+](C)CC", "an amidinium or guanidinium bond, shared with the N beside it"),
+            ("CCC(C)=N", "its N carries a hydrogen"),
+        ]:
+            got = self.stereoisomers(smiles)
+            self.assertEqual(got["as"], "drawn", smiles)
+            self.assertIn(why, self.note(got), smiles)
+            self.assertEqual(self.worker.op_open_stereo({"molblock": self.block(smiles)})["bonds"], [], smiles)
+            self.assertEqual(self.worker.op_stereo_left_open({"molblock": self.block(smiles)}), {"atoms": [], "bonds": []}, smiles)
+
+    def test_one_drawn_with_its_e_z_keeps_it_and_nothing_is_said(self):
+        got = self.stereoisomers("CC/N=C(/N)NCC")
+        self.assertEqual(got, {"as": "drawn"})
+
+    def test_a_double_bond_or_centre_drawn_as_not_known_is_left_open(self):
+        # (either configuration - the double bond alone, or a wavy bond on the centre - as one drawn plain is: before,
+        #  counted as nothing open, then given each way the moment anything else was open)
+        got = self.stereoisomers("CC=CC(=O)O")
+        self.assertEqual(got["smiles"], ["C/C=C/C(=O)O", "C/C=C\\C(=O)O"])
+        from rdkit.Chem import AllChem
+
+        mol = Chem.MolFromSmiles("CC(O)CC")
+        AllChem.Compute2DCoords(mol)
+        bond = mol.GetBondBetweenAtoms(1, 2)
+        bond.SetBondDir(Chem.BondDir.UNKNOWN)
+        wavy = Chem.MolToMolBlock(mol)
+        self.assertEqual(self.worker.op_open_stereo({"molblock": wavy})["atoms"], [1])
+        self.assertEqual(self.worker.op_stereo_left_open({"molblock": wavy}), {"atoms": [1], "bonds": []})
+
+    def test_conformers_of_a_guanidine_choose_nothing_for_its_c_n(self):
+        # (one 3D structure of each of its two, its C=N as the embedding places it: never a configuration given it)
+        made = self.worker.op_conformers({"molblock": self.block("CN=C(N)NCC(O)C"), "isomers": "all", "options": {"count": 1}})["isomers"]
+        self.assertEqual(len(made), 2)

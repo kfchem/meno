@@ -154,12 +154,24 @@ describe("coordinates in a text", () => {
     expect(s.warnings[0]).toMatch(/columns came mixed/);
   });
 
-  it("reads a text whose lines' ends were made spaces, as some copies make them: each structure, its charge and multiplicity", () => {
+  it("reads a text whose lines' ends were made spaces, as some copies make them: each structure and its notes - but no charge and multiplicity, which no line of their own says", () => {
     const ss = read(lines("Water", "E = -76.4 Hartree", "0 1", WATER, "Methane", "1 2", METHANE).replace(/\n/g, " "));
     expect(ss.map((s) => [s.name, formulaOf(s.atoms), s.charge, s.multiplicity, s.notes])).toEqual([
-      ["Water", "H2O", 0, 1, ["E = -76.4 Hartree"]],
-      ["Methane", "CH4", 1, 2, []],
+      ["Water", "H2O", undefined, undefined, ["E = -76.4 Hartree"]],
+      // (its two numbers run onto its title: kept with it, as the text has them - not taken for its species, nor taken off)
+      ["Methane 1 2", "CH4", undefined, undefined, []],
     ]);
+  });
+
+  it("takes a charge and multiplicity on a line of their own alone - never two numbers a title ends in", () => {
+    const [own] = read(lines("Water", "0 1", WATER));
+    expect([own.name, own.charge, own.multiplicity]).toEqual(["Water", 0, 1]);
+    // (a conformer's number and another, a TS's: the title's own words, kept as it is - no species read from them)
+    for (const title of ["Conformer 12 3", "TS 2 1", "water, 2024 1"]) {
+      const [s] = read(lines(title, WATER));
+      expect([s.charge, s.multiplicity], title).toEqual([undefined, undefined]);
+      expect(s.name, title).toBe(title);
+    }
   });
 
   it("reads lengths in ångströms where only the energies are given in atomic units", () => {
@@ -274,5 +286,93 @@ describe("coordinates selected in a PDF, each word where it lies", () => {
     expect(more).toHaveLength(0);
     expect(formulaOf(s.atoms)).toBe("C2H6O");
     expect(s.atoms[0]).toEqual({ el: "C", x: -1.17, y: -0.4, z: 0 });
+  });
+});
+
+describe("coordinates selected across pages", () => {
+  const rows = (from: number, to: number) => Array.from({ length: to - from }, (_, i) => `C ${(1.27 * (from + i)).toFixed(6)} ${((from + i) % 2 ? 0.42 : -0.42).toFixed(6)} 0.000000`);
+  const twoPages = ["Supporting Information S12", "Table S3. Cartesian coordinates of the chain.", "Atom X Y Z", ...rows(0, 40), "S12", "Supporting Information S13", "Atom X Y Z", ...rows(40, 62), "S13"].join("\n");
+
+  it("read as one molecule across the page break, its table's heads set again left out - and the lines left out among its atoms said", () => {
+    const [s, ...rest] = readCoordinates(twoPages);
+    expect(rest).toEqual([]);
+    expect(s.atoms).toHaveLength(62);
+    expect(s.skipped).toEqual(["S12", "Supporting Information S13", "Atom X Y Z"]);
+    expect(s.broken).toBeUndefined();
+  });
+
+  it("refuse a structure with a line among its atoms that looks like an atom's but does not read as one, naming it - nothing guessed", () => {
+    for (const bad of ["C 1.0 2.0", "C 1.0x 2.0 3.0"]) {
+      const [s] = readCoordinates(["TS1", ...rows(0, 5), bad, ...rows(5, 9)].join("\n"));
+      expect(s.broken).toEqual([bad]);
+      expect(s.warnings).toContain(`"${bad}" does not read as an atom, or as a charge and multiplicity, so this structure is not placed: nothing is guessed.`);
+    }
+  });
+
+  it("take a charge and multiplicity said in words, on one line or two", () => {
+    const [a] = readCoordinates(["TS1", "Charge = 1 Multiplicity = 2", ...rows(0, 4)].join("\n"));
+    expect([a.name, a.charge, a.multiplicity]).toEqual(["TS1", 1, 2]);
+    const [b] = readCoordinates(["TS1", "charge: -1", "spin multiplicity: 1", ...rows(0, 4)].join("\n"));
+    expect([b.charge, b.multiplicity]).toEqual([-1, 1]);
+  });
+
+  it("refuse a structure whose charge or multiplicity is said but does not read", () => {
+    const [s] = readCoordinates(["TS1", "Charge = one Multiplicity = 1", ...rows(0, 4)].join("\n"));
+    expect(s.broken).toEqual(["Charge = one Multiplicity = 1"]);
+  });
+
+  it("never take two numbers at a title's end as a charge and multiplicity", () => {
+    const [s] = readCoordinates(["Conformer 12 3", ...rows(0, 4)].join("\n"));
+    expect(s.charge).toBeUndefined();
+    expect(s.multiplicity).toBeUndefined();
+  });
+});
+
+describe("coordinates: what a run of atoms holds, said", () => {
+  const H = (k: number) => `H ${(0.63 * (k % 2 ? 1 : -1)).toFixed(4)} ${(0.63 * (k < 2 ? 1 : -1)).toFixed(4)} ${(0.63 * (k === 1 || k === 2 ? 1 : -1)).toFixed(4)}`;
+
+  it("never takes two numbers at a title's end as a charge and multiplicity, the title and an atom on one line", () => {
+    const [s] = readCoordinates("TS 2 1 O 0.0 0.0 0.0\nH 0.0 0.76 0.59\nH 0.0 -0.76 0.59");
+    expect([s.charge, s.multiplicity]).toEqual([undefined, undefined]);
+  });
+
+  it("goes on past a note set among its atoms - an energy - listing it as not read, never losing the atom beside it", () => {
+    for (const note of ["Energy = -76.4 Eh", "E(RB3LYP) = -40.5"]) {
+      const [s, ...rest] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", note, H(0), H(1), H(2), H(3)].join("\n"));
+      expect([note, formulaOf(s.atoms), rest.length]).toEqual([note, "CH4", 0]);
+      expect(s.skipped).toEqual([note]);
+    }
+  });
+
+  it("says where a structure runs on over a page's end, by the page's number", () => {
+    const [s] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", H(0), "S14", H(1), H(2), H(3)].join("\n"));
+    expect(formulaOf(s.atoms)).toBe("CH4");
+    expect(s.continues).toEqual(["S14"]);
+  });
+
+  it("names a lone atom set apart from a structure beside it on the card - never dropped unsaid - and keeps it from being placed", () => {
+    const ss = readCoordinates(["Water", "O 0.0000 0.0000 0.1173", "H 0.0000 0.7572 -0.4692", "H 0.0000 -0.7572 -0.4692", "set apart here", "C 10.0000 10.0000 10.0000"].join("\n"));
+    expect(ss.map((s) => [s.name, formulaOf(s.atoms), s.broken])).toEqual([
+      ["Water", "H2O", undefined],
+      ["An atom on its own", "C", ["C 10.0000 10.0000 10.0000"]],
+    ]);
+  });
+
+  it("refuses a structure whose table's last row, or first, does not read - never dropped at its edge - naming the line", () => {
+    const methane = ["C 0.0000 0.0000 0.0000", H(0), H(1), H(2), H(3)];
+    for (const bad of ["H 0.500 O.500 0.500", "H 0.500 0.500", "Bq 0.500 0.500 0.500", "Xx 0.100 0.200 0.300", "Q 0.100 0.200 0.300"]) {
+      const [s] = readCoordinates(["Methane", ...methane, bad].join("\n"));
+      expect([bad, s.broken]).toEqual([bad, [bad]]);
+    }
+    const [first] = readCoordinates(["Methane", "Bq 0.500 0.500 0.500", ...methane].join("\n"));
+    expect(first.broken).toEqual(["Bq 0.500 0.500 0.500"]);
+    // (the next structure's first atom, right after: no row that does not read)
+    const two = readCoordinates(["1 C 0.0 0.0 0.0", "2 H 0.0 0.0 1.09", "1 O 5.0 5.0 5.0", "2 H 5.0 5.0 5.96"].join("\n"));
+    expect(two.every((x) => !x.broken)).toBe(true);
+  });
+
+  it("refuses a structure with a line of an unknown symbol and three numbers among its atoms - a ghost or a dummy atom - naming it", () => {
+    const [s] = readCoordinates(["Methane", "C 0.0000 0.0000 0.0000", H(0), "Xx 0.100 0.200 0.300", H(1), H(2), H(3)].join("\n"));
+    expect(s.broken).toEqual(["Xx 0.100 0.200 0.300"]);
   });
 });

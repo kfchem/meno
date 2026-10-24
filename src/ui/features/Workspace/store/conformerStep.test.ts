@@ -84,7 +84,8 @@ import { PLUGINS } from "../../../../lib/calc/catalog";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { optionsFor } from "../workflow/doers";
 import { kindInfo } from "../workflow/kinds";
-import { notMade, stereoFree, stereoOpen } from "./slices/stepRuns";
+import { setMembers } from "../workflow/entries";
+import { bareLeft, notMade, partsLeft, stereoFree, stereoOpen } from "./slices/stepRuns";
 
 useReaders.setState({ state: Object.fromEntries(PLUGINS.map((p) => [p.id, "added" as const])), problem: {} });
 
@@ -178,7 +179,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).not.toMatch(/Invariant|expected match/);
   });
 
-  it("takes the structures a large result set holds off the page, each made in 3D linked to no drawing: their ids are none of the page's", async () => {
+  it("takes all the structures a large result set holds - on the page, then held off it - each held one made in 3D linked to no drawing: their ids are none of the page's", async () => {
     const doc = createWorkspaceDocument();
     // (a template of the chemist's, an aryl ether R1-O-Ar-R2, enumerated 3 x 17 = 51 ways, none the same: more than are laid out, so held in its set)
     const drawn = drawnFromSmiles("*Oc1ccc(*)cc1");
@@ -198,15 +199,17 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     // (wired from Enumerate's exit once there is one to wire from: the chain run, Enumerate first)
     await st().runStep(enumerate);
     const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
-    expect(held.drawnCollection).toHaveLength(51);
-    expect(doc.getState().model.atoms).toHaveLength(model.atoms.length);
+    // (as many as the page shows on it, the rest held in the set after them: all 51 the set's)
+    const shown = setMembers(doc.getState(), held).structures.length;
+    expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
     st().connect({ set: held.id }, step);
     await st().runStep(step);
     expect(asked).toHaveLength(51);
     expect(st().steps.find((s) => s.id === step)!.ran?.said).toMatch(/ · 51 conformers of 51 compounds$/);
     const made = st().sets.find((b) => b.made?.step === step && b.made.exit === "out")!.collection!;
     expect(made).toHaveLength(51);
-    expect(made.every((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toBe(true);
+    // (those held made in 3D linked to no drawing: they are on no page)
+    expect(made.filter((m) => m.drawnFrom === undefined && m.drawnAs === undefined)).toHaveLength(51 - shown);
   });
 
 
@@ -232,14 +235,49 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     // (wired from Enumerate's exit once there is one to wire from: the chain run, Enumerate first)
     await st().runStep(enumerate);
     const held = st().sets.find((b) => b.made?.step === enumerate && b.made.exit === "out")!;
-    expect(held.drawnCollection).toHaveLength(51);
-    expect(doc.getState().model.atoms).toHaveLength(model.atoms.length);
+    // (as many as the page shows on it, the rest held in the set after them: all 51 the set's)
+    const shown = setMembers(doc.getState(), held).structures.length;
+    expect([shown > 0, held.drawnCollection!.length > 0, shown + held.drawnCollection!.length]).toEqual([true, true, 51]);
     st().connect({ set: held.id }, step);
     await st().runStep(step);
     expect(asked).toHaveLength(51);
     const said = st().steps.find((s) => s.id === step)!.ran!.said;
     expect(said).toMatch(/ · 48 conformers of 48 compounds · structures \d+, \d+ and \d+ of 51 could not be made in 3D$/);
   });
+  it("leaves a lone ion out, saying so: one alone by its place, and a salt's counter-ion by name - the rest made", async () => {
+    // (held in a set off the page, as a step's would be: water, a sodium ion alone, and methylammonium chloride as one structure)
+    const at = (id: number, el: string, x: number, charge?: number) => ({ id, el, x, y: 0, r: 0.9, ...(charge ? { charge } : {}) });
+    const water = { atoms: [at(1, "O", 0), at(2, "H", 1), at(3, "H", -1)], bonds: [{ id: 4, a: 1, b: 2, order: 1 }, { id: 5, a: 1, b: 3, order: 1 }] };
+    const sodium = { atoms: [at(1, "Na", 0, 1)], bonds: [] };
+    const salt = { atoms: [at(1, "C", 0), at(2, "N", 1.5, 1), at(3, "Cl", 4, -1)], bonds: [{ id: 4, a: 1, b: 2, order: 1 }] };
+    const doc = createWorkspaceDocument();
+    doc.edit("held", (d) => ({ ...d, sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [water, sodium, salt] as never }], nextWorkflowId: 901 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const step = st().addStep("conformers", "rdkit", 200, 0);
+    st().connect({ set: 900 }, step);
+    await st().runStep(step);
+    // (the sodium ion never asked about; the salt asked about as its cation)
+    expect(asked.map((a) => readMolfile(a.molblock)!.atoms.map((x) => x.symbol).join(""))).toEqual(["OHH", "CN"]);
+    expect(st().steps.find((s) => s.id === step)!.ran?.said).toMatch(
+      / · 2 conformers of 2 compounds · structure 2 of 3 left out: one atom alone has no 3D structure · structure 3: its Cl\u2212 left out$/,
+    );
+  });
+
+  it("fails where every structure is a lone ion, saying why", async () => {
+    const doc = createWorkspaceDocument();
+    doc.edit("held", (d) => ({ ...d, sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [{ atoms: [{ id: 1, el: "Na", x: 0, y: 0, r: 0.9, charge: 1 }], bonds: [] }] as never }], nextWorkflowId: 901 }));
+    const store = createEditorStore(doc);
+    connectStoreToDocument(store, doc);
+    const st = () => store.getState();
+    const step = st().addStep("conformers", "rdkit", 200, 0);
+    st().connect({ set: 900 }, step);
+    await st().runStep(step);
+    expect(asked).toEqual([]);
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1 of 1 left out: one atom alone has no 3D structure" });
+  });
+
   it("says one of which none was made as one not made", async () => {
     worker.noneOfMethanol = true;
     const { step } = await searched();
@@ -316,5 +354,9 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(stereoOpen([1, 3], 3)).toBe("structures 1 and 3 of 3 leave stereo open: draw it, wedges and all");
     expect(stereoFree([2], 3)).toBe("structure 2 of 3 made with its stereo free: no stereoisomer of it holds in 3D");
     expect(stereoFree([1, 2], 3)).toBe("structures 1 and 2 of 3 made with their stereo free: no stereoisomer of them holds in 3D");
+    expect(bareLeft([2, 4], 5)).toBe("structures 2 and 4 of 5 left out: one atom alone has no 3D structure");
+    expect(partsLeft(3, "Na+ and Cl\u2212", 0)).toBe("structure 3: its Na+ and Cl\u2212 left out");
+    expect(partsLeft(1, undefined, 1)).toBe("structure 1: its 1 other part left out");
+    expect(partsLeft(2, "Cl\u2212", 2)).toBe("structure 2: its Cl\u2212 and 2 other parts left out");
   });
 });

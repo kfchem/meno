@@ -511,6 +511,22 @@ fn hashed_so_far(path: &Path) -> std::io::Result<(Sha256, u64)> {
     }
 }
 
+/// A size as the chemist reads it: in MB from a megabyte up, else in bytes.
+fn sized(n: u64) -> String {
+    if n >= 1_000_000 { format!("{:.1} MB", n as f64 / 1e6) } else { format!("{n} bytes") }
+}
+
+/// What is said of a download that stopped part of the way, `why`: how much came of how much, that it is kept, and
+/// that adding the plugin again goes on from there.
+fn stopped(d: &Download, had: u64, why: &str) -> String {
+    format!(
+        "{} stopped after {} of {} ({why}). What came is kept: Add goes on from there.",
+        d.file,
+        sized(had),
+        sized(d.bytes)
+    )
+}
+
 /// One file fetched into `dir`: into `<file>.part` - taken up where an
 /// earlier try left it, where the server sends the rest - then, all of it
 /// there and its hash the manifest's, put in place; a file whose hash is
@@ -540,7 +556,18 @@ pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut t
         .open(&part)
         .map_err(|e| format!("{}: {e}", part.display()))?;
     tell(had);
-    while let Some(chunk) = response.chunk().await.map_err(|e| format!("fetching {}: {e}", d.url))? {
+    // (the server gone quiet past the client's read timeout, or the connection broken, part of the way: what came is
+    //  kept, and said so, with how to go on - never the client library's own words)
+    loop {
+        let chunk = match response.chunk().await {
+            Ok(Some(chunk)) => chunk,
+            Ok(None) => break,
+            Err(e) => {
+                let _ = out.flush();
+                let why = if e.is_timeout() { "the server stopped sending" } else { "the connection broke" };
+                return Err(stopped(d, had, why));
+            }
+        };
         if had + chunk.len() as u64 > d.bytes {
             drop(out);
             let _ = std::fs::remove_file(&part);
@@ -555,7 +582,7 @@ pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut t
     drop(out);
     if had != d.bytes {
         // (kept, to be taken up again)
-        return Err(format!("{} stopped after {had} of its {} bytes", d.url, d.bytes));
+        return Err(stopped(d, had, "the server ended it early"));
     }
     let got: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
     if got != d.sha256 {
@@ -977,7 +1004,40 @@ mod tests {
         let (url, _server) = serve(body[..4].to_vec(), true, 1).await;
         let dir = Scratch::new();
         let err = fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap_err();
-        assert!(err.contains("stopped after 4"), "{err}");
+        assert_eq!(err, "model.bin stopped after 4 bytes of 10 bytes (the server ended it early). What came is kept: Add goes on from there.");
         assert_eq!(std::fs::read(dir.path().join("model.bin.part")).unwrap(), b"0123");
+    }
+
+    #[tokio::test]
+    async fn says_a_download_the_server_stopped_sending_is_kept_to_go_on_with() {
+        // (half of it sent, then nothing - past the client's read timeout: said in words, what came kept, and taken
+        //  up from there by the next try)
+        let body: Vec<u8> = (0..2_000_000u32).map(|i| (i % 239) as u8).collect();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/f", listener.local_addr().unwrap());
+        let half = body[..1_200_000].to_vec();
+        let size = body.len();
+        let server = tokio::spawn(async move {
+            let (mut s, _) = listener.accept().await.unwrap();
+            let mut head = Vec::new();
+            let mut b = [0u8; 1];
+            while !head.ends_with(b"\r\n\r\n") {
+                s.read_exact(&mut b).await.unwrap();
+                head.push(b[0]);
+            }
+            s.write_all(format!("HTTP/1.1 200 OK\r\nContent-Length: {size}\r\n\r\n").as_bytes()).await.unwrap();
+            s.write_all(&half).await.unwrap();
+            tokio::time::sleep(Duration::from_secs(3)).await;
+        });
+        let dir = Scratch::new();
+        let client = client_builder().read_timeout(Duration::from_millis(500)).build().unwrap();
+        let err = fetch_one(&client, &download(&url, &body), dir.path(), |_| {}).await.unwrap_err();
+        assert_eq!(err, "model.bin stopped after 1.2 MB of 2.0 MB (the server stopped sending). What came is kept: Add goes on from there.");
+        assert_eq!(std::fs::read(dir.path().join("model.bin.part")).unwrap().len(), 1_200_000);
+        server.abort();
+        let (url, again) = serve(body.clone(), true, 1).await;
+        fetch_one(&client_builder().build().unwrap(), &download(&url, &body), dir.path(), |_| {}).await.unwrap();
+        assert_eq!(std::fs::read(dir.path().join("model.bin")).unwrap(), body);
+        assert_eq!(again.await.unwrap(), ["from 1200000"]);
     }
 }
