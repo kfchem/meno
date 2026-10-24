@@ -3,7 +3,8 @@ import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
 import { countOf, setEntries } from "./entries";
 import { addSet } from "./model";
-import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, workedOf } from "./programs";
+import { clock, conformersWorked, doneSaid, entryFiles, hartrees, isFailure, jobEntries, pluginEntry, readCollected, readKept, readPrepared, readRefused, sameCompound, UNLINKED_WHY, workedOf } from "./programs";
+import { runMeno } from "./meno";
 import type { SetEntry } from "./entries";
 import { resultsOf, type Worked } from "./run";
 
@@ -173,20 +174,71 @@ describe("what a plugin reads back of a job", () => {
     expect(workedOf("energy", WATER, { ...out, frames: [[1, 2]] }, ["xtb 6.7.1"])).toEqual({ kind: "no-geometry", why: "It read back no geometry" });
   });
 
-  it("gives back none of what the entry came with that is not so of what the program worked out: how it was made, what its energies were from", () => {
+  it("gives back none of what the entry came with that is not so of what the program worked out: how it was made, what its energies were from, its stereo labels", () => {
     // (water made by a conformer search, its energy MMFF94's, optimised by xTB: its energy is now xTB's, and says so only)
-    const made = { ...WATER, calc: { readers: [], program: "RDKit", method: "MMFF94" }, keep: { drawnFrom: [], drawnAs: "", made: { how: [], energies: "MMFF94" } } };
+    const made = { ...WATER, calc: { readers: [], program: "RDKit", method: "MMFF94" }, keep: { made: { how: [], energies: "MMFF94" } } };
     const w = workedOf("optimise", made, out, ["xtb 6.7.1"]);
     if (isFailure(w)) throw new Error(w.why);
     expect(w.keep).toBeUndefined();
     expect(w.calc).toMatchObject({ program: "xtb", method: "GFN2-xTB" });
+    // (made from a structure drawn: that link kept - it is still that compound - but not how it was made, nor its labels, which were of the geometry it came with)
+    const drawn = { ...made, keep: { drawnFrom: [11, 12, 13], drawnAs: "drawn", stereo: { atoms: { 0: "R" }, bonds: {} }, made: { how: [], energies: "MMFF94" }, centres: [{ metal: 0, atoms: [1, 2] }] } };
+    const linked = workedOf("optimise", drawn, out, ["xtb 6.7.1"]);
+    if (isFailure(linked)) throw new Error(linked.why);
+    expect(linked.keep).toEqual({ drawnFrom: [11, 12, 13], drawnAs: "drawn", centres: [{ metal: 0, atoms: [1, 2] }] });
     // (a conformer search's conformers likewise - each with the search's calculation, none with the entry's own)
     const found = conformersWorked(made, { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], WATER.xyz as number[]], energies: [-5, -4.99] }, ["crest 3.0"]);
     if (isFailure(found)) throw new Error(found.why);
     expect(found.map((f) => [f.keep, f.calc?.program])).toEqual([
       [undefined, "CREST"],
       [undefined, "CREST"],
-    ]);
+    ]);    // (and made from a structure drawn: each linked to it - but one whose bonds the search changed, not)
+    const moved = conformersWorked(drawn, { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], [0, 0, 0, 0, 0.76, 0.59, 0, -3, 0.59]], energies: [-5, -4.99] }, ["crest 3.0"]);
+    if (isFailure(moved)) throw new Error(moved.why);
+    expect(moved.map((f) => f.keep)).toEqual([{ drawnFrom: [11, 12, 13], drawnAs: "drawn", centres: [{ metal: 0, atoms: [1, 2] }] }, { made: { how: [{ label: "Drawing", text: UNLINKED_WHY }] } }]);
+  });
+
+  it("drops the link to the structure drawn where the calculation broke or formed a bond, or gave another charge - and says so", () => {
+    const drawn: SetEntry = { ...WATER, keep: { drawnFrom: [11, 12, 13], drawnAs: "drawn" } };
+    // (one hydrogen gone off, 3 Å away: a bond broken)
+    const broken = workedOf("optimise", drawn, { ...out, frames: [WATER.xyz as number[], [0, 0, 0, 0, 0.76, 0.59, 0, -3, 0.59]] }, ["xtb 6.7.1"]);
+    if (isFailure(broken)) throw new Error(broken.why);
+    expect(broken.keep).toEqual({ made: { how: [{ label: "Drawing", text: UNLINKED_WHY }] } });
+    // (the two hydrogens brought together: a bond formed)
+    const formed = workedOf("optimise", drawn, { ...out, frames: [[0, 0, 0, 0, 0.76, 0.59, 0, 0.1, 0.9]] }, ["xtb 6.7.1"]);
+    expect(!isFailure(formed) && formed.keep?.drawnFrom).toBeFalsy();
+    // (its own charge, -1 on the oxygen, the calculation said 0: another species)
+    const other = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: 0 }, ["xtb 6.7.1"]);
+    expect(!isFailure(other) && other.keep?.drawnFrom).toBeFalsy();
+    const same = workedOf("energy", drawn, { ...out, frames: [WATER.xyz as number[]], charge: -1 }, ["xtb 6.7.1"]);
+    expect(!isFailure(same) && same.keep).toEqual({ drawnFrom: [11, 12, 13], drawnAs: "drawn" });
+    expect(sameCompound(WATER, out.frames[1])).toBe(true);
+  });
+
+  it("keeps conformers optimised linked to the structure drawn, through to their populations - what it was made from riding with them as properties", () => {
+    // (a generated structure's provenance: a model's NLL, a descriptor, what it was made from)
+    const properties = {
+      nll: { value: 21.5, unit: "none" as const, status: "computed" as const },
+      mw: { value: 18.02, unit: "g/mol" as const, status: "computed" as const },
+      "made_from.smiles": { value: "O", unit: "none" as const, status: "computed" as const },
+    };
+    const drawn: SetEntry = { ...WATER, properties, keep: { drawnFrom: [11, 12, 13], drawnAs: "drawn" } };
+    const searched = conformersWorked(drawn, { schema: 1, program: "RDKit", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], [0, 0, 0.02, 0, 0.75, 0.6, 0, -0.75, 0.6]], energies: [-1, -0.99] }, []);
+    if (isFailure(searched)) throw new Error(searched.why);
+    const conformers = resultsOf({ ok: true, holds: "conformers", kept: searched.map((e) => ({ ...e, keep: drawn.keep })), aside: [], said: "" }, "conformers").molecules;
+    const optimised = setEntries(conformers.map((m, i) => ({ ...m, id: i + 1, at: { x: 0, y: 0 } })), "conformers").map((e) => {
+      const w = workedOf("optimise", e, { ...out, frames: [e.xyz as number[], e.xyz.map((v, k) => (k === 2 ? v + 0.01 : v))], energies: [-5.07, e.number === 1 ? -5.0705 : -5.0702] }, ["xtb 6.7.1"]);
+      if (isFailure(w)) throw new Error(w.why);
+      return w;
+    });
+    const mols = resultsOf({ ok: true, holds: "conformers", kept: optimised, aside: [], said: "" }, "conformers").molecules;
+    expect(mols.map((m) => [m.drawnFrom, m.drawnAs])).toEqual([[[11, 12, 13], "drawn"]]);
+    const populated = runMeno("populations", setEntries(mols.map((m, i) => ({ ...m, id: i + 1, at: { x: 0, y: 0 } })), "conformers"), "conformers");
+    if (!populated.ok) throw new Error(populated.said);
+    const shared = resultsOf(populated, "populations").molecules;
+    expect(shared.map((m) => [m.drawnFrom, m.drawnAs, m.shares?.length])).toEqual([[[11, 12, 13], "drawn", 2]]);
+    for (const e of setEntries(mols.map((m, i) => ({ ...m, id: i + 1, at: { x: 0, y: 0 } })), "conformers")) expect(e.properties).toMatchObject(properties);
+    for (const e of setEntries(shared.map((m, i) => ({ ...m, id: i + 1, at: { x: 0, y: 0 } })), "conformers")) expect(e.properties).toMatchObject(properties);
   });
 });
 
@@ -248,6 +300,17 @@ describe("a conformer search", () => {
       [3, 2, -0.99],
     ]);
     expect(made[0].calc).toMatchObject({ program: "RDKit" });
+  });
+
+  it("keeps a search's results - of its run, how it took conformers as one - with the conformer set; a job per conformer's, with none", () => {
+    const rmsd = { id: "search.rmsd", on: "molecule", group: "Same conformer", label: "RMSD threshold", value: 0.125, unit: "Å" };
+    const out = { schema: 1, program: "CREST", atoms: ["O", "H", "H"], frames: [WATER.xyz as number[], [0, 0, 0.1, 0, 0.7, 0.6, 0, -0.7, 0.6]], energies: [-1, -0.99], results: [rmsd] };
+    const made = conformersWorked(WATER, out, ["crest 3.0"]);
+    if (isFailure(made)) throw new Error(made.why);
+    const [m] = resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "conformers").molecules;
+    expect(m.calc?.results?.map((r) => [r.id, r.on === "molecule" ? r.value : null])).toEqual([["search.rmsd", 0.125]]);
+    // (the same conformers, each a job of its own: what the first's found is of it alone, not the compound's)
+    expect(resultsOf({ ok: true, holds: "conformers", kept: made, aside: [], said: "" }, "frequencies").molecules[0].calc?.results).toBeUndefined();
   });
 
   it("keeps the program's own populations, where it gives one for each conformer", () => {

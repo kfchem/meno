@@ -14,7 +14,8 @@ type Step = {
   before: object;
   after: object;
   turnsBefore: Record<number, Turn3D | undefined>;
-  turnsAfter: Record<number, Turn3D>;
+  /** Those after it: a molecule given none, none (as `turnsBefore`'s). */
+  turnsAfter: Record<number, Turn3D | undefined>;
 };
 
 /** How many such steps are kept: as many as undo goes back (it was a hundred, as undo was, and stayed so when undo went to a thousand). */
@@ -33,7 +34,7 @@ export function noteTurns(
   before: object,
   after: object,
   turnsBefore: Record<number, Turn3D | undefined>,
-  turnsAfter: Record<number, Turn3D>,
+  turnsAfter: Record<number, Turn3D | undefined>,
 ): void {
   const steps = journals.get(doc) ?? [];
   const last = steps[steps.length - 1];

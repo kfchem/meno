@@ -9,6 +9,7 @@ import {
   type UpdateState,
 } from "../../lib/update";
 import Switch from "../controls/Switch";
+import { useAppSettings } from "../../lib/settings/appSettings";
 
 const when = (ms: number) =>
   new Date(ms).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -28,13 +29,15 @@ function status(u: UpdateState, offline: boolean, allowed: boolean): string {
 
 /**
  * Keeping Meno up to date, in Settings > Network: whether it may (the
- * "app-update" purpose, allowed or taken back like any other), where it is,
- * and a look or a restart at once.
+ * "app-update" purpose, allowed or taken back like any other), whether each
+ * look shows its notice, where it is, and a look or a restart at once.
  */
 export default function UpdateSettings() {
   const u = useUpdate((s) => s);
   const offline = useNetwork((s) => s.offline);
   const allowed = useNetwork((s) => s.granted.includes(UPDATE_PURPOSE));
+  const updates = useAppSettings((s) => s.updates);
+  const setUpdates = useAppSettings((s) => s.setUpdates);
   if (!u) return null;
   const busy = u.phase === "checking" || u.phase === "downloading";
   const usable = u.phase !== "unavailable";
@@ -46,11 +49,18 @@ export default function UpdateSettings() {
           <div className="text-sm text-gh-black">Keep Meno up to date</div>
           <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">
             Meno {u.current}. A newer version is looked for on GitHub and downloaded in the
-            background, and goes in when you quit Meno. Each connection is shown as it is made;
+            background, and goes in when you quit Meno. {updates.notice ? "Each connection is shown as it is made" : "Each connection is kept in the record below"};
             nothing goes out while Meno works offline.
           </p>
         </div>
         <Switch on={allowed} label="Keep Meno up to date" disabled={!usable} onChange={() => void (allowed ? revoke(UPDATE_PURPOSE) : keepUpToDate())} />
+      </div>
+      <div className="flex items-start gap-4">
+        <div className="flex-1">
+          <div className="text-sm text-gh-black">Show a notice each time Meno checks for updates</div>
+          <p className="text-xs text-gh-gray mt-0.5 max-w-2xl">Every other use of the network always shows one.</p>
+        </div>
+        <Switch on={updates.notice} label="Show a notice each time Meno checks for updates" onChange={(notice) => setUpdates({ ...updates, notice })} />
       </div>
       <div className="flex items-center gap-3">
         <p className="flex-1 text-xs text-gh-gray" aria-live="polite">

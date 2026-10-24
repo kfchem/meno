@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Model } from "../store/types";
+import type { DrawnRecord, Model } from "../store/types";
 import { drawingOf } from "../chem/drawing";
 import { identityOfDrawn } from "../chem/identityOf";
 import { drawnFromSmiles } from "../chem/testdata/identityCases";
@@ -188,6 +188,27 @@ describe("Enumerate's way: substituents", () => {
     expect(out.kept.map((e) => [recordNumber(e.record), recordHow(e.record)])).toEqual([[1, "Position 1 (C3) = Cl"]]);
     expect(out.aside).toHaveLength(1);
     expect(out.core?.attach).toEqual({ P1: [2], P2: [7] });
+  });
+});
+
+describe("Enumerate's products, made from a template a step gave", () => {
+  it("carry what the template was made from, and its values as the template's - never as their own; a template drawn on the page gives none", () => {
+    const record: DrawnRecord = {
+      from: ["seed-3"],
+      properties: { nll: { value: 12.5, unit: "none", status: "computed" }, made: { value: "2 of 4", unit: "none", status: "computed" }, "made_from.nll": { value: 9.1, unit: "none", status: "computed" } },
+    };
+    const out = runMenoDrawn("enumerate", [{ place: 0, drawn: drawnFromSmiles(XYLENE), record }], { way: "substituents", positions: "3 8", groups: "Cl", combine: "one" });
+    if (!out.ok) throw new Error(out.said);
+    const [product] = out.kept;
+    expect(product.record?.from).toEqual(["seed-3"]);
+    // (its own number and how it was made; the template's NLL as the template's; what that carried of its own seed as it is; never which of how many the template was)
+    expect(recordNumber(product.record)).toBe(1);
+    expect(product.record?.properties?.["made_from.nll"]?.value).toBe(12.5);
+    expect(product.record?.properties?.nll).toBeUndefined();
+    expect(Object.keys(product.record?.properties ?? {}).filter((k) => k.includes("made") && k !== "made.how")).toEqual(["made_from.nll"]);
+    const drawnOnly = runMenoDrawn("enumerate", [{ place: 0, drawn: drawnFromSmiles(XYLENE) }], { way: "substituents", positions: "3 8", groups: "Cl", combine: "one" });
+    if (!drawnOnly.ok) throw new Error(drawnOnly.said);
+    expect([drawnOnly.kept[0].record?.from, Object.keys(drawnOnly.kept[0].record?.properties ?? {})]).toEqual([undefined, ["number", "made.how"]]);
   });
 });
 

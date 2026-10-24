@@ -240,13 +240,13 @@ class ChemWorkerTest(unittest.TestCase):
 
     def test_finds_the_stereocentres_and_double_bonds_left_open(self):
         # PCPA's centre is drawn on a wedge: nothing open
-        self.assertEqual(ask("open_stereo", molblock=PCPA)["result"], {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "free": False})
+        self.assertEqual(ask("open_stereo", molblock=PCPA)["result"], {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "cumulated": [], "free": False})
         # butan-2-ol drawn flat: its carbinol carbon is open, two isomers
         flat = v2000(
             [("C", 0, 0), ("C", 1.3, 0.75), ("C", 2.6, 0), ("C", 3.9, 0.75), ("O", 1.3, 2.25)],
             [(0, 1, 1, None), (1, 2, 1, None), (2, 3, 1, None), (1, 4, 1, None)],
         )
-        self.assertEqual(ask("open_stereo", molblock=flat)["result"], {"atoms": [1], "bonds": [], "isomers": 2, "cumulenes": [], "free": False})
+        self.assertEqual(ask("open_stereo", molblock=flat)["result"], {"atoms": [1], "bonds": [], "isomers": 2, "cumulenes": [], "cumulated": [], "free": False})
 
     def test_makes_conformers_as_its_options_say_and_says_how(self):
         made = ask("conformers", molblock=PCPA, options={"count": 5, "field": "MMFF94s", "iters": 300, "seed": 7})["result"]["isomers"][0]
@@ -357,7 +357,7 @@ class ChemWorkerTest(unittest.TestCase):
         for iso in ask("conformers", molblock=flat, count=4, isomers="all")["result"]["isomers"]:
             f = iso["frames"][0]
             like = {str(i): f[3 * i : 3 * i + 3] for i in range(5)}
-            self.assertEqual(ask("open_stereo", molblock=flat, like=like)["result"], {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "free": False})
+            self.assertEqual(ask("open_stereo", molblock=flat, like=like)["result"], {"atoms": [], "bonds": [], "isomers": 1, "cumulenes": [], "cumulated": [], "free": False})
             again = ask("conformers", molblock=flat, count=4, like=like)["result"]["isomers"]
             self.assertEqual(len(again), 1)
             # (still counted as chosen: the drawing leaves it open)
