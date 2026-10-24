@@ -18,6 +18,7 @@ import { structureFromSmiles } from "./fromSmiles";
  *   or PowerPoint when the picture is copied there, or a PNG;
  * - an RXN file another program put there, laid out as a scheme;
  * - a MOL file another program put there;
+ * - a SMILES, given as one;
  * - plain text, read as what it is (lib/io/kinds) - an RXN, MOL, SD or XYZ
  *   file, a calculation's output, Meno's own record - or else as a SMILES.
  * Null when there is nothing that reads as a structure.
@@ -58,9 +59,11 @@ async function structureIn(
     if (!mol?.text) return null;
     return asKind(mol.text, kindOf("", mol.text) ?? MENO_KINDS.mol, "dropped");
   }
-  const item = await read(["mol", "text"]);
+  // (a MOL file first, which keeps where its atoms are; then a SMILES, said to be one; then plain text)
+  const item = await read(["mol", "smiles", "text"]);
   const text = item?.text;
   if (!item || text == null) return null;
+  if (item.flavor === "smiles") return text.trim() ? structureFromSmiles(text.trim(), style) : null;
   // (a MOL file's flavour holding an RXN file is read as one: it starts $RXN;
   // told as Open and a drop tell it - a calculation's output a plugin not
   // added reads named so, to be added)
