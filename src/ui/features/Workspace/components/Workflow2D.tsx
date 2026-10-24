@@ -29,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, shapeMoved, wireRoute, wireToward, wireKey, type WireWay } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, shapeMoved, WIRE_LANE, wireLanes, wireRoute, wireToward, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { diagramKept, diagramNeeds, diagramOptions, diagramValues } from "../workflow/diagramOptions";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
@@ -105,67 +105,136 @@ function useEasedPoints(target: readonly Pt[], zoom: number): readonly Pt[] {
   return shown;
 }
 
-/** A wire's points from `p` to `q`, leaving and arriving level - round its ends and what else is in its way (look `wireRoute`) - as many as make it smooth at `zoom`, closer where it bends (look `pointsFor`, `byTurn`). */
-function wirePoints(p: Pt, q: Pt, ends: Ends | undefined, zoom: number, was: { current: WireWay | undefined }): Pt[] {
-  // (the way it went before, kept while it still can: so that a card dragged past something makes its wires flip neither way - look `wireRoute`)
-  const { pts: path, way } = wireRoute(p, q, ends && { from: ends.from, to: ends.to, lead: ends.lead }, ends?.around ?? [], was.current);
-  was.current = way;
-  return byTurn(path, pointsFor(path, zoom));
-}
-
 /**
  * The time a frame gives to working wires out: half of one at 60 frames a
  * second (16.7 ms), the other half left for drawing them.
  */
 const WIRES_BUDGET = new FrameBudget(8);
 
+/** A wire to draw: from `p` to `q`, with what it leaves and comes into, and what is near it (`Ends`), by its `key`. */
+type WireItem = { key: string; p: Pt; q: Pt; ends?: Ends };
+/** A wire's way as last worked out: from its key, its ends then, and its way (look `wireRoute`). */
+type Routed = { key: string; p: Pt; q: Pt; route: WireRouted };
+
 /**
- * A wire's points (`wirePoints`), worked out again where its key changed
- * (look `wireKey`): at once where its ends moved - a wire is never drawn
- * off its ports - but where only what is near it moved, while this frame
- * has time for it and none waits before it (`WIRES_BUDGET`), else when its
- * turn comes, the longest waiting first: so that a card dragged among many
- * wires near it keeps up with the pointer, those it is not wired to
- * following some frames behind - eased, as ever, where that moves them far
- * (`useEasedPoints`).
+ * The page's wires' points, by key, as drawn at `zoom`. Each wire's way
+ * (look `wireRoute`) is worked out again where its key changed (look
+ * `wireKey`): at once where its ends moved - a wire is never drawn off its
+ * ports - but where only what is near it moved, while this frame has time
+ * for it and none waits before it (`WIRES_BUDGET`), else when its turn
+ * comes, the longest waiting first: so that a card dragged among many
+ * wires keeps up with the pointer, those it is not wired to following some
+ * frames behind. Then the wires going round are moved apart where they
+ * would run on one another, each into a lane of its own (look `wireLanes`)
+ * - half a bond clear of `frames`, the page's sets and cards - and each
+ * drawn through as many points as make it smooth at `zoom` (look
+ * `pointsFor`, `byTurn`). A wire whose way, or lane, moved is eased there
+ * by its drawing (`useEasedPoints`). Those of `keep` no longer given are
+ * kept as they were, for a wire going to fade where it was.
  */
-function useWireTarget(p: Pt, q: Pt, ends: Ends | undefined, at: number): Pt[] {
-  const way = useRef<WireWay | undefined>(undefined);
-  const key = `${wireKey(p, q, ends, ends?.aroundKey ?? 0)},${at}`;
-  const now = useRef({ p, q, ends, at, key });
-  now.current = { p, q, ends, at, key };
-  const work = () => {
-    const t = performance.now();
-    const c = now.current;
-    const pts = wirePoints(c.p, c.q, c.ends, c.at, way);
-    WIRES_BUDGET.spend(performance.now() - t);
-    return { key: c.key, p: c.p, q: c.q, pts };
-  };
-  const done = useRef<{ key: string; p: Pt; q: Pt; pts: Pt[] } | null>(null);
+function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoom: number, keep: readonly string[], moving: boolean): Map<string, Pt[]> {
+  const at = zoomStep(zoom);
+  const routed = useRef(new Map<string, Routed>());
+  const drawn = useRef(new Map<string, { of: string; pts: Pt[] }>());
+  const latest = useRef(new Map<string, WireItem>());
+  latest.current = new Map(items.map((it) => [it.key, it]));
+  // (who each wire is, in the line of those waiting)
+  const who = useRef(new Map<string, object>());
+  const whoOf = (key: string) => who.current.get(key) ?? who.current.set(key, {}).get(key)!;
   const [, redraw] = useState(0);
   const { invalidate } = useThree();
-  // (who this wire is, in the line of those waiting)
-  const [me] = useState(() => ({}));
-  useEffect(() => () => WIRES_BUDGET.leave(me), [me]);
-  const d = done.current;
-  if (!d || (d.key !== key && (d.p.x !== p.x || d.p.y !== p.y || d.q.x !== q.x || d.q.y !== q.y || (WIRES_BUDGET.waiting === 0 && WIRES_BUDGET.left())))) {
-    done.current = work();
-    WIRES_BUDGET.leave(me);
-  } else if (d.key !== key) {
-    WIRES_BUDGET.wait(me, () => {
-      if (done.current?.key === now.current.key) return;
-      done.current = work();
-      redraw((n) => n + 1);
-    });
-    invalidate();
+  const keyOf = (it: WireItem) => wireKey(it.p, it.q, it.ends, it.ends?.aroundKey ?? 0);
+  const work = (it: WireItem) => {
+    const t = performance.now();
+    // (the way it went before, kept while it still can: so that a card dragged past something makes its wires flip neither way - look `wireRoute`)
+    const was = routed.current.get(it.key)?.route.way;
+    const route = wireRoute(it.p, it.q, it.ends && { from: it.ends.from, to: it.ends.to, lead: it.ends.lead }, it.ends?.around ?? [], was);
+    routed.current.set(it.key, { key: keyOf(it), p: it.p, q: it.q, route });
+    WIRES_BUDGET.spend(performance.now() - t);
+  };
+  for (const it of items) {
+    const d = routed.current.get(it.key);
+    const key = keyOf(it);
+    if (d && d.key === key) continue;
+    if (!d || d.p.x !== it.p.x || d.p.y !== it.p.y || d.q.x !== it.q.x || d.q.y !== it.q.y || (WIRES_BUDGET.waiting === 0 && WIRES_BUDGET.left())) {
+      work(it);
+      WIRES_BUDGET.leave(whoOf(it.key));
+    } else {
+      WIRES_BUDGET.wait(whoOf(it.key), () => {
+        const now = latest.current.get(it.key);
+        if (!now || routed.current.get(it.key)?.key === keyOf(now)) return;
+        work(now);
+        redraw((n) => n + 1);
+      });
+      invalidate();
+    }
   }
+  // (those gone, and not fading: forgotten, and no longer waiting)
+  const kept = new Set([...latest.current.keys(), ...keep]);
+  for (const key of [...routed.current.keys()])
+    if (!kept.has(key)) {
+      routed.current.delete(key);
+      drawn.current.delete(key);
+      const me = who.current.get(key);
+      if (me) WIRES_BUDGET.leave(me);
+      who.current.delete(key);
+    }
+  useEffect(() => () => who.current.forEach((me) => WIRES_BUDGET.leave(me)), []);
   useFrame((state) => {
     WIRES_BUDGET.frame(state.clock.elapsedTime);
     if (!WIRES_BUDGET.waiting) return;
     WIRES_BUDGET.serve();
     invalidate();
   });
-  return done.current!.pts;
+  // (those going round, into lanes: each wire's corners as moved - worked out again only where a way, or a frame, changed)
+  type Laned = { corners: Pt[]; way: Pt[]; p: Pt; q: Pt; key: string };
+  const lanes = useRef<{ of: string; laned: Map<string, Laned> } | null>(null);
+  // (while a card or a set is dragged, the wires not on it keep the lanes they had - moved aside from their way as far as they were, where
+  //  it goes the same way - and only those it moves, or makes go another way, put in lanes among them; all put in lanes anew once it is let go.
+  //  As far aside as they were when it began, where they are as they were then: a lane taken in for a frame, to keep a frame's room, is
+  //  not taken in for good - it is as wide again once the card has passed)
+  const held = moving ? lanes.current?.laned : undefined;
+  const began = useRef<Map<string, Laned> | null>(null);
+  if (!moving) began.current = null;
+  else if (!began.current) began.current = new Map(lanes.current?.laned ?? []);
+  const round = [...routed.current.entries()].filter(([, r]) => r.route.corners);
+  const holds = round.map(([key, r]) => {
+    const h = held?.get(key);
+    const c = r.route.corners!;
+    const same = (l: Laned | undefined): l is Laned => !!l && l.p.x === r.p.x && l.p.y === r.p.y && l.q.x === r.q.x && l.q.y === r.q.y && l.way.length === c.length;
+    if (!same(h)) return null;
+    // (going the same way still - none of its corners further than a lane from where it was: else it goes another way, and is put in a lane anew)
+    if (c.some((pt, i) => Math.hypot(pt.x - h.way[i].x, pt.y - h.way[i].y) >= WIRE_LANE)) return null;
+    const b = began.current?.get(key);
+    const from = same(b) ? b : h;
+    return c.map((pt, i) => ({ x: pt.x + from.corners[i].x - from.way[i].x, y: pt.y + from.corners[i].y - from.way[i].y }));
+  });
+  const lanesOf = `${round.map(([key, r], i) => `${key}:${r.key}${holds[i] ? `*${holds[i]!.map((c) => `${c.x},${c.y}`).join(";")}` : ""}`).join("|")}#${framesHash(frames)}`;
+  if (lanes.current?.of !== lanesOf) {
+    const put = wireLanes(
+      round.map(([, r]) => r.route.corners!),
+      frames,
+      holds,
+    );
+    lanes.current = { of: lanesOf, laned: new Map(round.map(([key, r], i) => [key, { corners: put[i], way: r.route.corners!, p: r.p, q: r.q, key: r.key }])) };
+  }
+  const laned = new Map([...lanes.current.laned].map(([key, l]) => [key, l.corners]));
+  const out = new Map<string, Pt[]>();
+  for (const [key, r] of routed.current) {
+    const corners = laned.get(key);
+    // (drawn again only where its way, or lane, or the zoom it is drawn at, changed)
+    const of = `${r.key}|${at}|${corners ? corners.map((c) => `${c.x},${c.y}`).join(";") : ""}`;
+    const had = drawn.current.get(key);
+    if (had && had.of === of) {
+      out.set(key, had.pts);
+      continue;
+    }
+    const path = corners ? roundedWay(corners) : r.route.pts;
+    const pts = byTurn(path, pointsFor(path, at));
+    drawn.current.set(key, { of, pts });
+    out.set(key, pts);
+  }
+  return out;
 }
 
 /** A zoom as the points a wire is drawn through are worked out at: by quarter steps of doubling, so that a wire is not worked out again for every frame of a zoom. */
@@ -215,9 +284,7 @@ void main() {
 }`;
 
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
-function MovingWire({ p, q, ends, color, zoom }: { p: Pt; q: Pt; ends?: Ends; color: string; zoom: number }) {
-  const at = zoomStep(zoom);
-  const target = useWireTarget(p, q, ends, at);
+function MovingWire({ target, color, zoom }: { target: Pt[]; color: string; zoom: number }) {
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
   useEffect(() => () => line.dispose(), [line]);
@@ -274,10 +341,8 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 }
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
-function WireLine({ p, q, ends, color, zoom, onHover, leaving = false }: { p: Pt; q: Pt; ends?: Ends; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
+function WireLine({ target, color, zoom, onHover, leaving = false }: { target: Pt[]; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
   // (as wide on the screen at any zoom: a hair, as the frames' lines are)
-  const at = zoomStep(zoom);
-  const target = useWireTarget(p, q, ends, at);
   const pts = useEasedPoints(target, zoom);
   const line = useMemo(() => ribbon(pts, WIRE_PX / zoom), [pts, zoom]);
   const hit = useMemo(() => (onHover && !leaving ? ribbon(pts, WIRE_HIT_PX / zoom) : null), [pts, zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -450,7 +515,10 @@ export default function Workflow2D() {
     return { x: p.x, y: p.y };
   };
 
-  /** A press followed: each move past MOV_PX, at its place on the page, and the button coming up - whether it moved. */
+  // (a card or a set being dragged: the wires not on it kept in their lanes till it is let go - `useWirePoints`)
+  const [moving, setMoving] = useState(false);
+
+  /** A press followed: each move past MOV_PX, at its place on the page, and the button coming up - whether it moved; or lost, without a click (`onCancel`). */
   const follow = (e: ReactPointerEvent, move: (p: Pt, ev: PointerEvent) => void, up: (moved: boolean, ev: PointerEvent) => void) => {
     e.stopPropagation();
     const sx = e.clientX;
@@ -462,11 +530,24 @@ export default function Workflow2D() {
       move(worldOf(ev.clientX, ev.clientY), ev);
       invalidate();
     };
-    const onUp = (ev: PointerEvent) => {
+    const stop = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp, true);
+      window.removeEventListener("pointercancel", onCancel, true);
+      window.removeEventListener("blur", onCancel);
       window.removeEventListener("keydown", onKey, true);
+    };
+    const onUp = (ev: PointerEvent) => {
+      stop();
       up(moved, ev);
+      invalidate();
+    };
+    // (the press lost without being let go - a gesture of the trackpad's or a pen's, or the window left: an end, but no click, and no drop -
+    //  what was dragged stays where it was last moved; a wire being drawn let go, as Escape does)
+    const onCancel = () => {
+      stop();
+      setMoving(false);
+      if (store.getState().wireDrag) store.getState().setWorkflowView({ wireDrag: null });
       invalidate();
     };
     // (Escape lets a wire being drawn go)
@@ -474,14 +555,14 @@ export default function Workflow2D() {
       if (ev.key !== "Escape" || !store.getState().wireDrag) return;
       ev.preventDefault();
       ev.stopPropagation();
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp, true);
-      window.removeEventListener("keydown", onKey, true);
+      stop();
       store.getState().setWorkflowView({ wireDrag: null });
       invalidate();
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp, true);
+    window.addEventListener("pointercancel", onCancel, true);
+    window.addEventListener("blur", onCancel);
     window.addEventListener("keydown", onKey, true);
   };
 
@@ -593,10 +674,12 @@ export default function Workflow2D() {
     follow(
       e,
       (p) => {
+        setMoving(true);
         store.getState().moveSet(set.id, p.x - last.x, p.y - last.y, gesture);
         last = p;
       },
       (moved) => {
+        setMoving(false);
         if (!moved) store.getState().setWorkflowView({ chosenSet: set.id });
       },
     );
@@ -640,8 +723,12 @@ export default function Workflow2D() {
     const gesture = `${performance.now()}`;
     follow(
       e,
-      (p) => store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture),
+      (p) => {
+        setMoving(true);
+        store.getState().moveStep(step.id, step.x + p.x - start.x, step.y + p.y - start.y, gesture);
+      },
       (moved) => {
+        setMoving(false);
         if (!moved) open();
       },
     );
@@ -926,18 +1013,21 @@ export default function Workflow2D() {
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);
+  const wirePoints = useWirePoints([...wireParts, ...(drawn ? [{ key: "drawn", p: drawn.p, q: drawn.q }] : [])], around, zoom, shownWires.map((w) => w.key), moving);
 
   return (
     <group>
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
-      {shownWires.map(({ key, item, leaving }) =>
-        item.moving && !leaving ? (
-          <MovingWire key={key} p={item.p} q={item.q} ends={item.ends} color={WIRE} zoom={zoom} />
+      {shownWires.map(({ key, item, leaving }) => {
+        const target = wirePoints.get(item.key);
+        if (!target) return null;
+        return item.moving && !leaving ? (
+          <MovingWire key={key} target={target} color={WIRE} zoom={zoom} />
         ) : (
-          <WireLine key={key} p={item.p} q={item.q} ends={item.ends} color={item.color} zoom={zoom} onHover={leaving ? undefined : item.onHover} leaving={leaving} />
-        ),
-      )}
-      {drawn && <WireLine p={drawn.p} q={drawn.q} color={ACCENT} zoom={zoom} />}
+          <WireLine key={key} target={target} color={item.color} zoom={zoom} onHover={leaving ? undefined : item.onHover} leaving={leaving} />
+        );
+      })}
+      {drawn && wirePoints.get("drawn") && <WireLine target={wirePoints.get("drawn")!} color={ACCENT} zoom={zoom} />}
 
       {/* Sets and steps drawn in HTML on one layer laid on the page at its
           scale: one, so that what is under the pointer is found among them

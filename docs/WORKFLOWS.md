@@ -2015,6 +2015,26 @@ page could not be read after one run.
     going round to the curve, a wire changes shape once, and the drawing
     eases that (`DURATION.move`). Into a card that names its inputs, a
     wire comes in level for as long as the input's name, under it.
+  - **A lane of its own** (look `wireLanes`). Wires going round that
+    would run on one another - up or down, or across, within half a bond
+    of each other along the same stretch - are moved apart into lanes half
+    a bond apart (`WIRE_LANE`, the room from a frame), as near where they ran as that
+    lets them be: half a bond clear of every frame still, no further than
+    halfway to the corners either side, and never a wire's runs into its
+    ends, so its ends are where they were. The lanes are in the order the
+    wires turn in and out of them, so that they cross each other no more
+    than they must. Where a way between frames has no room for lanes so
+    far apart, they are left as they ran; and a lane that would bring a
+    wire nearer a frame than its own way went - its turn round a frame's
+    corner - takes it only as far in as keeps that room. While a card or a
+    set is dragged, the wires not on it keep the lanes they had when it
+    began - taken in for a frame only where a frame's room needs it - and
+    only those it moves, or sends another way, are put in lanes among
+    them; all are put in lanes anew once it is let go, or the press is
+    lost (the window left, a gesture taking it over), with no click. A wire moved into a lane, or out of one, is eased
+    there by the drawing. So wires run together as little as there is room
+    for: where a way has no room for lanes, or the runs are into their
+    wires' ends, they still do.
   - **It keeps its way** while that is still clear: the side it passed
     what it goes round, unless the other side has become a fifth shorter.
     A card dragged past a set makes its wire change way twice at most.
