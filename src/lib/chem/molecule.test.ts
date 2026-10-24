@@ -57,7 +57,7 @@ describe("canTakeBond", () => {
 describe("mostBonds", () => {
   it("is an element's valence, a heavier one's highest, as its charge and an unpaired electron leave it; none for a metal", () => {
     expect([mostBonds("C"), mostBonds("O"), mostBonds("N", 1), mostBonds("O", -1), mostBonds("B", -1)]).toEqual([4, 2, 4, 1, 4]);
-    expect([mostBonds("S"), mostBonds("P"), mostBonds("I"), mostBonds("Si")]).toEqual([6, 5, 7, 4]);
+    expect([mostBonds("S"), mostBonds("P"), mostBonds("I"), mostBonds("Si"), mostBonds("P", -1)]).toEqual([6, 5, 7, 4, 6]);
     expect([mostBonds("C", 0, "doublet"), mostBonds("C", 0, "singlet"), mostBonds("C", 1)]).toEqual([3, 2, 3]);
     expect(mostBonds("Pd")).toBeNull();
   });

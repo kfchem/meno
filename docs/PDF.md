@@ -1324,8 +1324,10 @@ it where it lies out of view.
     here than oxygen has."), and a charge more than its atom carries. And
     the structure is checked again as a file has it, each label written
     out as the atoms it stands for: any atom of it with more bonds than it
-    takes - an H with two, a halogen bonded to two carbons (one more for
-    each positive charge: a diaryliodonium's iodine) - marks the atom or
+    takes - an H with two, or one charged; a halogen bonded to more than
+    one atom that is not O nor F (an iodine to more than two; one more for
+    each positive charge: a diaryliodonium's iodine); a charge past four
+    either way - marks the atom or
     label drawn, so that nothing whose valence is broken is put down
     looking sure;
   - a radical's dots by an atom whose bonds leave it no unpaired electron:

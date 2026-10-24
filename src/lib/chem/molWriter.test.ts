@@ -626,6 +626,9 @@ describe("overBonded", () => {
     expect([...overBonded(star({ el: "Cl" }, [["C", 1], ["C", 1]]))]).toEqual([1]);
     expect([...overBonded(star({ el: "Cl" }, [["O", 2], ["O", 2], ["O", 2], ["O", 1, -1]]))]).toEqual([]);
     expect([...overBonded(star({ el: "I", charge: 1 }, [["C", 1], ["C", 1]]))]).toEqual([]);
+    // (nor an alkynyl benziodoxolone's: two carbons and an oxygen, neutral)
+    expect([...overBonded(star({ el: "I" }, [["C", 1], ["C", 1], ["O", 1]]))]).toEqual([]);
+    expect([...overBonded(star({ el: "I" }, [["C", 1], ["C", 1], ["C", 1]]))]).toEqual([1]);
   });
 
   it("finds a halogen with a second bond to a nitrogen or a label, or a dot by it; an H charged and bonded; an O given a third by a bond lent to it", () => {
@@ -635,7 +638,9 @@ describe("overBonded", () => {
     expect([...overBonded(star({ el: "H", charge: 1 }, [["Br", 1]]))]).toEqual([1]);
     const lent: WriterModel = { atoms: [{ id: 1, x: 0, y: 0, el: "O" }, { id: 2, x: 1, y: 0, el: "C" }, { id: 3, x: -1, y: 0, el: "C" }, { id: 4, x: 0, y: 1, el: "C" }], bonds: [{ a: 2, b: 1, order: 1, dative: true }, { a: 1, b: 3, order: 1 }, { a: 1, b: 4, order: 1 }] };
     expect([...overBonded(lent)]).toEqual([1]);
-    // (but not a boron lent a pair: H3N->BH3)
+    // (but not one lent by an atom no element - a label's - nor a boron lent a pair: H3N->BH3)
+    const toLabel: WriterModel = { atoms: [{ id: 1, x: 0, y: 0, el: "O" }, { id: 2, x: 1, y: 0, el: "M1" }, { id: 3, x: -1, y: 0, el: "C" }, { id: 4, x: 0, y: 1, el: "C" }], bonds: [{ a: 2, b: 1, order: 1, dative: true }, { a: 1, b: 3, order: 1 }, { a: 1, b: 4, order: 1 }] };
+    expect([...overBonded(toLabel)]).toEqual([]);
     const borane: WriterModel = { atoms: [{ id: 1, x: 0, y: 0, el: "B" }, { id: 2, x: 1, y: 0, el: "N" }], bonds: [{ a: 2, b: 1, order: 1, dative: true }] };
     expect([...overBonded(borane)]).toEqual([]);
   });

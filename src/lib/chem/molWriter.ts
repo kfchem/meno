@@ -218,11 +218,13 @@ function prepared(model: WriterModel): { model: WriterModel; sups: Sup[]; aliase
  * The atoms drawn that, written out as a file has them - each label as the
  * atoms it stands for - have an atom with more bonds than it takes
  * (./molecule `mostBonds`; a hydrogen one, none charged or with its
- * electron unpaired; a halogen one to what is not oxygen nor fluorine, and
- * one more for each positive charge): by id, a label's for any atom of it.
+ * electron unpaired; a halogen one to what is not oxygen nor fluorine, an
+ * iodine two, and one more for each positive charge): by id, a label's for
+ * any atom of it.
  * A metal is never one, nor an atom bonded to a metal (a halide bridging
- * two, a hydride). A bond lent between two non-metals counts at the end it
- * is lent to, but a boron's; any other counts as `valenceOrder` counts it.
+ * two, a hydride). A bond lent between two elements, neither a metal,
+ * counts at the end it is lent to, but a boron's; any other counts as
+ * `valenceOrder` counts it.
  */
 export function overBonded(model: WriterModel): Set<number> {
   const { model: out, sups } = prepared(model);
@@ -242,7 +244,7 @@ export function overBonded(model: WriterModel): Set<number> {
     ]) {
       // (a bond lent between two non-metals counts at the end it is lent to - C->O gives the O a third - but a boron's, an
       // aluminium's, which take a pair: H3N->BH3)
-      const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "");
+      const lent = (b.dative || b.coordination) && !metal && end === b.b && !TAKE_A_PAIR.has(byId.get(end)?.el ?? "") && ELEMENT_SYMBOLS.has(byId.get(other)?.el ?? "");
       add(sums, end, lent ? b.order : valenceOrder(b, byId.get(end)?.el));
       if (isMetal(byId.get(other)?.el ?? "")) byMetal.add(end);
       if (HALOGENS.has(byId.get(end)?.el ?? "") && !["O", "F"].includes(byId.get(other)?.el ?? "")) add(plain, end, b.order);
@@ -253,12 +255,13 @@ export function overBonded(model: WriterModel): Set<number> {
   for (const a of out.atoms) {
     if (byMetal.has(a.id)) continue;
     const sum = sums.get(a.id) ?? 0;
-    // (an H takes one bond - none, charged or with its electron unpaired; a halogen one to what is not O nor F, and one more for
-    // each positive charge, as a diaryliodonium's iodine has two carbons)
+    // (an H takes one bond - none, charged or with its electron unpaired; a halogen one to what is not O nor F - an iodine two,
+    // as an alkynyl benziodoxolone's - and one more for each positive charge, as a diaryliodonium's)
     const h = a.el === "H" && sum + Math.abs(a.charge ?? 0) + unpaired(a) > 1;
-    const halogen = HALOGENS.has(a.el) && (plain.get(a.id) ?? 0) + unpaired(a) > 1 + Math.max(0, a.charge ?? 0);
+    const halogen = HALOGENS.has(a.el) && (plain.get(a.id) ?? 0) + unpaired(a) > (a.el === "I" ? 2 : 1) + Math.max(0, a.charge ?? 0);
     const most = mostBonds(a.el, a.charge ?? 0, a.radical);
-    if (h || halogen || (most != null && sum > most)) over.add(drawn.get(a.id) ?? a.id);
+    // (and a charge more than any atom carries: four either way)
+    if (h || halogen || Math.abs(a.charge ?? 0) > 4 || (most != null && sum > most)) over.add(drawn.get(a.id) ?? a.id);
   }
   return over;
 }

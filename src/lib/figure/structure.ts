@@ -45,6 +45,8 @@ function drawnHydrogens(label: string): number | null {
 }
 
 const NAMES = new Map(ELEMENTS.map((e) => [e.symbol, e.name]));
+/** The most charge an atom of a structure carries, either way: a C4- or an Sn4+, no more. */
+const MOST_CHARGE = 4;
 
 /**
  * The most bonds an atom read as `el` takes, their orders summed, with its
@@ -61,8 +63,8 @@ function mostTaken(el: string, charge: number): number | null {
   const most = mostBonds(a.el, (a.charge ?? 0) + charge);
   if (most == null) return null;
   const own = g.bonds.filter((b) => b.a1 === g.attach[0] || b.a2 === g.attach[0]).reduce((t, b) => t + b.order, 0);
-  // (its hydrogens: as its SMILES says them, or - not in brackets - as many as its valence leaves with the one bond it is bonded by)
-  return most - own - (a.hs ?? implicitHydrogens(a.el, own + 1, (a.charge ?? 0) + charge));
+  // (its hydrogens where its SMILES says them, in brackets; else as many as its valence leaves, however it is bonded - =NOAc)
+  return most - own - (a.hs ?? 0);
 }
 
 /** What an atom read as `el` is called, saying it has too many bonds: a carbon, oxygen, "OMe". */
@@ -122,10 +124,16 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
   });
   // (more bonds than an atom takes - its charge counted, a group's atom past the group's own bonds - said, whatever it is drawn
   // as; and a radical's dots by an atom its bonds leave no unpaired electron, none - a speck, or a letter's round shape - said)
+  // (its bonds to metals left out, as the canvas leaves them: a pyridine's N bound to a nickel has its three)
+  const unbound = valence.slice();
+  read.bonds.forEach((b, i) => {
+    if (isMetal(els[b.b])) unbound[b.a] -= orders[i];
+    if (isMetal(els[b.a])) unbound[b.b] -= orders[i];
+  });
   const tooMany = read.atoms.map((_, i): string | null => {
     const most = mostTaken(els[i], charges[i]);
-    if (most == null) return null;
-    if (most < 0) return `A charge of ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
+    if (most == null || unbound[i] < valence[i]) return null;
+    if (most < 0 || Math.abs(charges[i]) > MOST_CHARGE) return `A charge of ${chargeText(charges[i])} is more than ${calledAs(els[i])} carries.`;
     if (valence[i] > most) {
       return valence[i] > (mostTaken(els[i], 0) ?? most) ? `More bonds meet here than ${calledAs(els[i])} has.` : `Its charge, ${chargeText(charges[i])}, and its bonds are more than ${calledAs(els[i])} takes.`;
     }

@@ -226,6 +226,24 @@ describe("a structure read whose atoms have more bonds than they take", () => {
     expect([hydrogen && bondsAt(m, hydrogen.id), hydrogen?.unsure?.said]).toEqual([2, ["More bonds meet here than hydrogen has."]]);
   });
 
+  it("marks a label read with a charge no atom carries unsure - a page's \"S188−\" taken for a sulfur", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const s = step(b, -30);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, towards(b, s, 0.55))], letters: letters("S18−", s), pictures: [] }, SHA, 1) as Model;
+    const sulfur = m.atoms.find((x) => x.el === "S");
+    expect([sulfur?.charge, sulfur?.unsure?.said]).toEqual([-18, ["A charge of 18− is more than sulfur carries."]]);
+  });
+
+  it("leaves sure a group's label drawn with the bond its atom has left: =NOAc, an oxime's ester", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const n = step(b, -30);
+    const end = towards(b, n, 0.55);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("NOAc", n), pictures: [] }, SHA, 1) as Model;
+    expect(m.atoms.find((x) => x.el === "NOAc")?.unsure).toBeUndefined();
+  });
+
   it("leaves sure what has no more bonds than it takes: a sulfone's sulfur, an ammonium's nitrogen, a quaternary carbon", () => {
     const s: P = [150, 200];
     const left = step(s, 180);
