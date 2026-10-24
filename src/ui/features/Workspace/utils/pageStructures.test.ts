@@ -39,6 +39,49 @@ describe("the structures of a figure, each taken whole", () => {
     expect(formula(found[0])).toContain("Na1");
   });
 
+  describe("a lone ion by a structure", () => {
+    const L = 14.4;
+    type P = [number, number];
+    const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+    const step = (p: P, deg: number): P => [p[0] + L * Math.cos((deg * Math.PI) / 180), p[1] - L * Math.sin((deg * Math.PI) / 180)];
+    const towards = (p: P, q: P, share = 0.6): P => [p[0] + (q[0] - p[0]) * share, p[1] + (q[1] - p[1]) * share];
+    const letters = (text: string, [x, y]: P) => [...text].map((c, i) => ({ c, box: [x - 3.4 + 6.8 * i, y - 3.6, x + 3.4 + 6.8 * i, y + 3.6] as [number, number, number, number], at: [x - 3.4 + 6.8 * i, y + 3.6] as [number, number], size: 10 }));
+    /** A two-carbon chain ending in a label at `[100, 200]` and on: acetaldehyde's C-C=O, or ethylammonium's C-C-NH3+. */
+    const chain = (label: string, double: boolean): FigureDrawn => {
+      const a: P = [100, 200];
+      const b = step(a, 30);
+      const x = step(b, -30);
+      const end = towards(b, x);
+      const off: [P, P] = [
+        [b[0] + 1.8 * Math.sin(-Math.PI / 6), b[1] + 1.8 * Math.cos(-Math.PI / 6)],
+        [end[0] + 1.8 * Math.sin(-Math.PI / 6), end[1] + 1.8 * Math.cos(-Math.PI / 6)],
+      ];
+      return { paths: [stroke(a, b), stroke(b, end), ...(double ? [stroke(...off)] : [])], letters: letters(label, x), pictures: [] };
+    };
+    /** `drawn` with an ion's label set 1.1 bonds below its middle carbon - and a "+" between them, where asked. */
+    const withIon = (drawn: FigureDrawn, ion: string, plus = false): FigureDrawn => {
+      const b = step([100, 200], 30);
+      const at: P = [b[0], b[1] + 1.1 * L];
+      return { ...drawn, letters: [...drawn.letters, ...letters(ion, at), ...(plus ? letters("+", [b[0], b[1] + 0.55 * L]) : [])] };
+    };
+    const charge = (s: PageStructure) => read(s).atoms.reduce((t, a) => t + (a.charge ?? 0), 0);
+
+    it("leaves a Cl- by a neutral molecule its own: acetaldehyde is C2 O, and the Cl- apart", () => {
+      const found = structuresOf(withIon(chain("O", true), "Cl−"), 0, "pdf", 0, []);
+      expect(found.map((s) => [formula(s), charge(s)]).sort()).toEqual([["C2 O1", 0], ["Cl1", -1]]);
+    });
+
+    it("takes a Cl- with the ammonium it lies by: the two neutral, one structure", () => {
+      const found = structuresOf(withIon(chain("NH3+", false), "Cl−"), 0, "pdf", 0, []);
+      expect(found.map((s) => [formula(s), charge(s)])).toEqual([["C2 Cl1 N1", 0]]);
+    });
+
+    it("never takes an ion across a \"+\": the ammonium and the Cl- each their own", () => {
+      const found = structuresOf(withIon(chain("NH3+", false), "Cl−", true), 0, "pdf", 0, []);
+      expect(found.map((s) => [formula(s), charge(s)]).sort()).toEqual([["C2 N1", 1], ["Cl1", -1]]);
+    });
+  });
+
   it("finds none in one line with no label - a chart's tick, a table's rule - nor in a lone word: they are no structures", () => {
     const line: FigureDrawn = { paths: [{ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 100, 100], ["L", 120, 100]] }], letters: [], pictures: [] };
     expect(structuresOf(line, 0, "pdf", 0, [])).toEqual([]);
