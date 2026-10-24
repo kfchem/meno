@@ -31,6 +31,11 @@ shots, and is checked against this page (*The look check*, below).
    below.
 5. **Room round what is shown.** Ink never touches a frame's line or its
    neighbour's ink (*Room*).
+6. **Nothing on the canvas is the page's text.** The canvas and what lies
+   over it - notes, chips, cards, a set's words - never show the browser's
+   own text selection: they are `select-none`, and a selection that reaches
+   there all the same is let go. What is selected there is Meno's own
+   selection. Text fields, and the words in the column, stay selectable.
 
 ## Colours
 
@@ -74,6 +79,10 @@ Numbers that change in place are tabular (`tabular-nums`).
   an input. A menu's row is `h-8` (32 px).
 - **Padding**: a control `px-2` (a button `px-2.5` or `px-3`); a menu's
   row `px-3`; a card `p-3`; a dialog `p-5`; a menu `py-1`.
+- **A card's insets** are the same on both sides: what is in it - a
+  list, a field and its unit, the buttons at its foot - ends on one edge
+  on the right, inside the card's padding, however narrow the card (a
+  step's card is 208 px).
 - **Corners**: `rounded-md` (6 px) for controls, menus, chips and toasts;
   `rounded-lg` (8 px) for cards and dialogs; `rounded-full` for a dot, a
   switch, a pill. Not the bare `rounded` (4 px).
