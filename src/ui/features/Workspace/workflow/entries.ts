@@ -956,6 +956,19 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
 export const MADE_FROM = "made_from.";
 
 /**
+ * The values of the structure one was made from, as that one's (`made_from.nll`): its own, and what it carried of
+ * one it was made from in turn, as it is - one level, still of the structure it was made from, at a remove - its
+ * own over them; never which of how many it was (`made`).
+ */
+export function madeFrom(record: DrawnRecord | undefined): [string, Property][] {
+  const had = Object.entries(record?.properties ?? {});
+  return [
+    ...had.filter(([name]) => name.startsWith(MADE_FROM)),
+    ...had.filter(([name]) => !name.startsWith(MADE_FROM) && name !== "made").map(([name, p]): [string, Property] => [`${MADE_FROM}${name}`, p]),
+  ];
+}
+
+/**
  * A structure drawn as an entry record (lib/entry) reads it - by Filter,
  * and as a table of structures (flow `structuresAsTable`) - by `id`: its
  * record's properties, what it was made from and its status, its drawing
