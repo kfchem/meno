@@ -1,8 +1,8 @@
 import { useEffect, type RefObject } from "react";
 import { isTextTarget } from "../../../../lib/doc/shortcuts";
 
-/** What of the page's text selection is read: where it begins and ends, and whether it holds anything. */
-type SelectionLike = { isCollapsed: boolean; anchorNode: unknown; focusNode: unknown };
+/** What of the page's text selection is read: where it begins and ends, whether it holds anything, and its words. */
+type SelectionLike = { isCollapsed: boolean; anchorNode: unknown; focusNode: unknown; toString?: () => string };
 
 /**
  * Words on the canvas that can be selected and copied all the same: a step
@@ -11,27 +11,33 @@ type SelectionLike = { isCollapsed: boolean; anchorNode: unknown; focusNode: unk
  */
 export const COPYABLE = { "data-copyable": "" } as const;
 
-/** Whether `node` lies in words flagged `COPYABLE`. */
-function inCopyable(node: unknown): boolean {
+/** The words flagged `COPYABLE` that `node` lies in - their text - or none. */
+function copyableOf(node: unknown): { textContent: string | null } | null {
   const n = node as { closest?: (s: string) => unknown; parentElement?: { closest(s: string): unknown } | null } | null;
-  const el = n?.closest ? n : n?.parentElement;
-  return el?.closest?.("[data-copyable]") != null;
+  const el = (n?.closest ? n : n?.parentElement) as { closest?: (s: string) => unknown } | null | undefined;
+  return (el?.closest?.("[data-copyable]") as { textContent: string | null } | null) ?? null;
 }
 
 /**
  * Whether the page's text selection reaches into `within` - begins or ends
  * there - and is to be let go: never while a text field has the keys, whose
  * own selection is its words', nor one wholly in words that can be copied
- * (`copyable`: both its ends in such words).
+ * (`copyable`: both its ends in such words, or all it holds within them).
  */
 export function selectionReaches(
   selection: SelectionLike | null,
   within: { contains(node: never): boolean } | null,
   typing: boolean,
-  copyable: (node: unknown) => boolean = inCopyable,
+  copyable: (node: unknown) => { textContent: string | null } | null = copyableOf,
 ): boolean {
   if (!selection || selection.isCollapsed || !within || typing) return false;
-  if (copyable(selection.anchorNode) && copyable(selection.focusNode)) return false;
+  const a = copyable(selection.anchorNode);
+  const f = copyable(selection.focusNode);
+  if (a && f) return false;
+  // (a line clicked three times: its words, the selection ending at the start of what follows it - kept, as all it holds is the line's)
+  const line = a ?? f;
+  const words = selection.toString?.().trim();
+  if (line?.textContent && words && line.textContent.includes(words)) return false;
   const inside = (n: unknown) => n != null && within.contains(n as never);
   return inside(selection.anchorNode) || inside(selection.focusNode);
 }

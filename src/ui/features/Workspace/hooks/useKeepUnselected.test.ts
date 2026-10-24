@@ -22,10 +22,15 @@ describe("the page's text selection kept off the canvas and what lies over it", 
   });
 
   it("leaves one wholly in words that can be copied - a step's failure, a program's line - and still lets go of one reaching the canvas elsewhere", () => {
-    const copyable = (n: unknown) => String(n).startsWith("canvas/failure");
+    const line = { textContent: "Failed · Takes conformer sets" };
+    const copyable = (n: unknown) => (String(n).startsWith("canvas/failure") ? line : null);
     expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/failure/a", focusNode: "canvas/failure/b" }, canvas, false, copyable)).toBe(false);
     expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/failure/a", focusNode: "canvas/note" }, canvas, false, copyable)).toBe(true);
     expect(selectionReaches({ isCollapsed: false, anchorNode: "canvas/note", focusNode: "canvas/note" }, canvas, false, copyable)).toBe(true);
+    // (the line clicked three times: the selection ends at the start of what follows it, all it holds the line's)
+    const tripled = { isCollapsed: false, anchorNode: "canvas/failure/a", focusNode: "canvas/next", toString: () => "Failed · Takes conformer sets\n" };
+    expect(selectionReaches(tripled, canvas, false, copyable)).toBe(false);
+    expect(selectionReaches({ ...tripled, toString: () => "Failed · Takes conformer sets Input 3 compounds" }, canvas, false, copyable)).toBe(true);
     // (the flag, read off an element or the words in it: by closest())
     const flagged = { closest: (q: string) => (q === "[data-copyable]" ? {} : null) };
     const words = { parentElement: flagged };
