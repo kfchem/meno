@@ -196,17 +196,51 @@ pub fn folder(data: &Path, id: &str, pixi: bool) -> PathBuf {
     home.join(format!("plugin-{id}")).join("files")
 }
 
-/// The files not kept yet: those missing, or not the size they should be -
-/// or, an archive, not unpacked whole.
-pub fn missing<'a>(dir: &Path, downloads: &'a [Download]) -> Vec<&'a Download> {
-    downloads
-        .iter()
-        .filter(|d| match d.unpack {
-            Some(_) => copy_of(dir, d).is_none(),
-            None => std::fs::metadata(dir.join(&d.file)).map(|m| m.len() != d.bytes).unwrap_or(true),
-        })
-        .collect()
+/// How a file a plugin downloads stands in its folder.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Held {
+    /// There, as it was fetched: its size and SHA-256 the manifest's - an archive, unpacked whole.
+    Whole,
+    /// Not there, or not the size it should be - an archive, not unpacked whole.
+    Missing,
+    /// There at its size, but its SHA-256 not the manifest's: changed, or damaged, since it was fetched.
+    Changed,
 }
+
+/// What this launch found of each kept file's SHA-256, by its path: at the size and the time it was last changed
+/// then, and whether it was the manifest's.
+type Checked = std::collections::HashMap<PathBuf, (u64, Option<std::time::SystemTime>, String, bool)>;
+static CHECKED: std::sync::OnceLock<std::sync::Mutex<Checked>> = std::sync::OnceLock::new();
+
+/// How file `d` stands in `dir` (`Held`). One kept as it is is read through for its SHA-256 once a launch - it is
+/// checked as it is fetched, and a model's weights are large - and again only where its size or the time it was last
+/// changed is not what it was then. An archive is as its stamp says (`copy_of`): what it unpacked to is not read again.
+pub fn held(dir: &Path, d: &Download) -> Held {
+    if d.unpack.is_some() {
+        return if copy_of(dir, d).is_some() { Held::Whole } else { Held::Missing };
+    }
+    let path = dir.join(&d.file);
+    let Ok(meta) = std::fs::metadata(&path) else { return Held::Missing };
+    if meta.len() != d.bytes {
+        return Held::Missing;
+    }
+    let when = meta.modified().ok();
+    let checked = CHECKED.get_or_init(Default::default);
+    let known = checked.lock().ok().and_then(|c| c.get(&path).cloned());
+    let ok = match known {
+        Some((len, at, sha, ok)) if len == meta.len() && at == when && sha == d.sha256 => ok,
+        _ => {
+            // (a file that cannot be read through is not the one fetched, as far as is known)
+            let ok = hashed_so_far(&path).is_ok_and(|(h, _)| hex(h) == d.sha256);
+            if let Ok(mut c) = checked.lock() {
+                c.insert(path, (meta.len(), when, d.sha256.clone(), ok));
+            }
+            ok
+        }
+    };
+    if ok { Held::Whole } else { Held::Changed }
+}
+
 
 /// The files a plugin needs as it is set up: those for this computer.
 pub fn needed(downloads: &[Download]) -> Vec<Download> {
@@ -396,6 +430,8 @@ pub struct FilesState {
     pub folder: String,
     pub missing: Vec<String>,
     pub bytes: u64,
+    /// Of those missing, the ones there at their size whose SHA-256 is not the manifest's (`Held::Changed`).
+    pub changed: Vec<String>,
 }
 
 /// How far a plugin's files have come: bytes had, of all of those fetched.
@@ -431,12 +467,20 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Op
     let pixi = manifest.get("environment").and_then(Value::as_str) == Some("pixi");
     let data = crate::local_data_dir(&app)?;
     let dir = folder(&data, &plugin, pixi);
+    // (each file's SHA-256 read through, where it is, off the async runtime: a model's weights take a while)
+    let stand = {
+        let (dir, downloads) = (dir.clone(), downloads.clone());
+        tauri::async_runtime::spawn_blocking(move || downloads.iter().map(|d| held(&dir, d)).collect::<Vec<_>>())
+            .await
+            .map_err(|e| format!("checking {plugin}'s files: {e}"))?
+    };
     let state = |missing: &[&Download]| FilesState {
         folder: dir.to_string_lossy().into_owned(),
         missing: missing.iter().map(|d| d.file.clone()).collect(),
         bytes: missing.iter().map(|d| d.bytes).sum(),
+        changed: downloads.iter().zip(&stand).filter(|(d, h)| **h == Held::Changed && missing.iter().any(|m| m.file == d.file)).map(|(d, _)| d.file.clone()).collect(),
     };
-    let wanted = missing(&dir, &downloads);
+    let wanted: Vec<&Download> = downloads.iter().zip(&stand).filter(|(_, h)| **h != Held::Whole).map(|(d, _)| d).collect();
     if !fetch || wanted.is_empty() {
         return Ok(state(&wanted));
     }
@@ -484,7 +528,12 @@ pub async fn plugin_files(app: AppHandle, plugin: String, fetch: bool, hosts: Op
 /// Whether an archive fetched is there whole: its size, and its SHA-256, the manifest's.
 fn whole(archive: &Path, d: &Download) -> bool {
     std::fs::metadata(archive).is_ok_and(|m| m.len() == d.bytes)
-        && hashed_so_far(archive).is_ok_and(|(h, _)| h.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>() == d.sha256)
+        && hashed_so_far(archive).is_ok_and(|(h, _)| hex(h) == d.sha256)
+}
+
+/// A SHA-256 as manifests write it: in lowercase hexadecimal.
+fn hex(h: Sha256) -> String {
+    h.finalize().iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// A client, the crypto it needs installed first (`rustls-no-provider`).
@@ -584,7 +633,7 @@ pub async fn fetch_one(client: &reqwest::Client, d: &Download, dir: &Path, mut t
         // (kept, to be taken up again)
         return Err(stopped(d, had, "the server ended it early"));
     }
-    let got: String = hasher.finalize().iter().map(|b| format!("{b:02x}")).collect();
+    let got = hex(hasher);
     if got != d.sha256 {
         let _ = std::fs::remove_file(&part);
         return Err(format!("{} is not the file Meno expects: its SHA-256 is {got}", d.url));
@@ -614,6 +663,11 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    /// The files not kept as they were fetched (`held`): as `plugin_files` finds them.
+    fn missing<'a>(dir: &Path, downloads: &'a [Download]) -> Vec<&'a Download> {
+        downloads.iter().filter(|d| held(dir, d) != Held::Whole).collect()
     }
 
     fn sha(bytes: &[u8]) -> String {
@@ -882,6 +936,57 @@ mod tests {
     }
 
     #[test]
+    fn says_a_kept_file_whose_hash_is_no_longer_the_manifests_is_changed() {
+        let dir = Scratch::new();
+        let body = b"trained weights".to_vec();
+        let d = Download { file: "model.bin".into(), url: "https://h/model.bin".into(), sha256: sha(&body), bytes: body.len() as u64, ..Default::default() };
+        let path = dir.path().join("model.bin");
+        assert_eq!(held(dir.path(), &d), Held::Missing);
+        std::fs::write(&path, &body).unwrap();
+        assert_eq!(held(dir.path(), &d), Held::Whole);
+        assert!(missing(dir.path(), std::slice::from_ref(&d)).is_empty());
+        // (the same size, other bytes - changed, or damaged, since - and the time it was changed moved on: read again)
+        let at = std::fs::metadata(&path).unwrap().modified().unwrap();
+        std::fs::write(&path, b"trained weightz").unwrap();
+        let f = std::fs::File::options().write(true).open(&path).unwrap();
+        f.set_modified(at + std::time::Duration::from_secs(5)).unwrap();
+        drop(f);
+        assert_eq!(held(dir.path(), &d), Held::Changed);
+        assert_eq!(missing(dir.path(), std::slice::from_ref(&d)).len(), 1);
+        // (put right: whole again)
+        std::fs::write(&path, &body).unwrap();
+        let f = std::fs::File::options().write(true).open(&path).unwrap();
+        f.set_modified(at + std::time::Duration::from_secs(10)).unwrap();
+        drop(f);
+        assert_eq!(held(dir.path(), &d), Held::Whole);
+        // (another size: missing, not changed - it is fetched again, as one cut short is)
+        std::fs::write(&path, b"weights").unwrap();
+        assert_eq!(held(dir.path(), &d), Held::Missing);
+    }
+
+    #[test]
+    fn reads_a_kept_file_through_once_a_launch_while_its_size_and_time_stay() {
+        let dir = Scratch::new();
+        let body = b"0123456789".to_vec();
+        let d = Download { file: "w.bin".into(), url: "https://h/w.bin".into(), sha256: sha(&body), bytes: body.len() as u64, ..Default::default() };
+        let path = dir.path().join("w.bin");
+        std::fs::write(&path, &body).unwrap();
+        let at = std::fs::metadata(&path).unwrap().modified().unwrap();
+        assert_eq!(held(dir.path(), &d), Held::Whole);
+        // (other bytes at the same size, its time put back: not read again this launch - the check is once a launch)
+        std::fs::write(&path, b"9876543210").unwrap();
+        let f = std::fs::File::options().write(true).open(&path).unwrap();
+        f.set_modified(at).unwrap();
+        drop(f);
+        assert_eq!(held(dir.path(), &d), Held::Whole);
+        // (its time moved on: read again)
+        let f = std::fs::File::options().write(true).open(&path).unwrap();
+        f.set_modified(at + std::time::Duration::from_secs(1)).unwrap();
+        drop(f);
+        assert_eq!(held(dir.path(), &d), Held::Changed);
+    }
+
+    #[test]
     fn finds_the_program_a_plugin_fetched_as_it_was_set_up() {
         let data = Scratch::new();
         let manifest = json!({"name": "Blender", "environment": "uv", "downloads": [archive("blender-x.tar.xz", "tar.xz", "*/blender")]});
@@ -914,7 +1019,7 @@ mod tests {
     #[test]
     fn a_file_not_its_size_is_still_missing() {
         let dir = Scratch::new();
-        let d = |file: &str, bytes| Download { file: file.into(), url: "https://h/m".into(), sha256: "a".repeat(64), bytes, ..Default::default() };
+        let d = |file: &str, bytes| Download { file: file.into(), url: "https://h/m".into(), sha256: sha(b"12345"), bytes, ..Default::default() };
         std::fs::write(dir.path().join("whole"), b"12345").unwrap();
         std::fs::write(dir.path().join("short"), b"12").unwrap();
         let all = [d("whole", 5), d("short", 5), d("none", 5)];

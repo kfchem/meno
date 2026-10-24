@@ -10,7 +10,7 @@ const wroteIn = new Map<string, string>();
 const lookedIn = new Map<string, number>();
 const commands: { cmd: string; args?: Record<string, unknown> }[] = [];
 const asked: ConsentRequest[] = [];
-const state = { missing: [] as string[], allowed: true, granted: new Set<string>() };
+const state = { missing: [] as string[], changed: [] as string[], allowed: true, granted: new Set<string>() };
 
 vi.mock("@tauri-apps/plugin-fs", () => ({
   BaseDirectory: { AppData: 1, Resource: 2, AppLocalData: 3 },
@@ -38,8 +38,8 @@ vi.mock("@tauri-apps/api/core", () => ({
     if (cmd === "py_env_python_path_uv") return "/data/uv/plugin-blender/venv/bin/python";
     if (cmd === "py_env_setup_uv") return void files.set(VENV_PYTHON, "");
     if (cmd === "plugin_files") {
-      if (args?.fetch) state.missing = [];
-      return { folder: "/data/uv/plugin-blender/files", missing: state.missing, bytes: 0 };
+      if (args?.fetch) state.missing = state.changed = [];
+      return { folder: "/data/uv/plugin-blender/files", missing: state.missing, bytes: 0, changed: state.changed };
     }
   },
 }));
@@ -74,6 +74,7 @@ describe("setting a plugin up, with what it downloads besides", () => {
     commands.length = 0;
     asked.length = 0;
     state.missing = [dmg.file];
+    state.changed = [];
     state.allowed = true;
     state.granted.clear();
   });
@@ -144,6 +145,29 @@ describe("setting a plugin up, with what it downloads besides", () => {
     await ensurePyEnv("plugin-blender");
     expect(asked).toEqual([]);
     expect(fetched()).toBe(true);
+  });
+
+  it("says plainly a file there that is not the one Meno downloaded, and asks again before fetching it anew - even where it was allowed", async () => {
+    state.granted.add("python-env:plugin-blender");
+    files.set(VENV_PYTHON, "");
+    files.set(STAMP, JSON.stringify({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] }));
+    // (as the app's side says of a file kept as it is - a model's weights - whose SHA-256 it read through: any it names is said)
+    state.changed = [dmg.file];
+    await ensurePyEnv("plugin-blender");
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ again: true });
+    expect(asked[0].detail.startsWith(`${dmg.file} is not the file Meno downloaded: its fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since. The Blender plugin needs`)).toBe(true);
+    expect(fetched()).toBe(true);
+  });
+
+  it("says it too where the user says no to fetching it anew - and fetches nothing", async () => {
+    state.granted.add("python-env:plugin-blender");
+    files.set(VENV_PYTHON, "");
+    files.set(STAMP, JSON.stringify({ lockSha: await sha256(LOCK), py: "3.12", files: [dmg.sha256] }));
+    state.changed = [dmg.file];
+    state.allowed = false;
+    await expect(ensurePyEnv("plugin-blender")).rejects.toThrow(/is not the file Meno downloaded/);
+    expect(fetched()).toBe(false);
   });
 
   it("fetches nothing where the user says no", async () => {
