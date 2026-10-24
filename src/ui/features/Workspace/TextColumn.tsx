@@ -638,6 +638,8 @@ function PdfBody({ pdf }: { pdf: PdfItem }) {
     const onMove = (e: PointerEvent) => {
       over = true;
       setOver(true);
+      // (the pointer in the column has left the canvas: no PDF there is hovered any more, whatever the canvas last saw)
+      if (store.getState().hoveredPdf != null) store.getState().setHoveredPdf(null);
       const q = inPdf(e);
       lit(q.on);
       if (lifting) {
