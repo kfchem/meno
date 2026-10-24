@@ -29,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
+import { CARD_H, CARD_W, HTML_DISTANCE, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, wireCurve } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, missingFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -61,10 +61,15 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** Where a step's input `port` takes - its first, where it has no such input (look `stepTakes`). */
 const stepTakes = (s: Pick<WorkflowStep, "x" | "y" | "kind">, port?: string): Pt => portTakes(s, Math.max(0, inputsOf(s.kind).findIndex((p) => p.id === port)));
 
-/** A wire's curve from `p` to `q`, leaving and arriving level, as a ribbon `width` wide. */
-function ribbon(p: Pt, q: Pt, width: number): THREE.BufferGeometry {
+/** What a wire leaves and comes into - a set's frame, a step's card - for it to go round where it comes back (look `wireCurve`). */
+type Ends = { from?: Frame; to?: Frame };
+/** Ends said as a key, for what is worked out from them to be kept while they stay where they are. */
+const endsKey = (e?: Ends) => (e ? [e.from, e.to].map((f) => (f ? `${f.x0},${f.x1},${f.y0},${f.y1}` : "")).join("|") : "");
+
+/** A wire's curve from `p` to `q`, leaving and arriving level - round its `ends` where it comes back - as a ribbon `width` wide. */
+function ribbon(p: Pt, q: Pt, width: number, ends?: Ends): THREE.BufferGeometry {
   const N = 48;
-  const pts = wireCurve(p, q, N);
+  const pts = wireCurve(p, q, N, ends);
   const positions: number[] = [];
   const index: number[] = [];
   // (how far along it each point is, for a dash)
@@ -107,8 +112,8 @@ void main() {
 }`;
 
 /** The wire into a running step: dashed, its dashes moving slowly towards the step - a frame drawn for each step they move. */
-function MovingWire({ p, q, color, zoom }: { p: Pt; q: Pt; color: string; zoom: number }) {
-  const line = useMemo(() => ribbon(p, q, WIRE_PX / zoom), [p.x, p.y, q.x, q.y, zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+function MovingWire({ p, q, ends, color, zoom }: { p: Pt; q: Pt; ends?: Ends; color: string; zoom: number }) {
+  const line = useMemo(() => ribbon(p, q, WIRE_PX / zoom, ends), [p.x, p.y, q.x, q.y, endsKey(ends), zoom]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   const material = useMemo(
     () =>
@@ -163,10 +168,10 @@ function useFade(material: React.RefObject<THREE.Material | null>, leaving: bool
 }
 
 /** A wire drawn from `p` to `q`; where it can be pointed at, a wider band round it that the pointer takes. It fades in as it comes, and out as it goes (`leaving`). */
-function WireLine({ p, q, color, zoom, onHover, leaving = false }: { p: Pt; q: Pt; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
+function WireLine({ p, q, ends, color, zoom, onHover, leaving = false }: { p: Pt; q: Pt; ends?: Ends; color: string; zoom: number; onHover?: (on: boolean) => void; leaving?: boolean }) {
   // (as wide on the screen at any zoom: a hair, as the frames' lines are)
-  const line = useMemo(() => ribbon(p, q, WIRE_PX / zoom), [p.x, p.y, q.x, q.y, zoom]); // eslint-disable-line react-hooks/exhaustive-deps
-  const hit = useMemo(() => (onHover && !leaving ? ribbon(p, q, WIRE_HIT_PX / zoom) : null), [p.x, p.y, q.x, q.y, zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
+  const line = useMemo(() => ribbon(p, q, WIRE_PX / zoom, ends), [p.x, p.y, q.x, q.y, endsKey(ends), zoom]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hit = useMemo(() => (onHover && !leaving ? ribbon(p, q, WIRE_HIT_PX / zoom, ends) : null), [p.x, p.y, q.x, q.y, endsKey(ends), zoom, !!onHover, leaving]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => line.dispose(), [line]);
   useEffect(() => () => hit?.dispose(), [hit]);
   const material = useRef<THREE.MeshBasicMaterial>(null);
@@ -768,7 +773,8 @@ export default function Workflow2D() {
   const coverStep = cover ? stepById.get(cover.step) : undefined;
   const coverFrame = coverStep && cover ? { x0: coverStep.x, x1: coverStep.x + cover.w, y0: coverStep.y - cover.h, y1: coverStep.y } : null;
   const portR = 4.5 / zoom;
-  // the wires: each drawn, and each step's to the set it made
+  // the wires: each drawn, and each step's to the set it made - each going round what it leaves and comes into, where it comes back (a step's card as it stands shut: where wires join it, look `wireCurve`)
+  const cardFrame = (s: WorkflowStep): Frame => ({ x0: s.x, x1: s.x + CARD_W, y0: s.y - CARD_H, y1: s.y });
   const wireParts = [
     ...wires.flatMap((w) => {
       if (w.id === wireDrag?.was) return [];
@@ -776,11 +782,13 @@ export default function Workflow2D() {
       const s = stepById.get(w.to.step);
       if (!p || !s) return [];
       const failed = states.get(s.id) === "failed";
+      const from = setById.get(w.from.set);
       return [
         {
           key: `w${w.id}`,
           p,
           q: stepTakes(s, w.to.port),
+          ends: { ...(from ? { from: shownOf(from) } : {}), to: cardFrame(s) } as Ends,
           moving: !!s.running && hoveredWire !== w.id,
           color: hoveredWire === w.id ? COLORS.highlight : failed ? ATTENTION : WIRE,
           onHover: (on: boolean) => (on ? hover({ hoveredWire: w.id }) : unhover("hoveredWire", w.id)),
@@ -789,7 +797,7 @@ export default function Workflow2D() {
     }),
     ...sets.flatMap((b) => {
       const s = b.made ? stepById.get(b.made.step) : undefined;
-      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), moving: false, color: WIRE, onHover: undefined }] : [];
+      return s ? [{ key: `m${b.id}`, p: stepGives(s), q: setTakes(shownOf(b)), ends: { from: cardFrame(s), to: shownOf(b) } as Ends, moving: false, color: WIRE, onHover: undefined }] : [];
     }),
   ];
   const shownWires = usePresence(wireParts, (w) => w.key);
@@ -799,9 +807,9 @@ export default function Workflow2D() {
       {/* wires: those drawn, and each step's to the set it made - and those just gone, fading */}
       {shownWires.map(({ key, item, leaving }) =>
         item.moving && !leaving ? (
-          <MovingWire key={key} p={item.p} q={item.q} color={WIRE} zoom={zoom} />
+          <MovingWire key={key} p={item.p} q={item.q} ends={item.ends} color={WIRE} zoom={zoom} />
         ) : (
-          <WireLine key={key} p={item.p} q={item.q} color={item.color} zoom={zoom} onHover={leaving ? undefined : item.onHover} leaving={leaving} />
+          <WireLine key={key} p={item.p} q={item.q} ends={item.ends} color={item.color} zoom={zoom} onHover={leaving ? undefined : item.onHover} leaving={leaving} />
         ),
       )}
       {drawn && <WireLine p={drawn.p} q={drawn.q} color={ACCENT} zoom={zoom} />}

@@ -105,19 +105,80 @@ export const setTakes = (b: Side): Pt => ({ x: b.x0, y: (b.y0 + b.y1) / 2 });
 export const stepTakes = (s: { x: number; y: number }, k: number): Pt => ({ x: s.x, y: s.y - portDown(k) });
 export const stepGives = (s: { x: number; y: number }): Pt => ({ x: s.x + CARD_W, y: s.y - PORT_DOWN });
 
-/** A wire's curve from `p` to `q`, leaving and arriving level (a cubic Bézier, its handles half the run across, 40 px at least): `n` + 1 points along it. */
-export function wireCurve(p: Pt, q: Pt, n = 48): Pt[] {
-  const d = Math.max(Math.abs(q.x - p.x) / 2, 40 * PX);
-  const c1 = { x: p.x + d, y: p.y };
-  const c2 = { x: q.x - d, y: q.y };
-  const at = (t: number): Pt => {
-    const u = 1 - t;
-    return {
-      x: u * u * u * p.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * q.x,
-      y: u * u * u * p.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * q.y,
+/**
+ * A wire's curve from `p` to `q`, leaving and arriving level: `n` + 1
+ * points along it. Going on to the right, a cubic Bézier, its handles half
+ * the run across, 40 px at least. Coming back - its end to the left of its
+ * start, or too near it to turn - where what it leaves and what it comes
+ * into are given (`ends`: a set's frame, a step's card), round them rather
+ * than over them: out to the right of the one, across between the two -
+ * or above or below both, where they are side by side - and into the
+ * other from its left, half a bond clear of each (`BETWEEN`), its corners
+ * rounded. Never back over what it leaves or comes into, nor over what
+ * that holds.
+ */
+export function wireCurve(p: Pt, q: Pt, n = 48, ends?: { from?: Side; to?: Side }): Pt[] {
+  const least = 40 * PX;
+  if (!ends || q.x - p.x >= 2 * least) {
+    const d = Math.max(Math.abs(q.x - p.x) / 2, least);
+    const c1 = { x: p.x + d, y: p.y };
+    const c2 = { x: q.x - d, y: q.y };
+    const at = (t: number): Pt => {
+      const u = 1 - t;
+      return {
+        x: u * u * u * p.x + 3 * u * u * t * c1.x + 3 * u * t * t * c2.x + t * t * t * q.x,
+        y: u * u * u * p.y + 3 * u * u * t * c1.y + 3 * u * t * t * c2.y + t * t * t * q.y,
+      };
     };
-  };
-  return Array.from({ length: n + 1 }, (_, i) => at(i / n));
+    return Array.from({ length: n + 1 }, (_, i) => at(i / n));
+  }
+  const from = ends.from ?? { x0: p.x, x1: p.x, y0: p.y, y1: p.y };
+  const to = ends.to ?? { x0: q.x, x1: q.x, y0: q.y, y1: q.y };
+  const out = Math.max(p.x, from.x1) + BETWEEN;
+  const into = Math.min(q.x, to.x0) - BETWEEN;
+  // (the level it crosses at: between the two, one above the other; else above both, or below both - whichever is the shorter way)
+  const levels = [Math.max(from.y1, to.y1) + BETWEEN, Math.min(from.y0, to.y0) - BETWEEN];
+  if (to.y0 > from.y1) levels.push((from.y1 + to.y0) / 2);
+  if (from.y0 > to.y1) levels.push((to.y1 + from.y0) / 2);
+  const way = (y: number) => Math.abs(p.y - y) + Math.abs(y - q.y);
+  const level = levels.reduce((a, b) => (way(b) < way(a) ? b : a));
+  return rounded([p, { x: out, y: p.y }, { x: out, y: level }, { x: into, y: level }, { x: into, y: q.y }, q], BETWEEN, n);
+}
+
+/**
+ * A line through `corners`, each corner rounded - as far as `r` from it, or
+ * half the shorter side - as `n` + 1 points evenly along it.
+ */
+function rounded(corners: readonly Pt[], r: number, n: number): Pt[] {
+  const pts = corners.filter((c, i) => i === 0 || Math.hypot(c.x - corners[i - 1].x, c.y - corners[i - 1].y) > 1e-9);
+  const fine: Pt[] = [pts[0]];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const [a, c, b] = [pts[i - 1], pts[i], pts[i + 1]];
+    const la = Math.hypot(c.x - a.x, c.y - a.y);
+    const lb = Math.hypot(b.x - c.x, b.y - c.y);
+    const k = Math.min(r, la / 2, lb / 2);
+    const s = { x: c.x + ((a.x - c.x) / la) * k, y: c.y + ((a.y - c.y) / la) * k };
+    const e = { x: c.x + ((b.x - c.x) / lb) * k, y: c.y + ((b.y - c.y) / lb) * k };
+    // (a quarter turn: a quadratic Bézier from where it starts turning to where it ends, the corner its control)
+    for (let j = 0; j <= 8; j++) {
+      const t = j / 8;
+      const u = 1 - t;
+      fine.push({ x: u * u * s.x + 2 * u * t * c.x + t * t * e.x, y: u * u * s.y + 2 * u * t * c.y + t * t * e.y });
+    }
+  }
+  fine.push(pts[pts.length - 1]);
+  // (evenly along it, by length)
+  const run = [0];
+  for (let i = 1; i < fine.length; i++) run.push(run[i - 1] + Math.hypot(fine[i].x - fine[i - 1].x, fine[i].y - fine[i - 1].y));
+  const total = run[run.length - 1] || 1;
+  let k = 1;
+  return Array.from({ length: n + 1 }, (_, i) => {
+    const want = (total * i) / n;
+    while (k < fine.length - 1 && run[k] < want) k++;
+    const span = run[k] - run[k - 1] || 1;
+    const t = Math.min(1, Math.max(0, (want - run[k - 1]) / span));
+    return { x: fine[k - 1].x + (fine[k].x - fine[k - 1].x) * t, y: fine[k - 1].y + (fine[k].y - fine[k - 1].y) * t };
+  });
 }
 
 /**

@@ -4,8 +4,11 @@ import type { DrawnModel } from "../store/types";
 import { inside, type Frame } from "./entries";
 import { resultOf } from "./flow";
 import { inputsOf } from "./kinds";
-import { CARD_H, CARD_W, GAP, PORT_DOWN, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
+import { BETWEEN, CARD_H, CARD_W, GAP, PORT_DOWN, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
 import { addStep, connect } from "./model";
+import { clearOf } from "./place";
+import { boxOf } from "../chem/make3d";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { placeResults, type RunResults, type RunWith } from "./run";
 
 const W: RunWith = { extentOf: () => ({ x0: -1, x1: 1, y0: -1, y1: 1 }), byOf: () => "meno", now: 1000 };
@@ -45,13 +48,21 @@ function overlaps(doc: WorkspaceDocument): string[] {
       const from = sets.find((x) => x.id === w.from.set)!;
       const to = steps.find((x) => x.id === w.to.step)!;
       if (from.id === b.id) continue;
-      lines.push({ name: `wire ${w.id}`, pts: wireCurve(setGives(from), stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port))), 96) });
+      lines.push({ name: `wire ${w.id}`, pts: wireCurve(setGives(from), stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port))), 96, { from, to: cardOf(to) }) });
     }
     for (const o of sets) {
       const s = o.made && steps.find((x) => x.id === o.made!.step);
-      if (s && o.id !== b.id) lines.push({ name: `line to set ${o.id}`, pts: wireCurve(stepGives(s), setTakes(o), 96) });
+      if (s && o.id !== b.id) lines.push({ name: `line to set ${o.id}`, pts: wireCurve(stepGives(s), setTakes(o), 96, { from: cardOf(s), to: o }) });
     }
     for (const l of lines) if (l.pts.some((p) => inside(b, p))) said.push(`set ${b.id} over ${l.name}`);
+    // (and its own wires and line, none turning back over it: in it, off its sides)
+    const within = (p: { x: number; y: number }) => p.x > b.x0 + 1e-6 && p.x < b.x1 - 1e-6 && p.y > b.y0 + 1e-6 && p.y < b.y1 - 1e-6;
+    for (const w of (doc.wires ?? []).filter((w) => w.from.set === b.id)) {
+      const to = steps.find((x) => x.id === w.to.step)!;
+      if (wireCurve(setGives(b), stepTakes(to, Math.max(0, inputsOf(to.kind).findIndex((p) => p.id === w.to.port))), 96, { from: b, to: cardOf(to) }).some(within)) said.push(`set ${b.id} under its own wire ${w.id}`);
+    }
+    const by = steps.find((x) => x.id === b.made!.step);
+    if (by && wireCurve(stepGives(by), setTakes(b), 96, { from: cardOf(by), to: b }).some(within)) said.push(`set ${b.id} under its own line`);
   }
   return said;
 }
@@ -111,3 +122,52 @@ describe("where a result set goes", () => {
   });
 });
 
+
+describe("what a set keeps clear of: a structure's ink, and its own wires", () => {
+  const L = NOMINAL_BOND_LENGTH;
+  /** A page with one structure drawn on it, not in any set. */
+  const drawnOn = (atoms: { el: string; x: number; y: number }[], bonds: [number, number][]): WorkspaceDocument => ({
+    ...emptyWorkspaceDocument(),
+    model: { atoms: atoms.map((a, i) => ({ id: i + 1, r: 0.9, ...a })), bonds: bonds.map(([a, b], i) => ({ id: i + 1, a, b, order: 1 })) } as never,
+  });
+  const f: Frame = { x0: 0, x1: 10, y0: -10, y1: 0 };
+
+  it("keeps BETWEEN from a structure's labels' letters, not only its atoms: a Cl just beyond reach, its letters within it", () => {
+    // (C-Cl, the Cl to the left, its atom just past BETWEEN from the frame's right side - its letters, about half a bond either side of it, within)
+    const at = f.x1 + BETWEEN + 0.1 * L;
+    const doc = drawnOn([{ el: "Cl", x: at, y: -5 }, { el: "C", x: at + L, y: -5 }], [[1, 2]]);
+    expect(boxOf({ atoms: doc.model.atoms, bonds: doc.model.bonds }).x0).toBeLessThan(f.x1 + BETWEEN);
+    expect(clearOf(doc, f)).toBe(false);
+    // (moved a bond further off: clear)
+    expect(clearOf(drawnOn([{ el: "Cl", x: at + L, y: -5 }, { el: "C", x: at + 2 * L, y: -5 }], [[1, 2]]), f)).toBe(true);
+  });
+
+  it("keeps BETWEEN from a structure's bonds: a long one across it, its atoms both well outside", () => {
+    const doc = drawnOn([{ el: "C", x: -6, y: -5 }, { el: "C", x: 16, y: -5 }], [[1, 2]]);
+    expect(clearOf(doc, f)).toBe(false);
+  });
+
+  it("a wire coming back - into a step to the left of its set's right side, above it - goes round both, never over either", () => {
+    // (a tall set, and a step's card above it whose input is to the left of the set's right side: as steps laid close have it)
+    const set: Frame = { x0: 10, x1: 16, y0: -60, y1: -4 };
+    const card = cardOf({ x: 12, y: 0 });
+    const p = setGives(set);
+    const q = stepTakes({ x: 12, y: 0 }, 0);
+    const strictly = (b: Frame) => (pt: { x: number; y: number }) => pt.x > b.x0 + 1e-9 && pt.x < b.x1 - 1e-9 && pt.y > b.y0 + 1e-9 && pt.y < b.y1 - 1e-9;
+    // (the curve alone: back over the set)
+    expect(wireCurve(p, q, 96).some(strictly(set))).toBe(true);
+    const pts = wireCurve(p, q, 96, { from: set, to: card });
+    expect(pts).toHaveLength(97);
+    expect([pts[0], pts[96]]).toEqual([p, q]);
+    expect(pts.some(strictly(set)) || pts.some(strictly(card))).toBe(false);
+    // (leaving to the right, and coming into the input from its left: half a bond out from each)
+    expect(Math.max(...pts.map((pt) => pt.x))).toBeCloseTo(set.x1 + BETWEEN, 6);
+    expect(Math.min(...pts.map((pt) => pt.x))).toBeCloseTo(card.x0 - BETWEEN, 6);
+    // (across between the two, the set under the card: no higher than the card's foot, no lower than the set's top)
+    const across = pts.filter((pt) => pt.x > card.x0 && pt.x < set.x1);
+    for (const pt of across) expect(pt.y > set.y1 - 1e-9 && pt.y < card.y0 + 1e-9).toBe(true);
+    // (going on to the right, as it was: the curve)
+    const far = stepTakes({ x: 40, y: 0 }, 0);
+    expect(wireCurve(p, far, 48, { from: set, to: cardOf({ x: 40, y: 0 }) })).toEqual(wireCurve(p, far, 48));
+  });
+});

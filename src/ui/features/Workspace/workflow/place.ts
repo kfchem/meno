@@ -7,7 +7,9 @@
  * (`placeCard`).
  */
 import type { WorkspaceDocument } from "../document";
-import { inside, type Frame } from "./entries";
+import { inside, setMembers, structuresOf, type Frame } from "./entries";
+import { boxOf } from "../chem/make3d";
+import { NOMINAL_BOND_LENGTH } from "../../../../lib/chem/acs";
 import { inputsOf } from "./kinds";
 import { BETWEEN, CARD_H, CARD_W, GAP, setGives, setTakes, stepGives, stepTakes, wireCurve } from "./look";
 
@@ -36,26 +38,36 @@ export function placeFor(doc: WorkspaceDocument, step: { id: number; x: number; 
  */
 export type Self = { set?: number; molecules?: ReadonlySet<number>; sets?: ReadonlySet<number>; step?: number };
 
+/** A step's card, shut: where it stands on the page. */
+const cardOf = (s: { x: number; y: number }): Frame => frameAt(s.x, s.y, CARD_W, CARD_H);
+
 /** How many points along a wire stand for it, as `clearOf` keeps clear of it. */
 const WIRE_POINTS = 24;
 
 type Pt = { x: number; y: number };
 /** What a frame keeps clear of: frames - a card's with its step - and points; and the lines its own wires would be, each with the card at its far end, which it meets. */
-type Taken = { frames: (Frame & { card?: number })[]; points: Pt[]; from?: { step: number; at: Pt }; to: { step: number; at: Pt }[] };
+type Taken = { frames: (Frame & { card?: number })[]; points: Pt[]; from?: { step: number; at: Pt; card: Frame }; to: { step: number; at: Pt; card: Frame }[] };
+
+/** How far a structure's ink may reach past its atoms, about: its labels' letters - "OSiPh2tBu" written out from its O. A structure whose atoms lie further than this from where a frame is looked for cannot reach it. */
+const INK_REACH = 8 * NOMINAL_BOND_LENGTH;
 
 /**
  * What a frame keeps clear of on the page: its sets and steps' cards, as
  * frames; its structures' atoms, its molecules in 3D, and its wires - each
  * a curve as Workflow2D draws it (look `wireCurve`), its points along it -
- * as points. Not `self`, nor what it holds, nor the wires to and from it:
- * those move with it, and are kept clear of the rest themselves.
+ * as points; and each structure as far as its ink, its labels' letters too
+ * (chem/make3d `boxOf`, as a set's frame keeps round it), as a frame -
+ * those near `along`, the stretch across the page frames are looked for in.
+ * Not `self`, nor what it holds, nor the wires to and from it: those move
+ * with it, and are kept clear of the rest themselves.
  */
-function takenOn(doc: WorkspaceDocument, self?: Self): Taken {
+function takenOn(doc: WorkspaceDocument, self?: Self, along?: { x0: number; x1: number }): Taken {
   const own = (id: number) => id === self?.set || !!self?.sets?.has(id);
   const sets = new Map((doc.sets ?? []).map((b) => [b.id, b]));
   const steps = new Map((doc.steps ?? []).map((s) => [s.id, s]));
   const takes = (s: { x: number; y: number; kind: Parameters<typeof inputsOf>[0] }, port: string) => stepTakes(s, Math.max(0, inputsOf(s.kind).findIndex((p) => p.id === port)));
   const frames: Taken["frames"] = [...(doc.sets ?? []).filter((b) => !own(b.id)), ...(doc.steps ?? []).map((s) => ({ ...frameAt(s.x, s.y, CARD_W, CARD_H), card: s.id }))];
+  frames.push(...inkOf(doc, own, along));
   const points: Pt[] = [...doc.model.atoms.map((a) => ({ x: a.x, y: a.y })), ...(doc.molecules3d ?? []).filter((m) => !self?.molecules?.has(m.id)).map((m) => m.at)];
   const to: Taken["to"] = [];
   // (each wire from a set into a step's input, and each line from a step to its result set)
@@ -63,29 +75,52 @@ function takenOn(doc: WorkspaceDocument, self?: Self): Taken {
     const b = sets.get(w.from.set);
     const s = steps.get(w.to.step);
     if (!b || !s) continue;
-    if (b.id === self?.set) to.push({ step: s.id, at: takes(s, w.to.port) });
-    else if (!own(b.id)) points.push(...wireCurve(setGives(b), takes(s, w.to.port), WIRE_POINTS));
+    if (b.id === self?.set) to.push({ step: s.id, at: takes(s, w.to.port), card: cardOf(s) });
+    else if (!own(b.id)) points.push(...wireCurve(setGives(b), takes(s, w.to.port), WIRE_POINTS, { from: b, to: cardOf(s) }));
   }
   for (const b of doc.sets ?? []) {
     const s = b.made ? steps.get(b.made.step) : undefined;
-    if (s && !own(b.id)) points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS));
+    if (s && !own(b.id)) points.push(...wireCurve(stepGives(s), setTakes(b), WIRE_POINTS, { from: cardOf(s), to: b }));
   }
   const step = self?.step != null ? steps.get(self.step) : undefined;
-  return { frames, points, ...(step ? { from: { step: step.id, at: stepGives(step) } } : {}), to };
+  return { frames, points, ...(step ? { from: { step: step.id, at: stepGives(step), card: cardOf(step) } } : {}), to };
+}
+
+/**
+ * Each structure on the page but those the sets `own` hold, as far as its
+ * ink (chem/make3d `boxOf`) - where its atoms come within `INK_REACH` of
+ * `along` (all, where none is given): measuring a structure's ink lays it
+ * out, so a page of a thousand is not laid out for each frame looked for.
+ */
+function inkOf(doc: WorkspaceDocument, own: (id: number) => boolean, along?: { x0: number; x1: number }): Frame[] {
+  const held = new Set((doc.sets ?? []).filter((b) => own(b.id)).flatMap((b) => setMembers(doc, b).structures.flat()));
+  const byId = new Map(doc.model.atoms.map((a) => [a.id, a]));
+  const out: Frame[] = [];
+  for (const ids of structuresOf(doc.model)) {
+    if (ids.some((id) => held.has(id))) continue;
+    const atoms = ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []));
+    if (along && !atoms.some((a) => a.x > along.x0 - INK_REACH && a.x < along.x1 + INK_REACH)) continue;
+    const these = new Set(ids);
+    out.push(boxOf({ atoms, bonds: doc.model.bonds.filter((b) => these.has(b.a) && these.has(b.b)) }));
+  }
+  return out;
 }
 
 /**
  * Whether frame `f` keeps `BETWEEN` clear of what is `taken` - and, `lines`,
  * its own lines, to it from its step and from it to the steps it goes into,
- * cross no card or set but those they meet.
+ * cross no card, set or structure's ink but those they meet - nor `f`
+ * itself: a wire from it into a step to the left of its right side would
+ * turn back over what it holds.
  */
 function clearIn(taken: Taken, f: Frame, lines = true): boolean {
   const near = { x0: f.x0 - BETWEEN, x1: f.x1 + BETWEEN, y0: f.y0 - BETWEEN, y1: f.y1 + BETWEEN };
   if (taken.frames.some((t) => t.x0 < near.x1 && t.x1 > near.x0 && t.y0 < near.y1 && t.y1 > near.y0) || taken.points.some((p) => inside(near, p))) return false;
   if (!lines) return true;
-  const crosses = (pts: readonly Pt[], meets: number) => pts.some((p) => taken.frames.some((t) => t.card !== meets && p.x > t.x0 && p.x < t.x1 && p.y > t.y0 && p.y < t.y1));
-  if (taken.from && crosses(wireCurve(taken.from.at, setTakes(f), WIRE_POINTS), taken.from.step)) return false;
-  return !taken.to.some((w) => crosses(wireCurve(setGives(f), w.at, WIRE_POINTS), w.step));
+  const over = [...taken.frames, f];
+  const crosses = (pts: readonly Pt[], meets: number) => pts.some((p) => over.some((t) => (t as { card?: number }).card !== meets && p.x > t.x0 && p.x < t.x1 && p.y > t.y0 && p.y < t.y1));
+  if (taken.from && crosses(wireCurve(taken.from.at, setTakes(f), WIRE_POINTS, { from: taken.from.card, to: f }), taken.from.step)) return false;
+  return !taken.to.some((w) => crosses(wireCurve(setGives(f), w.at, WIRE_POINTS, { from: f, to: w.card }), w.step));
 }
 
 /**
@@ -95,7 +130,7 @@ function clearIn(taken: Taken, f: Frame, lines = true): boolean {
  * its own lines cross none.
  */
 export function clearOf(doc: WorkspaceDocument, f: Frame, self?: Self): boolean {
-  return clearIn(takenOn(doc, self), f);
+  return clearIn(takenOn(doc, self, f), f);
 }
 
 /**
@@ -117,7 +152,7 @@ export function placeAgain(doc: WorkspaceDocument, step: { id: number; x: number
  * lower, half a card at a time, as far as it must to keep clear (`clearOf`).
  */
 export function placeBelow(doc: WorkspaceDocument, x: number, top: number, width: number, height: number, self?: Self): Frame {
-  const taken = takenOn(doc, self);
+  const taken = takenOn(doc, self, { x0: x, x1: x + width });
   const lowest = Math.min(top, ...taken.frames.map((t) => t.y0), ...taken.points.map((p) => p.y));
   const most = Math.ceil((top - lowest + height + BETWEEN) / (CARD_H / 2)) + 1;
   // (its own lines crossing nothing, where there is such a place; else - steps laid so close that a wire turns back on
