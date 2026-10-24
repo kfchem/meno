@@ -4,6 +4,10 @@ import type { WorkflowStep } from "../store/types";
 import StepCard from "./StepCard";
 import { kindInfo, needsOf, optionsOf, type StepKind } from "./kinds";
 import { speciesSet } from "./structureSteps";
+import { filter, filterNeeds } from "../../../../lib/nodes/filter";
+import { tag, tagNeeds } from "../../../../lib/nodes/tag";
+import { readLists } from "./enumerate";
+import { NO_POSITIONS } from "./substituents";
 import { notReadyFor } from "./doers";
 
 // Vitest runs in Node, with no page to mount on: the server's renderer draws the card.
@@ -57,9 +61,35 @@ describe("what a step still needs before it can run", () => {
     expect(needsOf(step("tag", { name: "R" }))).toBeUndefined();
   });
 
-  it("is nothing for a step that takes no such options", () => {
-    expect(needsOf(step("filter"))).toBeUndefined();
+  it("is said for Filter with no conditions, or a line that does not read - in the words its run is refused with", () => {
+    expect(needsOf(step("filter"))).toBe("No conditions yet");
+    expect(needsOf(step("filter", { conditions: "mw" }))).toBe('"mw" compares nothing: it takes a property, then < ≤ > ≥ = or ≠, then a value');
+    expect(needsOf(step("filter", { conditions: "mw < 300" }))).toBeUndefined();
+    expect(filter([], { conditions: [], match: "all" })).toEqual({ ok: false, said: filterNeeds("") });
+  });
+
+  it("is said for Tag with no name, in one phrase: its card's, its how's and its run's", () => {
+    expect(tagNeeds(" ")).toBe("Name the tag");
+    expect(tag([], { name: " " })).toEqual({ ok: false, said: "Name the tag" });
+    expect(kindInfo("tag").how!({ name: "" })).toBe("Name the tag");
+  });
+
+  it("is said for Enumerate with no lists, an empty one, or no positions or groups - as its run says them", () => {
+    // (by R groups, as a new step has it: R1 with nothing under it)
+    expect(needsOf(step("enumerate"))).toBe("R1 has no options");
+    expect(readLists("R1:\n").problems).toContain("R1 has no options");
+    expect(needsOf(step("enumerate", { lists: "" }))).toBe("No lists yet");
+    expect(needsOf(step("enumerate", { lists: "R1: Me\nEt" }))).toBeUndefined();
+    // (by substituents)
+    expect(needsOf(step("enumerate", { way: "substituents" }))).toBe(NO_POSITIONS);
+    expect(needsOf(step("enumerate", { way: "substituents", positions: "3" }))).toBe("No groups yet: type one to a line");
+    expect(needsOf(step("enumerate", { way: "substituents", positions: "3", groups: "Me" }))).toBeUndefined();
+  });
+
+  it("is nothing for a step that takes no such options, or whose defaults run", () => {
     expect(needsOf(step("combine"))).toBeUndefined();
+    expect(needsOf(step("chart"))).toBeUndefined();
+    expect(needsOf(step("populations"))).toBeUndefined();
   });
 
   it("is what Species' run is refused with, word for word", () => {

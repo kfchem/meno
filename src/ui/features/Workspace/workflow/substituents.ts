@@ -43,6 +43,9 @@ const said = (o: OptionRead) => (o.as === "element" ? o.formula : o.label);
 /** Whether an option is a plain hydrogen: "H" - which leaves a position as it is drawn. */
 const isPlainH = (o: OptionRead) => o.as === "element" && o.el === "H" && !o.charge && !o.isotope;
 
+/** What substituents with no positions say: as the step runs, and on its card. */
+export const NO_POSITIONS = "No positions chosen: choose atoms on the drawing";
+
 /** The groups typed on the step, one to a line, each read - and what could not be, by its line. */
 export function readGroups(text: string): { groups: (OptionRead | OptionProblem)[]; problems: string[] } {
   const groups: (OptionRead | OptionProblem)[] = [];
@@ -78,7 +81,7 @@ export function groupsReadAs(text: string): LineRead[] {
  */
 export function positionsOf(template: Model, ids: readonly number[]): { positions: Position[]; problems: string[] } {
   const problems: string[] = [];
-  if (!ids.length) return { positions: [], problems: ["No positions chosen: choose atoms on the drawing"] };
+  if (!ids.length) return { positions: [], problems: [NO_POSITIONS] };
   const place = new Map(template.atoms.map((a, i) => [a.id, i]));
   const gone = ids.filter((id) => !place.has(id)).length;
   if (gone) problems.push(gone === 1 ? "A position's atom is no longer in the drawing" : `${gone} positions' atoms are no longer in the drawing`);
