@@ -61,7 +61,7 @@ export default function NetworkToasts({ onOpen }: { onOpen: () => void }) {
       // the user's own code shows only once it reaches out
       if (task.purpose === "python-code" && conns.length === 0) continue;
       // (a look for a newer Meno, where its notice was turned off: kept in the record, not shown)
-      if (!noticeShown(task, updateNotice)) continue;
+      if (!noticeShown(task, updateNotice, { phase: updatePhase, downloads })) continue;
       const active = Math.max(
         task.ended ?? now,
         ...conns.map((c) => c.ended ?? now),

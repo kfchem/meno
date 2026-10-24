@@ -93,11 +93,15 @@ useUpdate.subscribe((u, was) => {
  * it shows its notice from the download's start: only the look itself is
  * hidden. The record keeps every look either way.
  */
-export function noticeShown(task: Pick<NetTask, "id" | "purpose" | "ended">, updateNotice: boolean): boolean {
+export function noticeShown(
+  task: Pick<NetTask, "id" | "purpose" | "ended">,
+  updateNotice: boolean,
+  update: { phase?: UpdatePhase; downloads: readonly string[] } = { phase: useUpdate.getState()?.phase, downloads: useUpdateDownloads.getState().tasks },
+): boolean {
   if (updateNotice || task.purpose !== UPDATE_PURPOSE) return true;
   // (the update downloading now, this task still running: the download, whether or not it was seen to begin)
-  if (!task.ended && useUpdate.getState()?.phase === "downloading") return true;
-  return useUpdateDownloads.getState().tasks.includes(task.id);
+  if (!task.ended && update.phase === "downloading") return true;
+  return update.downloads.includes(task.id);
 }
 
 /** Whether Meno may look now: online, and allowed to. */
