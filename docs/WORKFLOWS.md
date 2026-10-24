@@ -1950,6 +1950,63 @@ page could not be read after one run.
     where something else is there (`keepExitsUnder`). A step's empty
     exit frames, made as it is added, go clear in the same way (model
     `withExits`).
+  - **A wire goes round** (look `wireRoute`). Going on to the right it
+    is a curve, running on across all the way, never back out over what
+    is beside its ends. Where its input lies less than half a bond to the
+    right of where it leaves (`WIRE_TURNS`), or to the left of it, or the
+    curve would cross another set or card, or come within half a bond of
+    one away from its ends, it goes round them all: out a bond to the
+    right of its set, up or down to a level clear of all - a bond above
+    them, a bond below, or between them, across from one end to the
+    other, where that leaves half a bond either side (`levelsFor`) -
+    across, and into its input from a bond to its left. Each way up or
+    down is stepped aside past what stands in it, or kept short of it,
+    between it and its end, where that leaves half a bond either side or
+    the frame lies across the line in or out. Of these, the way over
+    least, then the shortest; where every way is over something, each is
+    tried again round that too. Inside another set or card it never goes,
+    however near its ends. Its turns are a bond wide, on the page, so they
+    are arcs at any zoom; two turns closer than that both shrink alike.
+    It keeps half a bond from every other frame's line (docs/LOOK.md,
+    *Room*), but beside its ends. Moved past where it turns over from
+    going round to the curve, a wire changes shape once, and the drawing
+    eases that (`DURATION.move`). Into a card that names its inputs, a
+    wire comes in level for as long as the input's name, under it.
+  - **It keeps its way** while that is still clear: the side it passed
+    what it goes round, unless the other side has become a fifth shorter.
+    A card dragged past a set makes its wire change way twice at most.
+    Placement keeps clear of the same routes, and a change of way on the
+    page is eased, never a jump: its ends stay on their ports while it
+    eases, only the rest moving (look `wireToward`), and a wire dragged by
+    its card is not eased at all (`shapeMoved`).
+  - **Only what moved is worked out again.** Each wire looks at the sets
+    and cards near it (`nearWire`), and is keyed by its ends and those
+    (`wireKey`): a drag works out again only the wires whose key changed.
+    Of those, a wire whose ends moved is worked out at once; one where
+    only what is near it moved waits while the frame's 8 ms for wires is
+    spent (`FrameBudget`), and is served the longest waiting first. A
+    frame serves at least one, so none waits more frames than there are
+    wires waiting before it: dragging a card among 100 sets and 45 long
+    wires near it, each waited at most 19 frames (0.3 s), and none was
+    left waiting 19 frames after the card was let go. Within a
+    wire, the ways round are tried shortest first, and no further than the
+    first clear of all - the longest a wire takes is about 7 ms on this
+    Mac, among 100 sets and 50 cards.
+  - **Smooth** (look `byTurn`, `pointsFor`). A wire is worked out as a
+    close path, then drawn through points spread by how far it runs and
+    how much it turns: one about every 3 screen pixels and every 2
+    degrees, more at its bends. A long run up or down turns in an arc as
+    wide as the run allows: the curve's handles are half the run, from 40
+    to 240 px, but never more than its run across - so an input near
+    where it leaves turns tighter, never swinging out past it. Worked out
+    finer where it turns tight, so that it is never a kink.
+  - **A card put down** (Quick Add, or a wire let go on empty space)
+    goes where it was put, or lower where that is over a set, a card, a
+    structure or a wire, as far as it must (place `placeCard`): it is made
+    there, so nothing on the page moves. A card the chemist drags lands
+    where they let it go. Put down
+    near the window's edge, or moved lower, it is brought into view with
+    the sets it will give, as what is put down is shown.
 - **How many it shows** (look `DRAWN_ON_PAGE`, the maintainer,
   2026-10-23): as many of its structures as take no more than 400 square
   bond lengths of the page between them - each its drawing's box and its
