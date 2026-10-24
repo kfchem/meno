@@ -8,6 +8,7 @@ import { readWorkspace, workspaceText } from "./workspace";
 import { entryOfSet, setEntries, setMembers, setMolecules } from "../workflow/entries";
 import { placeAsSet } from "../workflow/run";
 import { coordinateMolecules, energyOf } from "./coordinates";
+import { energiesFrom } from "../workflow/setTable";
 
 // (made up for the test: a water and a methane, each under its name)
 const TEXT = [
@@ -115,5 +116,51 @@ describe("the charge and multiplicity a text gives a structure read from its coo
       { charge: "given", multiplicity: "given" },
       { charge: "atoms", multiplicity: "atoms" },
     ]);
+  });
+});
+
+describe("the energy a structure's notes give it", () => {
+  it("is an electronic energy a note names as one - in hartrees, after its value or in brackets after its name", () => {
+    expect(energyOf(["E = -76.4 Hartree"])).toBe(-76.4);
+    expect(energyOf(["SCF Done: E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
+    expect(energyOf(["SCF energy (a.u.) = -154.987654"])).toBe(-154.987654);
+    expect(energyOf(["FINAL SINGLE POINT ENERGY = -93.399651434575 Eh"])).toBe(-93.399651434575);
+    expect(energyOf(["Electronic energy = -76.4 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
+  });
+
+  it("is never another quantity in its place, whichever comes first: a zero-point energy, a correction, a free energy, an enthalpy, a sum", () => {
+    expect(energyOf(["ZPE = 0.021 Hartree", "E = -76.4 Hartree"])).toBe(-76.4);
+    expect(energyOf(["Zero-point correction= 0.021234 (Hartree/Particle)", "E(RB3LYP) = -76.40 A.U."])).toBe(-76.4);
+    expect(energyOf(["G = -76.38 Hartree", "E = -76.40 Hartree"])).toBe(-76.4);
+    for (const note of ["ZPE = 0.021 Hartree", "Thermal correction to Gibbs Free Energy= 0.003 Hartree", "Sum of electronic and thermal Free Energies= -76.38 Hartree", "G = -76.38 Hartree", "H = -76.37 Eh", "Free energy = -76.38 Hartree"]) {
+      expect(energyOf([note]), note).toBeUndefined();
+    }
+  });
+
+  it("is none where two notes give two that differ - an MP2 energy and an HF one - never one of them chosen", () => {
+    expect(energyOf(["E(MP2) = -76.30 au", "E(HF) = -76.01 au"])).toBeUndefined();
+  });
+
+  /** A water read from a text, its notes `notes`. */
+  const water = (notes: string[]) =>
+    coordinateMolecules(readCoordinates(["TS1", ...notes, "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n")).map((structure) => ({ structure, name: structure.name })), "Pasted text")[0];
+
+  it("is given a structure with what its note names it - its method with it - as what its energies are, shown and set apart from others' by it", () => {
+    const m = water(["E(MP2) = -76.30 au"]);
+    expect([m.energies, m.made]).toEqual([[-76.3], { how: [], energies: "E(MP2)" }]);
+    expect(energiesFrom(m)).toBe("E(MP2)");
+    expect(energiesFrom(water(["E(HF) = -76.01 au"]))).toBe("E(HF)");
+  });
+
+  it("is none of a structure whose notes give two that differ, saying why beside them", () => {
+    const m = water(["E(MP2) = -76.30 au", "E(HF) = -76.01 au"]);
+    expect([m.energies, m.made]).toEqual([undefined, undefined]);
+    expect(m.said?.at(-1)).toEqual({ label: "Energy", text: "none taken: its notes give E(MP2) = -76.3 and E(HF) = -76.01, which differ" });
+  });
+
+  it("is none of a structure whose notes give another quantity alone: the note shown, no energy given it", () => {
+    const [m] = coordinateMolecules(readCoordinates(["TS1", "ZPE = 0.021 Hartree", "O 0.000000 0.000000 0.117300", "H 0.000000 0.757200 -0.469200", "H 0.000000 -0.757200 -0.469200"].join("\n")).map((structure) => ({ structure, name: structure.name })), "Pasted text");
+    expect(m.energies).toBeUndefined();
+    expect(m.said).toEqual([{ label: "Note", text: "ZPE = 0.021 Hartree" }]);
   });
 });
