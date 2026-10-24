@@ -2499,6 +2499,10 @@ each entry's number, then its energy).
   them, from below the least value to above the greatest.
 - A point pointed at says its row, what it is, and its two values; pressed, where it is
   of a molecule on the page, that molecule is chosen at its frame.
+- Zoomed out until words on the page are too small to read, a chart - and
+  an energy diagram - is still drawn, its points, levels, lines and axes;
+  only its words fade out, as a set's name and count do. A table and a
+  number, all words, fade out whole.
 - Its set's count line says its points. It is kept in the workspace's
   file. A chart goes into no step.
 - A point dragged reports where to in the axes' own units (`ChartBody`
