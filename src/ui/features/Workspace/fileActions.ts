@@ -28,7 +28,7 @@ import { editorLayoutOptions, layoutBonds } from "./layoutOptions";
 import { useEditorStore } from "./store";
 import type { Carried3D, Drawn, DrawnRecord, EditorState, Model } from "./store/types";
 import type { Property } from "../../../lib/entry";
-import { recordNow, recordNumber } from "./workflow/entries";
+import { imaginaryOf, recordNow, recordNumber } from "./workflow/entries";
 import { partsOf } from "./workflow/parts";
 import { useNotices } from "../../notices";
 import { carriedOf, isWorkspaceFile, notKeptSaid, workspaceFile } from "./utils/workspace";
@@ -279,16 +279,23 @@ function speciesData(m: Carried3D, i: number, skeleton: boolean): string {
 }
 
 /**
- * A frame's imaginary frequencies as an SD file's data item, in cm-1 as its
- * calculation gave them (workflow/entries `imaginaryOf`): each, where it was
- * judged to have any; "none", where its vibrations were worked out and it
- * has none; left out where they were not worked out - never "none" for not known.
+ * A frame's imaginary frequencies as an SD file's data item, in cm-1, as
+ * a step's entry reads them (workflow/entries `imaginaryOf`): those its
+ * calculation judged; else, where its vibrations were worked out - the
+ * molecule's calculation's, of its last frame, or those a conformer
+ * carries as its frame's property - those they list as negative, "none"
+ * where they list none; left out where they were not worked out - never
+ * "none" for not known.
  */
 function imaginaryData(m: Carried3D, i: number, n: number): string {
-  const own = m.imaginary?.length === n ? m.imaginary[i] : i === n - 1 ? m.calc?.imaginary : undefined;
-  if (own?.length) return `> <${SD_IMAGINARY}>\n${own.join(" ")}\n\n`;
-  const computed = i === n - 1 && m.imaginary?.length !== n && m.calc?.results?.some((r) => r.on === "list" && r.id === "vibrations");
-  return computed ? `> <${SD_IMAGINARY}>\nnone\n\n` : "";
+  const perFrame = m.imaginary?.length === n;
+  const found = imaginaryOf({
+    imaginary: (perFrame ? m.imaginary![i] : i === n - 1 ? m.calc?.imaginary : undefined) ?? undefined,
+    calc: i === n - 1 && !perFrame ? m.calc : undefined,
+    properties: m.properties?.length === n ? m.properties[i] : undefined,
+  });
+  if (found === "not computed") return "";
+  return `> <${SD_IMAGINARY}>\n${found.length ? found.join(" ") : "none"}\n\n`;
 }
 
 /**

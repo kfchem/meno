@@ -4,7 +4,8 @@ import type { DiagramValue } from "../../../../lib/energyDiagram";
 import { geometryKey } from "../../../../lib/entry";
 import { factor } from "../../../../lib/units";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
-import type { Molecule3D } from "../store/types";
+import { structureFileText } from "../fileActions";
+import type { Drawn, Molecule3D } from "../store/types";
 import { readCarried3D } from "../utils/copyPaste";
 import { noting } from "../utils/readNotes";
 import { carriedOf } from "../utils/workspace";
@@ -118,6 +119,19 @@ describe("Frequencies on a conformer set", () => {
     const again = setEntries([{ ...read!, id: molecule.id } as Molecule3D], "conformers");
     expect(again.map(imaginaryOf)).toEqual([[], [-85.3], []]);
     again.forEach((e, k) => expect(e.properties!.vibrations).toEqual(molecule.properties![k].vibrations));
+  });
+
+  it("writes each conformer's imaginary frequencies to an SD file, frame by frame: none, those it has, none - and leaves the item out where none were worked out", () => {
+    const { molecule } = frequencied(undefined, undefined, undefined, [[], [-85.3], []]);
+    const sdf = (m: Molecule3D) => structureFileText({ atoms: [], bonds: [], arrows: [], pluses: [], molecules3d: carriedOf({ molecules3d: [m], turns3d: {}, frames3d: {} }) } as unknown as Drawn, "/x/w.sdf", { frames: "all" });
+    const said = sdf(molecule)
+      .split("$$$$\n")
+      .filter(Boolean)
+      .map((r) => r.match(/> <Imaginary frequencies \(cm-1\)>\n(.*)\n/)?.[1]);
+    expect(said).toEqual(["none", "-85.3", "none"]);
+    // (the same set with nothing worked out of its vibrations: no item, never "none")
+    const bare = { ...molecule, imaginary: undefined, properties: molecule.properties!.map((p) => withoutCarried({ compound: 0, number: 1, atoms: [], bonds: [], xyz: [], properties: p }).properties ?? {}) };
+    expect(sdf(bare)).not.toContain("Imaginary");
   });
 
   it("never reads a vibrations table that lists a negative frequency as none - where the program judged none imaginary", () => {

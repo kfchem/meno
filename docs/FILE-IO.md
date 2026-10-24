@@ -738,7 +738,9 @@ As this part of step 5 was built (#155, from main beside step 3):
     say - (`> <Charge>`, `> <Multiplicity>`; none of a skeleton); and its
     imaginary frequencies in cm-1 as its calculation gave them
     (`> <Imaginary frequencies (cm-1)>`), `none` where its vibrations were
-    worked out and it has none, the item left out where they were not.
+    worked out and it has none, the item left out where they were not -
+    frame by frame for a conformer set, each conformer's as its own job
+    found them, as a step reads them.
     After them, what else was found of that frame - a model's value, a
     descriptor, what it was made from (`made_from.nll`) - each under its
     own name, as a structure drawn's record writes its properties (below):
