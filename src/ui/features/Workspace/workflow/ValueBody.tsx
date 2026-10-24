@@ -92,6 +92,13 @@ const DOT = 3;
 const DRAG = 4;
 
 /**
+ * A chart's axes and ticks: part of what it draws - in its numbers' grey,
+ * not a frame's line - and a screen pixel wide at least, whatever the zoom
+ * (`--hair`, the page's layer's), so that zoomed out they still read as axes.
+ */
+const AXIS = { className: "stroke-gh-gray", style: { strokeWidth: "max(1px, var(--hair, 1px))" } } as const;
+
+/**
  * A chart's body, its words - each a span over its drawing, which is SVG -
  * faded out where they are too small to read (`compact`): a chart at a fit
  * zoom is still its points and axes, never an empty frame.
@@ -170,12 +177,12 @@ export function ChartBody({
         onPointerUp={up}
         onPointerCancel={() => (pressed.current = null)}
       >
-        <rect x={0} y={0} width={w} height={h} className="fill-none stroke-gh-line" strokeWidth={1} />
+        <rect x={0} y={0} width={w} height={h} className="fill-none stroke-gh-gray" style={AXIS.style} />
         {tx.ticks.map((t) => (
-          <line key={`x${t}`} x1={px(t)} x2={px(t)} y1={h} y2={h + 4} className="stroke-gh-gray" strokeWidth={1} />
+          <line key={`x${t}`} x1={px(t)} x2={px(t)} y1={h} y2={h + 4} {...AXIS} />
         ))}
         {ty.ticks.map((t) => (
-          <line key={`y${t}`} x1={-4} x2={0} y1={py(t)} y2={py(t)} className="stroke-gh-gray" strokeWidth={1} />
+          <line key={`y${t}`} x1={-4} x2={0} y1={py(t)} y2={py(t)} {...AXIS} />
         ))}
         {chart.points.map((p, i) => (
           <circle
@@ -256,9 +263,9 @@ export function DiagramBody({ diagram, onLevel, compact }: { diagram: DiagramVal
   return (
     <div className={wordsOf(compact)} style={{ width: CHART_PX.w, height: CHART_PX.h }} data-set-diagram="">
       <svg className="absolute overflow-visible" style={{ left, top, pointerEvents: "auto" }} width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
-        <line x1={0} x2={0} y1={0} y2={h} className="stroke-gh-line" strokeWidth={1} />
+        <line x1={0} x2={0} y1={0} y2={h} {...AXIS} />
         {ty.ticks.map((t) => (
-          <line key={t} x1={-4} x2={0} y1={py(t)} y2={py(t)} className="stroke-gh-gray" strokeWidth={1} />
+          <line key={t} x1={-4} x2={0} y1={py(t)} y2={py(t)} {...AXIS} />
         ))}
         {diagram.links.map(([a, b], i) => {
           const [p, q] = a < b ? [a, b] : [b, a];

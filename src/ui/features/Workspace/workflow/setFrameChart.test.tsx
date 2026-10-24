@@ -54,6 +54,15 @@ describe("a set holding a chart, at a zoom too small to read its words", () => {
     }
   });
 
+  it("draws its axes and ticks in its numbers' grey, a screen pixel wide at least - never a frame's faint line", () => {
+    for (const c of [chart, diagram]) {
+      const svg = frame(set(c), true).match(/<svg[\s\S]*<\/svg>/)![0];
+      expect(svg).not.toContain("stroke-gh-line");
+      // (the plot's box or the axis, and each tick: three ticks at least, all as wide)
+      expect(svg.match(/stroke-width:max\(1px, var\(--hair, 1px\)\)/g)!.length).toBeGreaterThanOrEqual(4);
+    }
+  });
+
   it("leaves a table out whole, as before: its words are all it is", () => {
     const table = { columns: [{ name: "x", kind: "number" as const, unit: "none" as const }], rows: [[1]], unread: [], left: [] };
     const far = frame({ id: 1, x0: 0, x1: 12, y0: 0, y1: 9, table }, true);
