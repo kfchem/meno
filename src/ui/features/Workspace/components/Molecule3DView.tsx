@@ -10,7 +10,7 @@ import { buttonHeld } from "./buttonHeld";
 import { atomColour, ballCircles, bondRadiusOf, linedBall, lineWidth, LINE_LEAST_PX, type Style3D } from "../../../../lib/chem/style3d";
 import type { Look3D, Measure3D, Molecule3D, Rising3D, Turn3D } from "../store/types";
 import { menoShader } from "../utils/menoShader";
-import { pageScale } from "../utils/pageScale";
+import { NOTES_SCALE, pageScale } from "../utils/pageScale";
 import { bentStickGeometry, stickBends, withStickBend } from "../utils/stickBend";
 import { withCentres, fadeStep, bentLinesOf, bondLines, bondReach, frameBondsOf, linesBetween, notesOf, plainNoteOf, frameOf, labelSpot, linesOf, magnifiedOf, seenShare, sharesOf, sharesWithheld, solidOf, spotFollowed, valueSpots, widestWay, WORLD_PER_ANGSTROM, type BondLine, type DrawnBond, type LabelBox, type LabelFade, type SpotAbout, type Stick, type ValueAt } from "../utils/molecule3d";
 import { MARK_MIN_PX, MARK_SCALE, marksSeenAt, stereoTextEms } from "../chem/marks";
@@ -2038,7 +2038,8 @@ export default function Molecule3DView(props: Molecule3DViewProps) {
           <PageHtml zIndexRange={[30, 20]} style={{ pointerEvents: "none" }}>
             <div
               className="flex flex-col items-center"
-              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(0.75, var(--page, 1), 1.5))`, transformOrigin: "50% 100%" }}
+              data-fit-notes={MARK_GAP_PX}
+              style={{ transform: `translate(-50%, calc(-100% - ${MARK_GAP_PX}px)) scale(clamp(${NOTES_SCALE.least}, var(--page, 1), ${NOTES_SCALE.most}))`, transformOrigin: "50% 100%" }}
             >
               {notesEver.map((text) => (
                 <NoteMark

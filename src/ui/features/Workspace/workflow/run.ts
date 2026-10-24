@@ -382,7 +382,7 @@ export function resultsOf(outcome: Extract<Outcome, { ok: true }>, kind: StepKin
   const rest = outcome.aside.length ? moleculesOf({ ...outcome, holds: asideHolds, kept: outcome.aside, shares: undefined }) : [];
   // (structures drawn it could not make in 3D - Conformers' - in its aside exit's set as they came: there to be followed, and wired on)
   const asideDrawn = "asideDrawn" in outcome && outcome.asideDrawn?.length ? { drawn: { made: [], rest: outcome.asideDrawn.map(drawnModel) } } : {};
-  return { molecules: moleculesOf(outcome), rest, holds: outcome.holds, ...asideDrawn };
+  return { molecules: moleculesOf(outcome, kind === "conformers"), rest, holds: outcome.holds, ...asideDrawn };
 }
 
 /** `doc` with what a step gave as the entries of its result set: made to the right of it, or the one it made before, emptied of what it held - each molecule given room as `turns` turns it. */
@@ -800,7 +800,7 @@ export function speciesKept(e: SetEntry): Pick<Molecule3D, "calc"> | Record<stri
 /** The imaginary frequencies an entry was judged to have: its calculation's verdict - one a program step just made - else its own. */
 const imaginaryOfEntry = (e: SetEntry): number[] | undefined => (e as Worked).calc?.imaginary ?? e.imaginary;
 
-function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D, "id" | "at">[] {
+function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>, search = false): Omit<Molecule3D, "id" | "at">[] {
   const atomsAt = (e: SetEntry, xyz: readonly number[] = e.xyz) => e.atoms.map((a, i) => ({ ...a, x: xyz[3 * i], y: xyz[3 * i + 1], z: xyz[3 * i + 2] }));
   // (the shares a step worked out - Meno's Populations - else those the program that found them gave)
   const share = new Map(outcome.kept.map((e, i) => [e, outcome.shares?.[i] ?? (e as Worked).share]));
@@ -856,8 +856,10 @@ function moleculesOf(outcome: Extract<Outcome3D, { ok: true }>): Omit<Molecule3D
       ...(degeneracies ? { degeneracies } : {}),
       ...(properties ? { properties } : {}),
       ...(g.some((e) => e.mirror) ? { mirrors: g.map((e) => (e.mirror ? [...e.mirror] : null)) } : {}),
-      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's)
-      ...(calc ? { calc: { ...calc, results: undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
+      // (what the calculation found of the first alone - its results, its imaginary frequencies - not the compound's; but a
+      //  search's results, which programs conformersWorked keeps with the first, are of its run, the compound's: how it
+      //  took conformers as one, as its program said - kept)
+      ...(calc ? { calc: { ...calc, results: search ? calc.results : undefined, source: undefined, imaginary: undefined } } : speciesKept(first)),
       conformerSet: true,
       // (a part of a search's conformers where any of them was - As conformers grouping one with others too: its shares not shown unless a Populations step worked them out)
       ...(g.some((e) => e.partOf) ? { partOf: true as const } : {}),

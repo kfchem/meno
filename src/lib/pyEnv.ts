@@ -35,9 +35,37 @@ export type PyProfile = `plugin-${string}`;
 const pluginOf = (profile: PyProfile): PythonPlugin | undefined => PLUGINS.find((p) => p.profile === profile);
 
 /** A plugin's files besides its environment (src-tauri/src/plugfiles.rs): the folder they are kept in, and those still to be downloaded, with their bytes. */
-type FilesState = { folder: string; missing: string[]; bytes: number };
-/** Where a plugin's files stand; or, given the hosts the consent to fetch them named - all the fetch may reach - fetched. */
-const filesOf = (plugin: PythonPlugin, hosts?: readonly string[]) => invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: !!hosts, hosts });
+/**
+ * Where a plugin's files stand (src-tauri/src/plugfiles.rs `FilesState`):
+ * those not kept as fetched; of them, those there that are not - not their
+ * size, or their SHA-256 not the manifest's: changed, or damaged, since; and
+ * those there that could not be read, each with why.
+ */
+type FilesState = { folder: string; missing: string[]; bytes: number; changed?: string[]; unreadable?: string[] };
+
+/** The plugins whose kept files are being read through for their SHA-256, by id, with their names - said where setting them up is (`filesOf`). */
+export const useCheckingFiles = create<Record<string, string>>(() => ({}));
+
+/** How long a check of a plugin's files goes unsaid: one Meno has read through this launch takes no time. */
+const CHECK_SAID_AFTER_MS = 300;
+
+/**
+ * Where a plugin's files stand - each read through for its SHA-256, once a
+ * launch, which a model's weights take a while to be: said, where it takes
+ * more than a moment (`useCheckingFiles`); or, given the hosts the consent
+ * to fetch them named - all the fetch may reach - fetched.
+ */
+async function filesOf(plugin: PythonPlugin, hosts?: readonly string[]): Promise<FilesState> {
+  if (hosts) return invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: true, hosts });
+  const said = setTimeout(() => useCheckingFiles.setState({ [plugin.id]: plugin.name }), CHECK_SAID_AFTER_MS);
+  try {
+    return await invoke<FilesState>("plugin_files", { plugin: plugin.id, fetch: false, hosts });
+  } finally {
+    clearTimeout(said);
+    // (replaced, not merged: a merge would keep the plugin it leaves out)
+    useCheckingFiles.setState((s) => Object.fromEntries(Object.entries(s).filter(([id]) => id !== plugin.id)), true);
+  }
+}
 
 /** How far each plugin's files have come as they download, by the plugin's id: a share, naught to one. */
 export const useDownloads = create<Record<string, number>>(() => ({}));
@@ -217,11 +245,16 @@ async function envState(profile: PyProfile, opts?: EnvOptions) {
     stamp.py !== info.pythonVersion;
   // (a plugin's files besides, each there whole)
   const files = setUpFiles(plugin);
-  const needFiles = !!plugin && files.length > 0 && (await filesOf(plugin)).missing.length > 0;
+  const filesNow = plugin && files.length > 0 ? await filesOf(plugin) : null;
+  const needFiles = !!filesNow?.missing.length;
+  // (those there whose SHA-256 is not the one Meno carries: said, and asked again before they are fetched anew)
+  const changed = filesNow?.changed ?? [];
+  // (one that could not be read: not known to be changed - never fetched over; said, and read again next time)
+  const unreadable = filesNow?.unreadable ?? [];
   // (one the user was not told of as it was set up - a plugin that has come to need more since: asked again, even where it was allowed)
   const untold = files.some((f) => !stamp.files?.includes(f.sha256));
 
-  return { info, lockText, lockSha, venvPy, needSetup, needFiles, untold, told: files.map((f) => f.sha256) };
+  return { info, lockText, lockSha, venvPy, needSetup, needFiles, changed, unreadable, untold, told: files.map((f) => f.sha256) };
 }
 
 /**
@@ -237,6 +270,14 @@ export async function pyEnvReady(profile: PyProfile): Promise<boolean> {
   }
 }
 
+/** What is said of a plugin's files there whose SHA-256 is not the one Meno carries for them, first: none where there are none. */
+export function changedSaid(changed: readonly string[]): string {
+  if (!changed.length) return "";
+  const one = changed.length === 1;
+  const names = one ? changed[0] : `${changed.slice(0, -1).join(", ")} and ${changed[changed.length - 1]}`;
+  return `${names} ${one ? "is" : "are"} not the file${one ? "" : "s"} Meno downloaded: ${one ? "its" : "their"} size or fingerprint (SHA-256) is not the one Meno carries - changed, or damaged, since. `;
+}
+
 /** What asking to set a plugin up says first: an interface to a program installed separately (the ORCA interface) downloads that program never - only what the interface itself needs. */
 const consentTitle = (plugin: { name: string; installed?: readonly unknown[] }) =>
   plugin.installed?.length ? `Set up the ${plugin.name}?` : `Download ${plugin.name}?`;
@@ -245,10 +286,13 @@ export async function ensurePyEnv(
   profile: PyProfile,
   opts?: EnvOptions
 ): Promise<string> {
-  const { info, lockText, lockSha, venvPy, needSetup, needFiles, untold, told } = await envState(
+  const { info, lockText, lockSha, venvPy, needSetup, needFiles, changed, unreadable, untold, told } = await envState(
     profile,
     opts
   );
+  // (a file there that could not be read - held by another program, not allowed, a share gone: not known to be changed, so neither
+  //  fetched over nor run with; said, with why, and read again the next time)
+  if (unreadable.length) throw new Error(`${unreadable.join("; ")} - ${unreadable.length === 1 ? "it" : "they"} could not be read, so ${pluginOf(profile)?.name ?? profile} cannot run. Meno reads ${unreadable.length === 1 ? "it" : "them"} again the next time.`);
   // (set up, with the files besides the user was told of)
   const stampNow = () => writeJsonSafe(info.stampPath, { lockSha, py: info.pythonVersion, ...(told.length ? { files: told } : {}) });
   const extra = besides(pluginOf(profile));
@@ -320,15 +364,18 @@ export async function ensurePyEnv(
     // (allowed as the plugin was set up - asked again where that leave was
     // withdrawn, or where the user was not told of these then)
     const plugin = pluginOf(profile)!;
+    // (one there that is not the file Meno fetched - its fingerprint not the one Meno carries - is said plainly, and asked again, even where
+    //  setting it up was allowed: it is downloaded anew only with a yes)
+    const unlike = changedSaid(changed);
     const allowed = await askToConnect({
       purpose: info.purpose,
       title: consentTitle(plugin),
-      again: untold && !needSetup,
-      detail: `The ${plugin.name} plugin needs${extra.need.replace(/^; and it needs/, "").replace(/ beside them$/, "")}, downloaded once into its data folder, checked against the fingerprint Meno carries for it:`,
+      again: (untold && !needSetup) || !!unlike,
+      detail: `${unlike}The ${plugin.name} plugin needs${extra.need.replace(/^; and it needs/, "").replace(/ beside them$/, "")}, downloaded once into its data folder, checked against the fingerprint Meno carries for it:`,
       sources: extra.sources,
       hosts: extra.hosts,
     });
-    if (!allowed) throw new Error(`${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
+    if (!allowed) throw new Error(`${unlike}${info.label} needs the network, and was not allowed it (Meno is offline, or the download was declined).`);
     if (untold && !needSetup) await stampNow();
     await fetchFiles(plugin, extra.hosts);
   }

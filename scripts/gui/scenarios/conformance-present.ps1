@@ -100,10 +100,15 @@ function SizeUp { [MacGui]::Chord([uint16[]] @(55, 56), [uint64[]] @(0x100000, 0
 function Calm { Send-MenoKey Escape; Start-Sleep -Milliseconds 300; Move-MenoPointer -X 1280 -Y 1690; Start-Sleep -Milliseconds 400 }
 
 Start-Meno
-# (a fresh profile asks whether Meno may keep itself up to date, a moment in: declined)
-Start-Sleep -Milliseconds 4500
+# (a fresh profile asks whether Meno may keep itself up to date after the first action - Settings opened here, then
+# the workspace's tab brought back - so that it is not asked in the middle of what follows: declined)
+Start-Sleep -Milliseconds 1500
+Invoke-MenoClick -X 2515 -Y 40
+Start-Sleep -Milliseconds 2000
 Send-MenoKey Escape
 Start-Sleep -Milliseconds 600
+Invoke-MenoClick -X 240 -Y 40
+Start-Sleep -Milliseconds 800
 Note ("screen: " + (& /usr/bin/osascript -e 'tell application "Finder" to get bounds of window of desktop'))
 
 # whether this Meno's Quick Add has the pen: its row's width, at a clean spot
