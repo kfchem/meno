@@ -279,7 +279,8 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
     const part: FigureRead = { atoms: ids.map((i) => f.atoms[i]), bonds: mine.map((b) => ({ ...b, a: at.get(b.a)!, b: at.get(b.b)! })), bond: f.bond, left: { letters: [] } };
     const mid = { x: (Math.min(...part.atoms.map((a) => a.x)) + Math.max(...part.atoms.map((a) => a.x))) / 2, y: (Math.min(...part.atoms.map((a) => a.y)) + Math.max(...part.atoms.map((a) => a.y))) / 2 };
     const within = lettersWithin([...f.left.letters, ...words].map((l) => ({ c: l.c, box: boxBack(l.box, back) })), bonds, box, f.bond);
-    const model: Model | null = within ? null : modelOf(part, (x, y) => ({ sha256, page, ...back({ x, y }), bond: f.bond }), mid);
+    const line = lineOfWords(part);
+    const model: Model | null = within || line ? null : modelOf(part, (x, y) => ({ sha256, page, ...back({ x, y }), bond: f.bond }), mid);
     return {
       key: `${figure}:${k}`,
       bonds,
@@ -288,9 +289,23 @@ function structuresHere(f: FigureRead, back: (p: Point) => Point, figure: number
       box,
       ends,
       reach,
-      read: model ? { model } : { none: `Part of this structure could not be read ("${within}"), so none of it is taken.` },
+      read: model ? { model } : line ? { none: `It is a line of words (${line}), not a structure drawn, so none of it is taken.` } : { none: `Part of this structure could not be read ("${within}"), so none of it is taken.` },
     };
   });
+}
+
+/**
+ * Whether a structure read is a line of words - "R2 = SPh", "t-BuNH2·BH3" - its signs read as bonds: every atom a label, all
+ * on one line, each bond level - and an "=" read as a double bond, or a label that reads as nothing (an italic t). Its labels,
+ * in order along the line, where it is one; else null. A molecule drawn so with bonds, its labels all read and its bonds single
+ * - Cl-Hg-Cl - is none.
+ */
+function lineOfWords(f: FigureRead): string | null {
+  if (f.atoms.length < 2 || f.atoms.some((a) => !a.label)) return null;
+  const level = (p: number, q: number) => Math.abs(p - q) <= 0.2 * f.bond;
+  if (!f.atoms.every((a) => level(a.y, f.atoms[0].y)) || !f.bonds.every((b) => level(f.atoms[b.a].y, f.atoms[b.b].y))) return null;
+  const odd = f.bonds.some((b) => b.order > 1) || f.atoms.some((a) => !readDrawnLabel(a.label!, figureLabels).read);
+  return odd ? [...f.atoms].sort((p, q) => p.x - q.x).map((a) => `"${a.label}"`).join(", ") : null;
 }
 
 /** A compound's number as a figure sets one under or beside its structure: 12, 3a, (4b), 7' - words of a figure that are no part of a structure. */

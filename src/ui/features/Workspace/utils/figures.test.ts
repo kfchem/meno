@@ -151,6 +151,21 @@ describe("a figure read as a structure for the page", () => {
   });
 });
 
+describe("a bond's open end drawn short", () => {
+  it("marks its atom unsure - a letter there not read, an I set alone, or a wavy line across it - never a methyl, sure; a chain's full-length end it leaves", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const c = step(b, -30);
+    const d = step(c, 30);
+    const short: P = [c[0] + (d[0] - c[0]) * 0.6, c[1] + (d[1] - c[1]) * 0.6];
+    const m = structureFrom({ paths: [stroke(a, b, c, short)], letters: [], pictures: [] }, SHA, 1) as Model;
+    const said = m.atoms.map((x) => x.unsure?.said ?? []);
+    expect(said.filter((w) => w.includes("Its bond is drawn short, as one to a label is, but no label is read at its end."))).toHaveLength(1);
+    const full = structureFrom({ paths: [stroke(a, b, c, d)], letters: [], pictures: [] }, SHA, 1) as Model;
+    expect(full.atoms.filter((x) => x.unsure)).toEqual([]);
+  });
+});
+
 describe("a figure set sideways", () => {
   /** The figure turned a quarter as the page shows it: its words reading down the page - each point turned, each letter's line reading down. */
   const sideways = (f: FigureDrawn): FigureDrawn => {

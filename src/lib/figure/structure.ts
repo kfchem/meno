@@ -43,6 +43,9 @@ function drawnHydrogens(label: string): number | null {
   return n(m[1]) + n(m[3]);
 }
 
+/** How short a bond's open end may be drawn, for the figure's bond, before it is taken to have been drawn to something not read. */
+const SHORT_END = 0.72;
+
 /**
  * The structure a figure reads as: the page's points made Meno's units,
  * a bond as long as Meno draws one, its middle at naught (or `about`); a ring drawn
@@ -154,6 +157,14 @@ export function structureOf(read: FigureRead, reads: LabelReader, about?: { x: n
     const groups = around[i].filter((n) => !lone(n)).map((n) => kinds[n]);
     if (hs[i] > 1 || new Set(groups).size !== groups.length || groups.length + hs[i] !== 4) return;
     (a.unsure ??= []).push("A stereocentre whose configuration is not drawn: none is read.");
+  });
+  // a bond's open end - an atom of one bond, with no label - drawn short, as a bond to a label is: a letter there not read (an
+  // I, set alone), or a wavy line across it, the point a group is attached at - never a methyl, sure
+  read.atoms.forEach((a, i) => {
+    if (a.label || a.el || degree[i] !== 1) return;
+    const b = read.bonds.find((x) => x.a === i || x.b === i)!;
+    const other = read.atoms[b.a === i ? b.b : b.a];
+    if (read.bond && Math.hypot(a.x - other.x, a.y - other.y) < SHORT_END * read.bond) (atoms[i].unsure ??= []).push("Its bond is drawn short, as one to a label is, but no label is read at its end.");
   });
   return { atoms, bonds };
 }
