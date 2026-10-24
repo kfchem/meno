@@ -558,10 +558,16 @@ type Run = {
  * and by the order the wires are given, where that says nothing. Where
  * there is no room for lanes so far apart, they are left as they ran.
  * Moving some into lanes may bring them alongside others: those are then
- * given lanes together, three times at most. The corners of each wire, as
- * many as it had.
+ * given lanes together, three times at most. A wire `held` - one not on a
+ * card being dragged - is held where it is given there, others put in
+ * lanes beside it. A wire that would come nearer a frame than its way
+ * (`ways`) went - its turn under a frame's corner - is taken only as far
+ * into its lane as keeps that room, else left as its way went. The
+ * corners of each wire, as many as it had.
  */
-export function wireLanes(wires: readonly (readonly Pt[])[], frames: readonly Side[], held: readonly boolean[] = []): Pt[][] {
+export function wireLanes(ways: readonly (readonly Pt[])[], frames: readonly Side[], held: readonly (readonly Pt[] | null | undefined)[] = []): Pt[][] {
+  // (each wire from where it is held, else from its way)
+  const wires = ways.map((c, w) => held[w] ?? c);
   const runs: Run[] = [];
   wires.forEach((c, w) => {
     for (let i = 0; i + 1 < c.length; i++) {
@@ -641,7 +647,7 @@ export function wireLanes(wires: readonly (readonly Pt[])[], frames: readonly Si
   }
   // (a wire its lane brings nearer a frame than its own way went: as far into its lane as keeps that room - three quarters, half, a quarter - else as it ran)
   return out.map((c, w) => {
-    const was = wires[w];
+    const was = ways[w];
     if (c.every((pt, i) => pt.x === was[i].x && pt.y === was[i].y)) return c;
     const room = clearOf(roundedWay(was), frames);
     for (const k of [1, 0.75, 0.5, 0.25]) {

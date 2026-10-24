@@ -59,7 +59,7 @@ describe("wires moved into lanes", () => {
   it("holds a wire held - as one not on a card being dragged - where it is: another takes a lane beside it", () => {
     const a = down(10, { x: 0, y: 10 }, { x: 20, y: -10 });
     const b = down(10, { x: 0, y: 8 }, { x: 20, y: -12 });
-    const [na, nb] = wireLanes([a, b], [], [true, false]);
+    const [na, nb] = wireLanes([a, b], [], [a, null]);
     expect(na).toEqual(a);
     expect(Math.abs(xOfRun(nb) - 10)).toBeCloseTo(WIRE_LANE, 9);
   });

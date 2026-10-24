@@ -29,7 +29,7 @@ import { howOf, inputsOf, kindInfo, optionsOf } from "../workflow/kinds";
 import { useReaders } from "../../../../lib/calc/workers";
 import { useAppSettings } from "../../../../lib/settings/appSettings";
 import { finished } from "../../../../lib/jobs";
-import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, shapeMoved, wireLanes, wireRoute, wireToward, wireKey, type WireRouted } from "../workflow/look";
+import { CARD_H, CARD_W, framesHash, HTML_DISTANCE, inputLead, nearWire, onLayer, PORTS_Z, portDown, PX, setGives, setTakes, shuttingCard, stepGives, stepTakes as portTakes, underCard, byTurn, FrameBudget, pointsFor, roundedWay, shapeMoved, WIRE_LANE, wireLanes, wireRoute, wireToward, wireKey, type WireRouted } from "../workflow/look";
 import { byOf, doerOf, inputsFor, installedFor, kindsOf, notReadyFor, optionsFor, setName, stepOptions } from "../workflow/doers";
 import { lookFor, useInstalled } from "../../../../lib/plugins/installed";
 import { addsToSelection } from "../../../../lib/doc/shortcuts";
@@ -186,26 +186,28 @@ function useWirePoints(items: readonly WireItem[], frames: readonly Frame[], zoo
     invalidate();
   });
   // (those going round, into lanes: each wire's corners as moved - worked out again only where a way, or a frame, changed)
-  type Laned = { corners: Pt[]; p: Pt; q: Pt; key: string };
+  type Laned = { corners: Pt[]; way: Pt[]; p: Pt; q: Pt; key: string };
   const lanes = useRef<{ of: string; laned: Map<string, Laned> } | null>(null);
-  // (while a card or a set is dragged, the lanes as they were when it began: those of wires not on it held there - their way, where that is
-  //  as it was, in its lane; else as it goes now - and only the wires it moves put in lanes among them; all put in lanes anew once it is let go)
-  const held = useRef<Map<string, Laned> | null>(null);
-  if (!moving) held.current = null;
-  else if (!held.current) held.current = new Map(lanes.current?.laned ?? []);
+  // (while a card or a set is dragged, the wires not on it keep the lanes they had - moved aside from their way as far as they were, where
+  //  it goes the same way - and only those it moves, or makes go another way, put in lanes among them; all put in lanes anew once it is let go)
+  const held = moving ? lanes.current?.laned : undefined;
   const round = [...routed.current.entries()].filter(([, r]) => r.route.corners);
   const holds = round.map(([key, r]) => {
-    const h = held.current?.get(key);
-    return h && h.p.x === r.p.x && h.p.y === r.p.y && h.q.x === r.q.x && h.q.y === r.q.y ? (h.key === r.key ? h.corners : r.route.corners!) : null;
+    const h = held?.get(key);
+    const c = r.route.corners!;
+    if (!h || h.p.x !== r.p.x || h.p.y !== r.p.y || h.q.x !== r.q.x || h.q.y !== r.q.y || h.way.length !== c.length) return null;
+    // (going the same way still - none of its corners further than a lane from where it was: else it goes another way, and is put in a lane anew)
+    if (c.some((pt, i) => Math.hypot(pt.x - h.way[i].x, pt.y - h.way[i].y) >= WIRE_LANE)) return null;
+    return c.map((pt, i) => ({ x: pt.x + h.corners[i].x - h.way[i].x, y: pt.y + h.corners[i].y - h.way[i].y }));
   });
-  const lanesOf = `${round.map(([key, r], i) => `${key}:${r.key}${holds[i] ? "*" : ""}`).join("|")}#${framesHash(frames)}`;
+  const lanesOf = `${round.map(([key, r], i) => `${key}:${r.key}${holds[i] ? `*${holds[i]!.map((c) => `${c.x},${c.y}`).join(";")}` : ""}`).join("|")}#${framesHash(frames)}`;
   if (lanes.current?.of !== lanesOf) {
     const put = wireLanes(
-      round.map(([, r], i) => holds[i] ?? r.route.corners!),
+      round.map(([, r]) => r.route.corners!),
       frames,
-      holds.map((h) => !!h),
+      holds,
     );
-    lanes.current = { of: lanesOf, laned: new Map(round.map(([key, r], i) => [key, { corners: put[i], p: r.p, q: r.q, key: r.key }])) };
+    lanes.current = { of: lanesOf, laned: new Map(round.map(([key, r], i) => [key, { corners: put[i], way: r.route.corners!, p: r.p, q: r.q, key: r.key }])) };
   }
   const laned = new Map([...lanes.current.laned].map(([key, l]) => [key, l.corners]));
   const out = new Map<string, Pt[]>();
