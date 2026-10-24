@@ -222,6 +222,16 @@ stops being part of the work.
   stack, a drag moves the view, and a long press on its words selects
   from the word under it (*As built*, step 3). ⌘C copies it, and the
   right-click menu has *Copy*.
+- **A line's band is its words'** (2026-10-23): a press in the white
+  between two lines - half way to each - or up to a line's height past its
+  ends selects from the line it is in, so a press between the rows of a
+  table of coordinates, or in the gaps between its numbers, selects text
+  and never draws a box. In a figure, a line of twenty letters or more (a
+  table's row, a sentence) is text too; a figure's labels are the
+  figure's, as before. A box is drawn from where there are no words.
+- **Shift-click** in the column draws the selection on from where it was
+  begun to the point clicked, on the same page or a later one - as a drag
+  across pages, the column scrolling on at its top and foot, does.
 - **PDFium says where each letter is**, and Meno selects and marks by
   that, on the stack and in the column alike.
 
@@ -1528,9 +1538,15 @@ words are: by itself, not by a box drawn round it.
 **A structure, and where it lies** (`utils/pageStructures`):
 - each figure of the page is read as *Read as structure* reads one (the
   one reading, `schemeDrawn`), and split into its structures: an atom and
-  every atom bonded to it, on and on. A lone labelled atom - an ion -
-  within 1.6 bonds of a structure is that structure's (sodium acetate is
-  one structure);
+  every atom bonded to it, on and on. A lone ion (Na+, Cl-) within 1.6
+  bonds of a structure, with no arrow nor "+" between them, is that
+  structure's where the ions so by it make it neutral - it carrying their
+  charge the other way: sodium acetate, an ammonium chloride, are each one
+  structure. Any other ion by a structure - within those 1.6 bonds, or
+  within the box round the figure's bonds - is its own, never a neutral
+  molecule's nor taken across a scheme; one further out (a "Na+" of a
+  caption or a table) is words. A lone label that is no ion - a lone
+  metal - is the structure's it lies by so, and by none, words;
 - where each lies is its bonds and its labels' boxes, on the page;
 - the pointer takes the nearest within a third of a bond of one of its
   bonds or labels, and none where an arrow, a "+" or words lie nearer.

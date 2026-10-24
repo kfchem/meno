@@ -12,9 +12,9 @@ type Rules = { nativeControls: Rule[]; colourLiterals: Rule[]; notYet: { nativeC
 const root = fileURLToPath(new URL("../../../", import.meta.url));
 const rules: Rules = JSON.parse(readFileSync(new URL("./lookRules.json", import.meta.url), "utf8"));
 
-/** How many places of each listed file each look rule finds, read as ESLint reads them. */
-async function counted(): Promise<{ nativeControls: Record<string, number>; colourLiterals: Record<string, number> }> {
-  const eslint = new ESLint({
+/** The look rules alone, as ESLint reads them. */
+function lookLint(): ESLint {
+  return new ESLint({
     cwd: root,
     overrideConfigFile: true,
     overrideConfig: [
@@ -25,6 +25,11 @@ async function counted(): Promise<{ nativeControls: Record<string, number>; colo
       },
     ],
   });
+}
+
+/** How many places of each listed file each look rule finds, read as ESLint reads them. */
+async function counted(): Promise<{ nativeControls: Record<string, number>; colourLiterals: Record<string, number> }> {
+  const eslint = lookLint();
   const files = [...new Set([...Object.keys(rules.notYet.nativeControls), ...Object.keys(rules.notYet.colourLiterals)])];
   const native = new Set(rules.nativeControls.map((r) => r.message));
   const out = { nativeControls: {} as Record<string, number>, colourLiterals: {} as Record<string, number> };
@@ -71,6 +76,24 @@ describe("the look rules' files not yet in line (docs/LOOK.md, Not yet)", () => 
       under: ["a.tsx: 3 now, cap 5: lower the cap", "c.tsx: 0 now, cap 1: lower the cap"],
     });
   });
+});
+
+describe("the look rules", () => {
+  it(
+    "refuse a control drawn by the browser or in place, and leave Meno's own",
+    async () => {
+      const [r] = await lookLint().lintText(
+        ['const a = <select />;', 'const b = <input type="checkbox" />;', 'const c = <button role="switch" />;', 'const d = <Switch on label="x" onChange={() => {}} />;', 'const e = <input type="text" />;'].join("\n"),
+        { filePath: "src/ui/example.tsx" },
+      );
+      expect(r.messages.map((m) => [m.line, m.message.split(":")[0]])).toEqual([
+        [1, "A native <select>"],
+        [2, "A native radio or checkbox"],
+        [3, "A switch drawn in place"],
+      ]);
+    },
+    measured(3_000),
+  );
 });
 
 describe("a colour made from data (colourCss)", () => {

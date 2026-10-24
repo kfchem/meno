@@ -1,5 +1,5 @@
-import clsx from "clsx";
 import { useAppSettings } from "../../../lib/settings/appSettings";
+import Switch from "../../controls/Switch";
 
 /** How an atom's label is read, and words on the page are written, as they are typed, in Settings: as they were meant, or exactly as typed. */
 export default function LabelSettings() {
@@ -32,15 +32,7 @@ function Smart({ title, about, on, turn }: { title: string; about: string; on: b
         <div className="text-sm text-gh-black">{title}</div>
         <p className="text-xs leading-snug text-gh-gray mt-0.5 max-w-2xl">{about}</p>
       </div>
-      <button
-        role="switch"
-        aria-checked={on}
-        aria-label={title}
-        onClick={turn}
-        className={clsx("relative h-6 w-11 shrink-0 rounded-full transition-colors", on ? "bg-accel-base" : "bg-gh-line")}
-      >
-        <span className={clsx("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all", on ? "left-[1.375rem]" : "left-0.5")} />
-      </button>
+      <Switch on={on} label={title} onChange={turn} />
     </div>
   );
 }

@@ -6,9 +6,9 @@
  * it keeps, which it sets aside, and what it found; or why it could not.
  */
 import { speciesOf as speciesBy } from "../../../../lib/io/writers";
-import { stereoIdentity, type Entry } from "../../../../lib/entry";
+import { stereoIdentity } from "../../../../lib/entry";
 import type { OptionValues } from "../../../../lib/options";
-import { compoundLetter, entryOfSet, entryState, FINISHED, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
+import { compoundLetter, drawnAsEntry, entryOfSet, entryState, FINISHED, MARKS_UNREAD, STATE_FINISHED, numberedRecord, shadowedIn, unlikeMade, type DrawnEntry, type SetEntry } from "./entries";
 import { conditionsIn, filter } from "../../../../lib/nodes/filter";
 import { enumerated } from "./enumerate";
 import { combinedSet, measuredSet, speciesSet, taggedSet } from "./structureSteps";
@@ -306,7 +306,7 @@ function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all
     const status = e.record?.status;
     return onValues && typeof status === "object" && "failed" in status ? `structure ${e.place + 1} failed: ${status.failed}` : null;
   };
-  const out = filter(entries.map(recordAsEntry), { conditions: read.conditions, match, unread });
+  const out = filter(entries.map((e, i) => drawnAsEntry(e, String(i))), { conditions: read.conditions, match, unread });
   if (!out.ok) return out;
   // (kept: its record without the status it came in with - an earlier step's "aside" is not what this one says of it)
   const kept = out.exits.kept.map((e) => {
@@ -325,27 +325,6 @@ function filteredDrawn(entries: readonly DrawnEntry[], text: string, match: "all
   });
   return { ok: true, holds: "structures", kept, aside, said: out.said };
 }
-
-/**
- * A structure drawn as Filter reads it, by its place: its record's
- * properties, what it was made from and its status - its drawing no part
- * of it (no structure, no geometry) - and Meno's `state` of it: "failed:
- * <why>" where its record says it failed, else finished (one an earlier
- * step set aside - the same as another - is no failure).
- */
-const recordAsEntry = (e: DrawnEntry, i: number): Entry => {
-  const status = e.record?.status;
-  const state = typeof status === "object" && "failed" in status ? `failed: ${status.failed}` : FINISHED;
-  return {
-    id: String(i),
-    from: e.record?.from ?? [],
-    structure: { atoms: [], bonds: [] },
-    geometry: { kind: "none" },
-    species: null,
-    properties: { ...e.record?.properties, state: { value: state, unit: "none", status: "computed" } },
-    status: status ?? "done",
-  };
-};
 
 /** Where compounds have one conformer each, so that a window or shares over them can do nothing: how many, said after a step's line - none where none has. */
 function onesSaid(entries: readonly SetEntry[]): string {

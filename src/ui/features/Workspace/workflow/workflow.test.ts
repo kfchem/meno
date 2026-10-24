@@ -27,7 +27,8 @@ import { inputsOf } from "./kinds";
 import { doerOf } from "./doers";
 import { pluginById } from "../../../../lib/calc/catalog";
 import { populations } from "../utils/molecule3d";
-import { selectionFrame } from "./selectionSet";
+import { chipWide, selectionFrame } from "./selectionSet";
+import { STYLE_3D } from "../../../../lib/chem/style3d";
 import { readWorkflow } from "./saved";
 import { measured } from "../../../../testing/timeouts";
 
@@ -1045,6 +1046,21 @@ describe("the selection as a set", () => {
     expect(f.x1).toBeGreaterThan(1.8);
     // (room under its tab)
     expect(f.y1 - 0).toBeGreaterThan(0 - f.y0);
+  });
+
+  it("takes in each molecule's frames chip, as wide as it is - wider than a small molecule - as a result set makes room for it", () => {
+    // (HCN read from an optimisation of seven steps, each its energy: its chip "7 / 7 · 0.00 kcal/mol" wider than it)
+    const hcn: Molecule3D = {
+      id: 5,
+      atoms: [{ el: "H", x: -1.066, y: 0, z: 0 }, { el: "C", x: 0, y: 0, z: 0 }, { el: "N", x: 1.153, y: 0, z: 0 }] as never,
+      bonds: [{ a1: 0, a2: 1, order: 1 }, { a1: 1, a2: 2, order: 3 }],
+      frames: Array.from({ length: 6 }, () => [-1.066, 0, 0, 0, 0, 0, 1.153, 0, 0]),
+      energies: Array.from({ length: 7 }, (_, k) => -93.4 - k / 1000),
+      at: { x: 40, y: 0 },
+    };
+    const f = selectionFrame({ atoms: [], bonds: [] }, new Set(), [hcn], new Set([5]), STYLE_3D, {}, {})!;
+    expect(f.x0).toBeLessThanOrEqual(40 - chipWide(hcn) / 2);
+    expect(f.x1).toBeGreaterThanOrEqual(40 + chipWide(hcn) / 2);
   });
 });
 

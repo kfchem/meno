@@ -75,8 +75,9 @@ def seed_of(entry):
     """A seed as RDKit reads it, from a structure drawn as Meno gives one: its MOL blocks, its parts joined - as
     drawn, its stereo as its blocks say it. Else why not: a string."""
     blocks = entry.get("molblocks") or []
+    # (Meno gives every part of one drawn, a lone ion's too: none, only where it is a label of no element alone)
     if not blocks:
-        return "it has no atoms"
+        return "it is a label of no element"
     mol = None
     for block in blocks:
         part = Chem.MolFromMolBlock(block)

@@ -8,15 +8,33 @@
 import type { Style3D } from "../../../../lib/chem/style3d";
 import { labelBox, labelSetOf, pxToWorld, type Layout, type LayoutOptions, type TextItem } from "../../../../lib/chem/layout2d";
 import type { Model, Molecule3D, Turn3D } from "../store/types";
-import { lookOf, poseOf, seenBounds, solidOf } from "../utils/molecule3d";
+import { lookOf, poseOf, seenBounds, sharesOf, solidOf } from "../utils/molecule3d";
 import { framesOf, structuresOf, type Frame } from "./entries";
-import { SET_PAD, SET_TOP, CHIP } from "./look";
+import { SET_PAD, SET_TOP, CHIP, CHIP_CHAR, CHIP_SIDES } from "./look";
 import { greatest, least } from "../../../../lib/chem/lists";
 
 /** Whether a molecule in 3D shows a frames chip below it (Molecule3DView): it has frames, or a calculation it was read from. */
 export const hasChip = (m: Pick<Molecule3D, "frames" | "calc"> & Partial<Pick<Molecule3D, "title" | "stack" | "failed">>) => framesOf(m) > 1 || !!m.calc || named3d(m) || !!m.failed?.some(Boolean);
 /** A molecule in 3D called by a name of its own - a structure read from coordinates in a text - not one of a stack, whose chip says its record's: its chip says it. */
 export const named3d = (m: Partial<Pick<Molecule3D, "title" | "stack">>) => !!m.title && !m.stack;
+
+/**
+ * About how wide a molecule's frames chip is, shut, on the page - as
+ * Frames3D writes it: "#3 · 4 / 12 · 0.00 kcal/mol · 62%", its widest
+ * numbers - where it shows always, a molecule of several frames. A single
+ * geometry's shows only while it is pointed at, over what is beside it:
+ * none.
+ */
+export function chipWide(m: Pick<Molecule3D, "frames" | "energies" | "shares" | "numbers" | "conformerSet"> & Partial<Pick<Molecule3D, "title" | "stack" | "partOf" | "degeneracies">>): number {
+  const n = framesOf(m);
+  // (a single geometry called by its name: its name, and its energy where it has one)
+  if (n < 2) return named3d(m) ? `${m.title}${m.energies?.length === 1 ? " · -1234.567890" : ""}`.length * CHIP_CHAR + CHIP_SIDES : 0;
+  const numbered = m.numbers?.length === n && m.numbers.some((k, i) => k !== i + 1) ? `#${Math.max(...m.numbers)} · ` : "";
+  const energies = m.energies?.length === n ? " · 10.0 kcal/mol" : "";
+  const shares = sharesOf(m) ? " · 100%" : "";
+  return `${numbered}${n} / ${n}${energies}${shares}`.length * CHIP_CHAR + CHIP_SIDES;
+}
+
 
 /**
  * How far each labelled atom's label reaches on the page, by the atom's id,
@@ -77,9 +95,11 @@ export function selectionFrame(
   for (const m of molecules) {
     if (!sel3d.has(m.id)) continue;
     const b = seenBounds(poseOf(m, solidOf(m, style), lookOf(m), turns[m.id], frames[m.id]));
-    // (and its frames chip below it, where it has one)
+    // (and its frames chip below it, where it has one - as wide as it is, centred under it: "4 / 4 · 0.00 kcal/mol" is
+    //  wider than an HCN, as a result set makes room for it: run `roomOf`)
     const chip = hasChip(m) ? CHIP : 0;
-    xs.push(b.minX - SET_PAD, b.maxX + SET_PAD);
+    const half = chipWide(m) / 2;
+    xs.push(Math.min(b.minX, m.at.x - half) - SET_PAD, Math.max(b.maxX, m.at.x + half) + SET_PAD);
     ys.push(b.minY - SET_PAD - chip, b.maxY + SET_PAD);
   }
   if (!xs.length) return null;
