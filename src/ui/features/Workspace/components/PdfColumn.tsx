@@ -88,15 +88,21 @@ type Rect = { x: number; y: number; w: number; h: number };
 /** The pages whose letters and figures have been asked for, once shown (`readWhenIdle`). */
 const readAsked = new Set<string>();
 
-/** A page's letters and figures read in idle time, once - after it is drawn, not with it (lib/core/idle). */
+/** A page's letters and figures read in idle time, once - after it is drawn, not with it (lib/core/idle); asked for again where the reading failed. */
 function readWhenIdle(sha256: string, page: number): void {
   const key = `${sha256}:${page}`;
   if (readAsked.has(key)) return;
   readAsked.add(key);
+  const failed = () => readAsked.delete(key);
   whenIdle(() => {
-    textHad(sha256, page);
-    figuresHad(sha256, page);
+    textHad(sha256, page, undefined, failed);
+    figuresHad(sha256, page, undefined, { failed });
   });
+}
+
+/** A PDF gone from the column: its pages asked for again, should it come back. */
+function readForgotten(sha256: string): void {
+  for (const key of readAsked) if (key.startsWith(`${sha256}:`)) readAsked.delete(key);
 }
 
 export default function PdfColumn() {
@@ -115,6 +121,9 @@ export default function PdfColumn() {
   if (open && shown != null) last.current = shown;
   const drawn = open && shown != null ? shown : cover > 0.5 ? last.current : null;
   const pdf = pdfs.find((p) => p.id === drawn) ?? null;
+  // (a PDF gone from the column - shut, or another read there: its pages read again, should it come back)
+  const drawnSha = pdf?.sha256;
+  useEffect(() => (drawnSha ? () => readForgotten(drawnSha) : undefined), [drawnSha]);
   // (a text read, where no PDF is: likewise, as the column shuts on it)
   const texts = useEditor((s) => s.texts);
   const textShown = useEditor((s) => s.textShown);

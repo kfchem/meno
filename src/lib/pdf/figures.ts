@@ -12,7 +12,7 @@
  * across a column, or the page's own frame, is no figure.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { idle } from "../core/idle";
+import { whenIdle } from "../core/idle";
 import { textOf, type PageText } from "./text";
 
 /** A box on a page, in points from its top left: left, top, right, bottom. */
@@ -39,29 +39,44 @@ export function pageObjectsOf(buf: ArrayBuffer): PageObject[] {
 const had = new Map<string, Box[] | "asked">();
 
 /** A page's figures, if they have been worked out - asked for, the first time, and `came` called once they have. */
-export function figuresHad(sha256: string, page: number, came: () => void = () => {}): Box[] | null {
+export function figuresHad(sha256: string, page: number, came: () => void = () => {}, ahead?: { failed: () => void }): Box[] | null {
   const key = `${sha256}:${page}`;
   const h = had.get(key);
   if (h && h !== "asked") return h;
   if (!h) {
     had.set(key, "asked");
-    figuresOn(sha256, page)
+    figuresOn(sha256, page, !!ahead)
       .then(() => came())
-      .catch(() => had.delete(key));
-  }
+      .catch(() => {
+        had.delete(key);
+        ahead?.failed();
+      });
+  } else if (!ahead) hurry.get(key)?.();
   return null;
 }
 
-/** A page's figures, worked out once and kept. */
-export async function figuresOn(sha256: string, page: number): Promise<Box[]> {
+/** Of the pages whose figures are read ahead, waiting for idle time: each one's wait, cut short where they are asked for meanwhile. */
+const hurry = new Map<string, () => void>();
+
+/**
+ * A page's figures, worked out once and kept - read `ahead` of being asked
+ * for (the column's, once a page is shown), worked out in idle time, unless
+ * they are asked for meanwhile (a press, the pointer on a figure): never
+ * kept waiting then.
+ */
+export async function figuresOn(sha256: string, page: number, ahead = false): Promise<Box[]> {
   const key = `${sha256}:${page}`;
   const h = had.get(key);
   if (h && h !== "asked") return h;
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
   // (its words, for the one thing told by what words say: a one-bond structure's label)
   const text = isTauri() ? await textOf(sha256, page).catch(() => null) : null;
-  // (worked out once the window is idle: a page turned to is drawn first, never held up by this)
-  if (isTauri()) await idle();
+  // (read ahead, worked out once the window is idle: a page turned to is drawn first, never held up by this)
+  if (ahead && isTauri())
+    await new Promise<void>((done) => {
+      hurry.set(key, done);
+      whenIdle(done);
+    }).finally(() => hurry.delete(key));
   const figures = figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined);
   objectsKept.set(key, objects);
   had.set(key, figures);
