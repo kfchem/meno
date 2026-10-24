@@ -84,7 +84,9 @@ Numbers that change in place are tabular (`tabular-nums`).
   structure lifted from a PDF, a picture or words in flight)
   `filter: drop-shadow(var(--meno-lift))`; nothing else.
 - **Over the page**: a card's ground is `bg-white/95`, so the drawing
-  shows faintly beneath.
+  shows faintly beneath. A card's foot that stays while its rows scroll
+  (its buttons) is on solid `bg-white`, parted from them by `border-t
+  border-gh-line`, so that nothing shows through it.
 
 ## Highlights
 
