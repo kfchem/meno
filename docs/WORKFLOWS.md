@@ -1607,9 +1607,19 @@ Built, as the maintainer chose from pictures (decided: 18, 19):
   stereoisomers RDKit does not count. The canvas's *3D structure* asks
   which is meant; a step cannot ask, and never chooses. The others are
   made, and the step's line names those not made by their places
-  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*); where
-  none is made, the step fails, saying so. Until then the first
-  stereoisomer was made without a word.
+  (*structure 3 of 4 leaves stereo open: draw it, wedges and all*). Each
+  structure drawn that is not made - its stereo left open, one atom alone,
+  or one that could not be made - goes to the step's *Failed* exit as it
+  came, its record with it, failed - no result to stand on, so a table
+  says so, a chart refuses it and "state = finished" leaves it - saying
+  why ("1 double bond not specified: put Stereoisomers before
+  Conformers"; what it was set aside for before kept beside it, "earlier:
+  ..."; 2026-10-24): there it can be followed, and wired on, into
+  *Stereoisomers* above all. Its open stereo is counted once each: an
+  allene's cumulated bonds one axis, a cumulene of three one double bond. Where none is
+  made, the step makes none and sets them all aside so. Until 2026-10-22
+  the first stereoisomer was made without a word; until 2026-10-24 those
+  not made were in no set, said on the line alone.
   - **A bridgehead its rings fix is no choice.** Adamantane's, cubane's or
     norbornane's open centres give one stereoisomer that can be made in
     3D (RDKit's enumeration with its embedding tried, seeded by the
