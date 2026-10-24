@@ -28,9 +28,7 @@ import { columnWidthFor } from "../utils/texts";
 import { viewBesideColumn } from "./coverLayer";
 import { setViewGoal, viewGoalOf } from "./viewGoal";
 import { pagesInView } from "../../../../lib/pdf/column";
-import { textHad } from "../../../../lib/pdf/text";
-import { figuresHad } from "../../../../lib/pdf/figures";
-import { whenIdle } from "../../../../lib/core/idle";
+import { readForgotten, readWhenIdle } from "./pageReads";
 import { BASE, levelFor, MOVING_ASK_MS, MOVING_KEEP_MS, Page, QUICK, TILE, usePictures } from "./pdfPictures";
 import { pickedStructure } from "../utils/pdfStructures";
 import { FLASH_MS, marksOn } from "./pdfMarks";
@@ -84,26 +82,6 @@ function bodyBoxOf(st: EditorState, t: WorkspaceText): { x0: number; x1: number;
 
 /** A rectangle on the canvas, in CSS pixels from its top left. */
 type Rect = { x: number; y: number; w: number; h: number };
-
-/** The pages whose letters and figures have been asked for, once shown (`readWhenIdle`). */
-const readAsked = new Set<string>();
-
-/** A page's letters and figures read in idle time, once - after it is drawn, not with it (lib/core/idle); asked for again where the reading failed. */
-function readWhenIdle(sha256: string, page: number): void {
-  const key = `${sha256}:${page}`;
-  if (readAsked.has(key)) return;
-  readAsked.add(key);
-  const failed = () => readAsked.delete(key);
-  whenIdle(() => {
-    textHad(sha256, page, undefined, failed);
-    figuresHad(sha256, page, undefined, { failed });
-  });
-}
-
-/** A PDF gone from the column: its pages asked for again, should it come back. */
-function readForgotten(sha256: string): void {
-  for (const key of readAsked) if (key.startsWith(`${sha256}:`)) readAsked.delete(key);
-}
 
 export default function PdfColumn() {
   const store = useEditorStore();
