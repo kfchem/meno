@@ -27,6 +27,8 @@ export { frameAt, placeFor } from "./place";
 import { notResults, pushTo, runMeno, runMenoDrawn, type Outcome, type Outcome3D } from "./meno";
 import { addSet, CHART_SET, heldPut, holdChart, holdCollection, holdMembers, holdRest, moveSet, resizeSet, markMade, setRan, setForExit, withStepRuns } from "./model";
 import { rmsd } from "./rmsd";
+import { structuresAsTable } from "./structuresTable";
+import type { Table } from "../../../../lib/table";
 
 /**
  * What a run needs of the canvas: how far a molecule in 3D reaches on the
@@ -213,6 +215,17 @@ const drawnModel = (e: DrawnEntry): DrawnModel => ({ ...e.drawn, ...(e.record ? 
 export function inputEntries(model: Model, input: { structures: readonly (readonly number[])[]; records?: readonly (DrawnRecord | undefined)[]; held?: readonly DrawnModel[] }): DrawnEntry[] {
   const shown = drawnEntries(model, input.structures, input.records);
   return [...shown, ...(input.held ?? []).map(({ record, ...drawn }, k) => ({ place: shown.length + k, drawn, ...(record ? { record } : {}) }))];
+}
+
+/** Every structure drawn a set holds, as a step after it takes them (`inputEntries`): those on the page, then those it holds off it. */
+export function setStructures(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): DrawnEntry[] {
+  const { structures, records } = set.members ? setMembers(doc, set) : { structures: [], records: [] };
+  return inputEntries(doc.model, { structures, records, ...(set.drawnCollection ? { held: set.drawnCollection } : {}) });
+}
+
+/** A set of structures drawn as a table (structuresTable): every structure it holds (`setStructures`), each row's id the set's and its place. */
+export function setStructuresTable(doc: Pick<WorkspaceDocument, "model" | "molecules3d" | "pictures">, set: WorkflowSet): Table {
+  return structuresAsTable(setStructures(doc, set), (k) => `structure:${set.id}#${k}`);
 }
 
 /** What a step's result set holds now, as a run kept keeps it; none, where it has made none - or made pictures, which a run kept does not keep. */

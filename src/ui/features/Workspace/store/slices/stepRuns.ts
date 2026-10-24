@@ -23,7 +23,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
-import { compoundLetter, frameXyz, framesOf, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
+import { compoundLetter, frameXyz, framesOf, MADE_FROM, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
 import { allToRun, chainTo, findSet, inputKey, inputOf, stepOf, stepsAfter, wireInto } from "../../workflow/flow";
@@ -638,8 +638,6 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   const DRAWN_MOST_MS = 10 * 60_000;
   const drawnMs = (n: number) => Math.min(DRAWN_MOST_MS, Math.max(2 * 60_000, n * DRAWN_EACH_MS));
 
-  /** How a value of the structure one was made from is named on it (`madeRecord`): `made_from.nll`, that one's NLL - never its own. */
-  const MADE_FROM = "made_from.";
   /**
    * The values of the structure one was made from, as that one's (`made_from.nll`): its own, and what it carried of
    * one it was made from in turn, as it is - one level, still of the structure it was made from, at a remove - its

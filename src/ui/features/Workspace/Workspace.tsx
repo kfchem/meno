@@ -215,7 +215,8 @@ import { titled } from "../../../lib/calc/sources";
 import { byOf, MENO, missingFor } from "./workflow/doers";
 import { tableOfText } from "../../../lib/table";
 import { TABLE_SET } from "./workflow/model";
-import { heldOwn, holdsOwn } from "./workflow/entries";
+import { heldOwn, holdsOf, holdsOwn } from "./workflow/entries";
+import { setStructures } from "./workflow/run";
 import { openSettingsAt } from "../SettingsPanel/section";
 import Slides2D from "./components/Slides2D";
 import Guides2D from "./components/Guides2D";
@@ -2061,8 +2062,10 @@ function WorkspaceContent({
           } : undefined}
           onOpenAsTable={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;
-            const set = store.getState().sets.find((b) => b.id === menu.id);
-            return set?.collection ? () => store.getState().readSetTable(set.id) : undefined;
+            const st = store.getState();
+            const set = st.sets.find((b) => b.id === menu.id);
+            // (molecules in 3D it holds off the page; or structures drawn, any - on the page and off it, all read)
+            return set && (set.collection || (holdsOf(st, set) === "structures" && setStructures(st, set).length)) ? () => st.readSetTable(set.id) : undefined;
           })()}
           setHoldsOwn={(() => {
             if (menu.kind !== "set" || menu.id == null) return undefined;

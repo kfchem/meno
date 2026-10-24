@@ -441,6 +441,11 @@ export const conformersOfOne = (m: Pick<Molecule3D, "conformerSet">) => m.confor
  * 3D. A set mixing the two is molecules in 3D, and no step takes it
  * (`plainAmong`).
  */
+/** Whether a set can be read as a table in the column: molecules in 3D it holds off the page, or structures drawn (structuresTable). */
+export function readAsTable(page: Page, set: WorkflowSet): boolean {
+  return !!set.collection || holdsOf(page, set) === "structures";
+}
+
 export function holdsOf(page: Page, set: WorkflowSet): SetHolds {
   // (a step's exit not run yet holds nothing yet: what it will give is flow's `givesOf`)
   if (set.made?.holds) return set.made.holds;
@@ -941,6 +946,31 @@ function menoProperties(e: SetEntry): Partial<Record<(typeof MENO_NAMES)[number]
     ...(e.name ? { name: { value: e.name, unit: "none" as const, status: "computed" as const } } : {}),
     // (whether it is a result to stand on: finished - converged, not failed, its marks read - or why not, in a step's line's words)
     state: { value: entryState(e), unit: "none", status: "computed" },
+  };
+}
+
+/** How a value of the structure one was made from is named on it (stepRuns `madeRecord`): `made_from.nll`, that one's NLL - never its own. */
+export const MADE_FROM = "made_from.";
+
+/**
+ * A structure drawn as an entry record (lib/entry) reads it - by Filter,
+ * and as a table of structures (flow `structuresAsTable`) - by `id`: its
+ * record's properties, what it was made from and its status, its drawing
+ * no part of it (no structure, no geometry); and Meno's `state` of it:
+ * "failed: <why>" where its record says it failed, else finished (one an
+ * earlier step set aside - the same as another - is no failure).
+ */
+export function drawnAsEntry(e: DrawnEntry, id: string): Entry {
+  const status = e.record?.status;
+  const state = typeof status === "object" && "failed" in status ? `failed: ${status.failed}` : FINISHED;
+  return {
+    id,
+    from: e.record?.from ?? [],
+    structure: { atoms: [], bonds: [] },
+    geometry: { kind: "none" },
+    species: null,
+    properties: { ...e.record?.properties, state: { value: state, unit: "none", status: "computed" } },
+    status: status ?? "done",
   };
 }
 

@@ -13,6 +13,8 @@ import { DURATION, EASE_SLIDE, FADE } from "../../theme/motion";
 import { useEditor, useEditorStore } from "./store";
 import type { LostText, PdfFind, PdfItem, PdfStructurePick, WordPlace, WorkflowSet, WorkspaceText } from "./store/types";
 import SetTableBody from "./workflow/SetTableBody";
+import StructuresTableBody from "./workflow/StructuresTableBody";
+import { readAsTable } from "./workflow/entries";
 import { setName } from "./workflow/doers";
 import { COLUMN_NARROWEST, COLUMN_WIDEST, columnWidthFor, lostSaid, textExportPath } from "./utils/texts";
 import { takenBeside } from "../../../lib/io/beside";
@@ -81,7 +83,9 @@ export default function TextColumn({ slideIn = false }: { slideIn?: boolean }) {
   const sets = useEditor((s) => s.sets);
   const setsRead = useEditor((s) => s.setsRead);
   const tableId = useEditor((s) => s.setTableShown);
-  const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && b.collection)), [sets, setsRead]);
+  // (molecules in 3D a set holds off the page; or structures drawn, on the page and off it)
+  const page = useEditorStore();
+  const tables = useMemo(() => setsRead.flatMap((id) => sets.filter((b) => b.id === id && readAsTable(page.getState(), b))), [sets, setsRead, page]);
   const table = tables.find((b) => b.id === tableId);
   const pdf = table ? undefined : read.find((p) => p.id === pdfShownId);
   const shown = pdf || table ? undefined : texts.find((t) => t.id === shownId);
@@ -312,7 +316,7 @@ function Column({
           )}
         </AnimatePresence>
         {pdf && <PdfBody key={`pdf-${pdf.id}`} pdf={pdf} />}
-        {table && <SetTableBody key={`set-${table.id}`} set={table} />}
+        {table && (table.collection ? <SetTableBody key={`set-${table.id}`} set={table} /> : <StructuresTableBody key={`set-${table.id}`} set={table} />)}
         {lostShown && (
           <div key={`lost-${lostShown.id}`} role="status" className="absolute inset-0 flex items-start gap-2 px-4 py-3 bg-white text-xs text-gh-black">
             <ExclamationTriangleIcon className="h-4 w-4 shrink-0 text-accel-accent" />
