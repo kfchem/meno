@@ -219,6 +219,32 @@ T /K                                  :   298.15
         short = ask("collect", step="conformers", entries=[METHANOL], options={}, files={"crest_conformers.xyz": ENSEMBLE}, log=log.replace("3   1.069   -11.39100    0.30000    0.30000       2       1     mtd3", ""), ended="done")
         self.assertIsNone(short["outputs"][0]["populations"])
 
+    def test_how_cregen_took_conformers_as_one_as_the_run_printed_it(self):
+        # (after "Conformational Sampling": CREGEN's settings as it prints them before sorting - a first block with
+        #  other values, and the last, which counts; written here as CREST 2.12 sets them out)
+        block = """ CREGEN> running
+ RMSD threshold                 :   {r}
+ Bconst threshold               :   0.0100
+ population threshold           :   0.0500
+ conformer energy window  /kcal :   {w}
+ # fragment in coord            :     1
+"""
+        log = " Version 2.12\n" + block.format(r="0.2500", w="12.0000") + block.format(r="0.1250", w="6.0000")
+        said = {r["label"]: (r["value"], r.get("unit")) for r in worker.cregen_settings_in(log)}
+        self.assertEqual(said, {
+            "RMSD threshold": (0.125, "Å"),
+            "Rotational-constant threshold (relative)": (0.01, None),
+            "Population threshold": (0.05, None),
+            "Energy window": (6.0, "kcal/mol"),
+        })
+        out = ask("collect", step="conformers", entries=[METHANOL], options={}, files={"crest_conformers.xyz": ENSEMBLE}, log=log, ended="done")["outputs"][0]
+        self.assertEqual({r["group"] for r in out["results"]}, {"Same conformer (CREGEN)"})
+        self.assertTrue(all(r["on"] == "molecule" for r in out["results"]))
+        # (none printed: none said - never a default, nor what was asked)
+        self.assertEqual(worker.cregen_settings_in(" Version 2.12\n"), [])
+        bare = ask("collect", step="conformers", entries=[METHANOL], options={"ewin": 6}, files={"crest_conformers.xyz": ENSEMBLE}, log=" Version 2.12\n", ended="done")["outputs"][0]
+        self.assertEqual(bare["results"], [])
+
     def test_an_ensemble_optimised_read_back_in_its_order(self):
         out = ask("collect", step="optimise", entries=[METHANOL, METHANOL], options={"method": "gfn2"}, files={"crest_ensemble.xyz": ENSEMBLE}, log="", ended="done")["outputs"]
         self.assertEqual([o["energies"] for o in out], [[-11.39270131], [-11.391]])
