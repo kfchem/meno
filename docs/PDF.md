@@ -1522,9 +1522,15 @@ words are: by itself, not by a box drawn round it.
 **A structure, and where it lies** (`utils/pageStructures`):
 - each figure of the page is read as *Read as structure* reads one (the
   one reading, `schemeDrawn`), and split into its structures: an atom and
-  every atom bonded to it, on and on. A lone labelled atom - an ion -
-  within 1.6 bonds of a structure is that structure's (sodium acetate is
-  one structure);
+  every atom bonded to it, on and on. A lone ion (Na+, Cl-) within 1.6
+  bonds of a structure, with no arrow nor "+" between them, is that
+  structure's where the ions so by it make it neutral - it carrying their
+  charge the other way: sodium acetate, an ammonium chloride, are each one
+  structure. Any other ion by a structure - within those 1.6 bonds, or
+  within the box round the figure's bonds - is its own, never a neutral
+  molecule's nor taken across a scheme; one further out (a "Na+" of a
+  caption or a table) is words. A lone label that is no ion - a lone
+  metal - is the structure's it lies by so, and by none, words;
 - where each lies is its bonds and its labels' boxes, on the page;
 - the pointer takes the nearest within a third of a bond of one of its
   bonds or labels, and none where an arrow, a "+" or words lie nearer.
