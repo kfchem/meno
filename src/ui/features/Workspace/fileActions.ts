@@ -412,17 +412,22 @@ function propertyLabel(name: string, p: Property): string {
   return MENO_ITEMS.has(label) ? `${label} (property)` : label;
 }
 
+/** A property whose value is a table - a conformer's vibrations: one an SD file's data item does not hold, a line of it being 200 characters at most (`propertyItems`). */
+const isTable = (p: Property) => typeof p.value === "object" && "table" in p.value;
+
 /**
  * Properties as an SD file's data items, each under its own name: a number
  * worked out with its unit beside it as the page shows it ("mw (g/mol)");
  * one not worked out saying why in place of a value, under its bare name, so
  * that no reader takes a value for one; one named as an item Meno writes of
- * its own, under that name and "(property)" (`propertyLabel`). A structure
- * drawn's record writes them so (`recordData`), and a molecule in 3D each
- * frame's.
+ * its own, under that name and "(property)" (`propertyLabel`). A table is
+ * left out (`isTable`), and said (`propertiesSaid`): a frame's imaginary
+ * frequencies have their own item. A structure drawn's record writes them
+ * so (`recordData`), and a molecule in 3D each frame's.
  */
 function propertyItems(properties: Record<string, Property>): string {
   return Object.entries(properties)
+    .filter(([, p]) => !isTable(p))
     .map(([name, p]) => {
       const st = p.status;
       return dataItem(propertyLabel(name, p), st === "computed" ? valueData(p.value) : "failed" in st ? `not worked out: ${st.failed}` : `not applicable: ${st.notApplicable}`);
@@ -434,14 +439,21 @@ function propertyItems(properties: Record<string, Property>): string {
  * What an SD file of `drawn` says of the properties it holds, as it is
  * written (`structureFileText`): of each molecule in 3D whose properties
  * are not one for each frame, that they could not be written - none of
- * them is; and the properties written under "(property)", their names
- * being Meno's own items. None where there is nothing to say.
+ * them is; the tables left out (`isTable`), counted, with their names;
+ * and the properties written under "(property)", their names being Meno's
+ * own items. None where there is nothing to say.
  */
 export function propertiesSaid(drawn: Drawn): string[] {
   const said: string[] = [];
   const clashed = new Set<string>();
+  const tables = { count: 0, names: new Set<string>() };
   const clashes = (properties: Record<string, Property> | undefined) => {
-    for (const [name, p] of Object.entries(properties ?? {})) if (MENO_ITEMS.has(labelOf(name, p))) clashed.add(propertyLabel(name, p));
+    for (const [name, p] of Object.entries(properties ?? {})) {
+      if (isTable(p)) {
+        tables.count += 1;
+        tables.names.add(name);
+      } else if (MENO_ITEMS.has(labelOf(name, p))) clashed.add(propertyLabel(name, p));
+    }
   };
   for (const m of drawn.molecules3d ?? []) {
     if (!m.properties?.length) continue;
@@ -457,10 +469,13 @@ export function propertiesSaid(drawn: Drawn): string[] {
   }
   const { loose } = recordDrawings(drawn);
   for (const r of setRecordsOf(drawn, loose)) clashes(r.record.properties);
+  const listed = (labels: string[]) => (labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0]);
+  if (tables.count) {
+    const names = listed([...tables.names].map((l) => `"${l}"`));
+    said.push(`${tables.count} ${tables.count === 1 ? "property" : "properties"} not written, ${names}: an SD file does not hold a table.`);
+  }
   if (clashed.size) {
-    const labels = [...clashed].map((l) => `"${l}"`);
-    const listed = labels.length > 1 ? `${labels.slice(0, -1).join(", ")} and ${labels[labels.length - 1]}` : labels[0];
-    said.push(`${clashed.size} ${clashed.size === 1 ? "property" : "properties"} written as ${listed}: ${clashed.size === 1 ? "its name is one of" : "their names are"} Meno's own items.`);
+    said.push(`${clashed.size} ${clashed.size === 1 ? "property" : "properties"} written as ${listed([...clashed].map((l) => `"${l}"`))}: ${clashed.size === 1 ? "its name is one of" : "their names are"} Meno's own items.`);
   }
   return said;
 }

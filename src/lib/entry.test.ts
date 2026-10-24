@@ -143,5 +143,23 @@ describe("a property's structure, as a file holds it", () => {
     const { of: _, ...plain } = p;
     expect(propertyIn(plain)).toEqual(plain);
   });
+
+  it("reads back a table of numbers, as a conformer carries its vibrations - and refuses a table of any other shape", () => {
+    const p = { value: { table: { columns: [FREQUENCY], rows: [[-12.5], [1595], [3657]] } }, unit: "none", at: { geometry: "g1", kelvin: 298.15 }, status: "computed" };
+    expect(propertyIn(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    const table = (t: unknown) => propertyIn({ ...p, value: { table: t } });
+    expect(table({ columns: [FREQUENCY], rows: [] })).toEqual({ ...p, value: { table: { columns: [FREQUENCY], rows: [] } } });
+    // (a row not as wide as the columns; a cell not a finite number; a column of no unit Meno knows, or unnamed; no columns)
+    expect(table({ columns: [FREQUENCY], rows: [[1, 2]] })).toBeUndefined();
+    expect(table({ columns: [FREQUENCY], rows: [["1595"]] })).toBeUndefined();
+    expect(table({ columns: [FREQUENCY], rows: [[null]] })).toBeUndefined();
+    expect(table({ columns: [{ name: "frequency", unit: "furlongs" }], rows: [[1]] })).toBeUndefined();
+    expect(table({ columns: [{ name: "", unit: "cm-1" }], rows: [[1]] })).toBeUndefined();
+    expect(table({ columns: [], rows: [] })).toBeUndefined();
+    expect(table({ columns: [FREQUENCY] })).toBeUndefined();
+    // (other values not one: a list, modes)
+    expect(propertyIn({ ...p, value: { list: [1, 2], per: "atom" } })).toBeUndefined();
+    expect(propertyIn({ ...p, value: { modes: [[0, 0, 0]] } })).toBeUndefined();
+  });
 });
 

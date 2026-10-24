@@ -630,9 +630,11 @@ beside its edge - being drawn over all of it.
   later reads them again, or drops them, and a step that changes the
   structure or its charge or spin drops them (*Species* says so: "their
   thermochemistry was dropped"): never carried onto another geometry or
-  species. (Until 2026-10-24 a conformer set dropped them: a Frequencies
-  step on one gave nothing downstream.) The modes' displacements stay
-  with a molecule of one geometry's calculation, not each frame's;
+  species. A workspace saved keeps them all, the vibrations too: opened
+  again, "none" is still none. (Until 2026-10-24 a conformer set dropped
+  them: a Frequencies step on one gave nothing downstream.) The modes'
+  displacements stay with a molecule of one geometry's calculation, not
+  each frame's;
 - **As conformers**: the same entries, as a conformer set.
 
 They are calculation results as Meno knows them: the frames chip,

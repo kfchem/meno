@@ -270,18 +270,40 @@ export function valueFault(value: PropertyValue, entry: Pick<Entry, "structure" 
 const BY_FIELDS = ["step", "run", "plugin", "version", "program", "method", "basis", "model", "treatment"] as const;
 
 /**
- * A property of one value - a number, a text, true or false - as a file or
- * a plugin gives it, read back: its value, its unit, what worked it out and
- * where (each field a text, a temperature and a pressure numbers), and
- * whether it was. None where any of that does not read, or its value is
- * of another kind - a list or a table, which a molecule on the page does
- * not keep as a property.
+ * A table of numbers as a file gives one, read back: its columns, each a
+ * name and a unit; its rows, each a finite number for each column - as a
+ * conformer carries its vibrations (workflow/entries `calcProperties`).
+ * None where any of that does not read.
+ */
+function numberTableIn(v: unknown): PropertyValue | undefined {
+  const t = (v as { table?: unknown } | null)?.table as { columns?: unknown; rows?: unknown } | undefined;
+  if (!t || typeof t !== "object" || !Array.isArray(t.columns) || !Array.isArray(t.rows) || !t.columns.length) return undefined;
+  const columns: Column[] = [];
+  for (const c of t.columns as unknown[]) {
+    const { name, unit } = (c ?? {}) as { name?: unknown; unit?: unknown };
+    if (typeof name !== "string" || !name || !(unit === "none" || (typeof unit === "string" && isUnit(unit)))) return undefined;
+    columns.push({ name, unit: unit as Unit | "none" });
+  }
+  const wide = columns.length;
+  const isRow = (r: unknown): r is number[] => Array.isArray(r) && r.length === wide && r.every((x) => typeof x === "number" && Number.isFinite(x));
+  if (!(t.rows as unknown[]).every(isRow)) return undefined;
+  return { table: { columns, rows: (t.rows as number[][]).map((r) => [...r]) } };
+}
+
+/**
+ * A property as a file or a plugin gives it, read back: its value - a
+ * number, a text, true or false, or a table of numbers (`numberTableIn`) -
+ * its unit, what worked it out and where (each field a text, a temperature
+ * and a pressure numbers), and whether it was. None where any of that does
+ * not read, or its value is of another kind - a list, a table of other
+ * cells, modes - which a molecule on the page does not keep as a property.
  */
 export function propertyIn(v: unknown): Property | undefined {
   const p = v as { value?: unknown; unit?: unknown; at?: unknown; of?: unknown; by?: unknown; status?: unknown } | null;
   if (!p || typeof p !== "object") return undefined;
-  const value = p.value;
-  if (!((typeof value === "number" && Number.isFinite(value)) || typeof value === "string" || typeof value === "boolean")) return undefined;
+  const value: PropertyValue | undefined =
+    (typeof p.value === "number" && Number.isFinite(p.value)) || typeof p.value === "string" || typeof p.value === "boolean" ? p.value : numberTableIn(p.value);
+  if (value === undefined) return undefined;
   if (!(p.unit === "none" || (typeof p.unit === "string" && isUnit(p.unit)))) return undefined;
   const st = p.status as { failed?: unknown; notApplicable?: unknown } | string | null | undefined;
   const status: PropertyStatus | undefined =

@@ -5,6 +5,9 @@ import { geometryKey } from "../../../../lib/entry";
 import { factor } from "../../../../lib/units";
 import { addMolecule3d, emptyWorkspaceDocument } from "../document";
 import type { Molecule3D } from "../store/types";
+import { readCarried3D } from "../utils/copyPaste";
+import { noting } from "../utils/readNotes";
+import { carriedOf } from "../utils/workspace";
 import { entryOfSet, imaginaryOf, setEntries, withoutCarried, type SetEntry } from "./entries";
 import { resultOf } from "./flow";
 import { runMeno } from "./meno";
@@ -104,6 +107,17 @@ describe("Frequencies on a conformer set", () => {
     expect(entryOfSet(entries[1], "b").properties.imaginary.value).toBe(1);
     // (a conformer no frequency job ran on: not computed)
     expect(imaginaryOf(water(1, 0))).toBe("not computed");
+  });
+
+  it("keeps each conformer's vibrations and thermochemistry through a save and an open: \"none\" imaginary stays none, nothing left out", () => {
+    const { molecule } = frequencied(undefined, undefined, undefined, [[], [-85.3], []]);
+    const saved = JSON.parse(JSON.stringify(carriedOf({ molecules3d: [molecule], turns3d: {}, frames3d: {} })[0]));
+    const { value: read, left } = noting(() => readCarried3D(saved));
+    expect(left).toEqual({});
+    expect(read!.properties).toEqual(molecule.properties);
+    const again = setEntries([{ ...read!, id: molecule.id } as Molecule3D], "conformers");
+    expect(again.map(imaginaryOf)).toEqual([[], [-85.3], []]);
+    again.forEach((e, k) => expect(e.properties!.vibrations).toEqual(molecule.properties![k].vibrations));
   });
 
   it("never reads a vibrations table that lists a negative frequency as none - where the program judged none imaginary", () => {
