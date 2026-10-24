@@ -31,7 +31,7 @@ const KCAL_PER_HARTREE = factor("Eh", "kcal/mol");
 export type Outcome = Outcome3D | DrawnOutcome;
 /** What a step did on molecules in 3D (`Outcome`). */
 export type Outcome3D =
-  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string }
+  | { ok: true; holds: Holds3D; kept: SetEntry[]; aside: SetEntry[]; shares?: number[]; said: string; asideDrawn?: DrawnEntry[] }
   | { ok: false; said: string };
 /** What a step did on structures drawn: those it kept and those it set aside, each as drawn (`DrawnEntry`); or why it could not. */
 export type DrawnOutcome = { ok: true; holds: "structures"; kept: DrawnEntry[]; aside: DrawnEntry[]; said: string; core?: SeriesCore } | { ok: false; said: string };

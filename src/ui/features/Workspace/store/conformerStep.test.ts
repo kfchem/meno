@@ -6,6 +6,7 @@
  * configuration never chosen for it; and the search is the one *3D structures* makes,
  * with the options chosen in Settings, Chemistry, on its 3D card.
  */
+import { recordWhy } from "../workflow/entries";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readMolfile } from "../../../../lib/chem/ctfile";
 
@@ -16,7 +17,7 @@ const asked: { molblock: string; options: Record<string, unknown> }[] = [];
  * holds each structure until stopped, and those it was stopped for; and the structures whose drawing it says leaves
  * stereo open, by what they hold - methanol, or every one.
  */
-const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { isomers?: number; cumulenes?: number[]; free?: boolean } };
+const worker = { taken: 0, noneOfMethanol: false, noneWithS: false, holds: false, stopped: [] as string[], open: "" as "" | "methanol" | "all", openAs: {} as { atoms?: number[]; bonds?: number[]; isomers?: number; cumulenes?: number[]; free?: boolean } };
 /** Whether a molblock is methanol's, C and O. */
 const methanol = (mol: { atoms: { symbol: string }[] }) => mol.atoms.some((a) => a.symbol === "O") && mol.atoms.some((a) => a.symbol === "C");
 /** What a held request is let go with: the worker stopped. */
@@ -265,7 +266,7 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     );
   });
 
-  it("fails where every structure is a lone ion, saying why", async () => {
+  it("makes none where every structure is a lone ion - each in its Failed exit as it came, saying why", async () => {
     const doc = createWorkspaceDocument();
     doc.edit("held", (d) => ({ ...d, sets: [...(d.sets ?? []), { id: 900, x0: -50, y0: -50, x1: 50, y1: 50, made: { step: 899, exit: "out", holds: "structures" }, drawnCollection: [{ atoms: [{ id: 1, el: "Na", x: 0, y: 0, r: 0.9, charge: 1 }], bonds: [] }] as never }], nextWorkflowId: 901 }));
     const store = createEditorStore(doc);
@@ -275,7 +276,10 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     st().connect({ set: 900 }, step);
     await st().runStep(step);
     expect(asked).toEqual([]);
-    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: false, said: "Structure 1 of 1 left out: one atom alone has no 3D structure" });
+    expect(st().steps.find((s) => s.id === step)!.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structure 1 of 1 left out: one atom alone has no 3D structure$/) });
+    const failed = st().sets.find((b) => b.made?.step === step && b.made.exit === "failed")!;
+    expect(failed.made?.holds).toBe("structures");
+    expect([...(failed.members ?? []), ...(failed.drawnCollection ?? [])]).toHaveLength(1);
   });
 
   it("says one of which none was made as one not made", async () => {
@@ -317,12 +321,35 @@ describe("RDKit's conformer search as a step, on structures drawn", () => {
     expect(step.ran?.said).toMatch(/ · structure 3 of 3 leaves stereo open: draw it, wedges and all$/);
   });
 
-  it("fails where every structure leaves stereo open, saying so - nothing made, no conformer asked for", async () => {
+  it("makes none where every structure leaves stereo open - no conformer asked for - each in its Failed exit as it came, saying what to put before it", async () => {
     worker.open = "all";
-    const { step, sets } = await searched();
+    const { step, st } = await searched();
     expect(asked).toHaveLength(0);
-    expect(step.ran).toMatchObject({ ok: false, said: "Structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all" });
-    expect(sets).toBe(1);
+    expect(step.ran).toMatchObject({ ok: true, said: expect.stringMatching(/0 conformers · structures 1, 2 and 3 of 3 leave stereo open: draw it, wedges and all$/) });
+    const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+    expect(failed.made?.holds).toBe("structures");
+    expect((failed.members ?? []).map((m) => ("structure" in m ? recordWhy(m.record) : null))).toEqual(Array(3).fill("1 stereocentre not specified: put Stereoisomers before Conformers"));
+  });
+
+  it("sets aside, in its Failed exit, one whose stereo is left open and one it could not make, each as it came - its record with it - and makes the others", async () => {
+    // (a propenyl's double bond left open, say: its E or Z not drawn - the stand-in says its first structure, methanol, leaves one open)
+    worker.open = "methanol";
+    worker.openAs = { atoms: [], bonds: [0], isomers: 2 };
+    const nll = { value: 21.5, unit: "none" as const, status: "computed" as const };
+    const { step, st } = await searched(undefined, [{ properties: { nll } }, { properties: { nll } }, { properties: { nll } }]);
+    expect(step.ran).toMatchObject({ ok: true });
+    const failed = st().sets.find((b) => b.made?.step === step.id && b.made.exit === "failed")!;
+    expect(failed.made?.holds).toBe("structures");
+    // (the one left open, and the one the stand-in cannot make - each as it came, its record with it, saying why; the water, made, not among them)
+    const records = (failed.members ?? []).map((m) => ("structure" in m ? m.record : undefined));
+    expect(records.map(recordWhy).sort()).toEqual(["1 double bond not specified: put Stereoisomers before Conformers", "could not be made in 3D"]);
+    for (const r of records) expect(r?.properties).toEqual({ nll });
+    // (and it can be wired on: into Stereoisomers, which takes structures drawn)
+    const stereo = st().addStep("stereoisomers", "rdkit", 400, 0);
+    st().connect({ set: failed.id }, stereo);
+    expect(st().wires.some((w) => w.to.step === stereo && w.from.set === failed.id)).toBe(true);
+    // (none of those made set aside: each of the others has its conformers)
+    expect(st().sets.find((b) => b.made?.step === step.id && b.made.exit === "out")!.members!.length).toBeGreaterThan(0);
   });
 
   it("is given the options chosen in Settings, Chemistry, on its 3D card, as 3D structures on the canvas is", async () => {

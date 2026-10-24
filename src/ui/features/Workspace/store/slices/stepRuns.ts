@@ -23,6 +23,7 @@ import * as ops from "../../document";
 import type { WorkspaceDocument } from "../../document";
 import { bareAtomsOf, bareNames, blocksOf, CONFORMERS_MS, drawnBlocksOf, moleculeOf } from "../../chem/make3d";
 import { byOf, installedFor, optionsFor, programsFor, takesNothingBy } from "../../workflow/doers";
+import { partOf } from "../../chem/cleanUp";
 import { compoundLetter, frameXyz, framesOf, MADE_FROM, recordNumber, setEntries, TAKEN_AT_THE_EDIT, skeletonEntries, skeletonsRefused, type DrawnEntry, type SetEntry } from "../../workflow/entries";
 import { skeletonWhy } from "../../../../../lib/chem/skeleton";
 import { cappedSaid } from "../../workflow/sameConformer";
@@ -91,6 +92,17 @@ export function notMade(places: readonly number[], of: number): string {
 export function stereoOpen(places: readonly number[], of: number): string {
   return `${structuresAt(places)} of ${of} ${places.length === 1 ? "leaves" : "leave"} stereo open: draw it, wedges and all`;
 }
+
+/** Why a structure drawn was not made in 3D, as its record in the Failed exit says it: its stereo left open - so many centres, double bonds and axes - to be given it first. */
+export function openWhy(centres: number, bonds: number, axes = 0): string {
+  const count = (n: number, one: string, many: string) => (n ? [`${n} ${n === 1 ? one : many}`] : []);
+  const parts = [...count(centres, "stereocentre", "stereocentres"), ...count(bonds, "double bond", "double bonds"), ...count(axes, "axis", "axes")];
+  const said = parts.length ? parts.join(" and ") : "its stereo";
+  return `${said} not specified: put Stereoisomers before Conformers`;
+}
+/** Why a structure drawn was not made in 3D: one atom alone, or what could not be made. */
+export const BARE_WHY = "one atom alone has no 3D structure";
+export const NOT_MADE_WHY = "could not be made in 3D";
 
 /** The structures not made in 3D because each is a lone atom or ion alone, by their places among `of`: Na+, Cl-, a lone metal. */
 export function bareLeft(places: readonly number[], of: number): string {
@@ -356,14 +368,14 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
   };
 
   /** The results of a step put in, as one edit - what it set aside in its second exit's set - and what it did kept with it; a molecule that is an optimisation's path shown at its end. */
-  function bringIn(id: number, worked: Worked[], holds: Holds3D, ran: StepRan, aside: SetEntry[] = []) {
+  function bringIn(id: number, worked: Worked[], holds: Holds3D, ran: StepRan, aside: SetEntry[] = [], asideDrawn: DrawnEntry[] = []) {
     const d = doc.getState();
     const step = stepOf(d, id);
     if (!step) return;
     const before = new Set((d.molecules3d ?? []).map((m) => m.id));
     // (what it did before kept among its runs)
-    if (!worked.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
-    const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said };
+    if (!worked.length && !asideDrawn.length) return void doc.edit("run", (x) => setRan(keepRun(x, stepOf(x, id)!), id, ran));
+    const outcome = { ok: true as const, holds, kept: worked, aside, said: ran.said, ...(asideDrawn.length ? { asideDrawn } : {}) };
     const turns = turnsFor(d, id, ran.kind ?? step.kind, resultsOf(outcome, ran.kind ?? step.kind));
     doc.edit("results", (x) => setRan(withResults(keepRun(x, stepOf(x, id)!), step, outcome, w, turns), id, ran));
     atTheirEnds(before);
@@ -515,6 +527,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const bareOnly: number[] = [];
     // (those made without some of their parts - a salt's counter-ion, which has no 3D structure; any part past the first: said, each by its place)
     const partly: string[] = [];
+    // (each structure drawn not made, as it came, with why: in the step's Failed exit, to be followed and wired on - into Stereoisomers, one left open)
+    const notMadeDrawn: DrawnEntry[] = [];
     try {
       let chem = await pluginWorker(plugin);
       // (each structure drawn: on the page, by its atoms; then those held in its result set off the page, as it holds them)
@@ -528,9 +542,15 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         const blocks = blocksOf(model, atoms);
         const bare = bareAtomsOf(model, atoms);
         const block = blocks[0];
+        // (set aside as it came, its record with it - what it said before, its status not - saying why)
+        const asideAs = (why: string) => {
+          const { status: _status, ...kept } = record ?? {};
+          notMadeDrawn.push({ place, drawn: partOf(model, new Set(atoms)), record: { ...kept, status: { aside: why } } });
+        };
         if (!block) {
           if (bare.length) bareOnly.push(place + 1);
           else failed.push(place + 1);
+          asideAs(bare.length ? BARE_WHY : NOT_MADE_WHY);
           continue;
         }
         let made;
@@ -542,6 +562,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           const unset = left.atoms.length + left.bonds.length > 0;
           if (unset && (left.isomers > 1 || (left.cumulenes?.length ?? 0) > 0)) {
             open.push(place + 1);
+            asideAs(openWhy(left.atoms.length, left.bonds.length, left.cumulenes?.length ?? 0));
             continue;
           }
           if (unset && left.free) free.push(place + 1);
@@ -551,6 +572,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
           if (menoStops.has(id)) break;
           // (said by its place, in words: what the plugin's library says of it is none of the chemist's to read)
           failed.push(place + 1);
+          asideAs(NOT_MADE_WHY);
           // (its worker may have gone with it - held past its time, or stopped: the next is asked of the one running now, started afresh where need be)
           chem = await pluginWorker(plugin);
           continue;
@@ -558,6 +580,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
         // (none made of it, said so too)
         if (!made) {
           failed.push(place + 1);
+          asideAs(NOT_MADE_WHY);
           continue;
         }
         // (one made from a structure on no page is linked to no drawing: its atoms' ids are its own, not the page's)
@@ -601,10 +624,8 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
     const unmade = [...(failed.length ? [notMade(failed, of)] : []), ...(open.length ? [stereoOpen(open, of)] : []), ...(bareOnly.length ? [bareLeft(bareOnly, of)] : [])];
     // (made, but said: their stereo not held - only those that were made)
     const freed = free.filter((p) => !failed.includes(p));
-    if (!worked.length) {
-      const why = open.length || bareOnly.length ? unmade.join(" \u00b7 ") : "No structure drawn could be made in 3D";
-      return void fail(id, why[0].toUpperCase() + why.slice(1), at, key);
-    }
+    // (none made, and none to set aside: nothing came that could be - else those not made, in the Failed exit, each saying why)
+    if (!worked.length && !notMadeDrawn.length) return void fail(id, "No structure drawn could be made in 3D", at, key);
     const took = Date.now() - at;
     const left = [...unmade, ...(freed.length ? [stereoFree(freed, of)] : []), ...partly].map((u) => ` \u00b7 ${u}`).join("");
     bringIn(id, worked, "conformers", {
@@ -615,7 +636,7 @@ export function createStepRuns(doc: DocumentStore<WorkspaceDocument>, set: SetSt
       took,
       kind: step.kind,
       ...(step.options ? { options: step.options } : {}),
-    });
+    }, [], notMadeDrawn);
   }
 
   /**
