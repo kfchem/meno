@@ -271,7 +271,7 @@ page itself.
   takes it (the maintainer, 2026-10-13) - and when its plugin is taken
   away.
 - **Meno's question about keeping itself up to date** waits until a guide
-  is closed.
+  is closed (it comes after the user's first action: `lib/firstAction.ts`).
 
 **Getting started** (`resources/plugins/getting-started`) is the guide
 Meno comes with (the maintainer, 2026-10-10: a plugin, there from the
