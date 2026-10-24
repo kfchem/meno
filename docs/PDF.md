@@ -1534,8 +1534,12 @@ words are: by itself, not by a box drawn round it.
   atom nearest what is not read marked unsure, saying what lies there
   ('"OTBS" lies at this end, not read as its label.'), so its note counts it
   and the chemist puts it right. A label not read stays an atom, its words as
-  written, marked unsure: nothing is dropped. Only what is no structure - a
-  line of words, a chart - is refused, with why.
+  written, marked unsure: nothing is dropped. A piece of three heavy atoms
+  or fewer that would be so marked is refused still, as before, with why -
+  most likely a cut-off bit of a drawing, or none (the maintainer,
+  2026-10-24); a small molecule read whole (MeOH, CO2, a lone ion) is taken
+  as ever. And what is no structure - a line of words, a chart - is refused,
+  with why.
 - In the column first. The PDF on the page, whose presses move the view,
   comes later.
 

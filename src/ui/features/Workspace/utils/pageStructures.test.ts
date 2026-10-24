@@ -238,6 +238,26 @@ describe("the structures of a figure, each taken whole", () => {
     });
   });
 
+  describe("a small piece, part of it not read", () => {
+    const L = 14.4;
+    type P = [number, number];
+    const stroke = (p: P, q: P) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", ...p], ["L", ...q]] }) as FigureDrawn["paths"][number];
+    /** A zigzag chain of `n` carbons, and - `stray` - a letter no atom takes beside the middle of its first bond. */
+    const chain = (n: number, stray: boolean): FigureDrawn => {
+      const pts = Array.from({ length: n }, (_, i): P => [100 + i * L * 0.866, 200 + (i % 2 ? -L / 2 : 0)]);
+      const mid: P = [(pts[0][0] + pts[1][0]) / 2, (pts[0][1] + pts[1][1]) / 2 + 3];
+      const letter = { c: "§", box: [mid[0] - 1.5, mid[1] - 2, mid[0] + 1.5, mid[1] + 2] as [number, number, number, number], at: [mid[0] - 1.5, mid[1] + 2] as [number, number], size: 6 };
+      return { paths: pts.slice(1).map((p, i) => stroke(pts[i], p)), letters: stray ? [letter] : [], pictures: [] };
+    };
+    const one = (d: FigureDrawn) => structuresOf(d, 0, "pdf", 0, []).map((s) => ("none" in s.read ? s.read.none : [formula(s), unread(s)]));
+
+    it("is refused, as before, at three heavy atoms or fewer - most likely a cut-off bit, or none - but taken unmarked; at four, taken, marked", () => {
+      expect(one(chain(3, true))).toEqual(['Part of this structure could not be read ("§"), so none of it is taken.']);
+      expect(one(chain(3, false))).toEqual([["C3", []]]);
+      expect(one(chain(4, true))).toEqual([["C4", ['"§" lies within it, not read as part of it.']]]);
+    });
+  });
+
   it("finds none in one line with no label - a chart's tick, a table's rule - nor in a lone word: they are no structures", () => {
     const line: FigureDrawn = { paths: [{ fill: null, stroke: "#000000ff", width: 0.6, d: [["M", 100, 100], ["L", 120, 100]] }], letters: [], pictures: [] };
     expect(structuresOf(line, 0, "pdf", 0, [])).toEqual([]);
