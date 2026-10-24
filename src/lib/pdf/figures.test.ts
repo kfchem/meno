@@ -160,6 +160,22 @@ describe("a PDF page's figures", () => {
     expect(y1).toBeGreaterThanOrEqual(338);
   });
 
+  it("take a \"+\" drawn with lines between two compounds as a \"+\": the two one scheme - but not a sign drawn with lines right by a word, a charge", () => {
+    // (a stroke each way, 6 points across, its middle level with the compounds', 8 points clear of the second's label)
+    const cross = [path([192, 307.5, 198, 308.5]), path([194.5, 305, 195.5, 311])];
+    expect(figuresOf([...structureAt(100, 300), ...cross, ...structureAt(215, 300)])).toHaveLength(1);
+    // (the same signs 2 points from a word - a label with its charge - join nothing)
+    const by = text([199, 304, 205, 312]);
+    expect(figuresOf([...structureAt(100, 300), ...cross, by, ...structureAt(215, 300)])).toHaveLength(2);
+  });
+
+  it("take one line with a label at its end as a structure - CH3NH3+ - but not a word's underline, nor a line alone", () => {
+    const bond = path([100, 300, 114.4, 300.6]);
+    expect(figuresOf([bond, text([116, 296, 138, 305])])).toHaveLength(1);
+    expect(figuresOf([path([100, 300, 130, 300.6]), text([100, 290, 130, 298])])).toEqual([]);
+    expect(figuresOf([bond])).toEqual([]);
+  });
+
   it("join no compounds without an arrow or a + between them: not by a small word, nor by a chain drawn flat", () => {
     // (a small word between two compounds - an atom's label, a number - is no "+")
     const word = text([192, 305, 199, 312]);

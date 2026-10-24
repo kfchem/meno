@@ -102,6 +102,8 @@ const ARROW_LONG = 2.5;
 const ARROW_LINE_PT = 25;
 const ARROW_LINE_THIN = 0.15;
 const PLUS_PT = 14;
+/** The least a "+" drawn with lines is across, in points: no speck. */
+const PLUS_LEAST_PT = 2.5;
 const CONDITIONS_PT = 24;
 const SHORT_WORD_PT = 40;
 const NUMBER_PT = 14;
@@ -196,10 +198,22 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   );
   // (a small structure - an acetate, an ammonium drawn small - is one too: a bond long at the least, of a few lines,
   // its own labels taking it to 18 points; a bullet, an arrow or an icon in a line of words is none)
+  // (or one line with a label at an end of it, along it - CH3NH3+, H3C-OH - its line however thin: a word's underline has
+  // its word over it, not at its end)
+  const endLabelled = (g: Box) => {
+    const level = g[2] - g[0] >= g[3] - g[1];
+    return labels.some((l) => {
+      if (!meet(grow(g, LABEL_PT), l)) return false;
+      const [mid, lo, hi] = level ? [(l[0] + l[2]) / 2, g[0], g[2]] : [(l[1] + l[3]) / 2, g[1], g[3]];
+      const across = level ? Math.min(l[3], g[3] + 1) - Math.max(l[1], g[1] - 1) : Math.min(l[2], g[2] + 1) - Math.max(l[0], g[0] - 1);
+      return (mid < lo || mid > hi) && across > 0;
+    });
+  };
   const small = (g: Box) => {
     const [w, h] = [g[2] - g[0], g[3] - g[1]];
-    if (Math.max(w, h) < BOND_PT || Math.min(w, h) < LEAST_THICK_PT) return false;
-    if (drawn.filter((o) => within(o.box, grow(g, 0.5))).length < LEAST_LINES) return false;
+    const labelled = endLabelled(g);
+    if (Math.max(w, h) < BOND_PT || (Math.min(w, h) < LEAST_THICK_PT && !labelled)) return false;
+    if (drawn.filter((o) => within(o.box, grow(g, 0.5))).length < (labelled ? 1 : LEAST_LINES)) return false;
     // (set in a line of running words - longer than a label, level with it and right beside it - an icon's, not a structure's)
     const level = (t: Box) => Math.min(t[3], g[3]) - Math.max(t[1], g[1]) > 0.5 * Math.min(t[3] - t[1], h);
     if (running.some((t) => meet(grow(g, LABEL_PT), t) && level(t))) return false;
@@ -214,7 +228,13 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   const charges = [...pieces.filter((g) => !parts.includes(g)), ...objects.filter((o) => o.kind === "plus").map((o) => o.box)].filter((g) => Math.max(g[2] - g[0], g[3] - g[1]) <= CHARGE_PT);
   const pageW = Math.max(1, page[2] - page[0]);
   const words = objects.filter((o) => (o.kind === "text" || o.kind === "plus") && o.box[2] - o.box[0] <= Math.max(COLUMN_LINE * pageW, COLUMN_LINE_PT)).map((o) => o.box);
-  const pluses = objects.filter((o) => o.kind === "plus").map((o) => o.box);
+  // (a "+" written, or drawn with lines - one filled cross, or a stroke each way - square, no part, by no word: a charge drawn
+  // with lines is as small, but by its label; and a "+" is a scheme's only with a part either side of it, level with it)
+  const drawnPluses = pieces.filter((g) => {
+    const [w, h] = [g[2] - g[0], g[3] - g[1]];
+    return !parts.includes(g) && Math.min(w, h) >= 0.75 * Math.max(w, h) && Math.max(w, h) >= PLUS_LEAST_PT && Math.max(w, h) <= PLUS_PT && !words.some((t) => meet(grow(g, CHARGE_BY_PT), t));
+  });
+  const pluses = [...objects.filter((o) => o.kind === "plus").map((o) => o.box), ...drawnPluses];
   // a scheme's parts joined: each arrow - long and thin, holding a straight line - to what lies beyond its ends, each "+" to what lies either side of it
   const lines = drawn.map((o) => o.box).filter((b) => {
     const [w, h] = [b[2] - b[0], b[3] - b[1]];

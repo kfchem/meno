@@ -4,7 +4,7 @@ import aldol from "../../../../lib/figure/fixtures/aldol-rdkitrxn.json";
 import camphor from "../../../../lib/figure/fixtures/camphor-rdkitacs.json";
 import acetate from "../../../../lib/figure/fixtures/sodium-acetate-rdkit.json";
 import { schemeDrawn } from "./figures";
-import { figuresOf } from "../../../../lib/pdf/figures";
+import { figuresOf, type PageObject } from "../../../../lib/pdf/figures";
 import { centreWithin, figureOn, pageStructuresOf, structureAt, structuresOf, type PageStructure } from "./pageStructures";
 
 const read = (s: PageStructure) => {
@@ -172,6 +172,54 @@ describe("every structure on a page", () => {
     const far = { kind: "text" as const, box: [figure[2] + 3 * bond, y - 4, figure[2] + 3 * bond + 60, y + 4] as [number, number, number, number] };
     const { structures } = pageStructuresOf({ objects: [far] }, [figure], () => drawn, "pdf", 0);
     expect("model" in structures[0].read).toBe(true);
+  });
+});
+
+describe("a page drawn as Meno draws one", () => {
+  const L = 14.4;
+  type P = [number, number];
+  const stroke = (...pts: P[]) => ({ fill: null, stroke: "#000000ff", width: 0.6, d: pts.map(([x, y], i) => [i ? "L" : "M", x, y]) }) as FigureDrawn["paths"][number];
+  const letters = (text: string, [x, y]: P) => [...text].map((c, i) => ({ c, box: [x - 3.4 + 6.8 * i, y - 3.6, x + 3.4 + 6.8 * i, y + 3.6] as [number, number, number, number], at: [x - 3.4 + 6.8 * i, y + 3.6] as [number, number], size: 10 }));
+  const boxOf = (p: FigureDrawn["paths"][number]): [number, number, number, number] => {
+    const xs = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[1]]));
+    const ys = p.d.flatMap((st) => (st[0] === "Z" ? [] : [st[2]]));
+    return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+  };
+  /** Its structures, as the column finds them: the page's objects from what is drawn, its figures from those. */
+  const picked = (drawn: FigureDrawn, extra: PageObject[] = []) => {
+    // (a label's letters one text object, as a PDF sets a word)
+    const words: [number, number, number, number][] = [];
+    for (const l of drawn.letters) {
+      const last = words[words.length - 1];
+      if (last && l.box[0] - last[2] < 1 && Math.abs(l.box[1] - last[1]) < 1) last[2] = l.box[2];
+      else words.push([...l.box]);
+    }
+    const objects: PageObject[] = [...drawn.paths.map((p) => ({ kind: "path" as const, box: boxOf(p) })), ...words.map((box) => ({ kind: "text" as const, box })), ...extra];
+    const figures = figuresOf(objects);
+    return pageStructuresOf({ objects }, figures, () => drawn, "pdf", 0).structures;
+  };
+  /** A zigzag of four bonds from `x`. */
+  const zigzag = (x: number) => stroke(...[0, 1, 2, 3, 4].map((i): P => [x + i * L * 0.866, 300 + (i % 2) * L * 0.5]));
+
+  it("reads two compounds whole with a \"+\" drawn with lines a bond from each - no line beside either", () => {
+    const right = 100 + 4 * L * 0.866;
+    const mid = right + L * 1.3;
+    const cross = [stroke([mid - 3, 303.6], [mid + 3, 303.6]), stroke([mid, 300.6], [mid, 306.6])];
+    const found = picked({ paths: [zigzag(100), ...cross, zigzag(right + 2.6 * L)], letters: [], pictures: [] });
+    expect(found.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("reads two compounds whole with a \"+\" written between them, in figures of their own", () => {
+    const right = 100 + 4 * L * 0.866;
+    const mid = right + L * 1.3;
+    const plus: PageObject = { kind: "plus", box: [mid - 3, 300.6, mid + 3, 306.6] };
+    const found = picked({ paths: [zigzag(100), zigzag(right + 2.6 * L)], letters: [], pictures: [] }, [plus]);
+    expect(found.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("finds a structure of one bond with a label: CH3NH3+", () => {
+    const found = picked({ paths: [stroke([100, 300], [100 + 0.6 * L, 300])], letters: letters("NH3+", [100 + L, 300]), pictures: [] });
+    expect(found.map((s) => ("model" in s.read ? [formula(s), s.read.model.atoms.reduce((t, a) => t + (a.charge ?? 0), 0)] : s.read.none))).toEqual([["C1 N1", 1]]);
   });
 });
 

@@ -166,7 +166,8 @@ export function pageStructuresOf(made: PageMade, figures: readonly Box[], drawnO
     if (!drawn) return;
     // (all of the page whose middle is not within this figure - its own labels' boxes, a letter's full height, may pass its edge a
     // little; a label set between two figures, reaching into both, is neither's - its words named, where they are known)
-    const beside = made.objects.filter((o) => !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
+    // (a "+" written between a scheme's compounds is none of that: no line of a structure cut in two)
+    const beside = made.objects.filter((o) => o.kind !== "plus" && !centreWithin(o.box, box)).map((o): Beside => ({ box: o.box, ...(o.kind === "text" && made.wordsIn ? { text: made.wordsIn(o.box) } : {}) }));
     const read = figureOn(drawn, k, sha256, page, beside, known);
     // (and the words of the page within this figure that are none of a structure's labels, at one of its open ends: a label
     // its figure's drawing did not hold, the structure refused - a compound's number aside)
