@@ -30,6 +30,40 @@ export function turnOver(from: ArrayLike<number>, to: ArrayLike<number>): Turn3D
   return n < 2 ? [0, 0, 0, 1] : hornTurn(from, to, n);
 }
 
+/**
+ * The turn a molecule in 3D is first seen at, its coordinates as they are:
+ * along its principal axes - its longest extent across the screen, its next
+ * up it, its least towards the viewer - so that a linear molecule (HCN) is
+ * seen side-on, not end-on as one ball, and a planar one face-on. Of the
+ * points `xyz` (x, y and z in turn): the axes of their spread about their
+ * centre (Jacobi's sweeps), and the turn laying them over those axes on the
+ * page (`turnOnto`). None for one point, or points all in one place.
+ */
+export function principalTurn(xyz: ArrayLike<number>): Turn3D | undefined {
+  const n = Math.floor(xyz.length / 3);
+  if (n < 2) return undefined;
+  const c = [0, 0, 0];
+  for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) c[k] += xyz[3 * i + k] / n;
+  const spread = [0, 1, 2].map(() => [0, 0, 0]);
+  for (let i = 0; i < n; i++) {
+    const d = [0, 1, 2].map((k) => xyz[3 * i + k] - c[k]);
+    for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) spread[a][b] += d[a] * d[b];
+  }
+  const { values, vectors } = jacobi(spread);
+  const order = [0, 1, 2].sort((a, b) => values[b] - values[a] || a - b);
+  if (!(values[order[0]] > 1e-9)) return undefined;
+  const axis = (k: number) => [vectors[0][order[k]], vectors[1][order[k]], vectors[2][order[k]]];
+  const [e1, e2] = [axis(0), axis(1)];
+  // (where each point lies along the two longest axes: on the page, across and up)
+  const onPage = new Float64Array(2 * n);
+  for (let i = 0; i < n; i++) {
+    const d = [0, 1, 2].map((k) => xyz[3 * i + k] - c[k]);
+    onPage[2 * i] = d[0] * e1[0] + d[1] * e1[1] + d[2] * e1[2];
+    onPage[2 * i + 1] = d[0] * e2[0] + d[1] * e2[1] + d[2] * e2[2];
+  }
+  return turnOnto(xyz, onPage);
+}
+
 /** The turn `then` made after the turn `first`, as one: the quaternions' product. */
 export function turnAfter(then: Turn3D, first: Turn3D): Turn3D {
   const [ax, ay, az, aw] = then;

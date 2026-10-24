@@ -35,6 +35,7 @@ import { editAtTrueSize } from "../../utils/trueSize";
 import { style3dOf } from "../../style3d";
 import { hapticStars } from "../../chem/eta";
 import { workspace3dOf } from "../../../../../lib/chem/workspaceStyle3d";
+import { principalTurn } from "../../utils/align3d";
 
 type SetState = StoreApi<EditorState>["setState"];
 type GetState = StoreApi<EditorState>["getState"];
@@ -425,7 +426,7 @@ export const createModelSlice = (
     // the first, in order, as replaceModel left them to be - and each stack
     // of drawings the record marked, where it carries one: utils/stacks)
     const recordsShown = recordsShownOf(next.atoms);
-    set((prev: EditorState) => ({ ...prev, frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    set((prev: EditorState) => ({ ...prev, turns3d: shownTurns(scheme, 1, {}), frames3d: shownFrames(scheme, 1, {}), lists3d: shownLists(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   joinReadings: () => {
@@ -510,7 +511,7 @@ export const createModelSlice = (
     );
     get().forgetInteraction();
     const recordsShown = recordsShownOf(next.atoms);
-    set((prev: EditorState) => ({ ...prev, recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
+    set((prev: EditorState) => ({ ...prev, turns3d: shownTurns(scheme, 1, {}), recordsShown, model: shownModel(prev.fullModel, recordsShown) }));
   },
 
   forgetInteraction: () => {
@@ -696,7 +697,7 @@ export const createModelSlice = (
       recordsShown,
       model,
       // (each molecule in 3D added showing the frame its file says)
-      ...(edited ? { frames3d: shownFrames(scheme, start3d, prev.frames3d), lists3d: shownLists(scheme, start3d, prev.lists3d) } : {}),
+      ...(edited ? { turns3d: shownTurns(scheme, start3d, prev.turns3d), frames3d: shownFrames(scheme, start3d, prev.frames3d), lists3d: shownLists(scheme, start3d, prev.lists3d) } : {}),
       // (selected, as a paste is)
       // (as it is shown: of a stack of drawings it brings, the record shown - utils/stacks)
       ...(edited && next.atoms.length ? { sel: added(start, model), selAnchor: null } : {}),
@@ -836,6 +837,23 @@ export const createModelSlice = (
  * its file says - an optimisation's last - those molecules numbered from
  * `first`, in order.
  */
+/**
+ * Each molecule in 3D added from a file, first seen along its principal
+ * axes (utils/align3d `principalTurn`): its coordinates as the file has
+ * them, the view turned - a linear molecule side-on, a planar one face-on;
+ * one tied to a drawing as the drawing lies. Numbered as `shownFrames`
+ * numbers them.
+ */
+function shownTurns(scheme: ImportedScheme | undefined, first: number, shown: EditorState["turns3d"]): EditorState["turns3d"] {
+  const out = { ...shown };
+  (scheme?.molecules3d ?? []).forEach((m, i) => {
+    if (m.drawnFrom) return;
+    const turn = principalTurn(m.atoms.flatMap((a) => [a.x, a.y, a.z ?? 0]));
+    if (turn) out[first + i] = turn;
+  });
+  return out;
+}
+
 function shownFrames(scheme: ImportedScheme | undefined, first: number, shown: EditorState["frames3d"]): EditorState["frames3d"] {
   const out = { ...shown };
   (scheme?.molecules3d ?? []).forEach((m, i) => {

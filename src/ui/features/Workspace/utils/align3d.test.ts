@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { turnAfter, turnOnto, turnOver } from "./align3d";
+import { principalTurn, turnAfter, turnOnto, turnOver } from "./align3d";
 
 /** Points on the page, and the same points stood up in 3D by the turn `q` undone. */
 function stoodUp(page: [number, number][], q: THREE.Quaternion) {
@@ -84,5 +84,41 @@ describe("turnAfter", () => {
     const a = p.clone().applyQuaternion(first).applyQuaternion(then);
     const b = p.clone().applyQuaternion(both);
     expect(b.distanceTo(a)).toBeLessThan(1e-12);
+  });
+});
+
+describe("principalTurn", () => {
+  /** Points turned by `turn` about their centre, as the canvas shows them. */
+  const seen = (xyz: number[], turn: [number, number, number, number]) => {
+    const q = new THREE.Quaternion(...turn);
+    const n = xyz.length / 3;
+    const c = [0, 1, 2].map((k) => xyz.filter((_, i) => i % 3 === k).reduce((a, b) => a + b, 0) / n);
+    return Array.from({ length: n }, (_, i) => new THREE.Vector3(xyz[3 * i] - c[0], xyz[3 * i + 1] - c[1], xyz[3 * i + 2] - c[2]).applyQuaternion(q));
+  };
+
+  it("shows a linear molecule side-on - HCN laid along the view, not end-on as one ball", () => {
+    // (H-C≡N along z, as a calculation's output may give it: end-on to the canvas)
+    const hcn = [0, 0, -1.066, 0, 0, 0, 0, 0, 1.153];
+    const p = seen(hcn, principalTurn(hcn)!);
+    expect(Math.max(...p.map((v) => v.x)) - Math.min(...p.map((v) => v.x))).toBeCloseTo(2.219, 3);
+    for (const v of p) {
+      expect(v.y).toBeCloseTo(0, 6);
+      expect(v.z).toBeCloseTo(0, 6);
+    }
+  });
+
+  it("shows a planar molecule face-on, its longest extent across", () => {
+    // (a ring of six in the xz plane - edge-on to the canvas - and stretched along z)
+    const ring = Array.from({ length: 6 }, (_, k) => [1.4 * Math.cos((k * Math.PI) / 3), 0, 2 * Math.sin((k * Math.PI) / 3)]).flat();
+    const p = seen(ring, principalTurn(ring)!);
+    for (const v of p) expect(v.z).toBeCloseTo(0, 6);
+    const across = Math.max(...p.map((v) => v.x)) - Math.min(...p.map((v) => v.x));
+    const up = Math.max(...p.map((v) => v.y)) - Math.min(...p.map((v) => v.y));
+    expect(across).toBeGreaterThan(up);
+  });
+
+  it("turns nothing of one atom, or of atoms all in one place", () => {
+    expect(principalTurn([1, 2, 3])).toBeUndefined();
+    expect(principalTurn([1, 2, 3, 1, 2, 3])).toBeUndefined();
   });
 });
