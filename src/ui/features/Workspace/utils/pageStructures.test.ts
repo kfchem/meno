@@ -244,7 +244,7 @@ describe("a page drawn as Meno draws one", () => {
       else words.push([...l.box]);
     }
     const objects: PageObject[] = [...drawn.paths.map((p) => ({ kind: "path" as const, box: boxOf(p) })), ...words.map((box) => ({ kind: "text" as const, box })), ...extra];
-    const figures = figuresOf(objects);
+    const figures = figuresOf(objects, (b) => drawn.letters.filter((l) => l.box[0] >= b[0] - 0.01 && l.box[2] <= b[2] + 0.01 && l.box[1] >= b[1] - 0.01 && l.box[3] <= b[3] + 0.01).map((l) => l.c).join(""));
     return pageStructuresOf({ objects }, figures, () => drawn, "pdf", 0).structures;
   };
   /** A zigzag of four bonds from `x`. */
@@ -264,6 +264,19 @@ describe("a page drawn as Meno draws one", () => {
     const plus: PageObject = { kind: "plus", box: [mid - 3, 300.6, mid + 3, 306.6] };
     const found = picked({ paths: [zigzag(100), zigzag(right + 2.6 * L)], letters: [], pictures: [] }, [plus]);
     expect(found.map((s) => "model" in s.read)).toEqual([true, true]);
+  });
+
+  it("finds no figure in a rule with a word or a number at its end - \"Date ____\", \"____ 12\", a 12-point word with an 11-point rule", () => {
+    const word = (text: string, x: number, size = 10): PageObject => ({ kind: "text", box: [x, 300, x + text.length * 0.6 * size, 300 + size] });
+    const said = new Map<string, string>();
+    const at = (o: PageObject, text: string) => (said.set(o.box.join(","), text), o);
+    const wordsIn = (b: [number, number, number, number]) => said.get(b.join(",")) ?? "";
+    const rule = (x0: number, x1: number): PageObject => ({ kind: "path", box: [x0, 303.8, x1, 304.3] });
+    expect(figuresOf([at(word("Date", 100), "Date"), rule(126, 166)], wordsIn)).toEqual([]);
+    expect(figuresOf([rule(100, 140), at(word("12", 143), "12")], wordsIn)).toEqual([]);
+    expect(figuresOf([at(word("Note", 100, 12), "Note"), rule(131, 142)], wordsIn)).toEqual([]);
+    // (and the same rule with an atom's label at its end, a bond long: one)
+    expect(figuresOf([rule(100, 113), at(word("NH3+", 115), "NH3+")], wordsIn)).toHaveLength(1);
   });
 
   it("finds a structure of one bond with a label: CH3NH3+", () => {

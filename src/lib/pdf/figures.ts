@@ -12,6 +12,7 @@
  * across a column, or the page's own frame, is no figure.
  */
 import { invoke, isTauri } from "@tauri-apps/api/core";
+import { textOf, type PageText } from "./text";
 
 /** A box on a page, in points from its top left: left, top, right, bottom. */
 export type Box = [number, number, number, number];
@@ -56,10 +57,30 @@ export async function figuresOn(sha256: string, page: number): Promise<Box[]> {
   const h = had.get(key);
   if (h && h !== "asked") return h;
   const objects = isTauri() ? pageObjectsOf(await invoke<ArrayBuffer>("pdf_objects", { sha: sha256, page })) : [];
-  const figures = figuresOf(objects);
+  // (its words, for the one thing told by what words say: a one-bond structure's label)
+  const text = isTauri() ? await textOf(sha256, page).catch(() => null) : null;
+  const figures = figuresOf(objects, text ? (b) => wordsIn(text, b) : undefined);
   objectsKept.set(key, objects);
   had.set(key, figures);
   return figures;
+}
+
+/** The letters of a page whose middles lie in a box, in order, as one word. */
+function wordsIn(t: PageText, b: Box): string {
+  let out = "";
+  for (let i = 0; i < t.codes.length; i++) {
+    const [x0, y0, x1, y1] = [t.boxes[i * 4], t.boxes[i * 4 + 1], t.boxes[i * 4 + 2], t.boxes[i * 4 + 3]];
+    const [x, y] = [(x0 + x1) / 2, (y0 + y1) / 2];
+    if (x1 > x0 && x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) out += String.fromCodePoint(t.codes[i]);
+  }
+  return out.replace(/\s+/g, "");
+}
+
+/** Whether words read as an atom's label, as a structure's labels are read - NH3+, OMe, CH3, never a number nor a word: told by
+ * the editor (utils/figures `figureLabels`), none till then. */
+let atomLabel: (text: string) => boolean = () => false;
+export function setAtomLabel(test: (text: string) => boolean): void {
+  atomLabel = test;
 }
 
 /** What each page whose figures were worked out is made of, kept with them. */
@@ -102,6 +123,9 @@ const ARROW_LONG = 2.5;
 const ARROW_LINE_PT = 25;
 const ARROW_LINE_THIN = 0.15;
 const PLUS_PT = 14;
+/** A one-bond structure's line is this many bonds long at most; a bond is drawn this many times as long as a label's letters are tall. */
+const ONE_BOND_MOST = 1.5;
+const BOND_PER_SIZE = 1.4;
 /** The least a "+" drawn with lines is across, in points: no speck. */
 const PLUS_LEAST_PT = 2.5;
 const CONDITIONS_PT = 24;
@@ -166,7 +190,7 @@ function throughLabels(boxes: Box[], labels: readonly Box[]): Box[] {
  * underline none), or holding a picture; and each widened to take the words over it or
  * right beside it, its labels, but not a column's lines of words beside it.
  */
-export function figuresOf(objects: readonly PageObject[]): Box[] {
+export function figuresOf(objects: readonly PageObject[], wordsIn?: (box: Box) => string): Box[] {
   const all = objects.map((o) => o.box);
   const page: Box = all.length ? all.reduce(union) : [0, 0, 0, 0];
   const pageArea = Math.max(1, (page[2] - page[0]) * (page[3] - page[1]));
@@ -198,12 +222,13 @@ export function figuresOf(objects: readonly PageObject[]): Box[] {
   );
   // (a small structure - an acetate, an ammonium drawn small - is one too: a bond long at the least, of a few lines,
   // its own labels taking it to 18 points; a bullet, an arrow or an icon in a line of words is none)
-  // (or one line with a label at an end of it, along it - CH3NH3+, H3C-OH - its line however thin: a word's underline has
-  // its word over it, not at its end)
+  // (or one line with an atom's label at an end of it, along it - CH3NH3+, H3C-OH - its line however thin, but a bond and a half
+  // long at most, a bond as long as its label's letters are tall and half again: a word's underline has its word over it, and a
+  // rule with a word or a number at its end - "Date ____", "____ 12", a leader - has no atom's label there)
   const endLabelled = (g: Box) => {
     const level = g[2] - g[0] >= g[3] - g[1];
     return labels.some((l) => {
-      if (!meet(grow(g, LABEL_PT), l)) return false;
+      if (!wordsIn || !meet(grow(g, LABEL_PT), l) || Math.max(g[2] - g[0], g[3] - g[1]) > ONE_BOND_MOST * BOND_PER_SIZE * (l[3] - l[1]) || !atomLabel(wordsIn(l))) return false;
       const [mid, lo, hi] = level ? [(l[0] + l[2]) / 2, g[0], g[2]] : [(l[1] + l[3]) / 2, g[1], g[3]];
       const across = level ? Math.min(l[3], g[3] + 1) - Math.max(l[1], g[1] - 1) : Math.min(l[2], g[2] + 1) - Math.max(l[0], g[0] - 1);
       return (mid < lo || mid > hi) && across > 0;
