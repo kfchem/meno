@@ -1578,7 +1578,14 @@ to be able to work with nothing going out at all.
   app's own (tauri-plugin-updater), sent through the proxy with the task's
   token (`TaskHandle::proxy_url`). Its purpose, `app-update`, is asked for
   once of Meno's own accord (remembered as `updates.asked` in the settings)
-  and after that only when the user turns it on in Settings › Network. The
+  and after that only when the user turns it on in Settings › Network. That
+  once is after the user's first action - a workspace's first edit, a file
+  opened, Settings opened (`lib/firstAction.ts`) - once it has ended (the
+  pointer let go, no guide open), never on a timer: with no action, it is
+  not asked. Each look shows its notice in the corner as every task does,
+  unless the user turned that off (`updates.notice`, Settings › Network) -
+  the one notice of the network that can be; the record keeps it either
+  way. The
   update is checked against the updater's public key (`tauri.conf.json`)
   before it is installed, which is as Meno quits; a development build, and
   a Meno Windows started for Office, neither look nor install. On Windows

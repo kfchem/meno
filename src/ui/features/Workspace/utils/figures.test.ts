@@ -166,6 +166,124 @@ describe("a bond's open end drawn short", () => {
   });
 });
 
+describe("a structure read whose atoms have more bonds than they take", () => {
+  const disc = ([cx, cy]: P, r: number): FigurePath => {
+    const k = 0.5523 * r;
+    return {
+      fill: "#000000ff",
+      stroke: null,
+      width: 0,
+      d: [["M", cx + r, cy], ["C", cx + r, cy + k], ["C", cx + k, cy + r], ["C", cx, cy + r], ["C", cx - k, cy + r], ["C", cx - r, cy + k], ["C", cx - r, cy], ["C", cx - r, cy - k], ["C", cx - k, cy - r], ["C", cx, cy - r], ["C", cx + k, cy - r], ["C", cx + r, cy - k], ["C", cx + r, cy], ["Z"]],
+    };
+  };
+  /** A line from `p` towards `q`, stopping `short` of it (a share of the way): where a label stands at `q`. */
+  const towards = (p: P, q: P, share = 0.6): P => [p[0] + (q[0] - p[0]) * share, p[1] + (q[1] - p[1]) * share];
+  /** A line beside another, `by` points to its left. */
+  const beside = (p: P, q: P, by: number): [P, P] => {
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]);
+    const [nx, ny] = [-(q[1] - p[1]) / l, (q[0] - p[0]) / l];
+    return [[p[0] + nx * by, p[1] + ny * by], [q[0] + nx * by, q[1] + ny * by]];
+  };
+  const bondsAt = (m: Model, id: number) => m.bonds.filter((b) => b.a === id || b.b === id).reduce((t, b) => t + b.order, 0);
+
+  it("reads no radical from a dot by a carbon its four bonds fill: the dot is said, and the carbon is unsure", () => {
+    const c: P = [150, 200];
+    const ends: P[] = [step(c, 0), step(c, 90), step(c, 180), step(c, 270)];
+    const m = structureFrom({ paths: [...ends.map((e) => stroke(c, e)), disc([c[0] + 4, c[1] - 4], 0.75)], letters: [], pictures: [] }, SHA, 1) as Model;
+    const centre = m.atoms.find((a) => bondsAt(m, a.id) === 4)!;
+    expect(m.atoms.filter((a) => a.radical)).toEqual([]);
+    expect(centre.unsure?.said).toEqual(["A dot by it, but its bonds leave it no unpaired electron: no radical is read."]);
+  });
+
+  it("marks a carbon unsure where a line with a dashed line drawn in two pieces beside it reads as three lines, its two other bonds besides", () => {
+    const c: P = [150, 200];
+    const end = step(c, 0);
+    const [p, q] = beside(c, end, 1.8);
+    const piece = (from: number, to: number): FigurePath => stroke([p[0] + (q[0] - p[0]) * from, p[1] + (q[1] - p[1]) * from], [p[0] + (q[0] - p[0]) * to, p[1] + (q[1] - p[1]) * to]);
+    const others = [stroke(c, step(c, 150)), stroke(c, step(c, 210))];
+    const m = structureFrom({ paths: [...others, stroke(c, end), piece(0, 0.3), piece(0.7, 1)], letters: [], pictures: [] }, SHA, 1) as Model;
+    // (as many bonds as a carbon takes, or said: never more, and sure)
+    const centre = m.atoms.find((a) => m.bonds.filter((b) => b.a === a.id || b.b === a.id).length === 3)!;
+    expect(bondsAt(m, centre.id) <= 4 || !!centre.unsure?.said.includes("More bonds meet here than a carbon has.")).toBe(true);
+    const [x, y] = beside(c, end, -1.8);
+    const three = structureFrom({ paths: [...others, stroke(c, end), stroke(p, q), stroke(x, y)], letters: [], pictures: [] }, SHA, 1) as Model;
+    const c3 = three.atoms.find((a) => bondsAt(three, a.id) === 5)!;
+    expect(c3.unsure?.said).toEqual(["More bonds meet here than a carbon has."]);
+  });
+
+  it("keeps no more bonds to an oxygen's label than it takes, drawn with three, and marks it unsure", () => {
+    const o: P = [150, 200];
+    const ends = [step(o, 0), step(o, 120), step(o, 240)];
+    const m = structureFrom({ paths: ends.map((e) => stroke(e, towards(e, o))), letters: letters("O", o), pictures: [] }, SHA, 1) as Model;
+    const ox = m.atoms.find((x) => x.el === "O")!;
+    // (as many as it takes kept, those nearest its letter, and said)
+    expect([bondsAt(m, ox.id), !!ox.unsure]).toEqual([2, true]);
+  });
+
+  it("marks a group's label with more bonds than its atom takes past the group's own unsure: OMe with a double bond", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const o = step(b, -30);
+    const end = towards(b, o, 0.55);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("OMe", o), pictures: [] }, SHA, 1) as Model;
+    const g = m.atoms.find((x) => x.el === "OMe")!;
+    expect([bondsAt(m, g.id), g.unsure?.said]).toEqual([2, ['More bonds meet here than "OMe" has.']]);
+  });
+
+  it("marks an H drawn with a double bond to it unsure, checked as a file has the structure", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const h = step(b, -30);
+    const end = towards(b, h, 0.55);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("H", h), pictures: [] }, SHA, 1) as Model;
+    const hydrogen = m.atoms.find((x) => x.el === "H");
+    // (read with its double bond, and said)
+    expect([hydrogen && bondsAt(m, hydrogen.id), hydrogen?.unsure?.said]).toEqual([2, ["More bonds meet here than hydrogen has."]]);
+  });
+
+  it("marks a label read with a charge no atom carries unsure - a page's \"S188−\" taken for a sulfur", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const s = step(b, -30);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, towards(b, s, 0.55))], letters: letters("S18−", s), pictures: [] }, SHA, 1) as Model;
+    const sulfur = m.atoms.find((x) => x.el === "S");
+    expect([sulfur?.charge, sulfur?.unsure?.said]).toEqual([-18, ["A charge of 18− is more than sulfur carries."]]);
+  });
+
+  it("leaves sure a group's label drawn with the bond its atom has left: =NOAc, an oxime's ester", () => {
+    const a: P = [100, 200];
+    const b = step(a, 30);
+    const n = step(b, -30);
+    const end = towards(b, n, 0.55);
+    const m = structureFrom({ paths: [stroke(a, b), stroke(b, end), stroke(...beside(b, end, 1.8))], letters: letters("NOAc", n), pictures: [] }, SHA, 1) as Model;
+    expect(m.atoms.find((x) => x.el === "NOAc")?.unsure).toBeUndefined();
+  });
+
+  it("leaves sure what has no more bonds than it takes: a sulfone's sulfur, an ammonium's nitrogen, a quaternary carbon", () => {
+    const s: P = [150, 200];
+    const left = step(s, 180);
+    const right = step(s, 0);
+    const up = step(s, 90);
+    const down = step(s, 270);
+    const sulfone = structureFrom(
+      {
+        paths: [stroke(left, towards(left, s)), stroke(right, towards(right, s)), ...[up, down].flatMap((o) => [stroke(towards(s, o, 0.35), towards(s, o, 0.65)), stroke(...beside(towards(s, o, 0.35), towards(s, o, 0.65), 1.8))])],
+        letters: [...letters("S", s), ...letters("O", up), ...letters("O", down)],
+        pictures: [],
+      },
+      SHA,
+      1,
+    ) as Model;
+    const sulfur = sulfone.atoms.find((x) => x.el === "S")!;
+    expect([bondsAt(sulfone, sulfur.id), sulfur.unsure]).toEqual([6, undefined]);
+    const n = structureFrom({ paths: [left, right, up, down].map((e) => stroke(e, towards(e, s))), letters: letters("N+", s), pictures: [] }, SHA, 1) as Model;
+    const nitrogen = n.atoms.find((x) => x.el === "N")!;
+    expect([nitrogen.charge, bondsAt(n, nitrogen.id), nitrogen.unsure]).toEqual([1, 4, undefined]);
+    const c = structureFrom({ paths: [left, right, up, down].map((e) => stroke(s, e)), letters: [], pictures: [] }, SHA, 1) as Model;
+    expect(c.atoms.filter((x) => x.unsure)).toEqual([]);
+  });
+});
+
 describe("a figure set sideways", () => {
   /** The figure turned a quarter as the page shows it: its words reading down the page - each point turned, each letter's line reading down. */
   const sideways = (f: FigureDrawn): FigureDrawn => {

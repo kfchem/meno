@@ -31,7 +31,7 @@ describe("the settings file", () => {
       style3d: { primary: "glossy", secondary: "space", looks: { glossy: { bondRadius: 0.15 } }, shared: { keyLight: 2 }, own: [{ id: "own-00000000-0000-4000-8000-000000000001", name: "Lab figures", look: { ...BALL_AND_STICK, ballScale: 0.16, colours: { O: "#ff2020" } } }] },
       network: { offline: true, granted: ["python-env:console"] },
       chemistry: { valenceWarnings: false },
-      updates: { asked: true },
+      updates: { asked: true, notice: false },
       options: { "write:sdf": { version: "V3000", frames: "all" }, export: { kind: "sdf" } },
       abbreviations: [{ label: "Mmt", name: "4-methoxytrityl", smiles: "*C(c1ccccc1)(c1ccccc1)c1ccc(OC)cc1", also: ["MMTr"] }],
       files: { read: { orca: "cclib" }, also: { orca: ["pyscf"] } },
@@ -121,7 +121,7 @@ describe("the settings file", () => {
     expect(acceptAppSettings({ pictures: { dpi: 300 } }).pictures).toEqual({ dpi: 300 });
     expect(acceptAppSettings({ pictures: { dpi: 450 } }).pictures).toEqual({ dpi: 600 });
     // a file from before Meno updated itself: not asked yet
-    expect(acceptAppSettings({ updates: { asked: "yes" } }).updates).toEqual({ asked: false });
+    expect(acceptAppSettings({ updates: { asked: "yes" } }).updates).toEqual({ asked: false, notice: true });
     // the user's abbreviations: those with a label and a structure that reads
     expect(
       acceptAppSettings({
@@ -170,6 +170,10 @@ describe("the settings file holds only what the user changed (the maintainer, 20
 
   it("writes nothing but its format where nothing was changed", () => {
     expect(JSON.parse(settingsFileText(DEFAULT_APP_SETTINGS))).toEqual({ format: 1 });
+    // (the update notice: on unless turned off, and kept only when it was)
+    expect(DEFAULT_APP_SETTINGS.updates.notice).toBe(true);
+    expect(acceptAppSettings({ updates: { asked: true } }).updates).toEqual({ asked: true, notice: true });
+    expect(JSON.parse(settingsFileText({ ...DEFAULT_APP_SETTINGS, updates: { asked: false, notice: false } }))).toEqual({ format: 1, updates: { notice: false } });
   });
 
   it("writes only what was changed, and reads back as it was - each setting alike", () => {

@@ -9,6 +9,7 @@ import { chemWorker } from "../../../lib/roles/worker";
 import { forFlatReaders } from "./chem/drawing";
 import { reactionForSmiles } from "./chem/reactionFile";
 import { structureOnClipboard } from "./chem/fromClipboard";
+import { stereoOpenSaid, withoutStereoOpen, type StereoOpen } from "./chem/fromSmiles";
 import { leftOutSaid } from "./utils/readNotes";
 import { drawnOf } from "./fileActions";
 import { pictureItems } from "./picture";
@@ -217,10 +218,11 @@ export function useClipboardActions(
           return;
         }
         pastes.current = now;
-        store.getState().pasteModel(centredAt(found, at));
-        // (what the copy held that could not be read, left out: said)
-        const left = leftOutSaid(found.leftOut, "copy");
-        if (left) onError(left);
+        const open = "stereoOpen" in found ? (found as { stereoOpen?: StereoOpen }).stereoOpen : undefined;
+        store.getState().pasteModel(centredAt(withoutStereoOpen(found as Drawn & { stereoOpen?: StereoOpen }), at));
+        // (what the copy held that could not be read, left out: said - and, of a SMILES, the stereo it leaves open)
+        const said = [leftOutSaid(found.leftOut, "copy"), stereoOpenSaid(open)].filter(Boolean).join(" ");
+        if (said) onError(said);
       } catch (e) {
         onError(`Paste failed: ${e instanceof Error ? e.message : String(e)}`);
       }

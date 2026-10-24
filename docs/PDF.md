@@ -1327,7 +1327,24 @@ it where it lies out of view.
     it;
   - hashes as wide at both ends, where both ends could be a stereocentre or
     neither could (where only one could, it is that one);
-  - more bonds meeting at a carbon than it has;
+  - more bonds meeting at an atom than it takes - an element's valence, a
+    heavier one's highest (P(V), S(VI), I(VII)), as its charge leaves it;
+    a group's label (OMe) what its atom has left past the group's own
+    bonds; a metal never - however its label is drawn ("More bonds meet
+    here than oxygen has."), and a charge more than its atom carries. And
+    the structure is checked again as a file has it, each label written
+    out as the atoms it stands for: any atom of it with more bonds than it
+    takes - an H with two, or one charged; a halogen bonded to more than
+    one atom that is not O nor F (an iodine to more than two that are not
+    a halogen, O nor C - PhICl2 and Ph3I take theirs; one more for each
+    positive charge: a diaryliodonium's iodine); a charge past four
+    either way - marks the atom or
+    label drawn, so that nothing whose valence is broken is put down
+    looking sure;
+  - a radical's dots by an atom whose bonds leave it no unpaired electron:
+    no radical is read - a speck, or a letter's round shape, lies there
+    as often ("A dot by it, but its bonds leave it no unpaired electron:
+    no radical is read.");
   - a bond drawn twice over;
   - a bond's open end drawn short, as a bond to a label is, with no label
     read at it - a letter there not read (an I set alone), or a wavy line
@@ -1528,10 +1545,12 @@ words are: by itself, not by a box drawn round it.
 - each figure of the page is read as *Read as structure* reads one (the
   one reading, `schemeDrawn`), and split into its structures: an atom and
   every atom bonded to it, on and on. A lone ion (Na+, Cl-) within 1.6
-  bonds of a structure, with no arrow nor "+" between them, is that
+  bonds of a structure - or within 3, set level with the atom nearest it,
+  as a salt's counter-ion is in a row beside it (bonds measured atom to
+  atom) - with no arrow nor "+" between them, is that
   structure's where the ions so by it make it neutral - it carrying their
-  charge the other way: sodium acetate, an ammonium chloride, are each one
-  structure. Any other ion by a structure - within those 1.6 bonds, or
+  charge the other way: sodium acetate, an ammonium chloride, NMe4+ Br-,
+  are each one structure. Any other ion by a structure - as near as that, or
   within the box round the figure's bonds - is its own, never a neutral
   molecule's nor taken across a scheme; one further out (a "Na+" of a
   caption or a table) is words. A lone label that is no ion - a lone

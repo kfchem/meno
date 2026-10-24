@@ -168,7 +168,14 @@ in 3D, arrows, text - and is made of three things:
 They are page items, as an arrow or a molecule in 3D is: they lie on the
 page, at the page's scale, zoom and pan with it, and are saved with it.
 Fit (Ctrl/Cmd+1) takes them in: each set's frame and each step's card,
-closed. Their words, and the chips on the page, go below 75 % (*How it
+closed; each wire as far as it bends out past them - one going back to a
+step on the left loops out either side; and what is drawn over the page
+in HTML - each molecule's frames chip, which may be wider than its set,
+and its notes over it (2026-10-24; components/FitToContent2D, utils/
+fitExtent). A chip is as large as the page draws it at any zoom, so where
+it lies now is where it lies after; the notes are drawn as large as the
+page only between three quarters and half as large again, so how much of
+it they take is worked out at the zoom the fit comes to. Their words, and the chips on the page, go below 75 % (*How it
 looks*): a card then shows its icon and its state's icon alone, a set
 its frame and what it holds.
 

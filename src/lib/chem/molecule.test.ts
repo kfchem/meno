@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canTakeBond, chargeText, implicitHydrogens } from "./molecule";
+import { canTakeBond, chargeText, implicitHydrogens, mostBonds } from "./molecule";
 
 describe("implicitHydrogens", () => {
   it("moves the valence with the charge the way the electrons go", () => {
@@ -51,5 +51,14 @@ describe("canTakeBond", () => {
     expect(canTakeBond("H", 0)).toBe(true);
     expect(canTakeBond("H", 1)).toBe(false);
     expect(canTakeBond("Pd", 4)).toBe(true);
+  });
+});
+
+describe("mostBonds", () => {
+  it("is an element's valence, a heavier one's highest, as its charge and an unpaired electron leave it; none for a metal", () => {
+    expect([mostBonds("C"), mostBonds("O"), mostBonds("N", 1), mostBonds("O", -1), mostBonds("B", -1)]).toEqual([4, 2, 4, 1, 4]);
+    expect([mostBonds("S"), mostBonds("P"), mostBonds("I"), mostBonds("Si"), mostBonds("P", -1), mostBonds("Si", -1), mostBonds("Si", -2), mostBonds("Si", 1)]).toEqual([6, 5, 7, 4, 6, 5, 6, 4]);
+    expect([mostBonds("C", 0, "doublet"), mostBonds("C", 0, "singlet"), mostBonds("C", 1)]).toEqual([3, 2, 3]);
+    expect(mostBonds("Pd")).toBeNull();
   });
 });

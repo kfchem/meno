@@ -25,7 +25,7 @@ export type ChemRequests = {
    */
   open_stereo: { args: { molblock: string; like?: Like }; result: OpenStereo };
   /** Only which stereocentres and double bonds are left open, by index - none of `open_stereo`'s trying each stereoisomer in 3D. */
-  stereo_left_open: { args: { molblock: string }; result: { atoms: number[]; bonds: number[] } };
+  stereo_left_open: { args: { molblock: string }; result: { atoms: number[]; bonds: number[]; cumulated?: number[][] } };
   /**
    * Which stereoisomer each molecule in 3D is, read from its own geometry:
    * its elements that could be stereogenic and a key that two molecules
