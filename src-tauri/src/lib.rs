@@ -562,10 +562,14 @@ const SAID_MOST: usize = 6;
 /// The most of one such line kept, in characters.
 const SAID_LINE_MOST: usize = 300;
 
-/// The last lines a program says on a stream, as they come (`SAID_MOST`), and the thread reading them.
+/// How long a set-up that failed waits for the last of what its program said: a child it left behind may hold the
+/// stream open, and the set-up must end all the same.
+const SAID_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// The last lines a program says on a stream, as they come (`SAID_MOST`), and word when the stream has ended.
 struct Said {
     lines: Arc<Mutex<std::collections::VecDeque<String>>>,
-    reading: std::thread::JoinHandle<()>,
+    ended: std::sync::mpsc::Receiver<()>,
 }
 
 /// `pipe_logs`, keeping the last lines said besides: what a set-up that
@@ -575,43 +579,77 @@ fn pipe_said<R: Read + Send + 'static>(app: &AppHandle, stream: R, ch: &'static 
     let app2 = app.clone();
     let lines = Arc::new(Mutex::new(std::collections::VecDeque::new()));
     let kept = lines.clone();
-    let reading = std::thread::spawn(move || {
+    let (tell, ended) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
         each_line(stream, |s| {
             let _ = app2.emit(ch, s.clone());
-            if s.trim().is_empty() {
-                return;
-            }
-            let mut k = kept.lock().unwrap_or_else(PoisonError::into_inner);
-            if k.len() == SAID_MOST {
-                k.pop_front();
-            }
-            k.push_back(s);
+            keep_said(&kept, s);
         });
+        let _ = tell.send(());
     });
-    Said { lines, reading }
+    Said { lines, ended }
+}
+
+/// One line more said, the last `SAID_MOST` kept; a blank one not.
+fn keep_said(kept: &Mutex<std::collections::VecDeque<String>>, line: String) {
+    if line.trim().is_empty() {
+        return;
+    }
+    let mut k = kept.lock().unwrap_or_else(PoisonError::into_inner);
+    if k.len() == SAID_MOST {
+        k.pop_front();
+    }
+    k.push_back(line);
 }
 
 /// A set-up's program failed, in words: what failed, and the last it said
 /// (`said_text`) - the same written to Meno's log, where it is found again.
+/// The last of it waited for `SAID_WAIT` at most: where the stream is still
+/// held open, what came by then is said, and the reading left to end alone.
 fn failed_saying(what: &str, said: Said) -> String {
-    // (the program has ended: its stream ends, and the last of it is read)
-    let _ = said.reading.join();
-    let lines: Vec<String> = said.lines.lock().unwrap_or_else(PoisonError::into_inner).iter().cloned().collect();
-    let text = said_text(what, &lines);
+    let text = said_by(what, &said, SAID_WAIT);
     logfile::logged!("{text}");
     text
 }
 
-/// What failed, and the lines said before it, each cut to `SAID_LINE_MOST`, joined: "uv pip install failed: error: ... / Caused by: ...".
+/// What `failed_saying` says, the stream waited for `wait` at most.
+fn said_by(what: &str, said: &Said, wait: std::time::Duration) -> String {
+    let _ = said.ended.recv_timeout(wait);
+    let lines: Vec<String> = said.lines.lock().unwrap_or_else(PoisonError::into_inner).iter().cloned().collect();
+    said_text(what, &lines)
+}
+
+/// A line with the proxy's credentials taken out - `meno:<token>@`, as a set-up's program may echo the proxy it was
+/// given - so that no token is kept in an error or Meno's log.
+fn without_token(line: &str) -> String {
+    let mut out = String::with_capacity(line.len());
+    let mut rest = line;
+    while let Some(at) = rest.find("meno:") {
+        out.push_str(&rest[..at + 5]);
+        let after = &rest[at + 5..];
+        let hex = after.bytes().take_while(u8::is_ascii_hexdigit).count();
+        if hex > 0 && after[hex..].starts_with('@') {
+            out.push('…');
+            rest = &after[hex..];
+        } else {
+            rest = after;
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+/// What failed, and the lines said before it, each cut to `SAID_LINE_MOST` and its proxy credentials taken out
+/// (`without_token`), joined: "uv pip install failed: error: ... / Caused by: ...". The one place a program's words are kept.
 fn said_text(what: &str, lines: &[String]) -> String {
     let cut: Vec<String> = lines
         .iter()
         .map(|l| {
-            let l = l.trim();
+            let l = without_token(l.trim());
             if l.chars().count() > SAID_LINE_MOST {
                 format!("{}…", l.chars().take(SAID_LINE_MOST).collect::<String>())
             } else {
-                l.to_string()
+                l
             }
         })
         .collect();
@@ -1202,6 +1240,25 @@ mod tests {
         assert_eq!(said_text("uv pip install failed", &lines), "uv pip install failed: error: Failed to install: torch-2.5.1 / Caused by: Access is denied. (os error 5)");
         let long = "x".repeat(SAID_LINE_MOST + 10);
         assert_eq!(said_text("uv venv failed", &[long]), format!("uv venv failed: {}…", "x".repeat(SAID_LINE_MOST)));
+    }
+
+    #[test]
+    fn keeps_no_proxy_token_in_what_a_set_up_said() {
+        let line = "error: Request failed via http://meno:0f3a9c2bd1e4@127.0.0.1:53211 (meno:not-a-token@x, meno:@y)".to_string();
+        assert_eq!(said_text("uv pip install failed", &[line]), "uv pip install failed: error: Request failed via http://meno:…@127.0.0.1:53211 (meno:not-a-token@x, meno:@y)");
+    }
+
+    #[test]
+    fn says_what_came_where_the_program_left_its_stream_open() {
+        // (a stream no one ends - a child left behind holding it: what came by then is said, after the wait, and no longer)
+        let lines = Arc::new(Mutex::new(std::collections::VecDeque::new()));
+        keep_said(&lines, "error: Failed to install".into());
+        keep_said(&lines, "   ".into());
+        let (_still_open, ended) = std::sync::mpsc::channel::<()>();
+        let said = Said { lines, ended };
+        let began = std::time::Instant::now();
+        assert_eq!(said_by("uv venv failed", &said, std::time::Duration::from_millis(200)), "uv venv failed: error: Failed to install");
+        assert!(began.elapsed() < std::time::Duration::from_secs(2));
     }
 
     #[test]
