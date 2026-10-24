@@ -38,7 +38,7 @@ import { HeldLight } from "./HeldLight";
 import { heldShows, type Held } from "./held";
 import { useStyleOptions } from "../useDrawingStyle";
 import { useLabelFontUrl } from "../../../fonts/typefaces";
-import { boxOf, joinOf } from "../presenting/slides";
+import { boxOf, joinOf, markScale } from "../presenting/slides";
 
 /** Where slides' frames lie: over the drawing and what is on the page. */
 const Z = 0.6;
@@ -151,7 +151,7 @@ export default function Slides2D() {
   return (
     <PartFrames.Provider value={parts}>
       <group position={[0, 0, Z]}>
-        {joins.map((j, i) => (j ? <Join key={`${slides[i].id}-${slides[i + 1].id}`} from={j.from} to={j.to} opacity={joinSeen} /> : null))}
+        {joins.map((j, i) => (j ? <Join key={`${slides[i].id}-${slides[i + 1].id}`} from={j.from} to={j.to} h={Math.min(slides[i].h, slides[i + 1].h)} opacity={joinSeen} /> : null))}
         {slides.map((s, i) => (
           <SlideFrame
             key={s.id}
@@ -207,14 +207,30 @@ function useScreenSize(place: (px: number) => void, deps: readonly unknown[]): v
   });
 }
 
-/** A slide's number: a disc in Meno's colour, its figures in white, the same size on the screen at any zoom; as seen as `opacity` says, frame by frame. */
-function SlideNumber({ n, font, opacity }: { n: number; font: string | null; opacity: () => number }) {
+/**
+ * A slide's number: a disc in Meno's colour, its figures in white, the same
+ * size on the screen at any zoom - but never more than a quarter of its
+ * slide's height there (`h`, the slide's on the page), shrinking with it
+ * from there, and fading out where its figures are too small to read
+ * (presenting/slides `markScale`); as seen as `opacity` says, frame by frame.
+ * Carried onto another slide, with no `h`, at its own size.
+ */
+function SlideNumber({ n, font, opacity, h }: { n: number; font: string | null; opacity: () => number; h?: number }) {
   const group = useRef<THREE.Group>(null);
   const disc = useRef<THREE.MeshBasicMaterial>(null);
   const figures = useRef<THREE.Mesh & { fillOpacity: number }>(null);
-  useScreenSize((px) => group.current?.scale.setScalar(px), []);
+  const shown = useRef(1);
+  useScreenSize(
+    (px) => {
+      const m = h == null ? { k: 1, seen: 1 } : markScale(h, px, 2 * NUMBER_PX, FIGURES_PX);
+      shown.current = m.seen;
+      group.current?.scale.setScalar(px * m.k);
+      if (group.current) group.current.visible = m.seen > 0;
+    },
+    [h],
+  );
   usePartFrame(() => {
-    const o = opacity();
+    const o = opacity() * shown.current;
     if (disc.current) disc.current.opacity = o;
     if (figures.current) figures.current.fillOpacity = o;
   });
@@ -405,7 +421,7 @@ function SlideFrame({
         }}
         onPointerDown={(e) => onDown(e, true)}
       >
-        <SlideNumber n={n} font={font} opacity={opacity} />
+        <SlideNumber n={n} font={font} opacity={opacity} h={s.h} />
       </group>
       {held && <HeldLight b={{ x0: -s.w / 2, x1: s.w / 2, y0: -s.h / 2, y1: s.h / 2 }} at={held} held={held} now={now} z={-0.001} />}
       {selected && <Handles s={s} toWorld={toWorld} />}
@@ -523,8 +539,14 @@ void main() {
 }
 `;
 
-/** The line from a slide to the next: dashed, the same on the screen at any zoom, with an arrowhead half way along that says which way the talk goes; as seen as `opacity` says, frame by frame. */
-function Join({ from, to, opacity }: { from: Pt; to: Pt; opacity: () => number }) {
+/**
+ * The line from a slide to the next: dashed, the same on the screen at any
+ * zoom, with an arrowhead half way along that says which way the talk goes
+ * - shrinking and fading with the smaller slide's number where that does
+ * (`h`, its height on the page; presenting/slides `markScale`); as seen as
+ * `opacity` says, frame by frame.
+ */
+function Join({ from, to, h, opacity }: { from: Pt; to: Pt; h: number; opacity: () => number }) {
   const material = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -554,8 +576,15 @@ function Join({ from, to, opacity }: { from: Pt; to: Pt; opacity: () => number }
   const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
   const head = useRef<THREE.Mesh>(null);
   const headMaterial = useRef<THREE.MeshBasicMaterial>(null);
+  const shown = useRef(1);
+  const line = useRef<THREE.Mesh>(null);
   useScreenSize(
-    (px) => {
+    (screenPx) => {
+      // (its pixel as its numbers': shrunk with them, where they shrink with their slides)
+      const m = markScale(h, screenPx, 2 * NUMBER_PX, FIGURES_PX);
+      shown.current = m.seen;
+      const px = screenPx * m.k;
+      if (line.current) line.current.visible = m.seen > 0;
       // (a little apart from the frames at either end)
       const gap = Math.min(NUMBER_PX * px * 1.4, len / 3);
       material.uniforms.uFrom.value.set(from.x + ux * gap, from.y + uy * gap);
@@ -564,19 +593,19 @@ function Join({ from, to, opacity }: { from: Pt; to: Pt; opacity: () => number }
       material.uniforms.uPx.value = px;
       if (head.current) {
         head.current.scale.setScalar(HEAD_PX * px);
-        head.current.visible = len > 6 * HEAD_PX * px;
+        head.current.visible = m.seen > 0 && len > 6 * HEAD_PX * px;
       }
     },
-    [from.x, from.y, to.x, to.y, material],
+    [from.x, from.y, to.x, to.y, h, material],
   );
   usePartFrame(() => {
-    const o = opacity();
+    const o = opacity() * shown.current;
     material.uniforms.uOpacity.value = o;
     if (headMaterial.current) headMaterial.current.opacity = o * 1.4;
   });
   return (
     <group>
-      <mesh material={material} renderOrder={38} frustumCulled={false}>
+      <mesh ref={line} material={material} renderOrder={38} frustumCulled={false}>
         <planeGeometry args={[1, 1]} />
       </mesh>
       <mesh ref={head} position={[mid.x, mid.y, 0]} rotation={[0, 0, Math.atan2(uy, ux)]} renderOrder={39}>

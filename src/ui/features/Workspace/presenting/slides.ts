@@ -151,6 +151,35 @@ export function joinOf(a: Pick<Slide, "x" | "y" | "w" | "h">, b: Pick<Slide, "x"
   return { from, to };
 }
 
+/** How much of a slide's height on the screen its number's disc may take at most (docs/PRESENTING.md): a quarter. */
+export const NUMBER_SHARE = 0.25;
+/**
+ * The least size on the screen a slide's figures are read at, in pixels:
+ * 8.25, as the page's words (utils/pageScale `WORDS_LEAST`, 0.75 of their
+ * smallest, 11 px); they fade out from 1.15 times that to 1/1.15 of it,
+ * about four notches of a mouse wheel, as those do.
+ */
+export const FIGURES_LEAST_PX = 0.75 * 11;
+const FIGURES_FADE = 1.15;
+
+/**
+ * How a slide's number - and the line from it to the next, and its
+ * arrowhead - is drawn for a slide `h` tall on the page, a screen pixel
+ * being `px` on the page: at `k` of its own size, the same on the screen
+ * (`k` 1) until its disc, `disc` px across, would be more than a quarter
+ * of the slide's height on the screen (`NUMBER_SHARE`), and from there
+ * shrinking with the slide; and seen as much as `seen` says, all where its
+ * figures, `figures` px at their own size, are large enough to read, none
+ * where they are too small, faded between (`FIGURES_LEAST_PX`). Both go
+ * with the zoom, never at a jump.
+ */
+export function markScale(h: number, px: number, disc: number, figures: number): { k: number; seen: number } {
+  const k = Math.min(1, (NUMBER_SHARE * h) / px / disc);
+  const t = Math.min(1, Math.max(0, (Math.log((figures * k) / FIGURES_LEAST_PX) + Math.log(FIGURES_FADE)) / (2 * Math.log(FIGURES_FADE))));
+  // (evenly in the zoom's own steps - a wheel's notch a factor, not an amount - so that no notch takes more of it than another)
+  return { k, seen: t };
+}
+
 /** The box round the slides, or null with none. */
 export function slidesBox(slides: readonly Pick<Slide, "x" | "y" | "w" | "h">[]): Box | null {
   if (!slides.length) return null;

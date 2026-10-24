@@ -41,8 +41,15 @@ page; a talk is a way through it.
   left corner, and a dashed line runs from each to the next, an arrowhead
   half way along it, from the edge of the one to the edge of the other -
   or, one within the other (a detail zoomed into), from number to number.
-  All in Meno's own colour, faint, the same on the screen at any zoom;
-  gone while a talk is given, and never in a picture of the page.
+  All in Meno's own colour, faint, the same on the screen at any zoom -
+  until a number's disc would be more than a quarter of its slide's
+  height on the screen: from there the number shrinks with its slide, and
+  the line and its arrowhead with the smaller of the two it joins; and
+  where its figures are too small to read, it fades out, from 1.15 times
+  the least size the page's words are read at (8.25 px) to 1/1.15 of it,
+  evenly with the zoom, never at a jump (presenting/slides `markScale`).
+  Gone while a talk is given, and never in a picture of the page. A number
+  being dragged onto another slide is at its own size.
 - **Made** round what is selected (the selection's menu, *Slide around
   these*: as wide as it needs, a little room about it), or from Quick Add
   (*Slide*: a slide of what is seen, a little in from its edges); last in
